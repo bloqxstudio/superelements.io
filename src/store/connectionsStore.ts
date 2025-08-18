@@ -61,25 +61,20 @@ export const useConnectionsStore = create<ConnectionsStore>()(
         set({ isLoading: true });
         
         try {
-          // Tentar primeiro como usuário autenticado
-          let { data, error } = await supabase
+          // SECURITY FIX: Only fetch connections for authenticated users
+          const { data: { user } } = await supabase.auth.getUser();
+          
+          if (!user) {
+            console.log('🔒 User not authenticated - no connections available');
+            set({ connections: [], isLoading: false });
+            return;
+          }
+
+          // Fetch connections based on user's access level
+          const { data, error } = await supabase
             .from('connections')
             .select('*')
             .order('created_at', { ascending: false });
-
-          // Se falhar (usuário não autenticado), tentar como anônimo para conexões públicas
-          if (error && error.code === 'PGRST301') {
-            console.log('🔓 User not authenticated, fetching public connections...');
-            const { data: publicData, error: publicError } = await supabase
-              .from('connections')
-              .select('*')
-              .in('user_type', ['free', 'all'])
-              .eq('is_active', true)
-              .order('created_at', { ascending: false });
-            
-            data = publicData;
-            error = publicError;
-          }
 
           if (error) {
             console.error('❌ Error fetching connections:', error);

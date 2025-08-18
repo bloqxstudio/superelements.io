@@ -19,8 +19,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       cleanup = await initialize();
       console.log('✅ Authentication initialized');
       
-      // Carregar conexões imediatamente após inicialização da auth
-      console.log('🔗 Loading connections...');
+      // SECURITY FIX: Load connections only after proper auth initialization
+      console.log('🔗 Loading connections for authenticated user...');
       try {
         await fetchConnections();
         console.log('✅ Connections loaded successfully');

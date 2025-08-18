@@ -164,11 +164,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ session, user: session?.user ?? null });
         
         if (session?.user) {
-          // Defer profile fetching and subscription check
-          setTimeout(async () => {
+          // SECURITY FIX: Remove setTimeout deferral to prevent race conditions
+          try {
             await get().fetchProfile();
             await get().checkSubscription();
-          }, 0);
+          } catch (error) {
+            console.error('Error during auth state update:', error);
+          }
         } else {
           set({ profile: null, subscription: null });
         }
