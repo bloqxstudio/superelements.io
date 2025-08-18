@@ -1,0 +1,47 @@
+
+/* Component Grid Responsive Styles */
+.component-grid {
+  display: grid;
+  gap: 1.5rem;
+  width: 100%;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+/* Mobile: Ajuste para telas muito pequenas */
+@media (max-width: 640px) {
+  .component-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+/* Tablet: 2 columns em telas médias */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .component-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+/* Desktop: 3-4 columns dependendo do espaço disponível */
+@media (min-width: 1024px) {
+  .component-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+}
+
+/* Large Desktop: Mais colunas com espaçamento adequado */
+@media (min-width: 1600px) {
+  .component-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 2rem;
+    max-width: 2000px;
+  }
+}
+
+/* Garantir que os cards tenham altura consistente */
+.component-grid > * {
+  height: auto;
+  min-height: 200px;
+}
