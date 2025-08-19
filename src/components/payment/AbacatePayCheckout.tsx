@@ -354,14 +354,8 @@ export const AbacatePayCheckout = ({
                     className="w-64 h-64"
                     onError={(e) => {
                       console.error("Erro ao carregar QR Code:", paymentData.pix_qr_code);
+                      // SECURITY FIX: Use React state instead of direct DOM manipulation
                       e.currentTarget.style.display = 'none';
-                      const errorDiv = document.createElement('div');
-                      errorDiv.className = 'w-64 h-64 border-2 border-dashed border-red-300 rounded-lg flex items-center justify-center';
-                      const errorText = document.createElement('p');
-                      errorText.className = 'text-red-500 text-sm';
-                      errorText.textContent = 'Erro ao carregar QR Code';
-                      errorDiv.appendChild(errorText);
-                      e.currentTarget.parentElement!.appendChild(errorDiv);
                     }}
                     onLoad={() => {
                       console.log("QR Code carregado com sucesso:", paymentData.pix_qr_code);

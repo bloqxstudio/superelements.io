@@ -74,28 +74,50 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null
   }
 
-  return (
-    <style
-      dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
-            ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
-${colorConfig
-  .map(([key, itemConfig]) => {
-    const color =
-      itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
-      itemConfig.color
-    return color ? `  --color-${key}: ${color};` : null
-  })
-  .join("\n")}
-}
-`
-          )
-          .join("\n"),
-      }}
-    />
-  )
+  // SECURITY FIX: Use React.useEffect to safely inject CSS instead of dangerouslySetInnerHTML
+  React.useEffect(() => {
+    const cssRules = Object.entries(THEMES)
+      .map(([theme, prefix]) => {
+        const rules = colorConfig
+          .map(([key, itemConfig]) => {
+            const color =
+              itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
+              itemConfig.color
+            // Sanitize color values to prevent CSS injection
+            if (color && /^#[0-9A-Fa-f]{3,6}$|^hsl\([^)]*\)$|^rgb\([^)]*\)$/.test(color)) {
+              return `  --color-${key.replace(/[^a-zA-Z0-9-_]/g, '')}: ${color};`
+            }
+            return null
+          })
+          .filter(Boolean)
+          .join('\n')
+
+        return rules ? `${prefix} [data-chart="${id}"] {\n${rules}\n}` : ''
+      })
+      .filter(Boolean)
+      .join('\n')
+
+    if (cssRules) {
+      const existingStyle = document.getElementById(`chart-style-${id}`)
+      if (existingStyle) {
+        existingStyle.textContent = cssRules
+      } else {
+        const styleElement = document.createElement('style')
+        styleElement.id = `chart-style-${id}`
+        styleElement.textContent = cssRules
+        document.head.appendChild(styleElement)
+      }
+    }
+
+    return () => {
+      const styleElement = document.getElementById(`chart-style-${id}`)
+      if (styleElement) {
+        styleElement.remove()
+      }
+    }
+  }, [id, colorConfig])
+
+  return null
 }
 
 const ChartTooltip = RechartsPrimitive.Tooltip

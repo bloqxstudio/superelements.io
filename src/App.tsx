@@ -8,6 +8,7 @@ import { AuthProvider } from "@/components/auth/AuthProvider";
 import Layout from "@/components/Layout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ViewportProvider } from "@/hooks/useViewport";
+import { ContentSecurityPolicy } from "@/components/security/ContentSecurityPolicy";
 import Components from "@/pages/Components";
 import Connections from "@/pages/Connections";
 import Login from "@/pages/Login";
@@ -25,6 +26,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <ContentSecurityPolicy />
         <Toaster />
         <Sonner />
         <BrowserRouter>

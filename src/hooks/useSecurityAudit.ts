@@ -9,16 +9,15 @@ export const useSecurityAudit = () => {
     if (!user) return;
 
     try {
+      // SECURITY FIX: Remove external IP API call to prevent data leakage
+      // IP address will be captured server-side in edge functions if needed
       const { error } = await supabase
         .from('security_audit_log')
         .insert({
           user_id: user.id,
           event_type: eventType,
           event_data: eventData,
-          ip_address: await fetch('https://api.ipify.org?format=json')
-            .then(res => res.json())
-            .then(data => data.ip)
-            .catch(() => 'unknown'),
+          ip_address: 'client-side-hidden', // Will be set server-side
           user_agent: navigator.userAgent
         });
 
