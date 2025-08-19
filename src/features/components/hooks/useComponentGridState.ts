@@ -1,7 +1,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { useWordPressStore } from '@/store/wordpressStore';
-import { useStreamlinedFastLoading } from '@/hooks/useStreamlinedFastLoading';
+import { useSimpleFastLoading } from '@/hooks/useSimpleFastLoading';
 import { getDisplayComponents, hasActiveFilters, shouldShowEmptyState } from '@/utils/componentRetrieval';
 import { filterValidComponents, generateValidationStats } from '@/utils/componentValidation';
 
@@ -29,7 +29,7 @@ export const useComponentGridState = () => {
     initializeFastLoading,
     loadNextPage,
     reset
-  } = useStreamlinedFastLoading({
+  } = useSimpleFastLoading({
     selectedCategories,
     activeConnectionId: 'default'
   });

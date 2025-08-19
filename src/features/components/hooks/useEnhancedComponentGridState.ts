@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useWordPressStore } from '@/store/wordpressStore';
-import { useStreamlinedFastLoading } from '@/hooks/useStreamlinedFastLoading';
+import { useSimpleFastLoading } from '@/hooks/useSimpleFastLoading';
 
 interface UseEnhancedComponentGridStateProps {
   selectedCategories: number[];
@@ -14,7 +14,7 @@ export const useEnhancedComponentGridState = ({
   const { config } = useWordPressStore();
   const [detectionIssues, setDetectionIssues] = useState<string[]>([]);
 
-  const fastLoadingResult = useStreamlinedFastLoading({
+  const fastLoadingResult = useSimpleFastLoading({
     selectedCategories,
     activeConnectionId,
   });

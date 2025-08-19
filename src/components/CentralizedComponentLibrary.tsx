@@ -23,18 +23,10 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
     isInSync
   } = useConnectionSync();
   const handleForceSync = () => {
-    console.log('🔄 Manual sync requested');
     syncConnection();
   };
   const activeConnections = connections.filter(conn => conn.isActive);
   console.log('=== CENTRALIZED LIBRARY RENDER ===');
-  console.log('State:', {
-    totalConnections: connections.length,
-    activeConnections: activeConnections.length,
-    activeConnectionId,
-    isInSync,
-    hasConnections: connections.length > 0
-  });
 
   // No connections available
   if (connections.length === 0) {

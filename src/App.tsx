@@ -12,6 +12,7 @@ import { ContentSecurityPolicy } from "@/components/security/ContentSecurityPoli
 import Components from "@/pages/Components";
 import Connections from "@/pages/Connections";
 import Login from "@/pages/Login";
+import Profile from "@/pages/Profile";
 import NotFound from "@/pages/NotFound";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminPricing from "@/pages/AdminPricing";
@@ -51,6 +52,11 @@ function App() {
                 <Route path="admin/pricing" element={
                   <ProtectedRoute allowedRoles={['admin']}>
                     <AdminPricing />
+                  </ProtectedRoute>
+                } />
+                <Route path="profile" element={
+                  <ProtectedRoute>
+                    <Profile />
                   </ProtectedRoute>
                 } />
                 <Route path="pricing" element={<PricingUnified />} />

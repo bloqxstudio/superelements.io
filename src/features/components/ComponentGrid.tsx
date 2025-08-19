@@ -3,7 +3,7 @@ import React, { memo } from 'react';
 import { useOptimizedFastLoading } from '@/hooks/useOptimizedFastLoading';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import ComponentGridError from './ComponentGridError';
-import ComponentGridLoading from './ComponentGridLoading';
+import OptimizedComponentGridLoading from './OptimizedComponentGridLoading';
 import ComponentGridContent from './ComponentGridContent';
 import { useComponentGridCallbacks } from './hooks/useComponentGridCallbacks';
 import { useWordPressStore } from '@/store/wordpressStore';
@@ -64,10 +64,9 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
   // Show loading state
   if (isLoading) {
     return (
-      <ComponentGridLoading 
+      <OptimizedComponentGridLoading 
         variant="loading"
-        count={12}
-        showCancel={false}
+        count={8}
       />
     );
   }

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
@@ -30,6 +29,10 @@ export const SimpleUserMenu: React.FC = () => {
 
   const handleManageConnections = () => {
     navigate('/connections');
+  };
+
+  const handleViewPricing = () => {
+    navigate('/pricing');
   };
 
   const getPlanBadgeVariant = () => {
@@ -79,15 +82,20 @@ export const SimpleUserMenu: React.FC = () => {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48 bg-white z-50">
-          {isAdmin && (
-            <>
-              <DropdownMenuItem onClick={handleManageConnections}>
-                <Settings className="mr-2 h-4 w-4" />
-                Manage Connections
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          )}
+          {/* Connections - Available for all users */}
+          <DropdownMenuItem onClick={handleManageConnections}>
+            <Settings className="mr-2 h-4 w-4" />
+            {isAdmin ? 'Manage Connections' : 'My Connections'}
+          </DropdownMenuItem>
+          
+          {/* Pricing - Show for Free users to upgrade, Pro/Admin to view */}
+          <DropdownMenuItem onClick={handleViewPricing}>
+            <Crown className="mr-2 h-4 w-4" />
+            {isFree ? 'Upgrade Plan' : 'View Pricing'}
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+          
           <DropdownMenuItem onClick={handleSignOut} className="text-red-600">
             <LogOut className="mr-2 h-4 w-4" />
             Sign Out

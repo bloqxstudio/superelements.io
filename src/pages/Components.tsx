@@ -6,7 +6,7 @@ import PreviewModal from '@/components/PreviewModal';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useAuthStore } from '@/store/authStore';
 import { useAccessControl } from '@/hooks/useAccessControl';
-import { useAutoSync } from '@/hooks/useAutoSync';
+import { useOptimizedAutoSync } from '@/hooks/useOptimizedAutoSync';
 import { useConnectionSync } from '@/hooks/useConnectionSync';
 const Components = () => {
   const navigate = useNavigate();
@@ -33,16 +33,9 @@ const Components = () => {
     component: null as any
   });
 
-  // Auto-sync connections
-  useAutoSync();
+  // Optimized auto-sync
+  useOptimizedAutoSync();
   const handlePreview = (url: string, title?: string, component?: any) => {
-    console.log('🎯 COMPONENTS PAGE - Opening preview modal:', {
-      url,
-      title,
-      hasComponent: !!component,
-      componentId: component?.id,
-      connectionId: component?.connection_id
-    });
     setPreviewModal({
       isOpen: true,
       url,
@@ -57,7 +50,6 @@ const Components = () => {
     }));
   };
   const handleForceSync = () => {
-    console.log('🔄 Manual force sync requested by user');
     syncConnection();
   };
 
