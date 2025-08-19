@@ -4,10 +4,10 @@
  * Sanitize HTML content to prevent XSS attacks
  */
 export function sanitizeHtml(content: string): string {
-  // Create a temporary div to parse HTML
+  // Create a temporary div to parse HTML and return only text content
   const tempDiv = document.createElement('div');
   tempDiv.textContent = content; // This automatically escapes HTML
-  return tempDiv.innerHTML;
+  return tempDiv.textContent || ''; // Return sanitized text content
 }
 
 /**

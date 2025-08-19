@@ -309,11 +309,37 @@ const showEnhancedManualCopyModal = (text: string): void => {
   title.style.cssText = 'margin: 0 0 16px 0; font-size: 24px; font-weight: 700; color: #1f2937;';
   
   const instructions = document.createElement('p');
-  instructions.innerHTML = `
-    Your browser blocked automatic copying. Please <strong>select all the text below</strong> and copy it manually:<br>
-    <kbd style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 12px;">Ctrl+A</kbd> (or <kbd style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 12px;">Cmd+A</kbd>) then 
-    <kbd style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 12px;">Ctrl+C</kbd> (or <kbd style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 12px;">Cmd+C</kbd>)
-  `;
+  const instructionsText = 'Your browser blocked automatic copying. Please select all the text below and copy it manually: ';
+  instructions.textContent = instructionsText;
+  
+  // Create keyboard shortcuts as separate elements
+  const ctrlAKey = document.createElement('kbd');
+  ctrlAKey.textContent = 'Ctrl+A';
+  ctrlAKey.style.cssText = 'background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 12px;';
+  
+  const cmdAKey = document.createElement('kbd');
+  cmdAKey.textContent = 'Cmd+A';
+  cmdAKey.style.cssText = 'background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 12px;';
+  
+  const ctrlCKey = document.createElement('kbd');
+  ctrlCKey.textContent = 'Ctrl+C';
+  ctrlCKey.style.cssText = 'background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 12px;';
+  
+  const cmdCKey = document.createElement('kbd');
+  cmdCKey.textContent = 'Cmd+C';
+  cmdCKey.style.cssText = 'background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 12px;';
+  
+  // Append text and keys safely
+  instructions.appendChild(document.createTextNode(instructionsText));
+  instructions.appendChild(ctrlAKey);
+  instructions.appendChild(document.createTextNode(' (or '));
+  instructions.appendChild(cmdAKey);
+  instructions.appendChild(document.createTextNode(') then '));
+  instructions.appendChild(ctrlCKey);
+  instructions.appendChild(document.createTextNode(' (or '));
+  instructions.appendChild(cmdCKey);
+  instructions.appendChild(document.createTextNode(')'));
+  
   instructions.style.cssText = 'margin: 0 0 20px 0; color: #6b7280; line-height: 1.6;';
   
   const textarea = document.createElement('textarea');
