@@ -10,10 +10,20 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user, isInitialized, profile } = useAuthStore();
+  const { user, isInitialized, profile, isProfileLoading } = useAuthStore();
+
+  console.log('🛡️ ProtectedRoute check:', { 
+    isInitialized, 
+    hasUser: !!user, 
+    hasProfile: !!profile, 
+    isProfileLoading,
+    userRole: profile?.role, 
+    allowedRoles 
+  });
 
   // Show skeleton while initializing auth
   if (!isInitialized) {
+    console.log('⏳ ProtectedRoute: Auth not initialized, showing skeleton');
     return (
       <div className="min-h-screen bg-background p-4">
         <div className="max-w-7xl mx-auto space-y-6">
@@ -40,15 +50,36 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
 
   // Redirect to login if not authenticated
   if (!user) {
+    console.log('🔒 ProtectedRoute: No user, redirecting to login');
     return <Navigate to="/login" replace />;
+  }
+
+  // Show loading skeleton if profile is still loading and we need role checks
+  if (allowedRoles && allowedRoles.length > 0 && isProfileLoading) {
+    console.log('⏳ ProtectedRoute: Profile loading, showing skeleton');
+    return (
+      <div className="min-h-screen bg-background p-4">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center space-y-4">
+              <Skeleton className="h-12 w-12 rounded-full mx-auto" />
+              <Skeleton className="h-4 w-32" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Check role permissions if allowedRoles is specified
   if (allowedRoles && allowedRoles.length > 0) {
+    console.log('🔐 ProtectedRoute: Checking role permissions');
     if (!profile?.role || !allowedRoles.includes(profile.role)) {
+      console.log('❌ ProtectedRoute: Access denied, redirecting to home');
       return <Navigate to="/" replace />;
     }
   }
 
+  console.log('✅ ProtectedRoute: Access granted');
   return <>{children}</>;
 };

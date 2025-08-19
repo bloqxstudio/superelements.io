@@ -25,11 +25,13 @@ interface AuthState {
   profile: UserProfile | null;
   subscription: SubscriptionInfo | null;
   isInitialized: boolean;
+  isProfileLoading: boolean;
   setUser: (user: User | null) => void;
   setSession: (session: Session | null) => void;
   setProfile: (profile: UserProfile | null) => void;
   setSubscription: (subscription: SubscriptionInfo | null) => void;
   setInitialized: (initialized: boolean) => void;
+  setProfileLoading: (loading: boolean) => void;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
@@ -46,12 +48,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   profile: null,
   subscription: null,
   isInitialized: false,
+  isProfileLoading: false,
 
   setUser: (user) => set({ user }),
   setSession: (session) => set({ session }),
   setProfile: (profile) => set({ profile }),
   setSubscription: (subscription) => set({ subscription }),
   setInitialized: (isInitialized) => set({ isInitialized }),
+  setProfileLoading: (isProfileLoading) => set({ isProfileLoading }),
 
   signIn: async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -115,9 +119,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   fetchProfile: async () => {
     const { user } = get();
-    if (!user) return;
+    console.log('🔍 fetchProfile called, user:', user?.id);
+    if (!user) {
+      console.log('❌ fetchProfile: No user found');
+      return;
+    }
 
+    set({ isProfileLoading: true });
     try {
+      console.log('📝 Fetching profile for user:', user.id);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -125,13 +135,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         .single();
 
       if (error) {
-        console.error('Error fetching profile:', error);
+        console.error('❌ Error fetching profile:', error);
+        set({ profile: null, isProfileLoading: false });
         return;
       }
 
-      set({ profile: data });
+      console.log('✅ Profile loaded:', data);
+      set({ profile: data, isProfileLoading: false });
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('❌ Exception fetching profile:', error);
+      set({ profile: null, isProfileLoading: false });
     }
   },
 
@@ -158,36 +171,50 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   initialize: async () => {
+    console.log('🔐 Starting auth initialization...');
+    
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log(`🔄 Auth state changed: ${event}`, session?.user?.id || 'no user');
         set({ session, user: session?.user ?? null });
         
         if (session?.user) {
-          // SECURITY FIX: Remove setTimeout deferral to prevent race conditions
+          console.log('👤 User authenticated, loading profile and subscription...');
           try {
             await get().fetchProfile();
             await get().checkSubscription();
+            console.log('✅ Profile and subscription loaded via auth state change');
           } catch (error) {
-            console.error('Error during auth state update:', error);
+            console.error('❌ Error during auth state update:', error);
           }
         } else {
-          set({ profile: null, subscription: null });
+          console.log('👤 No user, clearing profile and subscription');
+          set({ profile: null, subscription: null, isProfileLoading: false });
         }
-        
-        set({ isInitialized: true });
       }
     );
 
     // Check for existing session
+    console.log('🔍 Checking for existing session...');
     const { data: { session } } = await supabase.auth.getSession();
+    console.log('📋 Existing session:', session?.user?.id || 'none');
+    
     set({ session, user: session?.user ?? null });
     
     if (session?.user) {
-      await get().fetchProfile();
-      await get().checkSubscription();
+      console.log('👤 Existing user found, loading profile and subscription...');
+      try {
+        await get().fetchProfile();
+        await get().checkSubscription();
+        console.log('✅ Profile and subscription loaded for existing session');
+      } catch (error) {
+        console.error('❌ Error loading existing session data:', error);
+      }
     }
     
+    // Set initialized after all loading attempts
+    console.log('✅ Auth initialization complete');
     set({ isInitialized: true });
 
     // Return cleanup function

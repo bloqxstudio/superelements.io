@@ -8,25 +8,16 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const { initialize, isInitialized } = useAuthStore();
+  const { initialize, isInitialized, user } = useAuthStore();
   const { fetchConnections } = useConnectionsStore();
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
 
     const initializeAuth = async () => {
-      console.log('🔐 Initializing authentication...');
+      console.log('🔐 AuthProvider: Initializing authentication...');
       cleanup = await initialize();
-      console.log('✅ Authentication initialized');
-      
-      // SECURITY FIX: Load connections only after proper auth initialization
-      console.log('🔗 Loading connections for authenticated user...');
-      try {
-        await fetchConnections();
-        console.log('✅ Connections loaded successfully');
-      } catch (error) {
-        console.error('❌ Failed to load connections:', error);
-      }
+      console.log('✅ AuthProvider: Authentication initialized');
     };
 
     initializeAuth();
@@ -36,7 +27,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         cleanup();
       }
     };
-  }, [initialize, fetchConnections]);
+  }, [initialize]);
+
+  // Load connections only when user is authenticated and auth is initialized
+  useEffect(() => {
+    if (isInitialized && user) {
+      console.log('🔗 AuthProvider: Loading connections for authenticated user...');
+      fetchConnections()
+        .then(() => {
+          console.log('✅ AuthProvider: Connections loaded successfully');
+        })
+        .catch((error) => {
+          console.error('❌ AuthProvider: Failed to load connections:', error);
+        });
+    } else if (isInitialized && !user) {
+      console.log('🔒 AuthProvider: User not authenticated - skipping connection load');
+    }
+  }, [isInitialized, user, fetchConnections]);
 
   // Não bloquear renderização enquanto carrega
   return <>{children}</>;
