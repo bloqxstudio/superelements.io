@@ -147,10 +147,10 @@ export default function Auth() {
               muted
               playsInline
               preload="auto"
-              className="w-full h-full object-cover rounded-lg shadow-2xl lg:transform lg:perspective-1000 lg:rotateY-12 lg:hover:rotateY-6 lg:transition-transform lg:duration-700"
+              className="w-full h-full object-cover rounded-lg shadow-2xl"
               style={{
-                transform: window.innerWidth >= 1024 ? 'perspective(1000px) rotateY(-15deg) rotateX(5deg)' : 'none',
-                boxShadow: window.innerWidth >= 1024 ? '20px 20px 60px rgba(0,0,0,0.8)' : '0 10px 25px rgba(0,0,0,0.5)'
+                transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
+                boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
               }}
             />
           </div>
@@ -219,10 +219,10 @@ export default function Auth() {
               muted
               playsInline
               preload="auto"
-              className="w-full h-full object-cover rounded-lg shadow-2xl lg:transform lg:perspective-1000 lg:rotateY-12 lg:hover:rotateY-6 lg:transition-transform lg:duration-700"
+              className="w-full h-full object-cover rounded-lg shadow-2xl transform perspective-1000 rotateY-12 hover:rotateY-6 transition-transform duration-700"
               style={{
-                transform: window.innerWidth >= 1024 ? 'perspective(1000px) rotateY(-15deg) rotateX(5deg)' : 'none',
-                boxShadow: window.innerWidth >= 1024 ? '20px 20px 60px rgba(0,0,0,0.8)' : '0 10px 25px rgba(0,0,0,0.5)'
+                transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
+                boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
               }}
             />
           </div>
@@ -372,10 +372,10 @@ export default function Auth() {
             muted
             playsInline
             preload="auto"
-            className="w-full h-full object-cover rounded-lg shadow-2xl lg:transform lg:perspective-1000 lg:rotateY-12 lg:hover:rotateY-6 lg:transition-transform lg:duration-700"
+            className="w-full h-full object-cover rounded-lg shadow-2xl transform perspective-1000 rotateY-12 hover:rotateY-6 transition-transform duration-700"
             style={{
-              transform: window.innerWidth >= 1024 ? 'perspective(1000px) rotateY(-15deg) rotateX(5deg)' : 'none',
-              boxShadow: window.innerWidth >= 1024 ? '20px 20px 60px rgba(0,0,0,0.8)' : '0 10px 25px rgba(0,0,0,0.5)'
+              transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
+              boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
             }}
           />
         </div>
