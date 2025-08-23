@@ -136,8 +136,8 @@ export default function Auth() {
   // Email confirmation success screen
   if (step === 'confirm-email') {
     return (
-      <div className="min-h-screen relative bg-black">
-        {/* Video Background - Fixed */}
+      <div className="min-h-screen lg:flex bg-black">
+        {/* Video - Mobile: fixed top, Desktop: left side */}
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-0 lg:relative lg:top-auto lg:left-auto lg:transform-none lg:w-2/5 lg:flex lg:items-center lg:justify-center lg:p-8">
           <div className="relative w-64 h-32 lg:w-full lg:h-96 lg:max-w-md">
             <video 
@@ -156,8 +156,8 @@ export default function Auth() {
           </div>
         </div>
 
-        {/* Success Message - Can overlap video */}
-        <div className="relative z-10 min-h-screen flex items-start justify-center pt-20 lg:pt-0 lg:items-center p-4 lg:p-8 lg:flex-1">
+        {/* Success Message - Mobile: can overlap, Desktop: right side */}
+        <div className="relative z-10 min-h-screen flex items-start justify-center pt-20 lg:pt-0 lg:items-center p-4 lg:p-8 lg:flex-1 lg:z-auto">
           <div className="w-full max-w-lg">
             <Card className="bg-white border-0 shadow-2xl">
               <CardContent className="p-10">
@@ -208,8 +208,8 @@ export default function Auth() {
 
   if (step === 'password' || step === 'signup') {
     return (
-      <div className="min-h-screen relative bg-black">
-        {/* Video Background - Fixed */}
+      <div className="min-h-screen lg:flex bg-black">
+        {/* Video - Mobile: fixed top, Desktop: left side */}
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-0 lg:relative lg:top-auto lg:left-auto lg:transform-none lg:w-2/5 lg:flex lg:items-center lg:justify-center lg:p-8">
           <div className="relative w-64 h-32 lg:w-full lg:h-96 lg:max-w-md">
             <video 
@@ -228,8 +228,8 @@ export default function Auth() {
           </div>
         </div>
 
-        {/* Login Form - Can overlap video */}
-        <div className="relative z-10 min-h-screen flex items-start justify-center pt-20 lg:pt-0 lg:items-center p-4 lg:p-8 lg:flex-1">
+        {/* Login Form - Mobile: can overlap, Desktop: right side */}
+        <div className="relative z-10 min-h-screen flex items-start justify-center pt-20 lg:pt-0 lg:items-center p-4 lg:p-8 lg:flex-1 lg:z-auto">
           <div className="w-full max-w-lg">
             <Card className="bg-white border-0 shadow-2xl">
               <CardContent className="p-10">
@@ -361,8 +361,8 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen relative bg-black">
-      {/* Video Background - Fixed */}
+    <div className="min-h-screen lg:flex bg-black">
+      {/* Video - Mobile: fixed top, Desktop: left side */}
       <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-0 lg:relative lg:top-auto lg:left-auto lg:transform-none lg:w-2/5 lg:flex lg:items-center lg:justify-center lg:p-8">
         <div className="relative w-64 h-32 lg:w-full lg:h-96 lg:max-w-md">
           <video 
@@ -381,8 +381,8 @@ export default function Auth() {
         </div>
       </div>
 
-      {/* Auth Form - Can overlap video */}
-      <div className="relative z-10 min-h-screen flex items-start justify-center pt-20 lg:pt-0 lg:items-center p-4 lg:p-8 lg:flex-1">
+      {/* Auth Form - Mobile: can overlap, Desktop: right side */}
+      <div className="relative z-10 min-h-screen flex items-start justify-center pt-20 lg:pt-0 lg:items-center p-4 lg:p-8 lg:flex-1 lg:z-auto">
         <div className="w-full max-w-lg">
           <Card className="bg-white border-0 shadow-2xl">
             <CardContent className="p-10">
