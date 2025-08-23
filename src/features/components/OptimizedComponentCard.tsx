@@ -4,6 +4,7 @@ import { Copy, Check, Unlock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { useEnhancedCopyComponent } from './hooks/useEnhancedCopyComponent';
+import { useAuth } from '@/contexts/AuthContext';
 import OptimizedDynamicIframe from './OptimizedDynamicIframe';
 
 interface OptimizedComponentCardProps {
@@ -22,6 +23,7 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
   baseUrl
 }) => {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const { copyToClipboard, getCopyState } = useEnhancedCopyComponent();
   
   // Helper function to get component title
@@ -57,6 +59,11 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
   const handleCopyClick = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     
+    if (!profile) {
+      navigate('/auth');
+      return;
+    }
+    
     console.log('🚀 COPY BUTTON CLICKED:', {
       componentId: component.id,
       originalId: component.originalId,
@@ -71,12 +78,20 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
       // User has access - try to copy
       await copyToClipboard(component, baseUrl);
     }
-  }, [copyToClipboard, component, baseUrl, accessInfo, navigate]);
+  }, [copyToClipboard, component, baseUrl, accessInfo, navigate, profile]);
 
   const copyState = getCopyState(component.originalId || component.id);
   const { copying, copied } = copyState;
 
   const getCopyButtonContent = useCallback(() => {
+    if (!profile) {
+      return {
+        icon: <Copy className="h-3 w-3 opacity-60" />,
+        text: 'LOGIN',
+        className: 'bg-muted border-muted-foreground/20 text-muted-foreground hover:bg-muted/80 cursor-pointer'
+      };
+    }
+
     if (copying) {
       return {
         icon: <div className="animate-spin h-3 w-3 border border-current border-t-transparent rounded-full" />,
@@ -98,7 +113,7 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
       text: 'COPIAR',
       className: 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-600 hover:border-gray-300'
     };
-  }, [copying, copied]);
+  }, [copying, copied, profile]);
 
   const buttonContent = getCopyButtonContent();
 
@@ -127,13 +142,13 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
           
           <button 
             onClick={handleCopyClick} 
-            disabled={copying}
+            disabled={profile && copying}
             className={`
               flex items-center gap-1 px-2 py-1 text-xs font-medium border rounded 
               transition-all duration-200 disabled:cursor-not-allowed flex-shrink-0
               ${buttonContent.className}
             `} 
-            title={copying ? "Copiando..." : (copied ? "Copiado!" : "Copiar componente")}
+            title={!profile ? "Clique para fazer login e copiar componente" : (copying ? "Copiando..." : (copied ? "Copiado!" : "Copiar componente"))}
           >
             {buttonContent.icon}
             <span className="font-medium">
