@@ -5,11 +5,12 @@ import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import { useAuth } from '@/contexts/AuthContext';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 const Layout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const handleLogoClick = () => {
     navigate('/');
@@ -39,12 +40,15 @@ const Layout: React.FC = () => {
                   >
                     Library
                   </Button>
-                  <Button
-                    variant={location.pathname === '/connections' ? 'default' : 'ghost'}
-                    onClick={() => navigate('/connections')}
-                  >
-                    Connections
-                  </Button>
+                  {/* Only show Connections for admin users */}
+                  {profile?.role === 'admin' && (
+                    <Button
+                      variant={location.pathname === '/connections' ? 'default' : 'ghost'}
+                      onClick={() => navigate('/connections')}
+                    >
+                      Connections
+                    </Button>
+                  )}
                   <UserAvatar />
                 </>
               ) : (

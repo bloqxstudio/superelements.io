@@ -33,7 +33,7 @@ function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="connections" element={
-                    <ProtectedRoute>
+                    <ProtectedRoute requireRole={['admin']}>
                       <Connections />
                     </ProtectedRoute>
                   } />
