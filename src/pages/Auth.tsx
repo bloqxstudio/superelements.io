@@ -244,11 +244,11 @@ export default function Auth() {
           <Card className="bg-white border-0 shadow-2xl">
             <CardContent className="p-10">
               <div className="space-y-8">
-                <div className="text-center space-y-4">
-                  <h1 className="text-4xl font-bold text-gray-900">
+                <div className="space-y-2">
+                  <h1 className="text-2xl font-bold text-gray-900">
                     Acesse o Super Elements
                   </h1>
-                  <p className="text-gray-600 text-xl">
+                  <p className="text-gray-600 text-sm">
                     Faça login na sua conta ou crie uma
                   </p>
                 </div>
