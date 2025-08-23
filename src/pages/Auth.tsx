@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PhoneInput } from '@/components/ui/phone-input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Mail, Lock, ArrowLeft, Phone, CheckCircle } from 'lucide-react';
 
 export default function Auth() {
@@ -19,6 +20,8 @@ export default function Auth() {
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'initial' | 'password' | 'signup' | 'confirm-email'>('initial');
   const [isSignUp, setIsSignUp] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   
   const { signIn, signUp, signInWithGoogle, user } = useAuth();
   const navigate = useNavigate();
@@ -133,26 +136,65 @@ export default function Auth() {
     setError(null);
   };
 
+  // Video handlers
+  const handleVideoLoad = () => {
+    setVideoLoaded(true);
+    setVideoError(false);
+  };
+
+  const handleVideoError = () => {
+    setVideoError(true);
+    setVideoLoaded(false);
+  };
+
+  // Optimized Video Component
+  const OptimizedVideo = () => (
+    <div className="relative w-full h-96 max-w-md">
+      {/* Loading Skeleton */}
+      {!videoLoaded && !videoError && (
+        <div className="absolute inset-0 z-10">
+          <Skeleton className="w-full h-full rounded-lg" />
+        </div>
+      )}
+      
+      {/* Error Fallback */}
+      {videoError && (
+        <div className="w-full h-full bg-gray-900 rounded-lg flex items-center justify-center">
+          <div className="text-center text-white">
+            <div className="text-4xl mb-2">🎬</div>
+            <p className="text-sm opacity-75">Vídeo indisponível</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Optimized Video */}
+      <video 
+        src="/sp3.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        onLoadedData={handleVideoLoad}
+        onError={handleVideoError}
+        className={`w-full h-full object-cover rounded-lg shadow-2xl transform perspective-1000 rotateY-12 hover:rotateY-6 transition-transform duration-700 ${
+          !videoLoaded ? 'opacity-0' : 'opacity-100'
+        }`}
+        style={{
+          transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
+          boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
+        }}
+      />
+    </div>
+  );
+
   // Email confirmation success screen
   if (step === 'confirm-email') {
     return (
       <div className="min-h-screen flex bg-black">
         {/* Left side - 3D Video */}
         <div className="w-2/5 relative flex items-center justify-center p-8">
-          <div className="relative w-full h-96 max-w-md">
-            <video 
-              src="/sp3.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="w-full h-full object-cover rounded-lg shadow-2xl transform perspective-1000 rotateY-12 hover:rotateY-6 transition-transform duration-700"
-              style={{
-                transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
-                boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
-              }}
-            />
-          </div>
+          <OptimizedVideo />
         </div>
 
         {/* Right side - Success Message */}
@@ -210,20 +252,7 @@ export default function Auth() {
       <div className="min-h-screen flex bg-black">
         {/* Left side - 3D Video */}
         <div className="w-2/5 relative flex items-center justify-center p-8">
-          <div className="relative w-full h-96 max-w-md">
-            <video 
-              src="/sp3.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="w-full h-full object-cover rounded-lg shadow-2xl transform perspective-1000 rotateY-12 hover:rotateY-6 transition-transform duration-700"
-              style={{
-                transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
-                boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
-              }}
-            />
-          </div>
+          <OptimizedVideo />
         </div>
 
         {/* Right side - Login Form */}
@@ -362,20 +391,7 @@ export default function Auth() {
     <div className="min-h-screen flex bg-black">
       {/* Left side - 3D Video */}
       <div className="w-2/5 relative flex items-center justify-center p-8">
-        <div className="relative w-full h-96 max-w-md">
-          <video 
-            src="/sp3.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover rounded-lg shadow-2xl transform perspective-1000 rotateY-12 hover:rotateY-6 transition-transform duration-700"
-            style={{
-              transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
-              boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
-            }}
-          />
-        </div>
+        <OptimizedVideo />
       </div>
 
       {/* Right side - Auth Form */}
