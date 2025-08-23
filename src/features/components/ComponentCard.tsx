@@ -34,7 +34,9 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
 
   // Get connection info to determine access level
   const connection = component.connection_id ? getConnectionById(component.connection_id) : null;
-  const accessLevel = connection?.userType === 'pro' ? 'pro' : connection?.userType === 'all' ? 'free' : 'free';
+  const shouldShowBadge = connection?.userType === 'pro';
+  const isAccessible = !connection || connection.userType === 'all' || connection.userType === 'free' || 
+    (connection.userType === 'pro' && profile?.role !== 'free');
 
   const handlePreviewClick = useCallback(() => {
     onPreview(getPreviewUrl(component), component.title.rendered);
@@ -79,7 +81,7 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
       {/* Preview Container - Fluid with 4:3 aspect ratio */}
       <div className="aspect-[4/3] bg-gray-50 cursor-pointer relative overflow-hidden flex-shrink-0" onClick={handlePreviewClick}>
         {/* Access Level Badge */}
-        {connection && connection.userType === 'pro' && (
+        {shouldShowBadge && (
           <div className="absolute top-2 right-2 z-10">
             <ComponentAccessBadge 
               accessLevel="pro"

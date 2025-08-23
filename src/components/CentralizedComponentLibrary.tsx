@@ -46,15 +46,18 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
     
     const activeConnections = connections.filter(conn => conn.isActive);
     
+    // Admin can see all connections
     if (profile.role === 'admin') return activeConnections;
     
+    // Pro users can see connections marked as 'all', 'pro', or 'free'
     if (profile.role === 'pro') {
       return activeConnections.filter(conn => 
-        conn.userType === 'free' || conn.userType === 'pro' || conn.userType === 'all'
+        conn.userType === 'all' || conn.userType === 'pro' || conn.userType === 'free'
       );
     }
     
-    return activeConnections.filter(conn => conn.userType === 'free' || conn.userType === 'all');
+    // Free users can only see connections marked as 'all' or 'free'
+    return activeConnections.filter(conn => conn.userType === 'all' || conn.userType === 'free');
   };
 
   const activeConnections = getAccessibleActiveConnections();
@@ -99,26 +102,33 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
     const hasRestrictedConnections = connections.filter(conn => conn.isActive).length > 0;
     
     if (hasRestrictedConnections && profile?.role === 'free') {
-      return <div className="flex-1 flex items-center justify-center p-8">
-          <div className="max-w-md mx-auto space-y-6">
-            <Card>
-              <CardContent className="p-8 text-center">
-                <div className="w-16 h-16 bg-yellow-50 rounded-lg flex items-center justify-center mx-auto mb-6">
-                  <WifiOff className="w-8 h-8 text-yellow-600" />
-                </div>
-                <h2 className="text-2xl font-bold mb-4">Nenhuma Conexão Ativa</h2>
-                <p className="text-muted-foreground mb-6">
-                  Existem conexões disponíveis, mas você precisa de acesso Pro para visualizá-las.
-                </p>
-              </CardContent>
-            </Card>
-            <UpgradePrompt 
-              requiredLevel="pro" 
-              currentLevel="free"
-              onUpgrade={() => console.log('Upgrade to Pro')} 
-            />
-          </div>
-        </div>;
+      // Check if there are connections restricted to 'pro' only
+      const hasProOnlyConnections = connections.some(conn => 
+        conn.isActive && conn.userType === 'pro'
+      );
+      
+      if (hasProOnlyConnections) {
+        return <div className="flex-1 flex items-center justify-center p-8">
+            <div className="max-w-md mx-auto space-y-6">
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <div className="w-16 h-16 bg-yellow-50 rounded-lg flex items-center justify-center mx-auto mb-6">
+                    <WifiOff className="w-8 h-8 text-yellow-600" />
+                  </div>
+                  <h2 className="text-2xl font-bold mb-4">Nenhuma Conexão Ativa</h2>
+                  <p className="text-muted-foreground mb-6">
+                    Existem conexões disponíveis exclusivas para usuários Pro. Faça upgrade para acessá-las.
+                  </p>
+                </CardContent>
+              </Card>
+              <UpgradePrompt 
+                requiredLevel="pro" 
+                currentLevel="free"
+                onUpgrade={() => console.log('Upgrade to Pro')} 
+              />
+            </div>
+          </div>;
+      }
     }
     
     return <div className="flex-1 flex items-center justify-center p-8">

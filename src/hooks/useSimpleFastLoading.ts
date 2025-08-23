@@ -28,15 +28,15 @@ export const useSimpleFastLoading = ({
     // Admin can see all connections
     if (profile.role === 'admin') return activeConnections;
     
-    // Pro users can see free and pro connections
+    // Pro users can see connections marked as 'all', 'pro', or 'free'
     if (profile.role === 'pro') {
       return activeConnections.filter(c => 
-        c.userType === 'free' || c.userType === 'pro' || c.userType === 'all'
+        c.userType === 'all' || c.userType === 'pro' || c.userType === 'free'
       );
     }
     
-    // Free users can only see free connections
-    return activeConnections.filter(c => c.userType === 'free' || c.userType === 'all');
+    // Free users can only see connections marked as 'all' or 'free'
+    return activeConnections.filter(c => c.userType === 'all' || c.userType === 'free');
   };
 
   const allConnections = getAccessibleConnections();
