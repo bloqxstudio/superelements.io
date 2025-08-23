@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Mail, Lock, ArrowLeft } from 'lucide-react';
-import authHeroImage from '@/assets/auth-hero-image.png';
 
 export default function Auth() {
   const [email, setEmail] = useState('');
@@ -108,15 +107,17 @@ export default function Auth() {
   if (step === 'password' || step === 'signup') {
     return (
       <div className="min-h-screen flex">
-        {/* Left side - Image */}
-        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-violet-600 to-indigo-800 items-center justify-center p-12">
-          <div className="relative">
-            <img 
-              src={authHeroImage} 
-              alt="Super Elements" 
-              className="max-w-lg w-full h-auto object-contain"
-            />
-          </div>
+        {/* Left side - Video */}
+        <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
+          <video 
+            src="/sp3.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-black/20" />
         </div>
 
         {/* Right side - Form */}
@@ -215,15 +216,17 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left side - Image */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-violet-600 to-indigo-800 items-center justify-center p-12">
-        <div className="relative">
-          <img 
-            src={authHeroImage} 
-            alt="Super Elements" 
-            className="max-w-lg w-full h-auto object-contain"
-          />
-        </div>
+      {/* Left side - Video */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
+        <video 
+          src="/sp3.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-black/20" />
       </div>
 
       {/* Right side - Auth Form */}
