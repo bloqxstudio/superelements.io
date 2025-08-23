@@ -136,10 +136,10 @@ export default function Auth() {
   // Email confirmation success screen
   if (step === 'confirm-email') {
     return (
-      <div className="min-h-screen flex flex-col lg:flex-row bg-black">
-        {/* Top/Left - Video */}
-        <div className="lg:w-2/5 flex items-center justify-center p-4 lg:p-8">
-          <div className="relative w-64 h-40 lg:w-full lg:h-96 lg:max-w-md">
+      <div className="min-h-screen relative bg-black">
+        {/* Video Background - Fixed */}
+        <div className="fixed top-8 left-1/2 transform -translate-x-1/2 z-0 lg:relative lg:top-auto lg:left-auto lg:transform-none lg:w-2/5 lg:flex lg:items-center lg:justify-center lg:p-8">
+          <div className="relative w-80 h-48 lg:w-full lg:h-96 lg:max-w-md">
             <video 
               src="/sp3.mp4"
               autoPlay
@@ -156,8 +156,8 @@ export default function Auth() {
           </div>
         </div>
 
-        {/* Bottom/Right - Success Message */}
-        <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
+        {/* Success Message - Can overlap video */}
+        <div className="relative z-10 min-h-screen flex items-start justify-center pt-32 lg:pt-0 lg:items-center p-4 lg:p-8 lg:flex-1">
           <div className="w-full max-w-lg">
             <Card className="bg-white border-0 shadow-2xl">
               <CardContent className="p-10">
@@ -208,10 +208,10 @@ export default function Auth() {
 
   if (step === 'password' || step === 'signup') {
     return (
-      <div className="min-h-screen flex flex-col lg:flex-row bg-black">
-        {/* Top/Left - Video */}
-        <div className="lg:w-2/5 flex items-center justify-center p-4 lg:p-8">
-          <div className="relative w-64 h-40 lg:w-full lg:h-96 lg:max-w-md">
+      <div className="min-h-screen relative bg-black">
+        {/* Video Background - Fixed */}
+        <div className="fixed top-8 left-1/2 transform -translate-x-1/2 z-0 lg:relative lg:top-auto lg:left-auto lg:transform-none lg:w-2/5 lg:flex lg:items-center lg:justify-center lg:p-8">
+          <div className="relative w-80 h-48 lg:w-full lg:h-96 lg:max-w-md">
             <video 
               src="/sp3.mp4"
               autoPlay
@@ -228,8 +228,8 @@ export default function Auth() {
           </div>
         </div>
 
-        {/* Bottom/Right - Login Form */}
-        <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
+        {/* Login Form - Can overlap video */}
+        <div className="relative z-10 min-h-screen flex items-start justify-center pt-32 lg:pt-0 lg:items-center p-4 lg:p-8 lg:flex-1">
           <div className="w-full max-w-lg">
             <Card className="bg-white border-0 shadow-2xl">
               <CardContent className="p-10">
@@ -361,10 +361,10 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-black">
-      {/* Top/Left - Video */}
-      <div className="lg:w-2/5 flex items-center justify-center p-4 lg:p-8">
-        <div className="relative w-64 h-40 lg:w-full lg:h-96 lg:max-w-md">
+    <div className="min-h-screen relative bg-black">
+      {/* Video Background - Fixed */}
+      <div className="fixed top-8 left-1/2 transform -translate-x-1/2 z-0 lg:relative lg:top-auto lg:left-auto lg:transform-none lg:w-2/5 lg:flex lg:items-center lg:justify-center lg:p-8">
+        <div className="relative w-80 h-48 lg:w-full lg:h-96 lg:max-w-md">
           <video 
             src="/sp3.mp4"
             autoPlay
@@ -381,14 +381,14 @@ export default function Auth() {
         </div>
       </div>
 
-      {/* Bottom/Right - Auth Form */}
-      <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
+      {/* Auth Form - Can overlap video */}
+      <div className="relative z-10 min-h-screen flex items-start justify-center pt-32 lg:pt-0 lg:items-center p-4 lg:p-8 lg:flex-1">
         <div className="w-full max-w-lg">
           <Card className="bg-white border-0 shadow-2xl">
             <CardContent className="p-10">
               <div className="space-y-8">
                 <div className="space-y-2">
-                  <h1 className="text-2xl font-bold text-gray-900">
+                  <h1 className="text-xl font-bold text-gray-900">
                     Acesse o Super Elements
                   </h1>
                   <p className="text-gray-600 text-sm">
