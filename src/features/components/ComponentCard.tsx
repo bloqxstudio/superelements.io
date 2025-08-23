@@ -1,6 +1,6 @@
 
 import React, { memo, useCallback } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import OptimizedDynamicIframe from './OptimizedDynamicIframe';
@@ -56,8 +56,8 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
   const getCopyButtonContent = () => {
     if (!profile) {
       return {
-        icon: <Copy className="h-3 w-3 opacity-60" />,
-        text: 'LOGIN',
+        icon: <Lock className="h-3 w-3 opacity-60" />,
+        text: 'COPIAR',
         className: 'bg-muted border-muted-foreground/20 text-muted-foreground hover:bg-muted/80 cursor-pointer'
       };
     }
