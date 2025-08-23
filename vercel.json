@@ -2,7 +2,7 @@
 {
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!.*\\.(mp4|webm|ogg|avi|mov|wmv|flv|mkv|m4v|3gp|3g2|ts|mts|m2ts|vob|ogv|dv|rm|rmvb|asf|amv|m4p|mpg|mp2|mpeg|mpe|mpv|m2v|m4v|svi|3gp|3g2|mxf|roq|nsv|f4v|f4p|f4a|f4b)).*)",
       "destination": "/index.html"
     }
   ]
