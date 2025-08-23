@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import { useConnectionSync } from '@/hooks/useConnectionSync';
@@ -13,7 +13,9 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
   onPreview
 }) => {
   const {
-    connections
+    connections,
+    isLoading,
+    fetchConnections
   } = useConnectionsStore();
   const {
     activeConnectionId
@@ -22,11 +24,36 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
     syncConnection,
     isInSync
   } = useConnectionSync();
+
+  // Auto-fetch connections on mount if not already loaded
+  useEffect(() => {
+    if (connections.length === 0 && !isLoading) {
+      console.log('🔄 Auto-fetching connections on component mount...');
+      fetchConnections();
+    }
+  }, [connections.length, isLoading, fetchConnections]);
   const handleForceSync = () => {
     syncConnection();
   };
   const activeConnections = connections.filter(conn => conn.isActive);
   console.log('=== CENTRALIZED LIBRARY RENDER ===');
+
+  // Show loading state while fetching connections
+  if (isLoading && connections.length === 0) {
+    return <div className="flex-1 flex items-center justify-center p-8">
+        <Card className="max-w-md mx-auto">
+          <CardContent className="p-8 text-center">
+            <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center mx-auto mb-6">
+              <RefreshCw className="w-8 h-8 text-muted-foreground animate-spin" />
+            </div>
+            <h2 className="text-2xl font-bold mb-4">Loading Connections</h2>
+            <p className="text-muted-foreground mb-6">
+              Fetching WordPress connections...
+            </p>
+          </CardContent>
+        </Card>
+      </div>;
+  }
 
   // No connections available
   if (connections.length === 0) {
