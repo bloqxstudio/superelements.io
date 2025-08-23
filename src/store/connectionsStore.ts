@@ -101,7 +101,13 @@ export const useConnectionsStore = create<ConnectionsStore>()(
               free: connections.filter(c => c.userType === 'free').length,
               pro: connections.filter(c => c.userType === 'pro').length,
               all: connections.filter(c => c.userType === 'all').length,
-            }
+            },
+            connectionDetails: connections.map(c => ({
+              id: c.id,
+              name: c.name,
+              isActive: c.isActive,
+              status: c.status
+            }))
           });
 
           set({ connections, isLoading: false });
