@@ -107,35 +107,29 @@ export default function Auth() {
   if (step === 'password' || step === 'signup') {
     return (
       <div className="min-h-screen flex bg-black">
-      {/* Left side - 3D Video */}
-      <div className="w-2/5 relative flex items-center justify-center p-8 overflow-visible">
-        <div className="relative w-full h-[500px] max-w-lg">
-          <video 
-            src="/sp3.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover rounded-lg shadow-2xl transform transition-transform duration-1000 hover:scale-110 animate-pulse"
-            style={{
-              transform: 'perspective(1200px) rotateY(-25deg) rotateX(8deg) scale(1.2)',
-              transformOrigin: 'center right',
-              boxShadow: '30px 30px 80px rgba(0,0,0,0.6), 0 0 50px rgba(139, 92, 246, 0.3)',
-              zIndex: 1
-            }}
-          />
-          <div 
-            className="absolute inset-0 bg-gradient-to-r from-violet-600/20 to-transparent rounded-lg"
-            style={{ zIndex: 2 }}
-          />
+        {/* Left side - 3D Video */}
+        <div className="w-2/5 relative flex items-center justify-center p-8">
+          <div className="relative w-full h-96 max-w-md">
+            <video 
+              src="/sp3.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-full object-cover rounded-lg shadow-2xl transform perspective-1000 rotateY-12 hover:rotateY-6 transition-transform duration-700"
+              style={{
+                transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
+                boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
+              }}
+            />
+          </div>
         </div>
-      </div>
 
-      {/* Right side - Auth Form */}
-      <div className="flex-1 flex items-center justify-center p-8 relative" style={{ zIndex: 10 }}>
-        <div className="w-full max-w-lg">
-          <Card className="bg-white/95 backdrop-blur-sm border-0 shadow-2xl">
-            <CardContent className="p-10">
+        {/* Right side - Login Form */}
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="w-full max-w-lg">
+            <Card className="bg-white border-0 shadow-2xl">
+              <CardContent className="p-10">
                 <div className="space-y-8">
                   <button
                     onClick={handleBack}
@@ -145,11 +139,11 @@ export default function Auth() {
                     Voltar
                   </button>
                   
-                  <div className="space-y-2">
-                    <h1 className="text-2xl font-bold text-gray-900">
+                  <div className="text-center space-y-3">
+                    <h1 className="text-3xl font-bold text-gray-900">
                       {isSignUp ? 'Criar conta' : 'Fazer login'}
                     </h1>
-                    <p className="text-gray-600 text-sm">
+                    <p className="text-gray-600 text-lg">
                       {isSignUp 
                         ? 'Crie sua senha para finalizar o cadastro' 
                         : 'Digite sua senha para continuar'
@@ -227,33 +221,27 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex bg-black">
       {/* Left side - 3D Video */}
-      <div className="w-2/5 relative flex items-center justify-center p-8 overflow-visible">
-        <div className="relative w-full h-[500px] max-w-lg">
+      <div className="w-2/5 relative flex items-center justify-center p-8">
+        <div className="relative w-full h-96 max-w-md">
           <video 
             src="/sp3.mp4"
             autoPlay
             loop
             muted
             playsInline
-            className="w-full h-full object-cover rounded-lg shadow-2xl transform transition-transform duration-1000 hover:scale-110 animate-pulse"
+            className="w-full h-full object-cover rounded-lg shadow-2xl transform perspective-1000 rotateY-12 hover:rotateY-6 transition-transform duration-700"
             style={{
-              transform: 'perspective(1200px) rotateY(-25deg) rotateX(8deg) scale(1.2)',
-              transformOrigin: 'center right',
-              boxShadow: '30px 30px 80px rgba(0,0,0,0.6), 0 0 50px rgba(139, 92, 246, 0.3)',
-              zIndex: 1
+              transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
+              boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
             }}
-          />
-          <div 
-            className="absolute inset-0 bg-gradient-to-r from-violet-600/20 to-transparent rounded-lg"
-            style={{ zIndex: 2 }}
           />
         </div>
       </div>
 
       {/* Right side - Auth Form */}
-      <div className="flex-1 flex items-center justify-center p-8 relative" style={{ zIndex: 10 }}>
+      <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-lg">
-          <Card className="bg-white/95 backdrop-blur-sm border-0 shadow-2xl">
+          <Card className="bg-white border-0 shadow-2xl">
             <CardContent className="p-10">
               <div className="space-y-8">
                 <div className="space-y-2">
