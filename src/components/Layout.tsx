@@ -1,15 +1,12 @@
 
 import React from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { useAuthStore } from '@/store/authStore';
 import { Logo } from '@/components/Logo';
-import { SimpleUserMenu } from '@/components/auth/SimpleUserMenu';
+import { Button } from '@/components/ui/button';
 
 const Layout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile } = useAuthStore();
-  const isLibraryPage = location.pathname === '/';
 
   const handleLogoClick = () => {
     navigate('/');
@@ -29,44 +26,21 @@ const Layout: React.FC = () => {
               </div>
             </div>
             
-            {/* Admin Navigation */}
-            {profile?.role === 'admin' && (
-              <div className="flex items-center gap-2 mr-4">
-                <button
-                  onClick={() => navigate('/admin')}
-                  className={`px-3 py-2 text-sm font-medium transition-colors rounded-md ${
-                    location.pathname === '/admin' 
-                      ? 'bg-primary text-primary-foreground' 
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
-                >
-                  Dashboard
-                </button>
-                <button
-                  onClick={() => navigate('/admin/pricing')}
-                  className={`px-3 py-2 text-sm font-medium transition-colors rounded-md ${
-                    location.pathname === '/admin/pricing' 
-                      ? 'bg-primary text-primary-foreground' 
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
-                >
-                  Pricing
-                </button>
-                <button
-                  onClick={() => navigate('/connections')}
-                  className={`px-3 py-2 text-sm font-medium transition-colors rounded-md ${
-                    location.pathname === '/connections' 
-                      ? 'bg-primary text-primary-foreground' 
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
-                >
-                  Connections
-                </button>
-              </div>
-            )}
-            
-            {/* User Menu */}
-            <SimpleUserMenu />
+            {/* Navigation */}
+            <div className="flex items-center gap-4">
+              <Button
+                variant={location.pathname === '/' ? 'default' : 'ghost'}
+                onClick={() => navigate('/')}
+              >
+                Library
+              </Button>
+              <Button
+                variant={location.pathname === '/connections' ? 'default' : 'ghost'}
+                onClick={() => navigate('/connections')}
+              >
+                Connections
+              </Button>
+            </div>
           </div>
         </div>
       </header>

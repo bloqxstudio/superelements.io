@@ -1,5 +1,4 @@
-import React, { useCallback } from 'react';
-import { ComponentItem } from '@/hooks/useSimplifiedComponentLoading';
+import React from 'react';
 import OptimizedComponentCard from './OptimizedComponentCard';
 import ComponentGridLoading from './ComponentGridLoading';
 import { Button } from '@/components/ui/button';
@@ -9,15 +8,15 @@ import { useConnectionsStore } from '@/store/connectionsStore';
 import '../../components/ui/component-grid.css';
 
 interface ComponentGridContentProps {
-  displayComponents: ComponentItem[];
+  displayComponents: any[];
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   error: string | null;
   onRetry: () => void;
-  onPreview: (url: string, title: string, component: ComponentItem) => void;
-  handleCopyComponent: (component: ComponentItem) => void;
-  memoizedGetDesktopPreviewUrl: (component: ComponentItem) => string;
-  memoizedGetPreviewUrl: (component: ComponentItem) => string;
+  onPreview: (url: string, title: string, component: any) => void;
+  handleCopyComponent: (component: any) => void;
+  memoizedGetDesktopPreviewUrl: (component: any) => string;
+  memoizedGetPreviewUrl: (component: any) => string;
 }
 
 const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
@@ -36,7 +35,7 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
   const hasActiveFilters = selectedCategories && selectedCategories.length > 0;
 
   // Helper function to get component title
-  const getComponentTitle = useCallback((component: ComponentItem) => {
+  const getComponentTitle = React.useCallback((component: any) => {
     // Handle both string and object formats for title
     if (typeof component.title === 'string') {
       return component.title;
@@ -45,7 +44,7 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
   }, []);
 
   // Helper function to get base URL for component with enhanced debugging
-  const getComponentBaseUrl = useCallback((component: ComponentItem) => {
+  const getComponentBaseUrl = React.useCallback((component: any) => {
     console.log('🔍 GETTING BASE URL FOR COMPONENT - ENHANCED DEBUG:', {
       componentId: component.id,
       originalId: component.originalId,
@@ -91,14 +90,14 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
   }, [getConnectionById, getComponentTitle]);
 
   // Load more function for infinite scroll
-  const loadMore = useCallback(() => {
+  const loadMore = React.useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       console.log('Load more requested');
     }
   }, [hasNextPage, isFetchingNextPage]);
 
   // Enhanced preview handler that passes the full component
-  const handlePreviewClick = useCallback((component: ComponentItem) => {
+  const handlePreviewClick = React.useCallback((component: any) => {
     const previewUrl = memoizedGetPreviewUrl(component);
     const title = getComponentTitle(component);
     

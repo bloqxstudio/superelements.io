@@ -1,7 +1,6 @@
 
 import React, { memo, useCallback } from 'react';
-import { Copy, Check, Crown, Lock } from 'lucide-react';
-import { useComponentAccess } from '@/hooks/useComponentAccess';
+import { Copy, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import OptimizedDynamicIframe from './OptimizedDynamicIframe';
@@ -27,8 +26,6 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
   getPreviewUrl
 }) => {
   const navigate = useNavigate();
-  const { getComponentAccess } = useComponentAccess();
-  const accessInfo = getComponentAccess(component);
 
   const handlePreviewClick = useCallback(() => {
     onPreview(getPreviewUrl(component), component.title.rendered);
@@ -36,26 +33,12 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
 
   const handleCopyClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    if (accessInfo.canCopy) {
-      onCopy(component);
-    } else if (accessInfo.requiresUpgrade) {
-      // Redirecionar para página de upgrade
-      navigate('/pricing');
-    }
-  }, [onCopy, component, accessInfo, navigate]);
+    onCopy(component);
+  }, [onCopy, component]);
 
   const { copying, copied } = copyState;
 
   const getCopyButtonContent = () => {
-    if (!accessInfo.canCopy && accessInfo.requiresUpgrade) {
-      return {
-        icon: <Crown className="h-3 w-3" />,
-        text: 'PRO',
-        className: 'bg-gradient-to-r from-yellow-400 to-orange-500 border-yellow-500 text-white hover:from-yellow-500 hover:to-orange-600'
-      };
-    }
-
     if (copying) {
       return {
         icon: <div className="animate-spin h-3 w-3 border border-current border-t-transparent rounded-full" />,
@@ -84,16 +67,6 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
   return (
     <div className="rounded-lg text-card-foreground shadow-sm group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 bg-card border border-border relative h-full flex flex-col">
       
-      {/* PRO Badge */}
-      {accessInfo.level === 'pro' && (
-        <div className="absolute top-2 right-2 z-10">
-          <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-bold">
-            <Crown className="h-3 w-3 mr-1" />
-            PRO
-          </Badge>
-        </div>
-      )}
-
       {/* Preview Container - Fluid with 4:3 aspect ratio */}
       <div className="aspect-[4/3] bg-gray-50 cursor-pointer relative overflow-hidden flex-shrink-0" onClick={handlePreviewClick}>
         <div className="w-full h-full relative bg-white overflow-hidden">
@@ -102,18 +75,6 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
             title={`Preview of ${component.title.rendered}`} 
           />
         </div>
-        
-        {/* Overlay para componentes PRO não acessíveis */}
-        {!accessInfo.canCopy && accessInfo.requiresUpgrade && (
-          <div className="absolute inset-0 bg-black bg-opacity-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <div className="bg-white rounded-lg p-3 shadow-lg">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Lock className="h-4 w-4" />
-                <span>Recurso PRO</span>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
       
       {/* Content Container */}
@@ -134,7 +95,7 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
               transition-all duration-200 disabled:cursor-not-allowed flex-shrink-0
               ${buttonContent.className}
             `} 
-            title={accessInfo.canCopy ? "Copiar componente" : "Faça upgrade para PRO para copiar este componente"}
+            title="Copiar componente"
           >
             {buttonContent.icon}
             <span className="font-medium">

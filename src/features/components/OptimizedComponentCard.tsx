@@ -1,7 +1,6 @@
 
 import React, { memo, useCallback } from 'react';
-import { Copy, Check, Crown, Lock, Unlock } from 'lucide-react';
-import { useComponentAccess } from '@/hooks/useComponentAccess';
+import { Copy, Check, Unlock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { useEnhancedCopyComponent } from './hooks/useEnhancedCopyComponent';
@@ -23,7 +22,6 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
   baseUrl
 }) => {
   const navigate = useNavigate();
-  const { getComponentAccess } = useComponentAccess();
   const { copyToClipboard, getCopyState } = useEnhancedCopyComponent();
   
   // Helper function to get component title
@@ -45,8 +43,8 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
     hasConnectionId: !!component.connection_id
   });
   
-  // Memoize access info calculation
-  const accessInfo = React.useMemo(() => getComponentAccess(component), [component, getComponentAccess]);
+  // Memoize access info calculation - simplified to always allow access
+  const accessInfo = React.useMemo(() => ({ canCopy: true, requiresUpgrade: false }), []);
   
   // Memoize preview URLs
   const desktopPreviewUrl = React.useMemo(() => getDesktopPreviewUrl(component), [getDesktopPreviewUrl, component]);
@@ -70,11 +68,8 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
     });
     
     if (accessInfo.canCopy) {
-      // Usuário tem acesso - tentar copiar
+      // User has access - try to copy
       await copyToClipboard(component, baseUrl);
-    } else if (accessInfo.requiresUpgrade) {
-      // Usuário precisa fazer upgrade
-      navigate('/pricing');
     }
   }, [copyToClipboard, component, baseUrl, accessInfo, navigate]);
 
@@ -82,14 +77,6 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
   const { copying, copied } = copyState;
 
   const getCopyButtonContent = useCallback(() => {
-    if (!accessInfo.canCopy && accessInfo.requiresUpgrade) {
-      return {
-        icon: <Unlock className="h-3 w-3" />,
-        text: 'DESBLOQUEAR',
-        className: 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200 hover:border-gray-400'
-      };
-    }
-
     if (copying) {
       return {
         icon: <div className="animate-spin h-3 w-3 border border-current border-t-transparent rounded-full" />,
@@ -111,7 +98,7 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
       text: 'COPIAR',
       className: 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-600 hover:border-gray-300'
     };
-  }, [accessInfo.canCopy, accessInfo.requiresUpgrade, copying, copied]);
+  }, [copying, copied]);
 
   const buttonContent = getCopyButtonContent();
 
@@ -126,18 +113,6 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
             title={`Preview of ${componentTitle}`} 
           />
         </div>
-        
-        {/* Overlay for locked PRO components */}
-        {!accessInfo.canCopy && accessInfo.requiresUpgrade && (
-          <div className="absolute inset-0 bg-black bg-opacity-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <div className="bg-white rounded-lg p-3 shadow-lg">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Lock className="h-4 w-4" />
-                <span>Recurso PRO</span>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
       
       {/* Content Container */}
@@ -158,11 +133,7 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
               transition-all duration-200 disabled:cursor-not-allowed flex-shrink-0
               ${buttonContent.className}
             `} 
-            title={
-              accessInfo.canCopy 
-                ? (copying ? "Copiando..." : (copied ? "Copiado!" : "Copiar componente"))
-                : "Faça upgrade para PRO para copiar este componente"
-            }
+            title={copying ? "Copiando..." : (copied ? "Copiado!" : "Copiar componente")}
           >
             {buttonContent.icon}
             <span className="font-medium">

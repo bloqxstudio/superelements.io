@@ -1,22 +1,14 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAccessControl } from '@/hooks/useAccessControl';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Crown, Zap, Shield, Folder, FolderOpen, Globe, Gift } from 'lucide-react';
+import { Folder, FolderOpen, Globe } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 export const CategorySidebar: React.FC = () => {
   const navigate = useNavigate();
-  const {
-    userRole,
-    isAdmin,
-    isPro,
-    isFree
-  } = useAccessControl();
   const { getConnectionById } = useConnectionsStore();
   const {
     connectionsData,
@@ -32,10 +24,6 @@ export const CategorySidebar: React.FC = () => {
     isConnectionAllSelected,
     hasActiveFilters
   } = useMultiConnectionData();
-
-  const handleUpgradeClick = () => {
-    navigate('/pricing');
-  };
 
   const handleAllComponentsClick = () => {
     clearAllFilters();
@@ -177,48 +165,6 @@ export const CategorySidebar: React.FC = () => {
             )}
           </div>
         </ScrollArea>
-
-        {/* Bottom Section - Plan Status */}
-        <div className="flex-shrink-0 border-t border-gray-200 p-4">
-          <div className="text-center">
-            {isAdmin ? (
-              <>
-                <div className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-xs font-medium inline-flex items-center">
-                  <Shield className="h-3 w-3 mr-1" />
-                  ADMIN ACCESS
-                </div>
-                <p className="text-xs text-gray-600 mt-2">
-                  Full system access enabled
-                </p>
-              </>
-            ) : isPro ? (
-              <>
-                <div className="bg-[#D2F525] text-black px-3 py-1 rounded-full text-xs font-medium inline-flex items-center">
-                  <Crown className="h-3 w-3 mr-1" />
-                  PRO ACTIVE
-                </div>
-                <p className="text-xs text-gray-600 mt-2">
-                  You have access to all features
-                </p>
-              </>
-            ) : (
-              <div className="space-y-3">
-                <div className="mb-2 text-xs font-medium text-gray-600">FREE PLAN</div>
-                <p className="text-xs text-gray-600 mb-3">
-                  Upgrade to PRO for premium features
-                </p>
-                <Button 
-                  onClick={handleUpgradeClick} 
-                  className="w-full bg-[#D2F525] text-black hover:bg-[#B8CC02]" 
-                  size="sm"
-                >
-                  <Crown className="h-4 w-4 mr-2" />
-                  Upgrade to PRO
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );

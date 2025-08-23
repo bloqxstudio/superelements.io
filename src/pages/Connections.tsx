@@ -1,8 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useConnectionsStore } from '@/store/connectionsStore';
-import { useAuthStore } from '@/store/authStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,8 +27,6 @@ import {
 import { toast } from 'sonner';
 
 const Connections = () => {
-  const navigate = useNavigate();
-  const { profile } = useAuthStore();
   const { 
     connections, 
     isLoading, 
@@ -46,33 +42,9 @@ const Connections = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [userTypeFilter, setUserTypeFilter] = useState<string>('all');
 
-  const isAdmin = profile?.role === 'admin';
-
   useEffect(() => {
     fetchConnections();
   }, [fetchConnections]);
-
-  // Redirect non-admin users
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <Card className="max-w-md mx-auto">
-          <CardContent className="p-8 text-center">
-            <div className="w-16 h-16 bg-red-50 rounded-lg flex items-center justify-center mx-auto mb-6">
-              <XCircle className="w-8 h-8 text-red-600" />
-            </div>
-            <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-            <p className="text-muted-foreground mb-6">
-              You need administrator privileges to manage connections.
-            </p>
-            <Button onClick={() => navigate('/')} variant="outline">
-              Return to Home
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   // Filter connections based on search and filters
   const filteredConnections = connections.filter(connection => {
@@ -178,9 +150,9 @@ const Connections = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Connection Management</h1>
+            <h1 className="text-3xl font-bold">WordPress Connections</h1>
             <p className="text-muted-foreground mt-2">
-              Manage WordPress connections and control component visibility
+              Manage your WordPress connections to access components
             </p>
           </div>
           <Button onClick={() => setShowWizard(true)} className="flex items-center gap-2">

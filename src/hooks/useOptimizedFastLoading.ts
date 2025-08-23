@@ -2,7 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useWordPressStore } from '@/store/wordpressStore';
 import { useWordPressApi } from '@/hooks/useWordPressApi';
-import { useConnectionsForUserRole } from '@/hooks/useConnectionsForUserRole';
+import { useConnectionsStore } from '@/store/connectionsStore';
 import { toast } from '@/hooks/use-toast';
 
 interface UseOptimizedFastLoadingProps {
@@ -17,11 +17,11 @@ export const useOptimizedFastLoading = ({
   activeConnectionId,
 }: UseOptimizedFastLoadingProps) => {
   const { setComponents, setAvailableCategories } = useWordPressStore();
-  const { getConnectionsForCurrentUser } = useConnectionsForUserRole();
+  const { connections } = useConnectionsStore();
   const { fetchComponents } = useWordPressApi();
 
-  // Get user connections
-  const allUserConnections = getConnectionsForCurrentUser();
+  // Get all active connections (simplified - no user role filtering)
+  const allUserConnections = connections.filter(c => c.isActive);
   
   // Filter connections based on activeConnectionId
   const targetConnections = activeConnectionId 

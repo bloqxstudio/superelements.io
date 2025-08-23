@@ -1,31 +1,16 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import CentralizedComponentLibrary from '@/components/CentralizedComponentLibrary';
 import { CategorySidebar } from '@/features/components/CategorySidebar';
 import PreviewModal from '@/components/PreviewModal';
 import { useConnectionsStore } from '@/store/connectionsStore';
-import { useAuthStore } from '@/store/authStore';
-import { useAccessControl } from '@/hooks/useAccessControl';
-import { useOptimizedAutoSync } from '@/hooks/useOptimizedAutoSync';
 import { useConnectionSync } from '@/hooks/useConnectionSync';
 const Components = () => {
-  const navigate = useNavigate();
-  const {
-    profile
-  } = useAuthStore();
   const {
     connections
   } = useConnectionsStore();
   const {
     syncConnection
   } = useConnectionSync();
-  const {
-    userRole,
-    canAccessProFeatures,
-    isFree,
-    isPro,
-    isAdmin
-  } = useAccessControl();
   const [previewModal, setPreviewModal] = useState({
     isOpen: false,
     url: '',
@@ -33,8 +18,6 @@ const Components = () => {
     component: null as any
   });
 
-  // Optimized auto-sync
-  useOptimizedAutoSync();
   const handlePreview = (url: string, title?: string, component?: any) => {
     setPreviewModal({
       isOpen: true,

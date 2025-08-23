@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useWordPressStore } from '@/store/wordpressStore';
 import { useWordPressApi } from '@/hooks/useWordPressApi';
-import { useConnectionsForUserRole } from '@/hooks/useConnectionsForUserRole';
+import { useConnectionsStore } from '@/store/connectionsStore';
 import { toast } from '@/hooks/use-toast';
 
 interface UseSimpleFastLoadingProps {
@@ -14,20 +14,20 @@ export const useSimpleFastLoading = ({
   activeConnectionId,
 }: UseSimpleFastLoadingProps) => {
   const { setComponents, setAvailableCategories } = useWordPressStore();
-  const { getConnectionsForCurrentUser } = useConnectionsForUserRole();
+  const { connections } = useConnectionsStore();
   const { fetchComponents } = useWordPressApi();
 
-  // Get user-filtered connections
-  const allUserConnections = getConnectionsForCurrentUser();
+  // Get connections (simplified - no user filtering)  
+  const allConnections = connections.filter(c => c.isActive);
   
   // Filter by activeConnectionId if specified
   const targetConnections = activeConnectionId 
-    ? allUserConnections.filter(c => c.id === activeConnectionId)
-    : allUserConnections;
+    ? allConnections.filter(c => c.id === activeConnectionId)
+    : allConnections;
 
   const queryKey = [
     'simpleComponents',
-    activeConnectionId || 'user-allowed',
+    activeConnectionId || 'all-active',
     selectedCategories,
     targetConnections.map(c => c.id).join(',')
   ];
@@ -56,16 +56,15 @@ export const useSimpleFastLoading = ({
           
           const result = await fetchComponents(connectionConfig, {
             page: 1,
-            perPage: 30, // Reduced from 50
+            perPage: 30,
             categoryIds: selectedCategories.length > 0 ? selectedCategories : undefined
           });
 
           if (result?.components && Array.isArray(result.components)) {
             return result.components.map(component => ({
               ...component,
-              _connectionId: connection.id,
-              _connectionName: connection.name,
-              _connectionUserType: connection.userType
+              connection_id: connection.id,
+              _connectionName: connection.name
             }));
           }
           return [];
@@ -79,42 +78,8 @@ export const useSimpleFastLoading = ({
       const results = await Promise.all(connectionPromises);
       allComponents = results.flat();
 
-      // Extract categories if not filtering
-      if (selectedCategories.length === 0 && allComponents.length > 0) {
-        const categoryMap = new Map();
-        allComponents.forEach(component => {
-          if (component.categories && Array.isArray(component.categories)) {
-            component.categories.forEach(catId => {
-              if (!categoryMap.has(catId)) {
-                categoryMap.set(catId, {
-                  id: catId,
-                  name: `Category ${catId}`,
-                  count: 1
-                });
-              } else {
-                categoryMap.get(catId).count += 1;
-              }
-            });
-          }
-        });
-        allCategories = Array.from(categoryMap.values());
-      }
-
       // Update store
       setComponents(allComponents);
-      if (allCategories.length > 0) {
-        setAvailableCategories(allCategories);
-      }
-
-      // Show error only if all connections failed
-      if (allComponents.length === 0 && failedCount === targetConnections.length) {
-        toast({
-          title: "Loading Failed",
-          description: "Unable to load components. Please check your connection.",
-          variant: "destructive",
-          duration: 3000
-        });
-      }
       
       return { 
         components: allComponents, 
@@ -126,14 +91,6 @@ export const useSimpleFastLoading = ({
 
     } catch (error) {
       console.error('Error loading components:', error);
-      
-      toast({
-        title: "Loading Error",
-        description: "Failed to load components. Please try again.",
-        variant: "destructive",
-        duration: 3000
-      });
-      
       throw error;
     }
   };
@@ -152,8 +109,8 @@ export const useSimpleFastLoading = ({
     retry: 1,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const totalComponents = data?.totalLoaded || 0;
