@@ -128,13 +128,13 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
           </div>
           
           <h3 className="text-lg font-semibold mb-2">
-            {hasActiveFilters ? 'No matching components' : 'No components found'}
+            {hasActiveFilters ? 'Nenhum componente correspondente' : 'Nenhum componente encontrado'}
           </h3>
           
           <p className="text-muted-foreground mb-6">
             {hasActiveFilters 
-              ? 'Try adjusting your category filters to see more components.'
-              : 'No components are available in your connected library at the moment.'
+              ? 'Tente ajustar seus filtros de categoria para ver mais componentes.'
+              : 'Nenhum componente está disponível em sua biblioteca conectada no momento.'
             }
           </p>
           
@@ -142,12 +142,12 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
             {hasActiveFilters && clearAllFilters && (
               <Button onClick={() => clearAllFilters()} variant="outline">
                 <Filter className="h-4 w-4 mr-2" />
-                Clear Filters
+                Limpar Filtros
               </Button>
             )}
             <Button onClick={onRetry} variant="outline">
               <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
+              Atualizar
             </Button>
           </div>
         </div>
@@ -203,7 +203,7 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
             variant="outline"
             className="flex items-center gap-2"
           >
-            Load More Components
+            Carregar Mais Componentes
           </Button>
         </div>
       )}
@@ -212,7 +212,7 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
       {!hasNextPage && displayComponents.length > 0 && (
         <div className="text-center py-8">
           <p className="text-sm text-muted-foreground">
-            You've reached the end of your component library
+            Você chegou ao final da sua biblioteca de componentes
           </p>
         </div>
       )}

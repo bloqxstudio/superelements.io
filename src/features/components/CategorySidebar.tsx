@@ -60,7 +60,7 @@ export const CategorySidebar: React.FC = () => {
             onClick={handleAllComponentsClick}
           >
             <Globe className="h-3 w-3 mr-2" />
-            All Components
+            Todos os Componentes
           </Button>
         </div>
 
@@ -69,7 +69,7 @@ export const CategorySidebar: React.FC = () => {
           <div className="p-4 space-y-3">
             {connectionsData.length === 0 ? (
               <div className="text-sm text-gray-500 text-center py-8">
-                No active connections found.
+                Nenhuma conexão ativa encontrada.
               </div>
             ) : (
               <>
@@ -109,13 +109,13 @@ export const CategorySidebar: React.FC = () => {
                       <div className="ml-4 space-y-1">
                         {connection.isLoading && (
                           <div className="text-xs text-gray-500 py-2">
-                            Loading categories...
+                            Carregando categorias...
                           </div>
                         )}
                         
                         {connection.error && (
                           <div className="text-xs text-red-500 py-2">
-                            Error: {connection.error}
+                            Erro: {connection.error}
                           </div>
                         )}
                         
@@ -131,13 +131,13 @@ export const CategorySidebar: React.FC = () => {
                             }`}
                             onClick={() => selectAllFromConnection(connection.connectionId)}
                           >
-                            <span className="font-medium">All</span>
+                            <span className="font-medium">Todos</span>
                           </Button>
                         )}
                         
                         {connection.isLoaded && connection.categories.length === 0 && (
                           <div className="text-xs text-gray-500 py-2">
-                            No categories found
+                            Nenhuma categoria encontrada
                           </div>
                         )}
                         

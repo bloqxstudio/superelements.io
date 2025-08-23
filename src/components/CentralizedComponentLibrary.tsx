@@ -46,9 +46,9 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
             <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center mx-auto mb-6">
               <RefreshCw className="w-8 h-8 text-muted-foreground animate-spin" />
             </div>
-            <h2 className="text-2xl font-bold mb-4">Loading Connections</h2>
+            <h2 className="text-2xl font-bold mb-4">Carregando Conexões</h2>
             <p className="text-muted-foreground mb-6">
-              Fetching WordPress connections...
+              Buscando conexões WordPress...
             </p>
           </CardContent>
         </Card>
@@ -63,9 +63,9 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
             <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center mx-auto mb-6">
               <Layers className="w-8 h-8 text-muted-foreground" />
             </div>
-            <h2 className="text-2xl font-bold mb-4">No Connections</h2>
+            <h2 className="text-2xl font-bold mb-4">Nenhuma Conexão</h2>
             <p className="text-muted-foreground mb-6">
-              No WordPress connections are available. Please check your connection settings.
+              Nenhuma conexão WordPress disponível. Verifique suas configurações de conexão.
             </p>
           </CardContent>
         </Card>
@@ -80,10 +80,10 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
             <div className="w-16 h-16 bg-yellow-50 rounded-lg flex items-center justify-center mx-auto mb-6">
               <WifiOff className="w-8 h-8 text-yellow-600" />
             </div>
-            <h2 className="text-2xl font-bold mb-4">No Active Connections</h2>
+            <h2 className="text-2xl font-bold mb-4">Nenhuma Conexão Ativa</h2>
             <p className="text-muted-foreground mb-6">
-              You have {connections.length} connections, but none are currently active. 
-              Please activate at least one connection to view components.
+              Você tem {connections.length} conexões, mas nenhuma está ativa no momento. 
+              Ative pelo menos uma conexão para visualizar componentes.
             </p>
           </CardContent>
         </Card>

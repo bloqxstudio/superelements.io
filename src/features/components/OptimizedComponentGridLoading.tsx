@@ -13,11 +13,11 @@ const OptimizedComponentGridLoading: React.FC<OptimizedComponentGridLoadingProps
   const getMessage = () => {
     switch (variant) {
       case 'initializing':
-        return 'Connecting...';
+        return 'Conectando...';
       case 'applying-filters':
-        return 'Filtering...';
+        return 'Filtrando...';
       default:
-        return 'Loading...';
+        return 'Carregando...';
     }
   };
 

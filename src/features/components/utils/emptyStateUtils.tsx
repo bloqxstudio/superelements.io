@@ -14,22 +14,22 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ type, selectedCategories
       icon: Database,
       iconBg: 'from-[#D2F525] to-[#A8CC02]',
       iconColor: 'text-black',
-      title: 'Initializing Lazy Loading',
-      description: 'Preparing to load components on demand...'
+      title: 'Inicializando Carregamento',
+      description: 'Preparando para carregar componentes sob demanda...'
     },
     'no-components': {
       icon: Layers,
       iconBg: 'from-gray-100 to-gray-200',
       iconColor: 'text-gray-400',
-      title: 'No Components Found',
-      description: 'Try connecting to a WordPress site to explore components.'
+      title: 'Nenhum Componente Encontrado',
+      description: 'Tente conectar a um site WordPress para explorar componentes.'
     },
     'no-matches': {
       icon: Filter,
       iconBg: 'from-orange-100 to-orange-200',
       iconColor: 'text-orange-500',
-      title: 'No Matches Found',
-      description: 'No components found for the selected filters. Try adjusting your selection.'
+      title: 'Nenhuma Correspondência Encontrada',
+      description: 'Nenhum componente encontrado para os filtros selecionados. Tente ajustar sua seleção.'
     }
   };
 
@@ -51,7 +51,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ type, selectedCategories
         {type === 'no-matches' && (
           <div className="mt-4">
             <Badge variant="outline" className="text-sm">
-              {selectedCategories.length} categories selected
+              {selectedCategories.length} categorias selecionadas
             </Badge>
           </div>
         )}

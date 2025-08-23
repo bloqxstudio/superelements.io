@@ -60,7 +60,7 @@ const ComponentFilters: React.FC<ComponentFiltersProps> = ({ onRefresh }) => {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold">
-            Component Filters
+            Filtros de Componentes
           </CardTitle>
           <div className="flex items-center space-x-2">
             <Button 
@@ -70,11 +70,11 @@ const ComponentFilters: React.FC<ComponentFiltersProps> = ({ onRefresh }) => {
               className="mr-2"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
+              Atualizar
             </Button>
             <Button variant="outline" size="sm" onClick={toggleFilterVisibility}>
               <Filter className="h-4 w-4 mr-2" />
-              {isFilterVisible ? 'Hide Filters' : 'Show Filters'}
+              {isFilterVisible ? 'Ocultar Filtros' : 'Mostrar Filtros'}
             </Button>
           </div>
         </div>
@@ -84,7 +84,7 @@ const ComponentFilters: React.FC<ComponentFiltersProps> = ({ onRefresh }) => {
         <div className="relative">
           <Input
             type="search"
-            placeholder="Search components..."
+            placeholder="Buscar componentes..."
             value={searchTerm}
             onChange={handleSearchChange}
             className="pl-10"
@@ -98,7 +98,7 @@ const ComponentFilters: React.FC<ComponentFiltersProps> = ({ onRefresh }) => {
               className="absolute right-1 top-1/2 transform -translate-y-1/2 rounded-full hover:bg-accent text-muted-foreground"
             >
               <X className="w-4 h-4" />
-              <span className="sr-only">Clear Search</span>
+              <span className="sr-only">Limpar Busca</span>
             </Button>
           )}
         </div>
@@ -106,10 +106,10 @@ const ComponentFilters: React.FC<ComponentFiltersProps> = ({ onRefresh }) => {
         {/* Category Filters */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-medium">Categories</h4>
+            <h4 className="text-sm font-medium">Categorias</h4>
             {hasActiveFilters && (
               <Button variant="link" size="sm" onClick={clearAllFilters}>
-                Clear All
+                Limpar Todos
               </Button>
             )}
           </div>
@@ -126,12 +126,12 @@ const ComponentFilters: React.FC<ComponentFiltersProps> = ({ onRefresh }) => {
                     >
                       {category.name}
                       {selectedCategories.includes(category.id) && (
-                        <Badge className="ml-auto">Selected</Badge>
+                        <Badge className="ml-auto">Selecionado</Badge>
                       )}
                     </Button>
                   ))}
                   {filteredCategories.length === 0 && (
-                    <p className="text-sm text-muted-foreground">No categories available.</p>
+                    <p className="text-sm text-muted-foreground">Nenhuma categoria disponível.</p>
                   )}
                 </div>
               </ScrollArea>

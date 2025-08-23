@@ -20,11 +20,11 @@ const ComponentGridLoading: React.FC<ComponentGridLoadingProps> = ({
   const getMessage = () => {
     switch (variant) {
       case 'initializing':
-        return 'Initializing connection...';
+        return 'Inicializando conexão...';
       case 'applying-filters':
-        return 'Applying filters...';
+        return 'Aplicando filtros...';
       default:
-        return 'Loading components...';
+        return 'Carregando componentes...';
     }
   };
 
@@ -45,7 +45,7 @@ const ComponentGridLoading: React.FC<ComponentGridLoadingProps> = ({
             className="flex items-center gap-2"
           >
             <X className="h-4 w-4" />
-            Cancel
+            Cancelar
           </Button>
         )}
       </div>
