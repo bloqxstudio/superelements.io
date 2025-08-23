@@ -139,7 +139,7 @@ export default function Auth() {
       <div className="min-h-screen flex flex-col lg:flex-row bg-black">
         {/* Video - Top on mobile/tablet, Left on desktop */}
         <div className="w-full lg:w-2/5 relative flex items-center justify-center p-4 lg:p-8 order-1 lg:order-1">
-          <div className="relative w-32 h-20 md:w-40 md:h-24 lg:w-full lg:h-96 lg:max-w-md">
+          <div className="relative w-48 h-32 md:w-64 md:h-40 lg:w-full lg:h-96 lg:max-w-md">
             <video 
               src="/sp3.mp4"
               autoPlay
@@ -211,7 +211,7 @@ export default function Auth() {
       <div className="min-h-screen flex flex-col lg:flex-row bg-black">
         {/* Video - Top on mobile/tablet, Left on desktop */}
         <div className="w-full lg:w-2/5 relative flex items-center justify-center p-4 lg:p-8 order-1 lg:order-1">
-          <div className="relative w-32 h-20 md:w-40 md:h-24 lg:w-full lg:h-96 lg:max-w-md">
+          <div className="relative w-48 h-32 md:w-64 md:h-40 lg:w-full lg:h-96 lg:max-w-md">
             <video 
               src="/sp3.mp4"
               autoPlay
@@ -364,7 +364,7 @@ export default function Auth() {
     <div className="min-h-screen flex flex-col lg:flex-row bg-black">
       {/* Video - Top on mobile/tablet, Left on desktop */}
       <div className="w-full lg:w-2/5 relative flex items-center justify-center p-4 lg:p-8 order-1 lg:order-1">
-        <div className="relative w-32 h-20 md:w-40 md:h-24 lg:w-full lg:h-96 lg:max-w-md">
+        <div className="relative w-48 h-32 md:w-64 md:h-40 lg:w-full lg:h-96 lg:max-w-md">
           <video 
             src="/sp3.mp4"
             autoPlay
