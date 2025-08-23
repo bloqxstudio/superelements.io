@@ -4,6 +4,9 @@ import { Copy, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import OptimizedDynamicIframe from './OptimizedDynamicIframe';
+import { ComponentAccessBadge } from '@/components/ComponentAccessBadge';
+import { useAuth } from '@/contexts/AuthContext';
+import { useConnectionsStore } from '@/store/connectionsStore';
 
 interface ComponentCardProps {
   component: any;
@@ -26,6 +29,12 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
   getPreviewUrl
 }) => {
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const { getConnectionById } = useConnectionsStore();
+
+  // Get connection info to determine access level
+  const connection = component.connection_id ? getConnectionById(component.connection_id) : null;
+  const accessLevel = connection?.userType === 'pro' ? 'pro' : connection?.userType === 'all' ? 'free' : 'free';
 
   const handlePreviewClick = useCallback(() => {
     onPreview(getPreviewUrl(component), component.title.rendered);
@@ -69,6 +78,17 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
       
       {/* Preview Container - Fluid with 4:3 aspect ratio */}
       <div className="aspect-[4/3] bg-gray-50 cursor-pointer relative overflow-hidden flex-shrink-0" onClick={handlePreviewClick}>
+        {/* Access Level Badge */}
+        {connection && connection.userType === 'pro' && (
+          <div className="absolute top-2 right-2 z-10">
+            <ComponentAccessBadge 
+              accessLevel="pro"
+              userRole={profile?.role}
+              size="sm"
+            />
+          </div>
+        )}
+        
         <div className="w-full h-full relative bg-white overflow-hidden">
           <OptimizedDynamicIframe 
             url={getDesktopPreviewUrl(component)} 

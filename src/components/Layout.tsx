@@ -3,10 +3,13 @@ import React from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
+import { UserAvatar } from '@/components/UserAvatar';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Layout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const handleLogoClick = () => {
     navigate('/');
@@ -28,18 +31,27 @@ const Layout: React.FC = () => {
             
             {/* Navigation */}
             <div className="flex items-center gap-4">
-              <Button
-                variant={location.pathname === '/' ? 'default' : 'ghost'}
-                onClick={() => navigate('/')}
-              >
-                Library
-              </Button>
-              <Button
-                variant={location.pathname === '/connections' ? 'default' : 'ghost'}
-                onClick={() => navigate('/connections')}
-              >
-                Connections
-              </Button>
+              {user ? (
+                <>
+                  <Button
+                    variant={location.pathname === '/' ? 'default' : 'ghost'}
+                    onClick={() => navigate('/')}
+                  >
+                    Library
+                  </Button>
+                  <Button
+                    variant={location.pathname === '/connections' ? 'default' : 'ghost'}
+                    onClick={() => navigate('/connections')}
+                  >
+                    Connections
+                  </Button>
+                  <UserAvatar />
+                </>
+              ) : (
+                <Button onClick={() => navigate('/auth')}>
+                  Entrar
+                </Button>
+              )}
             </div>
           </div>
         </div>

@@ -6,6 +6,8 @@ import ComponentGrid from '@/features/components/ComponentGrid';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, AlertCircle, Layers, Wifi, WifiOff } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 interface CentralizedComponentLibraryProps {
   onPreview: (url: string, title: string) => void;
 }
@@ -24,6 +26,7 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
     syncConnection,
     isInSync
   } = useConnectionSync();
+  const { profile } = useAuth();
 
   // Auto-fetch connections on mount if not already loaded
   useEffect(() => {
@@ -32,10 +35,29 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
       fetchConnections();
     }
   }, [connections.length, isLoading, fetchConnections]);
+  
   const handleForceSync = () => {
     syncConnection();
   };
-  const activeConnections = connections.filter(conn => conn.isActive);
+
+  // Filter connections based on user access level
+  const getAccessibleActiveConnections = () => {
+    if (!profile) return [];
+    
+    const activeConnections = connections.filter(conn => conn.isActive);
+    
+    if (profile.role === 'admin') return activeConnections;
+    
+    if (profile.role === 'pro') {
+      return activeConnections.filter(conn => 
+        conn.userType === 'free' || conn.userType === 'pro' || conn.userType === 'all'
+      );
+    }
+    
+    return activeConnections.filter(conn => conn.userType === 'free' || conn.userType === 'all');
+  };
+
+  const activeConnections = getAccessibleActiveConnections();
   console.log('=== CENTRALIZED LIBRARY RENDER ===');
 
   // Show loading state while fetching connections
@@ -74,6 +96,31 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
 
   // No active connections
   if (activeConnections.length === 0) {
+    const hasRestrictedConnections = connections.filter(conn => conn.isActive).length > 0;
+    
+    if (hasRestrictedConnections && profile?.role === 'free') {
+      return <div className="flex-1 flex items-center justify-center p-8">
+          <div className="max-w-md mx-auto space-y-6">
+            <Card>
+              <CardContent className="p-8 text-center">
+                <div className="w-16 h-16 bg-yellow-50 rounded-lg flex items-center justify-center mx-auto mb-6">
+                  <WifiOff className="w-8 h-8 text-yellow-600" />
+                </div>
+                <h2 className="text-2xl font-bold mb-4">Nenhuma Conexão Ativa</h2>
+                <p className="text-muted-foreground mb-6">
+                  Existem conexões disponíveis, mas você precisa de acesso Pro para visualizá-las.
+                </p>
+              </CardContent>
+            </Card>
+            <UpgradePrompt 
+              requiredLevel="pro" 
+              currentLevel="free"
+              onUpgrade={() => console.log('Upgrade to Pro')} 
+            />
+          </div>
+        </div>;
+    }
+    
     return <div className="flex-1 flex items-center justify-center p-8">
         <Card className="max-w-md mx-auto">
           <CardContent className="p-8 text-center">

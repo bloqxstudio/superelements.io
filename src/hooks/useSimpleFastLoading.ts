@@ -3,6 +3,7 @@ import { useWordPressStore } from '@/store/wordpressStore';
 import { useWordPressApi } from '@/hooks/useWordPressApi';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UseSimpleFastLoadingProps {
   selectedCategories: number[];
@@ -16,9 +17,29 @@ export const useSimpleFastLoading = ({
   const { setComponents, setAvailableCategories } = useWordPressStore();
   const { connections } = useConnectionsStore();
   const { fetchComponents } = useWordPressApi();
+  const { profile } = useAuth();
 
-  // Get connections (simplified - no user filtering)  
-  const allConnections = connections.filter(c => c.isActive);
+  // Filter connections based on user access level
+  const getAccessibleConnections = () => {
+    const activeConnections = connections.filter(c => c.isActive);
+    
+    if (!profile) return [];
+    
+    // Admin can see all connections
+    if (profile.role === 'admin') return activeConnections;
+    
+    // Pro users can see free and pro connections
+    if (profile.role === 'pro') {
+      return activeConnections.filter(c => 
+        c.userType === 'free' || c.userType === 'pro' || c.userType === 'all'
+      );
+    }
+    
+    // Free users can only see free connections
+    return activeConnections.filter(c => c.userType === 'free' || c.userType === 'all');
+  };
+
+  const allConnections = getAccessibleConnections();
   
   // Filter by activeConnectionId if specified
   const targetConnections = activeConnectionId 
