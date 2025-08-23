@@ -80,9 +80,9 @@ export const useOptimizedFastLoading = ({
             if (result.status === 'fulfilled' && result.value?.components) {
               const componentsWithConnectionInfo = result.value.components.map(component => ({
                 ...component,
-                _connectionId: connection.id,
-                _connectionName: connection.name,
-                _connectionUserType: connection.userType
+                connection_id: connection.id,
+                connection_name: connection.name,
+                connection_user_type: connection.userType
               }));
               allComponents.push(...componentsWithConnectionInfo);
             }

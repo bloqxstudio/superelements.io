@@ -33,7 +33,12 @@ export const useSimpleFastLoading = ({
   ];
 
   const queryFn = async () => {
+    console.log('🔄 Starting simple fast loading...');
+    console.log('Target connections:', targetConnections.length);
+    console.log('Selected categories:', selectedCategories);
+    
     if (targetConnections.length === 0) {
+      console.log('❌ No target connections available');
       return { components: [], categories: [], totalLoaded: 0 };
     }
 
@@ -64,7 +69,7 @@ export const useSimpleFastLoading = ({
             return result.components.map(component => ({
               ...component,
               connection_id: connection.id,
-              _connectionName: connection.name
+              connection_name: connection.name
             }));
           }
           return [];
@@ -81,7 +86,13 @@ export const useSimpleFastLoading = ({
       // Update store
       setComponents(allComponents);
       
-      return { 
+      console.log('✅ Simple loading complete:', {
+        totalComponents: allComponents.length,
+        successful: targetConnections.length - failedCount,
+        failed: failedCount
+      });
+      
+      return {
         components: allComponents, 
         categories: allCategories,
         totalLoaded: allComponents.length,

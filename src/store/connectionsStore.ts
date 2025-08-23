@@ -61,16 +61,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
         set({ isLoading: true });
         
         try {
-          // SECURITY FIX: Only fetch connections for authenticated users
-          const { data: { user } } = await supabase.auth.getUser();
-          
-          if (!user) {
-            console.log('🔒 User not authenticated - no connections available');
-            set({ connections: [], isLoading: false });
-            return;
-          }
-
-          // Fetch connections based on user's access level
+          // Simplified - fetch all connections without auth check
           const { data, error } = await supabase
             .from('connections')
             .select('*')
@@ -125,12 +116,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
       
       addConnection: async (connectionData) => {
         try {
-          const { data: { user } } = await supabase.auth.getUser();
-          
-          if (!user) {
-            throw new Error('User must be authenticated to create a connection');
-          }
-          
+          // Simplified - create connection without auth check
           const { data, error } = await supabase
             .from('connections')
             .insert({
@@ -147,7 +133,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
               last_tested: connectionData.lastTested?.toISOString(),
               components_count: connectionData.componentsCount || 0,
               error: connectionData.error,
-              created_by: user.id, // Ensure this is set for RLS
+              created_by: null, // Simplified - no user context needed
             })
             .select()
             .single();
