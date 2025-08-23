@@ -136,10 +136,10 @@ export default function Auth() {
   // Email confirmation success screen
   if (step === 'confirm-email') {
     return (
-      <div className="min-h-screen flex bg-black">
-        {/* Left side - 3D Video */}
-        <div className="w-2/5 relative flex items-center justify-center p-8">
-          <div className="relative w-full h-96 max-w-md">
+      <div className="min-h-screen flex flex-col lg:flex-row bg-black">
+        {/* Top/Left - Video */}
+        <div className="lg:w-2/5 flex items-center justify-center p-4 lg:p-8">
+          <div className="relative w-64 h-40 lg:w-full lg:h-96 lg:max-w-md">
             <video 
               src="/sp3.mp4"
               autoPlay
@@ -147,7 +147,7 @@ export default function Auth() {
               muted
               playsInline
               preload="auto"
-              className="w-full h-full object-cover rounded-lg shadow-2xl transform perspective-1000 rotateY-12 hover:rotateY-6 transition-transform duration-700"
+              className="w-full h-full object-cover rounded-lg shadow-2xl lg:transform lg:perspective-1000 lg:rotateY-12 lg:hover:rotateY-6 lg:transition-transform lg:duration-700"
               style={{
                 transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
                 boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
@@ -156,8 +156,8 @@ export default function Auth() {
           </div>
         </div>
 
-        {/* Right side - Success Message */}
-        <div className="flex-1 flex items-center justify-center p-8">
+        {/* Bottom/Right - Success Message */}
+        <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
           <div className="w-full max-w-lg">
             <Card className="bg-white border-0 shadow-2xl">
               <CardContent className="p-10">
@@ -208,10 +208,10 @@ export default function Auth() {
 
   if (step === 'password' || step === 'signup') {
     return (
-      <div className="min-h-screen flex bg-black">
-        {/* Left side - 3D Video */}
-        <div className="w-2/5 relative flex items-center justify-center p-8">
-          <div className="relative w-full h-96 max-w-md">
+      <div className="min-h-screen flex flex-col lg:flex-row bg-black">
+        {/* Top/Left - Video */}
+        <div className="lg:w-2/5 flex items-center justify-center p-4 lg:p-8">
+          <div className="relative w-64 h-40 lg:w-full lg:h-96 lg:max-w-md">
             <video 
               src="/sp3.mp4"
               autoPlay
@@ -219,7 +219,7 @@ export default function Auth() {
               muted
               playsInline
               preload="auto"
-              className="w-full h-full object-cover rounded-lg shadow-2xl transform perspective-1000 rotateY-12 hover:rotateY-6 transition-transform duration-700"
+              className="w-full h-full object-cover rounded-lg shadow-2xl lg:transform lg:perspective-1000 lg:rotateY-12 lg:hover:rotateY-6 lg:transition-transform lg:duration-700"
               style={{
                 transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
                 boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
@@ -228,8 +228,8 @@ export default function Auth() {
           </div>
         </div>
 
-        {/* Right side - Login Form */}
-        <div className="flex-1 flex items-center justify-center p-8">
+        {/* Bottom/Right - Login Form */}
+        <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
           <div className="w-full max-w-lg">
             <Card className="bg-white border-0 shadow-2xl">
               <CardContent className="p-10">
@@ -361,10 +361,10 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen flex bg-black">
-      {/* Left side - 3D Video */}
-      <div className="w-2/5 relative flex items-center justify-center p-8">
-        <div className="relative w-full h-96 max-w-md">
+    <div className="min-h-screen flex flex-col lg:flex-row bg-black">
+      {/* Top/Left - Video */}
+      <div className="lg:w-2/5 flex items-center justify-center p-4 lg:p-8">
+        <div className="relative w-64 h-40 lg:w-full lg:h-96 lg:max-w-md">
           <video 
             src="/sp3.mp4"
             autoPlay
@@ -372,7 +372,7 @@ export default function Auth() {
             muted
             playsInline
             preload="auto"
-            className="w-full h-full object-cover rounded-lg shadow-2xl transform perspective-1000 rotateY-12 hover:rotateY-6 transition-transform duration-700"
+            className="w-full h-full object-cover rounded-lg shadow-2xl lg:transform lg:perspective-1000 lg:rotateY-12 lg:hover:rotateY-6 lg:transition-transform lg:duration-700"
             style={{
               transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
               boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
@@ -381,8 +381,8 @@ export default function Auth() {
         </div>
       </div>
 
-      {/* Right side - Auth Form */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      {/* Bottom/Right - Auth Form */}
+      <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
         <div className="w-full max-w-lg">
           <Card className="bg-white border-0 shadow-2xl">
             <CardContent className="p-10">
