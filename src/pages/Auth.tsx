@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,19 +42,24 @@ export default function Auth() {
     setLoading(true);
     setError(null);
 
-    // Try to sign in first to check if user exists
-    const { error: signInError } = await signIn(email, 'dummy-password');
-    
-    if (signInError?.message === 'Invalid login credentials') {
-      // User exists, go to password step
-      setStep('password');
-      setIsSignUp(false);
-    } else if (signInError?.message === 'Email not confirmed') {
-      // User exists but not confirmed, go to password step  
-      setStep('password');
-      setIsSignUp(false);
-    } else {
-      // User doesn't exist, go to signup step
+    try {
+      // Use password reset to check if user exists - it returns different errors
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'https://fake-url-just-to-check.com', // Won't actually send email
+      });
+      
+      if (error?.message?.includes('User not found') || 
+          error?.message?.includes('Unable to validate email address')) {
+        // User doesn't exist, go to signup
+        setStep('signup');
+        setIsSignUp(true);
+      } else {
+        // User exists (even if error about redirect URL), go to password step
+        setStep('password');
+        setIsSignUp(false);
+      }
+    } catch (err) {
+      // Fallback: assume it's a signup if we can't determine
       setStep('signup');
       setIsSignUp(true);
     }
