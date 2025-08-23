@@ -6,14 +6,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Mail, Lock, ArrowLeft } from 'lucide-react';
+import { PhoneInput } from '@/components/ui/phone-input';
+import { Mail, Lock, ArrowLeft, Phone, CheckCircle } from 'lucide-react';
 
 export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState<'initial' | 'password' | 'signup'>('initial');
+  const [step, setStep] = useState<'initial' | 'password' | 'signup' | 'confirm-email'>('initial');
   const [isSignUp, setIsSignUp] = useState(false);
   
   const { signIn, signUp, signInWithGoogle, user } = useAuth();
@@ -63,8 +66,27 @@ export default function Auth() {
     setLoading(true);
     setError(null);
 
+    // Validations for signup
+    if (isSignUp) {
+      if (password.length < 6) {
+        setError('A senha deve ter pelo menos 6 caracteres');
+        setLoading(false);
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('As senhas não coincidem');
+        setLoading(false);
+        return;
+      }
+      if (!phone || phone.length < 11) {
+        setError('Por favor, insira um número de telefone válido');
+        setLoading(false);
+        return;
+      }
+    }
+
     const { error } = isSignUp 
-      ? await signUp(email, password)
+      ? await signUp(email, password, phone)
       : await signIn(email, password);
 
     if (error) {
@@ -73,13 +95,12 @@ export default function Auth() {
           ? 'Email ou senha incorretos'
           : error.message === 'User already registered'
           ? 'Este email já está cadastrado'
+          : error.message === 'Signup requires a valid password'
+          ? 'A senha deve ter pelo menos 6 caracteres'
           : 'Ocorreu um erro. Tente novamente.'
       );
     } else if (isSignUp) {
-      setError(null);
-      alert('Conta criada com sucesso! Você já pode fazer login.');
-      setStep('password');
-      setIsSignUp(false);
+      setStep('confirm-email');
     }
     
     setLoading(false);
@@ -101,8 +122,82 @@ export default function Auth() {
   const handleBack = () => {
     setStep('initial');
     setPassword('');
+    setConfirmPassword('');
+    setPhone('');
     setError(null);
   };
+
+  // Email confirmation success screen
+  if (step === 'confirm-email') {
+    return (
+      <div className="min-h-screen flex bg-black">
+        {/* Left side - 3D Video */}
+        <div className="w-2/5 relative flex items-center justify-center p-8">
+          <div className="relative w-full h-96 max-w-md">
+            <video 
+              src="/sp3.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-full object-cover rounded-lg shadow-2xl transform perspective-1000 rotateY-12 hover:rotateY-6 transition-transform duration-700"
+              style={{
+                transform: 'perspective(1000px) rotateY(-15deg) rotateX(5deg)',
+                boxShadow: '20px 20px 60px rgba(0,0,0,0.8)'
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Right side - Success Message */}
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="w-full max-w-lg">
+            <Card className="bg-white border-0 shadow-2xl">
+              <CardContent className="p-10">
+                <div className="text-center space-y-8">
+                  <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircle className="h-8 w-8 text-green-600" />
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <h1 className="text-3xl font-bold text-gray-900">
+                      Conta criada com sucesso!
+                    </h1>
+                    <p className="text-gray-600 text-lg">
+                      Enviamos um email de confirmação para <strong>{email}</strong>
+                    </p>
+                    <p className="text-gray-500 text-base">
+                      Verifique sua caixa de entrada e clique no link para ativar sua conta.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <Button 
+                      onClick={() => {
+                        setStep('password');
+                        setIsSignUp(false);
+                      }}
+                      className="w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground text-base font-medium"
+                    >
+                      Fazer login agora
+                    </Button>
+                    
+                    <Button 
+                      variant="outline"
+                      onClick={handleBack}
+                      className="w-full h-14 text-base font-medium"
+                    >
+                      Voltar ao início
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (step === 'password' || step === 'signup') {
     return (
@@ -168,25 +263,64 @@ export default function Auth() {
                       </div>
                     </div>
                     
-                    <div className="space-y-2">
-                      <Label htmlFor="password" className="text-gray-700 text-base">
-                        Senha
-                      </Label>
-                      <div className="relative">
-                        <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                        <Input
-                          id="password"
-                          type="password"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          required
-                          disabled={loading}
-                          placeholder={isSignUp ? "Crie uma senha" : "Sua senha"}
-                          minLength={6}
-                          className="pl-12 h-14 border-gray-200 text-base"
-                        />
-                      </div>
-                    </div>
+                     <div className="space-y-2">
+                       <Label htmlFor="password" className="text-gray-700 text-base">
+                         Senha
+                       </Label>
+                       <div className="relative">
+                         <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                         <Input
+                           id="password"
+                           type="password"
+                           value={password}
+                           onChange={(e) => setPassword(e.target.value)}
+                           required
+                           disabled={loading}
+                           placeholder={isSignUp ? "Crie uma senha (mín. 6 caracteres)" : "Sua senha"}
+                           minLength={6}
+                           className="pl-12 h-14 border-gray-200 text-base"
+                         />
+                       </div>
+                     </div>
+
+                     {isSignUp && (
+                       <>
+                         <div className="space-y-2">
+                           <Label htmlFor="confirmPassword" className="text-gray-700 text-base">
+                             Confirmar Senha
+                           </Label>
+                           <div className="relative">
+                             <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                             <Input
+                               id="confirmPassword"
+                               type="password"
+                               value={confirmPassword}
+                               onChange={(e) => setConfirmPassword(e.target.value)}
+                               required
+                               disabled={loading}
+                               placeholder="Repita sua senha"
+                               minLength={6}
+                               className="pl-12 h-14 border-gray-200 text-base"
+                             />
+                           </div>
+                         </div>
+
+                         <div className="space-y-2">
+                           <Label htmlFor="phone" className="text-gray-700 text-base">
+                             Telefone
+                           </Label>
+                           <div className="relative">
+                             <Phone className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+                             <PhoneInput
+                               value={phone}
+                               onChange={setPhone}
+                               disabled={loading}
+                               className="pl-12 h-14 border-gray-200 text-base"
+                             />
+                           </div>
+                         </div>
+                       </>
+                     )}
 
                     <Button 
                       type="submit" 
