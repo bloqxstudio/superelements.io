@@ -190,7 +190,7 @@ export default function Auth() {
 
                     <Button 
                       type="submit" 
-                      className="w-full h-14 bg-violet-600 hover:bg-violet-700 text-white text-base font-medium"
+                      className="w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground text-base font-medium"
                       disabled={loading}
                     >
                       {loading ? (
@@ -305,7 +305,7 @@ export default function Auth() {
                     type="button"
                     onClick={handleEmailContinue}
                     disabled={loading || !email}
-                    className="w-full h-14 font-medium bg-violet-600 hover:bg-violet-700 text-white text-base"
+                    className="w-full h-14 font-medium bg-primary hover:bg-primary/90 text-primary-foreground text-base"
                   >
                     {loading ? (
                       <div className="flex items-center">
