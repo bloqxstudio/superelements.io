@@ -56,9 +56,9 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
   const getCopyButtonContent = () => {
     if (!profile) {
       return {
-        icon: <Copy className="h-3 w-3" />,
-        text: 'FAZER LOGIN',
-        className: 'bg-primary border-primary text-primary-foreground hover:bg-primary/90'
+        icon: <Copy className="h-3 w-3 opacity-60" />,
+        text: 'LOGIN',
+        className: 'bg-muted border-muted-foreground/20 text-muted-foreground hover:bg-muted/80 cursor-pointer'
       };
     }
 
@@ -129,7 +129,7 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
               transition-all duration-200 disabled:cursor-not-allowed flex-shrink-0
               ${buttonContent.className}
             `} 
-            title={!profile ? "Fazer login para copiar" : "Copiar componente"}
+            title={!profile ? "Clique para fazer login e copiar componente" : "Copiar componente"}
           >
             {buttonContent.icon}
             <span className="font-medium">
