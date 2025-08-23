@@ -106,28 +106,36 @@ export default function Auth() {
 
   if (step === 'password' || step === 'signup') {
     return (
-      <div className="min-h-screen relative bg-black overflow-hidden">
-        {/* Background Video - Full Page */}
-        <div className="absolute inset-0">
+      <div className="min-h-screen flex bg-black">
+      {/* Left side - 3D Video */}
+      <div className="w-2/5 relative flex items-center justify-center p-8 overflow-visible">
+        <div className="relative w-full h-[500px] max-w-lg">
           <video 
             src="/sp3.mp4"
             autoPlay
             loop
             muted
             playsInline
-            className="w-full h-full object-cover transform transition-transform duration-700"
+            className="w-full h-full object-cover rounded-lg shadow-2xl transform transition-transform duration-1000 hover:scale-110 animate-pulse"
             style={{
-              transform: 'perspective(1200px) rotateY(-15deg) rotateX(5deg)',
-              transformOrigin: 'left center'
+              transform: 'perspective(1200px) rotateY(-25deg) rotateX(8deg) scale(1.2)',
+              transformOrigin: 'center right',
+              boxShadow: '30px 30px 80px rgba(0,0,0,0.6), 0 0 50px rgba(139, 92, 246, 0.3)',
+              zIndex: 1
             }}
           />
+          <div 
+            className="absolute inset-0 bg-gradient-to-r from-violet-600/20 to-transparent rounded-lg"
+            style={{ zIndex: 2 }}
+          />
         </div>
+      </div>
 
-        {/* Login Form - Positioned over video */}
-        <div className="flex items-center justify-start pl-16 min-h-screen relative z-10">
-          <div className="w-full max-w-lg">
-            <Card className="bg-white border-0 shadow-2xl">
-              <CardContent className="p-10">
+      {/* Right side - Auth Form */}
+      <div className="flex-1 flex items-center justify-center p-8 relative" style={{ zIndex: 10 }}>
+        <div className="w-full max-w-lg">
+          <Card className="bg-white/95 backdrop-blur-sm border-0 shadow-2xl">
+            <CardContent className="p-10">
                 <div className="space-y-8">
                   <button
                     onClick={handleBack}
@@ -137,7 +145,7 @@ export default function Auth() {
                     Voltar
                   </button>
                   
-                  <div className="text-left space-y-3">
+                  <div className="space-y-2">
                     <h1 className="text-2xl font-bold text-gray-900">
                       {isSignUp ? 'Criar conta' : 'Fazer login'}
                     </h1>
@@ -151,7 +159,7 @@ export default function Auth() {
 
                   <form onSubmit={handleAuth} className="space-y-6">
                     <div className="space-y-2">
-                      <Label htmlFor="email" className="text-gray-700 text-sm">
+                      <Label htmlFor="email" className="text-gray-700 text-base">
                         Email
                       </Label>
                       <div className="relative">
@@ -167,7 +175,7 @@ export default function Auth() {
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="password" className="text-gray-700 text-sm">
+                      <Label htmlFor="password" className="text-gray-700 text-base">
                         Senha
                       </Label>
                       <div className="relative">
@@ -217,27 +225,35 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen relative bg-black overflow-hidden">
-      {/* Background Video - Full Page */}
-      <div className="absolute inset-0">
-        <video 
-          src="/sp3.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="w-full h-full object-cover transform transition-transform duration-700"
-          style={{
-            transform: 'perspective(1200px) rotateY(-15deg) rotateX(5deg)',
-            transformOrigin: 'left center'
-          }}
-        />
+    <div className="min-h-screen flex bg-black">
+      {/* Left side - 3D Video */}
+      <div className="w-2/5 relative flex items-center justify-center p-8 overflow-visible">
+        <div className="relative w-full h-[500px] max-w-lg">
+          <video 
+            src="/sp3.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full h-full object-cover rounded-lg shadow-2xl transform transition-transform duration-1000 hover:scale-110 animate-pulse"
+            style={{
+              transform: 'perspective(1200px) rotateY(-25deg) rotateX(8deg) scale(1.2)',
+              transformOrigin: 'center right',
+              boxShadow: '30px 30px 80px rgba(0,0,0,0.6), 0 0 50px rgba(139, 92, 246, 0.3)',
+              zIndex: 1
+            }}
+          />
+          <div 
+            className="absolute inset-0 bg-gradient-to-r from-violet-600/20 to-transparent rounded-lg"
+            style={{ zIndex: 2 }}
+          />
+        </div>
       </div>
 
-      {/* Login Form - Positioned over video */}
-      <div className="flex items-center justify-start pl-16 min-h-screen relative z-10">
+      {/* Right side - Auth Form */}
+      <div className="flex-1 flex items-center justify-center p-8 relative" style={{ zIndex: 10 }}>
         <div className="w-full max-w-lg">
-          <Card className="bg-white border-0 shadow-2xl">
+          <Card className="bg-white/95 backdrop-blur-sm border-0 shadow-2xl">
             <CardContent className="p-10">
               <div className="space-y-8">
                 <div className="space-y-2">
