@@ -23,7 +23,8 @@ export const useSimpleFastLoading = ({
   const getAccessibleConnections = () => {
     const activeConnections = connections.filter(c => c.isActive);
     
-    if (!profile) return [];
+    // If no profile (not logged in), show all active connections
+    if (!profile) return activeConnections;
     
     // Admin can see all connections
     if (profile.role === 'admin') return activeConnections;

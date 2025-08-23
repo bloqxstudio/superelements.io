@@ -42,9 +42,10 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
 
   // Filter connections based on user access level
   const getAccessibleActiveConnections = () => {
-    if (!profile) return [];
-    
     const activeConnections = connections.filter(conn => conn.isActive);
+    
+    // If no profile (not logged in), show all active connections
+    if (!profile) return activeConnections;
     
     // Admin can see all connections
     if (profile.role === 'admin') return activeConnections;

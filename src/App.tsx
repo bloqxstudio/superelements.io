@@ -27,11 +27,7 @@ function App() {
               <Routes>
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/" element={<Layout />}>
-                  <Route index element={
-                    <ProtectedRoute>
-                      <Components />
-                    </ProtectedRoute>
-                  } />
+                  <Route index element={<Components />} />
                   <Route path="connections" element={
                     <ProtectedRoute requireRole={['admin']}>
                       <Connections />

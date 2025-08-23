@@ -44,12 +44,24 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
 
   const handleCopyClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!profile) {
+      navigate('/auth');
+      return;
+    }
     onCopy(component);
-  }, [onCopy, component]);
+  }, [onCopy, component, profile, navigate]);
 
   const { copying, copied } = copyState;
 
   const getCopyButtonContent = () => {
+    if (!profile) {
+      return {
+        icon: <Copy className="h-3 w-3" />,
+        text: 'FAZER LOGIN',
+        className: 'bg-primary border-primary text-primary-foreground hover:bg-primary/90'
+      };
+    }
+
     if (copying) {
       return {
         icon: <div className="animate-spin h-3 w-3 border border-current border-t-transparent rounded-full" />,
@@ -111,13 +123,13 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
           
           <button 
             onClick={handleCopyClick} 
-            disabled={copying || copied}
+            disabled={profile && (copying || copied)}
             className={`
               flex items-center gap-1 px-2 py-1 text-xs font-medium border rounded 
               transition-all duration-200 disabled:cursor-not-allowed flex-shrink-0
               ${buttonContent.className}
             `} 
-            title="Copiar componente"
+            title={!profile ? "Fazer login para copiar" : "Copiar componente"}
           >
             {buttonContent.icon}
             <span className="font-medium">
