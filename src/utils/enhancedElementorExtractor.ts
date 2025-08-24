@@ -491,228 +491,53 @@ export const extractComponentForClipboard = async (
   }
 };
 
-// Extract Elementor data from local component object with ENHANCED validation and DEBUG
+// Extract Elementor data from local component object  
 const extractLocalElementorData = (component: any): ElementorElement[] | null => {
-  console.log('🔍 ENHANCED LOCAL ELEMENTOR DATA EXTRACTION - FULL DEBUG MODE');
+  if (!component) return null;
   
-  // STEP 1: Complete component analysis
-  console.log('📦 COMPLETE COMPONENT ANALYSIS:', {
-    hasComponent: !!component,
-    componentType: typeof component,
-    componentKeys: component ? Object.keys(component) : [],
-    componentId: component?.id,
-    componentTitle: component?.title?.rendered || component?.title,
-    componentLink: component?.link,
-    componentStatus: component?.status,
-    postType: component?.type,
-  });
-
-  // STEP 2: Meta fields detailed analysis
-  if (component?.meta) {
-    console.log('📋 META FIELDS COMPLETE ANALYSIS:', {
-      metaKeys: Object.keys(component.meta),
-      metaData: component.meta,
-      hasElementorData: '_elementor_data' in component.meta,
-      hasElementorVersion: '_elementor_version' in component.meta,
-      hasElementorCss: '_elementor_css' in component.meta,
-      hasElementorEditMode: '_elementor_edit_mode' in component.meta,
-      elementorDataExists: !!component.meta._elementor_data,
-      elementorDataType: typeof component.meta._elementor_data,
-      elementorDataLength: component.meta._elementor_data ? 
-        (typeof component.meta._elementor_data === 'string' ? component.meta._elementor_data.length : JSON.stringify(component.meta._elementor_data).length) : 0
-    });
-    
-    // Show raw _elementor_data if it exists
-    if (component.meta._elementor_data) {
-      console.log('🎯 RAW ELEMENTOR DATA FOUND:', {
-        type: typeof component.meta._elementor_data,
-        preview: typeof component.meta._elementor_data === 'string' ? 
-          component.meta._elementor_data.substring(0, 500) : 
-          JSON.stringify(component.meta._elementor_data).substring(0, 500),
-        fullLength: typeof component.meta._elementor_data === 'string' ? 
-          component.meta._elementor_data.length : 
-          JSON.stringify(component.meta._elementor_data).length
-      });
-    }
-  } else {
-    console.log('❌ NO META FIELDS FOUND IN COMPONENT');
-  }
-
-  // STEP 3: Content analysis
-  if (component?.content) {
-    console.log('📄 CONTENT ANALYSIS:', {
-      hasContent: !!component.content,
-      contentKeys: typeof component.content === 'object' ? Object.keys(component.content) : [],
-      hasRendered: !!(component.content?.rendered),
-      hasProtected: !!(component.content?.protected),
-      renderedLength: component.content?.rendered?.length || 0,
-      renderedPreview: component.content?.rendered?.substring(0, 200) || 'No rendered content'
-    });
-  }
-
-  // STEP 4: ACF fields analysis
-  if (component?.acf) {
-    console.log('🔧 ACF FIELDS ANALYSIS:', {
-      hasAcf: !!component.acf,
-      acfKeys: typeof component.acf === 'object' ? Object.keys(component.acf) : [],
-      acfData: component.acf
-    });
-  }
-
-  // STEP 5: Search in ALL possible locations for Elementor data
   const possibleSources = [
-    // Primary meta locations
-    { path: ['meta', '_elementor_data'], name: 'Primary Elementor Data' },
-    { path: ['meta', 'elementor_data'], name: 'Alternative Elementor Data' },
-    { path: ['meta', '_elementor_css'], name: 'Elementor CSS' },
-    
-    // Content locations
-    { path: ['content', 'rendered'], name: 'Rendered Content' },
-    { path: ['content', 'raw'], name: 'Raw Content' },
-    { path: ['content', 'protected'], name: 'Protected Content' },
-    
-    // ACF locations
-    { path: ['acf', '_elementor_data'], name: 'ACF Elementor Data' },
-    { path: ['acf', 'elementor_data'], name: 'ACF Alternative Elementor Data' },
-    { path: ['acf'], name: 'All ACF Fields' },
-    
-    // Direct properties
-    { path: ['_elementor_data'], name: 'Direct Elementor Data' },
-    { path: ['elementor_data'], name: 'Direct Alternative Elementor Data' },
-    
-    // Nested meta locations
-    { path: ['meta', '_elementor_version'], name: 'Elementor Version' },
-    { path: ['meta', '_elementor_edit_mode'], name: 'Elementor Edit Mode' },
-    { path: ['meta', '_elementor_template_type'], name: 'Elementor Template Type' },
-    
-    // WordPress post meta variations
-    { path: ['postmeta', '_elementor_data'], name: 'Post Meta Elementor Data' },
-    { path: ['custom_fields', '_elementor_data'], name: 'Custom Fields Elementor Data' },
+    { data: component.meta?._elementor_data, path: 'meta._elementor_data' },
+    { data: component.meta?.elementor_data, path: 'meta.elementor_data' },
+    { data: component._elementor_data, path: '_elementor_data' },
+    { data: component.elementor_data, path: 'elementor_data' },
+    { data: component.acf?._elementor_data, path: 'acf._elementor_data' },
+    { data: component.content?.rendered, path: 'content.rendered' }
   ];
-
-  let foundData = null;
-  let dataSource = 'Not found';
-  let isElementorRelated = false;
-
-  // Check each possible source
-  for (const source of possibleSources) {
-    const data = getNestedValue(component, source.path);
-    console.log(`🔍 Checking ${source.name} at ${source.path.join('.')}:`, {
-      hasData: !!data,
-      dataType: typeof data,
-      dataLength: data ? (typeof data === 'string' ? data.length : JSON.stringify(data).length) : 0,
-      preview: data ? (typeof data === 'string' ? data.substring(0, 100) : JSON.stringify(data).substring(0, 100)) : 'No data'
-    });
+  
+  for (const { data: source, path } of possibleSources) {
+    if (!source) continue;
     
-    if (data) {
-      // Check if this looks like Elementor data
-      const isElementorData = validateElementorDataFlexible(data);
-      console.log(`📊 ${source.name} validation:`, {
-        isElementorData,
-        hasElementorMarkers: hasElementorMarkers(data),
-        isJSON: isValidJSON(data),
-        dataPreview: typeof data === 'string' ? data.substring(0, 200) : JSON.stringify(data).substring(0, 200)
-      });
+    try {
+      let parsed = source;
       
-      if (isElementorData && !foundData) {
-        foundData = data;
-        dataSource = source.name;
-        isElementorRelated = true;
-        console.log(`✅ FOUND VALID ELEMENTOR DATA in ${source.name}!`);
-        break;
-      } else if (hasElementorMarkers(data)) {
-        isElementorRelated = true;
-        console.log(`🔍 Found Elementor-related data in ${source.name}, but validation failed`);
+      if (typeof source === 'string') {
+        const trimmed = source.trim();
+        if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+          parsed = JSON.parse(source);
+        } else {
+          continue;
+        }
       }
+      
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const elementorElements = parsed.filter(item => 
+          item && typeof item === 'object' && 
+          (item.elType || item.widgetType || (item.elements && Array.isArray(item.elements)))
+        );
+        
+        if (elementorElements.length > 0) {
+          return parsed;
+        }
+      } else if (parsed && typeof parsed === 'object' && 
+                 (parsed.elType || parsed.widgetType || parsed.elements)) {
+        return [parsed];
+      }
+    } catch (parseError) {
+      continue;
     }
   }
-
-  // STEP 6: Final decision and enhanced error reporting
-  console.log('🎯 FINAL EXTRACTION RESULT:', {
-    foundData: !!foundData,
-    dataSource,
-    isElementorRelated,
-    hasAnyElementorVersion: !!(component?.meta?._elementor_version),
-    hasElementorEditMode: !!(component?.meta?._elementor_edit_mode),
-    recommendedAction: foundData ? 'PROCEED_WITH_COPY' : (isElementorRelated ? 'NEEDS_FLEXIBLE_PARSING' : 'NOT_ELEMENTOR_COMPONENT')
-  });
-
-  if (!foundData) {
-    // Enhanced error reporting
-    if (isElementorRelated) {
-      console.error('❌ ELEMENTOR COMPONENT DETECTED BUT DATA EXTRACTION FAILED:', {
-        hasElementorVersion: !!(component?.meta?._elementor_version),
-        hasElementorEditMode: !!(component?.meta?._elementor_edit_mode),
-        possibleIssues: [
-          'Elementor data may be encoded/escaped differently',
-          'Component may use newer Elementor format',
-          'Data may be stored in custom field location',
-          'Authentication may be required for full meta access'
-        ]
-      });
-    } else {
-      console.error('❌ NO ELEMENTOR DATA FOUND - This appears to be a non-Elementor component');
-    }
-    return null;
-  }
-
-  // Try to parse the found data
-  try {
-    const parsedData = typeof foundData === 'string' ? JSON.parse(foundData) : foundData;
-    console.log('✅ Successfully parsed Elementor data from:', dataSource);
-    return Array.isArray(parsedData) ? parsedData : [parsedData];
-  } catch (error) {
-    console.error('❌ Failed to parse found Elementor data:', error);
-    return null;
-  }
-};
-
-// Helper functions for enhanced validation
-const getNestedValue = (obj: any, path: string[]): any => {
-  return path.reduce((current, key) => current?.[key], obj);
-};
-
-const isValidJSON = (str: any): boolean => {
-  if (typeof str !== 'string') return false;
-  try {
-    JSON.parse(str);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const hasElementorMarkers = (data: any): boolean => {
-  const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
-  return dataStr.includes('elType') || 
-         dataStr.includes('widgetType') || 
-         dataStr.includes('elementor') || 
-         dataStr.includes('_elementor');
-};
-
-const validateElementorDataFlexible = (data: any): boolean => {
-  try {
-    let parsed = data;
-    if (typeof data === 'string') {
-      parsed = JSON.parse(data);
-    }
-    
-    if (Array.isArray(parsed)) {
-      return parsed.some(item => 
-        item && 
-        typeof item === 'object' && 
-        (item.elType || item.widgetType || item.elements)
-      );
-    }
-    
-    if (parsed && typeof parsed === 'object') {
-      return !!(parsed.elType || parsed.widgetType || parsed.elements);
-    }
-    
-    return false;
-  } catch {
-    return false;
-  }
+  
+  return null;
 };
 
 /**
