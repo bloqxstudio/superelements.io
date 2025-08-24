@@ -17,7 +17,7 @@ export default function Auth() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState<'initial' | 'password' | 'signup' | 'confirm-email'>('initial');
+  const [step, setStep] = useState<'initial' | 'login' | 'signup' | 'confirm-email'>('initial');
   const [isSignUp, setIsSignUp] = useState(false);
   
   const { signIn, signUp, signInWithGoogle, user } = useAuth();
@@ -33,42 +33,24 @@ export default function Auth() {
     }
   }, [user, navigate, from]);
 
-  const handleEmailContinue = async () => {
+  const handleLoginClick = () => {
     if (!email || !email.includes('@')) {
       setError('Por favor, insira um email válido');
       return;
     }
-
-    setLoading(true);
     setError(null);
+    setStep('login');
+    setIsSignUp(false);
+  };
 
-    try {
-      // Check if user exists using RLS-safe email_exists function
-      const { data: emailExists, error } = await supabase
-        .rpc('email_exists', { check_email: email });
-      
-      if (error) {
-        console.error('Error checking user existence:', error);
-        setError('Erro ao verificar usuário. Tente novamente.');
-        setLoading(false);
-        return;
-      }
-
-      if (emailExists) {
-        // User exists, go to login
-        setStep('password');
-        setIsSignUp(false);
-      } else {
-        // User doesn't exist, go to signup
-        setStep('signup');
-        setIsSignUp(true);
-      }
-    } catch (err) {
-      console.error('Unexpected error:', err);
-      setError('Erro inesperado. Tente novamente.');
+  const handleSignupClick = () => {
+    if (!email || !email.includes('@')) {
+      setError('Por favor, insira um email válido');
+      return;
     }
-    
-    setLoading(false);
+    setError(null);
+    setStep('signup');
+    setIsSignUp(true);
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -185,7 +167,7 @@ export default function Auth() {
                   <div className="space-y-4">
                     <Button 
                       onClick={() => {
-                        setStep('password');
+                        setStep('login');
                         setIsSignUp(false);
                       }}
                       className="w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground text-base font-medium"
@@ -210,7 +192,7 @@ export default function Auth() {
     );
   }
 
-  if (step === 'password' || step === 'signup') {
+  if (step === 'login' || step === 'signup') {
     return (
       <div className="min-h-screen flex flex-col lg:flex-row bg-black">
         {/* Video - Top on mobile/tablet, Left on desktop */}
@@ -447,22 +429,27 @@ export default function Auth() {
                     </div>
                   </div>
 
-                  {/* Continue Button */}
-                  <Button
-                    type="button"
-                    onClick={handleEmailContinue}
-                    disabled={loading || !email}
-                    className="w-full h-14 font-medium bg-primary hover:bg-primary/90 text-primary-foreground text-base"
-                  >
-                    {loading ? (
-                      <div className="flex items-center">
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-3" />
-                        Verificando...
-                      </div>
-                    ) : (
-                      'Continue'
-                    )}
-                  </Button>
+                  {/* Login and Signup Buttons */}
+                  <div className="space-y-4">
+                    <Button
+                      type="button"
+                      onClick={handleLoginClick}
+                      disabled={loading || !email}
+                      className="w-full h-14 font-medium bg-primary hover:bg-primary/90 text-primary-foreground text-base"
+                    >
+                      Já tenho uma conta - Fazer login
+                    </Button>
+                    
+                    <Button
+                      type="button"
+                      onClick={handleSignupClick}
+                      disabled={loading || !email}
+                      variant="outline"
+                      className="w-full h-14 font-medium border-gray-200 hover:bg-gray-50 text-base"
+                    >
+                      Criar nova conta
+                    </Button>
+                  </div>
                 </div>
 
                 {error && (
