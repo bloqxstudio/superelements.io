@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { PhoneCollectionModal } from '@/components/PhoneCollectionModal';
 
 export type AppRole = 'free' | 'pro' | 'admin';
 
@@ -8,6 +9,7 @@ export interface UserProfile {
   id: string;
   email: string;
   role: AppRole;
+  phone?: string;
 }
 
 interface AuthContextType {
@@ -40,11 +42,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
 
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, role')
+      .select('id, email, role, phone')
       .eq('id', userId)
       .single();
 
@@ -68,6 +71,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setTimeout(async () => {
             const profileData = await fetchProfile(session.user.id);
             setProfile(profileData);
+            
+            // Check if user needs to provide phone number
+            // Only show modal for users who signed in with OAuth and don't have phone
+            if (profileData && !profileData.phone && event === 'SIGNED_IN') {
+              // Check if this was an OAuth sign-in by looking at the session metadata
+              const isOAuthUser = session.user.app_metadata?.provider === 'google';
+              if (isOAuthUser) {
+                setShowPhoneModal(true);
+              }
+            }
+            
             setLoading(false);
           }, 0);
         } else {
@@ -131,6 +145,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setProfile(null);
   };
 
+  const handlePhoneModalComplete = async () => {
+    setShowPhoneModal(false);
+    // Refetch profile to get updated phone number
+    if (user) {
+      const profileData = await fetchProfile(user.id);
+      setProfile(profileData);
+    }
+  };
+
   const value: AuthContextType = {
     user,
     session,
@@ -142,5 +165,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signOut,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <PhoneCollectionModal
+        open={showPhoneModal}
+        onComplete={handlePhoneModalComplete}
+        userEmail={user?.email || ''}
+      />
+    </AuthContext.Provider>
+  );
 };
