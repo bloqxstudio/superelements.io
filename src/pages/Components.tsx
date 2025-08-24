@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import CentralizedComponentLibrary from '@/components/CentralizedComponentLibrary';
 import { CategorySidebar } from '@/features/components/CategorySidebar';
 import PreviewModal from '@/components/PreviewModal';
+import { ProBanner } from '@/components/ProBanner';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useConnectionSync } from '@/hooks/useConnectionSync';
 const Components = () => {
@@ -74,10 +75,13 @@ const Components = () => {
         </div>
 
         {/* Component Library */}
-        <div className="flex-1 px-4 lg:px-6 pb-6 min-h-0">
+        <div className="flex-1 px-4 lg:px-6 pb-20 min-h-0">
           <CentralizedComponentLibrary onPreview={handlePreview} />
         </div>
       </div>
+
+      {/* Pro Banner for free users */}
+      <ProBanner />
 
       {/* Preview Modal with enhanced props */}
       <PreviewModal isOpen={previewModal.isOpen} onClose={closePreview} previewUrl={previewModal.url} title={previewModal.title} component={previewModal.component} />
