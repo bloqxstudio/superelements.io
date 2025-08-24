@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef } from 'react';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { toast } from '@/hooks/use-toast';
+import { extractComponentForClipboard } from '@/utils/enhancedElementorExtractor';
+import { copyToClipboardEnhanced } from '@/utils/enhancedRobustClipboard';
 
 interface CopyState {
   copying: boolean;
@@ -25,9 +27,34 @@ export const useEnhancedCopyComponent = () => {
     try {
       setCopyState(componentId, { copying: true, copied: false });
       
-      // Simulate copy process (simplified for demo)
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Get connection for WordPress config
+      const connection = component.connection_id ? getConnectionById(component.connection_id) : null;
       
+      if (!connection && !baseUrl) {
+        throw new Error('No connection or baseUrl available for component extraction');
+      }
+
+      // Build WordPress config
+      const wordpressConfig = {
+        baseUrl: connection?.base_url || baseUrl,
+        postType: connection?.post_type || 'posts',
+        username: connection?.username || '',
+        applicationPassword: connection?.application_password || ''
+      };
+
+      // Extract component data
+      const elementorData = await extractComponentForClipboard(
+        parseInt(componentId),
+        wordpressConfig
+      );
+
+      // Copy to clipboard using enhanced system
+      const result = await copyToClipboardEnhanced(elementorData);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to copy to clipboard');
+      }
+
       setCopyState(componentId, { copying: false, copied: true });
       
       // Reset after 3 seconds
@@ -42,21 +69,28 @@ export const useEnhancedCopyComponent = () => {
       
       toast({
         title: "Component Copied Successfully!",
-        description: "Component copied to clipboard. Ready to paste in Elementor!",
+        description: `Component copied using ${result.method}. Ready to paste in Elementor!`,
         duration: 4000
       });
       
     } catch (error) {
+      console.error('Copy component error:', error);
       setCopyState(componentId, { copying: false, copied: false });
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
       toast({
         title: "Copy Failed",
-        description: "Failed to copy component. Please try again.",
+        description: errorMessage.includes('authentication') 
+          ? "Authentication failed. Check your WordPress credentials."
+          : errorMessage.includes('network')
+          ? "Network error. Check your connection."
+          : `Failed to copy component: ${errorMessage}`,
         variant: "destructive",
-        duration: 3000
+        duration: 5000
       });
     }
-  }, [setCopyState]);
+  }, [setCopyState, getConnectionById]);
 
   const getCopyState = useCallback((componentId: string): CopyState => {
     return copyStates[componentId] || { copying: false, copied: false };
