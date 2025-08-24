@@ -56,8 +56,37 @@ export const useEnhancedCopyComponent = () => {
         componentId,
         baseUrl: wordpressConfig.baseUrl,
         postType: wordpressConfig.postType,
-        hasAuth: !!(wordpressConfig.username && wordpressConfig.applicationPassword)
+        hasAuth: !!(wordpressConfig.username && wordpressConfig.applicationPassword),
+        connectionData: connection,
+        componentKeys: component ? Object.keys(component) : 'No component object',
+        hasComponentMeta: !!(component?.meta),
+        componentMetaKeys: component?.meta ? Object.keys(component.meta) : 'No meta'
       });
+
+      // ENHANCED: Log the component object we're about to process
+      if (component) {
+        console.log('📦 COMPONENT OBJECT DETAILED ANALYSIS:', {
+          id: component.id,
+          title: component.title?.rendered || component.title || 'No title',
+          type: component.type,
+          status: component.status,
+          link: component.link,
+          hasContent: !!component.content,
+          contentKeys: component.content ? Object.keys(component.content) : [],
+          hasMeta: !!component.meta,
+          metaKeys: component.meta ? Object.keys(component.meta) : [],
+          hasAcf: !!component.acf,
+          acfKeys: component.acf ? Object.keys(component.acf) : [],
+          hasElementorMeta: !!(component.meta && component.meta._elementor_data),
+          elementorDataType: component.meta?._elementor_data ? typeof component.meta._elementor_data : 'undefined',
+          elementorDataSize: component.meta?._elementor_data ? 
+            (typeof component.meta._elementor_data === 'string' ? 
+              component.meta._elementor_data.length : 
+              JSON.stringify(component.meta._elementor_data).length) : 0
+        });
+      } else {
+        console.log('❌ NO COMPONENT OBJECT PROVIDED - Will rely on API extraction only');
+      }
 
       // Extract component data - pass the full component object for local data priority
       const elementorData = await extractComponentForClipboard(
@@ -122,9 +151,12 @@ export const useEnhancedCopyComponent = () => {
       let userMessage = '';
       let title = "Copy Failed";
       
-      if (errorMessage.includes('not created with Elementor') || errorMessage.includes('does not contain Elementor data')) {
+      if (errorMessage.includes('not created with Elementor') || errorMessage.includes('does not contain Elementor data') || errorMessage.includes('NO VALID ELEMENTOR DATA FOUND')) {
         title = "Not an Elementor Component";
-        userMessage = "This component was not created with Elementor. Only Elementor components can be copied and pasted into Elementor editor.";
+        userMessage = "No Elementor data was found in this component. It may have been created with WordPress editor, another page builder, or may be a regular post/page. Only Elementor components can be copied. Check console for detailed analysis.";
+      } else if (errorMessage.includes('ELEMENTOR COMPONENT DETECTED BUT DATA EXTRACTION FAILED')) {
+        title = "Elementor Data Extraction Failed";
+        userMessage = "This appears to be an Elementor component, but the data couldn't be extracted. This may be due to authentication issues, newer Elementor format, or data encoding. Try reconnecting or check console logs for details.";
       } else if (errorMessage.includes('Authentication failed')) {
         title = "Authentication Error";
         userMessage = "WordPress credentials are invalid or expired. Please check your username and application password in connection settings.";
