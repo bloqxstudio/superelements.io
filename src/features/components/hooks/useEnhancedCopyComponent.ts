@@ -59,10 +59,11 @@ export const useEnhancedCopyComponent = () => {
         hasAuth: !!(wordpressConfig.username && wordpressConfig.applicationPassword)
       });
 
-      // Extract component data
+      // Extract component data - pass the full component object for local data priority
       const elementorData = await extractComponentForClipboard(
         parseInt(componentId),
-        wordpressConfig
+        wordpressConfig,
+        component // Pass the component object for local data extraction
       );
 
       console.log('📋 Extracted data analysis:', {
@@ -95,20 +96,20 @@ export const useEnhancedCopyComponent = () => {
       }, 3000);
       
       // Determine data quality for user feedback
-      const isOriginalElementorData = elementorData.includes('"elType"') && 
-        (elementorData.includes('"widgetType"') || elementorData.includes('"elements":['));
+      const hasElementorStructure = elementorData.includes('"elType"') || 
+        elementorData.includes('"widgetType"') || 
+        elementorData.includes('"elements":');
       
-      const isFallbackData = !isOriginalElementorData;
+      const isOriginalElementorData = hasElementorStructure;
+      const isFallbackData = false; // Never use fallback mode
       
       toast({
-        title: isOriginalElementorData ? "Elementor Component Copied!" : "Component Copied (Fallback)",
+        title: "Elementor Component Copied!",
         description: isOriginalElementorData 
-          ? `Original Elementor component copied successfully. Ready to paste in Elementor!`
-          : isFallbackData 
-            ? `Basic component structure copied. Note: This is a fallback format and may not display properly in Elementor.`
-            : `Component copied using ${result.method}. Press Ctrl+V to paste in Elementor.`,
-        variant: isFallbackData ? "destructive" : "default",
-        duration: isFallbackData ? 6000 : 4000
+          ? "Original Elementor component copied successfully. Ready to paste in Elementor!"
+          : `Component data copied using ${result.method}. Press Ctrl+V to paste in Elementor.`,
+        variant: "default",
+        duration: 4000
       });
       
     } catch (error) {

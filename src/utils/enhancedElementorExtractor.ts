@@ -378,20 +378,115 @@ export const formatForElementorClipboard = (
  */
 export const extractComponentForClipboard = async (
   componentId: number,
-  config: WordPressConfig
+  config: WordPressConfig,
+  component?: any
 ): Promise<string> => {
-  console.log('🚀 Starting component extraction for clipboard:', { componentId, config: { baseUrl: config.baseUrl, postType: config.postType } });
-  
-  const result = await extractComponentRobust(componentId, config);
-  
-  if (result.success && result.data) {
-    console.log('✅ Extraction successful, formatting for clipboard');
-    console.log('📊 Data type:', result.debugInfo.dataSource, '| Elements:', result.data.length);
-    return formatForElementorClipboard(result.data, config.baseUrl);
-  } else {
-    console.error('❌ Extraction failed:', result.error);
+  try {
+    console.log('🚀 Starting clipboard extraction for component:', componentId);
+    console.log('📋 Component object received:', {
+      hasComponent: !!component,
+      componentKeys: component ? Object.keys(component) : [],
+      componentId,
+      componentData: component ? JSON.stringify(component).substring(0, 500) + '...' : 'No component'
+    });
+    
+    // Priority 1: Use local component data if available
+    if (component) {
+      const localData = extractLocalElementorData(component);
+      if (localData) {
+        console.log('✅ Using LOCAL component data - no API call needed');
+        return formatForElementorClipboard(localData, config.baseUrl);
+      }
+    }
+    
+    // Priority 2: Fallback to API extraction only if no local data
+    console.log('📡 No local data found, attempting API extraction...');
+    const result = await extractComponentRobust(componentId, config);
+    
+    if (result.success && result.data) {
+      console.log('✅ Successfully extracted from API');
+      return formatForElementorClipboard(result.data, config.baseUrl);
+    }
+    
+    console.warn('⚠️ Failed to extract component data from any source');
     throw new Error(result.error || 'Failed to extract component data');
+    
+  } catch (error) {
+    console.error('❌ Clipboard extraction error:', error);
+    throw error;
   }
+};
+
+// Extract Elementor data from local component object
+const extractLocalElementorData = (component: any): ElementorElement[] | null => {
+  console.log('🔍 Analyzing local component for Elementor data...');
+  
+  // Check various possible locations for Elementor data
+  const possibleSources = [
+    component._elementor_data,
+    component.elementor_data,
+    component.meta?._elementor_data,
+    component.meta?.elementor_data,
+    component.content?.raw,
+    component.content?.rendered,
+    component.content,
+    component.data,
+    component.elementor,
+    component._meta?._elementor_data
+  ];
+  
+  for (const [index, source] of possibleSources.entries()) {
+    if (!source) continue;
+    
+    console.log(`🔍 Checking source ${index}:`, {
+      type: typeof source,
+      isString: typeof source === 'string',
+      isArray: Array.isArray(source),
+      hasLength: source?.length,
+      preview: typeof source === 'string' ? source.substring(0, 200) + '...' : 'Not string'
+    });
+    
+    try {
+      let parsed = source;
+      
+      // Parse if it's a JSON string
+      if (typeof source === 'string') {
+        // Check if it looks like JSON
+        if (source.trim().startsWith('[') || source.trim().startsWith('{')) {
+          parsed = JSON.parse(source);
+        } else {
+          continue; // Skip non-JSON strings
+        }
+      }
+      
+      // Validate if it's Elementor data
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const hasElementorStructure = parsed.some(item => 
+          item && typeof item === 'object' && (
+            item.elType || 
+            item.widgetType || 
+            item.elements ||
+            item.id
+          )
+        );
+        
+        if (hasElementorStructure) {
+          console.log('✅ Found valid Elementor data in local component!', {
+            source: `possibleSources[${index}]`,
+            elementCount: parsed.length,
+            firstElement: parsed[0]
+          });
+          return parsed;
+        }
+      }
+    } catch (parseError) {
+      console.log(`⚠️ Failed to parse source ${index}:`, parseError);
+      continue;
+    }
+  }
+  
+  console.log('❌ No valid Elementor data found in local component');
+  return null;
 };
 
 /**
