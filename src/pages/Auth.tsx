@@ -43,12 +43,9 @@ export default function Auth() {
     setError(null);
 
     try {
-      // Check if user exists by querying the profiles table directly
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('email', email)
-        .maybeSingle();
+      // Check if user exists using RLS-safe email_exists function
+      const { data: emailExists, error } = await supabase
+        .rpc('email_exists', { check_email: email });
       
       if (error) {
         console.error('Error checking user existence:', error);
@@ -57,7 +54,7 @@ export default function Auth() {
         return;
       }
 
-      if (data) {
+      if (emailExists) {
         // User exists, go to login
         setStep('password');
         setIsSignUp(false);
