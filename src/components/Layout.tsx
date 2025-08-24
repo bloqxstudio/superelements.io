@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { Logo } from '@/components/Logo';
@@ -6,18 +5,17 @@ import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-
 const Layout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
-
+  const {
+    user,
+    profile
+  } = useAuth();
   const handleLogoClick = () => {
     navigate('/');
   };
-
-  return (
-    <div className="min-h-screen bg-background w-full flex flex-col">
+  return <div className="min-h-screen bg-background w-full flex flex-col">
       {/* Simplified Header */}
       <header className="border-b bg-white sticky top-0 z-50 w-full">
         <div className="w-full px-6 py-4">
@@ -32,30 +30,16 @@ const Layout: React.FC = () => {
             
             {/* Navigation */}
             <div className="flex items-center gap-4">
-              {user ? (
-                <>
-                  <Button
-                    variant={location.pathname === '/' ? 'default' : 'ghost'}
-                    onClick={() => navigate('/')}
-                  >
-                    Library
-                  </Button>
+              {user ? <>
+                  <Button variant={location.pathname === '/' ? 'default' : 'ghost'} onClick={() => navigate('/')}>Biblioteca</Button>
                   {/* Only show Connections for admin users */}
-                  {profile?.role === 'admin' && (
-                    <Button
-                      variant={location.pathname === '/connections' ? 'default' : 'ghost'}
-                      onClick={() => navigate('/connections')}
-                    >
+                  {profile?.role === 'admin' && <Button variant={location.pathname === '/connections' ? 'default' : 'ghost'} onClick={() => navigate('/connections')}>
                       Connections
-                    </Button>
-                  )}
+                    </Button>}
                   <UserAvatar />
-                </>
-              ) : (
-                <Button onClick={() => navigate('/auth')}>
+                </> : <Button onClick={() => navigate('/auth')}>
                   Entrar
-                </Button>
-              )}
+                </Button>}
             </div>
           </div>
         </div>
@@ -67,8 +51,6 @@ const Layout: React.FC = () => {
           <Outlet />
         </div>
       </main>
-    </div>
-  );
+    </div>;
 };
-
 export default Layout;
