@@ -65,6 +65,12 @@ export const useEnhancedCopyComponent = () => {
         wordpressConfig
       );
 
+      console.log('📋 Extracted data preview:', {
+        length: elementorData.length,
+        isRealElementorData: elementorData.includes('"elType"') && elementorData.includes('"widgetType"'),
+        hasComplexStructure: elementorData.includes('"elements":[') && elementorData.split('"elements":').length > 2
+      });
+
       // Copy to clipboard using enhanced system
       const result = await copyToClipboardEnhanced(elementorData);
       
@@ -86,7 +92,9 @@ export const useEnhancedCopyComponent = () => {
       
       toast({
         title: "Component Copied Successfully!",
-        description: `Component copied using ${result.method}. Ready to paste in Elementor!`,
+        description: result.method === 'clipboard-api' 
+          ? `Complete Elementor component copied to clipboard. Ready to paste in Elementor!`
+          : `Component copied using ${result.method}. Press Ctrl+V to paste in Elementor.`,
         duration: 4000
       });
       

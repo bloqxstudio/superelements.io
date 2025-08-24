@@ -295,77 +295,100 @@ const extractElementorDataFromResponse = (responseData: any, debugInfo: any): Ex
   // Check for meta data
   if (!responseData.meta) {
     debugInfo.validationErrors.push('No meta data found in response');
-    return createFallbackStructure(responseData, debugInfo);
+    return createEnhancedFallbackStructure(responseData, debugInfo);
   }
 
-  // Look for Elementor data in various meta fields
-  const possibleFields = ['_elementor_data', 'elementor_data', '_elementor_edit_mode'];
+  // Expanded search for Elementor data in multiple fields
+  const elementorFields = [
+    '_elementor_data',
+    'elementor_data', 
+    '_elementor_edit_mode',
+    '_elementor_controls_usage',
+    '_elementor_css',
+    '_elementor_page_settings',
+    '_elementor_version'
+  ];
+
   let elementorDataRaw = null;
   let sourceField = '';
 
-  for (const field of possibleFields) {
+  console.log('🔍 Available meta fields:', Object.keys(responseData.meta));
+
+  // Try each field until we find valid data
+  for (const field of elementorFields) {
     if (responseData.meta[field]) {
-      elementorDataRaw = responseData.meta[field];
-      sourceField = field;
-      break;
+      console.log(`🎯 Found potential data in field: ${field}`);
+      try {
+        let fieldData = responseData.meta[field];
+        
+        // Parse JSON if it's a string
+        if (typeof fieldData === 'string' && fieldData.trim().startsWith('[')) {
+          fieldData = JSON.parse(fieldData);
+        }
+
+        // Check if this looks like valid Elementor structure
+        if (Array.isArray(fieldData) && fieldData.length > 0) {
+          // Validate this is real Elementor data, not just fallback
+          const hasValidElements = fieldData.some(element => 
+            element && 
+            typeof element === 'object' && 
+            element.elType && 
+            (element.widgetType || element.elements || Object.keys(element.settings || {}).length > 1)
+          );
+
+          if (hasValidElements) {
+            elementorDataRaw = fieldData;
+            sourceField = field;
+            console.log(`✅ Valid Elementor data found in ${field}:`, {
+              elementsCount: fieldData.length,
+              firstElementType: fieldData[0]?.elType,
+              hasWidgets: fieldData.some(el => el.widgetType),
+              hasContainers: fieldData.some(el => el.elType === 'container'),
+              hasSections: fieldData.some(el => el.elType === 'section')
+            });
+            break;
+          } else {
+            console.log(`⚠️ Data in ${field} appears to be simple/fallback structure`);
+          }
+        }
+      } catch (parseError) {
+        console.log(`❌ Failed to parse ${field}:`, parseError);
+        continue;
+      }
     }
   }
 
   if (!elementorDataRaw) {
-    debugInfo.validationErrors.push('No Elementor data found in meta fields');
-    console.log('⚠️ NO ELEMENTOR DATA FOUND, CREATING FALLBACK');
-    return createFallbackStructure(responseData, debugInfo);
+    debugInfo.validationErrors.push('No valid Elementor data found in meta fields');
+    console.log('⚠️ NO REAL ELEMENTOR DATA FOUND, CREATING ENHANCED FALLBACK');
+    return createEnhancedFallbackStructure(responseData, debugInfo);
   }
 
   console.log('📊 ELEMENTOR DATA FOUND:', {
     sourceField,
     dataType: typeof elementorDataRaw,
-    dataSize: String(elementorDataRaw).length
+    elementsCount: elementorDataRaw.length,
+    complexity: elementorDataRaw.some(el => el.elements && el.elements.length > 0) ? 'complex' : 'simple'
   });
 
-  // Parse Elementor data
-  let elementorData;
-  try {
-    if (typeof elementorDataRaw === 'string') {
-      elementorData = JSON.parse(elementorDataRaw);
-    } else if (Array.isArray(elementorDataRaw)) {
-      elementorData = elementorDataRaw;
-    } else {
-      throw new Error('Unexpected Elementor data format');
-    }
-  } catch (parseError) {
-    debugInfo.validationErrors.push(`Failed to parse Elementor data: ${parseError}`);
-    console.error('💥 PARSE ERROR:', parseError);
-    return createFallbackStructure(responseData, debugInfo);
-  }
-
-  // Validate Elementor data structure
-  if (!Array.isArray(elementorData)) {
-    debugInfo.validationErrors.push('Elementor data is not an array');
-    return createFallbackStructure(responseData, debugInfo);
-  }
-
-  if (elementorData.length === 0) {
-    debugInfo.validationErrors.push('Elementor data array is empty');
-    return createFallbackStructure(responseData, debugInfo);
-  }
-
   // Validate and clean elements
-  const cleanedElements = elementorData
+  const cleanedElements = elementorDataRaw
     .map(element => validateAndCleanElement(element))
     .filter(Boolean) as ElementorElement[];
 
   if (cleanedElements.length === 0) {
     debugInfo.validationErrors.push('No valid Elementor elements after cleaning');
-    return createFallbackStructure(responseData, debugInfo);
+    return createEnhancedFallbackStructure(responseData, debugInfo);
   }
 
   console.log('✅ ELEMENTOR DATA VALIDATED:', {
-    originalElements: elementorData.length,
+    originalElements: elementorDataRaw.length,
     cleanedElements: cleanedElements.length,
-    sourceField
+    sourceField,
+    complexElements: cleanedElements.filter(el => el.elements && el.elements.length > 0).length
   });
 
+  debugInfo.dataSource = sourceField;
   return {
     success: true,
     data: cleanedElements,
@@ -374,17 +397,64 @@ const extractElementorDataFromResponse = (responseData: any, debugInfo: any): Ex
 };
 
 /**
- * Create fallback structure when Elementor data is not available
+ * Create enhanced fallback structure when Elementor data is not available
  */
-const createFallbackStructure = (responseData: any, debugInfo: any): ExtractionResult => {
-  console.log('🔄 CREATING FALLBACK STRUCTURE');
+const createEnhancedFallbackStructure = (responseData: any, debugInfo: any): ExtractionResult => {
+  console.log('🔄 CREATING ENHANCED FALLBACK STRUCTURE');
   
-  const fallbackElements: ElementorElement[] = [];
-  
-  // Create basic structure from available data
-  if (responseData.title?.rendered || responseData.title) {
-    const title = responseData.title?.rendered || responseData.title;
-    fallbackElements.push({
+  const title = responseData.title?.rendered || responseData.title || 'Untitled Component';
+  const content = responseData.content?.rendered || responseData.content || '';
+  const excerpt = responseData.excerpt?.rendered || responseData.excerpt || '';
+  const featuredImage = responseData.featured_media || responseData._links?.['wp:featuredmedia']?.[0]?.href;
+
+  console.log('📝 Available content for fallback:', {
+    hasTitle: !!title,
+    hasContent: !!content,
+    hasExcerpt: !!excerpt,
+    hasFeaturedImage: !!featuredImage,
+    contentLength: content.length
+  });
+
+  // Create a sophisticated container structure
+  const containerElement: ElementorElement = {
+    id: generateElementorId(),
+    elType: 'container',
+    isInner: false,
+    isLocked: false,
+    settings: {
+      content_width: 'boxed',
+      gap: { unit: 'px', size: 20, sizes: [] },
+      background_background: 'classic',
+      padding: { 
+        unit: 'px', 
+        top: 30, 
+        right: 30, 
+        bottom: 30, 
+        left: 30, 
+        isLinked: true 
+      },
+      border_radius: { 
+        unit: 'px', 
+        top: 8, 
+        right: 8, 
+        bottom: 8, 
+        left: 8, 
+        isLinked: true 
+      },
+      box_shadow: {
+        horizontal: 0,
+        vertical: 2,
+        blur: 10,
+        spread: 0,
+        color: 'rgba(0,0,0,0.1)'
+      }
+    },
+    elements: []
+  };
+
+  // Add title with enhanced styling
+  if (title && title !== 'Untitled Component') {
+    containerElement.elements!.push({
       id: generateElementorId(),
       elType: 'widget',
       isInner: false,
@@ -392,117 +462,288 @@ const createFallbackStructure = (responseData: any, debugInfo: any): ExtractionR
       widgetType: 'heading',
       settings: {
         title: title,
-        size: 'h2',
-        align: 'left'
+        size: 'default',
+        header_size: 'h2',
+        color: '#2c3e50',
+        typography_typography: 'custom',
+        typography_font_weight: '600',
+        typography_font_size: { unit: 'px', size: 28, sizes: [] },
+        typography_line_height: { unit: 'em', size: 1.3, sizes: [] },
+        _margin: { 
+          unit: 'px', 
+          top: 0, 
+          right: 0, 
+          bottom: 20, 
+          left: 0, 
+          isLinked: false 
+        }
       },
       elements: []
     });
   }
 
-  if (responseData.excerpt?.rendered || responseData.content?.rendered) {
-    const content = responseData.excerpt?.rendered || responseData.content?.rendered || '';
-    fallbackElements.push({
+  // Add featured image if available
+  if (featuredImage) {
+    containerElement.elements!.push({
+      id: generateElementorId(),
+      elType: 'widget',
+      isInner: false,
+      isLocked: false,
+      widgetType: 'image',
+      settings: {
+        image: { url: featuredImage, id: '' },
+        image_size: 'large',
+        width: { unit: '%', size: 100, sizes: [] },
+        border_radius: { 
+          unit: 'px', 
+          top: 5, 
+          right: 5, 
+          bottom: 5, 
+          left: 5, 
+          isLinked: true 
+        },
+        _margin: { 
+          unit: 'px', 
+          top: 0, 
+          right: 0, 
+          bottom: 25, 
+          left: 0, 
+          isLinked: false 
+        }
+      },
+      elements: []
+    });
+  }
+
+  // Process content with HTML structure preservation
+  if (content) {
+    // Clean but preserve some HTML structure
+    const cleanContent = content
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove scripts
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '') // Remove styles
+      .replace(/style\s*=\s*"[^"]*"/gi, '') // Remove inline styles
+      .replace(/class\s*=\s*"[^"]*"/gi, ''); // Remove CSS classes
+    
+    // Check if content has meaningful HTML structure
+    const hasStructure = /<(h[1-6]|p|div|ul|ol|li|blockquote|img|table|tr|td|th)\b[^>]*>/i.test(cleanContent);
+    
+    if (hasStructure) {
+      console.log('📋 Content has HTML structure, preserving formatting');
+      containerElement.elements!.push({
+        id: generateElementorId(),
+        elType: 'widget',
+        isInner: false,
+        isLocked: false,
+        widgetType: 'html',
+        settings: {
+          html: cleanContent,
+          _margin: { 
+            unit: 'px', 
+            top: 0, 
+            right: 0, 
+            bottom: 15, 
+            left: 0, 
+            isLinked: false 
+          }
+        },
+        elements: []
+      });
+    } else {
+      // Use text editor for plain content
+      const textContent = cleanContent.replace(/<[^>]*>/g, '').trim();
+      if (textContent) {
+        containerElement.elements!.push({
+          id: generateElementorId(),
+          elType: 'widget',
+          isInner: false,
+          isLocked: false,
+          widgetType: 'text-editor',
+          settings: {
+            editor: textContent,
+            typography_typography: 'custom',
+            typography_font_size: { unit: 'px', size: 16, sizes: [] },
+            typography_line_height: { unit: 'em', size: 1.6, sizes: [] },
+            text_color: '#555555',
+            _margin: { 
+              unit: 'px', 
+              top: 0, 
+              right: 0, 
+              bottom: 15, 
+              left: 0, 
+              isLinked: false 
+            }
+          },
+          elements: []
+        });
+      }
+    }
+  } else if (excerpt) {
+    // Use excerpt as fallback
+    const textContent = excerpt.replace(/<[^>]*>/g, '').trim();
+    if (textContent) {
+      containerElement.elements!.push({
+        id: generateElementorId(),
+        elType: 'widget',
+        isInner: false,
+        isLocked: false,
+        widgetType: 'text-editor',
+        settings: {
+          editor: textContent,
+          typography_typography: 'custom',
+          typography_font_size: { unit: 'px', size: 16, sizes: [] },
+          typography_line_height: { unit: 'em', size: 1.6, sizes: [] },
+          text_color: '#666666',
+          _margin: { 
+            unit: 'px', 
+            top: 0, 
+            right: 0, 
+            bottom: 0, 
+            left: 0, 
+            isLinked: true 
+          }
+        },
+        elements: []
+      });
+    }
+  }
+
+  // Ensure we have at least one element
+  if (containerElement.elements!.length === 0) {
+    containerElement.elements!.push({
       id: generateElementorId(),
       elType: 'widget',
       isInner: false,
       isLocked: false,
       widgetType: 'text-editor',
       settings: {
-        editor: content.replace(/<[^>]*>/g, ''), // Strip HTML
-        align: 'left'
+        editor: '<p>Component content will be displayed here after proper configuration.</p>',
+        typography_typography: 'custom',
+        typography_font_style: 'italic',
+        text_color: '#999999',
+        text_align: 'center'
       },
       elements: []
     });
   }
 
-  // Wrap in container if multiple elements
-  if (fallbackElements.length > 1) {
-    const containerElement: ElementorElement = {
-      id: generateElementorId(),
-      elType: 'container',
-      isInner: false,
-      isLocked: false,
-      settings: {
-        content_width: 'boxed',
-        gap: { size: 20, unit: 'px' }
-      },
-      elements: fallbackElements
-    };
+  debugInfo.dataSource = 'enhanced-fallback';
+  console.log('✅ Created enhanced fallback structure with preserved formatting:', {
+    elementsCount: containerElement.elements!.length,
+    hasTitle: containerElement.elements!.some(el => el.widgetType === 'heading'),
+    hasImage: containerElement.elements!.some(el => el.widgetType === 'image'),
+    hasContent: containerElement.elements!.some(el => el.widgetType === 'text-editor' || el.widgetType === 'html')
+  });
 
-    debugInfo.dataSource = 'fallback_container';
-    return {
-      success: true,
-      data: [containerElement],
-      debugInfo
-    };
-  } else if (fallbackElements.length === 1) {
-    debugInfo.dataSource = 'fallback_single';
-    return {
-      success: true,
-      data: fallbackElements,
-      debugInfo
-    };
-  }
-
-  // Last resort: create empty container
-  debugInfo.dataSource = 'fallback_empty';
-  debugInfo.validationErrors.push('Created empty fallback structure');
-  
   return {
     success: true,
-    data: [{
-      id: generateElementorId(),
-      elType: 'container',
-      isInner: false,
-      isLocked: false,
-      settings: {
-        content_width: 'boxed'
-      },
-      elements: []
-    }],
+    data: [containerElement],
     debugInfo
   };
 };
 
 /**
- * Validate and clean individual Elementor element
+ * Validate and clean individual Elementor element with enhanced validation
  */
 const validateAndCleanElement = (element: any): ElementorElement | null => {
   if (!element || typeof element !== 'object') {
     return null;
   }
 
+  // Ensure required properties exist
+  if (!element.elType) {
+    return null;
+  }
+
   const cleanedElement: ElementorElement = {
     id: element.id || generateElementorId(),
-    elType: element.elType || 'container',
+    elType: element.elType,
     isInner: Boolean(element.isInner),
     isLocked: Boolean(element.isLocked),
     settings: element.settings || {},
     elements: []
   };
 
-  // Add optional properties
-  if (element.widgetType) {
+  // Enhanced validation for Elementor elements
+  // Ensure widgets have widgetType
+  if (element.elType === 'widget') {
+    if (!element.widgetType) {
+      // Try to infer widget type from settings or default to text-editor
+      if (element.settings?.title) {
+        cleanedElement.widgetType = 'heading';
+      } else if (element.settings?.editor || element.settings?.content) {
+        cleanedElement.widgetType = 'text-editor';
+      } else if (element.settings?.image) {
+        cleanedElement.widgetType = 'image';
+      } else {
+        cleanedElement.widgetType = 'text-editor';
+      }
+    } else {
+      cleanedElement.widgetType = element.widgetType;
+    }
+  }
+
+  // Ensure containers have proper structure
+  if (element.elType === 'container') {
+    if (!cleanedElement.settings.content_width) {
+      cleanedElement.settings.content_width = 'boxed';
+    }
+    if (!cleanedElement.settings.gap) {
+      cleanedElement.settings.gap = { unit: 'px', size: 20, sizes: [] };
+    }
+  }
+
+  // Ensure sections have proper structure
+  if (element.elType === 'section') {
+    if (!cleanedElement.settings.structure) {
+      cleanedElement.settings.structure = '10';
+    }
+    if (!cleanedElement.settings.gap) {
+      cleanedElement.settings.gap = 'default';
+    }
+  }
+
+  // Ensure columns have proper size
+  if (element.elType === 'column') {
+    if (!cleanedElement.settings._column_size && !cleanedElement.settings.width) {
+      cleanedElement.settings._column_size = 100;
+    }
+  }
+
+  // Add optional properties with validation
+  if (element.widgetType && element.elType === 'widget') {
     cleanedElement.widgetType = element.widgetType;
   }
 
-  if (element.defaultEditSettings) {
+  if (element.defaultEditSettings && typeof element.defaultEditSettings === 'object') {
     cleanedElement.defaultEditSettings = element.defaultEditSettings;
   }
 
-  if (element.editSettings) {
+  if (element.editSettings && typeof element.editSettings === 'object') {
     cleanedElement.editSettings = element.editSettings;
   }
 
-  if (element.htmlCache) {
+  if (element.htmlCache && typeof element.htmlCache === 'string') {
     cleanedElement.htmlCache = element.htmlCache;
   }
 
-  // Recursively clean child elements
+  // Recursively clean child elements with improved validation
   if (element.elements && Array.isArray(element.elements)) {
     cleanedElement.elements = element.elements
       .map(validateAndCleanElement)
       .filter(Boolean) as ElementorElement[];
+  }
+
+  // Additional structure validation
+  if (cleanedElement.elType === 'section' && cleanedElement.elements.length === 0) {
+    // Sections should have at least one column
+    cleanedElement.elements.push({
+      id: generateElementorId(),
+      elType: 'column',
+      isInner: true,
+      isLocked: false,
+      settings: { _column_size: 100 },
+      elements: []
+    });
   }
 
   return cleanedElement;
