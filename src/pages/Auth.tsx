@@ -43,25 +43,32 @@ export default function Auth() {
     setError(null);
 
     try {
-      // Use password reset to check if user exists - it returns different errors
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://fake-url-just-to-check.com', // Won't actually send email
-      });
+      // Check if user exists by querying the profiles table directly
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('email', email)
+        .maybeSingle();
       
-      if (error?.message?.includes('User not found') || 
-          error?.message?.includes('Unable to validate email address')) {
+      if (error) {
+        console.error('Error checking user existence:', error);
+        setError('Erro ao verificar usuário. Tente novamente.');
+        setLoading(false);
+        return;
+      }
+
+      if (data) {
+        // User exists, go to login
+        setStep('password');
+        setIsSignUp(false);
+      } else {
         // User doesn't exist, go to signup
         setStep('signup');
         setIsSignUp(true);
-      } else {
-        // User exists (even if error about redirect URL), go to password step
-        setStep('password');
-        setIsSignUp(false);
       }
     } catch (err) {
-      // Fallback: assume it's a signup if we can't determine
-      setStep('signup');
-      setIsSignUp(true);
+      console.error('Unexpected error:', err);
+      setError('Erro inesperado. Tente novamente.');
     }
     
     setLoading(false);
