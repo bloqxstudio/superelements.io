@@ -34,6 +34,11 @@ export const useEnhancedCopyComponent = () => {
         throw new Error('No connection or baseUrl available for component extraction');
       }
 
+      // Validate connection if available
+      if (connection && connection.status !== 'connected') {
+        throw new Error('WordPress connection is not active. Please check your connection settings.');
+      }
+
       // Build WordPress config
       const wordpressConfig = {
         baseUrl: connection?.base_url || baseUrl,
@@ -41,6 +46,18 @@ export const useEnhancedCopyComponent = () => {
         username: connection?.username || '',
         applicationPassword: connection?.application_password || ''
       };
+
+      // Validate required fields
+      if (!wordpressConfig.baseUrl) {
+        throw new Error('WordPress site URL is required');
+      }
+
+      console.log('🚀 Starting component copy:', {
+        componentId,
+        baseUrl: wordpressConfig.baseUrl,
+        postType: wordpressConfig.postType,
+        hasAuth: !!(wordpressConfig.username && wordpressConfig.applicationPassword)
+      });
 
       // Extract component data
       const elementorData = await extractComponentForClipboard(
@@ -79,15 +96,37 @@ export const useEnhancedCopyComponent = () => {
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
+      // Enhanced error handling with specific messages
+      let userMessage = '';
+      let title = "Copy Failed";
+      
+      if (errorMessage.includes('Authentication failed')) {
+        title = "Authentication Error";
+        userMessage = "WordPress credentials are invalid or expired. Please check your username and application password in connection settings.";
+      } else if (errorMessage.includes('Component not found')) {
+        title = "Component Not Found";
+        userMessage = "The component was not found. It may have been deleted or moved.";
+      } else if (errorMessage.includes('Access denied')) {
+        title = "Access Denied";
+        userMessage = "Your WordPress user doesn't have permission to access this content. Contact your administrator.";
+      } else if (errorMessage.includes('connection is not active')) {
+        title = "Connection Error";
+        userMessage = "WordPress connection is not active. Please reconnect to your WordPress site.";
+      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        title = "Network Error";
+        userMessage = "Network connection failed. Please check your internet connection and try again.";
+      } else if (errorMessage.includes('site URL is required')) {
+        title = "Configuration Error";
+        userMessage = "WordPress site URL is missing. Please check your connection settings.";
+      } else {
+        userMessage = `Failed to copy component: ${errorMessage}`;
+      }
+      
       toast({
-        title: "Copy Failed",
-        description: errorMessage.includes('authentication') 
-          ? "Authentication failed. Check your WordPress credentials."
-          : errorMessage.includes('network')
-          ? "Network error. Check your connection."
-          : `Failed to copy component: ${errorMessage}`,
+        title,
+        description: userMessage,
         variant: "destructive",
-        duration: 5000
+        duration: 6000
       });
     }
   }, [setCopyState, getConnectionById]);

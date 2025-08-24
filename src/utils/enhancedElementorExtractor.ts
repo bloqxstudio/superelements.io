@@ -133,9 +133,9 @@ const attemptExtraction = async (
     };
   }
 
-  // Prepare API request
+  // Prepare API request - try with edit context first, fallback to view context
   const baseUrl = config.baseUrl.replace(/\/$/, '');
-  const apiUrl = `${baseUrl}/wp-json/wp/v2/${config.postType}/${componentId}?context=edit&_fields=id,title,meta`;
+  let apiUrl = `${baseUrl}/wp-json/wp/v2/${config.postType}/${componentId}?context=edit&_fields=id,title,meta`;
   
   console.log('🔗 API REQUEST:', {
     url: apiUrl,
@@ -169,8 +169,8 @@ const attemptExtraction = async (
     console.log('⚠️ NO AUTHENTICATION PROVIDED');
   }
 
-  // Make API request - removed timeout property
-  const response = await fetch(apiUrl, {
+  // Make API request - try with authentication first
+  let response = await fetch(apiUrl, {
     method: 'GET',
     headers
   });
@@ -182,12 +182,53 @@ const attemptExtraction = async (
     contentLength: response.headers.get('content-length')
   });
 
-  // Check response status
+  // If 401 and we have auth, try fallback without context=edit
+  if (response.status === 401 && config.username && config.applicationPassword) {
+    console.log('🔄 401 ERROR - TRYING FALLBACK WITHOUT EDIT CONTEXT...');
+    
+    // Try without context=edit (public access)
+    const fallbackUrl = `${baseUrl}/wp-json/wp/v2/${config.postType}/${componentId}?_fields=id,title,meta`;
+    
+    const fallbackHeaders = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': 'SuperElements/1.0'
+    };
+    
+    response = await fetch(fallbackUrl, {
+      method: 'GET',
+      headers: fallbackHeaders
+    });
+    
+    console.log('📡 FALLBACK RESPONSE:', {
+      status: response.status,
+      statusText: response.statusText
+    });
+    
+    if (response.ok) {
+      debugInfo.authStatus = 'fallback_success';
+      console.log('✅ FALLBACK SUCCESS - Using public access');
+    } else {
+      debugInfo.authStatus = 'fallback_failed';
+    }
+  }
+
+  // Check final response status
   if (!response.ok) {
     debugInfo.authStatus = response.status === 401 ? 'failed' : debugInfo.authStatus;
     
     const errorText = await response.text().catch(() => 'Unknown error');
-    const errorMessage = `HTTP ${response.status}: ${response.statusText}${errorText ? ` - ${errorText}` : ''}`;
+    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    
+    if (response.status === 401) {
+      errorMessage = 'Authentication failed. Please check your WordPress username and application password.';
+    } else if (response.status === 404) {
+      errorMessage = 'Component not found. The post may have been deleted or moved.';
+    } else if (response.status === 403) {
+      errorMessage = 'Access denied. Your user account may not have permission to access this content.';
+    } else if (errorText) {
+      errorMessage += ` - ${errorText}`;
+    }
     
     return {
       success: false,
