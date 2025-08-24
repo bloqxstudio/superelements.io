@@ -65,10 +65,14 @@ export const useEnhancedCopyComponent = () => {
         wordpressConfig
       );
 
-      console.log('📋 Extracted data preview:', {
+      console.log('📋 Extracted data analysis:', {
         length: elementorData.length,
         isRealElementorData: elementorData.includes('"elType"') && elementorData.includes('"widgetType"'),
-        hasComplexStructure: elementorData.includes('"elements":[') && elementorData.split('"elements":').length > 2
+        hasComplexStructure: elementorData.includes('"elements":[') && elementorData.split('"elements":').length > 2,
+        hasSections: elementorData.includes('"elType":"section"'),
+        hasContainers: elementorData.includes('"elType":"container"'),
+        hasWidgets: elementorData.includes('"widgetType"'),
+        dataPreview: elementorData.substring(0, 500) + '...'
       });
 
       // Copy to clipboard using enhanced system
@@ -90,12 +94,21 @@ export const useEnhancedCopyComponent = () => {
         delete timeoutRefs.current[componentId];
       }, 3000);
       
+      // Determine data quality for user feedback
+      const isOriginalElementorData = elementorData.includes('"elType"') && 
+        (elementorData.includes('"widgetType"') || elementorData.includes('"elements":['));
+      
+      const isFallbackData = !isOriginalElementorData;
+      
       toast({
-        title: "Component Copied Successfully!",
-        description: result.method === 'clipboard-api' 
-          ? `Complete Elementor component copied to clipboard. Ready to paste in Elementor!`
-          : `Component copied using ${result.method}. Press Ctrl+V to paste in Elementor.`,
-        duration: 4000
+        title: isOriginalElementorData ? "Elementor Component Copied!" : "Component Copied (Fallback)",
+        description: isOriginalElementorData 
+          ? `Original Elementor component copied successfully. Ready to paste in Elementor!`
+          : isFallbackData 
+            ? `Basic component structure copied. Note: This is a fallback format and may not display properly in Elementor.`
+            : `Component copied using ${result.method}. Press Ctrl+V to paste in Elementor.`,
+        variant: isFallbackData ? "destructive" : "default",
+        duration: isFallbackData ? 6000 : 4000
       });
       
     } catch (error) {
