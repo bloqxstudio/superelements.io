@@ -558,6 +558,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      email_exists: {
+        Args: { check_email: string }
+        Returns: boolean
+      }
       get_user_role: {
         Args: { user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
