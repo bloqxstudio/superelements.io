@@ -170,8 +170,11 @@ const extractElementorDataFromResponse = async (
   config: WordPressConfig,
   componentId: number,
   context: string = 'view'
-): Promise<ExtractionResult> => {
-  console.log('🔍 Analyzing response for Elementor data...', { context, componentId });
+  ): Promise<ExtractionResult> => {
+  console.log('🔍 ANALYZING API RESPONSE FOR ELEMENTOR DATA...', { context, componentId });
+  
+  // First, analyze what data we received
+  analyzeAvailableData(data);
   
   const debugInfo = {
     hasContent: !!data.content,
@@ -305,49 +308,88 @@ const extractElementorDataFromResponse = async (
     }
   }
 
-  // Only use fallback as last resort when NO Elementor data exists
-  console.log('❌ NO ELEMENTOR DATA FOUND - Creating fallback (will not work properly in Elementor)');
-  debugInfo.dataSource = 'fallback_warning';
+  // NO FALLBACK - Only return real Elementor data
+  console.log('❌ NO ELEMENTOR DATA FOUND - REFUSING to create fallback');
+  console.log('🔍 Detailed analysis of available data:', {
+    hasContent: !!data.content,
+    hasMeta: !!data.meta,
+    hasAcf: !!data.acf,
+    metaKeys: data.meta ? Object.keys(data.meta) : [],
+    acfKeys: data.acf ? Object.keys(data.acf) : [],
+    contentPreview: data.content?.rendered ? data.content.rendered.substring(0, 200) + '...' : 'No content',
+    fullDataKeys: Object.keys(data)
+  });
   
-  const fallbackElements = await createMinimalFallback(data, config);
+  debugInfo.dataSource = 'no_elementor_data_found';
   
   return {
-    success: true,
-    data: fallbackElements,
+    success: false,
+    error: 'This component was not created with Elementor or does not contain Elementor data. Only Elementor components can be copied.',
     debugInfo: {
       ...debugInfo,
-      warning: 'Using fallback structure - component may not work properly in Elementor'
+      validationErrors: [
+        'No _elementor_data found in meta fields',
+        'No Elementor data found in ACF fields',
+        'Component appears to be a regular WordPress post/page, not an Elementor component'
+      ]
     }
   };
 };
 
 /**
- * Create minimal fallback when no Elementor data exists
+ * Debug function to analyze what data is actually available
  */
-const createMinimalFallback = async (
-  responseData: any,
-  config: WordPressConfig
-): Promise<ElementorElement[]> => {
-  console.log('⚠️ CREATING MINIMAL FALLBACK - THIS IS NOT IDEAL');
+const analyzeAvailableData = (responseData: any): void => {
+  console.log('🔍 DEEP DATA ANALYSIS - What data is actually available?');
   
-  const title = responseData.title?.rendered || responseData.title || 'Untitled Component';
-  const content = responseData.content?.rendered || responseData.content || '';
+  console.log('📦 Response structure:', {
+    keys: Object.keys(responseData),
+    hasId: !!responseData.id,
+    hasTitle: !!responseData.title,
+    hasContent: !!responseData.content,
+    hasMeta: !!responseData.meta,
+    hasAcf: !!responseData.acf
+  });
   
-  // Create basic text widget with warning
-  const fallbackElement: ElementorElement = {
-    id: generateElementorId(),
-    elType: 'widget',
-    isInner: false,
-    isLocked: false,
-    widgetType: 'text-editor',
-    settings: {
-      editor: `<h3>${title}</h3>${content}<p><strong>Note:</strong> This is a fallback structure. The original component may not have been built with Elementor.</p>`,
-      text_color: '#e74c3c'
-    },
-    elements: []
-  };
-
-  return [fallbackElement];
+  if (responseData.meta) {
+    console.log('📊 Meta fields analysis:', {
+      metaKeys: Object.keys(responseData.meta),
+      hasElementorData: !!responseData.meta._elementor_data,
+      hasElementorControls: !!responseData.meta._elementor_controls_usage,
+      hasElementorCss: !!responseData.meta._elementor_css,
+      hasElementorVersion: !!responseData.meta._elementor_version,
+      elementorDataType: typeof responseData.meta._elementor_data,
+      elementorDataLength: responseData.meta._elementor_data ? 
+        (typeof responseData.meta._elementor_data === 'string' ? 
+         responseData.meta._elementor_data.length : 
+         JSON.stringify(responseData.meta._elementor_data).length) : 0
+    });
+    
+    // Show first few characters of _elementor_data if it exists
+    if (responseData.meta._elementor_data) {
+      const dataStr = typeof responseData.meta._elementor_data === 'string' ? 
+        responseData.meta._elementor_data : 
+        JSON.stringify(responseData.meta._elementor_data);
+      console.log('📄 _elementor_data preview (first 500 chars):', dataStr.substring(0, 500) + '...');
+    }
+  }
+  
+  if (responseData.acf) {
+    console.log('📊 ACF fields analysis:', {
+      acfKeys: Object.keys(responseData.acf),
+      acfPreview: Object.keys(responseData.acf).reduce((acc, key) => {
+        acc[key] = typeof responseData.acf[key];
+        return acc;
+      }, {} as Record<string, string>)
+    });
+  }
+  
+  console.log('📄 Content analysis:', {
+    hasRenderedContent: !!responseData.content?.rendered,
+    contentLength: responseData.content?.rendered?.length || 0,
+    contentPreview: responseData.content?.rendered ? 
+      responseData.content.rendered.substring(0, 200) + '...' : 'No content'
+  });
 };
 
 /**
@@ -382,63 +424,102 @@ export const extractComponentForClipboard = async (
   component?: any
 ): Promise<string> => {
   try {
-    console.log('🚀 Starting clipboard extraction for component:', componentId);
-    console.log('📋 Component object received:', {
+    console.log('🚀 ENHANCED CLIPBOARD EXTRACTION - REAL ELEMENTOR DATA ONLY');
+    console.log('📋 Component analysis:', {
       hasComponent: !!component,
-      componentKeys: component ? Object.keys(component) : [],
       componentId,
-      componentData: component ? JSON.stringify(component).substring(0, 500) + '...' : 'No component'
+      baseUrl: config.baseUrl
     });
     
-    // Priority 1: Use local component data if available
+    // DETAILED component inspection
     if (component) {
+      console.log('🔍 DETAILED COMPONENT INSPECTION:');
+      console.log('📦 Component keys:', Object.keys(component));
+      console.log('📊 Component meta analysis:', {
+        hasMeta: !!component.meta,
+        metaKeys: component.meta ? Object.keys(component.meta) : [],
+        hasElementorData: !!(component.meta && component.meta._elementor_data),
+        elementorDataType: component.meta?._elementor_data ? typeof component.meta._elementor_data : 'undefined'
+      });
+      
+      // Try to extract local data with enhanced debugging
       const localData = extractLocalElementorData(component);
-      if (localData) {
-        console.log('✅ Using LOCAL component data - no API call needed');
+      if (localData && localData.length > 0) {
+        console.log('✅ FOUND VALID LOCAL ELEMENTOR DATA!');
+        console.log('📊 Local data details:', {
+          elementCount: localData.length,
+          hasWidgets: localData.some(el => el.widgetType),
+          hasSections: localData.some(el => el.elType === 'section'),
+          hasContainers: localData.some(el => el.elType === 'container'),
+          dataPreview: JSON.stringify(localData[0]).substring(0, 300) + '...'
+        });
         return formatForElementorClipboard(localData, config.baseUrl);
+      } else {
+        console.log('❌ NO VALID LOCAL ELEMENTOR DATA FOUND');
       }
     }
     
-    // Priority 2: Fallback to API extraction only if no local data
-    console.log('📡 No local data found, attempting API extraction...');
+    // Enhanced API extraction with detailed logging
+    console.log('📡 ATTEMPTING API EXTRACTION (Local data not found or invalid)...');
     const result = await extractComponentRobust(componentId, config);
     
-    if (result.success && result.data) {
-      console.log('✅ Successfully extracted from API');
+    if (result.success && result.data && result.data.length > 0) {
+      console.log('✅ API EXTRACTION SUCCESSFUL!');
+      console.log('📊 API data details:', {
+        elementCount: result.data.length,
+        dataSource: result.debugInfo.dataSource,
+        hasWidgets: JSON.stringify(result.data).includes('"widgetType"'),
+        hasSections: JSON.stringify(result.data).includes('"elType":"section"')
+      });
       return formatForElementorClipboard(result.data, config.baseUrl);
     }
     
-    console.warn('⚠️ Failed to extract component data from any source');
-    throw new Error(result.error || 'Failed to extract component data');
+    // Enhanced error with detailed debugging info
+    console.error('❌ EXTRACTION FAILED - NO ELEMENTOR DATA FOUND');
+    console.error('🔍 Debug info:', result.debugInfo);
+    
+    const errorMessage = result.error || 'This component does not contain Elementor data. Only components created with Elementor can be copied.';
+    const detailedError = result.debugInfo?.validationErrors ? 
+      `${errorMessage}\n\nDetails: ${result.debugInfo.validationErrors.join(', ')}` : 
+      errorMessage;
+    
+    throw new Error(detailedError);
     
   } catch (error) {
-    console.error('❌ Clipboard extraction error:', error);
+    console.error('❌ CLIPBOARD EXTRACTION FAILED:', error);
     throw error;
   }
 };
 
-// Extract Elementor data from local component object
+// Extract Elementor data from local component object with ENHANCED validation
 const extractLocalElementorData = (component: any): ElementorElement[] | null => {
-  console.log('🔍 Analyzing local component for Elementor data...');
+  console.log('🔍 ENHANCED LOCAL ELEMENTOR DATA EXTRACTION');
   
-  // Check various possible locations for Elementor data
+  // Comprehensive search locations including nested paths
   const possibleSources = [
-    component._elementor_data,
-    component.elementor_data,
-    component.meta?._elementor_data,
-    component.meta?.elementor_data,
-    component.content?.raw,
-    component.content?.rendered,
-    component.content,
-    component.data,
-    component.elementor,
-    component._meta?._elementor_data
+    { data: component._elementor_data, path: '_elementor_data' },
+    { data: component.elementor_data, path: 'elementor_data' },
+    { data: component.meta?._elementor_data, path: 'meta._elementor_data' },
+    { data: component.meta?.elementor_data, path: 'meta.elementor_data' },
+    { data: component.acf?._elementor_data, path: 'acf._elementor_data' },
+    { data: component.acf?.elementor_data, path: 'acf.elementor_data' },
+    { data: component.fields?._elementor_data, path: 'fields._elementor_data' },
+    { data: component.data, path: 'data' },
+    { data: component.elementor, path: 'elementor' },
+    { data: component._meta?._elementor_data, path: '_meta._elementor_data' },
+    { data: component.meta?.raw, path: 'meta.raw' },
+    { data: component.content?.raw, path: 'content.raw' }
   ];
   
-  for (const [index, source] of possibleSources.entries()) {
-    if (!source) continue;
+  console.log('🔍 Searching in these locations:', possibleSources.map(s => s.path));
+  
+  for (const { data: source, path } of possibleSources) {
+    if (!source) {
+      console.log(`⚠️ ${path}: No data`);
+      continue;
+    }
     
-    console.log(`🔍 Checking source ${index}:`, {
+    console.log(`🔍 Checking ${path}:`, {
       type: typeof source,
       isString: typeof source === 'string',
       isArray: Array.isArray(source),
@@ -449,43 +530,57 @@ const extractLocalElementorData = (component: any): ElementorElement[] | null =>
     try {
       let parsed = source;
       
-      // Parse if it's a JSON string
+      // Parse JSON strings
       if (typeof source === 'string') {
-        // Check if it looks like JSON
-        if (source.trim().startsWith('[') || source.trim().startsWith('{')) {
+        const trimmed = source.trim();
+        if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
           parsed = JSON.parse(source);
+          console.log(`📋 Successfully parsed JSON from ${path}`);
         } else {
-          continue; // Skip non-JSON strings
+          console.log(`⚠️ ${path}: String doesn't look like JSON`);
+          continue;
         }
       }
       
-      // Validate if it's Elementor data
+      // Enhanced Elementor validation
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const hasElementorStructure = parsed.some(item => 
-          item && typeof item === 'object' && (
-            item.elType || 
-            item.widgetType || 
-            item.elements ||
-            item.id
-          )
+        console.log(`📊 ${path}: Found array with ${parsed.length} elements`);
+        
+        const elementorElements = parsed.filter(item => 
+          item && 
+          typeof item === 'object' && 
+          (item.elType || item.widgetType || (item.elements && Array.isArray(item.elements)))
         );
         
-        if (hasElementorStructure) {
-          console.log('✅ Found valid Elementor data in local component!', {
-            source: `possibleSources[${index}]`,
-            elementCount: parsed.length,
-            firstElement: parsed[0]
+        if (elementorElements.length > 0) {
+          console.log(`✅ FOUND VALID ELEMENTOR DATA AT ${path}!`, {
+            totalElements: parsed.length,
+            elementorElements: elementorElements.length,
+            firstElementType: elementorElements[0].elType || elementorElements[0].widgetType,
+            hasWidgets: elementorElements.some(el => el.widgetType),
+            hasSections: elementorElements.some(el => el.elType === 'section'),
+            hasContainers: elementorElements.some(el => el.elType === 'container'),
+            sample: elementorElements[0]
           });
+          
+          // Return ALL elements, not just the filtered ones
           return parsed;
+        } else {
+          console.log(`❌ ${path}: Array found but no Elementor elements`);
         }
+      } else if (parsed && typeof parsed === 'object' && 
+                 (parsed.elType || parsed.widgetType || parsed.elements)) {
+        console.log(`✅ FOUND SINGLE ELEMENTOR ELEMENT AT ${path}!`);
+        return [parsed];
       }
     } catch (parseError) {
-      console.log(`⚠️ Failed to parse source ${index}:`, parseError);
+      console.log(`❌ Failed to parse ${path}:`, parseError);
       continue;
     }
   }
   
-  console.log('❌ No valid Elementor data found in local component');
+  console.log('❌ NO VALID ELEMENTOR DATA FOUND IN LOCAL COMPONENT');
+  console.log('💡 This component was likely not created with Elementor');
   return null;
 };
 

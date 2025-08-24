@@ -95,22 +95,22 @@ export const useEnhancedCopyComponent = () => {
         delete timeoutRefs.current[componentId];
       }, 3000);
       
-      // Determine data quality for user feedback
+      // Enhanced success feedback - only for real Elementor data
       const hasElementorStructure = elementorData.includes('"elType"') || 
         elementorData.includes('"widgetType"') || 
         elementorData.includes('"elements":');
       
-      const isOriginalElementorData = hasElementorStructure;
-      const isFallbackData = false; // Never use fallback mode
-      
-      toast({
-        title: "Elementor Component Copied!",
-        description: isOriginalElementorData 
-          ? "Original Elementor component copied successfully. Ready to paste in Elementor!"
-          : `Component data copied using ${result.method}. Press Ctrl+V to paste in Elementor.`,
-        variant: "default",
-        duration: 4000
-      });
+      if (hasElementorStructure) {
+        toast({
+          title: "✅ Elementor Component Copied!",
+          description: "Original Elementor component data copied successfully. Ready to paste in Elementor editor!",
+          variant: "default",
+          duration: 4000
+        });
+      } else {
+        // This should not happen with the new system, but just in case
+        throw new Error('Copied data does not contain valid Elementor structure');
+      }
       
     } catch (error) {
       console.error('Copy component error:', error);
@@ -118,11 +118,14 @@ export const useEnhancedCopyComponent = () => {
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
-      // Enhanced error handling with specific messages
+      // Enhanced error handling with specific messages for Elementor components
       let userMessage = '';
       let title = "Copy Failed";
       
-      if (errorMessage.includes('Authentication failed')) {
+      if (errorMessage.includes('not created with Elementor') || errorMessage.includes('does not contain Elementor data')) {
+        title = "Not an Elementor Component";
+        userMessage = "This component was not created with Elementor. Only Elementor components can be copied and pasted into Elementor editor.";
+      } else if (errorMessage.includes('Authentication failed')) {
         title = "Authentication Error";
         userMessage = "WordPress credentials are invalid or expired. Please check your username and application password in connection settings.";
       } else if (errorMessage.includes('Component not found')) {
