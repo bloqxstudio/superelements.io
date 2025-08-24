@@ -186,8 +186,7 @@ export const useWordPressApi = () => {
     try {
       const baseUrl = config.baseUrl.replace(/\/$/, '');
       
-      // Build API URL with category filter if provided
-      let apiUrl = `${baseUrl}/wp-json/wp/v2/${config.postType}?page=${page}&per_page=${perPage}`;
+      let apiUrl = `${baseUrl}/wp-json/wp/v2/${config.postType}?page=${page}&per_page=${perPage}&_fields=id,title,content,meta,acf,link,categories`;
       
       if (categoryIds && categoryIds.length > 0) {
         apiUrl += `&categories=${categoryIds.join(',')}`;

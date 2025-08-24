@@ -870,8 +870,8 @@ export class WordPressApiService {
       headers['Authorization'] = `Basic ${credentials}`;
     }
 
-    // Build API URL with category filter if provided
-    let apiUrl = `${baseUrl}/wp-json/wp/v2/${config.postType}?per_page=100&page=${page}`;
+    // Build API URL with category filter if provided and include ALL fields needed for Elementor
+    let apiUrl = `${baseUrl}/wp-json/wp/v2/${config.postType}?per_page=100&page=${page}&_fields=id,title,content,meta,acf,link,categories`;
     
     if (categoryFilter) {
       apiUrl += `&categories=${categoryFilter}`;
@@ -1200,9 +1200,9 @@ export class WordPressApiService {
     }
 
     const baseUrl = config.baseUrl.replace(/\/$/, '');
-    const apiUrl = `${baseUrl}/wp-json/wp/v2/${config.postType}?per_page=100`;
+    const apiUrl = `${baseUrl}/wp-json/wp/v2/${config.postType}?per_page=100&_fields=id,title,content,meta,acf,link,categories`;
     
-    console.log('Fetching components from:', apiUrl);
+    console.log('Fetching components with Elementor data from:', apiUrl);
     
     const headers: HeadersInit = {
       'Content-Type': 'application/json',

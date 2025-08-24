@@ -493,7 +493,20 @@ export const extractComponentForClipboard = async (
 
 // Extract Elementor data from local component object with ENHANCED validation
 const extractLocalElementorData = (component: any): ElementorElement[] | null => {
-  console.log('🔍 ENHANCED LOCAL ELEMENTOR DATA EXTRACTION');
+      console.log('🔍 ENHANCED LOCAL ELEMENTOR DATA EXTRACTION');
+      console.log('📦 Component received for extraction:', {
+        hasComponent: !!component,
+        componentKeys: component ? Object.keys(component) : [],
+        hasMeta: !!(component && component.meta),
+        metaKeys: component?.meta ? Object.keys(component.meta) : [],
+        hasElementorData: !!(component?.meta && component.meta._elementor_data),
+        elementorDataType: component?.meta?._elementor_data ? typeof component.meta._elementor_data : 'undefined',
+        elementorDataPreview: component?.meta?._elementor_data ? 
+          (typeof component.meta._elementor_data === 'string' ? 
+            component.meta._elementor_data.substring(0, 300) + '...' : 
+            JSON.stringify(component.meta._elementor_data).substring(0, 300) + '...'
+          ) : 'No data'
+      });
   
   // Comprehensive search locations including nested paths
   const possibleSources = [
