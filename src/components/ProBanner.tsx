@@ -24,7 +24,17 @@ export const ProBanner: React.FC = () => {
           </div>
         </div>
         
-        <Button size="sm" variant="secondary" className="bg-white text-pro-gradient-from hover:bg-white/90 font-medium flex-shrink-0">
+        <Button 
+          size="sm" 
+          variant="secondary" 
+          className="bg-white text-pro-gradient-from hover:bg-white/90 font-medium flex-shrink-0"
+          onClick={() => {
+            const phone = "+5551989249280";
+            const message = encodeURIComponent("quero contratar o Super Elements PRO");
+            const whatsappUrl = `https://api.whatsapp.com/send/?phone=${encodeURIComponent(phone)}&text=${message}&type=phone_number&app_absent=0`;
+            window.open(whatsappUrl, '_blank');
+          }}
+        >
           Fazer Upgrade
           <ArrowRight className="ml-1 h-3 w-3" />
         </Button>
