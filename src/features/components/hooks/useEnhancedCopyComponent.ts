@@ -56,7 +56,11 @@ export const useEnhancedCopyComponent = () => {
         componentId,
         baseUrl: wordpressConfig.baseUrl,
         postType: wordpressConfig.postType,
-        hasAuth: !!(wordpressConfig.username && wordpressConfig.applicationPassword)
+        hasAuth: !!(wordpressConfig.username && wordpressConfig.applicationPassword),
+        isVercel: window.location.hostname.includes('vercel.app') || window.location.hostname.includes('superelements.io'),
+        hostname: window.location.hostname,
+        secureContext: window.isSecureContext,
+        hasClipboardApi: !!navigator.clipboard
       });
 
       // Extract component data - pass the full component object for local data priority

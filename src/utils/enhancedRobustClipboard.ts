@@ -22,6 +22,8 @@ interface ClipboardResult {
  */
 export const copyToClipboardEnhanced = async (text: string): Promise<ClipboardResult> => {
   const startTime = Date.now();
+  const isVercel = window.location.hostname.includes('vercel.app') || window.location.hostname.includes('superelements.io');
+  
   const debugInfo = {
     isSecureContext: window.isSecureContext,
     hasClipboardApi: !!navigator.clipboard,
@@ -29,23 +31,35 @@ export const copyToClipboardEnhanced = async (text: string): Promise<ClipboardRe
     userAgent: navigator.userAgent,
     attemptedMethods: [] as string[],
     timeTaken: 0,
-    permissions: undefined as string | undefined
+    permissions: undefined as string | undefined,
+    isVercel,
+    hostname: window.location.hostname,
+    protocol: window.location.protocol
   };
 
   console.log('📋 ENHANCED CLIPBOARD COPY START:', {
     textLength: text.length,
     secureContext: debugInfo.isSecureContext,
     hasApi: debugInfo.hasClipboardApi,
-    hasFocus: debugInfo.hasFocus
+    hasFocus: debugInfo.hasFocus,
+    isVercel: debugInfo.isVercel,
+    hostname: debugInfo.hostname
   });
 
-  // Strategy 1: Modern Clipboard API
+  // Strategy 1: Modern Clipboard API with Vercel-specific timeout
   if (debugInfo.hasClipboardApi && debugInfo.isSecureContext) {
     debugInfo.attemptedMethods.push('clipboard-api');
     
     try {
       console.log('📋 TRYING CLIPBOARD API...');
-      await navigator.clipboard.writeText(text);
+      
+      // Add timeout for Vercel environments where API might hang
+      const clipboardPromise = navigator.clipboard.writeText(text);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Clipboard API timeout')), isVercel ? 3000 : 5000)
+      );
+      
+      await Promise.race([clipboardPromise, timeoutPromise]);
       
       debugInfo.timeTaken = Date.now() - startTime;
       console.log('✅ CLIPBOARD API SUCCESS:', { timeTaken: debugInfo.timeTaken });
@@ -63,9 +77,15 @@ export const copyToClipboardEnhanced = async (text: string): Promise<ClipboardRe
         try {
           const permission = await navigator.permissions.query({ name: 'clipboard-write' as PermissionName });
           debugInfo.permissions = permission.state;
+          console.log('🔐 Clipboard permission state:', permission.state);
         } catch (permError) {
           debugInfo.permissions = 'unavailable';
         }
+      }
+      
+      // For Vercel, immediately try execCommand fallback
+      if (isVercel) {
+        console.log('🚀 VERCEL DETECTED - Forcing execCommand fallback');
       }
     }
   }
