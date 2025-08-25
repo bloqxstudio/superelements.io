@@ -1,20 +1,20 @@
 
 {
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         {
           "key": "Permissions-Policy",
-          "value": "clipboard-write=(self), clipboard-read=(self)"
+          "value": "clipboard-write=*, clipboard-read=*"
         }
       ]
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/((?!.*\\.(mp4|webm|ogg|avi|mov|wmv|flv|mkv|m4v|3gp|ts|mts|vob|ogv|dv|rm|rmvb|asf|amv|mpg|mpeg|mpe|mpv|svi|mxf|roq|nsv|f4v|f4p|f4a|f4b)).*)",
-      "destination": "/index.html"
     }
   ]
 }
