@@ -72,12 +72,12 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
                     className="flex items-center gap-2 text-xs sm:text-sm"
                   >
                     <Copy className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden sm:inline">COPIAR JSON</span>
-                    <span className="sm:hidden">JSON</span>
+                    <span className="hidden sm:inline">COPIAR</span>
+                    <span className="sm:hidden">COPIAR</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Copiar componente como JSON</p>
+                  <p>Copiar componente</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
