@@ -259,7 +259,7 @@ export const copyToClipboard = async (text: string): Promise<ClipboardResult> =>
         } else if (error.message.includes('permission')) {
           return {
             success: false,
-            error: 'Clipboard permission denied. Please allow clipboard access in your browser settings.',
+            error: 'Permissão de área de transferência negada. Por favor, permita acesso à área de transferência nas configurações do seu navegador.',
             debugInfo
           };
         } else {
@@ -289,7 +289,7 @@ export const copyToClipboard = async (text: string): Promise<ClipboardResult> =>
   // Strategy 3: Manual instruction as last resort
   return {
     success: false,
-    error: 'Unable to copy automatically. Your browser or security settings are blocking clipboard access.',
+    error: 'Não foi possível copiar automaticamente. Suas configurações de navegador ou segurança estão bloqueando o acesso à área de transferência.',
     method: 'manual',
     debugInfo
   };
@@ -329,10 +329,10 @@ export const getClipboardErrorMessage = (error: any): { title: string; descripti
   if (error instanceof Error) {
     if (error.message.includes('not allowed')) {
       return {
-        title: 'Clipboard Access Denied',
+        title: 'Acesso à Área de Transferência Negado',
         description: browserInfo.isSafari 
-          ? 'Safari requires direct user interaction. Click the copy button and try again immediately.'
-          : 'Your browser is blocking clipboard access. Try using a different browser or check your extensions.'
+          ? 'Safari requer interação direta do usuário. Clique no botão copiar e tente novamente imediatamente.'
+          : 'Seu navegador está bloqueando o acesso à área de transferência. Tente usar um navegador diferente ou verifique suas extensões.'
       };
     }
   }
@@ -340,21 +340,21 @@ export const getClipboardErrorMessage = (error: any): { title: string; descripti
   // Browser-specific fallback messages
   if (browserInfo.isSafari) {
     return {
-      title: 'Safari Clipboard Issue',
-      description: 'Safari has strict clipboard policies. Try clicking the copy button again or use a different browser.'
+      title: 'Problema do Safari',
+      description: 'Safari tem políticas rígidas de área de transferência. Tente clicar no botão copiar novamente ou use um navegador diferente.'
     };
   }
 
   if (browserInfo.isMobile) {
     return {
-      title: 'Mobile Clipboard Issue',
-      description: 'Mobile browsers have limited clipboard support. Try using the desktop version or copy manually.'
+      title: 'Problema Mobile',
+      description: 'Navegadores mobile têm suporte limitado à área de transferência. Tente usar a versão desktop ou copie manualmente.'
     };
   }
 
   return {
-    title: 'Copy Failed',
-    description: 'Unable to copy to clipboard. Please try again or copy the data manually.'
+    title: 'Falha na Cópia',
+    description: 'Não foi possível copiar para a área de transferência. Tente novamente ou copie os dados manualmente.'
   };
 };
 
@@ -392,11 +392,11 @@ export const showManualCopyModal = (componentData: string): void => {
   `;
   
   const title = document.createElement('h3');
-  title.textContent = 'Manual Copy Required';
+  title.textContent = 'Cópia Manual Necessária';
   title.style.cssText = 'margin: 0 0 16px 0; font-size: 18px; font-weight: 600;';
   
   const instructions = document.createElement('p');
-  instructions.textContent = 'Your browser blocked automatic copying. Please select all the text below and copy it manually (Ctrl+C or Cmd+C):';
+  instructions.textContent = 'Seu navegador bloqueou a cópia automática. Por favor, selecione todo o texto abaixo e copie manualmente (Ctrl+C ou Cmd+C):';
   instructions.style.cssText = 'margin: 0 0 16px 0; color: #666;';
   
   const textarea = document.createElement('textarea');
@@ -413,7 +413,7 @@ export const showManualCopyModal = (componentData: string): void => {
   `;
   
   const closeButton = document.createElement('button');
-  closeButton.textContent = 'Close';
+  closeButton.textContent = 'Fechar';
   closeButton.style.cssText = `
     margin-top: 16px;
     padding: 8px 16px;

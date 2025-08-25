@@ -66,8 +66,8 @@ export const useCopyComponent = () => {
       if (!component) {
         console.error('💥 Component not found for legacy copy:', { previewUrl, title, availableComponents: components.length });
         toast({
-          title: "❌ Component Not Found",
-          description: "Could not find the component data for copying",
+          title: "❌ Componente Não Encontrado",
+          description: "Não foi possível encontrar os dados do componente para cópia",
           variant: "destructive"
         });
         return;
@@ -105,8 +105,8 @@ export const useCopyComponent = () => {
       });
       
       toast({
-        title: "🔧 Copy Failed",
-        description: error instanceof Error ? error.message : "Unknown error occurred",
+        title: "🔧 Falha na Cópia",
+        description: error instanceof Error ? error.message : "Erro desconhecido ocorreu",
         variant: "destructive",
         duration: 6000
       });

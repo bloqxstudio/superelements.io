@@ -61,8 +61,8 @@ export const useWordPressApi = () => {
   const fetchPostTypes = async (config: { baseUrl: string; username: string; applicationPassword: string }) => {
     if (!config.baseUrl) {
       toast({
-        title: "Configuration Error",
-        description: "Please provide Base URL",
+        title: "Erro de Configuração",
+        description: "Por favor, forneça a URL Base",
         variant: "destructive"
       });
       return;
@@ -70,8 +70,8 @@ export const useWordPressApi = () => {
 
     if (!config.username || !config.applicationPassword) {
       toast({
-        title: "Authentication Required",
-        description: "Please provide both username and application password",
+        title: "Autenticação Obrigatória",
+        description: "Por favor, forneça nome de usuário e senha de aplicativo",
         variant: "destructive"
       });
       return;
@@ -102,11 +102,11 @@ export const useWordPressApi = () => {
         let errorMessage = 'Unknown error occurred';
         
         if (response.status === 401) {
-          errorMessage = 'Authentication failed. Please check your username and application password.';
+          errorMessage = 'Falha na autenticação. Verifique seu nome de usuário e senha de aplicativo.';
         } else if (response.status === 403) {
-          errorMessage = 'Access forbidden. You may not have permission to access this content.';
+          errorMessage = 'Acesso proibido. Você pode não ter permissão para acessar este conteúdo.';
         } else if (response.status === 404) {
-          errorMessage = 'Post types endpoint not found. Please check your base URL.';
+          errorMessage = 'Endpoint de tipos de post não encontrado. Verifique sua URL base.';
         } else {
           errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         }
@@ -150,7 +150,7 @@ export const useWordPressApi = () => {
       setIsConnected(false);
       
       toast({
-        title: "Connection Failed",
+        title: "Falha na Conexão",
         description: errorMessage,
         variant: "destructive"
       });
@@ -171,9 +171,9 @@ export const useWordPressApi = () => {
     console.log('Fetch request:', { page, perPage, postType: config.postType, categoryIds });
 
     if (!config.baseUrl || !config.postType) {
-      const errorMsg = "Please provide both Base URL and Post Type";
+      const errorMsg = "Por favor, forneça URL Base e Tipo de Post";
       toast({
-        title: "Configuration Error",
+        title: "Erro de Configuração",
         description: errorMsg,
         variant: "destructive"
       });
@@ -230,21 +230,21 @@ export const useWordPressApi = () => {
             let errorMessage = 'Unknown error occurred';
             
             if (response.status === 401) {
-              errorMessage = 'Authentication failed. Please check your username and application password.';
+              errorMessage = 'Falha na autenticação. Verifique seu nome de usuário e senha de aplicativo.';
             } else if (response.status === 403) {
-              errorMessage = 'Access forbidden. You may not have permission to access this content.';
+              errorMessage = 'Acesso proibido. Você pode não ter permissão para acessar este conteúdo.';
             } else if (response.status === 404) {
-              errorMessage = `Endpoint not found. The post type "${config.postType}" may not exist or may not be exposed via REST API.`;
+              errorMessage = `Endpoint não encontrado. O tipo de post "${config.postType}" pode não existir ou não estar exposto via REST API.`;
             } else if (response.status === 400) {
-              console.log('Page not found - end of pages reached');
+              console.log('Página não encontrada - fim das páginas alcançado');
               return { components: [], hasNextPage: false, totalComponents: 0 };
             } else if (response.status === 0 || response.status >= 500) {
-              errorMessage = `Server error (${response.status}). The WordPress site may be temporarily unavailable.`;
+              errorMessage = `Erro do servidor (${response.status}). O site WordPress pode estar temporariamente indisponível.`;
               
               // Retry on server errors
               if (retryCount < maxRetries) {
                 const delay = Math.min(baseDelay * Math.pow(2, retryCount), 10000);
-                console.log(`Server error ${response.status}, retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                console.log(`Erro do servidor ${response.status}, tentando novamente em ${delay}ms... (tentativa ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 retryCount++;
                 continue;
@@ -303,15 +303,15 @@ export const useWordPressApi = () => {
           
         } catch (fetchError) {
           if (fetchError.name === 'AbortError') {
-            const timeoutMessage = 'Request timeout - the server took too long to respond (30s). This might indicate server overload.';
+            const timeoutMessage = 'Tempo limite da solicitação - o servidor demorou muito para responder (30s). Isso pode indicar sobrecarga do servidor.';
             
             if (retryCount < maxRetries) {
               const delay = Math.min(baseDelay * Math.pow(2, retryCount), 15000);
-              console.log(`Request timeout, retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+              console.log(`Tempo limite da solicitação, tentando novamente em ${delay}ms... (tentativa ${retryCount + 1}/${maxRetries})`);
               
               toast({
-                title: "Loading Timeout",
-                description: `Connection timed out, retrying... (${retryCount + 1}/${maxRetries})`,
+                title: "Tempo Limite de Carregamento",
+                description: `Conexão expirou, tentando novamente... (${retryCount + 1}/${maxRetries})`,
                 duration: 3000
               });
               
@@ -325,15 +325,15 @@ export const useWordPressApi = () => {
           
           // Check if it's a network error
           if (fetchError instanceof TypeError && fetchError.message === 'Failed to fetch') {
-            const networkMessage = 'Network error - unable to connect to the WordPress site. Please check the URL and your internet connection.';
+            const networkMessage = 'Erro de rede - não foi possível conectar ao site WordPress. Verifique a URL e sua conexão com a internet.';
             
             if (retryCount < maxRetries) {
               const delay = Math.min(baseDelay * Math.pow(2, retryCount), 10000);
-              console.log(`Network error, retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+              console.log(`Erro de rede, tentando novamente em ${delay}ms... (tentativa ${retryCount + 1}/${maxRetries})`);
               
               toast({
-                title: "Network Error",
-                description: `Connection failed, retrying... (${retryCount + 1}/${maxRetries})`,
+                title: "Erro de Rede",
+                description: `Falha na conexão, tentando novamente... (${retryCount + 1}/${maxRetries})`,
                 duration: 3000
               });
               
@@ -354,7 +354,7 @@ export const useWordPressApi = () => {
       setError(errorMessage);
       
       toast({
-        title: "Fetch Error",
+        title: "Erro de Busca",
         description: errorMessage,
         variant: "destructive"
       });

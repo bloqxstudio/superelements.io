@@ -305,11 +305,11 @@ const showEnhancedManualCopyModal = (text: string): void => {
   `;
   
   const title = document.createElement('h2');
-  title.textContent = '📋 Manual Copy Required';
+  title.textContent = '📋 Cópia Manual Necessária';
   title.style.cssText = 'margin: 0 0 16px 0; font-size: 24px; font-weight: 700; color: #1f2937;';
   
   const instructions = document.createElement('p');
-  const instructionsText = 'Your browser blocked automatic copying. Please select all the text below and copy it manually: ';
+  const instructionsText = 'Seu navegador bloqueou a cópia automática. Por favor, selecione todo o texto abaixo e copie manualmente: ';
   instructions.textContent = instructionsText;
   
   // Create keyboard shortcuts as separate elements
@@ -362,7 +362,7 @@ const showEnhancedManualCopyModal = (text: string): void => {
   buttonContainer.style.cssText = 'display: flex; gap: 12px; justify-content: flex-end;';
   
   const selectAllButton = document.createElement('button');
-  selectAllButton.textContent = 'Select All';
+  selectAllButton.textContent = 'Selecionar Tudo';
   selectAllButton.style.cssText = `
     padding: 10px 20px;
     background: #3b82f6;
@@ -377,7 +377,7 @@ const showEnhancedManualCopyModal = (text: string): void => {
   selectAllButton.onmouseout = () => selectAllButton.style.background = '#3b82f6';
   
   const closeButton = document.createElement('button');
-  closeButton.textContent = 'Close';
+  closeButton.textContent = 'Fechar';
   closeButton.style.cssText = `
     padding: 10px 20px;
     background: #6b7280;
@@ -441,37 +441,37 @@ export const getEnhancedClipboardErrorMessage = (error: any): { title: string; d
   if (typeof error === 'string') {
     if (error.includes('not focused') || error.includes('focus')) {
       return {
-        title: 'Page Not Focused',
-        description: 'Please click on the page first and try copying again.'
+        title: 'Página Não Focada',
+        description: 'Por favor, clique na página primeiro e tente copiar novamente.'
       };
     }
     
     if (error.includes('permission') || error.includes('denied')) {
       return {
-        title: 'Clipboard Permission Denied',
+        title: 'Permissão de Área de Transferência Negada',
         description: browserInfo.isSafari 
-          ? 'Safari requires direct user interaction. Try clicking the copy button again immediately.'
-          : 'Please allow clipboard access in your browser settings.'
+          ? 'Safari requer interação direta do usuário. Tente clicar no botão copiar novamente.'
+          : 'Por favor, permita acesso à área de transferência nas configurações do seu navegador.'
       };
     }
   }
 
   if (browserInfo.isSafari) {
     return {
-      title: 'Safari Clipboard Limitation',
-      description: 'Safari has strict clipboard policies. A manual copy dialog will be shown if automatic copy fails.'
+      title: 'Limitação do Safari',
+      description: 'Safari tem políticas rígidas de área de transferência. Um diálogo de cópia manual será mostrado se a cópia automática falhar.'
     };
   }
 
   if (browserInfo.isMobile) {
     return {
-      title: 'Mobile Clipboard Issue',
-      description: 'Mobile browsers have limited clipboard support. A manual copy dialog will be shown.'
+      title: 'Problema de Área de Transferência Mobile',
+      description: 'Navegadores mobile têm suporte limitado à área de transferência. Um diálogo de cópia manual será mostrado.'
     };
   }
 
   return {
-    title: 'Copy Failed',
-    description: 'Automatic copy failed. A manual copy dialog will be shown to complete the operation.'
+    title: 'Falha na Cópia',
+    description: 'Cópia automática falhou. Um diálogo de cópia manual será mostrado para completar a operação.'
   };
 };

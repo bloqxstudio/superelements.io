@@ -20,8 +20,8 @@ export const useCopyToFigma = () => {
 
       if (!component) {
         toast({
-          title: "Component Not Found",
-          description: "Could not find the component data for Figma copy",
+          title: "Componente Não Encontrado",
+          description: "Não foi possível encontrar os dados do componente para cópia no Figma",
           variant: "destructive"
         });
         return;
@@ -35,8 +35,8 @@ export const useCopyToFigma = () => {
           await copyComponentToFigmaKiwiEnhanced(component);
           
           toast({
-            title: "🎨 Copied to Figma!",
-            description: "Component copied in Figma format. Paste directly in Figma to see the design!",
+            title: "🎨 Copiado para o Figma!",
+            description: "Componente copiado no formato Figma. Cole diretamente no Figma para ver o design!",
             duration: 5000
           });
           return;
@@ -51,8 +51,8 @@ export const useCopyToFigma = () => {
           await copyComponentToFigmaAsSVG(component);
           
           toast({
-            title: "🎨 Copied as SVG!",
-            description: "Component copied as SVG. Paste in Figma - it will appear as an image that you can trace or use as reference.",
+            title: "🎨 Copiado como SVG!",
+            description: "Componente copiado como SVG. Cole no Figma - aparecerá como uma imagem que você pode rastrear ou usar como referência.",
             duration: 5000
           });
           return;
@@ -66,8 +66,8 @@ export const useCopyToFigma = () => {
         await copyComponentToFigma(component);
         
         toast({
-          title: "📋 Copied as JSON",
-          description: "Component copied as JSON data. Use a Figma plugin like 'JSON to Figma' to import it.",
+          title: "📋 Copiado como JSON",
+          description: "Componente copiado como dados JSON. Use um plugin do Figma como 'JSON to Figma' para importá-lo.",
           duration: 5000
         });
         return;
@@ -75,22 +75,22 @@ export const useCopyToFigma = () => {
 
       // If nothing works, show helpful message
       toast({
-        title: "⚠️ Limited Copy Options",
-        description: "This component has limited data. The title and basic structure were copied as text. Consider using the 'Open in New Tab' option to view the full component.",
+        title: "⚠️ Opções de Cópia Limitadas",
+        description: "Este componente tem dados limitados. O título e estrutura básica foram copiados como texto. Considere usar a opção 'Abrir em Nova Aba' para ver o componente completo.",
         variant: "destructive",
         duration: 6000
       });
       
       // Copy at least the basic info
-      const basicInfo = `${component.title?.rendered || 'WordPress Component'}\nSource: ${previewUrl}`;
+      const basicInfo = `${component.title?.rendered || 'Componente WordPress'}\nFonte: ${previewUrl}`;
       await navigator.clipboard.writeText(basicInfo);
       
     } catch (error) {
       console.error('💥 Figma copy error:', error);
       
       toast({
-        title: "Copy Failed",
-        description: error instanceof Error ? error.message : "An unexpected error occurred while copying to Figma",
+        title: "Falha na Cópia",
+        description: error instanceof Error ? error.message : "Ocorreu um erro inesperado ao copiar para o Figma",
         variant: "destructive",
         duration: 6000
       });

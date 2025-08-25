@@ -86,8 +86,8 @@ export const useEnhancedCopyComponent = () => {
       }, 3000);
       
       toast({
-        title: "✅ Component Copied!",
-        description: "Component copied successfully. Ready to paste!",
+        title: "✅ Componente Copiado!",
+        description: "Componente copiado com sucesso. Pronto para colar!",
         variant: "default",
         duration: 3000
       });
@@ -100,34 +100,34 @@ export const useEnhancedCopyComponent = () => {
       
       // Enhanced error handling with specific messages for Elementor components
       let userMessage = '';
-      let title = "Copy Failed";
+      let title = "Falha na Cópia";
       
       if (errorMessage.includes('not created with Elementor') || errorMessage.includes('does not contain Elementor data') || errorMessage.includes('NO VALID ELEMENTOR DATA FOUND')) {
-        title = "Copy Failed";
-        userMessage = "Failed to copy component. Please try again.";
+        title = "Falha na Cópia";
+        userMessage = "Falha ao copiar componente. Tente novamente.";
       } else if (errorMessage.includes('ELEMENTOR COMPONENT DETECTED BUT DATA EXTRACTION FAILED')) {
-        title = "Copy Failed";
-        userMessage = "Failed to copy component. Please try again.";
+        title = "Falha na Cópia";
+        userMessage = "Falha ao copiar componente. Tente novamente.";
       } else if (errorMessage.includes('Authentication failed')) {
-        title = "Authentication Error";
-        userMessage = "WordPress credentials are invalid or expired. Please check your username and application password in connection settings.";
+        title = "Erro de Autenticação";
+        userMessage = "Credenciais do WordPress são inválidas ou expiraram. Verifique seu nome de usuário e senha de aplicativo nas configurações de conexão.";
       } else if (errorMessage.includes('Component not found')) {
-        title = "Component Not Found";
-        userMessage = "The component was not found. It may have been deleted or moved.";
+        title = "Componente Não Encontrado";
+        userMessage = "O componente não foi encontrado. Pode ter sido excluído ou movido.";
       } else if (errorMessage.includes('Access denied')) {
-        title = "Access Denied";
-        userMessage = "Your WordPress user doesn't have permission to access this content. Contact your administrator.";
+        title = "Acesso Negado";
+        userMessage = "Seu usuário WordPress não tem permissão para acessar este conteúdo. Entre em contato com o administrador.";
       } else if (errorMessage.includes('connection is not active')) {
-        title = "Connection Error";
-        userMessage = "WordPress connection is not active. Please reconnect to your WordPress site.";
+        title = "Erro de Conexão";
+        userMessage = "Conexão WordPress não está ativa. Reconecte-se ao seu site WordPress.";
       } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-        title = "Network Error";
-        userMessage = "Network connection failed. Please check your internet connection and try again.";
+        title = "Erro de Rede";
+        userMessage = "Falha na conexão de rede. Verifique sua conexão com a internet e tente novamente.";
       } else if (errorMessage.includes('site URL is required')) {
-        title = "Configuration Error";
-        userMessage = "WordPress site URL is missing. Please check your connection settings.";
+        title = "Erro de Configuração";
+        userMessage = "URL do site WordPress está faltando. Verifique suas configurações de conexão.";
       } else {
-        userMessage = `Failed to copy component: ${errorMessage}`;
+        userMessage = `Falha ao copiar componente: ${errorMessage}`;
       }
       
       toast({
