@@ -101,7 +101,7 @@ const attemptExtraction = async (
           headers['Authorization'] = `Basic ${auth}`;
         }
 
-        console.log(`📡 Making API request with ${context} context:`, { url: apiUrl, hasAuth: !!headers.Authorization });
+        
         
         const response = await fetch(apiUrl, { 
           method: 'GET',

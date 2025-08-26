@@ -33,14 +33,6 @@ export const CategorySidebar: React.FC = () => {
   // No active connection AND no selected categories means we're showing all components
   const isInAllComponentsState = !activeConnectionId && selectedCategories.length === 0;
 
-  console.log('CategorySidebar render:', {
-    connectionsCount: connectionsData.length,
-    activeConnectionId,
-    selectedCategoriesCount: selectedCategories.length,
-    hasActiveFilters,
-    isInAllComponentsState
-  });
-
   return (
     <div className="w-64 fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 shadow-sm hidden md:block">
       <div className="flex flex-col h-full pt-16 md:pt-20">

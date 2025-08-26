@@ -11,16 +11,9 @@ export const useCopyComponent = () => {
   const { getConnectionById } = useConnectionsStore();
 
   const copyComponent = useCallback(async (componentOrUrl: any, title?: string) => {
-    console.log('🚀 MODAL COPY STARTED:', { 
-      hasComponent: typeof componentOrUrl === 'object',
-      componentOrUrl, 
-      title 
-    });
-    
     try {
-      // NOVO SISTEMA: Se recebemos o componente completo
+      // NEW SYSTEM: If we received the full component
       if (typeof componentOrUrl === 'object' && componentOrUrl.id) {
-        console.log('✅ Using NEW modal copy system with full component');
         
         const component = componentOrUrl;
         

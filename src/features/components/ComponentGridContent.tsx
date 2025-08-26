@@ -43,18 +43,8 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
     return (component.title as any)?.rendered || 'Untitled Component';
   }, []);
 
-  // Helper function to get base URL for component with enhanced debugging
+  // Helper function to get base URL for component
   const getComponentBaseUrl = React.useCallback((component: any) => {
-    console.log('🔍 GETTING BASE URL FOR COMPONENT - ENHANCED DEBUG:', {
-      componentId: component.id,
-      originalId: component.originalId,
-      // Check connection_id property (not _connectionId)
-      connectionId: component.connection_id,
-      componentTitle: getComponentTitle(component),
-      hasConnectionId: !!component.connection_id,
-      availableProperties: Object.keys(component),
-      fullComponent: component
-    });
 
     // Use connection_id from the component
     const connectionId = component.connection_id;
@@ -62,29 +52,9 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
     if (connectionId) {
       const connection = getConnectionById(connectionId);
       if (connection) {
-        console.log('🔗 CONNECTION FOUND:', {
-          connectionId: connectionId,
-          connectionName: connection.name,
-          baseUrl: connection.base_url,
-          hasCredentials: !!(connection.username && connection.application_password)
-        });
         return connection.base_url;
-      } else {
-        console.warn('⚠️ CONNECTION NOT FOUND:', {
-          componentId: component.id,
-          originalId: component.originalId,
-          searchedConnectionId: connectionId
-        });
       }
-    } else {
-      console.warn('⚠️ NO CONNECTION ID FOUND:', {
-        componentId: component.id,
-        originalId: component.originalId,
-        checkedProperties: ['connection_id'],
-        availableProperties: Object.keys(component),
-        component: component
-      });
-    }
+    } 
     
     return '';
   }, [getConnectionById, getComponentTitle]);
@@ -92,7 +62,7 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
   // Load more function for infinite scroll
   const loadMore = React.useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
-      console.log('Load more requested');
+      // Load more logic handled by parent
     }
   }, [hasNextPage, isFetchingNextPage]);
 
@@ -101,16 +71,7 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
     const previewUrl = memoizedGetPreviewUrl(component);
     const title = getComponentTitle(component);
     
-    console.log('🎯 MODAL PREVIEW WITH FULL COMPONENT:', {
-      componentId: component.id,
-      originalId: component.originalId,
-      title,
-      previewUrl,
-      connectionId: component.connection_id,
-      hasConnectionId: !!component.connection_id
-    });
-    
-    // Chamar onPreview com URL, título E o componente completo
+    // Call onPreview with URL, title AND the full component
     onPreview(previewUrl, title, component);
   }, [memoizedGetPreviewUrl, getComponentTitle, onPreview]);
 
@@ -161,15 +122,6 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
       <div className="component-grid">
         {displayComponents.map((component) => {
           const baseUrl = getComponentBaseUrl(component);
-          
-          console.log('🎯 RENDERING COMPONENT CARD:', {
-            componentId: component.id,
-            originalId: component.originalId,
-            title: getComponentTitle(component),
-            baseUrl,
-            connectionId: component.connection_id,
-            hasBaseUrl: !!baseUrl
-          });
           
           return (
             <OptimizedComponentCard

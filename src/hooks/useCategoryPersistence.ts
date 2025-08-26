@@ -12,11 +12,7 @@ export const useCategoryPersistence = () => {
 
   // Função de reload que preserva as categorias selecionadas
   const reloadWithCategoryPersistence = useCallback((reloadFn: () => void) => {
-    console.log('=== RELOAD WITH CATEGORY PERSISTENCE ===');
-    console.log('Preserving categories:', selectedCategories);
-    console.log('Active connection:', activeConnectionId);
-    
-    // Salva as categorias atuais
+    // Save current categories
     const currentCategories = [...selectedCategories];
     const currentConnectionId = activeConnectionId;
     
@@ -26,7 +22,7 @@ export const useCategoryPersistence = () => {
     // Reaplica as categorias após um pequeno delay para garantir que o reload terminou
     setTimeout(() => {
       if (currentCategories.length > 0 && currentConnectionId) {
-        console.log('Reapplying categories after reload:', currentCategories);
+        
         // Reaplica cada categoria usando selectCategory
         currentCategories.forEach(categoryId => {
           selectCategory(currentConnectionId, categoryId);
@@ -37,7 +33,6 @@ export const useCategoryPersistence = () => {
 
   // Função de clear que realmente limpa e recarrega
   const clearFiltersAndReload = useCallback((reloadFn: () => void) => {
-    console.log('=== CLEAR FILTERS AND RELOAD ===');
     clearAllFilters();
     reloadFn();
   }, [clearAllFilters]);

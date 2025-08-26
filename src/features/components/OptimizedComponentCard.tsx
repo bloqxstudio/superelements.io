@@ -36,14 +36,6 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
   
   const componentTitle = getComponentTitle(component);
   
-  console.log('🎯 OPTIMIZED COMPONENT CARD RENDER:', {
-    componentId: component.id,
-    originalId: component.originalId,
-    componentTitle,
-    baseUrl,
-    connectionId: component.connection_id,
-    hasConnectionId: !!component.connection_id
-  });
   
   // Memoize access info calculation - simplified to always allow access
   const accessInfo = React.useMemo(() => ({ canCopy: true, requiresUpgrade: false }), []);
@@ -63,16 +55,6 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
       navigate('/auth');
       return;
     }
-    
-    console.log('🚀 COPY BUTTON CLICKED:', {
-      componentId: component.id,
-      originalId: component.originalId,
-      connectionId: component.connection_id,
-      baseUrl,
-      canCopy: accessInfo.canCopy,
-      requiresUpgrade: accessInfo.requiresUpgrade,
-      hasConnectionId: !!component.connection_id
-    });
     
     if (accessInfo.canCopy) {
       // User has access - try to copy

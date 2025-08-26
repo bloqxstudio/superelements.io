@@ -60,18 +60,15 @@ export const useCentralizedComponentLoading = () => {
   // Single centralized initialization that handles everything
   const initializeEverything = useCallback(async () => {
     if (initializationRef.current) {
-      console.log('🔄 Initialization already in progress, skipping...');
       return;
     }
     
     initializationRef.current = true;
-    console.log('🚀 === CENTRALIZED LOADING START ===');
 
     try {
       // Phase 1: Wait for connections to load if needed
       if (connectionsLoading) {
         setState(prev => ({ ...prev, phase: 'initializing' }));
-        console.log('⏳ Waiting for connections to load...');
         return; // Will be retriggered when connectionsLoading becomes false
       }
 
@@ -90,7 +87,6 @@ export const useCentralizedComponentLoading = () => {
       }
 
       // Force connection sync first
-      console.log('🔄 Forcing connection sync...');
       const syncResult = syncConnection();
       
       if (!syncResult) {
@@ -132,28 +128,16 @@ export const useCentralizedComponentLoading = () => {
         throw new Error('Missing configuration: baseUrl and postType required after sync');
       }
 
-      console.log('✅ Configuration validated:', {
-        baseUrl: config.baseUrl,
-        postType: config.postType,
-        isConnected: isConnected
-      });
-
       // Configure fast loading
       setIsFastLoading(true);
       setFastLoadingPage(0);
 
       // Load first page with enhanced error handling
-      console.log('📥 Loading first page...');
       const result = await loadPage(1);
       
       if (!result || !result.components || !Array.isArray(result.components)) {
         throw new Error('Invalid response from WordPress connection: missing or invalid components array');
       }
-
-      console.log('✅ First page loaded successfully:', {
-        componentCount: result.components.length,
-        hasNextPage: result.hasNextPage
-      });
 
       // Store loaded data
       setLoadedPage(1, result.components);
@@ -164,12 +148,6 @@ export const useCentralizedComponentLoading = () => {
       setState(prev => ({ ...prev, phase: 'validating' }));
       
       const validationResult = validateAndFilterComponents(result.components, selectedCategories);
-      
-      console.log('✅ Validation completed:', {
-        total: result.components.length,
-        valid: validationResult.validComponents.length,
-        selectedCategories: selectedCategories.length
-      });
 
       // Phase 5: Ready
       setState(prev => ({
@@ -179,8 +157,6 @@ export const useCentralizedComponentLoading = () => {
         displayComponents: validationResult.validComponents,
         error: null
       }));
-
-      console.log('🎉 === CENTRALIZED LOADING SUCCESS ===');
 
     } catch (error) {
       console.error('❌ Centralized loading failed:', error);
@@ -215,7 +191,6 @@ export const useCentralizedComponentLoading = () => {
   // Load next page function
   const loadNextPage = useCallback(async () => {
     if (state.phase !== 'ready') {
-      console.log('⚠️ Cannot load next page, not in ready state:', state.phase);
       return false;
     }
 
@@ -223,11 +198,9 @@ export const useCentralizedComponentLoading = () => {
       const currentPage = useWordPressStore.getState().fastLoadingPage;
       const nextPage = currentPage + 1;
       
-      console.log(`📥 Loading page ${nextPage}...`);
       const result = await loadPage(nextPage);
       
       if (!result || !result.components) {
-        console.log(`⚠️ No more pages available after page ${currentPage}`);
         return false;
       }
 
@@ -245,7 +218,6 @@ export const useCentralizedComponentLoading = () => {
         displayComponents: validationResult.validComponents
       }));
 
-      console.log(`✅ Page ${nextPage} loaded successfully`);
       return true;
     } catch (error) {
       console.error('❌ Failed to load next page:', error);
@@ -255,8 +227,6 @@ export const useCentralizedComponentLoading = () => {
 
   // Enhanced reload function
   const reload = useCallback(() => {
-    console.log('🔄 Reloading centralized component loading...');
-    
     // Reset everything
     resetConnection();
     initializationRef.current = false;
@@ -286,18 +256,7 @@ export const useCentralizedComponentLoading = () => {
                             state.phase === 'initializing' &&
                             (!connectionsLoading || connections.length > 0);
     
-    console.log('🔄 Unified initialization effect check:', {
-      shouldInitialize,
-      connectionsLoading,
-      connectionsCount: connections.length,
-      isInSync,
-      hasConfig: !!(config.baseUrl && config.postType),
-      phase: state.phase,
-      isInitializing: initializationRef.current
-    });
-    
     if (shouldInitialize) {
-      console.log('🚀 Starting unified centralized initialization...');
       initializeEverything();
     }
   }, [connectionsLoading, connections.length, isInSync, config.baseUrl, config.postType, state.phase, initializeEverything]);
@@ -305,8 +264,6 @@ export const useCentralizedComponentLoading = () => {
   // Category filter effect
   useEffect(() => {
     if (state.isReady && state.displayComponents.length > 0) {
-      console.log('🔄 Reapplying filters due to category change...');
-      
       const allComponents = getAllLoadedComponents();
       const validationResult = validateAndFilterComponents(allComponents, selectedCategories);
       

@@ -31,7 +31,6 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
   // Auto-fetch connections on mount if not already loaded
   useEffect(() => {
     if (connections.length === 0 && !isLoading) {
-      console.log('🔄 Auto-fetching connections on component mount...');
       fetchConnections();
     }
   }, [connections.length, isLoading, fetchConnections]);
@@ -62,7 +61,6 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
   };
 
   const activeConnections = getAccessibleActiveConnections();
-  console.log('=== CENTRALIZED LIBRARY RENDER ===');
 
   // Show loading state while fetching connections
   if (isLoading && connections.length === 0) {
@@ -125,7 +123,7 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
               <UpgradePrompt 
                 requiredLevel="pro" 
                 currentLevel="free"
-                onUpgrade={() => console.log('Upgrade to Pro')} 
+                onUpgrade={() => {}} 
               />
             </div>
           </div>;

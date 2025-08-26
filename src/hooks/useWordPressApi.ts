@@ -202,9 +202,6 @@ export const useWordPressApi = () => {
       if (config.username && config.applicationPassword) {
         const credentials = btoa(`${config.username}:${config.applicationPassword}`);
         headers['Authorization'] = `Basic ${credentials}`;
-        console.log('Using authentication with username:', config.username);
-      } else {
-        console.log('No authentication credentials provided, making public request');
       }
       
       // Enhanced retry logic with exponential backoff
