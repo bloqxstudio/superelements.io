@@ -72,7 +72,7 @@ export const CategorySidebar: React.FC = () => {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        className={`flex-1 justify-start text-xs font-medium ${
+                        className={`flex-1 justify-between text-xs font-medium ${
                           activeConnectionId === connection.connectionId 
                             ? 'bg-gray-200 text-gray-900' 
                             : 'text-gray-700 hover:bg-gray-100'
@@ -86,12 +86,19 @@ export const CategorySidebar: React.FC = () => {
                           }
                         }}
                       >
-                        {expandedConnections.has(connection.connectionId) ? (
-                          <FolderOpen className="h-3 w-3 mr-2" />
-                        ) : (
-                          <Folder className="h-3 w-3 mr-2" />
+                        <div className="flex items-center truncate">
+                          {expandedConnections.has(connection.connectionId) ? (
+                            <FolderOpen className="h-3 w-3 mr-2 flex-shrink-0" />
+                          ) : (
+                            <Folder className="h-3 w-3 mr-2 flex-shrink-0" />
+                          )}
+                          <span className="truncate">{connection.connectionName}</span>
+                        </div>
+                        {connection.isLoaded && connection.categories.length > 0 && (
+                          <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
+                            ({connection.categories.reduce((sum, cat) => sum + cat.count, 0)})
+                          </span>
                         )}
-                        <span className="truncate">{connection.connectionName}</span>
                       </Button>
                       
                     </div>
@@ -139,14 +146,15 @@ export const CategorySidebar: React.FC = () => {
                             key={category.id} 
                             variant="ghost" 
                             size="sm" 
-                            className={`w-full justify-start text-xs ${
+                            className={`w-full justify-between text-xs ${
                               isCategorySelected(category.id) 
                                 ? 'bg-gray-200 text-gray-900' 
                                 : 'text-gray-600 hover:bg-gray-50'
                             }`}
                             onClick={() => selectCategory(connection.connectionId, category.id)}
                           >
-                            <span className="truncate">{category.name}</span>
+                            <span className="truncate flex-1 text-left">{category.name}</span>
+                            <span className="text-xs text-muted-foreground ml-2">({category.count})</span>
                           </Button>
                         ))}
                       </div>

@@ -75,9 +75,15 @@ export const useOptimizedFastLoading = ({
           const pageResults = await Promise.allSettled(pagePromises);
           
           let allComponents = [];
+          let totalAvailable = 0;
           
           for (const result of pageResults) {
             if (result.status === 'fulfilled' && result.value?.components) {
+              // Capture total available from first page response
+              if (totalAvailable === 0 && result.value.totalComponents) {
+                totalAvailable = result.value.totalComponents;
+              }
+              
               const componentsWithConnectionInfo = result.value.components.map(component => ({
                 ...component,
                 connection_id: connection.id,
@@ -89,12 +95,13 @@ export const useOptimizedFastLoading = ({
           }
 
           if (isDevelopment) {
-            console.log(`✅ Loaded ${allComponents.length} from ${connection.name}`);
+            console.log(`✅ Loaded ${allComponents.length} from ${connection.name} (${totalAvailable} total available)`);
           }
 
           return {
             connectionName: connection.name,
             components: allComponents,
+            totalAvailable,
             success: true
           };
 
@@ -117,12 +124,14 @@ export const useOptimizedFastLoading = ({
       
       // Aggregate results
       let allComponents = [];
+      let totalAvailable = 0;
       let successfulConnections = [];
       let failedConnections = [];
 
       connectionResults.forEach(result => {
         if (result.success) {
           allComponents.push(...result.components);
+          totalAvailable += result.totalAvailable || 0;
           successfulConnections.push(result.connectionName);
         } else {
           failedConnections.push({
@@ -173,7 +182,8 @@ export const useOptimizedFastLoading = ({
 
       if (isDevelopment) {
         console.log('✅ OPTIMIZED LOADING COMPLETE');
-        console.log(`📊 Total: ${allComponents.length} components`);
+        console.log(`📊 Loaded: ${allComponents.length} components`);
+        console.log(`📊 Total Available: ${totalAvailable} components`);
         console.log(`✅ Success: ${successfulConnections.length} connections`);
         console.log(`❌ Failed: ${failedConnections.length} connections`);
       }
@@ -182,6 +192,7 @@ export const useOptimizedFastLoading = ({
         components: allComponents, 
         categories: allCategories,
         totalLoaded: allComponents.length,
+        totalAvailable,
         successfulConnections: successfulConnections.length,
         failedConnections: failedConnections.length
       };

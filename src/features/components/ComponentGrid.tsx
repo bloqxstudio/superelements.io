@@ -89,7 +89,10 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
               <Grid className="h-4 w-4" />
             )}
             <span>
-              {displayComponents.length} {displayComponents.length === 1 ? 'component' : 'components'} found
+              {displayComponents.length} 
+              {data?.totalAvailable && data.totalAvailable > displayComponents.length && (
+                <span> of {data.totalAvailable}</span>
+              )} {displayComponents.length === 1 ? 'component' : 'components'} found
               {isShowingAllComponents && connections.filter(c => c.isActive).length > 1 && (
                 <span className="text-muted-foreground ml-1">
                   (from {connections.filter(c => c.isActive).length} connections)
@@ -101,6 +104,11 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
                 </span>
               )}
             </span>
+            {data?.totalAvailable && data.totalAvailable > displayComponents.length && (
+              <span className="text-xs text-muted-foreground ml-2">
+                (showing first {displayComponents.length})
+              </span>
+            )}
           </Badge>
         ) : (
           <Badge variant="outline" className="flex items-center gap-2 px-3 py-1">
