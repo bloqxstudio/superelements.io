@@ -25,10 +25,7 @@ export class PostTypeCategoryService {
     console.log(`Fetching categories with components for post type: ${config.postType}`);
     
     try {
-      // 1. Buscar componentes do post type (apenas primeiro lote para extrair categorias)
       const baseUrl = config.baseUrl.replace(/\/$/, '');
-      let apiUrl = `${baseUrl}/wp-json/wp/v2/${config.postType}?per_page=100&_fields=id,categories`;
-      
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
@@ -37,63 +34,73 @@ export class PostTypeCategoryService {
         const credentials = btoa(`${config.username}:${config.applicationPassword}`);
         headers['Authorization'] = `Basic ${credentials}`;
       }
+
+      // 1. Buscar todas as categorias do WordPress primeiro
+      console.log('Fetching all categories from WordPress...');
+      const allCategories = await WordPressApiService.fetchCategories(config);
       
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch components: ${response.status}`);
-      }
-
-      const components = await response.json();
-      
-      if (!Array.isArray(components)) {
-        throw new Error('Invalid response format');
-      }
-
-      console.log(`Found ${components.length} components to analyze categories`);
-
-      // 2. Extrair categorias dos componentes
-      const categoryIds = new Set<number>();
-      const categoryCounts = new Map<number, number>();
-
-      components.forEach(component => {
-        if (component.categories && Array.isArray(component.categories)) {
-          component.categories.forEach(categoryId => {
-            categoryIds.add(categoryId);
-            categoryCounts.set(categoryId, (categoryCounts.get(categoryId) || 0) + 1);
-          });
-        }
-      });
-
-      if (categoryIds.size === 0) {
-        console.log('No categories found in components');
+      if (allCategories.length === 0) {
+        console.log('No categories found in WordPress');
         return [];
       }
 
-      // 3. Buscar informações completas das categorias que têm componentes
-      const categoriesData = await WordPressApiService.fetchCategories(config);
-      
-      // 4. Filtrar apenas categorias que têm componentes e não são "uncategorized"
-      const categoriesWithComponents = categoriesData
-        .filter(cat => 
-          categoryIds.has(cat.id) && 
-          cat.slug !== 'uncategorized' &&
-          (categoryCounts.get(cat.id) || 0) > 0
-        )
-        .map(cat => ({
-          id: cat.id,
-          name: cat.name,
-          slug: cat.slug,
-          count: categoryCounts.get(cat.id) || 0
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name));
+      console.log(`Found ${allCategories.length} total categories in WordPress`);
 
-      console.log(`Filtered to ${categoriesWithComponents.length} categories with components:`, 
+      // 2. Verificar quais categorias têm componentes neste post type
+      const categoriesWithComponents: CategoryWithComponents[] = [];
+      const batchSize = 5; // Processar 5 categorias por vez
+
+      for (let i = 0; i < allCategories.length; i += batchSize) {
+        const batch = allCategories.slice(i, i + batchSize);
+        
+        const batchPromises = batch.map(async (category) => {
+          // Pular "uncategorized"
+          if (category.slug === 'uncategorized') {
+            return null;
+          }
+
+          // Verificar se categoria tem componentes neste post type
+          const checkUrl = `${baseUrl}/wp-json/wp/v2/${config.postType}?categories=${category.id}&per_page=1&_fields=id`;
+          
+          try {
+            const checkResponse = await fetch(checkUrl, { method: 'GET', headers });
+            
+            if (checkResponse.ok) {
+              const totalHeader = checkResponse.headers.get('X-WP-Total');
+              const count = totalHeader ? parseInt(totalHeader, 10) : 0;
+              
+              if (count > 0) {
+                return {
+                  id: category.id,
+                  name: category.name,
+                  slug: category.slug,
+                  count: count
+                };
+              }
+            }
+          } catch (error) {
+            console.warn(`Failed to check category ${category.name}:`, error);
+          }
+          
+          return null;
+        });
+
+        const results = await Promise.all(batchPromises);
+        const validResults = results.filter((r): r is CategoryWithComponents => r !== null);
+        categoriesWithComponents.push(...validResults);
+        
+        // Pequeno delay entre lotes para não sobrecarregar o servidor
+        if (i + batchSize < allCategories.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+
+      console.log(`Found ${categoriesWithComponents.length} categories with components:`, 
         categoriesWithComponents.map(c => `${c.name} (${c.count})`));
-
+      
+      // Ordenar por nome
+      categoriesWithComponents.sort((a, b) => a.name.localeCompare(b.name));
+      
       return categoriesWithComponents;
       
     } catch (error) {
