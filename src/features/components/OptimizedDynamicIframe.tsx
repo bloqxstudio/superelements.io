@@ -22,20 +22,14 @@ const OptimizedDynamicIframe: React.FC<OptimizedDynamicIframeProps> = memo(({ ur
     if (!containerRef.current) return;
     const container = containerRef.current;
     const containerWidth = container.offsetWidth;
-    const containerHeight = container.offsetHeight;
     
     // Desktop viewport dimensions that the iframe content expects
     const contentWidth = 1400;
-    const contentHeight = 1050;
     
-    // Calculate scale to fit both dimensions
+    // Calculate scale based on width only for full horizontal coverage
     const scaleX = containerWidth / contentWidth;
-    const scaleY = containerHeight / contentHeight;
     
-    // Use the smaller scale to ensure content fits completely
-    const newScale = Math.min(scaleX, scaleY, 1);
-    
-    setScale(Math.max(0.1, newScale));
+    setScale(Math.max(0.1, Math.min(scaleX, 1)));
   }, []);
   
   // Intersection Observer for lazy loading
@@ -276,14 +270,14 @@ const OptimizedDynamicIframe: React.FC<OptimizedDynamicIframeProps> = memo(({ ur
   const shouldRenderIframe = isIntersecting || hasBeenInView;
   
   return (
-    <div ref={containerRef} className="w-full h-full relative bg-white overflow-hidden">
+    <div ref={containerRef} className="w-full h-full relative overflow-hidden">
       {!loaded && shouldRenderIframe && <LoadingSkeleton />}
       
       {shouldRenderIframe && (
         <iframe 
           ref={iframeRef} 
           src={url} 
-          className="border-0 bg-white transition-opacity duration-300 absolute origin-top-left" 
+          className="border-0 transition-opacity duration-300 absolute origin-top-left"
           loading="lazy" 
           title={title} 
           style={{
