@@ -21,10 +21,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCartStore } from '@/store/cartStore';
 import { useCartCopy } from '../hooks/useCartCopy';
 import { CartItem } from './CartItem';
+import { useConnectionsStore } from '@/store/connectionsStore';
 
 export const CartDrawer: React.FC = () => {
   const { items, isOpen, closeCart, clearCart, reorderItems } = useCartStore();
   const { copyAllToClipboard, copying } = useCartCopy();
+  const { getConnectionById } = useConnectionsStore();
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -51,6 +53,24 @@ export const CartDrawer: React.FC = () => {
     if (window.confirm('Deseja realmente limpar o carrinho?')) {
       clearCart();
     }
+  };
+
+  // Helper to get desktop preview URL
+  const getDesktopPreviewUrl = (component: any) => {
+    const connectionId = component.connection_id;
+    const connection = getConnectionById(connectionId);
+    
+    if (!connection) return '';
+    
+    const baseUrl = connection.base_url.replace(/\/$/, '');
+    const previewField = connection.preview_field || 'link';
+    const componentId = component.originalId || component.id;
+    
+    if (previewField === 'link' && component.link) {
+      return component.link;
+    }
+    
+    return `${baseUrl}/?p=${componentId}&elementor-preview=${componentId}&ver=1734155545`;
   };
 
   return (
@@ -87,7 +107,11 @@ export const CartDrawer: React.FC = () => {
                 >
                   <div className="space-y-2 py-4">
                     {items.map((item) => (
-                      <CartItem key={item.id} item={item} />
+                      <CartItem 
+                        key={item.id} 
+                        item={item}
+                        getDesktopPreviewUrl={getDesktopPreviewUrl}
+                      />
                     ))}
                   </div>
                 </SortableContext>

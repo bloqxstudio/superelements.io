@@ -8,13 +8,14 @@ export interface CartItem {
   order: number;
   addedAt: Date;
   connectionId: string;
+  postType: string;
 }
 
 interface CartStore {
   items: CartItem[];
   isOpen: boolean;
   
-  addToCart: (component: any, baseUrl: string, connectionId: string) => void;
+  addToCart: (component: any, baseUrl: string, connectionId: string, postType: string) => void;
   removeFromCart: (componentId: string) => void;
   clearCart: () => void;
   reorderItems: (fromIndex: number, toIndex: number) => void;
@@ -31,7 +32,7 @@ export const useCartStore = create<CartStore>()(
       items: [],
       isOpen: false,
 
-      addToCart: (component, baseUrl, connectionId) => {
+      addToCart: (component, baseUrl, connectionId, postType) => {
         const componentId = component.originalId || component.id;
         
         if (get().isInCart(componentId)) {
@@ -51,6 +52,7 @@ export const useCartStore = create<CartStore>()(
               order: maxOrder + 1,
               addedAt: new Date(),
               connectionId,
+              postType,
             },
           ],
         });

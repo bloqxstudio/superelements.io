@@ -6,12 +6,14 @@ interface AddToCartButtonProps {
   component: any;
   baseUrl: string;
   connectionId: string;
+  postType: string;
 }
 
 export const AddToCartButton: React.FC<AddToCartButtonProps> = ({
   component,
   baseUrl,
   connectionId,
+  postType,
 }) => {
   const { addToCart, removeFromCart, isInCart } = useCartStore();
   const componentId = component.originalId || component.id;
@@ -23,7 +25,7 @@ export const AddToCartButton: React.FC<AddToCartButtonProps> = ({
     if (inCart) {
       removeFromCart(componentId);
     } else {
-      addToCart(component, baseUrl, connectionId);
+      addToCart(component, baseUrl, connectionId, postType);
     }
   };
 

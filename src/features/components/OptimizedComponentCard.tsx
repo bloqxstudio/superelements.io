@@ -15,6 +15,7 @@ interface OptimizedComponentCardProps {
   getPreviewUrl: (component: any) => string;
   baseUrl: string;
   connectionId?: string;
+  postType?: string;
 }
 
 const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
@@ -23,7 +24,8 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
   getDesktopPreviewUrl,
   getPreviewUrl,
   baseUrl,
-  connectionId = ''
+  connectionId = '',
+  postType = 'posts'
 }) => {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -130,6 +132,7 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
               component={component} 
               baseUrl={baseUrl}
               connectionId={connectionId}
+              postType={postType}
             />
             
             <button 

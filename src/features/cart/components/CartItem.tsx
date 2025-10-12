@@ -4,12 +4,14 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { CartItem as CartItemType } from '@/store/cartStore';
 import { useCartStore } from '@/store/cartStore';
+import OptimizedDynamicIframe from '@/features/components/OptimizedDynamicIframe';
 
 interface CartItemProps {
   item: CartItemType;
+  getDesktopPreviewUrl: (component: any) => string;
 }
 
-export const CartItem: React.FC<CartItemProps> = ({ item }) => {
+export const CartItem: React.FC<CartItemProps> = ({ item, getDesktopPreviewUrl }) => {
   const { removeFromCart } = useCartStore();
   const {
     attributes,
@@ -33,38 +35,37 @@ export const CartItem: React.FC<CartItemProps> = ({ item }) => {
   };
 
   const componentTitle = getComponentTitle(item.component);
+  const desktopPreviewUrl = getDesktopPreviewUrl(item.component);
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={`
-        bg-card border border-border rounded-lg p-3 flex items-center gap-3
+        bg-card border border-border rounded-lg p-3 flex items-start gap-3
         transition-all duration-200
         ${isDragging ? 'opacity-50 shadow-lg' : 'opacity-100'}
       `}
     >
       <button
-        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground mt-1"
         {...attributes}
         {...listeners}
       >
         <GripVertical className="h-5 w-5" />
       </button>
 
-      <div className="w-16 h-12 bg-muted rounded overflow-hidden flex-shrink-0">
-        <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
-          Preview
-        </div>
+      <div className="w-24 h-16 bg-muted rounded overflow-hidden flex-shrink-0 border border-border/50">
+        <OptimizedDynamicIframe 
+          url={desktopPreviewUrl} 
+          title={`Preview of ${componentTitle}`}
+        />
       </div>
 
       <div className="flex-1 min-w-0">
         <h4 className="text-sm font-medium text-foreground truncate">
           {componentTitle}
         </h4>
-        <p className="text-xs text-muted-foreground truncate">
-          {item.baseUrl}
-        </p>
       </div>
 
       <button

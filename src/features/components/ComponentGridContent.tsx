@@ -123,6 +123,8 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
         {displayComponents.map((component) => {
           const baseUrl = getComponentBaseUrl(component);
           const connectionId = component.connection_id || '';
+          const connection = getConnectionById(connectionId);
+          const postType = connection?.post_type || 'posts';
           
           return (
             <OptimizedComponentCard
@@ -133,6 +135,7 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
               getPreviewUrl={memoizedGetPreviewUrl}
               baseUrl={baseUrl}
               connectionId={connectionId}
+              postType={postType}
             />
           );
         })}

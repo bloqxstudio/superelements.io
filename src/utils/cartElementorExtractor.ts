@@ -20,7 +20,7 @@ interface WordPressConfig {
 const getWordPressConfig = (item: CartItem): WordPressConfig => {
   return {
     baseUrl: item.baseUrl,
-    postType: 'elementor_library',
+    postType: item.postType || 'posts',
   };
 };
 
