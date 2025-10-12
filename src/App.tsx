@@ -27,6 +27,7 @@ function App() {
             <ViewportProvider>
               <Routes>
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/login" element={<Auth />} />
                 <Route path="/" element={<Layout />}>
                   <Route index element={<Components />} />
                   <Route path="connections" element={
