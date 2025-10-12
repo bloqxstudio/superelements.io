@@ -28,7 +28,21 @@ export const CartItem: React.FC<CartItemProps> = ({ item, index, getDesktopPrevi
     transition,
   };
 
-  const visualId = `C${(index + 1).toString().padStart(4, '0')}`;
+  const getComponentTitle = (comp: any): string => {
+    if (!comp) return 'Sem título';
+    
+    if (typeof comp.title === 'string') {
+      return comp.title;
+    }
+    
+    if (comp.title && typeof comp.title === 'object' && comp.title.rendered) {
+      return comp.title.rendered;
+    }
+    
+    return 'Componente sem nome';
+  };
+
+  const componentTitle = getComponentTitle(item.component);
   const desktopPreviewUrl = getDesktopPreviewUrl(item);
 
   // Try to resolve highlight id from elementor data if available
@@ -61,22 +75,22 @@ export const CartItem: React.FC<CartItemProps> = ({ item, index, getDesktopPrevi
       `}
     >
       {/* Header minimalista */}
-      <div className="h-9 px-3 flex items-center justify-between border-b border-border/50 bg-muted/30">
-        <div className="flex items-center gap-2">
+      <div className="h-10 px-3 flex items-center justify-between border-b border-border/50 bg-muted/30">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           <button
-            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors"
+            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
             {...attributes}
             {...listeners}
           >
             <GripVertical className="h-4 w-4" />
           </button>
-          <span className="text-xs font-mono text-muted-foreground/70">
-            {visualId}
+          <span className="text-xs font-medium text-foreground/90 truncate">
+            {componentTitle}
           </span>
         </div>
         <button
           onClick={() => removeFromCart(item.id)}
-          className="text-muted-foreground/70 hover:text-destructive transition-colors hover:scale-110"
+          className="text-muted-foreground/70 hover:text-destructive transition-colors hover:scale-110 flex-shrink-0"
           title="Remover do carrinho"
         >
           <X className="h-4 w-4" />
@@ -87,7 +101,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item, index, getDesktopPrevi
       <div className="flex-1 bg-muted/20 overflow-hidden">
         <OptimizedDynamicIframe 
           url={desktopPreviewUrl} 
-          title={`Component ${visualId}`}
+          title={componentTitle}
           highlightId={highlightId}
           isolateComponent={true}
         />

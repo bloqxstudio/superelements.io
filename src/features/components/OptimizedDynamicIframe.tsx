@@ -153,16 +153,16 @@ const OptimizedDynamicIframe: React.FC<OptimizedDynamicIframeProps> = memo(({ ur
               if (targetEl) {
                 if (isolateComponent) {
                   // ISOLATION MODE: Esconder tudo exceto o componente
-                  doc.body.style.cssText = `
-                    background: #fafafa !important; 
-                    margin: 0 !important;
-                    padding: 30px 20px !important; 
-                    overflow: auto !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    min-height: 100vh !important;
-                  `;
+            doc.body.style.cssText = `
+              background: #fafafa !important; 
+              margin: 0 !important;
+              padding: 0 !important;
+              overflow: auto !important;
+              display: flex !important;
+              align-items: center !important;
+              justify-content: center !important;
+              min-height: 100vh !important;
+            `;
                   
                   // Esconder todos os elementos que não contêm o target
                   const hideElement = (el: HTMLElement) => {
@@ -188,18 +188,19 @@ const OptimizedDynamicIframe: React.FC<OptimizedDynamicIframeProps> = memo(({ ur
                   }
                   
                   // Estilizar o componente isolado
-                  targetEl.style.cssText = `
-                    display: block !important;
-                    max-width: 100% !important;
-                    margin: 0 auto !important;
-                    padding: 0 !important;
-                    background: white !important;
-                    box-shadow: 0 2px 12px rgba(0,0,0,0.08) !important;
-                    border-radius: 6px !important;
-                    position: relative !important;
-                    z-index: 1 !important;
-                    overflow: visible !important;
-                  `;
+            targetEl.style.cssText = `
+              display: block !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background: white !important;
+              box-shadow: none !important;
+              border-radius: 0 !important;
+              position: relative !important;
+              z-index: 1 !important;
+              overflow: visible !important;
+            `;
                   
                   // Centralizar visualmente
                   setTimeout(() => {
