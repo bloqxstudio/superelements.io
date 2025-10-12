@@ -56,21 +56,21 @@ export const CartDrawer: React.FC = () => {
   };
 
   // Helper to get desktop preview URL
-  const getDesktopPreviewUrl = (component: any) => {
-    const connectionId = component.connection_id;
+  const getDesktopPreviewUrl = (item: any) => {
+    const connectionId = item.connectionId;
     const connection = getConnectionById(connectionId);
     
     if (!connection) return '';
     
     const baseUrl = connection.base_url.replace(/\/$/, '');
     const previewField = connection.preview_field || 'link';
-    const componentId = component.originalId || component.id;
+    const componentId = item.component?.originalId || item.component?.id || item.id;
     
-    if (previewField === 'link' && component.link) {
-      return component.link;
+    if (previewField === 'link' && item.component?.link) {
+      return item.component.link;
     }
     
-    return `${baseUrl}/?p=${componentId}&elementor-preview=${componentId}&ver=1734155545`;
+    return `${baseUrl}/?p=${componentId}&elementor-preview=${componentId}`;
   };
 
   return (

@@ -1,6 +1,6 @@
 import { extractComponentForClipboard } from './directElementorExtractor';
 import { CartItem } from '@/store/cartStore';
-
+import { useConnectionsStore } from '@/store/connectionsStore';
 interface ElementorElement {
   id: string;
   elType: string;
@@ -13,14 +13,21 @@ interface WordPressConfig {
   baseUrl: string;
   postType: string;
   username?: string;
-  password?: string;
-  token?: string;
+  applicationPassword?: string;
 }
 
 const getWordPressConfig = (item: CartItem): WordPressConfig => {
+  const state = useConnectionsStore.getState();
+  const connection = state.getConnectionById(item.connectionId);
+
+  const baseUrl = (connection?.base_url || item.baseUrl || '').replace(/\/$/, '');
+  const postType = connection?.post_type || item.postType || 'posts';
+
   return {
-    baseUrl: item.baseUrl,
-    postType: item.postType || 'posts',
+    baseUrl,
+    postType,
+    username: connection?.username,
+    applicationPassword: connection?.application_password,
   };
 };
 
@@ -42,7 +49,9 @@ export const extractMultipleComponents = async (
       
       if (result) {
         const parsed = JSON.parse(result);
-        if (parsed.content && Array.isArray(parsed.content)) {
+        if (parsed && Array.isArray(parsed.elements)) {
+          allElements.push(...parsed.elements);
+        } else if (parsed && Array.isArray(parsed.content)) {
           allElements.push(...parsed.content);
         }
       }
@@ -62,11 +71,10 @@ export const formatMultipleForClipboard = (
   elements: ElementorElement[],
   baseUrl: string
 ): string => {
+  const siteurl = (baseUrl || '').replace(/\/$/, '');
   return JSON.stringify({
-    content: elements,
-    page_settings: [],
-    version: "0.4",
-    title: "Multiple Components from Cart",
-    type: "page",
+    type: "elementor",
+    siteurl,
+    elements
   });
 };

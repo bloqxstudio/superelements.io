@@ -8,7 +8,7 @@ import OptimizedDynamicIframe from '@/features/components/OptimizedDynamicIframe
 
 interface CartItemProps {
   item: CartItemType;
-  getDesktopPreviewUrl: (component: any) => string;
+  getDesktopPreviewUrl: (item: CartItemType) => string;
 }
 
 export const CartItem: React.FC<CartItemProps> = ({ item, getDesktopPreviewUrl }) => {
@@ -35,7 +35,25 @@ export const CartItem: React.FC<CartItemProps> = ({ item, getDesktopPreviewUrl }
   };
 
   const componentTitle = getComponentTitle(item.component);
-  const desktopPreviewUrl = getDesktopPreviewUrl(item.component);
+  const desktopPreviewUrl = getDesktopPreviewUrl(item);
+
+  // Try to resolve highlight id from elementor data if available
+  const resolveHighlightId = (comp: any): string | undefined => {
+    try {
+      const raw = comp?.meta?._elementor_data;
+      if (!raw) return undefined;
+      const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(data) && data.length > 0) {
+        // top-level element id
+        if (data[0]?.id) return data[0].id;
+        // fallback: first child id
+        const firstWithId = JSON.stringify(data).match(/"id":"([^"]+)"/);
+        return firstWithId ? firstWithId[1] : undefined;
+      }
+    } catch {}
+    return undefined;
+  };
+  const highlightId = resolveHighlightId(item.component);
 
   return (
     <div
@@ -59,6 +77,7 @@ export const CartItem: React.FC<CartItemProps> = ({ item, getDesktopPreviewUrl }
         <OptimizedDynamicIframe 
           url={desktopPreviewUrl} 
           title={`Preview of ${componentTitle}`}
+          highlightId={highlightId}
         />
       </div>
 
