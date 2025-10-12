@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { useEnhancedCopyComponent } from './hooks/useEnhancedCopyComponent';
 import { useAuth } from '@/contexts/AuthContext';
 import OptimizedDynamicIframe from './OptimizedDynamicIframe';
+import { AddToCartButton } from '@/features/cart/components/AddToCartButton';
 
 interface OptimizedComponentCardProps {
   component: any;
@@ -13,6 +14,7 @@ interface OptimizedComponentCardProps {
   getDesktopPreviewUrl: (component: any) => string;
   getPreviewUrl: (component: any) => string;
   baseUrl: string;
+  connectionId?: string;
 }
 
 const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
@@ -20,7 +22,8 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
   onPreview,
   getDesktopPreviewUrl,
   getPreviewUrl,
-  baseUrl
+  baseUrl,
+  connectionId = ''
 }) => {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -122,21 +125,29 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
             {componentTitle}
           </h3>
           
-          <button 
-            onClick={handleCopyClick} 
-            disabled={profile && copying}
-            className={`
-              flex items-center gap-1 px-2 py-1 text-xs font-medium border rounded 
-              transition-all duration-200 disabled:cursor-not-allowed flex-shrink-0
-              ${buttonContent.className}
-            `} 
-            title={!profile ? "Clique para fazer login e copiar componente" : (copying ? "Copiando..." : (copied ? "Copiado!" : "Copiar componente"))}
-          >
-            {buttonContent.icon}
-            <span className="font-medium">
-              {buttonContent.text}
-            </span>
-          </button>
+          <div className="flex gap-1.5 flex-shrink-0">
+            <AddToCartButton 
+              component={component} 
+              baseUrl={baseUrl}
+              connectionId={connectionId}
+            />
+            
+            <button 
+              onClick={handleCopyClick} 
+              disabled={profile && copying}
+              className={`
+                flex items-center gap-1 px-2 py-1 text-xs font-medium border rounded 
+                transition-all duration-200 disabled:cursor-not-allowed flex-shrink-0
+                ${buttonContent.className}
+              `} 
+              title={!profile ? "Clique para fazer login e copiar componente" : (copying ? "Copiando..." : (copied ? "Copiado!" : "Copiar componente"))}
+            >
+              {buttonContent.icon}
+              <span className="font-medium">
+                {buttonContent.text}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

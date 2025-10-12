@@ -5,6 +5,8 @@ import PreviewModal from '@/components/PreviewModal';
 import { ProBanner } from '@/components/ProBanner';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useConnectionSync } from '@/hooks/useConnectionSync';
+import { CartButton } from '@/features/cart/components/CartButton';
+import { CartDrawer } from '@/features/cart/components/CartDrawer';
 const Components = () => {
   const {
     connections
@@ -85,6 +87,10 @@ const Components = () => {
 
       {/* Preview Modal with enhanced props */}
       <PreviewModal isOpen={previewModal.isOpen} onClose={closePreview} previewUrl={previewModal.url} title={previewModal.title} component={previewModal.component} />
+      
+      {/* Cart System */}
+      <CartButton />
+      <CartDrawer />
     </div>;
 };
 export default Components;
