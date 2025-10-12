@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { Users } from 'lucide-react';
 const Layout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -32,10 +33,16 @@ const Layout: React.FC = () => {
             <div className="flex items-center gap-4">
               {user ? <>
                   <Button variant={location.pathname === '/' ? 'default' : 'ghost'} onClick={() => navigate('/')}>Biblioteca</Button>
-                  {/* Only show Connections for admin users */}
-                  {profile?.role === 'admin' && <Button variant={location.pathname === '/connections' ? 'default' : 'ghost'} onClick={() => navigate('/connections')}>
+                  {/* Only show admin options for admin users */}
+                  {profile?.role === 'admin' && <>
+                    <Button variant={location.pathname === '/connections' ? 'default' : 'ghost'} onClick={() => navigate('/connections')}>
                       Connections
-                    </Button>}
+                    </Button>
+                    <Button variant={location.pathname === '/admin/users' ? 'default' : 'ghost'} onClick={() => navigate('/admin/users')}>
+                      <Users className="h-4 w-4 mr-2" />
+                      Usuários
+                    </Button>
+                  </>}
                   <UserAvatar />
                 </> : <Button onClick={() => navigate('/auth')}>
                   Entrar

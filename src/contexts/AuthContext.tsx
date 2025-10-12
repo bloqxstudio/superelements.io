@@ -45,18 +45,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [showPhoneModal, setShowPhoneModal] = useState(false);
 
   const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
+    const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('id, email, role, phone')
+      .select('id, email, phone')
       .eq('id', userId)
       .single();
 
-    if (error) {
-      console.error('Error fetching profile:', error);
+    if (profileError) {
+      console.error('Error fetching profile:', profileError);
       return null;
     }
 
-    return data as UserProfile;
+    // Buscar role da tabela user_roles
+    const { data: roleData, error: roleError } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .single();
+
+    if (roleError) {
+      console.error('Error fetching role:', roleError);
+    }
+
+    return {
+      ...profileData,
+      role: (roleData?.role as AppRole) || 'free'
+    } as UserProfile;
   };
 
   useEffect(() => {

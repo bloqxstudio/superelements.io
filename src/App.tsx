@@ -12,6 +12,7 @@ import Components from "@/pages/Components";
 import Connections from "@/pages/Connections";
 import Auth from "@/pages/Auth";
 import NotFound from "@/pages/NotFound";
+import AdminUsers from "@/pages/admin/Users";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,11 @@ function App() {
                   <Route path="connections" element={
                     <ProtectedRoute requireRole={['admin']}>
                       <Connections />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="admin/users" element={
+                    <ProtectedRoute requireRole={['admin']}>
+                      <AdminUsers />
                     </ProtectedRoute>
                   } />
                 </Route>
