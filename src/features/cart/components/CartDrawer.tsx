@@ -105,11 +105,12 @@ export const CartDrawer: React.FC = () => {
                   items={items.map((item) => item.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="space-y-2 py-4">
-                    {items.map((item) => (
+                  <div className="space-y-3 py-4">
+                    {items.map((item, index) => (
                       <CartItem 
                         key={item.id} 
                         item={item}
+                        index={index}
                         getDesktopPreviewUrl={getDesktopPreviewUrl}
                       />
                     ))}

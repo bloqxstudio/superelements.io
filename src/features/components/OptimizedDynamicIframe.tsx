@@ -152,32 +152,58 @@ const OptimizedDynamicIframe: React.FC<OptimizedDynamicIframeProps> = memo(({ ur
               const targetEl = doc.querySelector(`[data-id="${highlightId}"]`) as HTMLElement | null;
               if (targetEl) {
                 if (isolateComponent) {
-                  // ISOLATION MODE: Hide everything except the target component
-                  doc.body.style.cssText = 'background: #f5f5f5 !important; padding: 40px 20px !important; overflow: auto !important;';
+                  // ISOLATION MODE: Esconder tudo exceto o componente
+                  doc.body.style.cssText = `
+                    background: #fafafa !important; 
+                    margin: 0 !important;
+                    padding: 30px 20px !important; 
+                    overflow: auto !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    min-height: 100vh !important;
+                  `;
                   
-                  // Hide all direct body children
-                  Array.from(doc.body.children).forEach(child => {
-                    if (!child.contains(targetEl) && child !== targetEl) {
-                      (child as HTMLElement).style.display = 'none';
+                  // Esconder todos os elementos que não contêm o target
+                  const hideElement = (el: HTMLElement) => {
+                    if (el !== targetEl && !el.contains(targetEl)) {
+                      el.style.display = 'none';
                     }
+                  };
+                  
+                  // Esconder filhos diretos do body
+                  Array.from(doc.body.children).forEach(child => {
+                    hideElement(child as HTMLElement);
                   });
                   
-                  // Style the target to stand out
+                  // Esconder siblings em todos os níveis até o body
+                  let node = targetEl.parentElement;
+                  while (node && node !== doc.body) {
+                    Array.from(node.children).forEach(child => {
+                      if (child !== targetEl && !child.contains(targetEl)) {
+                        (child as HTMLElement).style.display = 'none';
+                      }
+                    });
+                    node = node.parentElement;
+                  }
+                  
+                  // Estilizar o componente isolado
                   targetEl.style.cssText = `
                     display: block !important;
+                    max-width: 100% !important;
                     margin: 0 auto !important;
                     padding: 0 !important;
                     background: white !important;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.15) !important;
-                    border-radius: 8px !important;
+                    box-shadow: 0 2px 12px rgba(0,0,0,0.08) !important;
+                    border-radius: 6px !important;
                     position: relative !important;
                     z-index: 1 !important;
                     overflow: visible !important;
                   `;
                   
-                  // Scroll to center
+                  // Centralizar visualmente
                   setTimeout(() => {
-                    targetEl.scrollIntoView({ behavior: 'instant', block: 'center' });
+                    targetEl.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
                   }, 50);
                 } else {
                   // HIGHLIGHT MODE: Just outline the component
