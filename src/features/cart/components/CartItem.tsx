@@ -60,8 +60,8 @@ export const CartItem: React.FC<CartItemProps> = ({ item, getDesktopPreviewUrl }
       ref={setNodeRef}
       style={style}
       className={`
-        bg-card border border-border rounded-lg p-3 flex items-start gap-3
-        transition-all duration-200
+        bg-card border border-border rounded-lg p-4 flex items-start gap-4
+        transition-all duration-200 hover:border-primary/50 hover:shadow-md
         ${isDragging ? 'opacity-50 shadow-lg' : 'opacity-100'}
       `}
     >
@@ -73,26 +73,35 @@ export const CartItem: React.FC<CartItemProps> = ({ item, getDesktopPreviewUrl }
         <GripVertical className="h-5 w-5" />
       </button>
 
-      <div className="w-24 h-16 bg-muted rounded overflow-hidden flex-shrink-0 border border-border/50">
-        <OptimizedDynamicIframe 
-          url={desktopPreviewUrl} 
-          title={`Preview of ${componentTitle}`}
-          highlightId={highlightId}
-        />
+      <div className="relative group">
+        <div className="w-64 h-40 bg-muted rounded-lg overflow-hidden flex-shrink-0 border-2 border-border/50 shadow-sm transition-all duration-300 group-hover:border-primary/50 group-hover:shadow-lg group-hover:scale-105">
+          <OptimizedDynamicIframe 
+            url={desktopPreviewUrl} 
+            title={`Preview of ${componentTitle}`}
+            highlightId={highlightId}
+            isolateComponent={true}
+          />
+        </div>
+        <div className="absolute top-2 left-2 bg-primary/90 text-primary-foreground text-xs font-medium px-2 py-1 rounded-md shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+          Preview
+        </div>
       </div>
 
-      <div className="flex-1 min-w-0">
-        <h4 className="text-sm font-medium text-foreground truncate">
+      <div className="flex-1 min-w-0 flex flex-col justify-center">
+        <h4 className="text-base font-semibold text-foreground truncate">
           {componentTitle}
         </h4>
+        <p className="text-xs text-muted-foreground mt-1">
+          Componente do Elementor
+        </p>
       </div>
 
       <button
         onClick={() => removeFromCart(item.id)}
-        className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+        className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0 hover:scale-110"
         title="Remover do carrinho"
       >
-        <X className="h-4 w-4" />
+        <X className="h-5 w-5" />
       </button>
     </div>
   );

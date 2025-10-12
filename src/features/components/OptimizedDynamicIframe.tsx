@@ -6,9 +6,10 @@ interface OptimizedDynamicIframeProps {
   url: string;
   title: string;
   highlightId?: string;
+  isolateComponent?: boolean;
 }
 
-const OptimizedDynamicIframe: React.FC<OptimizedDynamicIframeProps> = memo(({ url, title, highlightId }) => {
+const OptimizedDynamicIframe: React.FC<OptimizedDynamicIframeProps> = memo(({ url, title, highlightId, isolateComponent = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [scale, setScale] = useState(1.0);
@@ -145,20 +146,51 @@ const OptimizedDynamicIframe: React.FC<OptimizedDynamicIframeProps> = memo(({ ur
           `;
           doc.head.appendChild(style);
 
-          // Try to highlight a specific element by Elementor data-id
+          // Highlight or isolate a specific element by Elementor data-id
           try {
             if (highlightId) {
               const targetEl = doc.querySelector(`[data-id="${highlightId}"]`) as HTMLElement | null;
               if (targetEl) {
-                targetEl.style.outline = '3px solid rgba(99,102,241,1)';
-                targetEl.style.boxShadow = '0 0 0 4px rgba(99,102,241,0.3)';
-                targetEl.style.position = 'relative';
-                targetEl.style.zIndex = '9999';
-                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (isolateComponent) {
+                  // ISOLATION MODE: Hide everything except the target component
+                  doc.body.style.cssText = 'background: #f5f5f5 !important; padding: 40px 20px !important; overflow: auto !important;';
+                  
+                  // Hide all direct body children
+                  Array.from(doc.body.children).forEach(child => {
+                    if (!child.contains(targetEl) && child !== targetEl) {
+                      (child as HTMLElement).style.display = 'none';
+                    }
+                  });
+                  
+                  // Style the target to stand out
+                  targetEl.style.cssText = `
+                    display: block !important;
+                    margin: 0 auto !important;
+                    padding: 0 !important;
+                    background: white !important;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.15) !important;
+                    border-radius: 8px !important;
+                    position: relative !important;
+                    z-index: 1 !important;
+                    overflow: visible !important;
+                  `;
+                  
+                  // Scroll to center
+                  setTimeout(() => {
+                    targetEl.scrollIntoView({ behavior: 'instant', block: 'center' });
+                  }, 50);
+                } else {
+                  // HIGHLIGHT MODE: Just outline the component
+                  targetEl.style.outline = '3px solid rgba(99,102,241,1)';
+                  targetEl.style.boxShadow = '0 0 0 4px rgba(99,102,241,0.3)';
+                  targetEl.style.position = 'relative';
+                  targetEl.style.zIndex = '9999';
+                  targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
               }
             }
           } catch (e) {
-            // ignore highlight errors
+            // ignore highlight/isolation errors
           }
 
           // Force Elementor frontend to desktop mode
@@ -193,7 +225,7 @@ const OptimizedDynamicIframe: React.FC<OptimizedDynamicIframeProps> = memo(({ ur
     } catch (error) {
       console.log('Cannot modify iframe content due to CORS restrictions');
     }
-  }, []);
+  }, [highlightId, isolateComponent]);
 
   // Skeleton placeholder for iframe loading
   const LoadingSkeleton = () => (
@@ -244,7 +276,7 @@ const OptimizedDynamicIframe: React.FC<OptimizedDynamicIframeProps> = memo(({ ur
     </div>
   );
 }, (prevProps, nextProps) => {
-  return prevProps.url === nextProps.url && prevProps.title === nextProps.title && prevProps.highlightId === nextProps.highlightId;
+  return prevProps.url === nextProps.url && prevProps.title === nextProps.title && prevProps.highlightId === nextProps.highlightId && prevProps.isolateComponent === nextProps.isolateComponent;
 });
 
 OptimizedDynamicIframe.displayName = 'OptimizedDynamicIframe';
