@@ -1,10 +1,11 @@
-import React from 'react';
-import { GripVertical, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { GripVertical, X, Maximize2 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { CartItem as CartItemType } from '@/store/cartStore';
 import { useCartStore } from '@/store/cartStore';
 import OptimizedDynamicIframe from '@/features/components/OptimizedDynamicIframe';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface CartItemProps {
   item: CartItemType;
@@ -13,6 +14,7 @@ interface CartItemProps {
 
 export const CartItem: React.FC<CartItemProps> = ({ item, getDesktopPreviewUrl }) => {
   const { removeFromCart } = useCartStore();
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const {
     attributes,
     listeners,
@@ -60,39 +62,66 @@ export const CartItem: React.FC<CartItemProps> = ({ item, getDesktopPreviewUrl }
       ref={setNodeRef}
       style={style}
       className={`
-        bg-card border border-border rounded-lg p-4 flex items-start gap-4
+        bg-card border border-border rounded-lg p-3 flex items-center gap-3
         transition-all duration-200 hover:border-primary/50 hover:shadow-md
         ${isDragging ? 'opacity-50 shadow-lg' : 'opacity-100'}
       `}
     >
       <button
-        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground mt-1"
+        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
         {...attributes}
         {...listeners}
       >
         <GripVertical className="h-5 w-5" />
       </button>
 
-      <div className="relative group">
-        <div className="w-64 h-40 bg-muted rounded-lg overflow-hidden flex-shrink-0 border-2 border-border/50 shadow-sm transition-all duration-300 group-hover:border-primary/50 group-hover:shadow-lg group-hover:scale-105">
-          <OptimizedDynamicIframe 
-            url={desktopPreviewUrl} 
-            title={`Preview of ${componentTitle}`}
-            highlightId={highlightId}
-            isolateComponent={true}
-          />
-        </div>
-        <div className="absolute top-2 left-2 bg-primary/90 text-primary-foreground text-xs font-medium px-2 py-1 rounded-md shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
-          Preview
-        </div>
-      </div>
+      <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+        <PopoverTrigger asChild>
+          <div 
+            className="relative group cursor-pointer"
+            onMouseEnter={() => setIsPopoverOpen(true)}
+            onMouseLeave={() => setIsPopoverOpen(false)}
+          >
+            <div className="w-32 h-24 bg-muted rounded-lg overflow-hidden flex-shrink-0 border-2 border-border/50 shadow-sm transition-all duration-300 group-hover:border-primary/50 group-hover:shadow-lg">
+              <OptimizedDynamicIframe 
+                url={desktopPreviewUrl} 
+                title={`Preview of ${componentTitle}`}
+                highlightId={highlightId}
+                isolateComponent={true}
+              />
+            </div>
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors rounded-lg flex items-center justify-center">
+              <Maximize2 className="h-5 w-5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </div>
+        </PopoverTrigger>
+        <PopoverContent 
+          side="right" 
+          align="start"
+          className="w-[500px] h-[350px] p-2"
+          onMouseEnter={() => setIsPopoverOpen(true)}
+          onMouseLeave={() => setIsPopoverOpen(false)}
+        >
+          <div className="w-full h-full bg-muted rounded-lg overflow-hidden border border-border">
+            <OptimizedDynamicIframe 
+              url={desktopPreviewUrl} 
+              title={`Expanded preview of ${componentTitle}`}
+              highlightId={highlightId}
+              isolateComponent={true}
+            />
+          </div>
+        </PopoverContent>
+      </Popover>
 
       <div className="flex-1 min-w-0 flex flex-col justify-center">
-        <h4 className="text-base font-semibold text-foreground truncate">
+        <h4 className="text-base font-semibold text-foreground">
           {componentTitle}
         </h4>
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="text-xs text-muted-foreground mt-0.5">
           Componente do Elementor
+        </p>
+        <p className="text-xs text-muted-foreground/70 mt-1 italic">
+          Passe o mouse para expandir
         </p>
       </div>
 
