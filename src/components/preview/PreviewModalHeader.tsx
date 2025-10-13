@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useViewport } from '@/hooks/useViewport';
 import ViewportSwitcher from '@/components/ViewportSwitcher';
 import { ExternalLink, Smartphone, Tablet, Monitor, Eye, Copy } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface PreviewModalHeaderProps {
   title: string;
@@ -21,6 +22,7 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
   onCopyJson,
   onOpenInNewTab
 }) => {
+  const { user } = useAuth();
   const { viewport, getViewportWidth } = useViewport();
 
   const getViewportIcon = () => {
@@ -69,15 +71,17 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
                     variant="outline"
                     size="sm"
                     onClick={onCopyJson}
+                    disabled={!user}
                     className="flex items-center gap-2 text-xs sm:text-sm"
+                    title={!user ? "Faça login para copiar" : undefined}
                   >
                     <Copy className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden sm:inline">COPIAR</span>
-                    <span className="sm:hidden">COPIAR</span>
+                    <span className="hidden sm:inline">{!user ? 'LOGIN NECESSÁRIO' : 'COPIAR'}</span>
+                    <span className="sm:hidden">{!user ? 'LOGIN' : 'COPIAR'}</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Copiar componente</p>
+                  <p>{!user ? 'Faça login para copiar' : 'Copiar componente'}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

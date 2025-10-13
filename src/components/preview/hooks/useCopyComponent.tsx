@@ -4,13 +4,24 @@ import { toast } from '@/hooks/use-toast';
 import { useEnhancedCopyComponent } from '@/features/components/hooks/useEnhancedCopyComponent';
 import { useWordPressStore } from '@/store/wordpressStore';
 import { useConnectionsStore } from '@/store/connectionsStore';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const useCopyComponent = () => {
+  const { user } = useAuth();
   const { copyToClipboard } = useEnhancedCopyComponent();
   const { components, config } = useWordPressStore();
   const { getConnectionById } = useConnectionsStore();
 
   const copyComponent = useCallback(async (componentOrUrl: any, title?: string) => {
+    if (!user) {
+      toast({
+        title: "Acesso negado",
+        description: "Você precisa estar logado para copiar componentes.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       // NEW SYSTEM: If we received the full component
       if (typeof componentOrUrl === 'object' && componentOrUrl.id) {
@@ -104,7 +115,7 @@ export const useCopyComponent = () => {
         duration: 6000
       });
     }
-  }, [copyToClipboard, components, config, getConnectionById]);
+  }, [user, copyToClipboard, components, config, getConnectionById]);
 
   return { copyComponent };
 };

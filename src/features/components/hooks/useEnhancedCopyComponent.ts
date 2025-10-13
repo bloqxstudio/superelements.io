@@ -3,6 +3,7 @@ import { useConnectionsStore } from '@/store/connectionsStore';
 import { toast } from '@/hooks/use-toast';
 import { extractComponentForClipboard } from '@/utils/enhancedElementorExtractor';
 import { copyToClipboardEnhanced } from '@/utils/enhancedRobustClipboard';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface CopyState {
   copying: boolean;
@@ -10,6 +11,7 @@ interface CopyState {
 }
 
 export const useEnhancedCopyComponent = () => {
+  const { user } = useAuth();
   const { connections, getConnectionById } = useConnectionsStore();
   const [copyStates, setCopyStates] = useState<Record<string, CopyState>>({});
   const timeoutRefs = useRef<Record<string, NodeJS.Timeout>>({});
@@ -22,6 +24,15 @@ export const useEnhancedCopyComponent = () => {
   }, []);
 
   const copyToClipboard = useCallback(async (component: any, baseUrl: string) => {
+    if (!user) {
+      toast({
+        title: "Acesso negado",
+        description: "Você precisa estar logado para copiar componentes.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const componentId = component.originalId || component.id;
     
     try {
@@ -130,7 +141,7 @@ export const useEnhancedCopyComponent = () => {
         duration: 6000
       });
     }
-  }, [setCopyState, getConnectionById]);
+  }, [user, setCopyState, getConnectionById]);
 
   const getCopyState = useCallback((componentId: string): CopyState => {
     return copyStates[componentId] || { copying: false, copied: false };

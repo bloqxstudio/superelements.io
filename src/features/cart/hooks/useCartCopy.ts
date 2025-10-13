@@ -2,12 +2,23 @@ import { useState } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { CartItem } from '@/store/cartStore';
 import { extractMultipleComponents, formatMultipleForClipboard } from '@/utils/cartElementorExtractor';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const useCartCopy = () => {
+  const { user } = useAuth();
   const [copying, setCopying] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
 
   const copyAllToClipboard = async (items: CartItem[]) => {
+    if (!user) {
+      toast({
+        title: "Acesso negado",
+        description: "Você precisa estar logado para copiar componentes.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (items.length === 0) {
       toast({
         title: "Carrinho vazio",

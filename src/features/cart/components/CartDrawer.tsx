@@ -22,8 +22,10 @@ import { useCartStore } from '@/store/cartStore';
 import { useCartCopy } from '../hooks/useCartCopy';
 import { CartItem } from './CartItem';
 import { useConnectionsStore } from '@/store/connectionsStore';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const CartDrawer: React.FC = () => {
+  const { user } = useAuth();
   const { items, isOpen, closeCart, clearCart, reorderItems } = useCartStore();
   const { copyAllToClipboard, copying } = useCartCopy();
   const { getConnectionById } = useConnectionsStore();
@@ -122,12 +124,13 @@ export const CartDrawer: React.FC = () => {
             <SheetFooter className="flex-col sm:flex-col gap-2 mt-4">
               <Button
                 onClick={handleCopyAll}
-                disabled={copying}
+                disabled={copying || !user}
                 className="w-full"
                 size="lg"
+                title={!user ? "Faça login para copiar" : undefined}
               >
                 <Copy className="h-4 w-4 mr-2" />
-                {copying ? 'Copiando...' : 'Copiar Tudo'}
+                {copying ? 'Copiando...' : !user ? 'Login Necessário' : 'Copiar Tudo'}
               </Button>
               <Button
                 onClick={handleClearCart}
