@@ -42,7 +42,7 @@ const Layout: React.FC = () => {
                   {/* Show "Contratar Especialista" button for FREE and PRO users */}
                   {profile?.role && ['free', 'pro'].includes(profile.role) && (
                     <Button 
-                      className="bg-purple-600 text-white hover:bg-purple-700 shadow-md transition-all"
+                      className="bg-lime-500 text-white hover:bg-lime-600 shadow-md transition-all"
                       onClick={handleHireExpert}
                     >
                       <Briefcase className="h-4 w-4 sm:mr-2" />
