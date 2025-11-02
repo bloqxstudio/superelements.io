@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { Users } from 'lucide-react';
+import { Users, Briefcase } from 'lucide-react';
 const Layout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -15,6 +15,13 @@ const Layout: React.FC = () => {
   } = useAuth();
   const handleLogoClick = () => {
     navigate('/');
+  };
+
+  const handleHireExpert = () => {
+    const phone = "+5551989249280";
+    const message = encodeURIComponent("Quero contratar um especialista para meu projeto");
+    const whatsappUrl = `https://api.whatsapp.com/send/?phone=${encodeURIComponent(phone)}&text=${message}&type=phone_number&app_absent=0`;
+    window.open(whatsappUrl, '_blank');
   };
   return <div className="min-h-screen bg-background w-full flex flex-col">
       {/* Simplified Header */}
@@ -33,6 +40,19 @@ const Layout: React.FC = () => {
             <div className="flex items-center gap-4">
               {user ? <>
                   <Button variant={location.pathname === '/' ? 'default' : 'ghost'} onClick={() => navigate('/')}>Biblioteca</Button>
+                  
+                  {/* Show "Contratar Especialista" button for FREE and PRO users */}
+                  {profile?.role && ['free', 'pro'].includes(profile.role) && (
+                    <Button 
+                      variant="outline"
+                      className="border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
+                      onClick={handleHireExpert}
+                    >
+                      <Briefcase className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Contratar Especialista</span>
+                    </Button>
+                  )}
+                  
                   {/* Only show admin options for admin users */}
                   {profile?.role === 'admin' && <>
                     <Button variant={location.pathname === '/connections' ? 'default' : 'ghost'} onClick={() => navigate('/connections')}>
