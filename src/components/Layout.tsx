@@ -39,13 +39,10 @@ const Layout: React.FC = () => {
             {/* Navigation */}
             <div className="flex items-center gap-4">
               {user ? <>
-                  <Button variant={location.pathname === '/' ? 'default' : 'ghost'} onClick={() => navigate('/')}>Biblioteca</Button>
-                  
                   {/* Show "Contratar Especialista" button for FREE and PRO users */}
                   {profile?.role && ['free', 'pro'].includes(profile.role) && (
                     <Button 
-                      variant="outline"
-                      className="border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
+                      className="bg-purple-600 text-white hover:bg-purple-700 shadow-md transition-all"
                       onClick={handleHireExpert}
                     >
                       <Briefcase className="h-4 w-4 sm:mr-2" />
