@@ -96,15 +96,13 @@ export const useCreateUser = () => {
       if (error) throw error;
       if (!data.user) throw new Error('Usuário não foi criado');
 
-      // Atualizar role (se diferente de 'free')
-      if (role !== 'free') {
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .update({ role })
-          .eq('user_id', data.user.id);
+      // Atualizar role para a desejada (o trigger cria com 'free' por padrão)
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .update({ role })
+        .eq('user_id', data.user.id);
 
-        if (roleError) throw roleError;
-      }
+      if (roleError) throw roleError;
 
       return data.user;
     },
