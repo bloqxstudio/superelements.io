@@ -10,8 +10,10 @@ export interface WordPressConnection {
   post_type: string;
   json_field: string;
   preview_field: string;
-  username: string;
-  application_password: string;
+  credentials?: {
+    username: string;
+    application_password: string;
+  };
   status: 'disconnected' | 'connecting' | 'connected' | 'error';
   isActive: boolean;
   userType: 'free' | 'pro' | 'all';
@@ -61,28 +63,52 @@ export const useConnectionsStore = create<ConnectionsStore>()(
         set({ isLoading: true });
         
         try {
-          // Simplified - fetch all connections without auth check
-          const { data, error } = await supabase
+          const { data: { user } } = await supabase.auth.getUser();
+          
+          // Fetch connections
+          const { data: connectionsData, error: connectionsError } = await supabase
             .from('connections')
             .select('*')
             .order('created_at', { ascending: false });
 
-          if (error) {
-            console.error('❌ Error fetching connections:', error);
-            throw error;
+          if (connectionsError) {
+            console.error('❌ Error fetching connections:', connectionsError);
+            throw connectionsError;
           }
 
-          console.log('📊 Raw connections data:', data);
+          console.log('📊 Raw connections data:', connectionsData);
 
-          const connections: WordPressConnection[] = (data || []).map(conn => ({
+          // Fetch credentials ONLY for user's own connections
+          let credentialsData: any[] = [];
+          if (user) {
+            const { data, error } = await supabase
+              .from('connection_credentials')
+              .select('*');
+            
+            if (!error) {
+              credentialsData = data || [];
+            }
+          }
+
+          // Create credentials map
+          const credentialsMap = new Map(
+            credentialsData.map(cred => [
+              cred.connection_id,
+              {
+                username: cred.username,
+                application_password: cred.application_password
+              }
+            ])
+          );
+
+          const connections: WordPressConnection[] = (connectionsData || []).map(conn => ({
             id: conn.id,
             name: conn.name,
             base_url: conn.base_url,
             post_type: conn.post_type,
             json_field: conn.json_field,
             preview_field: conn.preview_field,
-            username: conn.username,
-            application_password: conn.application_password,
+            credentials: credentialsMap.get(conn.id), // Only populated for owned connections
             status: conn.status as WordPressConnection['status'],
             isActive: conn.is_active,
             userType: conn.user_type as WordPressConnection['userType'],
@@ -97,6 +123,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
           console.log('✅ Processed connections:', {
             total: connections.length,
             active: connections.filter(c => c.isActive).length,
+            withCredentials: connections.filter(c => c.credentials).length,
             byUserType: {
               free: connections.filter(c => c.userType === 'free').length,
               pro: connections.filter(c => c.userType === 'pro').length,
@@ -106,7 +133,8 @@ export const useConnectionsStore = create<ConnectionsStore>()(
               id: c.id,
               name: c.name,
               isActive: c.isActive,
-              status: c.status
+              status: c.status,
+              hasCredentials: !!c.credentials
             }))
           });
 
@@ -122,8 +150,11 @@ export const useConnectionsStore = create<ConnectionsStore>()(
       
       addConnection: async (connectionData) => {
         try {
-          // Simplified - create connection without auth check
-          const { data, error } = await supabase
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error('User not authenticated');
+
+          // Insert connection without credentials
+          const { data: connData, error: connError } = await supabase
             .from('connections')
             .insert({
               name: connectionData.name,
@@ -131,25 +162,40 @@ export const useConnectionsStore = create<ConnectionsStore>()(
               post_type: connectionData.post_type,
               json_field: connectionData.json_field,
               preview_field: connectionData.preview_field,
-              username: connectionData.username,
-              application_password: connectionData.application_password,
               status: connectionData.status,
               is_active: connectionData.isActive,
               user_type: connectionData.userType,
               last_tested: connectionData.lastTested?.toISOString(),
               components_count: connectionData.componentsCount || 0,
               error: connectionData.error,
-              created_by: null, // Simplified - no user context needed
+              created_by: user.id,
             })
             .select()
             .single();
 
-          if (error) throw error;
+          if (connError) throw connError;
+
+          // Insert credentials separately if provided
+          if (connectionData.credentials) {
+            const { error: credError } = await supabase
+              .from('connection_credentials')
+              .insert({
+                connection_id: connData.id,
+                username: connectionData.credentials.username,
+                application_password: connectionData.credentials.application_password,
+              });
+
+            if (credError) {
+              // Rollback: delete the connection if credentials insert fails
+              await supabase.from('connections').delete().eq('id', connData.id);
+              throw credError;
+            }
+          }
 
           // Refresh connections list
           await get().fetchConnections();
           
-          return data.id;
+          return connData.id;
         } catch (error) {
           console.error('Error adding connection:', error);
           throw error;
@@ -158,35 +204,44 @@ export const useConnectionsStore = create<ConnectionsStore>()(
       
       updateConnection: async (id, updates) => {
         try {
+          const { credentials, ...connectionUpdates } = updates;
           const updateData: any = {};
           
-          if (updates.name) updateData.name = updates.name;
-          if (updates.base_url) updateData.base_url = updates.base_url;
-          if (updates.post_type) updateData.post_type = updates.post_type;
-          if (updates.json_field) updateData.json_field = updates.json_field;
-          if (updates.preview_field) updateData.preview_field = updates.preview_field;
-          if (updates.username) updateData.username = updates.username;
-          if (updates.application_password) updateData.application_password = updates.application_password;
-          if (updates.status) updateData.status = updates.status;
-          if (updates.isActive !== undefined) updateData.is_active = updates.isActive;
-          if (updates.userType) updateData.user_type = updates.userType;
-          if (updates.lastTested) updateData.last_tested = updates.lastTested.toISOString();
-          if (updates.componentsCount !== undefined) updateData.components_count = updates.componentsCount;
-          if (updates.error !== undefined) updateData.error = updates.error;
+          if (connectionUpdates.name) updateData.name = connectionUpdates.name;
+          if (connectionUpdates.base_url) updateData.base_url = connectionUpdates.base_url;
+          if (connectionUpdates.post_type) updateData.post_type = connectionUpdates.post_type;
+          if (connectionUpdates.json_field) updateData.json_field = connectionUpdates.json_field;
+          if (connectionUpdates.preview_field) updateData.preview_field = connectionUpdates.preview_field;
+          if (connectionUpdates.status) updateData.status = connectionUpdates.status;
+          if (connectionUpdates.isActive !== undefined) updateData.is_active = connectionUpdates.isActive;
+          if (connectionUpdates.userType) updateData.user_type = connectionUpdates.userType;
+          if (connectionUpdates.lastTested) updateData.last_tested = connectionUpdates.lastTested.toISOString();
+          if (connectionUpdates.componentsCount !== undefined) updateData.components_count = connectionUpdates.componentsCount;
+          if (connectionUpdates.error !== undefined) updateData.error = connectionUpdates.error;
 
-          const { error } = await supabase
+          // Update connection metadata
+          const { error: connError } = await supabase
             .from('connections')
             .update(updateData)
             .eq('id', id);
 
-          if (error) throw error;
+          if (connError) throw connError;
 
-          // Update local state
-          set((state) => ({
-            connections: state.connections.map((conn) =>
-              conn.id === id ? { ...conn, ...updates } : conn
-            ),
-          }));
+          // Update credentials separately if provided
+          if (credentials) {
+            const { error: credError } = await supabase
+              .from('connection_credentials')
+              .upsert({
+                connection_id: id,
+                username: credentials.username,
+                application_password: credentials.application_password,
+              });
+
+            if (credError) throw credError;
+          }
+
+          // Refresh connections list to get updated data
+          await get().fetchConnections();
         } catch (error) {
           console.error('Error updating connection:', error);
           throw error;
@@ -214,16 +269,16 @@ export const useConnectionsStore = create<ConnectionsStore>()(
       
       validateConnection: async (id) => {
         const connection = get().getConnectionById(id);
-        if (!connection) {
-          console.error(`Connection ${id} not found`);
+        if (!connection || !connection.credentials) {
+          console.error(`Connection ${id} not found or missing credentials`);
           return false;
         }
         
         try {
           const validation = await WordPressPostTypeService.validateWordPressSite({
             baseUrl: connection.base_url,
-            username: connection.username,
-            applicationPassword: connection.application_password
+            username: connection.credentials.username,
+            applicationPassword: connection.credentials.application_password
           });
           
           // Update connection status based on validation
@@ -249,8 +304,8 @@ export const useConnectionsStore = create<ConnectionsStore>()(
       
       refreshPostTypeMapping: async (id) => {
         const connection = get().getConnectionById(id);
-        if (!connection) {
-          console.error(`Connection ${id} not found`);
+        if (!connection || !connection.credentials) {
+          console.error(`Connection ${id} not found or missing credentials`);
           return;
         }
         
@@ -261,8 +316,8 @@ export const useConnectionsStore = create<ConnectionsStore>()(
             currentPostType,
             {
               baseUrl: connection.base_url,
-              username: connection.username,
-              applicationPassword: connection.application_password
+              username: connection.credentials.username,
+              applicationPassword: connection.credentials.application_password
             }
           );
           

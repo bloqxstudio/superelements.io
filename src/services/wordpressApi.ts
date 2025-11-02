@@ -5,8 +5,13 @@ interface WordPressConfig {
   postType: string;
   jsonField: string;
   previewField: string;
-  username: string;
-  applicationPassword: string;
+  credentials?: {
+    username: string;
+    applicationPassword: string;
+  };
+  // Keep for backward compatibility during migration
+  username?: string;
+  applicationPassword?: string;
 }
 
 interface WordPressComponent {
@@ -150,7 +155,11 @@ export class WordPressApiService {
       'Content-Type': 'application/json',
     };
 
-    if (config.username && config.applicationPassword) {
+    if (config.credentials?.username && config.credentials?.applicationPassword) {
+      const credentials = btoa(`${config.credentials.username}:${config.credentials.applicationPassword}`);
+      headers['Authorization'] = `Basic ${credentials}`;
+    } else if (config.username && config.applicationPassword) {
+      // Backward compatibility
       const credentials = btoa(`${config.username}:${config.applicationPassword}`);
       headers['Authorization'] = `Basic ${credentials}`;
     }
@@ -281,7 +290,11 @@ export class WordPressApiService {
       'Content-Type': 'application/json',
     };
 
-    if (config.username && config.applicationPassword) {
+    if (config.credentials?.username && config.credentials?.applicationPassword) {
+      const credentials = btoa(`${config.credentials.username}:${config.credentials.applicationPassword}`);
+      headers['Authorization'] = `Basic ${credentials}`;
+    } else if (config.username && config.applicationPassword) {
+      // Backward compatibility
       const credentials = btoa(`${config.username}:${config.applicationPassword}`);
       headers['Authorization'] = `Basic ${credentials}`;
     }

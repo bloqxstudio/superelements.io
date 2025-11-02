@@ -14,10 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      connection_credentials: {
+        Row: {
+          application_password: string
+          connection_id: string
+          created_at: string
+          id: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          application_password: string
+          connection_id: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          application_password?: string
+          connection_id?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connection_credentials_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: true
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "connection_credentials_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: true
+            referencedRelation: "shared_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connections: {
         Row: {
           access_level: Database["public"]["Enums"]["app_role"] | null
-          application_password: string
           base_url: string
           components_count: number | null
           created_at: string
@@ -33,11 +74,9 @@ export type Database = {
           status: string
           updated_at: string
           user_type: string
-          username: string
         }
         Insert: {
           access_level?: Database["public"]["Enums"]["app_role"] | null
-          application_password: string
           base_url: string
           components_count?: number | null
           created_at?: string
@@ -53,11 +92,9 @@ export type Database = {
           status?: string
           updated_at?: string
           user_type?: string
-          username: string
         }
         Update: {
           access_level?: Database["public"]["Enums"]["app_role"] | null
-          application_password?: string
           base_url?: string
           components_count?: number | null
           created_at?: string
@@ -73,7 +110,6 @@ export type Database = {
           status?: string
           updated_at?: string
           user_type?: string
-          username?: string
         }
         Relationships: []
       }
@@ -127,7 +163,51 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      shared_connections: {
+        Row: {
+          base_url: string | null
+          components_count: number | null
+          created_at: string | null
+          id: string | null
+          is_active: boolean | null
+          json_field: string | null
+          name: string | null
+          post_type: string | null
+          preview_field: string | null
+          status: string | null
+          updated_at: string | null
+          user_type: string | null
+        }
+        Insert: {
+          base_url?: string | null
+          components_count?: number | null
+          created_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          json_field?: string | null
+          name?: string | null
+          post_type?: string | null
+          preview_field?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_type?: string | null
+        }
+        Update: {
+          base_url?: string | null
+          components_count?: number | null
+          created_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          json_field?: string | null
+          name?: string | null
+          post_type?: string | null
+          preview_field?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_type?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_user_role: {

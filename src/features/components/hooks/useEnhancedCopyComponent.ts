@@ -54,8 +54,8 @@ export const useEnhancedCopyComponent = () => {
       const wordpressConfig = {
         baseUrl: connection?.base_url || baseUrl,
         postType: connection?.post_type || 'posts',
-        username: connection?.username || '',
-        applicationPassword: connection?.application_password || ''
+        username: connection?.credentials?.username || '',
+        applicationPassword: connection?.credentials?.application_password || ''
       };
 
       // Validate required fields

@@ -26,8 +26,8 @@ const getWordPressConfig = (item: CartItem): WordPressConfig => {
   return {
     baseUrl,
     postType,
-    username: connection?.username,
-    applicationPassword: connection?.application_password,
+    username: connection?.credentials?.username,
+    applicationPassword: connection?.credentials?.application_password,
   };
 };
 

@@ -126,8 +126,8 @@ export const useOptimizedMultiConnectionData = () => {
         postType: connection.post_type,
         jsonField: connection.json_field,
         previewField: connection.preview_field,
-        username: connection.username,
-        applicationPassword: connection.application_password,
+        username: connection.credentials?.username || '',
+        applicationPassword: connection.credentials?.application_password || '',
       };
 
       const categoriesWithComponents = await PostTypeCategoryService.fetchCategoriesWithComponents(connectionConfig);

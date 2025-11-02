@@ -58,8 +58,8 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
           name: connection.name,
           baseUrl: connection.base_url,
           postType: connection.post_type,
-          username: connection.username,
-          applicationPassword: connection.application_password,
+          username: connection.credentials?.username || '',
+          applicationPassword: connection.credentials?.application_password || '',
           isActive: connection.isActive,
           userType: connection.userType
         });
@@ -158,8 +158,10 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
         post_type: formData.postType,
         json_field: '_elementor_data', // Valor padrão fixo
         preview_field: 'link', // Valor padrão fixo
-        username: formData.username,
-        application_password: formData.applicationPassword,
+        credentials: {
+          username: formData.username,
+          application_password: formData.applicationPassword,
+        },
         status: 'connected',
         isActive: formData.isActive,
         userType: formData.userType,

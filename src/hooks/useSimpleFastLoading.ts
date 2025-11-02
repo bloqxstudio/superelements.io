@@ -77,8 +77,8 @@ export const useSimpleFastLoading = ({
             postType: connection.post_type,
             jsonField: connection.json_field,
             previewField: connection.preview_field,
-            username: connection.username,
-            applicationPassword: connection.application_password,
+            username: connection.credentials?.username || '',
+            applicationPassword: connection.credentials?.application_password || '',
           };
           
           const result = await fetchComponents(connectionConfig, {

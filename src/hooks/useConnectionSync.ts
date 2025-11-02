@@ -40,14 +40,14 @@ export const useConnectionSync = () => {
         postType: activeConnection.post_type,
         jsonField: activeConnection.json_field,
         previewField: activeConnection.preview_field,
-        username: activeConnection.username,
-        applicationPassword: activeConnection.application_password
+        username: activeConnection.credentials?.username || '',
+        applicationPassword: activeConnection.credentials?.application_password || ''
       });
       
       setIsConnected(true);
       syncCompletedRef.current = true;
       return true;
-    } 
+    }
     // If no specific active connection but we have active connections available, 
     // this is "All Components" mode - still valid
     else if (activeConnections.length > 0) {
