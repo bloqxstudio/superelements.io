@@ -18,12 +18,13 @@ const Components = () => {
   const navigate = useNavigate();
   const {
     connections,
-    setActiveConnection
+    setActiveConnection,
+    activeConnectionId
   } = useConnectionsStore();
   const {
     syncConnection
   } = useConnectionSync();
-  const { setSelectedCategories, availableCategories } = useWordPressStore();
+  const { setSelectedCategories, selectedCategories } = useWordPressStore();
   const { getConnectionBySlug, getCategoryBySlug, getConnectionSlug, getCategorySlug } = useSlugResolver();
   const { connectionsData } = useMultiConnectionData();
   const [previewModal, setPreviewModal] = useState({
@@ -85,17 +86,26 @@ const Components = () => {
       categoryId,
       connectionSlug,
       categorySlug,
-      connectionsDataCount: connectionsData.length
+      connectionsDataCount: connectionsData.length,
+      connectionsLoaded: connections.length,
+      activeConnectionId,
+      selectedCategories
     });
 
-    // Priorizar slugs sobre IDs
-    let resolvedConnectionId = connectionId;
-    let resolvedCategoryId = categoryId;
+    // Aguarda conexões carregarem quando houver slug de conexão
+    if (connectionSlug && connections.length === 0) {
+      console.log('⏳ Waiting for connections to load before resolving slugs');
+      return;
+    }
 
-    // Se tem slug de conexão, resolver para ID
+    // Priorizar slugs sobre IDs
+    let resolvedConnectionId: string | null | undefined = connectionId;
+    let resolvedCategoryId: string | null | undefined = categoryId;
+
+    // Resolver conexão por slug
     if (connectionSlug && !connectionId) {
       const connection = getConnectionBySlug(connectionSlug);
-      resolvedConnectionId = connection?.id;
+      resolvedConnectionId = connection?.id || null;
       console.log('🔍 Resolved connection slug:', {
         connectionSlug,
         resolvedConnectionId,
@@ -103,55 +113,70 @@ const Components = () => {
       });
     }
 
-    // Se tem slug de categoria, resolver para ID usando connectionsData
+    // Resolver categoria por slug (apenas quando categorias estiverem carregadas)
     if (categorySlug && !categoryId && resolvedConnectionId) {
-      // Buscar nas categorias carregadas do useMultiConnectionData
       const connectionData = connectionsData.find(cd => cd.connectionId === resolvedConnectionId);
-      
-      if (connectionData && connectionData.categories.length > 0) {
-        // Usar getCategoryBySlug com o array de categorias correto
-        const category = getCategoryBySlug(categorySlug, resolvedConnectionId, connectionData.categories);
-        resolvedCategoryId = category?.id.toString();
-        
-        console.log('🔍 Resolved category slug:', {
-          categorySlug,
+      if (!connectionData || !connectionData.isLoaded) {
+        console.log('⏳ Waiting categories to load before applying category filter', {
           connectionId: resolvedConnectionId,
-          foundCategory: category,
-          resolvedCategoryId,
-          availableCategories: connectionData.categories.map(c => ({ id: c.id, slug: c.slug, name: c.name }))
+          hasData: !!connectionData,
+          isLoaded: connectionData?.isLoaded,
         });
-      } else {
-        console.warn('⚠️ Connection data not loaded yet or has no categories:', {
-          connectionId: resolvedConnectionId,
-          connectionData,
-          isLoading: connectionData?.isLoading,
-          isLoaded: connectionData?.isLoaded
-        });
+        return; // evita loop até termos dados
       }
+      const category = getCategoryBySlug(categorySlug, resolvedConnectionId, connectionData.categories);
+      resolvedCategoryId = category ? String(category.id) : null;
+      console.log('🔍 Resolved category slug:', {
+        categorySlug,
+        connectionId: resolvedConnectionId,
+        foundCategory: category,
+        resolvedCategoryId,
+      });
     }
 
-    // Aplicar filtros
-    if (resolvedConnectionId) {
+    // Caso "home" (sem conexão na URL)
+    if (!resolvedConnectionId && !connectionSlug && !connectionId) {
+      if (activeConnectionId !== null) setActiveConnection(null);
+      if (selectedCategories.length > 0) setSelectedCategories([]);
+      console.log('🏠 Home detected - ensuring no active connection and no category filters');
+      return;
+    }
+
+    // Aplicar conexão somente se mudou
+    if (resolvedConnectionId && activeConnectionId !== resolvedConnectionId) {
       setActiveConnection(resolvedConnectionId);
-      
+    }
+
+    // Aplicar categorias somente quando necessário
+    if (resolvedConnectionId) {
       if (resolvedCategoryId) {
         const categoryIdNum = parseInt(resolvedCategoryId, 10);
-        console.log('✅ Applying category filter:', {
-          categoryIdNum,
-          resolvedCategoryId
-        });
-        setSelectedCategories([categoryIdNum]);
+        const isSame = selectedCategories.length === 1 && selectedCategories[0] === categoryIdNum;
+        if (!isSame) {
+          console.log('✅ Applying category filter:', { categoryIdNum });
+          setSelectedCategories([categoryIdNum]);
+        }
       } else {
-        console.log('📋 No category selected, showing all from connection');
-        setSelectedCategories([]);
+        if (selectedCategories.length > 0) {
+          console.log('📋 Clearing category filters for connection');
+          setSelectedCategories([]);
+        }
       }
-    } else {
-      // Limpar filtros se estiver na home
-      console.log('🏠 Clearing filters - showing all components');
-      setActiveConnection(null);
-      setSelectedCategories([]);
     }
-  }, [connectionId, categoryId, connectionSlug, categorySlug, connectionsData, getConnectionBySlug, getCategoryBySlug, setActiveConnection, setSelectedCategories]);
+  }, [
+    connectionId,
+    categoryId,
+    connectionSlug,
+    categorySlug,
+    connections.length,
+    connectionsData,
+    activeConnectionId,
+    selectedCategories,
+    getConnectionBySlug,
+    getCategoryBySlug,
+    setActiveConnection,
+    setSelectedCategories
+  ]);
 
   // Fixed layout with proper sidebar integration
   return <div className="h-screen flex overflow-hidden">
