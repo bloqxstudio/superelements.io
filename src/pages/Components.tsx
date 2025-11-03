@@ -80,7 +80,7 @@ const Components = () => {
       setActiveConnection(null);
       setSelectedCategories([]);
     }
-  }, [connectionId, categoryId, connectionSlug, categorySlug, setActiveConnection, setSelectedCategories, getConnectionBySlug, getCategoryBySlug]);
+  }, [connectionId, categoryId, connectionSlug, categorySlug]);
 
   // Fixed layout with proper sidebar integration
   return <div className="h-screen flex overflow-hidden">

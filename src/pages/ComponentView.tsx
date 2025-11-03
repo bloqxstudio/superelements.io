@@ -130,7 +130,7 @@ const ComponentView = () => {
     if ((connectionId || connectionSlug) && (componentId || componentSlug)) {
       loadComponent();
     }
-  }, [connectionId, componentId, connectionSlug, componentSlug, connections, components, navigate, getConnectionBySlug]);
+  }, [connectionId, componentId, connectionSlug, componentSlug]);
 
   if (isLoading) {
     return (
