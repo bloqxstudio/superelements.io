@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import CentralizedComponentLibrary from '@/components/CentralizedComponentLibrary';
 import { CategorySidebar } from '@/features/components/CategorySidebar';
 import PreviewModal from '@/components/PreviewModal';
@@ -13,7 +13,8 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { useSlugResolver } from '@/hooks/useSlugResolver';
 
 const Components = () => {
-  const { connectionId, categoryId, connectionSlug, categorySlug } = useParams();
+  const { connectionId, categoryId, connectionSlug, categorySlug, componentSlug } = useParams();
+  const navigate = useNavigate();
   const {
     connections,
     setActiveConnection
@@ -22,7 +23,7 @@ const Components = () => {
     syncConnection
   } = useConnectionSync();
   const { setSelectedCategories, availableCategories } = useWordPressStore();
-  const { getConnectionBySlug, getCategoryBySlug } = useSlugResolver();
+  const { getConnectionBySlug, getCategoryBySlug, getConnectionSlug, getCategorySlug } = useSlugResolver();
   const [previewModal, setPreviewModal] = useState({
     isOpen: false,
     url: '',
@@ -37,12 +38,39 @@ const Components = () => {
       title: title || 'Component Preview',
       component: component || null
     });
+    
+    // Atualizar URL com slug do componente
+    if (component?.slug) {
+      const connSlug = connectionSlug || getConnectionSlug(component.connection_id || connectionId);
+      const catSlug = categorySlug || getCategorySlug(component.categories?.[0]);
+      
+      if (connSlug && catSlug) {
+        navigate(`/${connSlug}/${catSlug}/${component.slug}`, { replace: true });
+      } else if (connSlug) {
+        navigate(`/${connSlug}/${component.slug}`, { replace: true });
+      }
+    }
   };
+  
   const closePreview = () => {
     setPreviewModal(prev => ({
       ...prev,
       isOpen: false
     }));
+    
+    // Voltar para URL sem o componente
+    if (componentSlug) {
+      const connSlug = connectionSlug || getConnectionSlug(connectionId);
+      const catSlug = categorySlug || getCategorySlug(parseInt(categoryId || '0'));
+      
+      if (connSlug && catSlug) {
+        navigate(`/${connSlug}/${catSlug}`, { replace: true });
+      } else if (connSlug) {
+        navigate(`/${connSlug}`, { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
+    }
   };
   const handleForceSync = () => {
     syncConnection();
