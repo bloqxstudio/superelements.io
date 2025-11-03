@@ -1,18 +1,25 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { useConnectionsStore } from '@/store/connectionsStore';
 import { Users, Briefcase } from 'lucide-react';
+
 const Layout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const {
-    user,
-    profile
-  } = useAuth();
+  const { user, profile } = useAuth();
+  const { connections, isLoading, fetchConnections } = useConnectionsStore();
+
+  // Bootstrap: carregar conexões globalmente ao montar o Layout
+  useEffect(() => {
+    if (connections.length === 0 && !isLoading) {
+      fetchConnections();
+    }
+  }, [connections.length, isLoading, fetchConnections]);
   const handleLogoClick = () => {
     navigate('/');
   };

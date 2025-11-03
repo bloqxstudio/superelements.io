@@ -19,7 +19,7 @@ interface ComponentViewDirectProps {
  */
 const ComponentViewDirect: React.FC<ComponentViewDirectProps> = ({ connectionSlug, componentSlug }) => {
   const navigate = useNavigate();
-  const { connections } = useConnectionsStore();
+  const { connections, isLoading: connectionsLoading, fetchConnections } = useConnectionsStore();
   const { components } = useWordPressStore();
   const { getConnectionBySlug, getCategorySlug } = useSlugResolver();
   const { connectionsData } = useMultiConnectionData();
@@ -31,7 +31,12 @@ const ComponentViewDirect: React.FC<ComponentViewDirectProps> = ({ connectionSlu
   useEffect(() => {
     const loadComponent = async () => {
       // Aguardar conexões carregarem
-      if (connections.length === 0) return;
+      if (connections.length === 0) {
+        if (!connectionsLoading) {
+          fetchConnections();
+        }
+        return;
+      }
       
       setIsLoading(true);
       
@@ -147,7 +152,7 @@ const ComponentViewDirect: React.FC<ComponentViewDirectProps> = ({ connectionSlu
     };
 
     loadComponent();
-  }, [connectionSlug, componentSlug, connections, components, connectionsData, getConnectionBySlug, getCategorySlug, navigate]);
+  }, [connectionSlug, componentSlug, connections, components, connectionsData, getConnectionBySlug, getCategorySlug, navigate, connectionsLoading, fetchConnections]);
 
   if (isLoading) {
     return (

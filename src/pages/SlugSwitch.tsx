@@ -14,7 +14,7 @@ import { Loader2 } from 'lucide-react';
  */
 const SlugSwitch = () => {
   const { connectionSlug, secondSlug } = useParams<{ connectionSlug: string; secondSlug: string }>();
-  const { connections } = useConnectionsStore();
+  const { connections, isLoading, fetchConnections } = useConnectionsStore();
   const { components } = useWordPressStore();
   const { getConnectionBySlug } = useSlugResolver();
   const { connectionsData } = useMultiConnectionData();
@@ -26,7 +26,12 @@ const SlugSwitch = () => {
     
     const determineSlugType = async () => {
       // Aguardar conexões carregarem
-      if (connections.length === 0) return;
+      if (connections.length === 0) {
+        if (!isLoading) {
+          fetchConnections();
+        }
+        return;
+      }
       
       // Resolver conexão
       const connection = getConnectionBySlug(connectionSlug);
@@ -94,7 +99,7 @@ const SlugSwitch = () => {
     return () => {
       cancelRef.current = true;
     };
-  }, [connectionSlug, secondSlug, connections, connectionsData, components, getConnectionBySlug, isCategory]);
+  }, [connectionSlug, secondSlug, connections, connectionsData, components, getConnectionBySlug, isLoading, fetchConnections]);
 
   // Loading state enquanto determina o tipo de slug
   if (isCategory === null) {
