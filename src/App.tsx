@@ -13,6 +13,7 @@ import Connections from "@/pages/Connections";
 import Auth from "@/pages/Auth";
 import NotFound from "@/pages/NotFound";
 import AdminUsers from "@/pages/admin/Users";
+import ComponentView from "@/pages/ComponentView";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ function App() {
               <Routes>
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/login" element={<Auth />} />
+                <Route path="/component/:connectionId/:componentId" element={<ComponentView />} />
                 <Route path="/" element={<Layout />}>
                   <Route index element={<Components />} />
                   <Route path="connections" element={

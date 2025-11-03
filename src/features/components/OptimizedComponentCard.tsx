@@ -1,6 +1,6 @@
 
 import React, { memo, useCallback } from 'react';
-import { Copy, Check, Lock } from 'lucide-react';
+import { Copy, Check, Lock, Share2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { useEnhancedCopyComponent } from './hooks/useEnhancedCopyComponent';
@@ -9,6 +9,7 @@ import OptimizedDynamicIframe from './OptimizedDynamicIframe';
 import { AddToCartButton } from '@/features/cart/components/AddToCartButton';
 import { ComponentAccessBadge } from '@/components/ComponentAccessBadge';
 import { toast } from '@/hooks/use-toast';
+import { useShareComponent } from '@/hooks/useShareComponent';
 
 interface OptimizedComponentCardProps {
   component: any;
@@ -34,6 +35,7 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { copyToClipboard, getCopyState } = useEnhancedCopyComponent();
+  const { shareComponent } = useShareComponent();
   
   // Helper function to get component title
   const getComponentTitle = useCallback((comp: any) => {
@@ -101,6 +103,11 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
       await copyToClipboard(component, baseUrl);
     }
   }, [copyToClipboard, component, baseUrl, accessInfo, navigate, profile]);
+
+  const handleShareClick = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await shareComponent(component, connectionId || '');
+  }, [shareComponent, component, connectionId]);
 
   const copyState = getCopyState(component.originalId || component.id);
   const { copying, copied } = copyState;
@@ -188,6 +195,15 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
               connectionId={connectionId}
               postType={postType}
             />
+            
+            <button
+              onClick={handleShareClick}
+              className="flex items-center gap-1 px-2 py-1 text-xs font-medium border rounded transition-all duration-200 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 hover:border-blue-300 flex-shrink-0"
+              title="Compartilhar componente"
+            >
+              <Share2 className="h-3 w-3" />
+              <span className="font-medium hidden sm:inline">COMPARTILHAR</span>
+            </button>
             
             <button 
               onClick={handleCopyClick} 
