@@ -79,21 +79,22 @@ export const useConnectionsStore = create<ConnectionsStore>()(
 
           console.log('📊 Raw connections data:', connectionsData);
 
-          // Fetch credentials ONLY for user's own connections
-          let credentialsData: any[] = [];
-          if (user) {
-            const { data, error } = await supabase
-              .from('connection_credentials')
-              .select('*');
-            
-            if (!error) {
-              credentialsData = data || [];
-            }
+          // Fetch credentials for:
+          // 1. User's own connections (if logged in)
+          // 2. Shared connections (user_type = 'all') - accessible to everyone
+          const { data: credentialsData, error: credError } = await supabase
+            .from('connection_credentials')
+            .select('*');
+          
+          if (credError) {
+            console.warn('⚠️ Error fetching credentials:', credError);
           }
+          
+          const credentials = credentialsData || [];
 
           // Create credentials map
           const credentialsMap = new Map(
-            credentialsData.map(cred => [
+            credentials.map(cred => [
               cred.connection_id,
               {
                 username: cred.username,
