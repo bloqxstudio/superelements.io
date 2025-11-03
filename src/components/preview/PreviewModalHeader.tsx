@@ -6,8 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useViewport } from '@/hooks/useViewport';
 import ViewportSwitcher from '@/components/ViewportSwitcher';
-import { ExternalLink, Smartphone, Tablet, Monitor, Eye, Copy } from 'lucide-react';
+import { ExternalLink, Smartphone, Tablet, Monitor, Eye, Copy, Link2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from '@/hooks/use-toast';
 
 interface PreviewModalHeaderProps {
   title: string;
@@ -24,6 +25,24 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
 }) => {
   const { user } = useAuth();
   const { viewport, getViewportWidth } = useViewport();
+
+  const handleCopyLink = async () => {
+    try {
+      const currentUrl = window.location.href;
+      await navigator.clipboard.writeText(currentUrl);
+      toast({
+        title: "🔗 Link copiado!",
+        description: "URL do componente copiada para área de transferência",
+        duration: 2000
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao copiar",
+        description: "Não foi possível copiar o link",
+        variant: "destructive"
+      });
+    }
+  };
 
   const getViewportIcon = () => {
     switch (viewport) {
@@ -64,6 +83,26 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
           
           {/* Botões - Stack em mobile */}
           <div className="flex flex-col sm:flex-row gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyLink}
+                    className="flex items-center gap-2 text-xs sm:text-sm"
+                  >
+                    <Link2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">LINK</span>
+                    <span className="sm:hidden">LINK</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Copiar link do componente</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>

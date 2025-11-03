@@ -6,9 +6,9 @@ import { useSlugResolver } from '@/hooks/useSlugResolver';
 import { ChevronRight, Home } from 'lucide-react';
 
 export const Breadcrumbs: React.FC = () => {
-  const { connectionId, categoryId, connectionSlug, categorySlug } = useParams();
+  const { connectionId, categoryId, connectionSlug, categorySlug, componentSlug } = useParams();
   const { connections } = useConnectionsStore();
-  const { availableCategories } = useWordPressStore();
+  const { availableCategories, components } = useWordPressStore();
   const { getConnectionBySlug, getCategoryBySlug } = useSlugResolver();
   
   // Resolver slugs para obter dados completos
@@ -23,9 +23,15 @@ export const Breadcrumbs: React.FC = () => {
   } else if (connection && categorySlug) {
     category = getCategoryBySlug(categorySlug, connection.id);
   }
+
+  // Buscar componente pelo slug
+  const component = componentSlug ? components.find(c => c.slug === componentSlug) : null;
+  const componentTitle = typeof component?.title === 'object' 
+    ? component.title.rendered 
+    : (component?.title || componentSlug || '');
   
   // Não mostrar breadcrumbs na página inicial
-  if (!connectionId && !categoryId && !connectionSlug && !categorySlug) {
+  if (!connectionId && !categoryId && !connectionSlug && !categorySlug && !componentSlug) {
     return null;
   }
 
@@ -54,8 +60,29 @@ export const Breadcrumbs: React.FC = () => {
       {category && (
         <>
           <ChevronRight className="h-4 w-4 flex-shrink-0" />
+          {componentSlug ? (
+            <Link 
+              to={connection.slug && category.slug 
+                ? `/${connection.slug}/${category.slug}` 
+                : `/connection/${connection.id}/category/${category.id}`
+              }
+              className="hover:text-foreground transition-colors truncate"
+            >
+              {category.name}
+            </Link>
+          ) : (
+            <span className="text-foreground font-medium truncate">
+              {category.name}
+            </span>
+          )}
+        </>
+      )}
+
+      {componentSlug && (
+        <>
+          <ChevronRight className="h-4 w-4 flex-shrink-0" />
           <span className="text-foreground font-medium truncate">
-            {category.name}
+            {componentTitle}
           </span>
         </>
       )}
