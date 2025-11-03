@@ -28,7 +28,10 @@ export const CategorySidebar: React.FC = () => {
     hasActiveFilters
   } = useMultiConnectionData();
 
-  // Auto-expand connection when accessing via direct link
+  // Track which connections have been auto-expanded to avoid forcing them open
+  const autoExpandedRef = React.useRef<Set<string>>(new Set());
+
+  // Auto-expand connection when accessing via direct link (only once per connection)
   React.useEffect(() => {
     // Determine which connection should be expanded based on URL
     let targetConnectionId: string | null = null;
@@ -43,13 +46,19 @@ export const CategorySidebar: React.FC = () => {
       targetConnectionId = urlConnectionId;
     }
 
-    // If we have a target connection and it's not expanded, expand it
-    if (targetConnectionId && !expandedConnections.has(targetConnectionId)) {
+    // Only auto-expand if:
+    // 1. We have a target connection
+    // 2. It hasn't been auto-expanded before
+    // 3. It's not currently expanded
+    if (targetConnectionId && 
+        !autoExpandedRef.current.has(targetConnectionId) && 
+        !expandedConnections.has(targetConnectionId)) {
       // Wait for connection data to be loaded before expanding
       const connection = connectionsData.find(cd => cd.connectionId === targetConnectionId);
       if (connection && (connection.isLoaded || connection.isLoading)) {
         console.log('🔓 Auto-expanding connection from URL:', connection.connectionName);
         toggleConnectionExpansion(targetConnectionId);
+        autoExpandedRef.current.add(targetConnectionId);
       }
     }
   }, [connectionSlug, urlConnectionId, connectionsData, expandedConnections, toggleConnectionExpansion, getConnectionById]);
