@@ -123,11 +123,13 @@ export const CategorySidebar: React.FC = () => {
                             : 'text-gray-700 hover:bg-gray-100'
                         }`}
                         onClick={() => {
-                          if (urlConnectionId === connection.connectionId) {
-                            toggleConnectionExpansion(connection.connectionId);
-                          } else {
+                          // Always toggle expansion on click
+                          toggleConnectionExpansion(connection.connectionId);
+                          
+                          // Navigate only if not already on this connection
+                          if (urlConnectionId !== connection.connectionId && 
+                              !(connectionSlug && getConnectionById(connection.connectionId)?.slug === connectionSlug)) {
                             handleConnectionClick(connection.connectionId);
-                            toggleConnectionExpansion(connection.connectionId);
                           }
                         }}
                       >
