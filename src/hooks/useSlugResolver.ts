@@ -13,8 +13,20 @@ export const useSlugResolver = () => {
   }, [connections]);
 
   // Resolver categoria por slug
-  const getCategoryBySlug = useCallback((slug: string | undefined, connectionId?: string) => {
+  const getCategoryBySlug = useCallback((
+    slug: string | undefined, 
+    connectionId?: string,
+    categoriesData?: Array<{ id: number; name: string; slug: string; count: number }>
+  ) => {
     if (!slug) return null;
+    
+    // Priorizar categorias passadas diretamente (de useMultiConnectionData)
+    if (categoriesData) {
+      const cat = categoriesData.find(c => c.slug === slug);
+      if (cat) return cat;
+    }
+    
+    // Fallback para availableCategories
     return availableCategories.find(cat => cat.slug === slug) || null;
   }, [availableCategories]);
 

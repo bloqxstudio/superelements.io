@@ -11,6 +11,7 @@ import { CartDrawer } from '@/features/cart/components/CartDrawer';
 import { useWordPressStore } from '@/store/wordpressStore';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { useSlugResolver } from '@/hooks/useSlugResolver';
+import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 
 const Components = () => {
   const { connectionId, categoryId, connectionSlug, categorySlug, componentSlug } = useParams();
@@ -24,6 +25,7 @@ const Components = () => {
   } = useConnectionSync();
   const { setSelectedCategories, availableCategories } = useWordPressStore();
   const { getConnectionBySlug, getCategoryBySlug, getConnectionSlug, getCategorySlug } = useSlugResolver();
+  const { connectionsData } = useMultiConnectionData();
   const [previewModal, setPreviewModal] = useState({
     isOpen: false,
     url: '',
@@ -78,6 +80,14 @@ const Components = () => {
 
   // Sincronizar URL params com estado
   useEffect(() => {
+    console.log('🔄 Syncing URL params with state:', {
+      connectionId,
+      categoryId,
+      connectionSlug,
+      categorySlug,
+      connectionsDataCount: connectionsData.length
+    });
+
     // Priorizar slugs sobre IDs
     let resolvedConnectionId = connectionId;
     let resolvedCategoryId = categoryId;
@@ -86,12 +96,38 @@ const Components = () => {
     if (connectionSlug && !connectionId) {
       const connection = getConnectionBySlug(connectionSlug);
       resolvedConnectionId = connection?.id;
+      console.log('🔍 Resolved connection slug:', {
+        connectionSlug,
+        resolvedConnectionId,
+        connection: connection?.name
+      });
     }
 
-    // Se tem slug de categoria, resolver para ID
+    // Se tem slug de categoria, resolver para ID usando connectionsData
     if (categorySlug && !categoryId && resolvedConnectionId) {
-      const category = getCategoryBySlug(categorySlug, resolvedConnectionId);
-      resolvedCategoryId = category?.id.toString();
+      // Buscar nas categorias carregadas do useMultiConnectionData
+      const connectionData = connectionsData.find(cd => cd.connectionId === resolvedConnectionId);
+      
+      if (connectionData && connectionData.categories.length > 0) {
+        // Usar getCategoryBySlug com o array de categorias correto
+        const category = getCategoryBySlug(categorySlug, resolvedConnectionId, connectionData.categories);
+        resolvedCategoryId = category?.id.toString();
+        
+        console.log('🔍 Resolved category slug:', {
+          categorySlug,
+          connectionId: resolvedConnectionId,
+          foundCategory: category,
+          resolvedCategoryId,
+          availableCategories: connectionData.categories.map(c => ({ id: c.id, slug: c.slug, name: c.name }))
+        });
+      } else {
+        console.warn('⚠️ Connection data not loaded yet or has no categories:', {
+          connectionId: resolvedConnectionId,
+          connectionData,
+          isLoading: connectionData?.isLoading,
+          isLoaded: connectionData?.isLoaded
+        });
+      }
     }
 
     // Aplicar filtros
@@ -99,16 +135,23 @@ const Components = () => {
       setActiveConnection(resolvedConnectionId);
       
       if (resolvedCategoryId) {
-        setSelectedCategories([parseInt(resolvedCategoryId, 10)]);
+        const categoryIdNum = parseInt(resolvedCategoryId, 10);
+        console.log('✅ Applying category filter:', {
+          categoryIdNum,
+          resolvedCategoryId
+        });
+        setSelectedCategories([categoryIdNum]);
       } else {
+        console.log('📋 No category selected, showing all from connection');
         setSelectedCategories([]);
       }
     } else {
       // Limpar filtros se estiver na home
+      console.log('🏠 Clearing filters - showing all components');
       setActiveConnection(null);
       setSelectedCategories([]);
     }
-  }, [connectionId, categoryId, connectionSlug, categorySlug]);
+  }, [connectionId, categoryId, connectionSlug, categorySlug, connectionsData, getConnectionBySlug, getCategoryBySlug, setActiveConnection, setSelectedCategories]);
 
   // Fixed layout with proper sidebar integration
   return <div className="h-screen flex overflow-hidden">
