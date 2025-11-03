@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import CentralizedComponentLibrary from '@/components/CentralizedComponentLibrary';
 import { CategorySidebar } from '@/features/components/CategorySidebar';
 import PreviewModal from '@/components/PreviewModal';
@@ -7,13 +8,19 @@ import { useConnectionsStore } from '@/store/connectionsStore';
 import { useConnectionSync } from '@/hooks/useConnectionSync';
 import { CartButton } from '@/features/cart/components/CartButton';
 import { CartDrawer } from '@/features/cart/components/CartDrawer';
+import { useWordPressStore } from '@/store/wordpressStore';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
+
 const Components = () => {
+  const { connectionId, categoryId } = useParams();
   const {
-    connections
+    connections,
+    setActiveConnection
   } = useConnectionsStore();
   const {
     syncConnection
   } = useConnectionSync();
+  const { setSelectedCategories } = useWordPressStore();
   const [previewModal, setPreviewModal] = useState({
     isOpen: false,
     url: '',
@@ -38,6 +45,23 @@ const Components = () => {
   const handleForceSync = () => {
     syncConnection();
   };
+
+  // Sincronizar URL params com estado
+  useEffect(() => {
+    if (connectionId) {
+      setActiveConnection(connectionId);
+      
+      if (categoryId) {
+        setSelectedCategories([parseInt(categoryId, 10)]);
+      } else {
+        setSelectedCategories([]);
+      }
+    } else {
+      // Limpar filtros se estiver na home
+      setActiveConnection(null);
+      setSelectedCategories([]);
+    }
+  }, [connectionId, categoryId, setActiveConnection, setSelectedCategories]);
 
   // Fixed layout with proper sidebar integration
   return <div className="h-screen flex overflow-hidden">
@@ -75,6 +99,9 @@ const Components = () => {
             </div>
           </div>
         </div>
+
+        {/* Breadcrumbs */}
+        <Breadcrumbs />
 
         {/* Component Library */}
         <div className="flex-1 px-4 lg:px-6 pb-20 min-h-0">

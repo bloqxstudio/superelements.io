@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 export const CategorySidebar: React.FC = () => {
   const navigate = useNavigate();
+  const { connectionId: urlConnectionId, categoryId: urlCategoryId } = useParams();
   const { getConnectionById } = useConnectionsStore();
   const {
     connectionsData,
@@ -26,12 +27,20 @@ export const CategorySidebar: React.FC = () => {
   } = useMultiConnectionData();
 
   const handleAllComponentsClick = () => {
+    navigate('/');
     clearAllFilters();
   };
 
-  // Check if we're in the initial "All Components" state
-  // No active connection AND no selected categories means we're showing all components
-  const isInAllComponentsState = !activeConnectionId && selectedCategories.length === 0;
+  const handleConnectionClick = (connectionId: string) => {
+    navigate(`/connection/${connectionId}`);
+  };
+
+  const handleCategoryClick = (connectionId: string, categoryId: number) => {
+    navigate(`/connection/${connectionId}/category/${categoryId}`);
+  };
+
+  // Check if we're in the initial "All Components" state based on URL
+  const isInAllComponentsState = !urlConnectionId && !urlCategoryId;
 
   return (
     <div className="w-64 fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 shadow-sm hidden md:block">
@@ -73,15 +82,15 @@ export const CategorySidebar: React.FC = () => {
                         variant="ghost" 
                         size="sm" 
                         className={`flex-1 justify-between text-xs font-medium ${
-                          activeConnectionId === connection.connectionId 
+                          urlConnectionId === connection.connectionId 
                             ? 'bg-gray-200 text-gray-900' 
                             : 'text-gray-700 hover:bg-gray-100'
                         }`}
                         onClick={() => {
-                          if (activeConnectionId === connection.connectionId) {
+                          if (urlConnectionId === connection.connectionId) {
                             toggleConnectionExpansion(connection.connectionId);
                           } else {
-                            selectConnection(connection.connectionId);
+                            handleConnectionClick(connection.connectionId);
                             toggleConnectionExpansion(connection.connectionId);
                           }
                         }}
@@ -124,11 +133,11 @@ export const CategorySidebar: React.FC = () => {
                             variant="ghost" 
                             size="sm" 
                             className={`w-full justify-start text-xs ${
-                              isConnectionAllSelected(connection.connectionId) 
+                              urlConnectionId === connection.connectionId && !urlCategoryId
                                 ? 'bg-gray-200 text-gray-900' 
                                 : 'text-gray-600 hover:bg-gray-50'
                             }`}
-                            onClick={() => selectAllFromConnection(connection.connectionId)}
+                            onClick={() => handleConnectionClick(connection.connectionId)}
                           >
                             <span className="font-medium">Todos</span>
                           </Button>
@@ -147,11 +156,11 @@ export const CategorySidebar: React.FC = () => {
                             variant="ghost" 
                             size="sm" 
                             className={`w-full justify-between text-xs ${
-                              isCategorySelected(category.id) 
+                              urlCategoryId === String(category.id)
                                 ? 'bg-gray-200 text-gray-900' 
                                 : 'text-gray-600 hover:bg-gray-50'
                             }`}
-                            onClick={() => selectCategory(connection.connectionId, category.id)}
+                            onClick={() => handleCategoryClick(connection.connectionId, category.id)}
                           >
                             <span className="truncate flex-1 text-left">{category.name}</span>
                             <span className="text-xs text-muted-foreground ml-2">({category.count})</span>

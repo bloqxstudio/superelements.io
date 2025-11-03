@@ -127,10 +127,22 @@ const ComponentView = () => {
 
   if (!component) return null;
 
+  const handleClose = () => {
+    // Voltar para a categoria ou conexão de origem
+    const categoryId = component.categories?.[0];
+    if (categoryId) {
+      navigate(`/connection/${connectionId}/category/${categoryId}`);
+    } else if (connectionId) {
+      navigate(`/connection/${connectionId}`);
+    } else {
+      navigate('/');
+    }
+  };
+
   return (
     <PreviewModal
       isOpen={true}
-      onClose={() => navigate('/')}
+      onClose={handleClose}
       previewUrl={component.link}
       title={component.title?.rendered || 'Componente'}
       component={component}

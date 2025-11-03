@@ -32,6 +32,8 @@ function App() {
                 <Route path="/component/:connectionId/:componentId" element={<ComponentView />} />
                 <Route path="/" element={<Layout />}>
                   <Route index element={<Components />} />
+                  <Route path="connection/:connectionId" element={<Components />} />
+                  <Route path="connection/:connectionId/category/:categoryId" element={<Components />} />
                   <Route path="connections" element={
                     <ProtectedRoute requireRole={['admin']}>
                       <Connections />
