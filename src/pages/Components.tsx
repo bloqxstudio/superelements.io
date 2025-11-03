@@ -12,6 +12,7 @@ import { useWordPressStore } from '@/store/wordpressStore';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { useSlugResolver } from '@/hooks/useSlugResolver';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
+import { PostTypeCategoryService } from '@/services/postTypeCategoryService';
 
 const Components = () => {
   const { connectionId, categoryId, connectionSlug, categorySlug, componentSlug } = useParams();
@@ -192,10 +193,55 @@ const Components = () => {
       });
     }
 
+    // Aplicar conexão IMEDIATAMENTE após resolver para disparar carregamento de categorias
+    if (resolvedConnectionId && activeConnectionId !== resolvedConnectionId) {
+      console.log('⚙️ Setting active connection early:', resolvedConnectionId);
+      setActiveConnection(resolvedConnectionId);
+    }
+
     // Resolver categoria por slug (apenas quando categorias estiverem carregadas)
     if (categorySlug && !categoryId && resolvedConnectionId) {
       const connectionData = connectionsData.find(cd => cd.connectionId === resolvedConnectionId);
-      if (!connectionData || !connectionData.isLoaded) {
+      
+      // Se a conexão não está nas active connections, usar fallback via API
+      if (!connectionData) {
+        const connection = connections.find(c => c.id === resolvedConnectionId);
+        if (connection) {
+          console.log('⚙️ Using API fallback to resolve category for non-active connection');
+          
+          const resolveCategoryViaApi = async () => {
+            try {
+              const config = {
+                baseUrl: connection.base_url,
+                postType: connection.post_type,
+                jsonField: connection.json_field,
+                previewField: connection.preview_field,
+                username: connection.credentials?.username || '',
+                applicationPassword: connection.credentials?.application_password || ''
+              };
+              
+              const cats = await PostTypeCategoryService.fetchCategoriesWithComponents(config);
+              const cat = cats.find(c => c.slug === categorySlug);
+              
+              if (cat) {
+                console.log('✅ Fallback resolved category:', cat);
+                if (!(selectedCategories.length === 1 && selectedCategories[0] === cat.id)) {
+                  setSelectedCategories([cat.id]);
+                }
+              } else {
+                console.log('❌ Fallback could not resolve category:', categorySlug);
+              }
+            } catch (e) {
+              console.error('❌ Fallback error resolving categories:', e);
+            }
+          };
+          
+          resolveCategoryViaApi();
+        }
+        return;
+      }
+      
+      if (!connectionData.isLoaded) {
         console.log('⏳ Waiting categories to load before applying category filter', {
           connectionId: resolvedConnectionId,
           hasData: !!connectionData,
@@ -274,11 +320,6 @@ const Components = () => {
       if (selectedCategories.length > 0) setSelectedCategories([]);
       console.log('🏠 Home detected - ensuring no active connection and no category filters');
       return;
-    }
-
-    // Aplicar conexão somente se mudou
-    if (resolvedConnectionId && activeConnectionId !== resolvedConnectionId) {
-      setActiveConnection(resolvedConnectionId);
     }
 
     // Aplicar categorias somente quando necessário
