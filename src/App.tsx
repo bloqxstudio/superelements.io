@@ -13,6 +13,8 @@ import Connections from "@/pages/Connections";
 import Auth from "@/pages/Auth";
 import NotFound from "@/pages/NotFound";
 import AdminUsers from "@/pages/admin/Users";
+import AdminResources from "@/pages/admin/Resources";
+import Resources from "@/pages/Resources";
 import ComponentView from "@/pages/ComponentView";
 
 const queryClient = new QueryClient();
@@ -48,6 +50,18 @@ function App() {
                   <Route path="admin/users" element={
                     <ProtectedRoute requireRole={['admin']}>
                       <AdminUsers />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="admin/resources" element={
+                    <ProtectedRoute requireRole={['admin']}>
+                      <AdminResources />
+                    </ProtectedRoute>
+                  } />
+                  
+                  {/* Resources page for PRO and admin users */}
+                  <Route path="resources" element={
+                    <ProtectedRoute requireRole={['pro', 'admin']}>
+                      <Resources />
                     </ProtectedRoute>
                   } />
                   

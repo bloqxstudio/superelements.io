@@ -6,7 +6,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useConnectionsStore } from '@/store/connectionsStore';
-import { Users, Briefcase } from 'lucide-react';
+import { Users, Briefcase, Download } from 'lucide-react';
 
 const Layout: React.FC = () => {
   const location = useLocation();
@@ -46,6 +46,17 @@ const Layout: React.FC = () => {
             {/* Navigation */}
             <div className="flex items-center gap-4">
               {user ? <>
+                  {/* Show "Recursos" button for PRO and admin users */}
+                  {profile?.role && ['pro', 'admin'].includes(profile.role) && (
+                    <Button 
+                      variant={location.pathname === '/resources' ? 'default' : 'ghost'}
+                      onClick={() => navigate('/resources')}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Recursos
+                    </Button>
+                  )}
+                  
                   {/* Show "Contratar Especialista" button for FREE and PRO users */}
                   {profile?.role && ['free', 'pro'].includes(profile.role) && (
                     <Button 
@@ -65,6 +76,10 @@ const Layout: React.FC = () => {
                     <Button variant={location.pathname === '/admin/users' ? 'default' : 'ghost'} onClick={() => navigate('/admin/users')}>
                       <Users className="h-4 w-4 mr-2" />
                       Usuários
+                    </Button>
+                    <Button variant={location.pathname === '/admin/resources' ? 'default' : 'ghost'} onClick={() => navigate('/admin/resources')}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Gerenciar Recursos
                     </Button>
                   </>}
                   <UserAvatar />
