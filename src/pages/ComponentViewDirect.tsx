@@ -1,18 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useWordPressStore } from '@/store/wordpressStore';
+import { useSlugResolver } from '@/hooks/useSlugResolver';
 import PreviewModal from '@/components/PreviewModal';
 import { toast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import { useSlugResolver } from '@/hooks/useSlugResolver';
 
-const ComponentView = () => {
-  const { connectionId, componentId, connectionSlug, categorySlug, componentSlug } = useParams();
+interface ComponentViewDirectProps {
+  connectionSlug: string;
+  componentSlug: string;
+}
+
+/**
+ * ComponentViewDirect: Abre componente diretamente via modal
+ * Usado quando a URL é /:connectionSlug/:componentSlug (2 segmentos onde segundo não é categoria)
+ */
+const ComponentViewDirect: React.FC<ComponentViewDirectProps> = ({ connectionSlug, componentSlug }) => {
   const navigate = useNavigate();
   const { connections } = useConnectionsStore();
   const { components } = useWordPressStore();
-  const { getConnectionBySlug, getCategoryBySlug, getConnectionSlug, getCategorySlug } = useSlugResolver();
+  const { getConnectionBySlug, getCategorySlug } = useSlugResolver();
   
   const [isLoading, setIsLoading] = useState(true);
   const [component, setComponent] = useState<any>(null);
@@ -20,27 +28,14 @@ const ComponentView = () => {
 
   useEffect(() => {
     const loadComponent = async () => {
-      // Aguardar conexões carregarem antes de resolver (evita redirect prematuro)
-      if (connectionSlug && connections.length === 0) {
-        return;
-      }
+      // Aguardar conexões carregarem
+      if (connections.length === 0) return;
       
       setIsLoading(true);
       
-      // Resolver slugs para IDs em paralelo com busca em cache
-      let resolvedConnectionId = connectionId;
+      // Resolver conexão
+      const foundConnection = getConnectionBySlug(connectionSlug);
       
-      if (connectionSlug && !connectionId) {
-        const conn = getConnectionBySlug(connectionSlug);
-        resolvedConnectionId = conn?.id;
-      }
-
-      // 1. Buscar conexão e componente em cache em paralelo
-      const foundConnection = connections.find(c => c.id === resolvedConnectionId);
-      let foundComponent = components.find((c: any) => 
-        (componentSlug ? c.slug === componentSlug : String(c.id) === componentId) && 
-        c.connection_id === resolvedConnectionId
-      );
       if (!foundConnection) {
         toast({
           title: "Conexão não encontrada",
@@ -53,12 +48,15 @@ const ComponentView = () => {
       
       setConnection(foundConnection);
 
-      // 2. Se não está em cache, buscar do WordPress
+      // Buscar componente em cache primeiro
+      let foundComponent = components.find((c: any) => 
+        c.slug === componentSlug && c.connection_id === foundConnection.id
+      );
+
+      // Se não está em cache, buscar do WordPress
       if (!foundComponent && foundConnection.credentials) {
         try {
-          const endpoint = componentSlug 
-            ? `${foundConnection.base_url}/wp-json/wp/v2/${foundConnection.post_type}?slug=${componentSlug}`
-            : `${foundConnection.base_url}/wp-json/wp/v2/${foundConnection.post_type}/${componentId}`;
+          const endpoint = `${foundConnection.base_url}/wp-json/wp/v2/${foundConnection.post_type}?slug=${componentSlug}`;
           
           const response = await fetch(endpoint, {
             headers: {
@@ -75,14 +73,14 @@ const ComponentView = () => {
             if (componentData) {
               foundComponent = {
                 ...componentData,
-                connection_id: resolvedConnectionId,
+                connection_id: foundConnection.id,
                 connection_name: foundConnection.name,
                 connection_access_level: foundConnection.accessLevel
               };
             }
           }
         } catch (error) {
-          console.error('Erro ao buscar componente:', error);
+          console.error('❌ Erro ao buscar componente:', error);
         }
       }
 
@@ -103,7 +101,6 @@ const ComponentView = () => {
       if (foundComponent && foundConnection) {
         document.title = `${foundComponent.title?.rendered || 'Componente'} - ${foundConnection.name}`;
         
-        // Adicionar Open Graph meta tags
         const metaTags = [
           { property: 'og:title', content: foundComponent.title?.rendered || 'Componente' },
           { property: 'og:description', content: `Componente de ${foundConnection.name}` },
@@ -129,10 +126,8 @@ const ComponentView = () => {
       }
     };
 
-    if ((connectionId || connectionSlug) && (componentId || componentSlug)) {
-      loadComponent();
-    }
-  }, [connectionId, componentId, connectionSlug, componentSlug, connections, components, getConnectionBySlug, navigate]);
+    loadComponent();
+  }, [connectionSlug, componentSlug, connections, components, getConnectionBySlug, navigate]);
 
   if (isLoading) {
     return (
@@ -150,17 +145,12 @@ const ComponentView = () => {
   const handleClose = () => {
     // Voltar para a categoria ou conexão de origem
     const categoryId = component.categories?.[0];
-    const connSlug = getConnectionSlug(connection?.id);
     const catSlug = categoryId ? getCategorySlug(categoryId) : null;
     
-    if (categoryId && connSlug && catSlug) {
-      navigate(`/${connSlug}/${catSlug}`);
-    } else if (connSlug) {
-      navigate(`/${connSlug}`);
-    } else if (connectionId) {
-      navigate(`/connection/${connectionId}`);
+    if (catSlug) {
+      navigate(`/${connectionSlug}/${catSlug}`);
     } else {
-      navigate('/');
+      navigate(`/${connectionSlug}`);
     }
   };
 
@@ -175,4 +165,4 @@ const ComponentView = () => {
   );
 };
 
-export default ComponentView;
+export default ComponentViewDirect;

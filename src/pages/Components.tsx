@@ -58,9 +58,9 @@ const Components = () => {
       }
       
       if (connSlug && catSlug) {
-        navigate(`/${connSlug}/${catSlug}/${component.slug}`, { replace: true });
+        navigate(`/${connSlug}/${catSlug}/${component.slug}`);
       } else if (connSlug) {
-        navigate(`/${connSlug}/${component.slug}`, { replace: true });
+        navigate(`/${connSlug}/${component.slug}`);
       }
     }
   };
