@@ -10,9 +10,10 @@ import { CartButton } from '@/features/cart/components/CartButton';
 import { CartDrawer } from '@/features/cart/components/CartDrawer';
 import { useWordPressStore } from '@/store/wordpressStore';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { useSlugResolver } from '@/hooks/useSlugResolver';
 
 const Components = () => {
-  const { connectionId, categoryId } = useParams();
+  const { connectionId, categoryId, connectionSlug, categorySlug } = useParams();
   const {
     connections,
     setActiveConnection
@@ -20,7 +21,8 @@ const Components = () => {
   const {
     syncConnection
   } = useConnectionSync();
-  const { setSelectedCategories } = useWordPressStore();
+  const { setSelectedCategories, availableCategories } = useWordPressStore();
+  const { getConnectionBySlug, getCategoryBySlug } = useSlugResolver();
   const [previewModal, setPreviewModal] = useState({
     isOpen: false,
     url: '',
@@ -48,11 +50,28 @@ const Components = () => {
 
   // Sincronizar URL params com estado
   useEffect(() => {
-    if (connectionId) {
-      setActiveConnection(connectionId);
+    // Priorizar slugs sobre IDs
+    let resolvedConnectionId = connectionId;
+    let resolvedCategoryId = categoryId;
+
+    // Se tem slug de conexão, resolver para ID
+    if (connectionSlug && !connectionId) {
+      const connection = getConnectionBySlug(connectionSlug);
+      resolvedConnectionId = connection?.id;
+    }
+
+    // Se tem slug de categoria, resolver para ID
+    if (categorySlug && !categoryId && resolvedConnectionId) {
+      const category = getCategoryBySlug(categorySlug, resolvedConnectionId);
+      resolvedCategoryId = category?.id.toString();
+    }
+
+    // Aplicar filtros
+    if (resolvedConnectionId) {
+      setActiveConnection(resolvedConnectionId);
       
-      if (categoryId) {
-        setSelectedCategories([parseInt(categoryId, 10)]);
+      if (resolvedCategoryId) {
+        setSelectedCategories([parseInt(resolvedCategoryId, 10)]);
       } else {
         setSelectedCategories([]);
       }
@@ -61,7 +80,7 @@ const Components = () => {
       setActiveConnection(null);
       setSelectedCategories([]);
     }
-  }, [connectionId, categoryId, setActiveConnection, setSelectedCategories]);
+  }, [connectionId, categoryId, connectionSlug, categorySlug, setActiveConnection, setSelectedCategories, getConnectionBySlug, getCategoryBySlug]);
 
   // Fixed layout with proper sidebar integration
   return <div className="h-screen flex overflow-hidden">

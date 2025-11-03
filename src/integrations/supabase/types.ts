@@ -71,6 +71,7 @@ export type Database = {
           name: string
           post_type: string
           preview_field: string
+          slug: string | null
           status: string
           updated_at: string
           user_type: string
@@ -89,6 +90,7 @@ export type Database = {
           name: string
           post_type?: string
           preview_field?: string
+          slug?: string | null
           status?: string
           updated_at?: string
           user_type?: string
@@ -107,6 +109,7 @@ export type Database = {
           name?: string
           post_type?: string
           preview_field?: string
+          slug?: string | null
           status?: string
           updated_at?: string
           user_type?: string

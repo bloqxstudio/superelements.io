@@ -29,11 +29,17 @@ function App() {
               <Routes>
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/login" element={<Auth />} />
+                
+                {/* Legacy routes with IDs (for backward compatibility) */}
                 <Route path="/component/:connectionId/:componentId" element={<ComponentView />} />
+                <Route path="/connection/:connectionId" element={<Components />} />
+                <Route path="/connection/:connectionId/category/:categoryId" element={<Components />} />
+                
+                {/* Main layout */}
                 <Route path="/" element={<Layout />}>
                   <Route index element={<Components />} />
-                  <Route path="connection/:connectionId" element={<Components />} />
-                  <Route path="connection/:connectionId/category/:categoryId" element={<Components />} />
+                  
+                  {/* Admin routes */}
                   <Route path="connections" element={
                     <ProtectedRoute requireRole={['admin']}>
                       <Connections />
@@ -44,7 +50,13 @@ function App() {
                       <AdminUsers />
                     </ProtectedRoute>
                   } />
+                  
+                  {/* Slug-based routes (must be last to avoid conflicts) */}
+                  <Route path=":connectionSlug" element={<Components />} />
+                  <Route path=":connectionSlug/:categorySlug" element={<Components />} />
+                  <Route path=":connectionSlug/:categorySlug/:componentSlug" element={<ComponentView />} />
                 </Route>
+                
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </ViewportProvider>

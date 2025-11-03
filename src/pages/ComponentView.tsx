@@ -5,12 +5,14 @@ import { useWordPressStore } from '@/store/wordpressStore';
 import PreviewModal from '@/components/PreviewModal';
 import { toast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { useSlugResolver } from '@/hooks/useSlugResolver';
 
 const ComponentView = () => {
-  const { connectionId, componentId } = useParams();
+  const { connectionId, componentId, connectionSlug, categorySlug, componentSlug } = useParams();
   const navigate = useNavigate();
   const { connections } = useConnectionsStore();
   const { components } = useWordPressStore();
+  const { getConnectionBySlug, getCategoryBySlug, getConnectionSlug, getCategorySlug } = useSlugResolver();
   
   const [isLoading, setIsLoading] = useState(true);
   const [component, setComponent] = useState<any>(null);
@@ -20,8 +22,17 @@ const ComponentView = () => {
     const loadComponent = async () => {
       setIsLoading(true);
       
+      // Resolver slugs para IDs
+      let resolvedConnectionId = connectionId;
+      let resolvedComponentId = componentId;
+
+      if (connectionSlug && !connectionId) {
+        const conn = getConnectionBySlug(connectionSlug);
+        resolvedConnectionId = conn?.id;
+      }
+
       // 1. Buscar conexão
-      const foundConnection = connections.find(c => c.id === connectionId);
+      const foundConnection = connections.find(c => c.id === resolvedConnectionId);
       if (!foundConnection) {
         toast({
           title: "Conexão não encontrada",
@@ -35,31 +46,38 @@ const ComponentView = () => {
 
       // 2. Buscar componente em cache
       let foundComponent = components.find((c: any) => 
-        String(c.id) === componentId && c.connection_id === connectionId
+        (componentSlug ? c.slug === componentSlug : String(c.id) === resolvedComponentId) && 
+        c.connection_id === resolvedConnectionId
       );
 
       // 3. Se não está em cache, buscar do WordPress
       if (!foundComponent && foundConnection.credentials) {
         try {
-          const response = await fetch(
-            `${foundConnection.base_url}/wp-json/wp/v2/${foundConnection.post_type}/${componentId}`,
-            {
-              headers: {
-                'Authorization': `Basic ${btoa(
-                  `${foundConnection.credentials.username}:${foundConnection.credentials.application_password}`
-                )}`
-              }
+          // Se temos slug, buscar por slug, senão por ID
+          const endpoint = componentSlug 
+            ? `${foundConnection.base_url}/wp-json/wp/v2/${foundConnection.post_type}?slug=${componentSlug}`
+            : `${foundConnection.base_url}/wp-json/wp/v2/${foundConnection.post_type}/${resolvedComponentId}`;
+          
+          const response = await fetch(endpoint, {
+            headers: {
+              'Authorization': `Basic ${btoa(
+                `${foundConnection.credentials.username}:${foundConnection.credentials.application_password}`
+              )}`
             }
-          );
+          });
           
           if (response.ok) {
             const data = await response.json();
-            foundComponent = {
-              ...data,
-              connection_id: connectionId,
-              connection_name: foundConnection.name,
-              connection_access_level: foundConnection.accessLevel
-            };
+            const componentData = Array.isArray(data) ? data[0] : data;
+            
+            if (componentData) {
+              foundComponent = {
+                ...componentData,
+                connection_id: resolvedConnectionId,
+                connection_name: foundConnection.name,
+                connection_access_level: foundConnection.accessLevel
+              };
+            }
           }
         } catch (error) {
           console.error('Erro ao buscar componente:', error);
@@ -109,10 +127,10 @@ const ComponentView = () => {
       }
     };
 
-    if (connectionId && componentId) {
+    if ((connectionId || connectionSlug) && (componentId || componentSlug)) {
       loadComponent();
     }
-  }, [connectionId, componentId, connections, components, navigate]);
+  }, [connectionId, componentId, connectionSlug, componentSlug, connections, components, navigate, getConnectionBySlug]);
 
   if (isLoading) {
     return (
@@ -130,8 +148,13 @@ const ComponentView = () => {
   const handleClose = () => {
     // Voltar para a categoria ou conexão de origem
     const categoryId = component.categories?.[0];
-    if (categoryId) {
-      navigate(`/connection/${connectionId}/category/${categoryId}`);
+    const connSlug = getConnectionSlug(connection?.id);
+    const catSlug = categoryId ? getCategorySlug(categoryId) : null;
+    
+    if (categoryId && connSlug && catSlug) {
+      navigate(`/${connSlug}/${catSlug}`);
+    } else if (connSlug) {
+      navigate(`/${connSlug}`);
     } else if (connectionId) {
       navigate(`/connection/${connectionId}`);
     } else {

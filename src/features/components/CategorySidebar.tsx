@@ -6,11 +6,13 @@ import { useConnectionsStore } from '@/store/connectionsStore';
 import { Button } from '@/components/ui/button';
 import { Folder, FolderOpen, Globe } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useSlugResolver } from '@/hooks/useSlugResolver';
 
 export const CategorySidebar: React.FC = () => {
   const navigate = useNavigate();
-  const { connectionId: urlConnectionId, categoryId: urlCategoryId } = useParams();
+  const { connectionId: urlConnectionId, categoryId: urlCategoryId, connectionSlug, categorySlug } = useParams();
   const { getConnectionById } = useConnectionsStore();
+  const { getConnectionSlug, getCategorySlug } = useSlugResolver();
   const {
     connectionsData,
     expandedConnections,
@@ -32,15 +34,23 @@ export const CategorySidebar: React.FC = () => {
   };
 
   const handleConnectionClick = (connectionId: string) => {
-    navigate(`/connection/${connectionId}`);
+    const slug = getConnectionSlug(connectionId);
+    navigate(slug ? `/${slug}` : `/connection/${connectionId}`);
   };
 
   const handleCategoryClick = (connectionId: string, categoryId: number) => {
-    navigate(`/connection/${connectionId}/category/${categoryId}`);
+    const connSlug = getConnectionSlug(connectionId);
+    const catSlug = getCategorySlug(categoryId);
+    
+    if (connSlug && catSlug) {
+      navigate(`/${connSlug}/${catSlug}`);
+    } else {
+      navigate(`/connection/${connectionId}/category/${categoryId}`);
+    }
   };
 
   // Check if we're in the initial "All Components" state based on URL
-  const isInAllComponentsState = !urlConnectionId && !urlCategoryId;
+  const isInAllComponentsState = !urlConnectionId && !urlCategoryId && !connectionSlug && !categorySlug;
 
   return (
     <div className="w-64 fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 shadow-sm hidden md:block">
@@ -82,7 +92,8 @@ export const CategorySidebar: React.FC = () => {
                         variant="ghost" 
                         size="sm" 
                         className={`flex-1 justify-between text-xs font-medium ${
-                          urlConnectionId === connection.connectionId 
+                          (urlConnectionId === connection.connectionId || 
+                           (connectionSlug && getConnectionById(connection.connectionId)?.slug === connectionSlug))
                             ? 'bg-gray-200 text-gray-900' 
                             : 'text-gray-700 hover:bg-gray-100'
                         }`}
@@ -133,7 +144,8 @@ export const CategorySidebar: React.FC = () => {
                             variant="ghost" 
                             size="sm" 
                             className={`w-full justify-start text-xs ${
-                              urlConnectionId === connection.connectionId && !urlCategoryId
+                              ((urlConnectionId === connection.connectionId && !urlCategoryId) ||
+                               (connectionSlug && getConnectionById(connection.connectionId)?.slug === connectionSlug && !categorySlug))
                                 ? 'bg-gray-200 text-gray-900' 
                                 : 'text-gray-600 hover:bg-gray-50'
                             }`}
@@ -156,7 +168,8 @@ export const CategorySidebar: React.FC = () => {
                             variant="ghost" 
                             size="sm" 
                             className={`w-full justify-between text-xs ${
-                              urlCategoryId === String(category.id)
+                              (urlCategoryId === String(category.id) ||
+                               (categorySlug && category.slug === categorySlug))
                                 ? 'bg-gray-200 text-gray-900' 
                                 : 'text-gray-600 hover:bg-gray-50'
                             }`}

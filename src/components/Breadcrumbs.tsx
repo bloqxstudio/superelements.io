@@ -1,16 +1,31 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useConnectionsStore } from '@/store/connectionsStore';
+import { useWordPressStore } from '@/store/wordpressStore';
+import { useSlugResolver } from '@/hooks/useSlugResolver';
 import { ChevronRight, Home } from 'lucide-react';
 
 export const Breadcrumbs: React.FC = () => {
-  const { connectionId, categoryId } = useParams();
+  const { connectionId, categoryId, connectionSlug, categorySlug } = useParams();
   const { connections } = useConnectionsStore();
+  const { availableCategories } = useWordPressStore();
+  const { getConnectionBySlug, getCategoryBySlug } = useSlugResolver();
   
-  const connection = connections.find(c => c.id === connectionId);
+  // Resolver slugs para obter dados completos
+  let connection = connectionId ? connections.find(c => c.id === connectionId) : null;
+  if (!connection && connectionSlug) {
+    connection = getConnectionBySlug(connectionSlug);
+  }
+  
+  let category = null;
+  if (connection && categoryId) {
+    category = availableCategories.find(c => c.id === parseInt(categoryId));
+  } else if (connection && categorySlug) {
+    category = getCategoryBySlug(categorySlug, connection.id);
+  }
   
   // Não mostrar breadcrumbs na página inicial
-  if (!connectionId && !categoryId) {
+  if (!connectionId && !categoryId && !connectionSlug && !categorySlug) {
     return null;
   }
 
@@ -28,7 +43,7 @@ export const Breadcrumbs: React.FC = () => {
         <>
           <ChevronRight className="h-4 w-4 flex-shrink-0" />
           <Link 
-            to={`/connection/${connection.id}`}
+            to={connection.slug ? `/${connection.slug}` : `/connection/${connection.id}`}
             className="hover:text-foreground transition-colors truncate"
           >
             {connection.name}
@@ -36,11 +51,11 @@ export const Breadcrumbs: React.FC = () => {
         </>
       )}
       
-      {categoryId && (
+      {category && (
         <>
           <ChevronRight className="h-4 w-4 flex-shrink-0" />
           <span className="text-foreground font-medium truncate">
-            Categoria {categoryId}
+            {category.name}
           </span>
         </>
       )}
