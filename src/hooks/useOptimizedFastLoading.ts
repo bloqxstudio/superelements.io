@@ -225,11 +225,12 @@ export const useOptimizedFastLoading = ({
     queryKey,
     queryFn,
     enabled: targetConnections.length > 0,
-    retry: 1,
+    retry: false, // Don't retry in React Query - we handle retries in fetch logic
     refetchOnMount: false, // Prevent constant reloads
     refetchOnWindowFocus: false,
-    staleTime: 10 * 60 * 1000, // 10 minutes - much longer cache
-    gcTime: 30 * 60 * 1000, // 30 minutes garbage collection
+    staleTime: 30 * 60 * 1000, // 30 minutes - longer cache for resilience
+    gcTime: 60 * 60 * 1000, // 1 hour garbage collection
+    placeholderData: (previousData) => previousData, // Keep showing old data during errors
   });
 
   const totalComponents = data?.totalLoaded || 0;
