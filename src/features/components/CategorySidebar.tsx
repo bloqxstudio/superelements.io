@@ -28,6 +28,32 @@ export const CategorySidebar: React.FC = () => {
     hasActiveFilters
   } = useMultiConnectionData();
 
+  // Auto-expand connection when accessing via direct link
+  React.useEffect(() => {
+    // Determine which connection should be expanded based on URL
+    let targetConnectionId: string | null = null;
+
+    // Resolve connection from slug or ID
+    if (connectionSlug) {
+      const connection = connectionsData.find(cd => 
+        getConnectionById(cd.connectionId)?.slug === connectionSlug
+      );
+      targetConnectionId = connection?.connectionId || null;
+    } else if (urlConnectionId) {
+      targetConnectionId = urlConnectionId;
+    }
+
+    // If we have a target connection and it's not expanded, expand it
+    if (targetConnectionId && !expandedConnections.has(targetConnectionId)) {
+      // Wait for connection data to be loaded before expanding
+      const connection = connectionsData.find(cd => cd.connectionId === targetConnectionId);
+      if (connection && (connection.isLoaded || connection.isLoading)) {
+        console.log('🔓 Auto-expanding connection from URL:', connection.connectionName);
+        toggleConnectionExpansion(targetConnectionId);
+      }
+    }
+  }, [connectionSlug, urlConnectionId, connectionsData, expandedConnections, toggleConnectionExpansion, getConnectionById]);
+
   const handleAllComponentsClick = () => {
     navigate('/');
     clearAllFilters();
