@@ -10,7 +10,7 @@ import { useConnectionsStore } from '@/store/connectionsStore';
 
 interface ComponentCardProps {
   component: any;
-  onPreview: (url: string, title: string) => void;
+  onPreview: (url: string, title: string, component: any) => void;
   onCopy: (component: any) => void;
   copyState: {
     copying: boolean;
@@ -39,7 +39,7 @@ const ComponentCard: React.FC<ComponentCardProps> = memo(({
     (connection.userType === 'pro' && profile?.role !== 'free');
 
   const handlePreviewClick = useCallback(() => {
-    onPreview(getPreviewUrl(component), component.title.rendered);
+    onPreview(getPreviewUrl(component), component.title.rendered, component);
   }, [onPreview, getPreviewUrl, component]);
 
   const handleCopyClick = useCallback((e: React.MouseEvent) => {
