@@ -22,17 +22,20 @@ const ComponentView = () => {
     const loadComponent = async () => {
       setIsLoading(true);
       
-      // Resolver slugs para IDs
+      // Resolver slugs para IDs em paralelo com busca em cache
       let resolvedConnectionId = connectionId;
-      let resolvedComponentId = componentId;
-
+      
       if (connectionSlug && !connectionId) {
         const conn = getConnectionBySlug(connectionSlug);
         resolvedConnectionId = conn?.id;
       }
 
-      // 1. Buscar conexão
+      // 1. Buscar conexão e componente em cache em paralelo
       const foundConnection = connections.find(c => c.id === resolvedConnectionId);
+      let foundComponent = components.find((c: any) => 
+        (componentSlug ? c.slug === componentSlug : String(c.id) === componentId) && 
+        c.connection_id === resolvedConnectionId
+      );
       if (!foundConnection) {
         toast({
           title: "Conexão não encontrada",
@@ -42,21 +45,15 @@ const ComponentView = () => {
         navigate('/');
         return;
       }
+      
       setConnection(foundConnection);
 
-      // 2. Buscar componente em cache
-      let foundComponent = components.find((c: any) => 
-        (componentSlug ? c.slug === componentSlug : String(c.id) === resolvedComponentId) && 
-        c.connection_id === resolvedConnectionId
-      );
-
-      // 3. Se não está em cache, buscar do WordPress
+      // 2. Se não está em cache, buscar do WordPress
       if (!foundComponent && foundConnection.credentials) {
         try {
-          // Se temos slug, buscar por slug, senão por ID
           const endpoint = componentSlug 
             ? `${foundConnection.base_url}/wp-json/wp/v2/${foundConnection.post_type}?slug=${componentSlug}`
-            : `${foundConnection.base_url}/wp-json/wp/v2/${foundConnection.post_type}/${resolvedComponentId}`;
+            : `${foundConnection.base_url}/wp-json/wp/v2/${foundConnection.post_type}/${componentId}`;
           
           const response = await fetch(endpoint, {
             headers: {
@@ -130,7 +127,7 @@ const ComponentView = () => {
     if ((connectionId || connectionSlug) && (componentId || componentSlug)) {
       loadComponent();
     }
-  }, [connectionId, componentId, connectionSlug, componentSlug]);
+  }, [connectionId, componentId, connectionSlug, componentSlug, connections, components, getConnectionBySlug, navigate]);
 
   if (isLoading) {
     return (

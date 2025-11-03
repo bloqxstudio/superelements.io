@@ -45,7 +45,17 @@ const Components = () => {
     // Atualizar URL com slug do componente
     if (component?.slug) {
       const connSlug = connectionSlug || getConnectionSlug(component.connection_id || connectionId);
-      const catSlug = categorySlug || getCategorySlug(component.categories?.[0]);
+      let catSlug = categorySlug;
+      
+      // Buscar categoria do componente em connectionsData se não está na URL
+      const categoryId = component.categories?.[0];
+      if (categoryId && !catSlug && connSlug) {
+        const connectionData = connectionsData.find(cd => cd.connectionId === component.connection_id);
+        if (connectionData) {
+          const category = connectionData.categories.find(c => c.id === categoryId);
+          catSlug = category?.slug;
+        }
+      }
       
       if (connSlug && catSlug) {
         navigate(`/${connSlug}/${catSlug}/${component.slug}`, { replace: true });
@@ -75,9 +85,67 @@ const Components = () => {
       }
     }
   };
+
   const handleForceSync = () => {
     syncConnection();
   };
+
+  // Auto-abrir componente quando há componentSlug na URL
+  useEffect(() => {
+    const openComponentFromUrl = async () => {
+      if (!componentSlug || previewModal.isOpen) return;
+      
+      const { components } = useWordPressStore.getState();
+      console.log('🔗 Auto-opening component from URL:', componentSlug);
+      
+      // Buscar componente no cache primeiro
+      const cachedComponent = components.find(c => c.slug === componentSlug);
+      
+      if (cachedComponent) {
+        console.log('✅ Found component in cache:', cachedComponent.title?.rendered);
+        handlePreview(cachedComponent.link, cachedComponent.title?.rendered, cachedComponent);
+        return;
+      }
+      
+      // Se não está em cache, buscar do WordPress
+      if (connectionSlug) {
+        const connection = getConnectionBySlug(connectionSlug);
+        if (connection?.credentials) {
+          try {
+            const endpoint = `${connection.base_url}/wp-json/wp/v2/${connection.post_type}?slug=${componentSlug}`;
+            const response = await fetch(endpoint, {
+              headers: {
+                'Authorization': `Basic ${btoa(
+                  `${connection.credentials.username}:${connection.credentials.application_password}`
+                )}`
+              }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              const componentData = Array.isArray(data) ? data[0] : data;
+              
+              if (componentData) {
+                const component = {
+                  ...componentData,
+                  connection_id: connection.id,
+                  connection_name: connection.name,
+                  connection_access_level: connection.accessLevel
+                };
+                
+                console.log('✅ Fetched component from WordPress:', component.title?.rendered);
+                handlePreview(component.link, component.title?.rendered, component);
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error fetching component:', error);
+          }
+        }
+      }
+    };
+    
+    openComponentFromUrl();
+  }, [componentSlug, connectionSlug, previewModal.isOpen, getConnectionBySlug]);
 
   // Sincronizar URL params com estado
   useEffect(() => {
