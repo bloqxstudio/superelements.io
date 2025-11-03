@@ -42,21 +42,20 @@ const Components = () => {
       component: component || null
     });
     
-    // Atualizar URL com slug do componente
+    // Atualizar URL com slug do componente para ser compartilhável
     if (component?.slug) {
       const connSlug = connectionSlug || getConnectionSlug(component.connection_id || connectionId);
+      const categoryId = component.categories?.[0];
       let catSlug = categorySlug;
       
-      // Buscar categoria do componente em connectionsData se não está na URL
-      const categoryId = component.categories?.[0];
-      if (categoryId && !catSlug && connSlug) {
+      // Fallback: buscar categoria em connectionsData
+      if (!catSlug && categoryId && component.connection_id) {
         const connectionData = connectionsData.find(cd => cd.connectionId === component.connection_id);
-        if (connectionData) {
-          const category = connectionData.categories.find(c => c.id === categoryId);
-          catSlug = category?.slug;
-        }
+        const category = connectionData?.categories.find(c => c.id === categoryId);
+        catSlug = category?.slug || null;
       }
       
+      // Usar push (não replace) para atualizar URL e manter histórico
       if (connSlug && catSlug) {
         navigate(`/${connSlug}/${catSlug}/${component.slug}`);
       } else if (connSlug) {

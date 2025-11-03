@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useWordPressStore } from '@/store/wordpressStore';
 import { useSlugResolver } from '@/hooks/useSlugResolver';
+import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import PreviewModal from '@/components/PreviewModal';
 import { toast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
@@ -21,6 +22,7 @@ const ComponentViewDirect: React.FC<ComponentViewDirectProps> = ({ connectionSlu
   const { connections } = useConnectionsStore();
   const { components } = useWordPressStore();
   const { getConnectionBySlug, getCategorySlug } = useSlugResolver();
+  const { connectionsData } = useMultiConnectionData();
   
   const [isLoading, setIsLoading] = useState(true);
   const [component, setComponent] = useState<any>(null);
@@ -90,12 +92,30 @@ const ComponentViewDirect: React.FC<ComponentViewDirectProps> = ({ connectionSlu
           description: "Este componente não existe ou foi removido.",
           variant: "destructive"
         });
-        navigate('/');
+        navigate(`/${connectionSlug}`);
         return;
       }
 
       setComponent(foundComponent);
       setIsLoading(false);
+
+      // Promover URL para formato completo compartilhável
+      const categoryId = foundComponent.categories?.[0];
+      let catSlug = categoryId ? getCategorySlug(categoryId) : null;
+      
+      // Se não conseguiu via getCategorySlug, buscar em connectionsData
+      if (!catSlug && categoryId) {
+        const connectionData = connectionsData.find(cd => cd.connectionId === foundConnection.id);
+        const category = connectionData?.categories.find(cat => cat.id === categoryId);
+        catSlug = category?.slug || null;
+      }
+
+      // Atualizar URL com formato completo
+      if (catSlug) {
+        navigate(`/${connectionSlug}/${catSlug}/${foundComponent.slug}`, { replace: true });
+      } else {
+        navigate(`/${connectionSlug}/${foundComponent.slug}`, { replace: true });
+      }
 
       // SEO: Atualizar meta tags dinamicamente
       if (foundComponent && foundConnection) {
@@ -127,7 +147,7 @@ const ComponentViewDirect: React.FC<ComponentViewDirectProps> = ({ connectionSlu
     };
 
     loadComponent();
-  }, [connectionSlug, componentSlug, connections, components, getConnectionBySlug, navigate]);
+  }, [connectionSlug, componentSlug, connections, components, connectionsData, getConnectionBySlug, getCategorySlug, navigate]);
 
   if (isLoading) {
     return (
