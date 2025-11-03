@@ -38,12 +38,11 @@ export const CategorySidebar: React.FC = () => {
     navigate(slug ? `/${slug}` : `/connection/${connectionId}`);
   };
 
-  const handleCategoryClick = (connectionId: string, categoryId: number) => {
+  const handleCategoryClick = (connectionId: string, categoryId: number, categorySlug: string) => {
     const connSlug = getConnectionSlug(connectionId);
-    const catSlug = getCategorySlug(categoryId);
     
-    if (connSlug && catSlug) {
-      navigate(`/${connSlug}/${catSlug}`);
+    if (connSlug && categorySlug) {
+      navigate(`/${connSlug}/${categorySlug}`);
     } else {
       navigate(`/connection/${connectionId}/category/${categoryId}`);
     }
@@ -173,7 +172,7 @@ export const CategorySidebar: React.FC = () => {
                                 ? 'bg-gray-200 text-gray-900' 
                                 : 'text-gray-600 hover:bg-gray-50'
                             }`}
-                            onClick={() => handleCategoryClick(connection.connectionId, category.id)}
+                            onClick={() => handleCategoryClick(connection.connectionId, category.id, category.slug)}
                           >
                             <span className="truncate flex-1 text-left">{category.name}</span>
                             <span className="text-xs text-muted-foreground ml-2">({category.count})</span>
