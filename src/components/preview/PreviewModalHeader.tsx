@@ -9,27 +9,44 @@ import ViewportSwitcher from '@/components/ViewportSwitcher';
 import { ExternalLink, Smartphone, Tablet, Monitor, Eye, Copy, Link2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
+import { useParams } from 'react-router-dom';
+import { useSlugResolver } from '@/hooks/useSlugResolver';
 
 interface PreviewModalHeaderProps {
   title: string;
   previewUrl: string;
   onCopyJson: () => Promise<void>;
   onOpenInNewTab: () => void;
+  component?: any;
 }
 
 const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
   title,
   previewUrl,
   onCopyJson,
-  onOpenInNewTab
+  onOpenInNewTab,
+  component
 }) => {
   const { user } = useAuth();
   const { viewport, getViewportWidth } = useViewport();
+  const { connectionSlug: connSlugFromUrl, categorySlug: catSlugFromUrl } = useParams();
+  const { getConnectionSlug, getCategorySlug } = useSlugResolver();
 
   const handleCopyLink = async () => {
     try {
-      const currentUrl = window.location.href;
-      await navigator.clipboard.writeText(currentUrl);
+      // Compute final app URL for this component
+      let finalUrl = window.location.href;
+      if (component) {
+        const connSlug = getConnectionSlug(component.connection_id) || connSlugFromUrl;
+        const firstCategoryId = Array.isArray(component.categories) ? component.categories[0] : undefined;
+        const catSlug = (firstCategoryId ? getCategorySlug(firstCategoryId) : null) || catSlugFromUrl;
+        const compSlug = component.slug;
+        if (connSlug && catSlug && compSlug) {
+          finalUrl = `${window.location.origin}/${connSlug}/${catSlug}/${compSlug}`;
+        }
+      }
+
+      await navigator.clipboard.writeText(finalUrl);
       toast({
         title: "🔗 Link copiado!",
         description: "URL do componente copiada para área de transferência",
