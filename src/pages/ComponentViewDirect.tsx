@@ -61,17 +61,24 @@ const ComponentViewDirect: React.FC<ComponentViewDirectProps> = ({ connectionSlu
       );
 
       // Se não está em cache, buscar do WordPress
-      if (!foundComponent && foundConnection.credentials) {
+      if (!foundComponent) {
         try {
           const endpoint = `${foundConnection.base_url}/wp-json/wp/v2/${foundConnection.post_type}?slug=${componentSlug}`;
           
-          const response = await fetch(endpoint, {
-            headers: {
-              'Authorization': `Basic ${btoa(
-                `${foundConnection.credentials.username}:${foundConnection.credentials.application_password}`
-              )}`
-            }
-          });
+          // Tentar fetch público primeiro
+          let response = await fetch(endpoint);
+          
+          // Se falhar por autenticação E houver credentials, tentar com Basic Auth
+          if ((response.status === 401 || response.status === 403) && foundConnection.credentials) {
+            console.info('🔒 ComponentViewDirect: Tentando com autenticação...');
+            response = await fetch(endpoint, {
+              headers: {
+                'Authorization': `Basic ${btoa(
+                  `${foundConnection.credentials.username}:${foundConnection.credentials.application_password}`
+                )}`
+              }
+            });
+          }
           
           if (response.ok) {
             const data = await response.json();

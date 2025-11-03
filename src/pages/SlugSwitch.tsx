@@ -36,15 +36,19 @@ const SlugSwitch = () => {
       // Resolver conexão
       const connection = getConnectionBySlug(connectionSlug);
       if (!connection) {
-        if (!cancelRef.current) setIsCategory(false);
+        console.info('🔍 SlugSwitch: Conexão não encontrada, assumindo categoria');
+        if (!cancelRef.current) setIsCategory(true);
         return;
       }
+
+      console.info('🔍 SlugSwitch: Analisando slug:', secondSlug, 'para conexão:', connection.name);
 
       // Checagem rápida: se já temos as categorias carregadas, verificar imediatamente
       const connectionData = connectionsData.find(cd => cd.connectionId === connection.id);
       if (connectionData && !connectionData.isLoading && connectionData.categories.length > 0) {
         const isCategorySlug = connectionData.categories.some(cat => cat.slug === secondSlug);
         if (isCategorySlug) {
+          console.info('✅ SlugSwitch: Detectado como CATEGORIA via connectionsData');
           if (!cancelRef.current) setIsCategory(true);
           return;
         }
@@ -56,40 +60,46 @@ const SlugSwitch = () => {
       );
 
       if (cachedComponent) {
+        console.info('✅ SlugSwitch: Detectado como COMPONENTE via cache');
         if (!cancelRef.current) setIsCategory(false);
         return;
       }
 
-      // Se não está no cache e temos credentials, fazer busca rápida no WP
-      if (connection.credentials) {
-        try {
-          const endpoint = `${connection.base_url}/wp-json/wp/v2/${connection.post_type}?slug=${secondSlug}&_fields=id,slug`;
-          
-          const response = await fetch(endpoint, {
+      // Buscar no WordPress: tentar fetch público primeiro
+      try {
+        const endpoint = `${connection.base_url}/wp-json/wp/v2/${connection.post_type}?slug=${secondSlug}&_fields=id,slug`;
+        
+        let response = await fetch(endpoint);
+        
+        // Se falhar por autenticação E houver credentials, tentar com Basic Auth
+        if ((response.status === 401 || response.status === 403) && connection.credentials) {
+          console.info('🔒 SlugSwitch: Tentando com autenticação...');
+          response = await fetch(endpoint, {
             headers: {
               'Authorization': `Basic ${btoa(
                 `${connection.credentials.username}:${connection.credentials.application_password}`
               )}`
             }
           });
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data && data.length > 0) {
-              // É um componente válido
-              if (!cancelRef.current) setIsCategory(false);
-              return;
-            }
-          }
-        } catch (error) {
-          console.error('❌ Erro ao verificar componente:', error);
         }
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.length > 0) {
+            console.info('✅ SlugSwitch: Detectado como COMPONENTE via WordPress');
+            if (!cancelRef.current) setIsCategory(false);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('❌ SlugSwitch: Erro ao verificar componente:', error);
       }
 
-      // Timeout de segurança: se ainda não decidiu, assume que é componente
+      // Timeout de segurança: se ainda não decidiu, assume que é CATEGORIA
       setTimeout(() => {
         if (!cancelRef.current && isCategory === null) {
-          setIsCategory(false);
+          console.info('⏱️ SlugSwitch: Timeout - assumindo CATEGORIA por padrão');
+          setIsCategory(true);
         }
       }, 1200);
     };
