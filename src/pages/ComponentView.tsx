@@ -53,20 +53,26 @@ const ComponentView = () => {
       
       setConnection(foundConnection);
 
-      // 2. Se não está em cache, buscar do WordPress
-      if (!foundComponent && foundConnection.credentials) {
+      // 2. Se não está em cache, buscar do WordPress (público primeiro, depois autenticado)
+      if (!foundComponent) {
         try {
           const endpoint = componentSlug 
             ? `${foundConnection.base_url}/wp-json/wp/v2/${foundConnection.post_type}?slug=${componentSlug}`
             : `${foundConnection.base_url}/wp-json/wp/v2/${foundConnection.post_type}/${componentId}`;
           
-          const response = await fetch(endpoint, {
-            headers: {
-              'Authorization': `Basic ${btoa(
-                `${foundConnection.credentials.username}:${foundConnection.credentials.application_password}`
-              )}`
-            }
-          });
+          // Tentar fetch público primeiro
+          let response = await fetch(endpoint);
+          
+          // Se 401/403 e houver credentials, tentar com autenticação
+          if ((response.status === 401 || response.status === 403) && foundConnection.credentials) {
+            response = await fetch(endpoint, {
+              headers: {
+                'Authorization': `Basic ${btoa(
+                  `${foundConnection.credentials.username}:${foundConnection.credentials.application_password}`
+                )}`
+              }
+            });
+          }
           
           if (response.ok) {
             const data = await response.json();

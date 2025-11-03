@@ -14,7 +14,6 @@ import Auth from "@/pages/Auth";
 import NotFound from "@/pages/NotFound";
 import AdminUsers from "@/pages/admin/Users";
 import ComponentView from "@/pages/ComponentView";
-import SlugSwitch from "@/pages/SlugSwitch";
 
 const queryClient = new QueryClient();
 
@@ -54,8 +53,7 @@ function App() {
                   
                   {/* Slug-based routes (must be last to avoid conflicts) */}
                   <Route path=":connectionSlug" element={<Components />} />
-                  {/* Smart router: decides if secondSlug is category or component */}
-                  <Route path=":connectionSlug/:secondSlug" element={<SlugSwitch />} />
+                  <Route path=":connectionSlug/:categorySlug" element={<Components />} />
                   <Route path=":connectionSlug/:categorySlug/:componentSlug" element={<ComponentView />} />
                 </Route>
                 

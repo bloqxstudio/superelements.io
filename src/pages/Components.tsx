@@ -42,7 +42,7 @@ const Components = () => {
       component: component || null
     });
     
-    // Atualizar URL com slug do componente para ser compartilhável
+    // Atualizar URL com slug do componente para ser compartilhável (estrutura de 3 níveis)
     if (component?.slug) {
       const connSlug = connectionSlug || getConnectionSlug(component.connection_id || connectionId);
       const categoryId = component.categories?.[0];
@@ -55,12 +55,16 @@ const Components = () => {
         catSlug = category?.slug || null;
       }
       
-      // Usar push (não replace) para atualizar URL e manter histórico
-      if (connSlug && catSlug) {
-        navigate(`/${connSlug}/${catSlug}/${component.slug}`);
-      } else if (connSlug) {
-        navigate(`/${connSlug}/${component.slug}`);
+      // Último fallback: buscar via getCategorySlug
+      if (!catSlug && categoryId) {
+        catSlug = getCategorySlug(categoryId);
       }
+      
+      // Só navegar se tiver todos os slugs necessários (estrutura de 3 níveis)
+      if (connSlug && catSlug && component.slug) {
+        navigate(`/${connSlug}/${catSlug}/${component.slug}`);
+      }
+      // Se não conseguir obter catSlug, abrir modal sem mudar URL
     }
   };
   
@@ -201,6 +205,61 @@ const Components = () => {
       }
       const category = getCategoryBySlug(categorySlug, resolvedConnectionId, connectionData.categories);
       resolvedCategoryId = category ? String(category.id) : null;
+      
+      // Se categoria não encontrada, tentar resolver como componentSlug (compatibilidade com links antigos)
+      if (!category) {
+        console.log('⚠️ Category not found, trying to resolve as component slug:', categorySlug);
+        
+        const tryResolveAsComponent = async () => {
+          const connection = connections.find(c => c.id === resolvedConnectionId);
+          if (!connection) return;
+          
+          try {
+            const endpoint = `${connection.base_url}/wp-json/wp/v2/${connection.post_type}?slug=${categorySlug}&_fields=id,slug,categories`;
+            
+            // Tentar fetch público primeiro
+            let response = await fetch(endpoint);
+            
+            // Se 401/403 e houver credentials, tentar autenticado
+            if ((response.status === 401 || response.status === 403) && connection.credentials) {
+              response = await fetch(endpoint, {
+                headers: {
+                  'Authorization': `Basic ${btoa(
+                    `${connection.credentials.username}:${connection.credentials.application_password}`
+                  )}`
+                }
+              });
+            }
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data.length > 0) {
+                const componentData = data[0];
+                const firstCategoryId = componentData.categories?.[0];
+                
+                if (firstCategoryId) {
+                  const catData = connectionData.categories.find((c: any) => c.id === firstCategoryId);
+                  if (catData) {
+                    console.log('✅ Resolved as component! Redirecting to 3-level structure:', {
+                      component: categorySlug,
+                      category: catData.slug
+                    });
+                    navigate(`/${connectionSlug}/${catData.slug}/${categorySlug}`, { replace: true });
+                    return;
+                  }
+                }
+              }
+            }
+            
+            console.log('❌ Could not resolve as component or category:', categorySlug);
+          } catch (error) {
+            console.error('❌ Error resolving component:', error);
+          }
+        };
+        
+        tryResolveAsComponent();
+      }
+      
       console.log('🔍 Resolved category slug:', {
         categorySlug,
         connectionId: resolvedConnectionId,
@@ -250,7 +309,9 @@ const Components = () => {
     getConnectionBySlug,
     getCategoryBySlug,
     setActiveConnection,
-    setSelectedCategories
+    setSelectedCategories,
+    navigate,
+    connections
   ]);
 
   // Fixed layout with proper sidebar integration
