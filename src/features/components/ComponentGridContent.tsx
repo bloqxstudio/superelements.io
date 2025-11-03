@@ -136,6 +136,7 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
               baseUrl={baseUrl}
               connectionId={connectionId}
               postType={postType}
+              accessLevel={component.connection_access_level || 'free'}
             />
           );
         })}

@@ -88,7 +88,8 @@ export const useOptimizedFastLoading = ({
                 ...component,
                 connection_id: connection.id,
                 connection_name: connection.name,
-                connection_user_type: connection.userType
+                connection_user_type: connection.userType,
+                connection_access_level: connection.accessLevel
               }));
               allComponents.push(...componentsWithConnectionInfo);
             }

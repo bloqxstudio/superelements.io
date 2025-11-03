@@ -17,6 +17,7 @@ export interface WordPressConnection {
   status: 'disconnected' | 'connecting' | 'connected' | 'error';
   isActive: boolean;
   userType: 'free' | 'pro' | 'all';
+  accessLevel: 'free' | 'pro' | 'admin';
   lastTested?: Date;
   componentsCount?: number;
   error?: string;
@@ -112,6 +113,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
             status: conn.status as WordPressConnection['status'],
             isActive: conn.is_active,
             userType: conn.user_type as WordPressConnection['userType'],
+            accessLevel: (conn.access_level || 'free') as WordPressConnection['accessLevel'],
             lastTested: conn.last_tested ? new Date(conn.last_tested) : undefined,
             componentsCount: conn.components_count || 0,
             error: conn.error || undefined,

@@ -39,28 +39,8 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
     syncConnection();
   };
 
-  // Filter connections based on user access level
-  const getAccessibleActiveConnections = () => {
-    const activeConnections = connections.filter(conn => conn.isActive);
-    
-    // If no profile (not logged in), show all active connections
-    if (!profile) return activeConnections;
-    
-    // Admin can see all connections
-    if (profile.role === 'admin') return activeConnections;
-    
-    // Pro users can see connections marked as 'all', 'pro', or 'free'
-    if (profile.role === 'pro') {
-      return activeConnections.filter(conn => 
-        conn.userType === 'all' || conn.userType === 'pro' || conn.userType === 'free'
-      );
-    }
-    
-    // Free users can only see connections marked as 'all' or 'free'
-    return activeConnections.filter(conn => conn.userType === 'all' || conn.userType === 'free');
-  };
-
-  const activeConnections = getAccessibleActiveConnections();
+  // Show all active connections - access control is on copy, not view
+  const activeConnections = connections.filter(conn => conn.isActive);
 
   // Show loading state while fetching connections
   if (isLoading && connections.length === 0) {

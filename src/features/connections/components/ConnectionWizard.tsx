@@ -165,6 +165,7 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
         status: 'connected',
         isActive: formData.isActive,
         userType: formData.userType,
+        accessLevel: 'free',
         lastTested: new Date(),
         componentsCount: 0
       };

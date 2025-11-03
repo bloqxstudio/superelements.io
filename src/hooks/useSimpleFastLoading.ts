@@ -19,28 +19,8 @@ export const useSimpleFastLoading = ({
   const { fetchComponents } = useWordPressApi();
   const { profile } = useAuth();
 
-  // Filter connections based on user access level
-  const getAccessibleConnections = () => {
-    const activeConnections = connections.filter(c => c.isActive);
-    
-    // If no profile (not logged in), show all active connections
-    if (!profile) return activeConnections;
-    
-    // Admin can see all connections
-    if (profile.role === 'admin') return activeConnections;
-    
-    // Pro users can see connections marked as 'all', 'pro', or 'free'
-    if (profile.role === 'pro') {
-      return activeConnections.filter(c => 
-        c.userType === 'all' || c.userType === 'pro' || c.userType === 'free'
-      );
-    }
-    
-    // Free users can only see connections marked as 'all' or 'free'
-    return activeConnections.filter(c => c.userType === 'all' || c.userType === 'free');
-  };
-
-  const allConnections = getAccessibleConnections();
+  // Show all active connections - access control is on copy, not view
+  const allConnections = connections.filter(c => c.isActive);
   
   // Filter by activeConnectionId if specified
   const targetConnections = activeConnectionId 

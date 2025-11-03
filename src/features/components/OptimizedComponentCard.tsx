@@ -7,6 +7,8 @@ import { useEnhancedCopyComponent } from './hooks/useEnhancedCopyComponent';
 import { useAuth } from '@/contexts/AuthContext';
 import OptimizedDynamicIframe from './OptimizedDynamicIframe';
 import { AddToCartButton } from '@/features/cart/components/AddToCartButton';
+import { ComponentAccessBadge } from '@/components/ComponentAccessBadge';
+import { toast } from '@/hooks/use-toast';
 
 interface OptimizedComponentCardProps {
   component: any;
@@ -16,6 +18,7 @@ interface OptimizedComponentCardProps {
   baseUrl: string;
   connectionId?: string;
   postType?: string;
+  accessLevel?: 'free' | 'pro' | 'admin';
 }
 
 const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
@@ -25,7 +28,8 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
   getPreviewUrl,
   baseUrl,
   connectionId = '',
-  postType = 'posts'
+  postType = 'posts',
+  accessLevel = 'free'
 }) => {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -42,8 +46,30 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
   const componentTitle = getComponentTitle(component);
   
   
-  // Memoize access info calculation - simplified to always allow access
-  const accessInfo = React.useMemo(() => ({ canCopy: true, requiresUpgrade: false }), []);
+  // Calculate access based on user role and component accessLevel
+  const accessInfo = React.useMemo(() => {
+    if (!profile) {
+      return { canCopy: false, requiresUpgrade: false, reason: 'login' };
+    }
+    
+    if (profile.role === 'admin') {
+      return { canCopy: true, requiresUpgrade: false };
+    }
+    
+    if (accessLevel === 'free') {
+      return { canCopy: true, requiresUpgrade: false };
+    }
+    
+    if (accessLevel === 'pro') {
+      if (profile.role === 'pro') {
+        return { canCopy: true, requiresUpgrade: false };
+      } else {
+        return { canCopy: false, requiresUpgrade: true, reason: 'upgrade' };
+      }
+    }
+    
+    return { canCopy: true, requiresUpgrade: false };
+  }, [profile, accessLevel]);
   
   // Memoize preview URLs
   const desktopPreviewUrl = React.useMemo(() => getDesktopPreviewUrl(component), [getDesktopPreviewUrl, component]);
@@ -61,8 +87,17 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
       return;
     }
     
+    if (accessInfo.requiresUpgrade) {
+      toast({
+        title: "🔒 Componente PRO",
+        description: "Este componente está disponível apenas para usuários PRO. Faça upgrade para acessar!",
+        variant: "default",
+        duration: 5000
+      });
+      return;
+    }
+    
     if (accessInfo.canCopy) {
-      // User has access - try to copy
       await copyToClipboard(component, baseUrl);
     }
   }, [copyToClipboard, component, baseUrl, accessInfo, navigate, profile]);
@@ -74,8 +109,16 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
     if (!profile) {
       return {
         icon: <Lock className="h-3 w-3 opacity-60" />,
-        text: 'COPIAR',
+        text: 'LOGIN',
         className: 'bg-muted border-muted-foreground/20 text-muted-foreground hover:bg-muted/80 cursor-pointer'
+      };
+    }
+
+    if (accessInfo.requiresUpgrade) {
+      return {
+        icon: <Lock className="h-3 w-3" />,
+        text: 'PRO',
+        className: 'bg-yellow-50 border-yellow-400 text-yellow-700 hover:bg-yellow-100 cursor-pointer'
       };
     }
 
@@ -100,12 +143,23 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
       text: 'COPIAR',
       className: 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-600 hover:border-gray-300'
     };
-  }, [copying, copied, profile]);
+  }, [copying, copied, profile, accessInfo]);
 
   const buttonContent = getCopyButtonContent();
 
   return (
     <div className="rounded-lg text-card-foreground shadow-sm group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 bg-card border border-border relative h-full flex flex-col">
+      
+      {/* Access Level Badge */}
+      {accessLevel && accessLevel !== 'free' && (
+        <div className="absolute top-2 right-2 z-10">
+          <ComponentAccessBadge 
+            accessLevel={accessLevel} 
+            userRole={profile?.role}
+            size="sm"
+          />
+        </div>
+      )}
 
       {/* Preview Container */}
       <div className="aspect-[4/3] bg-gray-50 cursor-pointer relative overflow-hidden flex-shrink-0" onClick={handlePreviewClick}>
