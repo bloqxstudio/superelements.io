@@ -47,6 +47,23 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
       }
 
       await navigator.clipboard.writeText(finalUrl);
+      
+      // Track link copy event in GA4
+      if (typeof window.gtag !== 'undefined') {
+        const connSlug = getConnectionSlug(component?.connection_id) || connSlugFromUrl;
+        const firstCategoryId = Array.isArray(component?.categories) ? component.categories[0] : undefined;
+        const catSlug = (firstCategoryId ? getCategorySlug(firstCategoryId) : null) || catSlugFromUrl;
+        const compSlug = component?.slug;
+        
+        window.gtag('event', 'component_link_copied', {
+          component_slug: compSlug || 'unknown',
+          connection_slug: connSlug || 'unknown',
+          category_slug: catSlug || 'unknown',
+          full_url: finalUrl,
+          user_role: user?.user_metadata?.role || 'guest'
+        });
+      }
+      
       toast({
         title: "🔗 Link copiado!",
         description: "URL do componente copiada para área de transferência",

@@ -89,6 +89,17 @@ export const useEnhancedCopyComponent = () => {
         delete timeoutRefs.current[componentId];
       }, 3000);
       
+      // Track component copy event in GA4
+      if (typeof window.gtag !== 'undefined') {
+        window.gtag('event', 'component_copied', {
+          component_id: componentId,
+          component_title: component.title?.rendered || component.title || 'Unknown',
+          connection_id: component.connection_id,
+          post_type: wordpressConfig.postType,
+          user_role: user?.user_metadata?.role || 'free'
+        });
+      }
+      
       toast({
         title: "✅ Componente Copiado!",
         description: "Componente copiado com sucesso. Pronto para colar!",

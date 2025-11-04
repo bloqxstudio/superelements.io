@@ -43,6 +43,16 @@ const Components = () => {
       component: component || null
     });
     
+    // Track preview opened event in GA4
+    if (typeof window.gtag !== 'undefined') {
+      window.gtag('event', 'preview_opened', {
+        component_slug: component?.slug || 'unknown',
+        component_title: title || 'Unknown',
+        connection_slug: connectionSlug || 'unknown',
+        category_slug: categorySlug || 'all'
+      });
+    }
+    
     console.log('🔍 handlePreview called with:', {
       hasComponent: !!component,
       componentSlug: component?.slug,
