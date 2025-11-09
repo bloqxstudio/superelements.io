@@ -71,7 +71,6 @@ export type Database = {
           name: string
           post_type: string
           preview_field: string
-          slug: string | null
           status: string
           updated_at: string
           user_type: string
@@ -90,7 +89,6 @@ export type Database = {
           name: string
           post_type?: string
           preview_field?: string
-          slug?: string | null
           status?: string
           updated_at?: string
           user_type?: string
@@ -109,7 +107,6 @@ export type Database = {
           name?: string
           post_type?: string
           preview_field?: string
-          slug?: string | null
           status?: string
           updated_at?: string
           user_type?: string
@@ -137,54 +134,6 @@ export type Database = {
           id?: string
           phone?: string | null
           updated_at?: string
-        }
-        Relationships: []
-      }
-      resources: {
-        Row: {
-          category: string | null
-          created_at: string
-          created_by: string | null
-          description: string | null
-          file_size: string | null
-          icon: string | null
-          id: string
-          is_active: boolean
-          order: number
-          title: string
-          type: string
-          updated_at: string
-          url: string
-        }
-        Insert: {
-          category?: string | null
-          created_at?: string
-          created_by?: string | null
-          description?: string | null
-          file_size?: string | null
-          icon?: string | null
-          id?: string
-          is_active?: boolean
-          order?: number
-          title: string
-          type: string
-          updated_at?: string
-          url: string
-        }
-        Update: {
-          category?: string | null
-          created_at?: string
-          created_by?: string | null
-          description?: string | null
-          file_size?: string | null
-          icon?: string | null
-          id?: string
-          is_active?: boolean
-          order?: number
-          title?: string
-          type?: string
-          updated_at?: string
-          url?: string
         }
         Relationships: []
       }

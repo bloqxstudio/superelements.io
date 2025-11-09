@@ -1,25 +1,18 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { useConnectionsStore } from '@/store/connectionsStore';
-import { Users, Briefcase, Download } from 'lucide-react';
-
+import { Users, Briefcase } from 'lucide-react';
 const Layout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
-  const { connections, isLoading, fetchConnections } = useConnectionsStore();
-
-  // Bootstrap: carregar conexões globalmente ao montar o Layout
-  useEffect(() => {
-    if (connections.length === 0 && !isLoading) {
-      fetchConnections();
-    }
-  }, [connections.length, isLoading, fetchConnections]);
+  const {
+    user,
+    profile
+  } = useAuth();
   const handleLogoClick = () => {
     navigate('/');
   };
@@ -46,17 +39,6 @@ const Layout: React.FC = () => {
             {/* Navigation */}
             <div className="flex items-center gap-4">
               {user ? <>
-                  {/* Show "Recursos" button for PRO and admin users */}
-                  {profile?.role && ['pro', 'admin'].includes(profile.role) && (
-                    <Button 
-                      variant={location.pathname === '/resources' ? 'default' : 'ghost'}
-                      onClick={() => navigate('/resources')}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Recursos
-                    </Button>
-                  )}
-                  
                   {/* Show "Contratar Especialista" button for FREE and PRO users */}
                   {profile?.role && ['free', 'pro'].includes(profile.role) && (
                     <Button 
@@ -76,10 +58,6 @@ const Layout: React.FC = () => {
                     <Button variant={location.pathname === '/admin/users' ? 'default' : 'ghost'} onClick={() => navigate('/admin/users')}>
                       <Users className="h-4 w-4 mr-2" />
                       Usuários
-                    </Button>
-                    <Button variant={location.pathname === '/admin/resources' ? 'default' : 'ghost'} onClick={() => navigate('/admin/resources')}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Gerenciar Recursos
                     </Button>
                   </>}
                   <UserAvatar />

@@ -2,12 +2,10 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { supabase } from '@/integrations/supabase/client';
 import { WordPressPostTypeService } from '@/services/wordPressPostTypeService';
-import { slugify } from '@/utils/slugify';
 
 export interface WordPressConnection {
   id: string;
   name: string;
-  slug: string;
   base_url: string;
   post_type: string;
   json_field: string;
@@ -108,7 +106,6 @@ export const useConnectionsStore = create<ConnectionsStore>()(
           const connections: WordPressConnection[] = (connectionsData || []).map(conn => ({
             id: conn.id,
             name: conn.name,
-            slug: (conn as any).slug || slugify(conn.name),
             base_url: conn.base_url,
             post_type: conn.post_type,
             json_field: conn.json_field,
@@ -214,7 +211,6 @@ export const useConnectionsStore = create<ConnectionsStore>()(
           const updateData: any = {};
           
           if (connectionUpdates.name) updateData.name = connectionUpdates.name;
-          if (connectionUpdates.slug) updateData.slug = connectionUpdates.slug;
           if (connectionUpdates.base_url) updateData.base_url = connectionUpdates.base_url;
           if (connectionUpdates.post_type) updateData.post_type = connectionUpdates.post_type;
           if (connectionUpdates.json_field) updateData.json_field = connectionUpdates.json_field;

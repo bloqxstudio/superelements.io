@@ -49,57 +49,6 @@ class Logger {
     const prefix = `[${timestamp}] ERROR:`;
     console.error(prefix, message, ...args);
   }
-
-  // Network-specific logging with detailed context
-  logNetworkError(context: string, details: {
-    url?: string;
-    method?: string;
-    status?: number;
-    statusText?: string;
-    responseTime?: number;
-    retryCount?: number;
-    maxRetries?: number;
-    error?: any;
-    headers?: Record<string, string>;
-  }) {
-    // Always log network errors for debugging
-    const timestamp = new Date().toISOString();
-    const safeDetails = {
-      ...details,
-      // Remove sensitive data
-      headers: details.headers ? {
-        'Content-Type': details.headers['Content-Type'],
-        'Authorization': details.headers['Authorization'] ? '***REDACTED***' : undefined
-      } : undefined
-    };
-    
-    console.error(`[${timestamp}] NETWORK ERROR - ${context}`, safeDetails);
-  }
-
-  logNetworkRequest(context: string, details: {
-    url: string;
-    method: string;
-    timestamp: number;
-    hasAuth: boolean;
-    retryCount?: number;
-  }) {
-    if (!isDevelopment) return;
-    
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] NETWORK REQUEST - ${context}`, details);
-  }
-
-  logNetworkSuccess(context: string, details: {
-    url: string;
-    status: number;
-    responseTime: number;
-    dataSize?: number;
-  }) {
-    if (!isDevelopment) return;
-    
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] NETWORK SUCCESS - ${context}`, details);
-  }
 }
 
 export const logger = new Logger();

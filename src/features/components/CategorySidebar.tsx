@@ -1,18 +1,15 @@
 
 import React from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { Button } from '@/components/ui/button';
 import { Folder, FolderOpen, Globe } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useSlugResolver } from '@/hooks/useSlugResolver';
 
 export const CategorySidebar: React.FC = () => {
   const navigate = useNavigate();
-  const { connectionId: urlConnectionId, categoryId: urlCategoryId, connectionSlug, categorySlug } = useParams();
   const { getConnectionById } = useConnectionsStore();
-  const { getConnectionSlug, getCategorySlug } = useSlugResolver();
   const {
     connectionsData,
     expandedConnections,
@@ -28,63 +25,13 @@ export const CategorySidebar: React.FC = () => {
     hasActiveFilters
   } = useMultiConnectionData();
 
-  // Track which connections have been auto-expanded to avoid forcing them open
-  const autoExpandedRef = React.useRef<Set<string>>(new Set());
-
-  // Auto-expand connection when accessing via direct link (only once per connection)
-  React.useEffect(() => {
-    // Determine which connection should be expanded based on URL
-    let targetConnectionId: string | null = null;
-
-    // Resolve connection from slug or ID
-    if (connectionSlug) {
-      const connection = connectionsData.find(cd => 
-        getConnectionById(cd.connectionId)?.slug === connectionSlug
-      );
-      targetConnectionId = connection?.connectionId || null;
-    } else if (urlConnectionId) {
-      targetConnectionId = urlConnectionId;
-    }
-
-    // Only auto-expand if:
-    // 1. We have a target connection
-    // 2. It hasn't been auto-expanded before
-    // 3. It's not currently expanded
-    if (targetConnectionId && 
-        !autoExpandedRef.current.has(targetConnectionId) && 
-        !expandedConnections.has(targetConnectionId)) {
-      // Wait for connection data to be loaded before expanding
-      const connection = connectionsData.find(cd => cd.connectionId === targetConnectionId);
-      if (connection && (connection.isLoaded || connection.isLoading)) {
-        console.log('🔓 Auto-expanding connection from URL:', connection.connectionName);
-        toggleConnectionExpansion(targetConnectionId);
-        autoExpandedRef.current.add(targetConnectionId);
-      }
-    }
-  }, [connectionSlug, urlConnectionId, connectionsData, expandedConnections, toggleConnectionExpansion, getConnectionById]);
-
   const handleAllComponentsClick = () => {
-    navigate('/');
     clearAllFilters();
   };
 
-  const handleConnectionClick = (connectionId: string) => {
-    const slug = getConnectionSlug(connectionId);
-    navigate(slug ? `/${slug}` : `/connection/${connectionId}`);
-  };
-
-  const handleCategoryClick = (connectionId: string, categoryId: number, categorySlug: string) => {
-    const connSlug = getConnectionSlug(connectionId);
-    
-    if (connSlug && categorySlug) {
-      navigate(`/${connSlug}/${categorySlug}`);
-    } else {
-      navigate(`/connection/${connectionId}/category/${categoryId}`);
-    }
-  };
-
-  // Check if we're in the initial "All Components" state based on URL
-  const isInAllComponentsState = !urlConnectionId && !urlCategoryId && !connectionSlug && !categorySlug;
+  // Check if we're in the initial "All Components" state
+  // No active connection AND no selected categories means we're showing all components
+  const isInAllComponentsState = !activeConnectionId && selectedCategories.length === 0;
 
   return (
     <div className="w-64 fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 shadow-sm hidden md:block">
@@ -126,19 +73,16 @@ export const CategorySidebar: React.FC = () => {
                         variant="ghost" 
                         size="sm" 
                         className={`flex-1 justify-between text-xs font-medium ${
-                          (urlConnectionId === connection.connectionId || 
-                           (connectionSlug && getConnectionById(connection.connectionId)?.slug === connectionSlug))
+                          activeConnectionId === connection.connectionId 
                             ? 'bg-gray-200 text-gray-900' 
                             : 'text-gray-700 hover:bg-gray-100'
                         }`}
                         onClick={() => {
-                          // Always toggle expansion on click
-                          toggleConnectionExpansion(connection.connectionId);
-                          
-                          // Navigate only if not already on this connection
-                          if (urlConnectionId !== connection.connectionId && 
-                              !(connectionSlug && getConnectionById(connection.connectionId)?.slug === connectionSlug)) {
-                            handleConnectionClick(connection.connectionId);
+                          if (activeConnectionId === connection.connectionId) {
+                            toggleConnectionExpansion(connection.connectionId);
+                          } else {
+                            selectConnection(connection.connectionId);
+                            toggleConnectionExpansion(connection.connectionId);
                           }
                         }}
                       >
@@ -180,12 +124,11 @@ export const CategorySidebar: React.FC = () => {
                             variant="ghost" 
                             size="sm" 
                             className={`w-full justify-start text-xs ${
-                              ((urlConnectionId === connection.connectionId && !urlCategoryId) ||
-                               (connectionSlug && getConnectionById(connection.connectionId)?.slug === connectionSlug && !categorySlug))
+                              isConnectionAllSelected(connection.connectionId) 
                                 ? 'bg-gray-200 text-gray-900' 
                                 : 'text-gray-600 hover:bg-gray-50'
                             }`}
-                            onClick={() => handleConnectionClick(connection.connectionId)}
+                            onClick={() => selectAllFromConnection(connection.connectionId)}
                           >
                             <span className="font-medium">Todos</span>
                           </Button>
@@ -204,12 +147,11 @@ export const CategorySidebar: React.FC = () => {
                             variant="ghost" 
                             size="sm" 
                             className={`w-full justify-between text-xs ${
-                              (urlCategoryId === String(category.id) ||
-                               (categorySlug && category.slug === categorySlug))
+                              isCategorySelected(category.id) 
                                 ? 'bg-gray-200 text-gray-900' 
                                 : 'text-gray-600 hover:bg-gray-50'
                             }`}
-                            onClick={() => handleCategoryClick(connection.connectionId, category.id, category.slug)}
+                            onClick={() => selectCategory(connection.connectionId, category.id)}
                           >
                             <span className="truncate flex-1 text-left">{category.name}</span>
                             <span className="text-xs text-muted-foreground ml-2">({category.count})</span>

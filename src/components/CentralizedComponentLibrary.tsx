@@ -9,7 +9,7 @@ import { RefreshCw, AlertCircle, Layers, Wifi, WifiOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 interface CentralizedComponentLibraryProps {
-  onPreview: (url: string, title: string, component?: any) => void;
+  onPreview: (url: string, title: string) => void;
 }
 const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = ({
   onPreview

@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { useConnectionsStore, WordPressConnection } from '@/store/connectionsStore';
 import { WordPressPostTypeService } from '@/services/wordPressPostTypeService';
 import { extractWordPressInfo, isValidUrl, URL_EXAMPLES } from '@/utils/wordpressUrlUtils';
-import { slugify } from '@/utils/slugify';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -155,7 +154,6 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
     try {
       const connectionData: Omit<WordPressConnection, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'> = {
         name: formData.name,
-        slug: slugify(formData.name),
         base_url: formData.baseUrl,
         post_type: formData.postType,
         json_field: '_elementor_data', // Valor padrão fixo

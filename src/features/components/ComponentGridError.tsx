@@ -9,8 +9,6 @@ interface ComponentGridErrorProps {
   onCancel: () => void;
   onForceReload?: () => void;
   canRetry?: boolean;
-  connectionName?: string;
-  cachedComponentsCount?: number;
 }
 
 const ComponentGridError: React.FC<ComponentGridErrorProps> = ({ 
@@ -18,12 +16,8 @@ const ComponentGridError: React.FC<ComponentGridErrorProps> = ({
   onRetry, 
   onCancel, 
   onForceReload,
-  canRetry = true,
-  connectionName,
-  cachedComponentsCount = 0
+  canRetry = true 
 }) => {
-  const isNetworkError = error.includes('rede') || error.includes('network') || error.includes('conectar');
-  const isTimeoutError = error.includes('Tempo limite') || error.includes('timeout');
   return (
     <div className="h-full flex items-center justify-center">
       <div className="text-center max-w-md mx-auto space-y-6">
@@ -32,45 +26,10 @@ const ComponentGridError: React.FC<ComponentGridErrorProps> = ({
         </div>
         
         <div className="space-y-2">
-          <h3 className="text-xl font-semibold text-red-700">
-            {isNetworkError ? 'Problema de Conexão' : 'Erro ao Carregar'}
-          </h3>
-          {connectionName && (
-            <p className="text-sm text-gray-600">
-              Conexão: <strong>{connectionName}</strong>
-            </p>
-          )}
+          <h3 className="text-xl font-semibold text-red-700">Loading Failed</h3>
           <p className="text-red-600 text-sm bg-red-50 p-3 rounded border border-red-200">
             {error}
           </p>
-          
-          {isNetworkError && (
-            <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded border border-blue-200">
-              <p className="font-medium text-blue-800 mb-1">💡 Possíveis causas:</p>
-              <ul className="list-disc list-inside space-y-1 text-blue-700">
-                <li>Servidor WordPress temporariamente indisponível</li>
-                <li>Limite de taxa (rate limiting) atingido</li>
-                <li>Problema temporário de rede</li>
-              </ul>
-            </div>
-          )}
-          
-          {isTimeoutError && (
-            <div className="text-sm text-gray-600 bg-amber-50 p-3 rounded border border-amber-200">
-              <p className="font-medium text-amber-800 mb-1">⏱️ Servidor lento</p>
-              <p className="text-amber-700">
-                O servidor WordPress está demorando muito para responder. 
-                Tente novamente em alguns minutos.
-              </p>
-            </div>
-          )}
-          
-          {cachedComponentsCount > 0 && (
-            <div className="text-sm text-green-600 bg-green-50 p-3 rounded border border-green-200">
-              <p className="font-medium">✅ {cachedComponentsCount} componentes disponíveis em cache</p>
-              <p className="text-xs mt-1">Os dados em cache ainda podem ser visualizados</p>
-            </div>
-          )}
         </div>
         
         <div className="flex flex-col gap-3">
