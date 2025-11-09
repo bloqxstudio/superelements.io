@@ -27,15 +27,11 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
     error,
     isReady,
     refetch,
-    totalComponents,
-    isFetching
+    totalComponents
   } = useOptimizedFastLoading({
     selectedCategories,
     activeConnectionId
   });
-
-  // Track if we're filtering (fetching but not loading from scratch)
-  const isApplyingFilters = isFetching && !isLoading;
 
   const {
     handleCopyComponent,
@@ -75,7 +71,7 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
     );
   }
 
-  // Show content with filtering indicator
+  // Show content
   return (
     <div className="space-y-4">
       {/* Status Badge */}
@@ -84,11 +80,6 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
           <Badge variant="secondary" className="flex items-center gap-2 px-3 py-1">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Loading components...</span>
-          </Badge>
-        ) : isApplyingFilters ? (
-          <Badge variant="secondary" className="flex items-center gap-2 px-3 py-1 animate-pulse">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            <span className="text-xs">Filtering...</span>
           </Badge>
         ) : displayComponents.length > 0 ? (
           <Badge variant="secondary" className="flex items-center gap-2 px-3 py-1">

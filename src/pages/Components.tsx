@@ -43,56 +43,27 @@ const Components = () => {
       component: component || null
     });
     
-    // Track preview opened event in GA4
-    if (typeof window.gtag !== 'undefined') {
-      window.gtag('event', 'preview_opened', {
-        component_slug: component?.slug || 'unknown',
-        component_title: title || 'Unknown',
-        connection_slug: connectionSlug || 'unknown',
-        category_slug: categorySlug || 'all'
-      });
-    }
-    
-    console.log('🔍 handlePreview called with:', {
-      hasComponent: !!component,
-      componentSlug: component?.slug,
-      connectionId: component?.connection_id,
-      categories: component?.categories,
-      currentConnectionSlug: connectionSlug,
-      currentCategorySlug: categorySlug
-    });
-    
     // Atualizar URL com slug do componente para ser compartilhável (estrutura de 3 níveis)
     if (component?.slug) {
       const connSlug = connectionSlug || getConnectionSlug(component.connection_id || connectionId);
       const categoryId = component.categories?.[0];
       let catSlug = categorySlug;
       
-      console.log('🔍 Step 1 - Initial values:', { connSlug, categoryId, catSlug });
-      
       // Fallback: buscar categoria em connectionsData
       if (!catSlug && categoryId && component.connection_id) {
         const connectionData = connectionsData.find(cd => cd.connectionId === component.connection_id);
         const category = connectionData?.categories.find(c => c.id === categoryId);
         catSlug = category?.slug || null;
-        console.log('🔍 Step 2 - Found category in connectionsData:', { category, catSlug });
       }
       
       // Último fallback: buscar via getCategorySlug
       if (!catSlug && categoryId) {
         catSlug = getCategorySlug(categoryId);
-        console.log('🔍 Step 3 - getCategorySlug fallback:', { catSlug });
       }
-      
-      console.log('🔍 Final URL parts:', { connSlug, catSlug, componentSlug: component.slug });
       
       // Só navegar se tiver todos os slugs necessários (estrutura de 3 níveis)
       if (connSlug && catSlug && component.slug) {
-        const newUrl = `/${connSlug}/${catSlug}/${component.slug}`;
-        console.log('✅ Navigating to:', newUrl);
-        navigate(newUrl);
-      } else {
-        console.warn('⚠️ Missing slugs, not updating URL:', { connSlug, catSlug, componentSlug: component.slug });
+        navigate(`/${connSlug}/${catSlug}/${component.slug}`);
       }
       // Se não conseguir obter catSlug, abrir modal sem mudar URL
     }
