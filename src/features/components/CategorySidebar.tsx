@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { Button } from '@/components/ui/button';
@@ -10,6 +11,7 @@ import { useSlugResolver } from '@/hooks/useSlugResolver';
 
 export const CategorySidebar: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { connectionId: urlConnectionId, categoryId: urlCategoryId, connectionSlug, categorySlug } = useParams();
   const { getConnectionById } = useConnectionsStore();
   const { getConnectionSlug, getCategorySlug } = useSlugResolver();
@@ -81,6 +83,24 @@ export const CategorySidebar: React.FC = () => {
     } else {
       navigate(`/connection/${connectionId}/category/${categoryId}`);
     }
+  };
+
+  // Prefetch on hover for instant category switching
+  const handleCategoryHover = (connectionId: string) => {
+    const connection = getConnectionById(connectionId);
+    if (!connection) return;
+
+    const queryKey = [
+      'optimizedComponents',
+      connectionId,
+      connectionId // Single connection cache key
+    ];
+
+    // Prefetch the data in background
+    queryClient.prefetchQuery({
+      queryKey,
+      staleTime: 30 * 60 * 1000 // 30 minutes
+    });
   };
 
   // Check if we're in the initial "All Components" state based on URL
@@ -197,7 +217,7 @@ export const CategorySidebar: React.FC = () => {
                           </div>
                         )}
                         
-                        {/* Individual Categories */}
+                        {/* Individual Categories with prefetch on hover */}
                         {connection.categories.map(category => (
                           <Button 
                             key={category.id} 
@@ -210,6 +230,7 @@ export const CategorySidebar: React.FC = () => {
                                 : 'text-gray-600 hover:bg-gray-50'
                             }`}
                             onClick={() => handleCategoryClick(connection.connectionId, category.id, category.slug)}
+                            onMouseEnter={() => handleCategoryHover(connection.connectionId)}
                           >
                             <span className="truncate flex-1 text-left">{category.name}</span>
                             <span className="text-xs text-muted-foreground ml-2">({category.count})</span>

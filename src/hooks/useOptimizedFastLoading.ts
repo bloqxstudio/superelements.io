@@ -29,11 +29,11 @@ export const useOptimizedFastLoading = ({
     : allUserConnections;
 
   // Stable query key with reduced complexity
+  // Cache by connection only - filter categories client-side for instant switching
   const queryKey = [
     'optimizedComponents',
     activeConnectionId || 'all-user-connections',
-    selectedCategories.length > 0 ? selectedCategories.sort().join(',') : 'no-categories',
-    targetConnections.length
+    targetConnections.map(c => c.id).sort().join(',')
   ];
 
   const queryFn = async () => {
@@ -63,12 +63,12 @@ export const useOptimizedFastLoading = ({
         };
 
         try {
-          // Load first 3 pages in parallel (150 components max per connection)
+          // Fetch ALL components without category filter - cache everything
           const pagePromises = [1, 2, 3].map(page =>
             fetchComponents(connectionConfig, {
               page,
-              perPage: 50,
-              categoryIds: selectedCategories.length > 0 ? selectedCategories : undefined
+              perPage: 50
+              // No categoryIds - load everything for client-side filtering
             })
           );
 
@@ -165,7 +165,7 @@ export const useOptimizedFastLoading = ({
         allCategories = Array.from(categoryMap.values());
       }
 
-      // Update store
+      // Update store with ALL components (unfiltered cache)
       setComponents(allComponents);
       if (allCategories.length > 0) {
         setAvailableCategories(allCategories);
@@ -189,11 +189,27 @@ export const useOptimizedFastLoading = ({
         console.log(`❌ Failed: ${failedConnections.length} connections`);
       }
 
+      // Apply client-side filtering for display
+      const displayComponents = selectedCategories.length > 0
+        ? allComponents.filter(comp => 
+            comp.categories?.some(catId => selectedCategories.includes(catId))
+          )
+        : allComponents;
+      
+      if (isDevelopment) {
+        console.log('📦 Cache strategy:', {
+          totalCached: allComponents.length,
+          filtered: displayComponents.length,
+          selectedCategories: selectedCategories.length,
+          cacheHit: 'Client-side filtering - instant switch'
+        });
+      }
+
       return { 
-        components: allComponents, 
+        components: displayComponents, // Filtered for display
         categories: allCategories,
-        totalLoaded: allComponents.length,
-        totalAvailable,
+        totalLoaded: displayComponents.length,
+        totalAvailable: allComponents.length,
         successfulConnections: successfulConnections.length,
         failedConnections: failedConnections.length
       };

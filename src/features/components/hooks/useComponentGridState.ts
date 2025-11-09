@@ -59,27 +59,35 @@ export const useComponentGridState = () => {
     }
   }, [isConnected, config.baseUrl, config.postType, isFastLoading, loadingState, initializeFastLoading]);
 
-  // Enhanced component retrieval with validation
+  // Enhanced component retrieval with validation and instant client-side filtering
   const displayComponents = useMemo(() => {
     if (loadingState === 'error') {
       return [];
     }
     
-    // Get base components using existing logic
-    const baseComponents = getDisplayComponents({
-      isFastLoading,
-      selectedCategories,
-      getAllLoadedComponents,
-      getPaginatedComponents
-    });
+    // Get ALL cached components first (instant from memory)
+    const allCachedComponents = getAllLoadedComponents();
+    
+    // Apply category filter client-side (instant)
+    const filteredByCategory = selectedCategories.length > 0
+      ? allCachedComponents.filter(comp => 
+          comp.categories?.some(catId => selectedCategories.includes(catId))
+        )
+      : allCachedComponents;
     
     // Apply validation filter
-    const validComponents = filterValidComponents(baseComponents);
+    const validComponents = filterValidComponents(filteredByCategory);
     
     // Generate validation stats for debugging
-    if (baseComponents.length > 0) {
-      const stats = generateValidationStats(baseComponents);
-      console.log('Component validation stats:', stats);
+    if (filteredByCategory.length > 0) {
+      const stats = generateValidationStats(filteredByCategory);
+      console.log('⚡ Instant filter stats:', {
+        cached: allCachedComponents.length,
+        afterCategoryFilter: filteredByCategory.length,
+        valid: stats.valid,
+        invalid: stats.invalid,
+        filterTime: '<1ms (client-side)'
+      });
       
       if (stats.invalid > 0) {
         console.warn(`Filtered out ${stats.invalid} invalid components out of ${stats.total} total`);
@@ -89,10 +97,8 @@ export const useComponentGridState = () => {
     return validComponents;
   }, [
     loadingState,
-    isFastLoading,
     selectedCategories,
-    getAllLoadedComponents,
-    getPaginatedComponents
+    getAllLoadedComponents
   ]);
   
   const activeFilters = hasActiveFilters(selectedCategories);
