@@ -34,7 +34,7 @@ const ScaledIframe = React.forwardRef<ScaledIframeRef, ScaledIframeProps>(({ url
       try {
         const doc = iframe.contentDocument || iframe.contentWindow?.document;
         if (!doc) {
-          throw new Error('Cannot access iframe content (CORS restriction)');
+          throw new Error('CORS_RESTRICTION');
         }
         
         const html = doc.documentElement.outerHTML;
@@ -44,16 +44,15 @@ const ScaledIframe = React.forwardRef<ScaledIframeRef, ScaledIframeProps>(({ url
         
         return html;
       } catch (error) {
+        if (error instanceof Error && error.message === 'CORS_RESTRICTION') {
+          throw error;
+        }
         console.error('Failed to access iframe content:', error);
-        throw new Error('Cannot access iframe content - try waiting a bit longer');
+        throw new Error('CORS_RESTRICTION');
       }
     },
     
-    isReady: () => {
-      return loaded && 
-             !!iframeRef.current?.contentDocument && 
-             (iframeRef.current?.contentDocument?.readyState === 'complete');
-    }
+    isReady: () => loaded
   }), [loaded]);
 
   // Calculate scale based on container size

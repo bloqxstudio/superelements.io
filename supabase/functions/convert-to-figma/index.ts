@@ -8,7 +8,8 @@ const corsHeaders = {
 
 interface ConvertRequest {
   componentId: number;
-  html: string;
+  html?: string;
+  url?: string;
   forceRefresh?: boolean;
 }
 
@@ -18,13 +19,51 @@ serve(async (req) => {
   }
 
   try {
-    const { componentId, html, forceRefresh }: ConvertRequest = await req.json();
+    const body: ConvertRequest = await req.json();
+    const { componentId, html, url, forceRefresh = false } = body;
+    
+    if (!componentId || (!html && !url)) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Missing componentId and html/url' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     console.log('🎨 Convert to Figma request:', { 
       componentId, 
-      htmlSize: html.length,
+      hasHtml: !!html,
+      hasUrl: !!url,
       forceRefresh 
     });
+    
+    let finalHtml = html;
+    let componentUrl = url || `https://component-${componentId}`;
+    
+    // If URL provided instead of HTML, fetch it server-side
+    if (!html && url) {
+      console.log('📥 Fetching HTML from URL:', url);
+      try {
+        const fetchResponse = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          },
+          redirect: 'follow'
+        });
+        
+        if (!fetchResponse.ok) {
+          throw new Error(`Failed to fetch URL: ${fetchResponse.status}`);
+        }
+        
+        finalHtml = await fetchResponse.text();
+        console.log('✅ HTML fetched successfully, length:', finalHtml.length);
+      } catch (fetchError: any) {
+        console.error('❌ Failed to fetch HTML from URL:', fetchError);
+        return new Response(
+          JSON.stringify({ success: false, error: `Failed to fetch URL: ${fetchError.message}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // Init Supabase with service role for cache operations
     const supabaseClient = createClient(
@@ -33,7 +72,7 @@ serve(async (req) => {
     );
 
     // Generate hash of HTML for cache key
-    const htmlHash = await hashString(html);
+    const htmlHash = await hashString(finalHtml!);
     console.log('🔑 HTML hash:', htmlHash);
 
     // Check cache (unless force refresh)
@@ -84,7 +123,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        html: html,
+        html: finalHtml,
         clip: true  // Enable clipboard mode
       })
     });
@@ -105,13 +144,14 @@ serve(async (req) => {
       .from('figma_conversions')
       .insert({
         component_id: componentId,
-        component_url: '', // Not needed anymore since we receive HTML
+        component_url: componentUrl,
         html_hash: htmlHash,
         figma_data: { clipboardHtml },
         conversion_metadata: {
           convertedAt: new Date().toISOString(),
-          htmlSize: html.length,
-          clipboardHtmlSize: clipboardHtml.length
+          htmlSize: finalHtml!.length,
+          clipboardHtmlSize: clipboardHtml.length,
+          fetchedFromUrl: !!url
         }
       });
 

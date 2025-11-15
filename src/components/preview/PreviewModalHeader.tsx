@@ -33,7 +33,7 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
 }) => {
   const { user } = useAuth();
   const { viewport, getViewportWidth } = useViewport();
-  const { convertToFigma, converting } = useConvertToFigma();
+  const { convertToFigma, convertToFigmaFromUrl, converting } = useConvertToFigma();
 
   const handleCopyDesign = async () => {
     if (!component?.id) {
@@ -67,17 +67,22 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
       const html = iframeRef.current.getHTML();
       await convertToFigma(component.id, html);
     } catch (error: any) {
-      console.error('Failed to extract HTML:', error);
+      console.log('HTML extraction failed, using URL fallback:', error);
       
-      const errorMessage = error.message || 'Erro desconhecido';
-      
-      toast({
-        title: "Erro ao Extrair HTML",
-        description: errorMessage.includes('CORS') 
-          ? "Não foi possível acessar o conteúdo devido a restrições de segurança do WordPress"
-          : "Aguarde o componente carregar completamente e tente novamente",
-        variant: "destructive"
-      });
+      if (error?.message === 'CORS_RESTRICTION') {
+        toast({
+          title: "🌐 Usando Modo Alternativo",
+          description: "Não conseguimos ler o conteúdo diretamente. Convertendo via URL...",
+        });
+        
+        await convertToFigmaFromUrl(component.id, previewUrl);
+      } else {
+        toast({
+          title: "Erro ao Extrair HTML",
+          description: "Aguarde o componente carregar completamente e tente novamente",
+          variant: "destructive"
+        });
+      }
     }
   };
 
