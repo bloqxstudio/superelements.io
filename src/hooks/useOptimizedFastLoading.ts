@@ -28,12 +28,12 @@ export const useOptimizedFastLoading = ({
     ? allUserConnections.filter(c => c.id === activeConnectionId)
     : allUserConnections;
 
-  // Stable query key with reduced complexity
-  // Cache by connection only - filter categories client-side for instant switching
+  // ✅ Cache APENAS por connection - categorias são filtradas client-side
   const queryKey = [
     'optimizedComponents',
-    activeConnectionId || 'all-user-connections',
+    activeConnectionId || 'all-connections',
     targetConnections.map(c => c.id).sort().join(',')
+    // ❌ REMOVIDO: selectedCategories do queryKey para evitar refetch
   ];
 
   const queryFn = async () => {
@@ -48,10 +48,9 @@ export const useOptimizedFastLoading = ({
       if (isDevelopment) {
         console.log('🚀 OPTIMIZED LOADING START');
         console.log('Target connections:', targetConnections.length);
-        console.log('Selected categories:', selectedCategories.length);
       }
 
-      // Parallel loading for all connections
+      // Parallel loading for all connections - SEM filtro de categoria
       const connectionPromises = targetConnections.map(async (connection) => {
         const connectionConfig = {
           baseUrl: connection.base_url,
@@ -63,12 +62,12 @@ export const useOptimizedFastLoading = ({
         };
 
         try {
-          // Fetch ALL components without category filter - cache everything
+          // Carregar páginas em paralelo SEM filtro de categoria
           const pagePromises = [1, 2, 3].map(page =>
             fetchComponents(connectionConfig, {
               page,
               perPage: 50
-              // No categoryIds - load everything for client-side filtering
+              // ✅ REMOVIDO: categoryIds - carregar TUDO para filtrar client-side
             })
           );
 
@@ -79,7 +78,6 @@ export const useOptimizedFastLoading = ({
           
           for (const result of pageResults) {
             if (result.status === 'fulfilled' && result.value?.components) {
-              // Capture total available from first page response
               if (totalAvailable === 0 && result.value.totalComponents) {
                 totalAvailable = result.value.totalComponents;
               }
@@ -96,7 +94,7 @@ export const useOptimizedFastLoading = ({
           }
 
           if (isDevelopment) {
-            console.log(`✅ Loaded ${allComponents.length} from ${connection.name} (${totalAvailable} total available)`);
+            console.log(`✅ Loaded ${allComponents.length} from ${connection.name}`);
           }
 
           return {
@@ -142,34 +140,29 @@ export const useOptimizedFastLoading = ({
         }
       });
 
-      // Extract categories if not filtering
-      let allCategories = [];
-      if (selectedCategories.length === 0 && allComponents.length > 0) {
-        const categoryMap = new Map();
-        allComponents.forEach(component => {
-          if (component.categories && Array.isArray(component.categories)) {
-            component.categories.forEach(catId => {
-              if (!categoryMap.has(catId)) {
-                categoryMap.set(catId, {
-                  id: catId,
-                  name: `Category ${catId}`,
-                  slug: `cat-${catId}`,
-                  count: 1
-                });
-              } else {
-                categoryMap.get(catId).count += 1;
-              }
-            });
-          }
-        });
-        allCategories = Array.from(categoryMap.values());
-      }
+      // Extract ALL categories from ALL components
+      const categoryMap = new Map();
+      allComponents.forEach(component => {
+        if (component.categories && Array.isArray(component.categories)) {
+          component.categories.forEach(catId => {
+            if (!categoryMap.has(catId)) {
+              categoryMap.set(catId, {
+                id: catId,
+                name: `Category ${catId}`,
+                slug: `cat-${catId}`,
+                count: 1
+              });
+            } else {
+              categoryMap.get(catId).count += 1;
+            }
+          });
+        }
+      });
+      const allCategories = Array.from(categoryMap.values());
 
-      // Update store with ALL components (unfiltered cache)
+      // Update store with ALL components (cache completo)
       setComponents(allComponents);
-      if (allCategories.length > 0) {
-        setAvailableCategories(allCategories);
-      }
+      setAvailableCategories(allCategories);
 
       // Show toast only for critical errors
       if (allComponents.length === 0 && failedConnections.length > 0) {
@@ -182,28 +175,15 @@ export const useOptimizedFastLoading = ({
       }
 
       if (isDevelopment) {
-        console.log('✅ OPTIMIZED LOADING COMPLETE');
-        console.log(`📊 Loaded: ${allComponents.length} components`);
-        console.log(`📊 Total Available: ${totalAvailable} components`);
-        console.log(`✅ Success: ${successfulConnections.length} connections`);
-        console.log(`❌ Failed: ${failedConnections.length} connections`);
+        console.log('✅ CACHE LOADED:', allComponents.length, 'components');
       }
 
-      // Apply client-side filtering for display
+      // ✅ FILTRO CLIENT-SIDE INSTANTÂNEO
       const displayComponents = selectedCategories.length > 0
         ? allComponents.filter(comp => 
             comp.categories?.some(catId => selectedCategories.includes(catId))
           )
         : allComponents;
-      
-      if (isDevelopment) {
-        console.log('📦 Cache strategy:', {
-          totalCached: allComponents.length,
-          filtered: displayComponents.length,
-          selectedCategories: selectedCategories.length,
-          cacheHit: 'Client-side filtering - instant switch'
-        });
-      }
 
       return { 
         components: displayComponents, // Filtered for display
