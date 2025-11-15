@@ -1,5 +1,5 @@
 
-import React, { memo } from 'react';
+import React, { memo, useCallback } from 'react';
 import { useOptimizedFastLoading } from '@/hooks/useOptimizedFastLoading';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import ComponentGridError from './ComponentGridError';
@@ -15,10 +15,12 @@ interface ComponentGridProps {
   onPreview: (url: string, title: string) => void;
 }
 
-const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
+const ComponentGridComponent: React.FC<ComponentGridProps> = ({ onPreview }) => {
   const { activeConnectionId, selectedCategories } = useMultiConnectionData();
-  const { connections } = useConnectionsStore();
-  const { config } = useWordPressStore();
+  
+  // Seletores específicos para evitar re-renders
+  const connections = useConnectionsStore(useCallback((state) => state.connections, []));
+  const config = useWordPressStore(useCallback((state) => state.config, []));
 
   const {
     data,
@@ -140,6 +142,11 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
       />
     </div>
   );
+};
+
+// Memoize com comparação customizada
+const ComponentGrid = memo(ComponentGridComponent, (prevProps, nextProps) => {
+  return prevProps.onPreview === nextProps.onPreview;
 });
 
 ComponentGrid.displayName = 'ComponentGrid';

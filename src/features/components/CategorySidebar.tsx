@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
@@ -9,11 +9,13 @@ import { Folder, FolderOpen, Globe } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSlugResolver } from '@/hooks/useSlugResolver';
 
-export const CategorySidebar: React.FC = () => {
+const CategorySidebarComponent: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { connectionId: urlConnectionId, categoryId: urlCategoryId, connectionSlug, categorySlug } = useParams();
-  const { getConnectionById } = useConnectionsStore();
+  
+  // Seletores específicos para evitar re-renders
+  const getConnectionById = useConnectionsStore(useCallback((state) => state.getConnectionById, []));
   const { getConnectionSlug, getCategorySlug } = useSlugResolver();
   const {
     connectionsData,
@@ -65,17 +67,17 @@ export const CategorySidebar: React.FC = () => {
     }
   }, [connectionSlug, urlConnectionId, connectionsData, expandedConnections, toggleConnectionExpansion, getConnectionById]);
 
-  const handleAllComponentsClick = () => {
+  const handleAllComponentsClick = useCallback(() => {
     navigate('/');
     clearAllFilters();
-  };
+  }, [navigate, clearAllFilters]);
 
-  const handleConnectionClick = (connectionId: string) => {
+  const handleConnectionClick = useCallback((connectionId: string) => {
     const slug = getConnectionSlug(connectionId);
     navigate(slug ? `/${slug}` : `/connection/${connectionId}`);
-  };
+  }, [navigate, getConnectionSlug]);
 
-  const handleCategoryClick = (connectionId: string, categoryId: number, categorySlug: string) => {
+  const handleCategoryClick = useCallback((connectionId: string, categoryId: number, categorySlug: string) => {
     const connSlug = getConnectionSlug(connectionId);
     
     if (connSlug && categorySlug) {
@@ -83,10 +85,10 @@ export const CategorySidebar: React.FC = () => {
     } else {
       navigate(`/connection/${connectionId}/category/${categoryId}`);
     }
-  };
+  }, [navigate, getConnectionSlug]);
 
   // Prefetch on hover for instant category switching
-  const handleCategoryHover = (connectionId: string) => {
+  const handleCategoryHover = useCallback((connectionId: string) => {
     const connection = getConnectionById(connectionId);
     if (!connection) return;
 
@@ -101,7 +103,7 @@ export const CategorySidebar: React.FC = () => {
       queryKey,
       staleTime: 30 * 60 * 1000 // 30 minutes
     });
-  };
+  }, [queryClient, getConnectionById]);
 
   // Check if we're in the initial "All Components" state based on URL
   const isInAllComponentsState = !urlConnectionId && !urlCategoryId && !connectionSlug && !categorySlug;
@@ -248,3 +250,9 @@ export const CategorySidebar: React.FC = () => {
     </div>
   );
 };
+
+// Memoize com comparação customizada para evitar re-renders desnecessários
+export const CategorySidebar = React.memo(CategorySidebarComponent, (prevProps, nextProps) => {
+  // CategorySidebar não recebe props, mas vamos adicionar a comparação para garantir
+  return true; // Sem props, apenas re-renderiza quando hooks internos mudarem
+});
