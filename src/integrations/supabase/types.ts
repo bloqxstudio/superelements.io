@@ -116,6 +116,42 @@ export type Database = {
         }
         Relationships: []
       }
+      figma_conversions: {
+        Row: {
+          component_id: number
+          component_url: string
+          conversion_metadata: Json | null
+          created_at: string | null
+          figma_data: Json
+          html_hash: string
+          id: string
+          last_used_at: string | null
+          use_count: number | null
+        }
+        Insert: {
+          component_id: number
+          component_url: string
+          conversion_metadata?: Json | null
+          created_at?: string | null
+          figma_data: Json
+          html_hash: string
+          id?: string
+          last_used_at?: string | null
+          use_count?: number | null
+        }
+        Update: {
+          component_id?: number
+          component_url?: string
+          conversion_metadata?: Json | null
+          created_at?: string | null
+          figma_data?: Json
+          html_hash?: string
+          id?: string
+          last_used_at?: string | null
+          use_count?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -214,6 +250,15 @@ export type Database = {
       }
     }
     Views: {
+      figma_conversion_stats: {
+        Row: {
+          cache_hit_rate: number | null
+          cache_hits: number | null
+          total_conversions: number | null
+          total_uses: number | null
+        }
+        Relationships: []
+      }
       shared_connections: {
         Row: {
           base_url: string | null
