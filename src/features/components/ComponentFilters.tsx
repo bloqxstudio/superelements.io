@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +12,7 @@ interface ComponentFiltersProps {
   onRefresh: () => void;
 }
 
-const ComponentFiltersComponent: React.FC<ComponentFiltersProps> = ({ onRefresh }) => {
+const ComponentFilters: React.FC<ComponentFiltersProps> = ({ onRefresh }) => {
   const { 
     connectionsData,
     selectedCategories, 
@@ -24,44 +24,35 @@ const ComponentFiltersComponent: React.FC<ComponentFiltersProps> = ({ onRefresh 
   const [isFilterVisible, setIsFilterVisible] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Extract all categories from connections data (memoizado)
-  const allCategories = useMemo(() => 
-    connectionsData.flatMap(conn => 
-      conn.categories.map(cat => ({
-        id: cat.id,
-        name: cat.name,
-        connectionId: conn.connectionId
-      }))
-    ), 
-    [connectionsData]
+  // Extract all categories from connections data
+  const allCategories = connectionsData.flatMap(conn => 
+    conn.categories.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      connectionId: conn.connectionId
+    }))
   );
 
-  // Remove duplicates (memoizado)
-  const uniqueCategories = useMemo(() => 
-    allCategories.filter((cat, index, self) => 
-      index === self.findIndex(c => c.id === cat.id)
-    ),
-    [allCategories]
+  // Remove duplicates
+  const uniqueCategories = allCategories.filter((cat, index, self) => 
+    index === self.findIndex(c => c.id === cat.id)
   );
 
-  const toggleFilterVisibility = useCallback(() => {
-    setIsFilterVisible(prev => !prev);
-  }, []);
+  const toggleFilterVisibility = () => {
+    setIsFilterVisible(!isFilterVisible);
+  };
 
-  const handleCategoryToggle = useCallback((categoryId: number, connectionId: string) => {
+  const handleCategoryToggle = (categoryId: number, connectionId: string) => {
     selectCategory(connectionId, categoryId);
-  }, [selectCategory]);
+  };
 
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
-  }, []);
+  };
 
-  // Filter categories by search term (memoizado)
-  const filteredCategories = useMemo(() => 
-    uniqueCategories.filter(category =>
-      category.name.toLowerCase().includes(searchTerm.toLowerCase())
-    ),
-    [uniqueCategories, searchTerm]
+  // Filter categories by search term
+  const filteredCategories = uniqueCategories.filter(category =>
+    category.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -151,10 +142,5 @@ const ComponentFiltersComponent: React.FC<ComponentFiltersProps> = ({ onRefresh 
     </Card>
   );
 };
-
-// Memoize para evitar re-renders quando props não mudam
-const ComponentFilters = React.memo(ComponentFiltersComponent, (prevProps, nextProps) => {
-  return prevProps.onRefresh === nextProps.onRefresh;
-});
 
 export default ComponentFilters;

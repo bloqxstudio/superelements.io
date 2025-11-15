@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import CentralizedComponentLibrary from '@/components/CentralizedComponentLibrary';
 import { CategorySidebar } from '@/features/components/CategorySidebar';
@@ -17,20 +17,17 @@ import { PostTypeCategoryService } from '@/services/postTypeCategoryService';
 const Components = () => {
   const { connectionId, categoryId, connectionSlug, categorySlug, componentSlug } = useParams();
   const navigate = useNavigate();
-  
-  // Seletores específicos para evitar re-renders
-  const connections = useConnectionsStore(useCallback((state) => state.connections, []));
-  const setActiveConnection = useConnectionsStore(useCallback((state) => state.setActiveConnection, []));
-  const activeConnectionId = useConnectionsStore(useCallback((state) => state.activeConnectionId, []));
-  const { syncConnection } = useConnectionSync();
-  
-  // Seletores específicos
-  const setSelectedCategories = useWordPressStore(useCallback((state) => state.setSelectedCategories, []));
-  const selectedCategories = useWordPressStore(useCallback((state) => state.selectedCategories, []));
-  
+  const {
+    connections,
+    setActiveConnection,
+    activeConnectionId
+  } = useConnectionsStore();
+  const {
+    syncConnection
+  } = useConnectionSync();
+  const { setSelectedCategories, selectedCategories } = useWordPressStore();
   const { getConnectionBySlug, getCategoryBySlug, getConnectionSlug, getCategorySlug } = useSlugResolver();
   const { connectionsData } = useMultiConnectionData();
-  
   const [previewModal, setPreviewModal] = useState({
     isOpen: false,
     url: '',
@@ -38,34 +35,12 @@ const Components = () => {
     component: null as any
   });
 
-  const handlePreview = useCallback((url: string, title?: string, component?: any) => {
-    // ✅ Usar startTransition para UX suave
-    React.startTransition(() => {
-      setPreviewModal({
-        isOpen: true,
-        url,
-        title: title || 'Component Preview',
-        component: component || null
-      });
-    });
-    
-    // Track preview opened event in GA4
-    if (typeof window.gtag !== 'undefined') {
-      window.gtag('event', 'preview_opened', {
-        component_slug: component?.slug || 'unknown',
-        component_title: title || 'Unknown',
-        connection_slug: connectionSlug || 'unknown',
-        category_slug: categorySlug || 'all'
-      });
-    }
-    
-    console.log('🔍 handlePreview called with:', {
-      hasComponent: !!component,
-      componentSlug: component?.slug,
-      connectionId: component?.connection_id,
-      categories: component?.categories,
-      currentConnectionSlug: connectionSlug,
-      currentCategorySlug: categorySlug
+  const handlePreview = (url: string, title?: string, component?: any) => {
+    setPreviewModal({
+      isOpen: true,
+      url,
+      title: title || 'Component Preview',
+      component: component || null
     });
     
     // Atualizar URL com slug do componente para ser compartilhável (estrutura de 3 níveis)
@@ -74,37 +49,27 @@ const Components = () => {
       const categoryId = component.categories?.[0];
       let catSlug = categorySlug;
       
-      console.log('🔍 Step 1 - Initial values:', { connSlug, categoryId, catSlug });
-      
       // Fallback: buscar categoria em connectionsData
       if (!catSlug && categoryId && component.connection_id) {
         const connectionData = connectionsData.find(cd => cd.connectionId === component.connection_id);
         const category = connectionData?.categories.find(c => c.id === categoryId);
         catSlug = category?.slug || null;
-        console.log('🔍 Step 2 - Found category in connectionsData:', { category, catSlug });
       }
       
       // Último fallback: buscar via getCategorySlug
       if (!catSlug && categoryId) {
         catSlug = getCategorySlug(categoryId);
-        console.log('🔍 Step 3 - getCategorySlug fallback:', { catSlug });
       }
-      
-      console.log('🔍 Final URL parts:', { connSlug, catSlug, componentSlug: component.slug });
       
       // Só navegar se tiver todos os slugs necessários (estrutura de 3 níveis)
       if (connSlug && catSlug && component.slug) {
-        const newUrl = `/${connSlug}/${catSlug}/${component.slug}`;
-        console.log('✅ Navigating to:', newUrl);
-        navigate(newUrl);
-      } else {
-        console.warn('⚠️ Missing slugs, not updating URL:', { connSlug, catSlug, componentSlug: component.slug });
+        navigate(`/${connSlug}/${catSlug}/${component.slug}`);
       }
       // Se não conseguir obter catSlug, abrir modal sem mudar URL
     }
-  }, [navigate, connectionSlug, categorySlug, connectionsData, getCategorySlug, getConnectionSlug]);
+  };
   
-  const closePreview = useCallback(() => {
+  const closePreview = () => {
     setPreviewModal(prev => ({
       ...prev,
       isOpen: false
@@ -123,11 +88,11 @@ const Components = () => {
         navigate('/', { replace: true });
       }
     }
-  }, [navigate, connectionSlug, categorySlug, getConnectionSlug, getCategorySlug]);
+  };
 
-  const handleForceSync = useCallback(() => {
+  const handleForceSync = () => {
     syncConnection();
-  }, [syncConnection]);
+  };
 
   // Auto-abrir componente quando há componentSlug na URL
   useEffect(() => {
@@ -352,11 +317,7 @@ const Components = () => {
     // Caso "home" (sem conexão na URL)
     if (!resolvedConnectionId && !connectionSlug && !connectionId) {
       if (activeConnectionId !== null) setActiveConnection(null);
-      if (selectedCategories.length > 0) {
-        React.startTransition(() => {
-          setSelectedCategories([]);
-        });
-      }
+      if (selectedCategories.length > 0) setSelectedCategories([]);
       console.log('🏠 Home detected - ensuring no active connection and no category filters');
       return;
     }
@@ -368,17 +329,12 @@ const Components = () => {
         const isSame = selectedCategories.length === 1 && selectedCategories[0] === categoryIdNum;
         if (!isSame) {
           console.log('✅ Applying category filter:', { categoryIdNum });
-          // ✅ Usar startTransition para filtro instantâneo
-          React.startTransition(() => {
-            setSelectedCategories([categoryIdNum]);
-          });
+          setSelectedCategories([categoryIdNum]);
         }
       } else {
         if (selectedCategories.length > 0) {
           console.log('📋 Clearing category filters for connection');
-          React.startTransition(() => {
-            setSelectedCategories([]);
-          });
+          setSelectedCategories([]);
         }
       }
     }

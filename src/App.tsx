@@ -8,7 +8,6 @@ import Layout from "@/components/Layout";
 import { ViewportProvider } from "@/hooks/useViewport";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useGoogleAnalytics } from "@/hooks/useGoogleAnalytics";
 import Components from "@/pages/Components";
 import Connections from "@/pages/Connections";
 import Auth from "@/pages/Auth";
@@ -20,58 +19,6 @@ import ComponentView from "@/pages/ComponentView";
 
 const queryClient = new QueryClient();
 
-function AppRoutes() {
-  useGoogleAnalytics();
-  
-  return (
-    <Routes>
-      <Route path="/auth" element={<Auth />} />
-      <Route path="/login" element={<Auth />} />
-      
-      {/* Legacy routes with IDs (for backward compatibility) */}
-      <Route path="/component/:connectionId/:componentId" element={<ComponentView />} />
-      <Route path="/connection/:connectionId" element={<Components />} />
-      <Route path="/connection/:connectionId/category/:categoryId" element={<Components />} />
-      
-      {/* Main layout */}
-      <Route path="/" element={<Layout />}>
-        <Route index element={<Components />} />
-        
-        {/* Admin routes */}
-        <Route path="connections" element={
-          <ProtectedRoute requireRole={['admin']}>
-            <Connections />
-          </ProtectedRoute>
-        } />
-        <Route path="admin/users" element={
-          <ProtectedRoute requireRole={['admin']}>
-            <AdminUsers />
-          </ProtectedRoute>
-        } />
-        <Route path="admin/resources" element={
-          <ProtectedRoute requireRole={['admin']}>
-            <AdminResources />
-          </ProtectedRoute>
-        } />
-        
-        {/* Resources page for PRO and admin users */}
-        <Route path="resources" element={
-          <ProtectedRoute requireRole={['pro', 'admin']}>
-            <Resources />
-          </ProtectedRoute>
-        } />
-        
-        {/* Slug-based routes (must be last to avoid conflicts) */}
-        <Route path=":connectionSlug" element={<Components />} />
-        <Route path=":connectionSlug/:categorySlug" element={<Components />} />
-        <Route path=":connectionSlug/:categorySlug/:componentSlug" element={<ComponentView />} />
-      </Route>
-      
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  );
-}
-
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -81,7 +28,51 @@ function App() {
         <BrowserRouter>
           <AuthProvider>
             <ViewportProvider>
-              <AppRoutes />
+              <Routes>
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/login" element={<Auth />} />
+                
+                {/* Legacy routes with IDs (for backward compatibility) */}
+                <Route path="/component/:connectionId/:componentId" element={<ComponentView />} />
+                <Route path="/connection/:connectionId" element={<Components />} />
+                <Route path="/connection/:connectionId/category/:categoryId" element={<Components />} />
+                
+                {/* Main layout */}
+                <Route path="/" element={<Layout />}>
+                  <Route index element={<Components />} />
+                  
+                  {/* Admin routes */}
+                  <Route path="connections" element={
+                    <ProtectedRoute requireRole={['admin']}>
+                      <Connections />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="admin/users" element={
+                    <ProtectedRoute requireRole={['admin']}>
+                      <AdminUsers />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="admin/resources" element={
+                    <ProtectedRoute requireRole={['admin']}>
+                      <AdminResources />
+                    </ProtectedRoute>
+                  } />
+                  
+                  {/* Resources page for PRO and admin users */}
+                  <Route path="resources" element={
+                    <ProtectedRoute requireRole={['pro', 'admin']}>
+                      <Resources />
+                    </ProtectedRoute>
+                  } />
+                  
+                  {/* Slug-based routes (must be last to avoid conflicts) */}
+                  <Route path=":connectionSlug" element={<Components />} />
+                  <Route path=":connectionSlug/:categorySlug" element={<Components />} />
+                  <Route path=":connectionSlug/:categorySlug/:componentSlug" element={<ComponentView />} />
+                </Route>
+                
+                <Route path="*" element={<NotFound />} />
+              </Routes>
             </ViewportProvider>
           </AuthProvider>
         </BrowserRouter>

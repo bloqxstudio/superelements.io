@@ -1,7 +1,6 @@
 
-import React, { useCallback, useMemo } from 'react';
+import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { Button } from '@/components/ui/button';
@@ -9,13 +8,10 @@ import { Folder, FolderOpen, Globe } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSlugResolver } from '@/hooks/useSlugResolver';
 
-const CategorySidebarComponent: React.FC = () => {
+export const CategorySidebar: React.FC = () => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { connectionId: urlConnectionId, categoryId: urlCategoryId, connectionSlug, categorySlug } = useParams();
-  
-  // Seletores específicos para evitar re-renders
-  const getConnectionById = useConnectionsStore(useCallback((state) => state.getConnectionById, []));
+  const { getConnectionById } = useConnectionsStore();
   const { getConnectionSlug, getCategorySlug } = useSlugResolver();
   const {
     connectionsData,
@@ -67,17 +63,17 @@ const CategorySidebarComponent: React.FC = () => {
     }
   }, [connectionSlug, urlConnectionId, connectionsData, expandedConnections, toggleConnectionExpansion, getConnectionById]);
 
-  const handleAllComponentsClick = useCallback(() => {
+  const handleAllComponentsClick = () => {
     navigate('/');
     clearAllFilters();
-  }, [navigate, clearAllFilters]);
+  };
 
-  const handleConnectionClick = useCallback((connectionId: string) => {
+  const handleConnectionClick = (connectionId: string) => {
     const slug = getConnectionSlug(connectionId);
     navigate(slug ? `/${slug}` : `/connection/${connectionId}`);
-  }, [navigate, getConnectionSlug]);
+  };
 
-  const handleCategoryClick = useCallback((connectionId: string, categoryId: number, categorySlug: string) => {
+  const handleCategoryClick = (connectionId: string, categoryId: number, categorySlug: string) => {
     const connSlug = getConnectionSlug(connectionId);
     
     if (connSlug && categorySlug) {
@@ -85,25 +81,7 @@ const CategorySidebarComponent: React.FC = () => {
     } else {
       navigate(`/connection/${connectionId}/category/${categoryId}`);
     }
-  }, [navigate, getConnectionSlug]);
-
-  // Prefetch on hover for instant category switching
-  const handleCategoryHover = useCallback((connectionId: string) => {
-    const connection = getConnectionById(connectionId);
-    if (!connection) return;
-
-    const queryKey = [
-      'optimizedComponents',
-      connectionId,
-      connectionId // Single connection cache key
-    ];
-
-    // Prefetch the data in background
-    queryClient.prefetchQuery({
-      queryKey,
-      staleTime: 30 * 60 * 1000 // 30 minutes
-    });
-  }, [queryClient, getConnectionById]);
+  };
 
   // Check if we're in the initial "All Components" state based on URL
   const isInAllComponentsState = !urlConnectionId && !urlCategoryId && !connectionSlug && !categorySlug;
@@ -219,7 +197,7 @@ const CategorySidebarComponent: React.FC = () => {
                           </div>
                         )}
                         
-                        {/* Individual Categories with prefetch on hover */}
+                        {/* Individual Categories */}
                         {connection.categories.map(category => (
                           <Button 
                             key={category.id} 
@@ -232,7 +210,6 @@ const CategorySidebarComponent: React.FC = () => {
                                 : 'text-gray-600 hover:bg-gray-50'
                             }`}
                             onClick={() => handleCategoryClick(connection.connectionId, category.id, category.slug)}
-                            onMouseEnter={() => handleCategoryHover(connection.connectionId)}
                           >
                             <span className="truncate flex-1 text-left">{category.name}</span>
                             <span className="text-xs text-muted-foreground ml-2">({category.count})</span>
@@ -250,9 +227,3 @@ const CategorySidebarComponent: React.FC = () => {
     </div>
   );
 };
-
-// Memoize com comparação customizada para evitar re-renders desnecessários
-export const CategorySidebar = React.memo(CategorySidebarComponent, (prevProps, nextProps) => {
-  // CategorySidebar não recebe props, mas vamos adicionar a comparação para garantir
-  return true; // Sem props, apenas re-renderiza quando hooks internos mudarem
-});

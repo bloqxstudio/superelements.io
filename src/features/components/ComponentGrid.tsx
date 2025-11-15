@@ -1,5 +1,5 @@
 
-import React, { memo, useCallback } from 'react';
+import React, { memo } from 'react';
 import { useOptimizedFastLoading } from '@/hooks/useOptimizedFastLoading';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import ComponentGridError from './ComponentGridError';
@@ -15,12 +15,10 @@ interface ComponentGridProps {
   onPreview: (url: string, title: string) => void;
 }
 
-const ComponentGridComponent: React.FC<ComponentGridProps> = ({ onPreview }) => {
+const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
   const { activeConnectionId, selectedCategories } = useMultiConnectionData();
-  
-  // Seletores específicos para evitar re-renders
-  const connections = useConnectionsStore(useCallback((state) => state.connections, []));
-  const config = useWordPressStore(useCallback((state) => state.config, []));
+  const { connections } = useConnectionsStore();
+  const { config } = useWordPressStore();
 
   const {
     data,
@@ -29,15 +27,11 @@ const ComponentGridComponent: React.FC<ComponentGridProps> = ({ onPreview }) => 
     error,
     isReady,
     refetch,
-    totalComponents,
-    isFetching
+    totalComponents
   } = useOptimizedFastLoading({
     selectedCategories,
     activeConnectionId
   });
-
-  // Track if we're filtering (fetching but not loading from scratch)
-  const isApplyingFilters = isFetching && !isLoading;
 
   const {
     handleCopyComponent,
@@ -77,7 +71,7 @@ const ComponentGridComponent: React.FC<ComponentGridProps> = ({ onPreview }) => 
     );
   }
 
-  // Show content with filtering indicator
+  // Show content
   return (
     <div className="space-y-4">
       {/* Status Badge */}
@@ -86,11 +80,6 @@ const ComponentGridComponent: React.FC<ComponentGridProps> = ({ onPreview }) => 
           <Badge variant="secondary" className="flex items-center gap-2 px-3 py-1">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Loading components...</span>
-          </Badge>
-        ) : isApplyingFilters ? (
-          <Badge variant="secondary" className="flex items-center gap-2 px-3 py-1 animate-pulse">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            <span className="text-xs">Filtering...</span>
           </Badge>
         ) : displayComponents.length > 0 ? (
           <Badge variant="secondary" className="flex items-center gap-2 px-3 py-1">
@@ -142,11 +131,6 @@ const ComponentGridComponent: React.FC<ComponentGridProps> = ({ onPreview }) => 
       />
     </div>
   );
-};
-
-// Memoize com comparação customizada
-const ComponentGrid = memo(ComponentGridComponent, (prevProps, nextProps) => {
-  return prevProps.onPreview === nextProps.onPreview;
 });
 
 ComponentGrid.displayName = 'ComponentGrid';

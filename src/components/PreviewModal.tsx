@@ -47,7 +47,6 @@ const PreviewModalContent: React.FC<{
         previewUrl={previewUrl}
         onCopyJson={handleCopyJson}
         onOpenInNewTab={openInNewTab}
-        component={component}
       />
       
       {/* Preview Area */}

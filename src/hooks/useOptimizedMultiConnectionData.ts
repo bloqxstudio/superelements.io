@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useWordPressStore } from '@/store/wordpressStore';
@@ -18,30 +19,29 @@ interface ConnectionCategories {
   lastRefresh?: Date;
 }
 
-export const useMultiConnectionData = () => {
+const isDevelopment = import.meta.env.DEV;
+
+export const useOptimizedMultiConnectionData = () => {
   const { connections, activeConnectionId, setActiveConnection } = useConnectionsStore();
   const { selectedCategories, setSelectedCategories, clearLoadedPages, setIsFastLoading, setFastLoadingPage } = useWordPressStore();
   
   const [connectionData, setConnectionData] = useState<Map<string, ConnectionCategories>>(new Map());
   const [expandedConnections, setExpandedConnections] = useState<Set<string>>(new Set());
 
-  // Memoize active connections to prevent infinite loops
+  // Stable memoized active connections
   const activeConnections = useMemo(() => {
     return connections.filter(conn => conn.isActive);
   }, [connections]);
 
-  // Create a stable key for active connections to prevent unnecessary re-renders
+  // Stable key for active connections
   const activeConnectionsKey = useMemo(() => {
-    return activeConnections.map(c => `${c.id}-${c.name}-${c.isActive}`).join(',');
+    return activeConnections.map(c => `${c.id}-${c.isActive}`).join(',');
   }, [activeConnections]);
 
-  // Garantir estado inicial limpo - "All Components"
+  // Ensure initial clean state - "All Components"
   useEffect(() => {
-    console.log('🏠 Ensuring initial clean state for "All Components"');
-    
-    // Se não há conexão ativa nem categorias selecionadas no carregamento inicial
-    if (!activeConnectionId && selectedCategories.length === 0) {
-      console.log('✅ Initial state confirmed: "All Components" mode');
+    if (isDevelopment && !activeConnectionId && selectedCategories.length === 0) {
+      console.log('✅ Initial state: "All Components" mode');
     }
   }, []);
 
@@ -68,7 +68,9 @@ export const useMultiConnectionData = () => {
     const activeConnectionIds = new Set(activeConnections.map(c => c.id));
     for (const [connectionId] of connectionData.entries()) {
       if (!activeConnectionIds.has(connectionId)) {
-        console.log(`Removing data for inactive connection: ${connectionId}`);
+        if (isDevelopment) {
+          console.log(`Removing data for inactive connection: ${connectionId}`);
+        }
       }
     }
     
@@ -88,7 +90,9 @@ export const useMultiConnectionData = () => {
     if (activeConnectionId) {
       const isActiveConnectionStillActive = activeConnections.some(conn => conn.id === activeConnectionId);
       if (!isActiveConnectionStillActive) {
-        console.log('Active connection is no longer active, returning to "All Components"');
+        if (isDevelopment) {
+          console.log('Active connection is no longer active, returning to "All Components"');
+        }
         clearAllFilters();
       }
     }
@@ -97,11 +101,15 @@ export const useMultiConnectionData = () => {
   const loadConnectionCategories = useCallback(async (connectionId: string) => {
     const connection = activeConnections.find(c => c.id === connectionId);
     if (!connection) {
-      console.log(`Connection ${connectionId} not found in active connections`);
+      if (isDevelopment) {
+        console.log(`Connection ${connectionId} not found in active connections`);
+      }
       return;
     }
 
-    console.log(`Loading categories with components for active connection: ${connection.name} (${connection.post_type})`);
+    if (isDevelopment) {
+      console.log(`Loading categories for: ${connection.name}`);
+    }
 
     setConnectionData(prev => {
       const newData = new Map(prev);
@@ -139,10 +147,14 @@ export const useMultiConnectionData = () => {
         return newData;
       });
 
-      console.log(`Loaded ${categoriesWithComponents.length} categories with components for active connection: ${connection.name}`, categoriesWithComponents);
+      if (isDevelopment) {
+        console.log(`✅ Loaded ${categoriesWithComponents.length} categories for: ${connection.name}`);
+      }
       
     } catch (error) {
-      console.error(`Error loading categories for active connection ${connectionId}:`, error);
+      if (isDevelopment) {
+        console.error(`❌ Error loading categories for ${connectionId}:`, error);
+      }
       
       setConnectionData(prev => {
         const newData = new Map(prev);
@@ -160,7 +172,9 @@ export const useMultiConnectionData = () => {
   }, [activeConnections]);
 
   const refreshConnectionCategories = useCallback(async (connectionId: string) => {
-    console.log(`Refreshing categories for active connection: ${connectionId}`);
+    if (isDevelopment) {
+      console.log(`Refreshing categories for: ${connectionId}`);
+    }
     
     setConnectionData(prev => {
       const newData = new Map(prev);
@@ -188,7 +202,7 @@ export const useMultiConnectionData = () => {
         return newSet;
       });
     } else {
-      // Only expand the clicked connection, collapse others for clean UI
+      // Only expand the clicked connection
       setExpandedConnections(new Set([connectionId]));
     }
   }, [expandedConnections]);
@@ -196,87 +210,77 @@ export const useMultiConnectionData = () => {
   const selectConnection = useCallback((connectionId: string) => {
     const isConnectionActive = activeConnections.some(conn => conn.id === connectionId);
     if (!isConnectionActive) {
-      console.log('Cannot select inactive connection:', connectionId);
+      if (isDevelopment) {
+        console.log('Cannot select inactive connection:', connectionId);
+      }
       return;
     }
 
-    console.log('Selecting active connection:', connectionId);
+    if (isDevelopment) {
+      console.log('Selecting connection:', connectionId);
+    }
     
-    // Set the selection and maintain it - do not clear anything
     setActiveConnection(connectionId);
     setSelectedCategories([]);
-    
-    // Only clear loaded pages for new data loading
     clearLoadedPages();
     setIsFastLoading(false);
     setFastLoadingPage(0);
-    
-    // Expand only the selected connection
     setExpandedConnections(new Set([connectionId]));
-    
-    console.log('Connection selected and maintained');
   }, [activeConnections, setActiveConnection, setSelectedCategories, clearLoadedPages, setIsFastLoading, setFastLoadingPage]);
 
   const selectAllFromConnection = useCallback((connectionId: string) => {
     const isConnectionActive = activeConnections.some(conn => conn.id === connectionId);
     if (!isConnectionActive) {
-      console.log('Cannot select all from inactive connection:', connectionId);
+      if (isDevelopment) {
+        console.log('Cannot select all from inactive connection:', connectionId);
+      }
       return;
     }
 
-    console.log('Selecting all components from active connection:', connectionId);
+    if (isDevelopment) {
+      console.log('Selecting all from connection:', connectionId);
+    }
     
-    // Set active connection and maintain the selection
     setActiveConnection(connectionId);
     setSelectedCategories([]);
-    
-    // Only clear loaded pages for new data loading
     clearLoadedPages();
     setIsFastLoading(false);
     setFastLoadingPage(0);
-    
-    // Keep the connection expanded when selecting "All" from it
     setExpandedConnections(new Set([connectionId]));
-    
-    console.log('All components from connection selected and maintained');
   }, [activeConnections, setActiveConnection, setSelectedCategories, clearLoadedPages, setIsFastLoading, setFastLoadingPage]);
 
   const selectCategory = useCallback((connectionId: string, categoryId: number) => {
     const isConnectionActive = activeConnections.some(conn => conn.id === connectionId);
     if (!isConnectionActive) {
-      console.log('Cannot select category from inactive connection:', connectionId);
+      if (isDevelopment) {
+        console.log('Cannot select category from inactive connection:', connectionId);
+      }
       return;
     }
 
-    console.log('Selecting category:', categoryId, 'from active connection:', connectionId);
+    if (isDevelopment) {
+      console.log('Selecting category:', categoryId, 'from connection:', connectionId);
+    }
     
-    // Set the selection and maintain it
     setActiveConnection(connectionId);
     setSelectedCategories([categoryId]);
     setExpandedConnections(new Set([connectionId]));
-    
-    // Only clear loaded pages for new data loading
     clearLoadedPages();
     setIsFastLoading(false);
     setFastLoadingPage(0);
-    
-    console.log('Category selected and maintained');
   }, [activeConnections, setActiveConnection, setSelectedCategories, clearLoadedPages, setIsFastLoading, setFastLoadingPage]);
 
   const clearAllFilters = useCallback(() => {
-    console.log('🏠 Manually clearing all filters - returning to "All Components" state');
+    if (isDevelopment) {
+      console.log('🏠 Clearing all filters - returning to "All Components"');
+    }
     
     setSelectedCategories([]);
     setActiveConnection(null);
-    
     clearLoadedPages();
     setIsFastLoading(false);
     setFastLoadingPage(0);
-    
-    // Close all groups when returning to "All Components"
     setExpandedConnections(new Set());
-    
-    console.log('✅ All filters manually cleared - back to "All Components"');
   }, [setSelectedCategories, setActiveConnection, clearLoadedPages, setIsFastLoading, setFastLoadingPage]);
 
   const isCategorySelected = useCallback((categoryId: number) => {
@@ -284,7 +288,6 @@ export const useMultiConnectionData = () => {
   }, [selectedCategories]);
 
   const isConnectionAllSelected = useCallback((connectionId: string) => {
-    // Connection is "all selected" when it's the active connection but no specific categories are selected
     return activeConnectionId === connectionId && selectedCategories.length === 0;
   }, [activeConnectionId, selectedCategories]);
 
@@ -296,14 +299,14 @@ export const useMultiConnectionData = () => {
 
   const hasActiveFilters = selectedCategories.length > 0;
   
-  console.log('Multi-connection data state (active connections only):', {
-    totalConnections: connections.length,
-    activeConnectionsCount: activeConnections.length,
-    selectedCategoriesCount: selectedCategories.length,
-    hasActiveFilters,
-    activeConnectionId,
-    isInAllComponentsState: !activeConnectionId && selectedCategories.length === 0
-  });
+  if (isDevelopment) {
+    console.log('Multi-connection state:', {
+      activeConnectionsCount: activeConnections.length,
+      selectedCategoriesCount: selectedCategories.length,
+      hasActiveFilters,
+      activeConnectionId
+    });
+  }
 
   return {
     connectionsData: getConnectionsArray(),

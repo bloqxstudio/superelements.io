@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { useQuery } from '@tanstack/react-query';
 import { useWordPressStore } from '@/store/wordpressStore';
 import { useWordPressApi } from '@/hooks/useWordPressApi';
@@ -28,12 +28,12 @@ export const useOptimizedFastLoading = ({
     ? allUserConnections.filter(c => c.id === activeConnectionId)
     : allUserConnections;
 
-  // ✅ Cache APENAS por connection - categorias são filtradas client-side
+  // Stable query key with reduced complexity
   const queryKey = [
     'optimizedComponents',
-    activeConnectionId || 'all-connections',
-    targetConnections.map(c => c.id).sort().join(',')
-    // ❌ REMOVIDO: selectedCategories do queryKey para evitar refetch
+    activeConnectionId || 'all-user-connections',
+    selectedCategories.length > 0 ? selectedCategories.sort().join(',') : 'no-categories',
+    targetConnections.length
   ];
 
   const queryFn = async () => {
@@ -48,9 +48,10 @@ export const useOptimizedFastLoading = ({
       if (isDevelopment) {
         console.log('🚀 OPTIMIZED LOADING START');
         console.log('Target connections:', targetConnections.length);
+        console.log('Selected categories:', selectedCategories.length);
       }
 
-      // Parallel loading for all connections - SEM filtro de categoria
+      // Parallel loading for all connections
       const connectionPromises = targetConnections.map(async (connection) => {
         const connectionConfig = {
           baseUrl: connection.base_url,
@@ -62,12 +63,12 @@ export const useOptimizedFastLoading = ({
         };
 
         try {
-          // Carregar páginas em paralelo SEM filtro de categoria
+          // Load first 3 pages in parallel (150 components max per connection)
           const pagePromises = [1, 2, 3].map(page =>
             fetchComponents(connectionConfig, {
               page,
-              perPage: 50
-              // ✅ REMOVIDO: categoryIds - carregar TUDO para filtrar client-side
+              perPage: 50,
+              categoryIds: selectedCategories.length > 0 ? selectedCategories : undefined
             })
           );
 
@@ -78,6 +79,7 @@ export const useOptimizedFastLoading = ({
           
           for (const result of pageResults) {
             if (result.status === 'fulfilled' && result.value?.components) {
+              // Capture total available from first page response
               if (totalAvailable === 0 && result.value.totalComponents) {
                 totalAvailable = result.value.totalComponents;
               }
@@ -94,7 +96,7 @@ export const useOptimizedFastLoading = ({
           }
 
           if (isDevelopment) {
-            console.log(`✅ Loaded ${allComponents.length} from ${connection.name}`);
+            console.log(`✅ Loaded ${allComponents.length} from ${connection.name} (${totalAvailable} total available)`);
           }
 
           return {
@@ -140,29 +142,34 @@ export const useOptimizedFastLoading = ({
         }
       });
 
-      // Extract ALL categories from ALL components
-      const categoryMap = new Map();
-      allComponents.forEach(component => {
-        if (component.categories && Array.isArray(component.categories)) {
-          component.categories.forEach(catId => {
-            if (!categoryMap.has(catId)) {
-              categoryMap.set(catId, {
-                id: catId,
-                name: `Category ${catId}`,
-                slug: `cat-${catId}`,
-                count: 1
-              });
-            } else {
-              categoryMap.get(catId).count += 1;
-            }
-          });
-        }
-      });
-      const allCategories = Array.from(categoryMap.values());
+      // Extract categories if not filtering
+      let allCategories = [];
+      if (selectedCategories.length === 0 && allComponents.length > 0) {
+        const categoryMap = new Map();
+        allComponents.forEach(component => {
+          if (component.categories && Array.isArray(component.categories)) {
+            component.categories.forEach(catId => {
+              if (!categoryMap.has(catId)) {
+                categoryMap.set(catId, {
+                  id: catId,
+                  name: `Category ${catId}`,
+                  slug: `cat-${catId}`,
+                  count: 1
+                });
+              } else {
+                categoryMap.get(catId).count += 1;
+              }
+            });
+          }
+        });
+        allCategories = Array.from(categoryMap.values());
+      }
 
-      // Update store with ALL components (cache completo)
+      // Update store
       setComponents(allComponents);
-      setAvailableCategories(allCategories);
+      if (allCategories.length > 0) {
+        setAvailableCategories(allCategories);
+      }
 
       // Show toast only for critical errors
       if (allComponents.length === 0 && failedConnections.length > 0) {
@@ -175,15 +182,18 @@ export const useOptimizedFastLoading = ({
       }
 
       if (isDevelopment) {
-        console.log('✅ CACHE LOADED:', allComponents.length, 'components');
+        console.log('✅ OPTIMIZED LOADING COMPLETE');
+        console.log(`📊 Loaded: ${allComponents.length} components`);
+        console.log(`📊 Total Available: ${totalAvailable} components`);
+        console.log(`✅ Success: ${successfulConnections.length} connections`);
+        console.log(`❌ Failed: ${failedConnections.length} connections`);
       }
 
-      // ✅ Retornar TODOS os componentes (sem filtro) - filtro será aplicado externamente
       return { 
-        components: allComponents, // ✅ All components without filter
+        components: allComponents, 
         categories: allCategories,
         totalLoaded: allComponents.length,
-        totalAvailable: allComponents.length,
+        totalAvailable,
         successfulConnections: successfulConnections.length,
         failedConnections: failedConnections.length
       };
@@ -223,20 +233,7 @@ export const useOptimizedFastLoading = ({
     placeholderData: (previousData) => previousData, // Keep showing old data during errors
   });
 
-  // ✅ FILTRO CLIENT-SIDE REATIVO - Re-executa quando selectedCategories muda
-  const filteredComponents = React.useMemo(() => {
-    const allComponents = data?.components || [];
-    
-    if (selectedCategories.length === 0) {
-      return allComponents;
-    }
-    
-    return allComponents.filter(comp => 
-      comp.categories?.some(catId => selectedCategories.includes(catId))
-    );
-  }, [data?.components, selectedCategories]);
-
-  const totalComponents = filteredComponents.length;
+  const totalComponents = data?.totalLoaded || 0;
 
   if (isDevelopment) {
     console.log('📊 OPTIMIZED LOADING STATE:', {
@@ -249,11 +246,7 @@ export const useOptimizedFastLoading = ({
   }
 
   return {
-    data: data ? {
-      ...data,
-      components: filteredComponents, // ✅ Return filtered components
-      totalLoaded: filteredComponents.length
-    } : undefined,
+    data,
     isLoading,
     isError,
     error: error?.message || null,

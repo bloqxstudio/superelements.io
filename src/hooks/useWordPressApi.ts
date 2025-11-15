@@ -207,7 +207,7 @@ export const useWordPressApi = () => {
       }
       
       // Enhanced retry logic with exponential backoff and jitter
-      const maxRetries = 3; // Reduced from 5 for faster failure detection // Increased from 3 to 5
+      const maxRetries = 5; // Increased from 3 to 5
       let retryCount = 0;
       const baseDelay = 1000;
       const requestStartTime = Date.now();
@@ -225,7 +225,7 @@ export const useWordPressApi = () => {
         try {
           // Increased timeout to 30 seconds
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000); // Reduced from 30s to 10s
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
           
           const fetchStartTime = Date.now();
           const response = await fetch(apiUrl, {
@@ -275,10 +275,10 @@ export const useWordPressApi = () => {
             
             // Retry logic for server errors and rate limiting
             if (shouldRetry && retryCount < maxRetries) {
-              // Faster exponential backoff: 1s, 2s, 4s (max)
-              const exponentialDelay = baseDelay * Math.pow(1.5, retryCount); // Slower growth
-              const jitter = Math.random() * 500; // Reduced jitter
-              const delay = Math.min(exponentialDelay + jitter, 4000); // Max 4s instead of 15s
+              // Exponential backoff with jitter
+              const exponentialDelay = baseDelay * Math.pow(2, retryCount);
+              const jitter = Math.random() * 1000;
+              const delay = Math.min(exponentialDelay + jitter, 15000);
               
               logger.warn(`Retrying after ${Math.round(delay)}ms (attempt ${retryCount + 1}/${maxRetries})`);
               
