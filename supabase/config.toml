@@ -1,1 +1,4 @@
 project_id = "nfmfcpcwyavutntnrxqq"
+
+[functions.convert-to-figma]
+verify_jwt = true

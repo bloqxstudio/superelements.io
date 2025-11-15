@@ -6,24 +6,34 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useViewport } from '@/hooks/useViewport';
 import ViewportSwitcher from '@/components/ViewportSwitcher';
-import { ExternalLink, Smartphone, Tablet, Monitor, Eye, Copy } from 'lucide-react';
+import { ExternalLink, Smartphone, Tablet, Monitor, Eye, Copy, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useConvertToFigma } from '@/hooks/useConvertToFigma';
 
 interface PreviewModalHeaderProps {
   title: string;
   previewUrl: string;
   onCopyJson: () => Promise<void>;
   onOpenInNewTab: () => void;
+  component?: any;
 }
 
 const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
   title,
   previewUrl,
   onCopyJson,
-  onOpenInNewTab
+  onOpenInNewTab,
+  component
 }) => {
   const { user } = useAuth();
   const { viewport, getViewportWidth } = useViewport();
+  const { convertToFigma, converting } = useConvertToFigma();
+
+  const handleCopyDesign = async () => {
+    if (component?.id && previewUrl) {
+      await convertToFigma(component.id, previewUrl);
+    }
+  };
 
   const getViewportIcon = () => {
     switch (viewport) {
@@ -82,6 +92,33 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>{!user ? 'Faça login para copiar' : 'Copiar componente'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Copy Design Button */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyDesign}
+                    disabled={!user || converting}
+                    className="flex items-center gap-2 text-xs sm:text-sm bg-purple-50 hover:bg-purple-100 border-purple-300 dark:bg-purple-950/30 dark:hover:bg-purple-950/50 dark:border-purple-800"
+                  >
+                    <Sparkles className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">
+                      {converting ? 'CONVERTENDO...' : 'DESIGN'}
+                    </span>
+                    <span className="sm:hidden">
+                      {converting ? '...' : 'DESIGN'}
+                    </span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Converter e copiar design para o Figma (via code.to.design)</p>
+                  {!user && <p className="text-xs text-muted-foreground mt-1">LOGIN REQUIRED</p>}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
