@@ -9,6 +9,7 @@ interface ScaledIframeProps {
 
 export interface ScaledIframeRef {
   getHTML: () => string;
+  isReady: () => boolean;
 }
 
 const ScaledIframe = React.forwardRef<ScaledIframeRef, ScaledIframeProps>(({ url, title, viewport }, ref) => {
@@ -17,16 +18,43 @@ const ScaledIframe = React.forwardRef<ScaledIframeRef, ScaledIframeProps>(({ url
   const [loaded, setLoaded] = React.useState(false);
   const [scale, setScale] = React.useState(1);
 
-  // Expose getHTML method via ref
+  // Expose getHTML and isReady methods via ref
   React.useImperativeHandle(ref, () => ({
     getHTML: () => {
       const iframe = iframeRef.current;
-      if (!iframe || !iframe.contentDocument) {
-        throw new Error('Iframe not loaded');
+      
+      if (!iframe) {
+        throw new Error('Iframe ref not available');
       }
-      return iframe.contentDocument.documentElement.outerHTML;
+      
+      if (!loaded) {
+        throw new Error('Iframe still loading');
+      }
+      
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (!doc) {
+          throw new Error('Cannot access iframe content (CORS restriction)');
+        }
+        
+        const html = doc.documentElement.outerHTML;
+        if (!html || html.length < 100) {
+          throw new Error('Iframe content is empty or too small');
+        }
+        
+        return html;
+      } catch (error) {
+        console.error('Failed to access iframe content:', error);
+        throw new Error('Cannot access iframe content - try waiting a bit longer');
+      }
+    },
+    
+    isReady: () => {
+      return loaded && 
+             !!iframeRef.current?.contentDocument && 
+             (iframeRef.current?.contentDocument?.readyState === 'complete');
     }
-  }));
+  }), [loaded]);
 
   // Calculate scale based on container size
   const calculateScale = React.useCallback(() => {
