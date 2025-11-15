@@ -17,7 +17,7 @@ export const useConvertToFigma = () => {
 
   const convertToFigma = async (
     componentId: number, 
-    componentUrl: string,
+    html: string,
     forceRefresh: boolean = false
   ): Promise<boolean> => {
     if (!user) {
@@ -37,11 +37,11 @@ export const useConvertToFigma = () => {
         description: "Aguarde enquanto preparamos o design para você.",
       });
 
-      // Call edge function
+      // Call edge function with HTML
       const { data, error } = await supabase.functions.invoke('convert-to-figma', {
         body: { 
           componentId, 
-          componentUrl,
+          html,
           forceRefresh
         }
       });
@@ -119,25 +119,41 @@ export const useConvertToFigma = () => {
 };
 
 /**
- * Copy Figma data to clipboard in the correct format
+ * Copy Figma data to clipboard using copy event interception
+ * This is the method recommended by code.to.design for clipboard mode
  */
-async function copyToFigmaClipboard(figmaData: any) {
-  try {
-    // The exact format depends on code.to.design API response
-    // Usually it's special HTML that Figma recognizes
-    const htmlContent = figmaData.html || figmaData.clipboard || JSON.stringify(figmaData);
+async function copyToFigmaClipboard(clipboardHtml: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let clipboardDataFromAPI: string | undefined = clipboardHtml;
     
-    // Try using ClipboardItem API for better compatibility
-    const clipboardItem = new ClipboardItem({
-      'text/html': new Blob([htmlContent], { type: 'text/html' }),
-      'text/plain': new Blob([htmlContent], { type: 'text/plain' })
-    });
-
-    await navigator.clipboard.write([clipboardItem]);
-  } catch (clipboardError) {
-    // Fallback to simple text copy
-    console.warn('ClipboardItem failed, using text fallback:', clipboardError);
-    const textContent = typeof figmaData === 'string' ? figmaData : JSON.stringify(figmaData);
-    await navigator.clipboard.writeText(textContent);
-  }
+    const handleCopy = (e: ClipboardEvent) => {
+      if (clipboardDataFromAPI && e.clipboardData) {
+        e.clipboardData.setData('text/html', clipboardDataFromAPI);
+        e.preventDefault();
+        clipboardDataFromAPI = undefined;
+        document.removeEventListener('copy', handleCopy);
+        console.log('✅ HTML copied to clipboard for Figma');
+        resolve();
+      }
+    };
+    
+    document.addEventListener('copy', handleCopy);
+    
+    // Trigger copy command
+    try {
+      const success = document.execCommand('copy');
+      if (!success) {
+        throw new Error('execCommand failed');
+      }
+    } catch (err) {
+      document.removeEventListener('copy', handleCopy);
+      reject(err);
+    }
+    
+    // Timeout fallback
+    setTimeout(() => {
+      document.removeEventListener('copy', handleCopy);
+      reject(new Error('Copy timeout - clipboard operation took too long'));
+    }, 2000);
+  });
 }

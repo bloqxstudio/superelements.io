@@ -8,7 +8,7 @@ const corsHeaders = {
 
 interface ConvertRequest {
   componentId: number;
-  componentUrl: string;
+  html: string;
   forceRefresh?: boolean;
 }
 
@@ -18,9 +18,13 @@ serve(async (req) => {
   }
 
   try {
-    const { componentId, componentUrl, forceRefresh }: ConvertRequest = await req.json();
+    const { componentId, html, forceRefresh }: ConvertRequest = await req.json();
 
-    console.log('🎨 Convert to Figma request:', { componentId, componentUrl, forceRefresh });
+    console.log('🎨 Convert to Figma request:', { 
+      componentId, 
+      htmlSize: html.length,
+      forceRefresh 
+    });
 
     // Init Supabase with service role for cache operations
     const supabaseClient = createClient(
@@ -28,25 +32,11 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // 1. Fetch rendered HTML from component URL
-    console.log('📥 Fetching HTML from:', componentUrl);
-    const htmlResponse = await fetch(componentUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; CodeToDesign/1.0)'
-      }
-    });
-
-    if (!htmlResponse.ok) {
-      throw new Error(`Failed to fetch component HTML: ${htmlResponse.status}`);
-    }
-
-    const htmlContent = await htmlResponse.text();
-    console.log('✅ HTML fetched, size:', htmlContent.length, 'bytes');
-
     // Generate hash of HTML for cache key
-    const htmlHash = await hashString(htmlContent);
+    const htmlHash = await hashString(html);
+    console.log('🔑 HTML hash:', htmlHash);
 
-    // 2. Check cache (unless force refresh)
+    // Check cache (unless force refresh)
     if (!forceRefresh) {
       const { data: cached, error: cacheError } = await supabaseClient
         .from('figma_conversions')
@@ -79,53 +69,49 @@ serve(async (req) => {
       }
     }
 
-    // 3. Call code.to.design API
-    console.log('🚀 Converting HTML to Figma via code.to.design API...');
+    // Call api.to.design with correct endpoint
+    console.log('🚀 Converting HTML to Figma via api.to.design...');
     const apiKey = Deno.env.get('CODE_TO_DESIGN_API_KEY');
     
     if (!apiKey) {
       throw new Error('CODE_TO_DESIGN_API_KEY not configured');
     }
 
-    const conversionResponse = await fetch('https://api.code.to.design/api/convert', {
+    const conversionResponse = await fetch('https://api.to.design/html', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        html: htmlContent,
-        format: 'figma',
-        options: {
-          width: 1200,
-          preserveFonts: true,
-          inlineStyles: true
-        }
+        html: html,
+        clip: true  // Enable clipboard mode
       })
     });
 
     if (!conversionResponse.ok) {
       const errorText = await conversionResponse.text();
-      console.error('❌ code.to.design API error:', conversionResponse.status, errorText);
-      throw new Error(`code.to.design API error: ${conversionResponse.status} - ${errorText}`);
+      console.error('❌ api.to.design API error:', conversionResponse.status, errorText);
+      throw new Error(`API error: ${conversionResponse.status} - ${errorText}`);
     }
 
-    const figmaData = await conversionResponse.json();
-    console.log('✨ Conversion successful, data size:', JSON.stringify(figmaData).length, 'bytes');
+    // Response is text/html clipboard data
+    const clipboardHtml = await conversionResponse.text();
+    console.log('✨ Conversion successful, clipboard HTML size:', clipboardHtml.length, 'bytes');
 
-    // 4. Save to cache
+    // Save to cache
     console.log('💾 Saving conversion to cache...');
     const { error: insertError } = await supabaseClient
       .from('figma_conversions')
       .insert({
         component_id: componentId,
-        component_url: componentUrl,
+        component_url: '', // Not needed anymore since we receive HTML
         html_hash: htmlHash,
-        figma_data: figmaData,
+        figma_data: { clipboardHtml },
         conversion_metadata: {
           convertedAt: new Date().toISOString(),
-          htmlSize: htmlContent.length,
-          apiVersion: '1.0'
+          htmlSize: html.length,
+          clipboardHtmlSize: clipboardHtml.length
         }
       });
 
@@ -138,7 +124,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        data: figmaData,
+        data: { clipboardHtml },
         cached: false,
         newConversion: true
       }),
