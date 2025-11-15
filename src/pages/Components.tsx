@@ -39,11 +39,14 @@ const Components = () => {
   });
 
   const handlePreview = useCallback((url: string, title?: string, component?: any) => {
-    setPreviewModal({
-      isOpen: true,
-      url,
-      title: title || 'Component Preview',
-      component: component || null
+    // ✅ Usar startTransition para UX suave
+    React.startTransition(() => {
+      setPreviewModal({
+        isOpen: true,
+        url,
+        title: title || 'Component Preview',
+        component: component || null
+      });
     });
     
     // Track preview opened event in GA4
@@ -349,7 +352,11 @@ const Components = () => {
     // Caso "home" (sem conexão na URL)
     if (!resolvedConnectionId && !connectionSlug && !connectionId) {
       if (activeConnectionId !== null) setActiveConnection(null);
-      if (selectedCategories.length > 0) setSelectedCategories([]);
+      if (selectedCategories.length > 0) {
+        React.startTransition(() => {
+          setSelectedCategories([]);
+        });
+      }
       console.log('🏠 Home detected - ensuring no active connection and no category filters');
       return;
     }
@@ -361,12 +368,17 @@ const Components = () => {
         const isSame = selectedCategories.length === 1 && selectedCategories[0] === categoryIdNum;
         if (!isSame) {
           console.log('✅ Applying category filter:', { categoryIdNum });
-          setSelectedCategories([categoryIdNum]);
+          // ✅ Usar startTransition para filtro instantâneo
+          React.startTransition(() => {
+            setSelectedCategories([categoryIdNum]);
+          });
         }
       } else {
         if (selectedCategories.length > 0) {
           console.log('📋 Clearing category filters for connection');
-          setSelectedCategories([]);
+          React.startTransition(() => {
+            setSelectedCategories([]);
+          });
         }
       }
     }
