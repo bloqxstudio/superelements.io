@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import CentralizedComponentLibrary from '@/components/CentralizedComponentLibrary';
 import { CategorySidebar } from '@/features/components/CategorySidebar';
@@ -17,17 +17,20 @@ import { PostTypeCategoryService } from '@/services/postTypeCategoryService';
 const Components = () => {
   const { connectionId, categoryId, connectionSlug, categorySlug, componentSlug } = useParams();
   const navigate = useNavigate();
-  const {
-    connections,
-    setActiveConnection,
-    activeConnectionId
-  } = useConnectionsStore();
-  const {
-    syncConnection
-  } = useConnectionSync();
-  const { setSelectedCategories, selectedCategories } = useWordPressStore();
+  
+  // Seletores específicos para evitar re-renders
+  const connections = useConnectionsStore(useCallback((state) => state.connections, []));
+  const setActiveConnection = useConnectionsStore(useCallback((state) => state.setActiveConnection, []));
+  const activeConnectionId = useConnectionsStore(useCallback((state) => state.activeConnectionId, []));
+  const { syncConnection } = useConnectionSync();
+  
+  // Seletores específicos
+  const setSelectedCategories = useWordPressStore(useCallback((state) => state.setSelectedCategories, []));
+  const selectedCategories = useWordPressStore(useCallback((state) => state.selectedCategories, []));
+  
   const { getConnectionBySlug, getCategoryBySlug, getConnectionSlug, getCategorySlug } = useSlugResolver();
   const { connectionsData } = useMultiConnectionData();
+  
   const [previewModal, setPreviewModal] = useState({
     isOpen: false,
     url: '',
@@ -35,7 +38,7 @@ const Components = () => {
     component: null as any
   });
 
-  const handlePreview = (url: string, title?: string, component?: any) => {
+  const handlePreview = useCallback((url: string, title?: string, component?: any) => {
     setPreviewModal({
       isOpen: true,
       url,
@@ -96,9 +99,9 @@ const Components = () => {
       }
       // Se não conseguir obter catSlug, abrir modal sem mudar URL
     }
-  };
+  }, [navigate, connectionSlug, categorySlug, connectionsData, getCategorySlug, getConnectionSlug]);
   
-  const closePreview = () => {
+  const closePreview = useCallback(() => {
     setPreviewModal(prev => ({
       ...prev,
       isOpen: false
@@ -117,11 +120,11 @@ const Components = () => {
         navigate('/', { replace: true });
       }
     }
-  };
+  }, [navigate, connectionSlug, categorySlug, getConnectionSlug, getCategorySlug]);
 
-  const handleForceSync = () => {
+  const handleForceSync = useCallback(() => {
     syncConnection();
-  };
+  }, [syncConnection]);
 
   // Auto-abrir componente quando há componentSlug na URL
   useEffect(() => {

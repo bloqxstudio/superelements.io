@@ -19,8 +19,16 @@ interface ConnectionCategories {
 }
 
 export const useMultiConnectionData = () => {
-  const { connections, activeConnectionId, setActiveConnection } = useConnectionsStore();
-  const { selectedCategories, setSelectedCategories, clearLoadedPages, setIsFastLoading, setFastLoadingPage } = useWordPressStore();
+  // Seletores específicos com shallow comparison
+  const connections = useConnectionsStore(useCallback((state) => state.connections, []));
+  const activeConnectionId = useConnectionsStore(useCallback((state) => state.activeConnectionId, []));
+  const setActiveConnection = useConnectionsStore(useCallback((state) => state.setActiveConnection, []));
+  
+  const selectedCategories = useWordPressStore(useCallback((state) => state.selectedCategories, []));
+  const setSelectedCategories = useWordPressStore(useCallback((state) => state.setSelectedCategories, []));
+  const clearLoadedPages = useWordPressStore(useCallback((state) => state.clearLoadedPages, []));
+  const setIsFastLoading = useWordPressStore(useCallback((state) => state.setIsFastLoading, []));
+  const setFastLoadingPage = useWordPressStore(useCallback((state) => state.setFastLoadingPage, []));
   
   const [connectionData, setConnectionData] = useState<Map<string, ConnectionCategories>>(new Map());
   const [expandedConnections, setExpandedConnections] = useState<Set<string>>(new Set());
