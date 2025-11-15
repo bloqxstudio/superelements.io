@@ -19,6 +19,7 @@ interface PreviewModalHeaderProps {
   onOpenInNewTab: () => void;
   component?: any;
   iframeRef?: React.RefObject<ScaledIframeRef>;
+  iframeReady?: boolean;
 }
 
 const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
@@ -27,31 +28,54 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
   onCopyJson,
   onOpenInNewTab,
   component,
-  iframeRef
+  iframeRef,
+  iframeReady = false
 }) => {
   const { user } = useAuth();
   const { viewport, getViewportWidth } = useViewport();
   const { convertToFigma, converting } = useConvertToFigma();
 
   const handleCopyDesign = async () => {
-    if (!component?.id || !iframeRef?.current) {
+    if (!component?.id) {
       toast({
         title: "Erro",
-        description: "Componente não carregado completamente",
+        description: "Informações do componente não disponíveis",
         variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!iframeRef?.current) {
+      toast({
+        title: "Erro",
+        description: "Preview não inicializado",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!iframeRef.current.isReady()) {
+      toast({
+        title: "Aguarde",
+        description: "O componente ainda está carregando...",
+        variant: "default"
       });
       return;
     }
 
     try {
-      // Extract HTML from the already rendered iframe
       const html = iframeRef.current.getHTML();
       await convertToFigma(component.id, html);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to extract HTML:', error);
+      
+      const errorMessage = error.message || 'Erro desconhecido';
+      
       toast({
         title: "Erro ao Extrair HTML",
-        description: "Aguarde o componente carregar completamente",
+        description: errorMessage.includes('CORS') 
+          ? "Não foi possível acessar o conteúdo devido a restrições de segurança do WordPress"
+          : "Aguarde o componente carregar completamente e tente novamente",
         variant: "destructive"
       });
     }
@@ -126,21 +150,26 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
                     variant="outline"
                     size="sm"
                     onClick={handleCopyDesign}
-                    disabled={!user || converting}
+                    disabled={!user || converting || !iframeReady}
                     className="flex items-center gap-2 text-xs sm:text-sm bg-purple-50 hover:bg-purple-100 border-purple-300 dark:bg-purple-950/30 dark:hover:bg-purple-950/50 dark:border-purple-800"
                   >
                     <Sparkles className="h-3 w-3 sm:h-4 sm:w-4" />
                     <span className="hidden sm:inline">
-                      {converting ? 'CONVERTENDO...' : 'DESIGN'}
+                      {converting ? 'CONVERTENDO...' : !iframeReady ? 'CARREGANDO...' : 'DESIGN'}
                     </span>
                     <span className="sm:hidden">
-                      {converting ? '...' : 'DESIGN'}
+                      {converting ? '...' : !iframeReady ? '...' : 'DESIGN'}
                     </span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Converter e copiar design para o Figma (via code.to.design)</p>
-                  {!user && <p className="text-xs text-muted-foreground mt-1">LOGIN REQUIRED</p>}
+                  {!user ? (
+                    <p>Faça login para converter</p>
+                  ) : !iframeReady ? (
+                    <p>Aguardando o componente carregar...</p>
+                  ) : (
+                    <p>Converter e copiar design para o Figma</p>
+                  )}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

@@ -25,6 +25,19 @@ const PreviewModalContent: React.FC<{
   const { viewport } = useViewport();
   const { copyComponent } = useCopyComponent();
   const iframeRef = React.useRef<ScaledIframeRef>(null);
+  const [iframeReady, setIframeReady] = React.useState(false);
+  
+  // Check periodically if iframe is ready
+  React.useEffect(() => {
+    const checkInterval = setInterval(() => {
+      if (iframeRef.current?.isReady()) {
+        setIframeReady(true);
+        clearInterval(checkInterval);
+      }
+    }, 500);
+    
+    return () => clearInterval(checkInterval);
+  }, []);
 
   const openInNewTab = () => {
     window.open(previewUrl, '_blank', 'noopener,noreferrer');
@@ -49,6 +62,7 @@ const PreviewModalContent: React.FC<{
         onOpenInNewTab={openInNewTab}
         component={component}
         iframeRef={iframeRef}
+        iframeReady={iframeReady}
       />
       
       {/* Preview Area */}
