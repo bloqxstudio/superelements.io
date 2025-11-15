@@ -7,11 +7,26 @@ interface ScaledIframeProps {
   viewport: string;
 }
 
-const ScaledIframe: React.FC<ScaledIframeProps> = ({ url, title, viewport }) => {
+export interface ScaledIframeRef {
+  getHTML: () => string;
+}
+
+const ScaledIframe = React.forwardRef<ScaledIframeRef, ScaledIframeProps>(({ url, title, viewport }, ref) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
   const [loaded, setLoaded] = React.useState(false);
   const [scale, setScale] = React.useState(1);
+
+  // Expose getHTML method via ref
+  React.useImperativeHandle(ref, () => ({
+    getHTML: () => {
+      const iframe = iframeRef.current;
+      if (!iframe || !iframe.contentDocument) {
+        throw new Error('Iframe not loaded');
+      }
+      return iframe.contentDocument.documentElement.outerHTML;
+    }
+  }));
 
   // Calculate scale based on container size
   const calculateScale = React.useCallback(() => {
@@ -212,6 +227,8 @@ const ScaledIframe: React.FC<ScaledIframeProps> = ({ url, title, viewport }) => 
       </div>
     </div>
   );
-};
+});
+
+ScaledIframe.displayName = 'ScaledIframe';
 
 export default ScaledIframe;

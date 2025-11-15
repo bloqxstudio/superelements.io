@@ -9,6 +9,8 @@ import ViewportSwitcher from '@/components/ViewportSwitcher';
 import { ExternalLink, Smartphone, Tablet, Monitor, Eye, Copy, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConvertToFigma } from '@/hooks/useConvertToFigma';
+import { ScaledIframeRef } from './ScaledIframe';
+import { toast } from '@/hooks/use-toast';
 
 interface PreviewModalHeaderProps {
   title: string;
@@ -16,6 +18,7 @@ interface PreviewModalHeaderProps {
   onCopyJson: () => Promise<void>;
   onOpenInNewTab: () => void;
   component?: any;
+  iframeRef?: React.RefObject<ScaledIframeRef>;
 }
 
 const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
@@ -23,15 +26,34 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
   previewUrl,
   onCopyJson,
   onOpenInNewTab,
-  component
+  component,
+  iframeRef
 }) => {
   const { user } = useAuth();
   const { viewport, getViewportWidth } = useViewport();
   const { convertToFigma, converting } = useConvertToFigma();
 
   const handleCopyDesign = async () => {
-    if (component?.id && previewUrl) {
-      await convertToFigma(component.id, previewUrl);
+    if (!component?.id || !iframeRef?.current) {
+      toast({
+        title: "Erro",
+        description: "Componente não carregado completamente",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Extract HTML from the already rendered iframe
+      const html = iframeRef.current.getHTML();
+      await convertToFigma(component.id, html);
+    } catch (error) {
+      console.error('Failed to extract HTML:', error);
+      toast({
+        title: "Erro ao Extrair HTML",
+        description: "Aguarde o componente carregar completamente",
+        variant: "destructive"
+      });
     }
   };
 
