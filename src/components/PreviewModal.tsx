@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   Dialog,
@@ -5,7 +6,7 @@ import {
 } from '@/components/ui/dialog';
 import { useViewport, ViewportProvider } from '@/hooks/useViewport';
 import PreviewModalHeader from '@/components/preview/PreviewModalHeader';
-import ScaledIframe, { ScaledIframeRef } from '@/components/preview/ScaledIframe';
+import ScaledIframe from '@/components/preview/ScaledIframe';
 import { useCopyComponent } from '@/components/preview/hooks/useCopyComponent';
 
 interface PreviewModalProps {
@@ -24,20 +25,6 @@ const PreviewModalContent: React.FC<{
 }> = ({ previewUrl, title, component }) => {
   const { viewport } = useViewport();
   const { copyComponent } = useCopyComponent();
-  const iframeRef = React.useRef<ScaledIframeRef>(null);
-  const [iframeReady, setIframeReady] = React.useState(false);
-  
-  // Check periodically if iframe is ready
-  React.useEffect(() => {
-    const checkInterval = setInterval(() => {
-      if (iframeRef.current?.isReady()) {
-        setIframeReady(true);
-        clearInterval(checkInterval);
-      }
-    }, 500);
-    
-    return () => clearInterval(checkInterval);
-  }, []);
 
   const openInNewTab = () => {
     window.open(previewUrl, '_blank', 'noopener,noreferrer');
@@ -61,14 +48,11 @@ const PreviewModalContent: React.FC<{
         onCopyJson={handleCopyJson}
         onOpenInNewTab={openInNewTab}
         component={component}
-        iframeRef={iframeRef}
-        iframeReady={iframeReady}
       />
       
       {/* Preview Area */}
       <div className="bg-muted/30 overflow-hidden flex-1">
         <ScaledIframe
-          ref={iframeRef}
           url={previewUrl}
           title={title}
           viewport={viewport}

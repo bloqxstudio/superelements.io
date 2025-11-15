@@ -6,11 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useViewport } from '@/hooks/useViewport';
 import ViewportSwitcher from '@/components/ViewportSwitcher';
-import { ExternalLink, Smartphone, Tablet, Monitor, Eye, Copy, Sparkles } from 'lucide-react';
+import { ExternalLink, Smartphone, Tablet, Monitor, Eye, Copy, Link2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useConvertToFigma } from '@/hooks/useConvertToFigma';
-import { ScaledIframeRef } from './ScaledIframe';
 import { toast } from '@/hooks/use-toast';
+import { useParams } from 'react-router-dom';
+import { useSlugResolver } from '@/hooks/useSlugResolver';
 
 interface PreviewModalHeaderProps {
   title: string;
@@ -18,8 +18,6 @@ interface PreviewModalHeaderProps {
   onCopyJson: () => Promise<void>;
   onOpenInNewTab: () => void;
   component?: any;
-  iframeRef?: React.RefObject<ScaledIframeRef>;
-  iframeReady?: boolean;
 }
 
 const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
@@ -27,62 +25,56 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
   previewUrl,
   onCopyJson,
   onOpenInNewTab,
-  component,
-  iframeRef,
-  iframeReady = false
+  component
 }) => {
   const { user } = useAuth();
   const { viewport, getViewportWidth } = useViewport();
-  const { convertToFigma, convertToFigmaFromUrl, converting } = useConvertToFigma();
+  const { connectionSlug: connSlugFromUrl, categorySlug: catSlugFromUrl } = useParams();
+  const { getConnectionSlug, getCategorySlug } = useSlugResolver();
 
-  const handleCopyDesign = async () => {
-    if (!component?.id) {
-      toast({
-        title: "Erro",
-        description: "Informações do componente não disponíveis",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    if (!iframeRef?.current) {
-      toast({
-        title: "Erro",
-        description: "Preview não inicializado",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    if (!iframeRef.current.isReady()) {
-      toast({
-        title: "Aguarde",
-        description: "O componente ainda está carregando...",
-        variant: "default"
-      });
-      return;
-    }
-
+  const handleCopyLink = async () => {
     try {
-      const html = iframeRef.current.getHTML();
-      await convertToFigma(component.id, html);
-    } catch (error: any) {
-      console.log('HTML extraction failed, using URL fallback:', error);
+      // Compute final app URL for this component
+      let finalUrl = window.location.href;
+      if (component) {
+        const connSlug = getConnectionSlug(component.connection_id) || connSlugFromUrl;
+        const firstCategoryId = Array.isArray(component.categories) ? component.categories[0] : undefined;
+        const catSlug = (firstCategoryId ? getCategorySlug(firstCategoryId) : null) || catSlugFromUrl;
+        const compSlug = component.slug;
+        if (connSlug && catSlug && compSlug) {
+          finalUrl = `${window.location.origin}/${connSlug}/${catSlug}/${compSlug}`;
+        }
+      }
+
+      await navigator.clipboard.writeText(finalUrl);
       
-      if (error?.message === 'CORS_RESTRICTION') {
-        toast({
-          title: "🌐 Usando Modo Alternativo",
-          description: "Não conseguimos ler o conteúdo diretamente. Convertendo via URL...",
-        });
+      // Track link copy event in GA4
+      if (typeof window.gtag !== 'undefined') {
+        const connSlug = getConnectionSlug(component?.connection_id) || connSlugFromUrl;
+        const firstCategoryId = Array.isArray(component?.categories) ? component.categories[0] : undefined;
+        const catSlug = (firstCategoryId ? getCategorySlug(firstCategoryId) : null) || catSlugFromUrl;
+        const compSlug = component?.slug;
         
-        await convertToFigmaFromUrl(component.id, previewUrl);
-      } else {
-        toast({
-          title: "Erro ao Extrair HTML",
-          description: "Aguarde o componente carregar completamente e tente novamente",
-          variant: "destructive"
+        window.gtag('event', 'component_link_copied', {
+          component_slug: compSlug || 'unknown',
+          connection_slug: connSlug || 'unknown',
+          category_slug: catSlug || 'unknown',
+          full_url: finalUrl,
+          user_role: user?.user_metadata?.role || 'guest'
         });
       }
+      
+      toast({
+        title: "🔗 Link copiado!",
+        description: "URL do componente copiada para área de transferência",
+        duration: 2000
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao copiar",
+        description: "Não foi possível copiar o link",
+        variant: "destructive"
+      });
     }
   };
 
@@ -131,6 +123,26 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={handleCopyLink}
+                    className="flex items-center gap-2 text-xs sm:text-sm"
+                  >
+                    <Link2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">LINK</span>
+                    <span className="sm:hidden">LINK</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Copiar link do componente</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={onCopyJson}
                     disabled={!user}
                     className="flex items-center gap-2 text-xs sm:text-sm"
@@ -143,38 +155,6 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>{!user ? 'Faça login para copiar' : 'Copiar componente'}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            {/* Copy Design Button */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopyDesign}
-                    disabled={!user || converting || !iframeReady}
-                    className="flex items-center gap-2 text-xs sm:text-sm bg-purple-50 hover:bg-purple-100 border-purple-300 dark:bg-purple-950/30 dark:hover:bg-purple-950/50 dark:border-purple-800"
-                  >
-                    <Sparkles className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden sm:inline">
-                      {converting ? 'CONVERTENDO...' : !iframeReady ? 'CARREGANDO...' : 'DESIGN'}
-                    </span>
-                    <span className="sm:hidden">
-                      {converting ? '...' : !iframeReady ? '...' : 'DESIGN'}
-                    </span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {!user ? (
-                    <p>Faça login para converter</p>
-                  ) : !iframeReady ? (
-                    <p>Aguardando o componente carregar...</p>
-                  ) : (
-                    <p>Converter e copiar design para o Figma</p>
-                  )}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
