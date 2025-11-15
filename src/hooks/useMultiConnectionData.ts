@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useWordPressStore } from '@/store/wordpressStore';
-import { PostTypeCategoryService } from '@/services/postTypeCategoryService';
 
 interface ConnectionCategories {
   connectionId: string;

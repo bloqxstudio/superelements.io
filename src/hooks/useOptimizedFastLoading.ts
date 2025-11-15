@@ -1,4 +1,4 @@
-
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useWordPressStore } from '@/store/wordpressStore';
 import { useWordPressApi } from '@/hooks/useWordPressApi';
@@ -178,17 +178,11 @@ export const useOptimizedFastLoading = ({
         console.log('✅ CACHE LOADED:', allComponents.length, 'components');
       }
 
-      // ✅ FILTRO CLIENT-SIDE INSTANTÂNEO
-      const displayComponents = selectedCategories.length > 0
-        ? allComponents.filter(comp => 
-            comp.categories?.some(catId => selectedCategories.includes(catId))
-          )
-        : allComponents;
-
+      // ✅ Retornar TODOS os componentes (sem filtro) - filtro será aplicado externamente
       return { 
-        components: displayComponents, // Filtered for display
+        components: allComponents, // ✅ All components without filter
         categories: allCategories,
-        totalLoaded: displayComponents.length,
+        totalLoaded: allComponents.length,
         totalAvailable: allComponents.length,
         successfulConnections: successfulConnections.length,
         failedConnections: failedConnections.length
@@ -229,7 +223,20 @@ export const useOptimizedFastLoading = ({
     placeholderData: (previousData) => previousData, // Keep showing old data during errors
   });
 
-  const totalComponents = data?.totalLoaded || 0;
+  // ✅ FILTRO CLIENT-SIDE REATIVO - Re-executa quando selectedCategories muda
+  const filteredComponents = React.useMemo(() => {
+    const allComponents = data?.components || [];
+    
+    if (selectedCategories.length === 0) {
+      return allComponents;
+    }
+    
+    return allComponents.filter(comp => 
+      comp.categories?.some(catId => selectedCategories.includes(catId))
+    );
+  }, [data?.components, selectedCategories]);
+
+  const totalComponents = filteredComponents.length;
 
   if (isDevelopment) {
     console.log('📊 OPTIMIZED LOADING STATE:', {
@@ -242,7 +249,11 @@ export const useOptimizedFastLoading = ({
   }
 
   return {
-    data,
+    data: data ? {
+      ...data,
+      components: filteredComponents, // ✅ Return filtered components
+      totalLoaded: filteredComponents.length
+    } : undefined,
     isLoading,
     isError,
     error: error?.message || null,
