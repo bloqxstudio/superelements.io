@@ -115,7 +115,102 @@ export const useConvertToFigma = () => {
     }
   };
 
-  return { convertToFigma, converting };
+  const convertToFigmaFromUrl = async (
+    componentId: number,
+    url: string,
+    forceRefresh: boolean = false
+  ): Promise<boolean> => {
+    if (!user) {
+      toast({
+        title: "Login Necessário",
+        description: "Você precisa estar logado para copiar designs.",
+        variant: "destructive"
+      });
+      return false;
+    }
+
+    setConverting(true);
+
+    try {
+      toast({
+        title: "🌐 Modo Alternativo",
+        description: "Convertendo via URL (o resultado pode diferir do preview renderizado)...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('convert-to-figma', {
+        body: { 
+          componentId, 
+          url,
+          forceRefresh
+        }
+      });
+
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Falha ao chamar função de conversão');
+      }
+
+      const result: ConversionResult = data;
+
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Falha na conversão');
+      }
+
+      await copyToFigmaClipboard(result.data);
+
+      const description = result.cached 
+        ? "✨ Design copiado do cache! Cole no Figma com Ctrl+V ou Cmd+V"
+        : "✅ Design convertido! Cole no Figma com Ctrl+V ou Cmd+V";
+
+      toast({
+        title: "🎉 Pronto para Colar no Figma!",
+        description,
+        duration: 5000
+      });
+
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('event', 'design_converted_to_figma_from_url', {
+          component_id: componentId,
+          cached: result.cached,
+          saved_cost: result.savedCost
+        });
+      }
+
+      return true;
+
+    } catch (error) {
+      console.error('Conversion error:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      
+      let userMessage = errorMessage;
+      let title = "Falha na Conversão";
+      
+      if (errorMessage.includes('CODE_TO_DESIGN_API_KEY')) {
+        title = "Configuração Incompleta";
+        userMessage = "A API key do code.to.design não está configurada. Entre em contato com o suporte.";
+      } else if (errorMessage.includes('Failed to fetch')) {
+        title = "Erro de Rede";
+        userMessage = "Não foi possível carregar o componente. Verifique sua conexão.";
+      } else if (errorMessage.includes('API error')) {
+        title = "Erro da API";
+        userMessage = "Falha ao converter o design. Tente novamente em alguns instantes.";
+      }
+      
+      toast({
+        title,
+        description: userMessage,
+        variant: "destructive",
+        duration: 6000
+      });
+
+      return false;
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  return { convertToFigma, convertToFigmaFromUrl, converting };
 };
 
 /**
