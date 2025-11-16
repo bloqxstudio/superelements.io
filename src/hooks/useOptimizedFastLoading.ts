@@ -4,6 +4,7 @@ import { useWordPressStore } from '@/store/wordpressStore';
 import { useWordPressApi } from '@/hooks/useWordPressApi';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { toast } from '@/hooks/use-toast';
+import { useComponentMetadataCache } from './useComponentMetadataCache';
 
 interface UseOptimizedFastLoadingProps {
   selectedCategories: number[];
@@ -19,6 +20,7 @@ export const useOptimizedFastLoading = ({
   const { setComponents, setAvailableCategories } = useWordPressStore();
   const { connections } = useConnectionsStore();
   const { fetchComponents } = useWordPressApi();
+  const { getCachedComponents, setCachedComponents, getCacheKey } = useComponentMetadataCache();
 
   // Get all active connections (simplified - no user role filtering)
   const allUserConnections = connections.filter(c => c.isActive);
@@ -41,9 +43,63 @@ export const useOptimizedFastLoading = ({
       if (isDevelopment) {
         console.warn('❌ No connections available for current user role.');
       }
-      return { components: [], categories: [], totalLoaded: 0 };
+      return { 
+        components: [], 
+        categories: [], 
+        totalLoaded: 0,
+        totalAvailable: 0,
+        successfulConnections: 0,
+        failedConnections: 0,
+        fromCache: false
+      };
     }
 
+    // 1️⃣ Verificar cache primeiro
+    const cachedComponents = getCachedComponents(activeConnectionId, selectedCategories);
+    
+    if (cachedComponents && cachedComponents.length > 0) {
+      if (isDevelopment) {
+        console.log(`✅ Loaded ${cachedComponents.length} components from cache`);
+      }
+      
+      // Mostrar dados em cache imediatamente
+      setComponents(cachedComponents as any);
+      
+      // Background refresh (buscar dados frescos silenciosamente)
+      setTimeout(() => {
+        if (isDevelopment) {
+          console.log('🔄 Background refresh: fetching fresh data...');
+        }
+        fetchFreshData().then(freshData => {
+          if (freshData && freshData.components.length > 0) {
+            setComponents(freshData.components);
+            if (isDevelopment) {
+              console.log(`✅ Background refresh complete: ${freshData.components.length} components`);
+            }
+          }
+        }).catch(err => {
+          if (isDevelopment) {
+            console.error('❌ Background refresh failed:', err);
+          }
+        });
+      }, 100);
+      
+      return { 
+        components: cachedComponents as any, 
+        categories: [],
+        totalLoaded: cachedComponents.length,
+        totalAvailable: cachedComponents.length,
+        successfulConnections: targetConnections.length,
+        failedConnections: 0,
+        fromCache: true
+      };
+    }
+
+    // 2️⃣ Cache inválido ou ausente - buscar dados frescos
+    return fetchFreshData();
+  };
+
+  const fetchFreshData = async () => {
     try {
       if (isDevelopment) {
         console.log('🚀 OPTIMIZED LOADING START');
@@ -141,6 +197,25 @@ export const useOptimizedFastLoading = ({
           });
         }
       });
+
+      // 3️⃣ Cachear metadata (SEM elementor_data para economizar espaço)
+      if (allComponents.length > 0) {
+        const metadata = allComponents.map(comp => ({
+          id: comp.id,
+          slug: comp.slug,
+          title: comp.title?.rendered || '',
+          categories: comp.categories || [],
+          preview_url: comp.link || '',
+          connection_id: comp.connection_id,
+          connection_name: comp.connection_name,
+          link: comp.link || '',
+          date: comp.date || '',
+          modified: comp.modified || '',
+          cached_at: Date.now()
+        }));
+        
+        setCachedComponents(activeConnectionId, selectedCategories, metadata);
+      }
 
       // Extract categories if not filtering
       let allCategories = [];

@@ -4,15 +4,22 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { Button } from '@/components/ui/button';
-import { Folder, FolderOpen, Globe } from 'lucide-react';
+import { Folder, FolderOpen, Globe, RefreshCw } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSlugResolver } from '@/hooks/useSlugResolver';
+import { useCategoryCache } from '@/hooks/useCategoryCache';
+import { useComponentMetadataCache } from '@/hooks/useComponentMetadataCache';
+import { toast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 export const CategorySidebar: React.FC = () => {
   const navigate = useNavigate();
   const { connectionId: urlConnectionId, categoryId: urlCategoryId, connectionSlug, categorySlug } = useParams();
   const { getConnectionById } = useConnectionsStore();
   const { getConnectionSlug, getCategorySlug } = useSlugResolver();
+  const { invalidateCache: invalidateCategoryCache } = useCategoryCache();
+  const { invalidateCache: invalidateComponentCache } = useComponentMetadataCache();
+  const queryClient = useQueryClient();
   const {
     connectionsData,
     expandedConnections,
@@ -68,6 +75,22 @@ export const CategorySidebar: React.FC = () => {
     clearAllFilters();
   };
 
+  const handleForceRefresh = () => {
+    // Invalidar todos os caches
+    invalidateCategoryCache();
+    invalidateComponentCache();
+    
+    // Invalidar queries do React Query
+    queryClient.invalidateQueries({ queryKey: ['optimizedComponents'] });
+    
+    // Mostrar toast de confirmação
+    toast({
+      title: "Cache limpo",
+      description: "Recarregando dados frescos do servidor...",
+      duration: 2000
+    });
+  };
+
   const handleConnectionClick = (connectionId: string) => {
     const slug = getConnectionSlug(connectionId);
     navigate(slug ? `/${slug}` : `/connection/${connectionId}`);
@@ -92,6 +115,17 @@ export const CategorySidebar: React.FC = () => {
         
         {/* Header Section */}
         <div className="px-4 border-b border-gray-200 py-[8px]">
+          
+          {/* Force Refresh Button */}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full justify-center text-xs font-medium mb-2"
+            onClick={handleForceRefresh}
+          >
+            <RefreshCw className="h-3 w-3 mr-2" />
+            Forçar Atualização
+          </Button>
           
           {/* All Components Option - Highlight when active */}
           <Button 
