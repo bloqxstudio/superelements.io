@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useWordPressStore } from '@/store/wordpressStore';
 import { PostTypeCategoryService } from '@/services/postTypeCategoryService';
+import { useCategoryCache } from './useCategoryCache';
 
 interface ConnectionCategories {
   connectionId: string;
@@ -24,6 +25,7 @@ const isDevelopment = import.meta.env.DEV;
 export const useOptimizedMultiConnectionData = () => {
   const { connections, activeConnectionId, setActiveConnection } = useConnectionsStore();
   const { selectedCategories, setSelectedCategories, clearLoadedPages, setIsFastLoading, setFastLoadingPage } = useWordPressStore();
+  const { getCachedCategories, setCachedCategories, isExpired } = useCategoryCache();
   
   const [connectionData, setConnectionData] = useState<Map<string, ConnectionCategories>>(new Map());
   const [expandedConnections, setExpandedConnections] = useState<Set<string>>(new Set());
@@ -107,8 +109,48 @@ export const useOptimizedMultiConnectionData = () => {
       return;
     }
 
+    // 1️⃣ Verificar cache primeiro
+    const cachedCategories = getCachedCategories(connectionId);
+    
+    if (cachedCategories && !isExpired(connectionId)) {
+      if (isDevelopment) {
+        console.log(`✅ Using cached categories for: ${connection.name} (${cachedCategories.length} categories)`);
+      }
+      
+      // Usar dados em cache imediatamente
+      setConnectionData(prev => {
+        const newData = new Map(prev);
+        const existing = newData.get(connectionId);
+        if (existing) {
+          newData.set(connectionId, {
+            ...existing,
+            categories: cachedCategories,
+            isLoading: false,
+            isLoaded: true,
+            lastRefresh: new Date(cachedCategories[0]?.cached_at || Date.now())
+          });
+        }
+        return newData;
+      });
+      
+      // Background refresh (opcional - buscar dados frescos silenciosamente)
+      setTimeout(() => {
+        if (isDevelopment) {
+          console.log(`🔄 Background refresh for: ${connection.name}`);
+        }
+        loadConnectionCategoriesFromServer(connectionId, connection);
+      }, 100);
+      
+      return;
+    }
+
+    // 2️⃣ Cache inválido ou ausente - buscar do servidor
+    await loadConnectionCategoriesFromServer(connectionId, connection);
+  }, [activeConnections, getCachedCategories, isExpired]);
+
+  const loadConnectionCategoriesFromServer = useCallback(async (connectionId: string, connection: any) => {
     if (isDevelopment) {
-      console.log(`Loading categories for: ${connection.name}`);
+      console.log(`Loading categories from server for: ${connection.name}`);
     }
 
     setConnectionData(prev => {
@@ -131,6 +173,17 @@ export const useOptimizedMultiConnectionData = () => {
       };
 
       const categoriesWithComponents = await PostTypeCategoryService.fetchCategoriesWithComponents(connectionConfig);
+
+      // 3️⃣ Cachear os dados recém-buscados (mapear para CachedCategory)
+      const categoriesToCache = categoriesWithComponents.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        slug: cat.slug,
+        count: cat.count,
+        connection_id: connectionId,
+        cached_at: Date.now()
+      }));
+      setCachedCategories(connectionId, categoriesToCache);
 
       setConnectionData(prev => {
         const newData = new Map(prev);
@@ -169,7 +222,7 @@ export const useOptimizedMultiConnectionData = () => {
         return newData;
       });
     }
-  }, [activeConnections]);
+  }, [setCachedCategories]);
 
   const refreshConnectionCategories = useCallback(async (connectionId: string) => {
     if (isDevelopment) {
