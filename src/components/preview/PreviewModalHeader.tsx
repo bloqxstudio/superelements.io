@@ -13,6 +13,8 @@ interface PreviewModalHeaderProps {
   title: string;
   previewUrl: string;
   onCopyJson: () => Promise<void>;
+  onTogglePersonalizedCopy: () => void;
+  personalizedCopyOpen: boolean;
   onOpenInNewTab: () => void;
 }
 
@@ -20,6 +22,8 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
   title,
   previewUrl,
   onCopyJson,
+  onTogglePersonalizedCopy,
+  personalizedCopyOpen,
   onOpenInNewTab
 }) => {
   const { user } = useAuth();
@@ -64,6 +68,28 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
           
           {/* Botões - Stack em mobile */}
           <div className="flex flex-col sm:flex-row gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={personalizedCopyOpen ? "default" : "outline"}
+                    size="sm"
+                    onClick={onTogglePersonalizedCopy}
+                    disabled={!user}
+                    className="flex items-center gap-2 text-xs sm:text-sm"
+                    title={!user ? "Faça login para usar copy personalizada" : undefined}
+                  >
+                    <Copy className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">COPY IA</span>
+                    <span className="sm:hidden">IA</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{!user ? 'Faça login para usar copy personalizada' : 'Abrir copy personalizada com IA'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Copy, Trash2, ShoppingCart } from 'lucide-react';
+import React, { useState } from 'react';
+import { Copy, Trash2, ShoppingCart, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -17,9 +17,11 @@ import {
 } from '@dnd-kit/sortable';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCartStore } from '@/store/cartStore';
 import { useCartCopy } from '../hooks/useCartCopy';
+import { useCartPersonalize } from '../hooks/useCartPersonalize';
 import { CartItem } from './CartItem';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,7 +30,10 @@ export const CartDrawer: React.FC = () => {
   const { user } = useAuth();
   const { items, isOpen, closeCart, clearCart, reorderItems } = useCartStore();
   const { copyAllToClipboard, copying } = useCartCopy();
+  const { personalizeAndCopy, personalizing, progress } = useCartPersonalize();
   const { getConnectionById } = useConnectionsStore();
+  const [personalizeOpen, setPersonalizeOpen] = useState(false);
+  const [rawCopy, setRawCopy] = useState('');
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -49,6 +54,10 @@ export const CartDrawer: React.FC = () => {
 
   const handleCopyAll = async () => {
     await copyAllToClipboard(items);
+  };
+
+  const handlePersonalizeAndCopy = async () => {
+    await personalizeAndCopy(items, rawCopy);
   };
 
   const handleClearCart = () => {
@@ -121,21 +130,70 @@ export const CartDrawer: React.FC = () => {
               </DndContext>
             </ScrollArea>
 
+            {/* AI Personalization Section */}
+            <div className="border border-border/60 rounded-lg mt-4 overflow-hidden">
+              <button
+                onClick={() => setPersonalizeOpen((prev) => !prev)}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/40 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-[#D2F525]" />
+                  Personalizar com IA
+                </span>
+                {personalizeOpen ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </button>
+
+              {personalizeOpen && (
+                <div className="px-4 pb-4 space-y-3 border-t border-border/40 pt-3">
+                  <p className="text-xs text-muted-foreground">
+                    Cole sua copy bruta, briefing ou conteúdo do cliente. A IA vai distribuir o conteúdo entre os componentes do carrinho de forma coerente.
+                  </p>
+                  <Textarea
+                    placeholder="Ex: Somos uma consultoria financeira especializada em planejamento para famílias. Nosso diferencial é a abordagem humanizada e resultados comprovados em mais de 500 clientes..."
+                    value={rawCopy}
+                    onChange={(e) => setRawCopy(e.target.value)}
+                    rows={5}
+                    className="resize-none text-sm"
+                    disabled={personalizing}
+                  />
+                  <Button
+                    onClick={handlePersonalizeAndCopy}
+                    disabled={personalizing || !user || !rawCopy.trim()}
+                    className="w-full"
+                    size="sm"
+                    title={!user ? "Faça login para personalizar" : undefined}
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    {personalizing
+                      ? `Personalizando ${progress.current}/${progress.total}...`
+                      : !user
+                      ? 'Login Necessário'
+                      : 'Personalizar e Copiar Tudo'}
+                  </Button>
+                </div>
+              )}
+            </div>
+
             <SheetFooter className="flex-col sm:flex-col gap-2 mt-4">
               <Button
                 onClick={handleCopyAll}
                 disabled={copying || !user}
                 className="w-full"
                 size="lg"
+                variant="outline"
                 title={!user ? "Faça login para copiar" : undefined}
               >
                 <Copy className="h-4 w-4 mr-2" />
-                {copying ? 'Copiando...' : !user ? 'Login Necessário' : 'Copiar Tudo'}
+                {copying ? 'Copiando...' : !user ? 'Login Necessário' : 'Copiar Tudo (sem IA)'}
               </Button>
               <Button
                 onClick={handleClearCart}
-                variant="outline"
-                className="w-full"
+                variant="ghost"
+                className="w-full text-muted-foreground"
                 size="lg"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
