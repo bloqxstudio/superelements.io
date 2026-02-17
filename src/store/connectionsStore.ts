@@ -26,6 +26,7 @@ export interface WordPressConnection {
   createdBy?: string;
   createdAt?: Date;
   updatedAt?: Date;
+  connection_type?: 'designer_connection' | 'client_account';
 }
 
 interface ConnectionsStore {
@@ -33,25 +34,29 @@ interface ConnectionsStore {
   connections: WordPressConnection[];
   isLoading: boolean;
   activeConnectionId: string | null;
-  
+
   // Actions
   fetchConnections: () => Promise<void>;
   addConnection: (connection: Omit<WordPressConnection, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => Promise<string>;
   updateConnection: (id: string, updates: Partial<WordPressConnection>) => Promise<void>;
   removeConnection: (id: string) => Promise<void>;
-  
+
   // Enhanced actions for post type mapping
   validateConnection: (id: string) => Promise<boolean>;
   refreshPostTypeMapping: (id: string) => Promise<void>;
-  
+
   // Backward compatibility methods
   getActiveConnection: () => WordPressConnection | null;
   setActiveConnection: (id: string | null) => void;
-  
+
   // Enhanced getters for multiple active connections
   getActiveConnections: () => WordPressConnection[];
   getConnectionById: (id: string) => WordPressConnection | null;
   getConnectionsForUserType: (userType: 'free' | 'pro') => WordPressConnection[];
+
+  // Client accounts methods
+  getClientAccounts: () => WordPressConnection[];
+  getDesignerConnections: () => WordPressConnection[];
 }
 
 export const useConnectionsStore = create<ConnectionsStore>()(
@@ -125,6 +130,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
             createdBy: conn.created_by || undefined,
             createdAt: conn.created_at ? new Date(conn.created_at) : undefined,
             updatedAt: conn.updated_at ? new Date(conn.updated_at) : undefined,
+            connection_type: (conn as any).connection_type as WordPressConnection['connection_type'] || 'designer_connection',
           }));
 
           console.log('✅ Processed connections:', {
@@ -176,6 +182,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
               components_count: connectionData.componentsCount || 0,
               error: connectionData.error,
               created_by: user.id,
+              connection_type: connectionData.connection_type || 'designer_connection',
             })
             .select()
             .single();
@@ -226,6 +233,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
           if (connectionUpdates.lastTested) updateData.last_tested = connectionUpdates.lastTested.toISOString();
           if (connectionUpdates.componentsCount !== undefined) updateData.components_count = connectionUpdates.componentsCount;
           if (connectionUpdates.error !== undefined) updateData.error = connectionUpdates.error;
+          if (connectionUpdates.connection_type) updateData.connection_type = connectionUpdates.connection_type;
 
           // Update connection metadata
           const { error: connError } = await supabase
@@ -369,8 +377,22 @@ export const useConnectionsStore = create<ConnectionsStore>()(
 
       getConnectionsForUserType: (userType) => {
         const state = get();
-        return state.connections.filter((conn) => 
+        return state.connections.filter((conn) =>
           conn.isActive && (conn.userType === userType || conn.userType === 'all')
+        );
+      },
+
+      getClientAccounts: () => {
+        const state = get();
+        return state.connections.filter(
+          (conn) => conn.connection_type === 'client_account'
+        );
+      },
+
+      getDesignerConnections: () => {
+        const state = get();
+        return state.connections.filter(
+          (conn) => !conn.connection_type || conn.connection_type === 'designer_connection'
         );
       },
       }),

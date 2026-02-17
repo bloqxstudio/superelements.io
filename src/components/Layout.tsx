@@ -4,7 +4,6 @@ import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import { useAuth } from '@/contexts/AuthContext';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { Users, Briefcase, Download } from 'lucide-react';
 
@@ -14,12 +13,12 @@ const Layout: React.FC = () => {
   const { user, profile } = useAuth();
   const { connections, isLoading, fetchConnections } = useConnectionsStore();
 
-  // Bootstrap: carregar conexões globalmente ao montar o Layout
+  // Bootstrap: carregar conexões globalmente ao montar o Layout (apenas com usuário logado)
   useEffect(() => {
-    if (connections.length === 0 && !isLoading) {
+    if (user && connections.length === 0 && !isLoading) {
       fetchConnections();
     }
-  }, [connections.length, isLoading, fetchConnections]);
+  }, [user, connections.length, isLoading, fetchConnections]);
   const handleLogoClick = () => {
     navigate('/');
   };
@@ -72,6 +71,9 @@ const Layout: React.FC = () => {
                   {profile?.role === 'admin' && <>
                     <Button variant={location.pathname === '/connections' ? 'default' : 'ghost'} onClick={() => navigate('/connections')}>
                       Connections
+                    </Button>
+                    <Button variant={location.pathname === '/client-accounts' ? 'default' : 'ghost'} onClick={() => navigate('/client-accounts')}>
+                      Client Accounts
                     </Button>
                     <Button variant={location.pathname === '/admin/users' ? 'default' : 'ghost'} onClick={() => navigate('/admin/users')}>
                       <Users className="h-4 w-4 mr-2" />

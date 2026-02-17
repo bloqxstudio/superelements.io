@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import { useConnectionSync } from '@/hooks/useConnectionSync';
@@ -26,18 +27,31 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
     syncConnection,
     isInSync
   } = useConnectionSync();
-  const { profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirecionar para login apenas após auth resolver e não houver sessão
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth', { replace: true });
+    }
+  }, [authLoading, user, navigate]);
 
   // Auto-fetch connections on mount if not already loaded
   useEffect(() => {
-    if (connections.length === 0 && !isLoading) {
+    if (user && connections.length === 0 && !isLoading) {
       fetchConnections();
     }
-  }, [connections.length, isLoading, fetchConnections]);
+  }, [user, connections.length, isLoading, fetchConnections]);
   
   const handleForceSync = () => {
     syncConnection();
   };
+
+  // Aguardar auth resolver antes de renderizar qualquer coisa
+  if (authLoading) {
+    return null;
+  }
 
   // Show all active connections - access control is on copy, not view
   const activeConnections = connections.filter(conn => conn.isActive);

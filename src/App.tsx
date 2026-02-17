@@ -10,6 +10,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Components from "@/pages/Components";
 import Connections from "@/pages/Connections";
+import ClientAccounts from "@/pages/ClientAccounts";
+import ClientAccountDetail from "@/pages/ClientAccountDetail";
 import Auth from "@/pages/Auth";
 import NotFound from "@/pages/NotFound";
 import AdminUsers from "@/pages/admin/Users";
@@ -45,6 +47,16 @@ function App() {
                   <Route path="connections" element={
                     <ProtectedRoute requireRole={['admin']}>
                       <Connections />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="client-accounts" element={
+                    <ProtectedRoute requireRole={['admin']}>
+                      <ClientAccounts />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="client-accounts/:connectionId" element={
+                    <ProtectedRoute requireRole={['admin']}>
+                      <ClientAccountDetail />
                     </ProtectedRoute>
                   } />
                   <Route path="admin/users" element={

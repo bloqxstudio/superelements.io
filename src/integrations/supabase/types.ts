@@ -14,6 +14,225 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_pages: {
+        Row: {
+          connection_id: string
+          created_at: string | null
+          id: string
+          imported_at: string | null
+          last_synced: string | null
+          modified_date: string | null
+          slug: string
+          status: string
+          title: string
+          updated_at: string | null
+          url: string
+          wordpress_page_id: number
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string | null
+          id?: string
+          imported_at?: string | null
+          last_synced?: string | null
+          modified_date?: string | null
+          slug: string
+          status?: string
+          title: string
+          updated_at?: string | null
+          url: string
+          wordpress_page_id: number
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string | null
+          id?: string
+          imported_at?: string | null
+          last_synced?: string | null
+          modified_date?: string | null
+          slug?: string
+          status?: string
+          title?: string
+          updated_at?: string | null
+          url?: string
+          wordpress_page_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_pages_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_pages_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "shared_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_page_performance: {
+        Row: {
+          client_page_id: string | null
+          cls: number | null
+          connection_id: string | null
+          created_at: string
+          fetched_at: string
+          id: string
+          inp_ms: number | null
+          lcp_ms: number | null
+          performance_score: number | null
+          raw_result: Json | null
+          report_url: string | null
+          strategy: string
+          tbt_ms: number | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          client_page_id?: string | null
+          cls?: number | null
+          connection_id?: string | null
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          inp_ms?: number | null
+          lcp_ms?: number | null
+          performance_score?: number | null
+          raw_result?: Json | null
+          report_url?: string | null
+          strategy: string
+          tbt_ms?: number | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          client_page_id?: string | null
+          cls?: number | null
+          connection_id?: string | null
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          inp_ms?: number | null
+          lcp_ms?: number | null
+          performance_score?: number | null
+          raw_result?: Json | null
+          report_url?: string | null
+          strategy?: string
+          tbt_ms?: number | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_page_performance_client_page_id_fkey"
+            columns: ["client_page_id"]
+            isOneToOne: false
+            referencedRelation: "client_pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_page_performance_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_page_performance_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "shared_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_page_recommendations: {
+        Row: {
+          client_page_id: string
+          connection_id: string | null
+          created_at: string
+          full_analysis: Json
+          generated_at: string
+          id: string
+          model: string | null
+          performance_id: string | null
+          priority_actions: Json
+          quick_wins: Json
+          risk_notes: Json
+          strategy: string
+          summary: string
+          updated_at: string
+          wordpress_focus: Json
+        }
+        Insert: {
+          client_page_id: string
+          connection_id?: string | null
+          created_at?: string
+          full_analysis?: Json
+          generated_at?: string
+          id?: string
+          model?: string | null
+          performance_id?: string | null
+          priority_actions?: Json
+          quick_wins?: Json
+          risk_notes?: Json
+          strategy: string
+          summary?: string
+          updated_at?: string
+          wordpress_focus?: Json
+        }
+        Update: {
+          client_page_id?: string
+          connection_id?: string | null
+          created_at?: string
+          full_analysis?: Json
+          generated_at?: string
+          id?: string
+          model?: string | null
+          performance_id?: string | null
+          priority_actions?: Json
+          quick_wins?: Json
+          risk_notes?: Json
+          strategy?: string
+          summary?: string
+          updated_at?: string
+          wordpress_focus?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_page_recommendations_client_page_id_fkey"
+            columns: ["client_page_id"]
+            isOneToOne: false
+            referencedRelation: "client_pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_page_recommendations_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_page_recommendations_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "shared_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_page_recommendations_performance_id_fkey"
+            columns: ["performance_id"]
+            isOneToOne: false
+            referencedRelation: "client_page_performance"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connection_credentials: {
         Row: {
           application_password: string

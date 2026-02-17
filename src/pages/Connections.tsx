@@ -8,13 +8,13 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ConnectionWizard } from '@/features/connections/components/ConnectionWizard';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Globe, 
-  Settings, 
-  Trash2, 
+import {
+  Plus,
+  Search,
+  Filter,
+  Globe,
+  Settings,
+  Trash2,
   RefreshCw,
   Users,
   Crown,
@@ -22,7 +22,9 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  Clock
+  Clock,
+  Layers,
+  Briefcase
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -41,6 +43,7 @@ const Connections = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [userTypeFilter, setUserTypeFilter] = useState<string>('all');
+  const [connectionTypeFilter, setConnectionTypeFilter] = useState<string>('all');
 
   useEffect(() => {
     fetchConnections();
@@ -52,8 +55,10 @@ const Connections = () => {
                          connection.base_url.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || connection.status === statusFilter;
     const matchesUserType = userTypeFilter === 'all' || connection.userType === userTypeFilter;
-    
-    return matchesSearch && matchesStatus && matchesUserType;
+    const matchesConnectionType = connectionTypeFilter === 'all' ||
+                                   (connection.connection_type || 'designer_connection') === connectionTypeFilter;
+
+    return matchesSearch && matchesStatus && matchesUserType && matchesConnectionType;
   });
 
   // Statistics
@@ -254,6 +259,18 @@ const Connections = () => {
                     <SelectItem value="pro">Pro Users</SelectItem>
                   </SelectContent>
                 </Select>
+
+                <Select value={connectionTypeFilter} onValueChange={setConnectionTypeFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <Layers className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Connection Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="designer_connection">Designer Connections</SelectItem>
+                    <SelectItem value="client_account">Client Accounts</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardContent>
@@ -302,15 +319,32 @@ const Connections = () => {
 
                 <CardContent className="space-y-4">
                   {/* Status and Type Badges */}
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <Badge className={`flex items-center gap-1 ${getStatusColor(connection.status)}`}>
                       {getStatusIcon(connection.status)}
                       {connection.status}
                     </Badge>
-                    
+
                     <Badge variant="outline" className="flex items-center gap-1">
                       {getUserTypeIcon(connection.userType)}
                       {connection.userType === 'all' ? 'All Users' : connection.userType}
+                    </Badge>
+                  </div>
+
+                  {/* Connection Type Badge */}
+                  <div>
+                    <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                      {(connection.connection_type || 'designer_connection') === 'client_account' ? (
+                        <>
+                          <Briefcase className="h-3 w-3" />
+                          Client Account
+                        </>
+                      ) : (
+                        <>
+                          <Layers className="h-3 w-3" />
+                          Designer Connection
+                        </>
+                      )}
                     </Badge>
                   </div>
 

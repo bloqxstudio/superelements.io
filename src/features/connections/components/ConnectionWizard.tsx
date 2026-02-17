@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, CheckCircle, Loader2, Globe, Users, Crown, Link, Zap } from 'lucide-react';
+import { AlertCircle, CheckCircle, Loader2, Globe, Users, Crown, Link, Zap, Layers, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ConnectionWizardProps {
@@ -47,7 +47,8 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
     username: '',
     applicationPassword: '',
     isActive: true,
-    userType: 'all' as 'free' | 'pro' | 'all'
+    userType: 'all' as 'free' | 'pro' | 'all',
+    connectionType: 'designer_connection' as 'designer_connection' | 'client_account'
   });
 
   // Load existing connection data for editing
@@ -62,7 +63,8 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
           username: connection.credentials?.username || '',
           applicationPassword: connection.credentials?.application_password || '',
           isActive: connection.isActive,
-          userType: connection.userType
+          userType: connection.userType,
+          connectionType: connection.connection_type || 'designer_connection'
         });
         setUrlInput(connection.base_url);
       }
@@ -90,8 +92,9 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
           baseUrl: newExtractedInfo.baseUrl,
           postType: newExtractedInfo.postType,
           // Auto-generate name from URL if not editing
-          name: !editingConnectionId && !prev.name ? 
-            new URL(info.baseUrl).hostname.replace('www.', '') : prev.name
+          name: !editingConnectionId && !prev.name ?
+            new URL(info.baseUrl).hostname.replace('www.', '') : prev.name,
+          connectionType: prev.connectionType
         }));
         
         if (info.postType) {
@@ -169,7 +172,8 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
         userType: formData.userType,
         accessLevel: 'free',
         lastTested: new Date(),
-        componentsCount: 0
+        componentsCount: 0,
+        connection_type: formData.connectionType
       };
 
       if (editingConnectionId) {
@@ -197,7 +201,8 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
       username: '',
       applicationPassword: '',
       isActive: true,
-      userType: 'all'
+      userType: 'all',
+      connectionType: 'designer_connection'
     });
     setValidation(null);
     setUrlInput('');
@@ -365,6 +370,32 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
                     checked={formData.isActive}
                     onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: checked }))}
                   />
+                </div>
+
+                <div>
+                  <Label>Tipo de Conexão</Label>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Defina o propósito desta conexão
+                  </p>
+                  <Select value={formData.connectionType} onValueChange={(value: 'designer_connection' | 'client_account') => setFormData(prev => ({ ...prev, connectionType: value }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="designer_connection">
+                        <div className="flex items-center gap-2">
+                          <Layers className="h-4 w-4" />
+                          Designer Connection (Importar Componentes)
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="client_account">
+                        <div className="flex items-center gap-2">
+                          <Briefcase className="h-4 w-4" />
+                          Client Account (Site de Cliente)
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
