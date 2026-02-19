@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { devtools, persist } from 'zustand/middleware';
+import { devtools } from 'zustand/middleware';
 import { supabase } from '@/integrations/supabase/client';
 import { WordPressPostTypeService } from '@/services/wordPressPostTypeService';
 import { slugify } from '@/utils/slugify';
@@ -63,8 +63,7 @@ interface ConnectionsStore {
 
 export const useConnectionsStore = create<ConnectionsStore>()(
   devtools(
-    persist(
-      (set, get) => ({
+    (set, get) => ({
       connections: [],
       isLoading: false,
       activeConnectionId: null,
@@ -404,17 +403,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
         const state = get();
         return state.connections.filter((conn) => conn.workspace_id === workspaceId);
       },
-      }),
-      {
-        name: 'connections-cache-storage',
-        version: 1,
-        partialize: (state) => ({
-          connections: state.connections,
-          // Não persistir activeConnectionId (gerenciado por sessão)
-          // Não persistir isLoading (estado temporário)
-        }),
-      }
-    ),
+    }),
     { name: 'connections-store' }
   )
 );

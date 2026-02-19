@@ -45,7 +45,7 @@ export const useCopyComponent = () => {
       throw new Error('Não foi possível encontrar os dados do componente para personalização.');
     }
 
-    const componentId = legacyComponent.originalId || legacyComponent.id;
+    const componentId = (legacyComponent as any).originalId || legacyComponent.id;
     const fallbackBaseUrl = config.baseUrl || '';
 
     if (!fallbackBaseUrl) {
