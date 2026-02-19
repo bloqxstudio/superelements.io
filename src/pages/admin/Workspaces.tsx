@@ -391,9 +391,9 @@ const WorkspacesPage = () => {
                     <TableCell>
                       <Badge
                         variant={m.role === 'owner' ? 'default' : 'secondary'}
-                        className={m.role === 'manager' ? 'bg-violet-100 text-violet-700 hover:bg-violet-100' : ''}
+                        className={(m.role as string) === 'manager' ? 'bg-violet-100 text-violet-700 hover:bg-violet-100' : ''}
                       >
-                        {m.role === 'manager' ? 'gestor' : m.role}
+                        {(m.role as string) === 'manager' ? 'gestor' : m.role}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">

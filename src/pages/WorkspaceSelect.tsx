@@ -107,7 +107,7 @@ const WorkspaceSelect: React.FC = () => {
           className="w-full max-w-2xl"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] }}
         >
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-900">Selecione um workspace</h1>
@@ -142,7 +142,7 @@ const WorkspaceSelect: React.FC = () => {
                   className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4 hover:shadow-md hover:border-primary/40 transition-all text-left group"
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.06, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ delay: i * 0.06, duration: 0.35, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] }}
                   onClick={() => ws.isOwn ? handleSelectOwn(ws.id) : handleAdminEnter(ws)}
                 >
                   {/* Icon */}

@@ -14,65 +14,149 @@ export type Database = {
   }
   public: {
     Tables: {
-      client_pages: {
+      analytics_config: {
+        Row: {
+          connection_id: string
+          created_at: string | null
+          ecommerce_enabled: boolean | null
+          ecommerce_platform: string | null
+          id: string
+          last_synced_at: string | null
+          posthog_api_key: string | null
+          posthog_enabled: boolean | null
+          posthog_project_id: string | null
+          sync_frequency_minutes: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string | null
+          ecommerce_enabled?: boolean | null
+          ecommerce_platform?: string | null
+          id?: string
+          last_synced_at?: string | null
+          posthog_api_key?: string | null
+          posthog_enabled?: boolean | null
+          posthog_project_id?: string | null
+          sync_frequency_minutes?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string | null
+          ecommerce_enabled?: boolean | null
+          ecommerce_platform?: string | null
+          id?: string
+          last_synced_at?: string | null
+          posthog_api_key?: string | null
+          posthog_enabled?: boolean | null
+          posthog_project_id?: string | null
+          sync_frequency_minutes?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_config_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: true
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analytics_config_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: true
+            referencedRelation: "shared_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analytics_configs: {
         Row: {
           connection_id: string
           created_at: string | null
           id: string
-          imported_at: string | null
-          last_synced: string | null
-          modified_date: string | null
-          slug: string
-          status: string
-          title: string
+          last_posthog_sync: string | null
+          last_woocommerce_sync: string | null
+          posthog_api_key: string | null
+          posthog_enabled: boolean | null
+          posthog_project_id: string | null
           updated_at: string | null
-          url: string
-          wordpress_page_id: number
+          woocommerce_consumer_key: string | null
+          woocommerce_consumer_secret: string | null
+          woocommerce_enabled: boolean | null
         }
         Insert: {
           connection_id: string
           created_at?: string | null
           id?: string
-          imported_at?: string | null
-          last_synced?: string | null
-          modified_date?: string | null
-          slug: string
-          status?: string
-          title: string
+          last_posthog_sync?: string | null
+          last_woocommerce_sync?: string | null
+          posthog_api_key?: string | null
+          posthog_enabled?: boolean | null
+          posthog_project_id?: string | null
           updated_at?: string | null
-          url: string
-          wordpress_page_id: number
+          woocommerce_consumer_key?: string | null
+          woocommerce_consumer_secret?: string | null
+          woocommerce_enabled?: boolean | null
         }
         Update: {
           connection_id?: string
           created_at?: string | null
           id?: string
-          imported_at?: string | null
-          last_synced?: string | null
-          modified_date?: string | null
-          slug?: string
-          status?: string
-          title?: string
+          last_posthog_sync?: string | null
+          last_woocommerce_sync?: string | null
+          posthog_api_key?: string | null
+          posthog_enabled?: boolean | null
+          posthog_project_id?: string | null
           updated_at?: string | null
-          url?: string
-          wordpress_page_id?: number
+          woocommerce_consumer_key?: string | null
+          woocommerce_consumer_secret?: string | null
+          woocommerce_enabled?: boolean | null
         }
         Relationships: [
           {
-            foreignKeyName: "client_pages_connection_id_fkey"
+            foreignKeyName: "analytics_configs_connection_id_fkey"
             columns: ["connection_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "connections"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "client_pages_connection_id_fkey"
+            foreignKeyName: "analytics_configs_connection_id_fkey"
             columns: ["connection_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "shared_connections"
             referencedColumns: ["id"]
           },
         ]
+      }
+      asaas_webhooks: {
+        Row: {
+          created_at: string | null
+          event_type: string
+          id: string
+          payload: Json
+          payment_id: string | null
+          processed: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_type: string
+          id?: string
+          payload: Json
+          payment_id?: string | null
+          processed?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          payment_id?: string | null
+          processed?: boolean | null
+        }
+        Relationships: []
       }
       client_page_performance: {
         Row: {
@@ -233,6 +317,66 @@ export type Database = {
           },
         ]
       }
+      client_pages: {
+        Row: {
+          connection_id: string
+          created_at: string | null
+          id: string
+          imported_at: string | null
+          last_synced: string | null
+          modified_date: string | null
+          slug: string
+          status: string
+          title: string
+          updated_at: string | null
+          url: string
+          wordpress_page_id: number
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string | null
+          id?: string
+          imported_at?: string | null
+          last_synced?: string | null
+          modified_date?: string | null
+          slug: string
+          status?: string
+          title: string
+          updated_at?: string | null
+          url: string
+          wordpress_page_id: number
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string | null
+          id?: string
+          imported_at?: string | null
+          last_synced?: string | null
+          modified_date?: string | null
+          slug?: string
+          status?: string
+          title?: string
+          updated_at?: string | null
+          url?: string
+          wordpress_page_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_pages_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_pages_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "shared_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connection_credentials: {
         Row: {
           application_password: string
@@ -280,6 +424,7 @@ export type Database = {
           access_level: Database["public"]["Enums"]["app_role"] | null
           base_url: string
           components_count: number | null
+          connection_type: string | null
           created_at: string
           created_by: string | null
           error: string | null
@@ -294,12 +439,13 @@ export type Database = {
           status: string
           updated_at: string
           user_type: string
-          workspace_id: string | null
+          workspace_id: string
         }
         Insert: {
           access_level?: Database["public"]["Enums"]["app_role"] | null
           base_url: string
           components_count?: number | null
+          connection_type?: string | null
           created_at?: string
           created_by?: string | null
           error?: string | null
@@ -314,12 +460,13 @@ export type Database = {
           status?: string
           updated_at?: string
           user_type?: string
-          workspace_id?: string | null
+          workspace_id: string
         }
         Update: {
           access_level?: Database["public"]["Enums"]["app_role"] | null
           base_url?: string
           components_count?: number | null
+          connection_type?: string | null
           created_at?: string
           created_by?: string | null
           error?: string | null
@@ -334,7 +481,7 @@ export type Database = {
           status?: string
           updated_at?: string
           user_type?: string
-          workspace_id?: string | null
+          workspace_id?: string
         }
         Relationships: [
           {
@@ -342,6 +489,87 @@ export type Database = {
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ecommerce_snapshots: {
+        Row: {
+          average_order_value: number | null
+          completed_orders: number | null
+          connection_id: string
+          created_at: string | null
+          failed_orders: number | null
+          id: string
+          new_customers: number | null
+          out_of_stock_products: number | null
+          pending_orders: number | null
+          period_type: string
+          raw_data: Json | null
+          refunded_orders: number | null
+          snapshot_date: string
+          top_categories: Json | null
+          top_products: Json | null
+          total_customers: number | null
+          total_orders: number | null
+          total_products: number | null
+          total_sales: number | null
+        }
+        Insert: {
+          average_order_value?: number | null
+          completed_orders?: number | null
+          connection_id: string
+          created_at?: string | null
+          failed_orders?: number | null
+          id?: string
+          new_customers?: number | null
+          out_of_stock_products?: number | null
+          pending_orders?: number | null
+          period_type: string
+          raw_data?: Json | null
+          refunded_orders?: number | null
+          snapshot_date: string
+          top_categories?: Json | null
+          top_products?: Json | null
+          total_customers?: number | null
+          total_orders?: number | null
+          total_products?: number | null
+          total_sales?: number | null
+        }
+        Update: {
+          average_order_value?: number | null
+          completed_orders?: number | null
+          connection_id?: string
+          created_at?: string | null
+          failed_orders?: number | null
+          id?: string
+          new_customers?: number | null
+          out_of_stock_products?: number | null
+          pending_orders?: number | null
+          period_type?: string
+          raw_data?: Json | null
+          refunded_orders?: number | null
+          snapshot_date?: string
+          top_categories?: Json | null
+          top_products?: Json | null
+          total_customers?: number | null
+          total_orders?: number | null
+          total_products?: number | null
+          total_sales?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ecommerce_snapshots_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ecommerce_snapshots_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "shared_connections"
             referencedColumns: ["id"]
           },
         ]
@@ -382,8 +610,198 @@ export type Database = {
         }
         Relationships: []
       }
+      page_analytics: {
+        Row: {
+          avg_time_on_page: number | null
+          bounce_rate: number | null
+          connection_id: string
+          created_at: string | null
+          custom_events: Json | null
+          date: string
+          id: string
+          page_title: string | null
+          page_type: string | null
+          page_url: string
+          pageviews: number | null
+          raw_posthog_data: Json | null
+          sessions: number | null
+          traffic_sources: Json | null
+          unique_visitors: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          avg_time_on_page?: number | null
+          bounce_rate?: number | null
+          connection_id: string
+          created_at?: string | null
+          custom_events?: Json | null
+          date: string
+          id?: string
+          page_title?: string | null
+          page_type?: string | null
+          page_url: string
+          pageviews?: number | null
+          raw_posthog_data?: Json | null
+          sessions?: number | null
+          traffic_sources?: Json | null
+          unique_visitors?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          avg_time_on_page?: number | null
+          bounce_rate?: number | null
+          connection_id?: string
+          created_at?: string | null
+          custom_events?: Json | null
+          date?: string
+          id?: string
+          page_title?: string | null
+          page_type?: string | null
+          page_url?: string
+          pageviews?: number | null
+          raw_posthog_data?: Json | null
+          sessions?: number | null
+          traffic_sources?: Json | null
+          unique_visitors?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_analytics_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "page_analytics_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "shared_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_sessions: {
+        Row: {
+          amount: number
+          asaas_customer_id: string | null
+          asaas_payment_id: string | null
+          asaas_subscription_id: string | null
+          billing_type: string
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          metadata: Json | null
+          plan_id: string
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          asaas_customer_id?: string | null
+          asaas_payment_id?: string | null
+          asaas_subscription_id?: string | null
+          billing_type: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          plan_id: string
+          status: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          asaas_customer_id?: string | null
+          asaas_payment_id?: string | null
+          asaas_subscription_id?: string | null
+          billing_type?: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          plan_id?: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      posthog_stats: {
+        Row: {
+          avg_session_duration: number | null
+          bounce_rate: number | null
+          connection_id: string
+          created_at: string | null
+          devices: Json | null
+          id: string
+          pageviews_by_day: Json | null
+          period_end: string
+          period_start: string
+          top_pages: Json | null
+          total_pageviews: number | null
+          total_sessions: number | null
+          traffic_sources: Json | null
+          unique_visitors: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          avg_session_duration?: number | null
+          bounce_rate?: number | null
+          connection_id: string
+          created_at?: string | null
+          devices?: Json | null
+          id?: string
+          pageviews_by_day?: Json | null
+          period_end: string
+          period_start: string
+          top_pages?: Json | null
+          total_pageviews?: number | null
+          total_sessions?: number | null
+          traffic_sources?: Json | null
+          unique_visitors?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          avg_session_duration?: number | null
+          bounce_rate?: number | null
+          connection_id?: string
+          created_at?: string | null
+          devices?: Json | null
+          id?: string
+          pageviews_by_day?: Json | null
+          period_end?: string
+          period_start?: string
+          top_pages?: Json | null
+          total_pageviews?: number | null
+          total_sessions?: number | null
+          traffic_sources?: Json | null
+          unique_visitors?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posthog_stats_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posthog_stats_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "shared_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
+          asaas_customer_id: string | null
           created_at: string
           email: string
           id: string
@@ -391,6 +809,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          asaas_customer_id?: string | null
           created_at?: string
           email: string
           id: string
@@ -398,6 +817,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          asaas_customer_id?: string | null
           created_at?: string
           email?: string
           id?: string
@@ -405,6 +825,68 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      proposals: {
+        Row: {
+          accepted_at: string | null
+          client_email: string | null
+          client_name: string
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          id: string
+          payment_terms: string | null
+          price: number
+          scope: string
+          status: string
+          template: string
+          token: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          client_email?: string | null
+          client_name: string
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          id?: string
+          payment_terms?: string | null
+          price: number
+          scope: string
+          status?: string
+          template?: string
+          token?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          client_email?: string | null
+          client_name?: string
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          id?: string
+          payment_terms?: string | null
+          price?: number
+          scope?: string
+          status?: string
+          template?: string
+          token?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposals_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       resources: {
         Row: {
@@ -489,49 +971,101 @@ export type Database = {
         }
         Relationships: []
       }
-      proposals: {
+      woocommerce_stats: {
         Row: {
+          average_order_value: number | null
+          connection_id: string
+          created_at: string | null
           id: string
-          client_name: string
-          scope: string
-          price: number
-          deadline: string | null
-          status: string
-          token: string
-          template: string
-          workspace_id: string | null
-          created_at: string
+          orders_by_status: Json | null
+          period_end: string
+          period_start: string
+          sales_by_day: Json | null
+          top_products: Json | null
+          total_customers: number | null
+          total_orders: number | null
+          total_products: number | null
+          total_sales: number | null
           updated_at: string | null
         }
         Insert: {
+          average_order_value?: number | null
+          connection_id: string
+          created_at?: string | null
           id?: string
-          client_name: string
-          scope: string
-          price: number
-          deadline?: string | null
-          status?: string
-          token?: string
-          template?: string
-          workspace_id?: string | null
-          created_at?: string
+          orders_by_status?: Json | null
+          period_end: string
+          period_start: string
+          sales_by_day?: Json | null
+          top_products?: Json | null
+          total_customers?: number | null
+          total_orders?: number | null
+          total_products?: number | null
+          total_sales?: number | null
           updated_at?: string | null
         }
         Update: {
+          average_order_value?: number | null
+          connection_id?: string
+          created_at?: string | null
           id?: string
-          client_name?: string
-          scope?: string
-          price?: number
-          deadline?: string | null
-          status?: string
-          token?: string
-          template?: string
-          workspace_id?: string | null
-          created_at?: string
+          orders_by_status?: Json | null
+          period_end?: string
+          period_start?: string
+          sales_by_day?: Json | null
+          top_products?: Json | null
+          total_customers?: number | null
+          total_orders?: number | null
+          total_products?: number | null
+          total_sales?: number | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "proposals_workspace_id_fkey"
+            foreignKeyName: "woocommerce_stats_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "woocommerce_stats_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "shared_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_members: {
+        Row: {
+          joined_at: string
+          role: Database["public"]["Enums"]["workspace_role"]
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          joined_at?: string
+          role?: Database["public"]["Enums"]["workspace_role"]
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          joined_at?: string
+          role?: Database["public"]["Enums"]["workspace_role"]
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -541,69 +1075,33 @@ export type Database = {
       }
       workspaces: {
         Row: {
+          created_at: string
           id: string
           name: string
-          slug: string
           owner_id: string
-          created_at: string
+          slug: string
           updated_at: string
         }
         Insert: {
+          created_at?: string
           id?: string
           name: string
-          slug: string
           owner_id: string
-          created_at?: string
+          slug: string
           updated_at?: string
         }
         Update: {
+          created_at?: string
           id?: string
           name?: string
-          slug?: string
           owner_id?: string
-          created_at?: string
+          slug?: string
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "workspaces_owner_id_fkey"
             columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workspace_members: {
-        Row: {
-          workspace_id: string
-          user_id: string
-          role: Database["public"]["Enums"]["workspace_role"]
-          joined_at: string
-        }
-        Insert: {
-          workspace_id: string
-          user_id: string
-          role?: Database["public"]["Enums"]["workspace_role"]
-          joined_at?: string
-        }
-        Update: {
-          workspace_id?: string
-          user_id?: string
-          role?: Database["public"]["Enums"]["workspace_role"]
-          joined_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_members_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workspace_members_user_id_fkey"
-            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -679,16 +1177,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_platform_admin: { Args: never; Returns: boolean }
       is_workspace_member: {
         Args: { p_workspace_id: string }
         Returns: boolean
       }
-      is_workspace_owner: {
-        Args: { p_workspace_id: string }
-        Returns: boolean
+      is_workspace_owner: { Args: { p_workspace_id: string }; Returns: boolean }
+      process_payment_webhook: {
+        Args: { payment_id_param: string; payment_status: string }
+        Returns: undefined
       }
-      is_platform_admin: {
-        Args: Record<PropertyKey, never>
+      public_set_proposal_status_by_token: {
+        Args: { p_status: string; p_token: string }
         Returns: boolean
       }
     }
@@ -823,6 +1323,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["free", "pro", "admin"],
+      workspace_role: ["owner", "member", "manager"],
     },
   },
 } as const
