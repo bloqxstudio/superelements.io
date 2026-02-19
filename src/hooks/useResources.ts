@@ -15,22 +15,28 @@ export interface Resource {
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  workspace_id: string;
 }
 
 interface UseResourcesOptions {
+  workspaceId?: string | null;
   category?: string | null;
   includeInactive?: boolean;
 }
 
 export const useResources = (options: UseResourcesOptions = {}) => {
-  const { category, includeInactive = false } = options;
+  const { workspaceId, category, includeInactive = false } = options;
 
   return useQuery({
-    queryKey: ['resources', category, includeInactive],
+    queryKey: ['resources', workspaceId, category, includeInactive],
+    enabled: !!workspaceId,
     queryFn: async () => {
+      if (!workspaceId) return [];
+
       let query = supabase
         .from('resources')
         .select('*')
+        .eq('workspace_id', workspaceId)
         .order('order', { ascending: true })
         .order('created_at', { ascending: false });
 
@@ -50,13 +56,17 @@ export const useResources = (options: UseResourcesOptions = {}) => {
   });
 };
 
-export const useResourceCategories = () => {
+export const useResourceCategories = (workspaceId?: string | null) => {
   return useQuery({
-    queryKey: ['resource-categories'],
+    queryKey: ['resource-categories', workspaceId],
+    enabled: !!workspaceId,
     queryFn: async () => {
+      if (!workspaceId) return [];
+
       const { data, error } = await supabase
         .from('resources')
         .select('category')
+        .eq('workspace_id', workspaceId)
         .eq('is_active', true)
         .not('category', 'is', null);
 

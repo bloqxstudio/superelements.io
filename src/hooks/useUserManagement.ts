@@ -3,12 +3,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { AppRole } from '@/contexts/AuthContext';
 
+export interface UserWorkspace {
+  workspace_id: string;
+  workspace_name: string;
+  role: 'owner' | 'member';
+}
+
 export interface UserWithRole {
   id: string;
   email: string;
   phone?: string;
   role: AppRole;
   created_at: string;
+  workspaces: UserWorkspace[];
 }
 
 export const useUsers = () => {
@@ -30,12 +37,26 @@ export const useUsers = () => {
 
       if (rolesError) throw rolesError;
 
+      // Buscar workspace memberships com nome do workspace
+      const { data: memberships } = await supabase
+        .from('workspace_members')
+        .select('user_id, role, workspace_id, workspaces(name)');
+
       // Combinar dados
       const users: UserWithRole[] = profiles.map(profile => {
         const userRole = roles.find(r => r.user_id === profile.id);
+        const userMemberships = (memberships ?? [])
+          .filter((m) => m.user_id === profile.id)
+          .map((m) => ({
+            workspace_id: m.workspace_id,
+            workspace_name: (m.workspaces as { name: string } | null)?.name ?? '',
+            role: m.role as 'owner' | 'member',
+          }));
+
         return {
           ...profile,
-          role: (userRole?.role as AppRole) || 'free'
+          role: (userRole?.role as AppRole) || 'free',
+          workspaces: userMemberships,
         };
       });
 

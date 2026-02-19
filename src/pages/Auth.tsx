@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,18 +21,19 @@ export default function Auth() {
   const [step, setStep] = useState<'initial' | 'login' | 'signup' | 'confirm-email'>('initial');
   const [isSignUp, setIsSignUp] = useState(false);
   
-  const { signIn, signUp, signInWithGoogle, user } = useAuth();
+  const { signIn, signUp, signInWithGoogle, user, loading: authLoading } = useAuth();
+  const { activeWorkspace, isLoading: workspaceLoading } = useWorkspace();
   const navigate = useNavigate();
-  const location = useLocation();
-  
-  const from = location.state?.from?.pathname || '/';
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated (e.g. user visits /auth while logged in)
+  // If workspace is selected, go to /inicio. Otherwise, force /workspace selection.
   useEffect(() => {
+    if (authLoading || workspaceLoading) return;
+
     if (user) {
-      navigate(from, { replace: true });
+      navigate(activeWorkspace ? '/inicio' : '/workspace', { replace: true });
     }
-  }, [user, navigate, from]);
+  }, [user, activeWorkspace, authLoading, workspaceLoading, navigate]);
 
   const handleLoginClick = () => {
     if (!email || !email.includes('@')) {
@@ -77,7 +79,7 @@ export default function Auth() {
       }
     }
 
-    const { error } = isSignUp 
+    const { error } = isSignUp
       ? await signUp(email, password, phone)
       : await signIn(email, password);
 
@@ -91,11 +93,16 @@ export default function Auth() {
           ? 'A senha deve ter pelo menos 6 caracteres'
           : 'Ocorreu um erro. Tente novamente.'
       );
+      setLoading(false);
     } else if (isSignUp) {
       setStep('confirm-email');
+      setLoading(false);
+    } else {
+      // Deixa o useEffect reagir ao user/activeWorkspace após o onAuthStateChange
+      // completar o fetchProfile. Não navegamos manualmente para evitar redirect
+      // prematuro antes do profile (e workspaceMemberships) estar disponível.
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   const handleGoogleAuth = async () => {

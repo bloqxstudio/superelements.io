@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { RefreshCw, Package, Filter } from 'lucide-react';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import { useConnectionsStore } from '@/store/connectionsStore';
+import { motion } from 'framer-motion';
 import '../../components/ui/component-grid.css';
 
 interface ComponentGridContentProps {
@@ -30,6 +31,23 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
   memoizedGetDesktopPreviewUrl,
   memoizedGetPreviewUrl
 }) => {
+  const cardContainerVariants = {
+    hidden: { opacity: 1 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.06, delayChildren: 0.03 },
+    },
+  };
+
+  const cardItemVariants = {
+    hidden: { opacity: 0, y: 14 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] },
+    },
+  };
+
   const { selectedCategories, clearAllFilters } = useMultiConnectionData();
   const { getConnectionById } = useConnectionsStore();
   const hasActiveFilters = selectedCategories && selectedCategories.length > 0;
@@ -119,7 +137,12 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
   return (
     <div className="space-y-6">
       {/* Components Grid - Using custom CSS classes for responsive layout */}
-      <div className="component-grid">
+      <motion.div
+        className="component-grid"
+        variants={cardContainerVariants}
+        initial="hidden"
+        animate="show"
+      >
         {displayComponents.map((component) => {
           const baseUrl = getComponentBaseUrl(component);
           const connectionId = component.connection_id || '';
@@ -127,20 +150,21 @@ const ComponentGridContent: React.FC<ComponentGridContentProps> = ({
           const postType = connection?.post_type || 'posts';
           
           return (
-            <OptimizedComponentCard
-              key={component.id}
-              component={component}
-              onPreview={() => handlePreviewClick(component)}
-              getDesktopPreviewUrl={memoizedGetDesktopPreviewUrl}
-              getPreviewUrl={memoizedGetPreviewUrl}
-              baseUrl={baseUrl}
-              connectionId={connectionId}
-              postType={postType}
-              accessLevel={component.connection_access_level || 'free'}
-            />
+            <motion.div key={component.id} variants={cardItemVariants}>
+              <OptimizedComponentCard
+                component={component}
+                onPreview={() => handlePreviewClick(component)}
+                getDesktopPreviewUrl={memoizedGetDesktopPreviewUrl}
+                getPreviewUrl={memoizedGetPreviewUrl}
+                baseUrl={baseUrl}
+                connectionId={connectionId}
+                postType={postType}
+                accessLevel={component.connection_access_level || 'free'}
+              />
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
 
       {/* Infinite Scroll Loading */}
       {isFetchingNextPage && (

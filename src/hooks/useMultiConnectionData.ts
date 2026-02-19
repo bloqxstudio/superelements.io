@@ -18,17 +18,25 @@ interface ConnectionCategories {
   lastRefresh?: Date;
 }
 
-export const useMultiConnectionData = () => {
+export const useMultiConnectionData = (workspaceId?: string) => {
   const { connections, activeConnectionId, setActiveConnection } = useConnectionsStore();
   const { selectedCategories, setSelectedCategories, clearLoadedPages, setIsFastLoading, setFastLoadingPage } = useWordPressStore();
-  
+
   const [connectionData, setConnectionData] = useState<Map<string, ConnectionCategories>>(new Map());
   const [expandedConnections, setExpandedConnections] = useState<Set<string>>(new Set());
 
   // Memoize active connections to prevent infinite loops
+  // Only include designer connections — client accounts are excluded from the component library
   const activeConnections = useMemo(() => {
-    return connections.filter(conn => conn.isActive);
-  }, [connections]);
+    return connections.filter(
+      conn => {
+        const isDesignerConn = conn.isActive && (!conn.connection_type || conn.connection_type === 'designer_connection');
+        // If workspaceId is provided, filter by workspace (belt-and-suspenders on top of RLS)
+        const inWorkspace = !workspaceId || conn.workspace_id === workspaceId;
+        return isDesignerConn && inWorkspace;
+      }
+    );
+  }, [connections, workspaceId]);
 
   // Create a stable key for active connections to prevent unnecessary re-renders
   const activeConnectionsKey = useMemo(() => {

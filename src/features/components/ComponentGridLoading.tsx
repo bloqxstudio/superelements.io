@@ -3,6 +3,7 @@ import React from 'react';
 import { OptimizedSkeleton } from '@/components/ui/optimized-skeleton';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface ComponentGridLoadingProps {
   variant: 'loading' | 'initializing' | 'applying-filters';
@@ -50,16 +51,39 @@ const ComponentGridLoading: React.FC<ComponentGridLoadingProps> = ({
         )}
       </div>
 
-      {/* Skeleton Grid */}
-      <div className="component-grid">
-        {Array.from({ length: count }).map((_, index) => (
-          <OptimizedSkeleton 
-            key={index} 
-            variant="card"
-            className="animate-pulse"
-          />
-        ))}
+      <div className="h-1 w-full overflow-hidden rounded-full bg-gray-200/70">
+        <motion.div
+          className="h-full w-1/3 rounded-full bg-gray-400/70"
+          animate={{ x: ['-30%', '260%'] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+        />
       </div>
+
+      {/* Skeleton Grid */}
+      <motion.div
+        className="component-grid"
+        variants={{
+          hidden: { opacity: 1 },
+          show: { opacity: 1, transition: { staggerChildren: 0.05 } },
+        }}
+        initial="hidden"
+        animate="show"
+      >
+        {Array.from({ length: count }).map((_, index) => (
+          <motion.div
+            key={index}
+            variants={{
+              hidden: { opacity: 0.5, y: 8 },
+              show: { opacity: 1, y: 0, transition: { duration: 0.25 } },
+            }}
+          >
+            <OptimizedSkeleton
+              variant="card"
+              className="animate-pulse"
+            />
+          </motion.div>
+        ))}
+      </motion.div>
     </div>
   );
 };

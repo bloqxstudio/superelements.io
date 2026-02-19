@@ -139,6 +139,7 @@ const UsersPage = () => {
                   <TableHead>Email</TableHead>
                   <TableHead>Telefone</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Workspace</TableHead>
                   <TableHead>Data de Criação</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -155,6 +156,20 @@ const UsersPage = () => {
                           <RoleIcon className="h-3 w-3" />
                           {user.role}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {user.workspaces && user.workspaces.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {user.workspaces.map((ws) => (
+                              <Badge key={ws.workspace_id} variant="outline" className="text-xs">
+                                {ws.workspace_name}
+                                {ws.role === 'owner' && <span className="ml-1 text-primary">★</span>}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
                       </TableCell>
                       <TableCell>{new Date(user.created_at).toLocaleDateString('pt-BR')}</TableCell>
                       <TableCell className="text-right space-x-2">

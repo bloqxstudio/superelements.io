@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, CheckCircle, Loader2, Globe, Users, Crown, Link, Zap, Layers, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 
 interface ConnectionWizardProps {
   isOpen: boolean;
@@ -34,6 +35,7 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
   editingConnectionId
 }) => {
   const { addConnection, updateConnection, getConnectionById } = useConnectionsStore();
+  const { activeWorkspace } = useWorkspace();
   const [isLoading, setIsLoading] = useState(false);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [urlInput, setUrlInput] = useState('');
@@ -156,6 +158,12 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
 
     setIsLoading(true);
     try {
+      if (!editingConnectionId && !activeWorkspace?.id) {
+        toast.error('Selecione um workspace para criar a conexão');
+        setIsLoading(false);
+        return;
+      }
+
       const connectionData: Omit<WordPressConnection, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'> = {
         name: formData.name,
         slug: slugify(formData.name),
@@ -173,7 +181,10 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
         accessLevel: 'free',
         lastTested: new Date(),
         componentsCount: 0,
-        connection_type: formData.connectionType
+        connection_type: formData.connectionType,
+        workspace_id: editingConnectionId
+          ? getConnectionById(editingConnectionId)?.workspace_id ?? activeWorkspace?.id ?? null
+          : activeWorkspace?.id ?? null,
       };
 
       if (editingConnectionId) {

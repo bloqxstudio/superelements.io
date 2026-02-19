@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useResources } from '@/hooks/useResources';
 import { useResourceMutations } from '@/hooks/useResourceMutations';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { ResourceTable } from '@/components/admin/ResourceTable';
 import { ResourceForm } from '@/components/admin/ResourceForm';
 import { Button } from '@/components/ui/button';
@@ -9,10 +10,14 @@ import { Plus, AlertCircle } from 'lucide-react';
 import type { Resource } from '@/hooks/useResources';
 
 const AdminResources = () => {
+  const { activeWorkspace } = useWorkspace();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
-  const { data: resources, isLoading, error } = useResources({ includeInactive: true });
+  const { data: resources, isLoading, error } = useResources({
+    workspaceId: activeWorkspace?.id,
+    includeInactive: true,
+  });
   const { createResource, updateResource, deleteResource, toggleActive } = useResourceMutations();
 
   const handleCreate = () => {

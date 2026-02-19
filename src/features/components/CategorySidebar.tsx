@@ -3,6 +3,7 @@ import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import { useConnectionsStore } from '@/store/connectionsStore';
+import { useLibraryComponentCount } from '@/hooks/useLibraryComponentCount';
 import { Button } from '@/components/ui/button';
 import { Folder, FolderOpen, Globe, RefreshCw } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -20,6 +21,7 @@ export const CategorySidebar: React.FC = () => {
   const { invalidateCache: invalidateCategoryCache } = useCategoryCache();
   const { invalidateCache: invalidateComponentCache } = useComponentMetadataCache();
   const queryClient = useQueryClient();
+  const { data: libCount } = useLibraryComponentCount();
   const {
     connectionsData,
     expandedConnections,
@@ -110,8 +112,8 @@ export const CategorySidebar: React.FC = () => {
   const isInAllComponentsState = !urlConnectionId && !urlCategoryId && !connectionSlug && !categorySlug;
 
   return (
-    <div className="w-64 fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 shadow-sm hidden md:block">
-      <div className="flex flex-col h-full pt-16 md:pt-20">
+    <div className="w-64 fixed top-[65px] bottom-0 left-64 z-30 bg-white border-r border-gray-200 shadow-sm hidden md:block">
+      <div className="flex flex-col h-full">
         
         {/* Header Section */}
         <div className="px-4 border-b border-gray-200 py-[8px]">
@@ -184,7 +186,11 @@ export const CategorySidebar: React.FC = () => {
                           )}
                           <span className="truncate">{connection.connectionName}</span>
                         </div>
-                        {connection.isLoaded && connection.categories.length > 0 && (
+                        {libCount?.byConnection[connection.connectionId] != null ? (
+                          <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
+                            ({libCount.byConnection[connection.connectionId]})
+                          </span>
+                        ) : connection.isLoaded && connection.categories.length > 0 && (
                           <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
                             ({connection.categories.reduce((sum, cat) => sum + cat.count, 0)})
                           </span>

@@ -53,8 +53,10 @@ const CentralizedComponentLibrary: React.FC<CentralizedComponentLibraryProps> = 
     return null;
   }
 
-  // Show all active connections - access control is on copy, not view
-  const activeConnections = connections.filter(conn => conn.isActive);
+  // Only designer connections — client accounts are excluded from the component library
+  const activeConnections = connections.filter(
+    conn => conn.isActive && (!conn.connection_type || conn.connection_type === 'designer_connection')
+  );
 
   // Show loading state while fetching connections
   if (isLoading && connections.length === 0) {

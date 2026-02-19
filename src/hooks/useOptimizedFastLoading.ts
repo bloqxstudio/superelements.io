@@ -22,8 +22,10 @@ export const useOptimizedFastLoading = ({
   const { fetchComponents } = useWordPressApi();
   const { getCachedComponents, setCachedComponents, getCacheKey } = useComponentMetadataCache();
 
-  // Get all active connections (simplified - no user role filtering)
-  const allUserConnections = connections.filter(c => c.isActive);
+  // Get all active designer connections — client accounts are excluded from the component library
+  const allUserConnections = connections.filter(
+    c => c.isActive && (!c.connection_type || c.connection_type === 'designer_connection')
+  );
   
   // Filter connections based on activeConnectionId
   const targetConnections = activeConnectionId 

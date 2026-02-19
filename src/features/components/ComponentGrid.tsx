@@ -8,6 +8,7 @@ import ComponentGridContent from './ComponentGridContent';
 import { useComponentGridCallbacks } from './hooks/useComponentGridCallbacks';
 import { useWordPressStore } from '@/store/wordpressStore';
 import { useConnectionsStore } from '@/store/connectionsStore';
+import { useLibraryComponentCount } from '@/hooks/useLibraryComponentCount';
 import { Badge } from '@/components/ui/badge';
 import { Grid, Globe, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -47,6 +48,22 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
   // Context determination
   const isShowingAllComponents = !activeConnectionId && selectedCategories.length === 0;
   const activeConnection = connections.find(c => c.id === activeConnectionId);
+
+  // Real total from WordPress API (all active designer connections, per_page=1 + X-WP-Total)
+  const { data: realTotalAll } = useLibraryComponentCount();
+
+  // Total to display: always use real API total (X-WP-Total) when available.
+  // For a single connection, look up its count from byConnection.
+  // Only fall back to data?.totalAvailable (capped at 150) if the API hasn't responded yet.
+  const totalToShow = isShowingAllComponents
+    ? (realTotalAll?.total ?? data?.totalAvailable ?? displayComponents.length)
+    : (activeConnectionId && realTotalAll?.byConnection[activeConnectionId] != null
+        ? realTotalAll.byConnection[activeConnectionId]
+        : (data?.totalAvailable ?? displayComponents.length));
+
+  const activeDesignerConnections = connections.filter(
+    (c) => c.isActive && (!c.connection_type || c.connection_type === 'designer_connection')
+  );
 
   // Show error state
   if (isError && error) {
@@ -89,13 +106,10 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
               <Grid className="h-4 w-4" />
             )}
             <span>
-              {displayComponents.length} 
-              {data?.totalAvailable && data.totalAvailable > displayComponents.length && (
-                <span> of {data.totalAvailable}</span>
-              )} {displayComponents.length === 1 ? 'component' : 'components'} found
-              {isShowingAllComponents && connections.filter(c => c.isActive).length > 1 && (
+              {totalToShow} {totalToShow === 1 ? 'component' : 'components'} found
+              {isShowingAllComponents && activeDesignerConnections.length > 1 && (
                 <span className="text-muted-foreground ml-1">
-                  (from {connections.filter(c => c.isActive).length} connections)
+                  (from {activeDesignerConnections.length} connections)
                 </span>
               )}
               {activeConnection && (
@@ -104,11 +118,6 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
                 </span>
               )}
             </span>
-            {data?.totalAvailable && data.totalAvailable > displayComponents.length && (
-              <span className="text-xs text-muted-foreground ml-2">
-                (showing first {displayComponents.length})
-              </span>
-            )}
           </Badge>
         ) : (
           <Badge variant="outline" className="flex items-center gap-2 px-3 py-1">

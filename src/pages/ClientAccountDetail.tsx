@@ -38,6 +38,13 @@ interface ClientPage {
   last_synced: string | null;
 }
 
+interface PageScoreCache {
+  [pageId: string]: {
+    performance_score: number | null;
+    fetched_at: string;
+  };
+}
+
 interface PageSpeedData {
   performance_score: number | null;
   accessibility_score?: number | null;
@@ -93,6 +100,8 @@ const ClientAccountDetail = () => {
   const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
   const [analysisData, setAnalysisData] = useState<RecommendationData | null>(null);
   const [isAnalysisCached, setIsAnalysisCached] = useState(false);
+  const [pageScores, setPageScores] = useState<PageScoreCache>({});
+  const [isScanningInBackground, setIsScanningInBackground] = useState(false);
 
   const connection = connectionId ? getConnectionById(connectionId) : null;
 
@@ -122,12 +131,71 @@ const ClientAccountDetail = () => {
         .order('imported_at', { ascending: false });
 
       if (error) throw error;
-      setPages(data || []);
+      const loaded = data || [];
+      setPages(loaded);
+
+      if (loaded.length > 0) {
+        fetchCachedScores(loaded.map(p => p.id));
+      }
     } catch (error) {
       console.error('Error fetching pages:', error);
       toast.error('Failed to load pages');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Busca os scores já salvos no banco para exibir inline nos cards
+  const fetchCachedScores = async (pageIds: string[]) => {
+    try {
+      const { data, error } = await supabase
+        .from('client_page_performance')
+        .select('client_page_id, performance_score, fetched_at')
+        .in('client_page_id', pageIds)
+        .eq('strategy', 'mobile')
+        .order('fetched_at', { ascending: false });
+
+      if (error || !data) return;
+
+      // Pega o score mais recente por página
+      const scores: PageScoreCache = {};
+      for (const row of data) {
+        if (!scores[row.client_page_id]) {
+          scores[row.client_page_id] = {
+            performance_score: row.performance_score,
+            fetched_at: row.fetched_at,
+          };
+        }
+      }
+      setPageScores(scores);
+    } catch {
+      // silencioso — scores são complementares, não críticos
+    }
+  };
+
+  // Roda PageSpeed em background para todas as páginas publicadas sem score
+  const runBackgroundScan = async (allPages: ClientPage[]) => {
+    const toScan = allPages.filter(p => p.status === 'publish' && !pageScores[p.id]);
+    if (toScan.length === 0) return;
+
+    setIsScanningInBackground(true);
+    try {
+      // Processa em lotes de 3 para não sobrecarregar a API
+      const batchSize = 3;
+      for (let i = 0; i < toScan.length; i += batchSize) {
+        const batch = toScan.slice(i, i + batchSize);
+        await Promise.allSettled(
+          batch.map(page =>
+            supabase.functions.invoke('get-pagespeed', {
+              body: { pageId: page.id, strategy: 'mobile', forceRefresh: false }
+            })
+          )
+        );
+        // Atualiza os scores após cada lote
+        await fetchCachedScores(allPages.map(p => p.id));
+      }
+    } finally {
+      setIsScanningInBackground(false);
     }
   };
 
@@ -151,6 +219,12 @@ const ClientAccountDetail = () => {
           console.log('Successfully imported via Edge Function:', data.imported);
           toast.success(`Successfully imported ${data.imported} page(s)`);
           await fetchPages();
+          // Dispara scan automático após importar
+          const { data: freshPages } = await supabase
+            .from('client_pages')
+            .select('*')
+            .eq('connection_id', connection.id);
+          if (freshPages?.length) runBackgroundScan(freshPages as ClientPage[]);
           return;
         }
 
@@ -251,6 +325,12 @@ const ClientAccountDetail = () => {
       console.log('Successfully imported pages:', wpPages.length);
       toast.success(`Successfully imported ${wpPages.length} page(s)`);
       await fetchPages();
+      // Dispara scan automático após importar (fallback direto)
+      const { data: freshPages } = await supabase
+        .from('client_pages')
+        .select('*')
+        .eq('connection_id', connectionId);
+      if (freshPages?.length) runBackgroundScan(freshPages as ClientPage[]);
     } catch (error: any) {
       console.error('Error importing pages:', error);
 
@@ -367,11 +447,28 @@ const ClientAccountDetail = () => {
 
   const openPageSpeedModal = async (page: ClientPage) => {
     setSelectedPage(page);
-    setPageSpeedData(null);
     setAnalysisData(null);
     setIsAnalysisCached(false);
     setPageSpeedStrategy('mobile');
+
+    // Se já tem score local, pré-popula o modal imediatamente
+    const localScore = pageScores[page.id];
+    if (localScore) {
+      setPageSpeedData({
+        performance_score: localScore.performance_score,
+        lcp_ms: null,
+        inp_ms: null,
+        tbt_ms: null,
+        cls: null,
+        strategy: 'mobile',
+        fetched_at: localScore.fetched_at,
+      });
+    } else {
+      setPageSpeedData(null);
+    }
+
     setIsPageSpeedOpen(true);
+    // Busca os dados completos (vai retornar do cache do banco em ms se disponível)
     await fetchPageSpeed(page, 'mobile');
   };
 
@@ -738,41 +835,65 @@ const ClientAccountDetail = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openPageSpeedModal(page)}
-                    >
-                      <Gauge className="h-3 w-3 mr-1" />
-                      PageSpeed
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      asChild
-                    >
-                      <a href={page.url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-3 w-3 mr-1" />
-                        Abrir
-                      </a>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => syncPage(page.id)}
-                    >
-                      <RefreshCw className="h-3 w-3 mr-1" />
-                      Sync
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => deletePage(page.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                  <div className="flex items-center justify-between gap-2">
+                    {/* Score inline */}
+                    {pageScores[page.id] ? (
+                      <button
+                        onClick={() => openPageSpeedModal(page)}
+                        className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm hover:bg-accent transition-colors"
+                        title={`Atualizado ${new Date(pageScores[page.id].fetched_at).toLocaleString('pt-BR')}`}
+                      >
+                        <Gauge className="h-3 w-3 text-muted-foreground" />
+                        <span className={`font-bold tabular-nums ${getScoreTone(pageScores[page.id].performance_score)}`}>
+                          {pageScores[page.id].performance_score ?? '-'}
+                        </span>
+                        <span className="text-xs text-muted-foreground">/100</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => openPageSpeedModal(page)}
+                        className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm text-muted-foreground hover:bg-accent transition-colors"
+                      >
+                        <Gauge className="h-3 w-3" />
+                        {isScanningInBackground && page.status === 'publish' ? (
+                          <span className="flex items-center gap-1">
+                            <RefreshCw className="h-3 w-3 animate-spin" />
+                            Analisando...
+                          </span>
+                        ) : (
+                          <span>Ver score</span>
+                        )}
+                      </button>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                      >
+                        <a href={page.url} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          Abrir
+                        </a>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => syncPage(page.id)}
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Sync
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deletePage(page.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>

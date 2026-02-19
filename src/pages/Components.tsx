@@ -13,6 +13,28 @@ import { Breadcrumbs } from '@/components/Breadcrumbs';
 import { useSlugResolver } from '@/hooks/useSlugResolver';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import { PostTypeCategoryService } from '@/services/postTypeCategoryService';
+import { motion } from 'framer-motion';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.05,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 14 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+  },
+};
 
 const Components = () => {
   const { connectionId, categoryId, connectionSlug, categorySlug, componentSlug } = useParams();
@@ -27,7 +49,8 @@ const Components = () => {
   } = useConnectionSync();
   const { setSelectedCategories, selectedCategories } = useWordPressStore();
   const { getConnectionBySlug, getCategoryBySlug, getConnectionSlug, getCategorySlug } = useSlugResolver();
-  const { connectionsData } = useMultiConnectionData();
+  const { activeWorkspace } = useWorkspace();
+  const { connectionsData } = useMultiConnectionData(activeWorkspace?.id);
   const [previewModal, setPreviewModal] = useState({
     isOpen: false,
     url: '',
@@ -356,14 +379,19 @@ const Components = () => {
   ]);
 
   // Fixed layout with proper sidebar integration
-  return <div className="h-screen flex overflow-hidden">
+  return <div className="h-full flex overflow-hidden bg-[#f7f7f8]">
       {/* Category Sidebar - Fixed position */}
       <CategorySidebar />
 
       {/* Main Content Area - Properly spaced for sidebar */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-auto lg:ml-64">
+      <motion.div
+        className="flex-1 flex flex-col min-w-0 overflow-auto lg:ml-64"
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+      >
         {/* How to Use Section */}
-        <div className="bg-gray-50/80 rounded-xl border border-gray-100 px-4 lg:px-6 py-4 mx-4 lg:mx-6 mt-6 mb-4 flex-shrink-0">
+        <motion.div variants={itemVariants} className="bg-white rounded-2xl border border-gray-200/70 px-4 lg:px-6 py-4 mx-4 lg:mx-6 mt-6 mb-4 flex-shrink-0 shadow-sm">
           <div className="flex items-center justify-between flex-col lg:flex-row gap-4 lg:gap-0">
             <div className="flex items-center">
               <span className="text-sm font-medium text-gray-700">Como utilizar</span>
@@ -390,16 +418,18 @@ const Components = () => {
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Breadcrumbs */}
-        <Breadcrumbs />
+        <motion.div variants={itemVariants}>
+          <Breadcrumbs />
+        </motion.div>
 
         {/* Component Library */}
-        <div className="flex-1 px-4 lg:px-6 pb-20 min-h-0">
+        <motion.div variants={itemVariants} className="flex-1 px-4 lg:px-6 pb-20 min-h-0">
           <CentralizedComponentLibrary onPreview={handlePreview} />
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Pro Banner for free users */}
       <ProBanner />

@@ -27,6 +27,7 @@ export interface WordPressConnection {
   createdAt?: Date;
   updatedAt?: Date;
   connection_type?: 'designer_connection' | 'client_account';
+  workspace_id?: string | null;
 }
 
 interface ConnectionsStore {
@@ -57,6 +58,7 @@ interface ConnectionsStore {
   // Client accounts methods
   getClientAccounts: () => WordPressConnection[];
   getDesignerConnections: () => WordPressConnection[];
+  getConnectionsForWorkspace: (workspaceId: string) => WordPressConnection[];
 }
 
 export const useConnectionsStore = create<ConnectionsStore>()(
@@ -131,6 +133,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
             createdAt: conn.created_at ? new Date(conn.created_at) : undefined,
             updatedAt: conn.updated_at ? new Date(conn.updated_at) : undefined,
             connection_type: (conn as any).connection_type as WordPressConnection['connection_type'] || 'designer_connection',
+            workspace_id: (conn as any).workspace_id || null,
           }));
 
           console.log('✅ Processed connections:', {
@@ -183,6 +186,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
               error: connectionData.error,
               created_by: user.id,
               connection_type: connectionData.connection_type || 'designer_connection',
+              workspace_id: connectionData.workspace_id || null,
             })
             .select()
             .single();
@@ -394,6 +398,11 @@ export const useConnectionsStore = create<ConnectionsStore>()(
         return state.connections.filter(
           (conn) => !conn.connection_type || conn.connection_type === 'designer_connection'
         );
+      },
+
+      getConnectionsForWorkspace: (workspaceId) => {
+        const state = get();
+        return state.connections.filter((conn) => conn.workspace_id === workspaceId);
       },
       }),
       {
