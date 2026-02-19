@@ -11,7 +11,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 const Layout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, loading } = useAuth();
   const { activeWorkspace } = useWorkspace();
   const { connections, isLoading, fetchConnections } = useConnectionsStore();
 
@@ -37,7 +37,7 @@ const Layout: React.FC = () => {
 
               {/* Lado direito: admin options + avatar */}
               <div className="flex items-center gap-3">
-                {user ? (
+                {loading ? null : user ? (
                   <>
                     {activeWorkspace && (
                       <button

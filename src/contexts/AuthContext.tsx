@@ -26,7 +26,6 @@ interface AuthContextType {
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
-  profileLoading: boolean;
   signUp: (email: string, password: string, phone?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
@@ -37,18 +36,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-async function loadProfile(userId: string): Promise<UserProfile | null> {
-  // Retry once on PGRST116 (no rows) — happens when auth token isn't propagated yet in new tabs
+async function fetchProfile(userId: string): Promise<UserProfile | null> {
   let profileData: { id: string; email: string; phone?: string } | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await supabase
@@ -56,11 +48,7 @@ async function loadProfile(userId: string): Promise<UserProfile | null> {
       .select('id, email, phone')
       .eq('id', userId)
       .single();
-
-    if (!error) {
-      profileData = data;
-      break;
-    }
+    if (!error) { profileData = data; break; }
     if (attempt === 0 && error.code === 'PGRST116') {
       await new Promise((r) => setTimeout(r, 600));
       continue;
@@ -74,8 +62,6 @@ async function loadProfile(userId: string): Promise<UserProfile | null> {
     supabase.from('user_roles').select('role').eq('user_id', userId).single(),
     supabase.from('workspace_members').select('workspace_id, role, workspaces(name, slug)').eq('user_id', userId),
   ]);
-
-  if (roleResult.error) console.error('Error fetching role:', roleResult.error);
 
   const workspaceMemberships: WorkspaceMembership[] = (membershipResult.data || []).map((m) => ({
     workspace_id: m.workspace_id,
@@ -91,109 +77,66 @@ async function loadProfile(userId: string): Promise<UserProfile | null> {
   } as UserProfile;
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [profileLoading, setProfileLoading] = useState(false);
   const [showPhoneModal, setShowPhoneModal] = useState(false);
-
-  // Tracks the user ID currently being loaded so we can ignore stale results
-  const loadingForUserRef = useRef<string | null>(null);
-  // Prevents double-loading from bootstrapSession + onAuthStateChange INITIAL_SESSION
-  const initialLoadDoneRef = useRef(false);
+  // True once the initial getSession+fetchProfile completes
+  const bootstrapDone = useRef(false);
 
   useEffect(() => {
-    let isMounted = true;
+    let cancelled = false;
 
-    async function initAuth() {
-      // Get session once synchronously-ish before subscribing
-      const { data: { session: initialSession } } = await supabase.auth.getSession();
-
-      if (!isMounted) return;
-
-      setSession(initialSession);
-      setUser(initialSession?.user ?? null);
-
-      if (initialSession?.user) {
-        const uid = initialSession.user.id;
-        loadingForUserRef.current = uid;
-        setProfileLoading(true);
-        const p = await loadProfile(uid);
-        if (!isMounted || loadingForUserRef.current !== uid) return;
+    // Bootstrap: getSession → fetchProfile → done
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      if (cancelled) return;
+      setSession(s);
+      setUser(s?.user ?? null);
+      if (s?.user) {
+        const p = await fetchProfile(s.user.id);
+        if (cancelled) return;
         setProfile(p);
-        setProfileLoading(false);
-      } else {
-        setProfile(null);
       }
+      bootstrapDone.current = true;
+      setLoading(false);
+    }).catch((err) => {
+      console.error('Auth init error:', err);
+      if (!cancelled) {
+        bootstrapDone.current = true;
+        setLoading(false);
+      }
+    });
 
-      initialLoadDoneRef.current = true;
-      if (isMounted) setLoading(false);
-    }
-
-    void initAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      if (!isMounted) return;
-
-      // Skip INITIAL_SESSION — handled by initAuth above to avoid double fetch
-      if (event === 'INITIAL_SESSION') return;
-
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
+    // Listener: only act on events that happen AFTER bootstrap
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (cancelled || !bootstrapDone.current) return;
 
       if (event === 'SIGNED_OUT') {
-        loadingForUserRef.current = null;
+        setSession(null);
+        setUser(null);
         setProfile(null);
-        setLoading(false);
-        setProfileLoading(false);
         return;
       }
 
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-        if (!newSession?.user) {
-          setProfile(null);
-          setProfileLoading(false);
-          setLoading(false);
-          return;
+      if (event === 'SIGNED_IN') {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+        if (newSession?.user) {
+          fetchProfile(newSession.user.id).then((p) => {
+            if (cancelled) return;
+            setProfile(p);
+            if (p && !p.phone && newSession.user.app_metadata?.provider === 'google') {
+              setShowPhoneModal(true);
+            }
+          });
         }
-
-        // Only reload profile on SIGNED_IN; for token refresh just keep existing profile
-        if (event !== 'SIGNED_IN') {
-          if (!initialLoadDoneRef.current) setLoading(false);
-          return;
-        }
-
-        const uid = newSession.user.id;
-        loadingForUserRef.current = uid;
-        setProfileLoading(true);
-        try {
-          const p = await loadProfile(uid);
-          if (!isMounted || loadingForUserRef.current !== uid) return;
-          setProfile(p);
-
-          // Show phone modal for Google sign-in without phone
-          if (p && !p.phone) {
-            const isOAuth = newSession.user.app_metadata?.provider === 'google';
-            if (isOAuth) setShowPhoneModal(true);
-          }
-        } catch (err) {
-          console.error('Error loading profile on SIGNED_IN:', err);
-          if (isMounted && loadingForUserRef.current === uid) setProfile(null);
-        } finally {
-          if (isMounted && loadingForUserRef.current === uid) setProfileLoading(false);
-        }
-      }
-
-      if (!initialLoadDoneRef.current) {
-        initialLoadDoneRef.current = true;
-        if (isMounted) setLoading(false);
       }
     });
 
     return () => {
-      isMounted = false;
+      cancelled = true;
       subscription.unsubscribe();
     };
   }, []);
@@ -202,10 +145,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: phone ? { phone } : undefined,
-      },
+      options: { emailRedirectTo: `${window.location.origin}/`, data: phone ? { phone } : undefined },
     });
     return { error };
   };
@@ -231,33 +171,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } finally {
       localStorage.removeItem('superelements_active_workspace_id');
       sessionStorage.removeItem('superelements_admin_entered_workspace');
-      loadingForUserRef.current = null;
       setUser(null);
       setSession(null);
       setProfile(null);
-      setLoading(false);
-      setProfileLoading(false);
     }
   };
 
   const handlePhoneModalComplete = async () => {
     setShowPhoneModal(false);
     if (user) {
-      const p = await loadProfile(user.id);
-      setProfile(p);
+      const p = await fetchProfile(user.id);
+      if (p) setProfile(p);
     }
   };
 
   return (
-    <AuthContext.Provider
-      value={{ user, session, profile, loading, profileLoading, signUp, signIn, signInWithGoogle, signOut }}
-    >
+    <AuthContext.Provider value={{ user, session, profile, loading, signUp, signIn, signInWithGoogle, signOut }}>
       {children}
-      <PhoneCollectionModal
-        open={showPhoneModal}
-        onComplete={handlePhoneModalComplete}
-        userEmail={user?.email || ''}
-      />
+      <PhoneCollectionModal open={showPhoneModal} onComplete={handlePhoneModalComplete} userEmail={user?.email || ''} />
     </AuthContext.Provider>
   );
 };

@@ -39,11 +39,12 @@ interface WorkspaceProviderProps {
 }
 
 export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }) => {
-  const { user, profile, loading: authLoading, profileLoading } = useAuth();
+  const { user, profile, loading } = useAuth();
+
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(
     () => localStorage.getItem(ACTIVE_WORKSPACE_KEY)
   );
-  // Admin can "enter" any workspace — stored separately so it survives reload
+
   const [adminEnteredWorkspace, setAdminEnteredWorkspace] = useState<Workspace | null>(() => {
     try {
       const raw = sessionStorage.getItem(ADMIN_ENTERED_WORKSPACE_KEY);
@@ -62,18 +63,9 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     role: m.role,
   }));
 
-  // Keep only valid persisted workspace; do not auto-select any workspace.
-  // Important: do not clear persisted workspace while profile is transiently unavailable.
+  // Once profile is loaded, validate the persisted workspace ID is still valid
   useEffect(() => {
-    if (authLoading) return;
-
-    // Public/anonymous routes (e.g. /p/:token) must not wipe workspace selection.
-    if (!user) return;
-
-    // If session exists but profile is still loading/failed temporarily, keep current selection.
-    // profileLoading=false AND profile=null means the fetch failed transiently; don't wipe workspace.
-    if (profileLoading) return;
-    if (!profile) return;
+    if (loading || !user || !profile) return;
 
     if (workspaces.length === 0) {
       setActiveWorkspaceId(null);
@@ -85,40 +77,34 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
       setActiveWorkspaceId(null);
       localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
     }
-  }, [authLoading, profileLoading, user, profile, workspaces, activeWorkspaceId]);
+  }, [loading, user, profile]);
 
   const switchWorkspace = (workspaceId: string) => {
     const target = workspaces.find((w) => w.id === workspaceId);
     if (!target) return;
     setActiveWorkspaceId(workspaceId);
     localStorage.setItem(ACTIVE_WORKSPACE_KEY, workspaceId);
-    // Clear any admin override when switching own workspaces
     setAdminEnteredWorkspace(null);
     sessionStorage.removeItem(ADMIN_ENTERED_WORKSPACE_KEY);
   };
 
-  /** Admin enters any workspace to view its content */
   const enterWorkspace = (workspace: Workspace) => {
     setAdminEnteredWorkspace(workspace);
     sessionStorage.setItem(ADMIN_ENTERED_WORKSPACE_KEY, JSON.stringify(workspace));
   };
 
-  /** Admin exits the entered workspace, returning to their own view */
   const exitWorkspace = () => {
     setAdminEnteredWorkspace(null);
     sessionStorage.removeItem(ADMIN_ENTERED_WORKSPACE_KEY);
   };
 
-  // Active workspace: if admin entered one, use that; otherwise use own membership
   const ownActiveWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
-  const activeWorkspace = isAdmin && adminEnteredWorkspace
-    ? adminEnteredWorkspace
-    : ownActiveWorkspace;
+  const activeWorkspace = isAdmin && adminEnteredWorkspace ? adminEnteredWorkspace : ownActiveWorkspace;
 
   const value: WorkspaceContextType = {
     activeWorkspace,
     workspaces,
-    isLoading: authLoading || profileLoading,
+    isLoading: loading,
     switchWorkspace,
     enterWorkspace,
     exitWorkspace,

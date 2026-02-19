@@ -7,10 +7,7 @@ interface ProtectedRouteProps {
   requireRole?: AppRole[];
 }
 
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
-  children, 
-  requireRole 
-}) => {
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requireRole }) => {
   const { user, profile, loading } = useAuth();
   const location = useLocation();
 

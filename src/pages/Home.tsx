@@ -218,7 +218,7 @@ const Home: React.FC = () => {
       <motion.div
         className="mx-auto max-w-6xl space-y-7"
         variants={containerVariants}
-        initial="hidden"
+        initial={false}
         animate="show"
       >
       {/* ── A: Header ── */}
