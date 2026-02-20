@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Logo } from '@/components/Logo';
-import { Home, Building2, Download, LayoutGrid, LogOut } from 'lucide-react';
+import { Home, Building2, Download, LayoutGrid, LogOut, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -55,7 +55,8 @@ export const AppSidebar: React.FC = () => {
           location.pathname !== '/admin/users' &&
           location.pathname !== '/admin/resources' &&
           location.pathname !== '/admin/workspaces' &&
-          location.pathname !== '/partners'
+          location.pathname !== '/partners' &&
+          location.pathname !== '/proposals'
           )
       );
     }
@@ -119,6 +120,16 @@ export const AppSidebar: React.FC = () => {
               active={isActive('/client-accounts')}
               onClick={() => navigate('/client-accounts')}
             />
+
+            {!isManager && (
+              <NavItem
+                icon={<FileText className="h-4 w-4" />}
+                label="Propostas"
+                path="/proposals"
+                active={isActive('/proposals')}
+                onClick={() => navigate('/proposals')}
+              />
+            )}
 
           </>
         )}

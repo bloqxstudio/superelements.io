@@ -13,7 +13,7 @@ import { useConnectionsStore } from '@/store/connectionsStore';
 export const useLibraryComponentCount = (workspaceId?: string | null) => {
   const { getDesignerConnections } = useConnectionsStore();
   const designerConns = getDesignerConnections().filter(
-    (c) => c.isActive && (!!workspaceId ? c.workspace_id === workspaceId : false)
+    (c) => c.isActive && (workspaceId ? c.workspace_id === workspaceId : true)
   );
 
   return useQuery({

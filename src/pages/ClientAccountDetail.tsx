@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowLeft,
   ExternalLink,
@@ -15,15 +16,17 @@ import {
   Download,
   Trash2,
   Globe,
-  Calendar,
   FileText,
   Plus,
-  Clock3,
-  Hash,
   Gauge,
-  Sparkles
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { motion } from 'framer-motion';
+import OptimizedDynamicIframe from '@/features/components/OptimizedDynamicIframe';
+import '@/components/ui/component-grid.css';
+
+// ─── Interfaces ───────────────────────────────────────────────────────────────
 
 interface ClientPage {
   id: string;
@@ -82,10 +85,214 @@ interface RecommendationData {
   model?: string | null;
 }
 
+interface PageCardProps {
+  page: ClientPage;
+  score: PageScoreCache[string] | undefined;
+  isScanningBackground: boolean;
+  onPageSpeed: (page: ClientPage) => void;
+  onSync: (pageId: string) => void;
+  onDelete: (pageId: string) => void;
+}
+
+// ─── Animation variants ───────────────────────────────────────────────────────
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.08, delayChildren: 0.05 },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 16 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
+  },
+};
+
+const cardContainerVariants = {
+  hidden: { opacity: 1 },
+  show: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.03 } },
+};
+
+const cardItemVariants = {
+  hidden: { opacity: 0, y: 14 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
+  },
+};
+
+const sectionClass = 'rounded-3xl border border-gray-200/70 bg-white p-5 shadow-sm sm:p-6';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const getRelativeTime = (dateStr: string | null): string => {
+  if (!dateStr) return '—';
+  const diffDays = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  if (diffDays === 0) return 'Hoje';
+  if (diffDays === 1) return 'Ontem';
+  if (diffDays < 7) return `${diffDays}d atrás`;
+  return new Date(dateStr).toLocaleDateString('pt-BR');
+};
+
+const getScoreTone = (score: number | null) => {
+  if (score === null) return 'text-muted-foreground';
+  if (score >= 90) return 'text-green-600';
+  if (score >= 50) return 'text-yellow-600';
+  return 'text-red-600';
+};
+
+const getScoreBg = (score: number | null) => {
+  if (score === null) return 'bg-white/90';
+  if (score >= 90) return 'bg-green-50/95';
+  if (score >= 50) return 'bg-yellow-50/95';
+  return 'bg-red-50/95';
+};
+
+const formatMs = (value: number | null) => {
+  if (value === null) return '-';
+  if (value >= 1000) return `${(value / 1000).toFixed(2)} s`;
+  return `${value} ms`;
+};
+
+const getPageStatusLabel = (status: string) => {
+  switch (status) {
+    case 'publish': return 'Publicada';
+    case 'draft': return 'Rascunho';
+    case 'private': return 'Privada';
+    case 'pending': return 'Pendente';
+    default: return status;
+  }
+};
+
+const getPageStatusBadge = (status: string): 'default' | 'secondary' | 'outline' => {
+  switch (status) {
+    case 'publish': return 'default';
+    case 'draft': return 'secondary';
+    default: return 'outline';
+  }
+};
+
+const getImpactBadge = (impact: AnalysisAction['impact']): 'default' | 'secondary' | 'outline' => {
+  switch (impact) {
+    case 'high': return 'default';
+    case 'medium': return 'secondary';
+    default: return 'outline';
+  }
+};
+
+// ─── PageCard component ───────────────────────────────────────────────────────
+
+const PageCard = React.memo(({
+  page,
+  score,
+  isScanningBackground,
+  onPageSpeed,
+  onSync,
+  onDelete,
+}: PageCardProps) => {
+  const hasPreview = page.status === 'publish' && !!page.url;
+
+  return (
+    <div className="group rounded-2xl border border-gray-200/70 bg-white shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden flex flex-col">
+      {/* Preview area */}
+      <div className="aspect-[16/9] relative overflow-hidden bg-gray-50 flex-shrink-0">
+        {hasPreview ? (
+          <OptimizedDynamicIframe url={page.url} title={page.title} />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+            <FileText className="h-8 w-8 text-gray-300" />
+            <p className="text-xs text-muted-foreground capitalize">{getPageStatusLabel(page.status)}</p>
+          </div>
+        )}
+
+        {/* Status badge — top left */}
+        <div className="absolute top-2 left-2 z-10">
+          <Badge variant={getPageStatusBadge(page.status)} className="text-[10px] px-1.5 py-0.5">
+            {getPageStatusLabel(page.status)}
+          </Badge>
+        </div>
+
+        {/* Score badge — top right */}
+        <div className="absolute top-2 right-2 z-10">
+          {score ? (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold shadow-sm ${getScoreBg(score.performance_score)} ${getScoreTone(score.performance_score)}`}
+            >
+              <Gauge className="h-3 w-3" />
+              {score.performance_score ?? '-'}
+            </span>
+          ) : isScanningBackground && page.status === 'publish' ? (
+            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs bg-white/90 shadow-sm text-muted-foreground">
+              <RefreshCw className="h-3 w-3 animate-spin" />
+            </span>
+          ) : null}
+        </div>
+
+        {/* Hover actions — bottom right */}
+        <div className="absolute bottom-2 right-2 z-10 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <button
+            onClick={(e) => { e.stopPropagation(); onPageSpeed(page); }}
+            className="h-7 w-7 rounded-lg bg-white/95 shadow-sm border border-gray-200/80 flex items-center justify-center hover:bg-white transition-colors"
+            title="Ver performance"
+          >
+            <Gauge className="h-3.5 w-3.5 text-gray-700" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onSync(page.id); }}
+            className="h-7 w-7 rounded-lg bg-white/95 shadow-sm border border-gray-200/80 flex items-center justify-center hover:bg-white transition-colors"
+            title="Sincronizar"
+          >
+            <RefreshCw className="h-3.5 w-3.5 text-gray-700" />
+          </button>
+          <a
+            href={page.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="h-7 w-7 rounded-lg bg-white/95 shadow-sm border border-gray-200/80 flex items-center justify-center hover:bg-white transition-colors"
+            title="Abrir página"
+          >
+            <ExternalLink className="h-3.5 w-3.5 text-gray-700" />
+          </a>
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(page.id); }}
+            className="h-7 w-7 rounded-lg bg-white/95 shadow-sm border border-gray-200/80 flex items-center justify-center hover:bg-red-50 hover:border-red-200 transition-colors"
+            title="Remover"
+          >
+            <Trash2 className="h-3.5 w-3.5 text-gray-500 hover:text-red-600" />
+          </button>
+        </div>
+      </div>
+
+      {/* Info footer */}
+      <div className="p-3 flex-1 flex flex-col justify-between">
+        <p className="text-sm font-semibold text-gray-900 line-clamp-1">{page.title}</p>
+        <div className="flex items-center justify-between mt-1.5">
+          <p className="text-xs text-muted-foreground truncate">/{page.slug || '—'}</p>
+          <p className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+            {getRelativeTime(page.modified_date)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+PageCard.displayName = 'PageCard';
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 const ClientAccountDetail = () => {
   const { connectionId } = useParams<{ connectionId: string }>();
   const navigate = useNavigate();
   const { getConnectionById } = useConnectionsStore();
+
   const [pages, setPages] = useState<ClientPage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
@@ -111,17 +318,14 @@ const ClientAccountDetail = () => {
     }
   }, [connectionId]);
 
-  // Auto-import pages on first load if no pages exist
   useEffect(() => {
     if (connectionId && !isLoading && pages.length === 0 && connection && !isImporting) {
-      console.log('No pages found, auto-importing...');
       importPages();
     }
   }, [connectionId, isLoading, pages.length, connection]);
 
   const fetchPages = async () => {
     if (!connectionId) return;
-
     setIsLoading(true);
     try {
       const { data, error } = await supabase
@@ -129,11 +333,9 @@ const ClientAccountDetail = () => {
         .select('*')
         .eq('connection_id', connectionId)
         .order('imported_at', { ascending: false });
-
       if (error) throw error;
       const loaded = data || [];
       setPages(loaded);
-
       if (loaded.length > 0) {
         fetchCachedScores(loaded.map(p => p.id));
       }
@@ -145,7 +347,6 @@ const ClientAccountDetail = () => {
     }
   };
 
-  // Busca os scores já salvos no banco para exibir inline nos cards
   const fetchCachedScores = async (pageIds: string[]) => {
     try {
       const { data, error } = await supabase
@@ -154,10 +355,7 @@ const ClientAccountDetail = () => {
         .in('client_page_id', pageIds)
         .eq('strategy', 'mobile')
         .order('fetched_at', { ascending: false });
-
       if (error || !data) return;
-
-      // Pega o score mais recente por página
       const scores: PageScoreCache = {};
       for (const row of data) {
         if (!scores[row.client_page_id]) {
@@ -169,18 +367,15 @@ const ClientAccountDetail = () => {
       }
       setPageScores(scores);
     } catch {
-      // silencioso — scores são complementares, não críticos
+      // silencioso
     }
   };
 
-  // Roda PageSpeed em background para todas as páginas publicadas sem score
   const runBackgroundScan = async (allPages: ClientPage[]) => {
     const toScan = allPages.filter(p => p.status === 'publish' && !pageScores[p.id]);
     if (toScan.length === 0) return;
-
     setIsScanningInBackground(true);
     try {
-      // Processa em lotes de 3 para não sobrecarregar a API
       const batchSize = 3;
       for (let i = 0; i < toScan.length; i += batchSize) {
         const batch = toScan.slice(i, i + batchSize);
@@ -191,7 +386,6 @@ const ClientAccountDetail = () => {
             })
           )
         );
-        // Atualiza os scores após cada lote
         await fetchCachedScores(allPages.map(p => p.id));
       }
     } finally {
@@ -204,22 +398,15 @@ const ClientAccountDetail = () => {
       toast.error('Connection not found');
       return;
     }
-
     setIsImporting(true);
     try {
-      console.log('Starting page import for connection:', connection.id);
-
-      // Try using Edge Function first (best approach - no CORS issues)
       try {
         const { data, error } = await supabase.functions.invoke('fetch-wordpress-pages', {
           body: { connectionId: connection.id }
         });
-
         if (!error && data?.success) {
-          console.log('Successfully imported via Edge Function:', data.imported);
           toast.success(`Successfully imported ${data.imported} page(s)`);
           await fetchPages();
-          // Dispara scan automático após importar
           const { data: freshPages } = await supabase
             .from('client_pages')
             .select('*')
@@ -227,13 +414,11 @@ const ClientAccountDetail = () => {
           if (freshPages?.length) runBackgroundScan(freshPages as ClientPage[]);
           return;
         }
-
         console.warn('Edge Function not available or failed, trying direct fetch...', error);
       } catch (edgeFunctionError) {
         console.warn('Edge Function error:', edgeFunctionError);
       }
 
-      // Fallback: Direct fetch (will work if WordPress has CORS enabled)
       if (!connection.credentials) {
         toast.error('Connection credentials not found');
         return;
@@ -253,18 +438,13 @@ const ClientAccountDetail = () => {
           page: String(page),
           _fields: 'id,title,slug,link,status,modified',
         });
-
-        if (includeContext) {
-          params.set('context', 'edit');
-        }
-
+        if (includeContext) params.set('context', 'edit');
         return params;
       };
 
       const fetchPage = async (page: number, includeContext: boolean) => {
         const params = buildParams(page, includeContext);
         const url = `${apiUrl}?${params.toString()}`;
-        console.log('Trying direct fetch from:', url);
         return fetch(url, { method: 'GET', headers });
       };
 
@@ -291,11 +471,8 @@ const ClientAccountDetail = () => {
         if (!response.ok) {
           throw new Error(`WordPress API returned ${response.status}: ${response.statusText}`);
         }
-
         const batch = await response.json();
-        if (Array.isArray(batch)) {
-          wpPages = wpPages.concat(batch);
-        }
+        if (Array.isArray(batch)) wpPages = wpPages.concat(batch);
       }
 
       if (!Array.isArray(wpPages) || wpPages.length === 0) {
@@ -303,7 +480,6 @@ const ClientAccountDetail = () => {
         return;
       }
 
-      // Import pages to database
       const pagesToInsert = wpPages.map((page: any) => ({
         connection_id: connectionId,
         wordpress_page_id: page.id,
@@ -316,16 +492,12 @@ const ClientAccountDetail = () => {
 
       const { error: dbError } = await supabase
         .from('client_pages')
-        .upsert(pagesToInsert, {
-          onConflict: 'connection_id,wordpress_page_id'
-        });
+        .upsert(pagesToInsert, { onConflict: 'connection_id,wordpress_page_id' });
 
       if (dbError) throw dbError;
 
-      console.log('Successfully imported pages:', wpPages.length);
       toast.success(`Successfully imported ${wpPages.length} page(s)`);
       await fetchPages();
-      // Dispara scan automático após importar (fallback direto)
       const { data: freshPages } = await supabase
         .from('client_pages')
         .select('*')
@@ -333,15 +505,12 @@ const ClientAccountDetail = () => {
       if (freshPages?.length) runBackgroundScan(freshPages as ClientPage[]);
     } catch (error: any) {
       console.error('Error importing pages:', error);
-
       let errorMessage = 'Failed to import pages';
-
       if (error.message?.includes('CORS') || error.message?.includes('NetworkError') || error.message?.includes('Failed to fetch')) {
         errorMessage = 'CORS error: Please deploy the Supabase Edge Function or enable CORS on the WordPress site';
       } else if (error.message) {
         errorMessage = error.message;
       }
-
       toast.error(errorMessage);
     } finally {
       setIsImporting(false);
@@ -351,20 +520,14 @@ const ClientAccountDetail = () => {
   const syncPage = async (pageId: string) => {
     const page = pages.find(p => p.id === pageId);
     if (!page || !connection?.credentials) return;
-
     try {
       const auth = btoa(`${connection.credentials.username}:${connection.credentials.application_password}`);
       const response = await fetch(
         `${connection.base_url}/wp-json/wp/v2/pages/${page.wordpress_page_id}`,
-        {
-          headers: { 'Authorization': `Basic ${auth}` }
-        }
+        { headers: { 'Authorization': `Basic ${auth}` } }
       );
-
       if (!response.ok) throw new Error('Failed to sync page');
-
       const wpPage = await response.json();
-
       const { error } = await supabase
         .from('client_pages')
         .update({
@@ -374,9 +537,7 @@ const ClientAccountDetail = () => {
           last_synced: new Date().toISOString()
         })
         .eq('id', pageId);
-
       if (error) throw error;
-
       toast.success('Page synced successfully');
       fetchPages();
     } catch (error) {
@@ -386,18 +547,13 @@ const ClientAccountDetail = () => {
   };
 
   const deletePage = async (pageId: string) => {
-    if (!window.confirm('Are you sure you want to remove this page from tracking?')) {
-      return;
-    }
-
+    if (!window.confirm('Are you sure you want to remove this page from tracking?')) return;
     try {
       const { error } = await supabase
         .from('client_pages')
         .delete()
         .eq('id', pageId);
-
       if (error) throw error;
-
       toast.success('Page removed from tracking');
       fetchPages();
     } catch (error) {
@@ -410,31 +566,19 @@ const ClientAccountDetail = () => {
     setIsPageSpeedLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('get-pagespeed', {
-        body: {
-          pageId: page.id,
-          strategy,
-          forceRefresh,
-        }
+        body: { pageId: page.id, strategy, forceRefresh }
       });
-
       if (error || !data?.success || !data?.data) {
         let detailedError = error?.message || data?.error || 'Falha ao buscar PageSpeed';
-
         const context = (error as any)?.context;
         if (context instanceof Response) {
           try {
             const contextPayload = await context.json();
-            if (contextPayload?.error) {
-              detailedError = contextPayload.error;
-            }
-          } catch {
-            // Keep the fallback message when the error response body is not JSON.
-          }
+            if (contextPayload?.error) detailedError = contextPayload.error;
+          } catch { /* keep fallback */ }
         }
-
         throw new Error(detailedError);
       }
-
       setIsPageSpeedCached(Boolean(data.cached));
       setPageSpeedData(data.data as PageSpeedData);
     } catch (error) {
@@ -450,25 +594,18 @@ const ClientAccountDetail = () => {
     setAnalysisData(null);
     setIsAnalysisCached(false);
     setPageSpeedStrategy('mobile');
-
-    // Se já tem score local, pré-popula o modal imediatamente
     const localScore = pageScores[page.id];
     if (localScore) {
       setPageSpeedData({
         performance_score: localScore.performance_score,
-        lcp_ms: null,
-        inp_ms: null,
-        tbt_ms: null,
-        cls: null,
+        lcp_ms: null, inp_ms: null, tbt_ms: null, cls: null,
         strategy: 'mobile',
         fetched_at: localScore.fetched_at,
       });
     } else {
       setPageSpeedData(null);
     }
-
     setIsPageSpeedOpen(true);
-    // Busca os dados completos (vai retornar do cache do banco em ms se disponível)
     await fetchPageSpeed(page, 'mobile');
   };
 
@@ -477,35 +614,22 @@ const ClientAccountDetail = () => {
       toast.error('Selecione uma página para gerar análise');
       return;
     }
-
     setIsAnalysisLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('analyze-pagespeed-report', {
-        body: {
-          pageId: selectedPage.id,
-          strategy: pageSpeedStrategy,
-          forceRefresh,
-        }
+        body: { pageId: selectedPage.id, strategy: pageSpeedStrategy, forceRefresh }
       });
-
       if (error || !data?.success || !data?.data) {
         let detailedError = error?.message || data?.error || 'Falha ao gerar análise IA';
-
         const context = (error as any)?.context;
         if (context instanceof Response) {
           try {
             const contextPayload = await context.json();
-            if (contextPayload?.error) {
-              detailedError = contextPayload.error;
-            }
-          } catch {
-            // Keep fallback message.
-          }
+            if (contextPayload?.error) detailedError = contextPayload.error;
+          } catch { /* keep fallback */ }
         }
-
         throw new Error(detailedError);
       }
-
       const normalized: RecommendationData = {
         ...data.data,
         priority_actions: Array.isArray(data.data.priority_actions) ? data.data.priority_actions : [],
@@ -513,7 +637,6 @@ const ClientAccountDetail = () => {
         wordpress_focus: Array.isArray(data.data.wordpress_focus) ? data.data.wordpress_focus : [],
         risk_notes: Array.isArray(data.data.risk_notes) ? data.data.risk_notes : [],
       };
-
       setAnalysisData(normalized);
       setIsAnalysisCached(Boolean(data.cached));
     } catch (error) {
@@ -524,37 +647,13 @@ const ClientAccountDetail = () => {
     }
   };
 
-  const getScoreTone = (score: number | null) => {
-    if (score === null) return 'text-muted-foreground';
-    if (score >= 90) return 'text-green-600';
-    if (score >= 50) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const formatMs = (value: number | null) => {
-    if (value === null) return '-';
-    if (value >= 1000) return `${(value / 1000).toFixed(2)} s`;
-    return `${value} ms`;
-  };
-
-  const getImpactBadge = (impact: AnalysisAction['impact']): 'default' | 'secondary' | 'outline' => {
-    switch (impact) {
-      case 'high':
-        return 'default';
-      case 'medium':
-        return 'secondary';
-      default:
-        return 'outline';
-    }
-  };
-
-  const filteredPages = pages.filter(page =>
-    (page.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      page.slug.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    (statusFilter === 'all' || page.status === statusFilter)
-  ).sort((a, b) =>
-    new Date(b.modified_date).getTime() - new Date(a.modified_date).getTime()
-  );
+  const filteredPages = pages
+    .filter(page =>
+      (page.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        page.slug.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (statusFilter === 'all' || page.status === statusFilter)
+    )
+    .sort((a, b) => new Date(b.modified_date).getTime() - new Date(a.modified_date).getTime());
 
   const statusCounts = pages.reduce<Record<string, number>>((acc, page) => {
     acc[page.status] = (acc[page.status] || 0) + 1;
@@ -568,347 +667,212 @@ const ClientAccountDetail = () => {
     { key: 'private', label: 'Privadas', count: statusCounts.private || 0 },
   ];
 
-  const getPageStatusLabel = (status: string) => {
-    switch (status) {
-      case 'publish':
-        return 'Publicada';
-      case 'draft':
-        return 'Rascunho';
-      case 'private':
-        return 'Privada';
-      case 'pending':
-        return 'Pendente';
-      default:
-        return status;
-    }
-  };
-
-  const getPageStatusBadge = (status: string): 'default' | 'secondary' | 'outline' => {
-    switch (status) {
-      case 'publish':
-        return 'default';
-      case 'draft':
-        return 'secondary';
-      default:
-        return 'outline';
-    }
-  };
-
   if (!connection) {
     return (
-      <div className="container mx-auto py-8">
-        <Card>
-          <CardContent className="p-12 text-center">
-            <p className="text-muted-foreground">Client account not found</p>
-            <Button onClick={() => navigate('/client-accounts')} className="mt-4">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Client Accounts
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-[#f7f7f8] flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">Cliente não encontrado</p>
+          <Button onClick={() => navigate('/client-accounts')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Voltar
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <Button
-          variant="ghost"
-          onClick={() => navigate('/client-accounts')}
-          className="mb-4"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Client Accounts
-        </Button>
-
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">{connection.name}</h1>
-            <div className="flex items-center gap-2 mt-2">
-              <ExternalLink className="h-4 w-4 text-muted-foreground" />
-              <a
-                href={connection.base_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {connection.base_url}
-              </a>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              onClick={importPages}
-              disabled={isImporting}
-            >
-              {isImporting ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Importing...
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 h-4 w-4" />
-                  Import Pages
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Pages</p>
-                <p className="text-2xl font-bold">{pages.length}</p>
-              </div>
-              <FileText className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Published</p>
-                <p className="text-2xl font-bold">
-                  {pages.filter(p => p.status === 'publish').length}
-                </p>
-              </div>
-              <Globe className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Draft</p>
-                <p className="text-2xl font-bold">
-                  {pages.filter(p => p.status === 'draft').length}
-                </p>
-              </div>
-              <FileText className="h-8 w-8 text-yellow-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Connection</p>
-                <Badge variant={connection.status === 'connected' ? 'default' : 'destructive'}>
-                  {connection.status}
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search */}
-      <div className="mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por título ou slug..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
-
-      <Card className="mb-6">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-2">
-            {statusFilters.map((filter) => (
+    <div className="min-h-screen bg-[#f7f7f8] px-4 pb-12 pt-6 sm:px-6 lg:px-8">
+      <motion.div
+        className="mx-auto max-w-7xl space-y-6"
+        variants={containerVariants}
+        initial={false}
+        animate="show"
+      >
+        {/* ── Header ── */}
+        <motion.section variants={itemVariants} className={sectionClass}>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-4">
               <Button
-                key={filter.key}
-                variant={statusFilter === filter.key ? 'default' : 'outline'}
+                variant="ghost"
                 size="sm"
-                onClick={() => setStatusFilter(filter.key)}
+                onClick={() => navigate('/client-accounts')}
+                className="-ml-2 mt-0.5"
               >
-                {filter.label} ({filter.count})
+                <ArrowLeft className="h-4 w-4" />
               </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Pages List */}
-      {isLoading ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground">Loading pages...</p>
-          </CardContent>
-        </Card>
-      ) : filteredPages.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Nenhuma página encontrada</h3>
-            <p className="text-muted-foreground mb-6">
-              {pages.length === 0
-                ? 'Importe as páginas do WordPress para começar.'
-                : 'Tente ajustar a busca ou o filtro de status.'}
-            </p>
-            {pages.length === 0 && (
-              <Button onClick={importPages} disabled={isImporting}>
-                <Plus className="mr-2 h-4 w-4" />
-                Importar páginas agora
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          {filteredPages.map((page) => (
-            <Card key={page.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg leading-tight">{page.title}</CardTitle>
-                    <CardDescription className="mt-2 flex flex-wrap items-center gap-2">
-                      <Badge variant={getPageStatusBadge(page.status)}>
-                        {getPageStatusLabel(page.status)}
-                      </Badge>
-                      <Badge variant="outline" className="gap-1">
-                        <Hash className="h-3 w-3" />
-                        ID {page.wordpress_page_id}
-                      </Badge>
-                    </CardDescription>
-                  </div>
+              <div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-2xl font-bold text-gray-900">{connection.name}</h1>
+                  <Badge variant={connection.status === 'connected' ? 'default' : 'destructive'} className="capitalize">
+                    {connection.status === 'connected' ? 'Conectado' : connection.status}
+                  </Badge>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Slug</p>
-                      <p className="font-medium truncate">/{page.slug || '-'}</p>
-                    </div>
-                    <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Última modificação</p>
-                      <p className="font-medium">
-                        {new Date(page.modified_date).toLocaleString('pt-BR')}
-                      </p>
-                    </div>
-                    <div className="rounded-md border p-3 sm:col-span-2">
-                      <p className="text-xs text-muted-foreground mb-1">URL</p>
-                      <a
-                        href={page.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-medium hover:underline flex items-center gap-1 truncate"
-                      >
-                        <ExternalLink className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{page.url}</span>
-                      </a>
-                    </div>
-                    <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Importada em</p>
-                      <p className="font-medium flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(page.imported_at).toLocaleString('pt-BR')}
-                      </p>
-                    </div>
-                    <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Último sync</p>
-                      <p className="font-medium flex items-center gap-1">
-                        <Clock3 className="h-3 w-3" />
-                        {page.last_synced
-                          ? new Date(page.last_synced).toLocaleString('pt-BR')
-                          : 'Ainda não sincronizada'}
-                      </p>
-                    </div>
-                  </div>
+                <a
+                  href={connection.base_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 mt-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  {connection.base_url}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
 
-                  <div className="flex items-center justify-between gap-2">
-                    {/* Score inline */}
-                    {pageScores[page.id] ? (
-                      <button
-                        onClick={() => openPageSpeedModal(page)}
-                        className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm hover:bg-accent transition-colors"
-                        title={`Atualizado ${new Date(pageScores[page.id].fetched_at).toLocaleString('pt-BR')}`}
-                      >
-                        <Gauge className="h-3 w-3 text-muted-foreground" />
-                        <span className={`font-bold tabular-nums ${getScoreTone(pageScores[page.id].performance_score)}`}>
-                          {pageScores[page.id].performance_score ?? '-'}
+                {/* Compact stats */}
+                {!isLoading && pages.length > 0 && (
+                  <div className="flex items-center gap-4 mt-3">
+                    <span className="text-sm text-muted-foreground">
+                      <span className="font-semibold text-gray-900">{pages.length}</span> páginas
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      <span className="font-semibold text-green-600">{statusCounts.publish || 0}</span> publicadas
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      <span className="font-semibold text-gray-600">{statusCounts.draft || 0}</span> rascunhos
+                    </span>
+                    {isScanningInBackground && (
+                      <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500" />
                         </span>
-                        <span className="text-xs text-muted-foreground">/100</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => openPageSpeedModal(page)}
-                        className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm text-muted-foreground hover:bg-accent transition-colors"
-                      >
-                        <Gauge className="h-3 w-3" />
-                        {isScanningInBackground && page.status === 'publish' ? (
-                          <span className="flex items-center gap-1">
-                            <RefreshCw className="h-3 w-3 animate-spin" />
-                            Analisando...
-                          </span>
-                        ) : (
-                          <span>Ver score</span>
-                        )}
-                      </button>
+                        Analisando performance...
+                      </span>
                     )}
+                  </div>
+                )}
+              </div>
+            </div>
 
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        asChild
-                      >
-                        <a href={page.url} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-3 w-3 mr-1" />
-                          Abrir
-                        </a>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => syncPage(page.id)}
-                      >
-                        <RefreshCw className="h-3 w-3 mr-1" />
-                        Sync
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deletePage(page.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={importPages}
+                disabled={isImporting}
+              >
+                {isImporting ? (
+                  <>
+                    <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    Importando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-3.5 w-3.5" />
+                    Importar páginas
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </motion.section>
+
+        {/* ── Search + Filters ── */}
+        <motion.section variants={itemVariants} className={sectionClass}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por título ou slug..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 bg-gray-50 border-gray-200"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {statusFilters.map((filter) => (
+                <button
+                  key={filter.key}
+                  onClick={() => setStatusFilter(filter.key)}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    statusFilter === filter.key
+                      ? 'bg-gray-900 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {filter.label}
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                    statusFilter === filter.key
+                      ? 'bg-white/20 text-white'
+                      : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {filter.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </motion.section>
+
+        {/* ── Page Grid ── */}
+        <motion.section variants={itemVariants}>
+          {isLoading ? (
+            <div className="component-grid">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="rounded-2xl overflow-hidden border border-gray-200/70 bg-white">
+                  <Skeleton className="aspect-[16/9] w-full" />
+                  <div className="p-3 space-y-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+              ))}
+            </div>
+          ) : filteredPages.length === 0 ? (
+            <div className={`${sectionClass} text-center py-16`}>
+              <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-base font-semibold text-gray-900 mb-2">
+                {pages.length === 0 ? 'Nenhuma página importada' : 'Nenhuma página encontrada'}
+              </h3>
+              <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">
+                {pages.length === 0
+                  ? 'Importe as páginas do WordPress para começar a gerenciar e monitorar.'
+                  : 'Tente ajustar a busca ou o filtro de status.'}
+              </p>
+              {pages.length === 0 && (
+                <Button onClick={importPages} disabled={isImporting}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Importar páginas agora
+                </Button>
+              )}
+            </div>
+          ) : (
+            <motion.div
+              className="component-grid"
+              variants={cardContainerVariants}
+              initial="hidden"
+              animate="show"
+            >
+              {filteredPages.map((page) => (
+                <motion.div key={page.id} variants={cardItemVariants}>
+                  <PageCard
+                    page={page}
+                    score={pageScores[page.id]}
+                    isScanningBackground={isScanningInBackground}
+                    onPageSpeed={openPageSpeedModal}
+                    onSync={syncPage}
+                    onDelete={deletePage}
+                  />
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </motion.section>
+      </motion.div>
 
+      {/* ── PageSpeed Modal ── */}
       <Dialog open={isPageSpeedOpen} onOpenChange={setIsPageSpeedOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>PageSpeed - {selectedPage?.title || 'Página'}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Gauge className="h-4 w-4" />
+              PageSpeed — {selectedPage?.title || 'Página'}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Strategy + actions */}
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
@@ -970,116 +934,80 @@ const ClientAccountDetail = () => {
                 <RefreshCw className={`h-3 w-3 mr-1 ${isAnalysisLoading ? 'animate-spin' : ''}`} />
                 Regerar IA
               </Button>
-              {isPageSpeedCached && (
-                <Badge variant="outline">Cache (1h)</Badge>
-              )}
-              {isAnalysisCached && (
-                <Badge variant="outline">IA em cache</Badge>
-              )}
+              {isPageSpeedCached && <Badge variant="outline">Cache (1h)</Badge>}
+              {isAnalysisCached && <Badge variant="outline">IA em cache</Badge>}
             </div>
 
             {isPageSpeedLoading ? (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-3 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Executando análise PageSpeed...</p>
-                </CardContent>
-              </Card>
+              <div className="py-10 text-center">
+                <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-3 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Executando análise PageSpeed...</p>
+              </div>
             ) : pageSpeedData ? (
               <div className="space-y-4">
-                <Card>
-                  <CardContent className="p-6 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Performance Score</p>
-                      <p className={`text-4xl font-bold ${getScoreTone(pageSpeedData.performance_score)}`}>
-                        {pageSpeedData.performance_score ?? '-'}
-                      </p>
-                    </div>
-                    <Badge variant="outline">{pageSpeedData.strategy}</Badge>
-                  </CardContent>
-                </Card>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <Card>
-                    <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground mb-1">Acessibilidade</p>
-                      <p className={`text-2xl font-semibold ${getScoreTone(pageSpeedData.accessibility_score ?? null)}`}>
-                        {pageSpeedData.accessibility_score ?? '-'}
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground mb-1">Boas práticas</p>
-                      <p className={`text-2xl font-semibold ${getScoreTone(pageSpeedData.best_practices_score ?? null)}`}>
-                        {pageSpeedData.best_practices_score ?? '-'}
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground mb-1">SEO</p>
-                      <p className={`text-2xl font-semibold ${getScoreTone(pageSpeedData.seo_score ?? null)}`}>
-                        {pageSpeedData.seo_score ?? '-'}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Card>
-                    <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground mb-1">LCP</p>
-                      <p className="text-lg font-semibold">{formatMs(pageSpeedData.lcp_ms)}</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground mb-1">INP</p>
-                      <p className="text-lg font-semibold">{formatMs(pageSpeedData.inp_ms)}</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground mb-1">TBT</p>
-                      <p className="text-lg font-semibold">{formatMs(pageSpeedData.tbt_ms)}</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground mb-1">CLS</p>
-                      <p className="text-lg font-semibold">{pageSpeedData.cls ?? '-'}</p>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <Card>
-                  <CardContent className="p-4 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs text-muted-foreground">
-                      Última coleta: {new Date(pageSpeedData.fetched_at).toLocaleString('pt-BR')}
+                {/* Main score */}
+                <div className="rounded-2xl border border-gray-200/70 bg-gray-50 p-6 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Performance Score</p>
+                    <p className={`text-5xl font-bold tabular-nums ${getScoreTone(pageSpeedData.performance_score)}`}>
+                      {pageSpeedData.performance_score ?? '-'}
                     </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {new Date(pageSpeedData.fetched_at).toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <Badge variant="outline" className="capitalize">{pageSpeedData.strategy}</Badge>
                     {pageSpeedData.report_url && (
                       <Button variant="outline" size="sm" asChild>
                         <a href={pageSpeedData.report_url} target="_blank" rel="noopener noreferrer">
                           <ExternalLink className="h-3 w-3 mr-1" />
-                          Abrir relatório
+                          Relatório
                         </a>
                       </Button>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
 
+                {/* Category scores */}
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Acessibilidade', value: pageSpeedData.accessibility_score ?? null },
+                    { label: 'Boas práticas', value: pageSpeedData.best_practices_score ?? null },
+                    { label: 'SEO', value: pageSpeedData.seo_score ?? null },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="rounded-xl border border-gray-200/70 bg-white p-4 text-center">
+                      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+                      <p className={`text-2xl font-bold ${getScoreTone(value)}`}>{value ?? '-'}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Core Web Vitals */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'LCP', value: formatMs(pageSpeedData.lcp_ms) },
+                    { label: 'INP', value: formatMs(pageSpeedData.inp_ms) },
+                    { label: 'TBT', value: formatMs(pageSpeedData.tbt_ms) },
+                    { label: 'CLS', value: pageSpeedData.cls ?? '-' },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="rounded-xl border border-gray-200/70 bg-white p-4">
+                      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+                      <p className="text-lg font-semibold">{String(value)}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* AI Analysis */}
                 {isAnalysisLoading ? (
-                  <Card>
-                    <CardContent className="p-6 text-center">
-                      <Sparkles className="h-6 w-6 animate-spin mx-auto mb-3 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Gerando análise com IA...</p>
-                    </CardContent>
-                  </Card>
+                  <div className="py-8 text-center">
+                    <Sparkles className="h-6 w-6 animate-spin mx-auto mb-3 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">Gerando análise com IA...</p>
+                  </div>
                 ) : analysisData ? (
                   <div className="space-y-3">
                     <Card>
-                      <CardHeader>
+                      <CardHeader className="pb-2">
                         <CardTitle className="text-base">Diagnóstico IA</CardTitle>
                         <CardDescription>
                           Gerado em {new Date(analysisData.generated_at).toLocaleString('pt-BR')}
@@ -1093,14 +1021,14 @@ const ClientAccountDetail = () => {
 
                     {analysisData.priority_actions.length > 0 && (
                       <Card>
-                        <CardHeader>
+                        <CardHeader className="pb-2">
                           <CardTitle className="text-base">Ações priorizadas</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
                           {analysisData.priority_actions.slice(0, 5).map((action, index) => (
-                            <div key={`${action.title}-${index}`} className="rounded-md border p-3 space-y-2">
+                            <div key={`${action.title}-${index}`} className="rounded-lg border p-3 space-y-2">
                               <div className="flex flex-wrap items-center gap-2">
-                                <p className="font-medium">{action.title}</p>
+                                <p className="font-medium text-sm">{action.title}</p>
                                 <Badge variant={getImpactBadge(action.impact)}>Impacto {action.impact}</Badge>
                                 <Badge variant="outline">Esforço {action.effort}</Badge>
                                 <Badge variant="outline">{action.category}</Badge>
@@ -1125,70 +1053,50 @@ const ClientAccountDetail = () => {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Quick Wins</CardTitle>
-                        </CardHeader>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Quick Wins</CardTitle></CardHeader>
                         <CardContent>
                           {analysisData.quick_wins.length > 0 ? (
                             <ul className="list-disc pl-5 space-y-1 text-sm">
-                              {analysisData.quick_wins.map((item, i) => (
-                                <li key={`quick-${i}`}>{item}</li>
-                              ))}
+                              {analysisData.quick_wins.map((item, i) => <li key={`quick-${i}`}>{item}</li>)}
                             </ul>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">Sem itens.</p>
-                          )}
+                          ) : <p className="text-sm text-muted-foreground">Sem itens.</p>}
                         </CardContent>
                       </Card>
                       <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Foco WordPress</CardTitle>
-                        </CardHeader>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Foco WordPress</CardTitle></CardHeader>
                         <CardContent>
                           {analysisData.wordpress_focus.length > 0 ? (
                             <ul className="list-disc pl-5 space-y-1 text-sm">
-                              {analysisData.wordpress_focus.map((item, i) => (
-                                <li key={`wp-${i}`}>{item}</li>
-                              ))}
+                              {analysisData.wordpress_focus.map((item, i) => <li key={`wp-${i}`}>{item}</li>)}
                             </ul>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">Sem itens.</p>
-                          )}
+                          ) : <p className="text-sm text-muted-foreground">Sem itens.</p>}
                         </CardContent>
                       </Card>
                     </div>
 
                     {analysisData.risk_notes.length > 0 && (
                       <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm">Riscos e cuidados</CardTitle>
-                        </CardHeader>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Riscos e cuidados</CardTitle></CardHeader>
                         <CardContent>
                           <ul className="list-disc pl-5 space-y-1 text-sm">
-                            {analysisData.risk_notes.map((item, i) => (
-                              <li key={`risk-${i}`}>{item}</li>
-                            ))}
+                            {analysisData.risk_notes.map((item, i) => <li key={`risk-${i}`}>{item}</li>)}
                           </ul>
                         </CardContent>
                       </Card>
                     )}
                   </div>
                 ) : (
-                  <Card>
-                    <CardContent className="p-6 text-center">
-                      <p className="text-sm text-muted-foreground">
-                        Clique em <span className="font-medium">Análise IA</span> para gerar um plano de melhoria com base no relatório completo.
-                      </p>
-                    </CardContent>
-                  </Card>
+                  <div className="rounded-xl border border-gray-200/70 bg-gray-50 p-6 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Clique em <span className="font-medium">Análise IA</span> para gerar um plano de melhoria com base no relatório completo.
+                    </p>
+                  </div>
                 )}
               </div>
             ) : (
-              <Card>
-                <CardContent className="p-8 text-center">
-                  <p className="text-sm text-muted-foreground">Nenhum dado de PageSpeed disponível.</p>
-                </CardContent>
-              </Card>
+              <div className="py-8 text-center">
+                <p className="text-sm text-muted-foreground">Nenhum dado de PageSpeed disponível.</p>
+              </div>
             )}
           </div>
         </DialogContent>

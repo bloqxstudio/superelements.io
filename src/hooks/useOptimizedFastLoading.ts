@@ -27,17 +27,23 @@ export const useOptimizedFastLoading = ({
     c => c.isActive && (!c.connection_type || c.connection_type === 'designer_connection')
   );
   
-  // Filter connections based on activeConnectionId
-  const targetConnections = activeConnectionId 
+  // Filter connections based on activeConnectionId.
+  // If activeConnectionId is set but the matching connection isn't in allUserConnections yet
+  // (race condition during state update), fall back to all connections so the query doesn't
+  // short-circuit with an empty result and cache it.
+  const filteredByActive = activeConnectionId
     ? allUserConnections.filter(c => c.id === activeConnectionId)
     : allUserConnections;
+  const targetConnections = activeConnectionId && filteredByActive.length === 0
+    ? allUserConnections   // fallback: connections still loading, use all
+    : filteredByActive;
 
-  // Stable query key with reduced complexity
+  // Stable query key — does NOT include targetConnections.length to avoid caching
+  // an empty result when connections haven't loaded yet
   const queryKey = [
     'optimizedComponents',
     activeConnectionId || 'all-user-connections',
-    selectedCategories.length > 0 ? selectedCategories.sort().join(',') : 'no-categories',
-    targetConnections.length
+    selectedCategories.length > 0 ? [...selectedCategories].sort().join(',') : 'no-categories',
   ];
 
   const queryFn = async () => {

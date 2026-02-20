@@ -304,14 +304,17 @@ export const useMultiConnectionData = (workspaceId?: string) => {
 
   const hasActiveFilters = selectedCategories.length > 0;
   
-  console.log('Multi-connection data state (active connections only):', {
-    totalConnections: connections.length,
-    activeConnectionsCount: activeConnections.length,
-    selectedCategoriesCount: selectedCategories.length,
-    hasActiveFilters,
-    activeConnectionId,
-    isInAllComponentsState: !activeConnectionId && selectedCategories.length === 0
-  });
+  // Development-only logging to avoid performance impact in production
+  if (import.meta.env.DEV) {
+    console.log('Multi-connection data state (active connections only):', {
+      totalConnections: connections.length,
+      activeConnectionsCount: activeConnections.length,
+      selectedCategoriesCount: selectedCategories.length,
+      hasActiveFilters,
+      activeConnectionId,
+      isInAllComponentsState: !activeConnectionId && selectedCategories.length === 0
+    });
+  }
 
   return {
     connectionsData: getConnectionsArray(),

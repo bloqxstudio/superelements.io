@@ -24,6 +24,7 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
   const {
     data,
     isLoading,
+    isFetching,
     isError,
     error,
     isReady,
@@ -52,14 +53,16 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
   // Real total from WordPress API (all active designer connections, per_page=1 + X-WP-Total)
   const { data: realTotalAll } = useLibraryComponentCount();
 
-  // Total to display: always use real API total (X-WP-Total) when available.
-  // For a single connection, look up its count from byConnection.
-  // Only fall back to data?.totalAvailable (capped at 150) if the API hasn't responded yet.
-  const totalToShow = isShowingAllComponents
-    ? (realTotalAll?.total ?? data?.totalAvailable ?? displayComponents.length)
-    : (activeConnectionId && realTotalAll?.byConnection[activeConnectionId] != null
-        ? realTotalAll.byConnection[activeConnectionId]
-        : (data?.totalAvailable ?? displayComponents.length));
+  // When filtering by category: use totalAvailable from the paginated response (filtered total)
+  // When showing all (no category filter): use real API total (X-WP-Total) for accuracy
+  const hasCategoryFilter = selectedCategories.length > 0;
+  const totalToShow = hasCategoryFilter
+    ? (data?.totalAvailable ?? displayComponents.length)
+    : isShowingAllComponents
+      ? (realTotalAll?.total ?? data?.totalAvailable ?? displayComponents.length)
+      : (activeConnectionId && realTotalAll?.byConnection[activeConnectionId] != null
+          ? realTotalAll.byConnection[activeConnectionId]
+          : (data?.totalAvailable ?? displayComponents.length));
 
   const activeDesignerConnections = connections.filter(
     (c) => c.isActive && (!c.connection_type || c.connection_type === 'designer_connection')
@@ -78,10 +81,10 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
     );
   }
 
-  // Show loading state
-  if (isLoading) {
+  // Show loading state (initial load OR refetching with no placeholder to show)
+  if (isLoading || (isFetching && displayComponents.length === 0)) {
     return (
-      <OptimizedComponentGridLoading 
+      <OptimizedComponentGridLoading
         variant="loading"
         count={8}
       />
@@ -93,10 +96,10 @@ const ComponentGrid: React.FC<ComponentGridProps> = memo(({ onPreview }) => {
     <div className="space-y-4">
       {/* Status Badge */}
       <div className="flex items-center gap-2 mb-4">
-        {isLoading ? (
+        {isFetching ? (
           <Badge variant="secondary" className="flex items-center gap-2 px-3 py-1">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Loading components...</span>
+            <span>Carregando...</span>
           </Badge>
         ) : displayComponents.length > 0 ? (
           <Badge variant="secondary" className="flex items-center gap-2 px-3 py-1">

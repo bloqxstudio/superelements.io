@@ -241,9 +241,15 @@ const useWordPressStore = create<WordPressStore>()((set, get) => ({
     set({ error });
   },
   setLoadedPage: (page: number, components: WordPressComponent[]) => {
-    set((state) => ({
-      loadedPages: new Map(state.loadedPages).set(page, components),
-    }));
+    set((state) => {
+      const MAX_CACHED_PAGES = 8;
+      const updated = new Map(state.loadedPages).set(page, components);
+      if (updated.size > MAX_CACHED_PAGES) {
+        const oldestKey = updated.keys().next().value;
+        updated.delete(oldestKey);
+      }
+      return { loadedPages: updated };
+    });
   },
   clearLoadedPages: () => {
     set({ loadedPages: new Map() });

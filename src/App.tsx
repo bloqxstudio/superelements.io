@@ -25,6 +25,9 @@ import ComponentView from "@/pages/ComponentView";
 import Home from "@/pages/Home";
 import Partners from "@/pages/Partners";
 import WorkspaceSelect from "@/pages/WorkspaceSelect";
+import Proposals from "@/pages/Proposals";
+import ProposalView from "@/pages/ProposalView";
+
 
 const queryClient = new QueryClient();
 
@@ -43,32 +46,20 @@ function App() {
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/login" element={<Auth />} />
                 <Route path="/workspace" element={<WorkspaceSelect />} />
-                {/* Legacy routes with IDs (for backward compatibility) */}
+
+                {/* Public proposal view — no auth required */}
+                <Route path="/p/:token" element={<ProposalView />} />
+
+                {/* Component view route using numeric ID */}
                 <Route
-                  path="/component/:connectionId/:componentId"
+                  path="/component/:componentId"
                   element={
                     <WorkspaceGate>
                       <ComponentView />
                     </WorkspaceGate>
                   }
                 />
-                <Route
-                  path="/connection/:connectionId"
-                  element={
-                    <WorkspaceGate>
-                      <Components />
-                    </WorkspaceGate>
-                  }
-                />
-                <Route
-                  path="/connection/:connectionId/category/:categoryId"
-                  element={
-                    <WorkspaceGate>
-                      <Components />
-                    </WorkspaceGate>
-                  }
-                />
-                
+
                 {/* Main layout */}
                 <Route path="/" element={<Layout />}>
                   <Route
@@ -84,7 +75,7 @@ function App() {
                       <Home />
                     </WorkspaceGate>
                   } />
-                  
+
                   {/* Admin routes */}
                   <Route path="connections" element={
                     <ProtectedRoute requireRole={['admin']}>
@@ -118,7 +109,7 @@ function App() {
                       <AdminWorkspaces />
                     </ProtectedRoute>
                   } />
-                  
+
                   {/* Resources page for PRO and admin users */}
                   <Route path="resources" element={
                     <ProtectedRoute requireRole={['pro', 'admin']}>
@@ -127,36 +118,16 @@ function App() {
                       </WorkspaceGate>
                     </ProtectedRoute>
                   } />
-                  
-                  <Route path="partners" element={<Partners />} />
 
-                  {/* Slug-based routes (must be last to avoid conflicts) */}
-                  <Route
-                    path=":connectionSlug"
-                    element={
-                      <WorkspaceGate>
-                        <Components />
-                      </WorkspaceGate>
-                    }
-                  />
-                  <Route
-                    path=":connectionSlug/:categorySlug"
-                    element={
-                      <WorkspaceGate>
-                        <Components />
-                      </WorkspaceGate>
-                    }
-                  />
-                  <Route
-                    path=":connectionSlug/:categorySlug/:componentSlug"
-                    element={
-                      <WorkspaceGate>
-                        <ComponentView />
-                      </WorkspaceGate>
-                    }
-                  />
+                  <Route path="proposals" element={
+                    <WorkspaceGate>
+                      <Proposals />
+                    </WorkspaceGate>
+                  } />
+
+                  <Route path="partners" element={<Partners />} />
                 </Route>
-                
+
                 <Route path="*" element={<NotFound />} />
               </Routes>
               </ErrorBoundary>
