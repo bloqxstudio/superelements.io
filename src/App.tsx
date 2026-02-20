@@ -24,6 +24,8 @@ import Resources from "@/pages/Resources";
 import ComponentView from "@/pages/ComponentView";
 import Home from "@/pages/Home";
 import Partners from "@/pages/Partners";
+import StudioPartners from "@/pages/StudioPartners";
+import StudioPartnersOusen from "@/pages/StudioPartnersOusen";
 import WorkspaceSelect from "@/pages/WorkspaceSelect";
 import Proposals from "@/pages/Proposals";
 import ProposalView from "@/pages/ProposalView";
@@ -127,6 +129,12 @@ function App() {
 
                   <Route path="partners" element={<Partners />} />
                 </Route>
+
+                {/* Studio Partners landing page — public, no auth */}
+                <Route path="/studio-partners" element={<StudioPartners />} />
+
+                {/* Studio Partners — versão Paper & Ink para Ousen */}
+                <Route path="/studio-partners-ousen" element={<StudioPartnersOusen />} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
