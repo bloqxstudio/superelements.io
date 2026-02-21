@@ -16,10 +16,10 @@ const Layout: React.FC = () => {
   const { connections, isLoading, fetchConnections } = useConnectionsStore();
 
   useEffect(() => {
-    if (user && connections.length === 0 && !isLoading) {
+    if (user && !isLoading) {
       fetchConnections();
     }
-  }, [user, connections.length, isLoading, fetchConnections]);
+  }, [user, activeWorkspace?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-background w-full flex">

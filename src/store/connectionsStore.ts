@@ -3,6 +3,10 @@ import { devtools } from 'zustand/middleware';
 import { supabase } from '@/integrations/supabase/client';
 import { WordPressPostTypeService } from '@/services/wordPressPostTypeService';
 import { slugify } from '@/utils/slugify';
+import { OUSEN_CONNECTIONS } from '@/mocks/ousenWorkspace';
+
+export const MOCK_OUSEN_ENABLED_KEY = 'superelements_mock_ousen';
+export const isMockOusenEnabled = () => localStorage.getItem(MOCK_OUSEN_ENABLED_KEY) === 'true';
 
 export interface WordPressConnection {
   id: string;
@@ -153,7 +157,11 @@ export const useConnectionsStore = create<ConnectionsStore>()(
             }))
           });
 
-          set({ connections, isLoading: false });
+          const finalConnections = isMockOusenEnabled()
+            ? [...connections, ...OUSEN_CONNECTIONS]
+            : connections;
+
+          set({ connections: finalConnections, isLoading: false });
 
           // Remover auto-seleção - deixar o estado inicial como "All Components"
           console.log('🏠 Initial load - maintaining "All Components" state (no auto-selection)');

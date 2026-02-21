@@ -1,17 +1,30 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkspaces as useAdminWorkspaces } from '@/hooks/useWorkspaceManagement';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
-import { Building2, Users, LogOut, ArrowRight, Settings } from 'lucide-react';
+import { Building2, Users, LogOut, ArrowRight, Settings, FlaskConical } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { MOCK_OUSEN_ENABLED_KEY } from '@/store/connectionsStore';
+import { OUSEN_WORKSPACE } from '@/mocks/ousenWorkspace';
 
 const WorkspaceSelect: React.FC = () => {
   const navigate = useNavigate();
   const { profile, signOut, loading: authLoading, user } = useAuth();
   const { workspaces, enterWorkspace, switchWorkspace, isAdmin, isLoading } = useWorkspace();
+  const [mockEnabled, setMockEnabled] = useState(
+    () => localStorage.getItem(MOCK_OUSEN_ENABLED_KEY) === 'true'
+  );
+
+  const toggleMock = () => {
+    const next = !mockEnabled;
+    if (next) localStorage.setItem(MOCK_OUSEN_ENABLED_KEY, 'true');
+    else localStorage.removeItem(MOCK_OUSEN_ENABLED_KEY);
+    setMockEnabled(next);
+    window.location.reload();
+  };
 
   // Admin: busca todos os workspaces da plataforma
   const { data: allWorkspaces, isLoading: adminLoading } = useAdminWorkspaces();
@@ -57,16 +70,28 @@ const WorkspaceSelect: React.FC = () => {
     isOwn: boolean;
   };
 
+  const ousenMockItem: DisplayItem = {
+    id: OUSEN_WORKSPACE.id,
+    name: OUSEN_WORKSPACE.name,
+    slug: OUSEN_WORKSPACE.slug,
+    member_count: 8,
+    connection_count: 8,
+    owner_email: null,
+    isOwn: true,
+  };
+
+  const adminBase: DisplayItem[] = (allWorkspaces ?? []).map((ws) => ({
+    id: ws.id,
+    name: ws.name,
+    slug: ws.slug,
+    member_count: ws.member_count,
+    connection_count: ws.connection_count,
+    owner_email: ws.owner_email,
+    isOwn: workspaces.some((w) => w.id === ws.id),
+  }));
+
   const displayList: DisplayItem[] = isAdmin
-    ? (allWorkspaces ?? []).map((ws) => ({
-        id: ws.id,
-        name: ws.name,
-        slug: ws.slug,
-        member_count: ws.member_count,
-        connection_count: ws.connection_count,
-        owner_email: ws.owner_email,
-        isOwn: workspaces.some((w) => w.id === ws.id),
-      }))
+    ? (mockEnabled ? [...adminBase, ousenMockItem] : adminBase)
     : workspaces.map((ws) => ({
         id: ws.id,
         name: ws.name,
@@ -100,6 +125,22 @@ const WorkspaceSelect: React.FC = () => {
           </Button>
         </div>
       </header>
+
+      {/* Dev mock toggle */}
+      {import.meta.env.DEV && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center justify-between text-xs text-amber-800">
+          <span className="flex items-center gap-1.5">
+            <FlaskConical className="h-3.5 w-3.5" />
+            Modo dev — Workspace mock Ousen {mockEnabled ? 'ativado' : 'desativado'}
+          </span>
+          <button
+            onClick={toggleMock}
+            className="font-semibold underline underline-offset-2 hover:text-amber-900"
+          >
+            {mockEnabled ? 'Desativar' : 'Ativar mock Ousen'}
+          </button>
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">

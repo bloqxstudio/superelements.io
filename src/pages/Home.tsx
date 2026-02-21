@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { supabase } from '@/integrations/supabase/client';
+import { OUSEN_CONNECTIONS, OUSEN_PROPOSALS, OUSEN_CLIENT_PAGES } from '@/mocks/ousenWorkspace';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -117,13 +118,29 @@ const Home: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
   const { isLoading, getClientAccounts } = useConnectionsStore();
 
+  // Detecta workspace mock pelo slug — funciona independente de flag ou store
+  const isMockOusen = activeWorkspace?.slug === 'ousen';
+
   const [proposalsCount, setProposalsCount] = useState<number | null>(null);
   const [isProposalsLoading, setIsProposalsLoading] = useState(false);
   const [pageCountByConnection, setPageCountByConnection] = useState<Record<string, number>>({});
 
-  const allClientAccounts = getClientAccounts();
-
   const { clientAccounts, errorAccounts, connectedAccounts, prioritizedAccounts } = useMemo(() => {
+    // Mock: serve dados direto do arquivo, sem depender do store
+    if (isMockOusen) {
+      const accounts = OUSEN_CONNECTIONS;
+      const errorAccounts = accounts.filter((a) => a.status === 'error');
+      const connectedAccounts = accounts.filter((a) => a.status === 'connected');
+      const prioritizedAccounts = [
+        ...errorAccounts,
+        ...accounts.filter((a) => a.status === 'disconnected'),
+        ...accounts.filter((a) => a.status === 'connecting'),
+        ...connectedAccounts,
+      ].slice(0, 6);
+      return { clientAccounts: accounts, errorAccounts, connectedAccounts, prioritizedAccounts };
+    }
+
+    const allClientAccounts = getClientAccounts();
     const clientAccounts = activeWorkspace
       ? allClientAccounts.filter((a) => a.workspace_id === activeWorkspace.id)
       : [];
@@ -136,9 +153,13 @@ const Home: React.FC = () => {
       ...connectedAccounts,
     ].slice(0, 6);
     return { clientAccounts, errorAccounts, connectedAccounts, prioritizedAccounts };
-  }, [allClientAccounts, activeWorkspace]);
+  }, [isMockOusen, getClientAccounts, activeWorkspace]);
 
   useEffect(() => {
+    if (isMockOusen) {
+      setProposalsCount(OUSEN_PROPOSALS.filter((p) => p.status !== 'rejected').length);
+      return;
+    }
     if (!activeWorkspace?.id) {
       setProposalsCount(0);
       return;
@@ -153,15 +174,22 @@ const Home: React.FC = () => {
         if (!error) setProposalsCount(count ?? 0);
         setIsProposalsLoading(false);
       });
-  }, [activeWorkspace?.id]);
+  }, [isMockOusen, activeWorkspace?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (clientAccounts.length === 0) {
-      setPageCountByConnection({});
+    if (isMockOusen) {
+      const counts: Record<string, number> = {};
+      for (const page of OUSEN_CLIENT_PAGES) {
+        counts[page.connection_id] = (counts[page.connection_id] ?? 0) + 1;
+      }
+      setPageCountByConnection(counts);
       return;
     }
     const ids = clientAccounts.map((a) => a.id);
+    if (ids.length === 0) {
+      setPageCountByConnection({});
+      return;
+    }
     supabase
       .from('client_pages')
       .select('connection_id')
@@ -175,9 +203,9 @@ const Home: React.FC = () => {
           setPageCountByConnection(counts);
         }
       });
-  }, [clientAccounts.map((a) => a.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isMockOusen, clientAccounts.map((a) => a.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (isLoading) {
+  if (isLoading && !isMockOusen) {
     return (
       <div className="min-h-screen bg-[#f7f7f8] px-4 pb-12 pt-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl space-y-7">

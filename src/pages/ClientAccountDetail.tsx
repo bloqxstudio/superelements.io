@@ -2,6 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  OUSEN_CLIENT_PAGES,
+  OUSEN_PAGE_PERFORMANCE,
+  OUSEN_CONNECTIONS,
+} from '@/mocks/ousenWorkspace';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -89,10 +94,104 @@ interface PageCardProps {
   page: ClientPage;
   score: PageScoreCache[string] | undefined;
   isScanningBackground: boolean;
+  isMock?: boolean;
   onPageSpeed: (page: ClientPage) => void;
   onSync: (pageId: string) => void;
   onDelete: (pageId: string) => void;
 }
+
+// ─── Mock Page Preview ────────────────────────────────────────────────────────
+// Renders a static visual preview for mock law firm pages (no real iframe).
+
+const MOCK_PREVIEW_THEMES: Record<string, { accent: string; bg: string; navBg: string }> = {
+  'conn-joao-adv':             { accent: '#1e3a5f', bg: '#f0f4f8', navBg: '#1e3a5f' },
+  'conn-silva-escritorio':     { accent: '#2d4a22', bg: '#f4f7f0', navBg: '#2d4a22' },
+  'conn-torres-advocacia':     { accent: '#3b1f1f', bg: '#faf4f4', navBg: '#3b1f1f' },
+  'conn-camila-mendes':        { accent: '#4a2c6e', bg: '#f7f3fb', navBg: '#4a2c6e' },
+  'conn-ramos-previdenciario': { accent: '#1a3d52', bg: '#f0f6fa', navBg: '#1a3d52' },
+  'conn-lima-tributario':      { accent: '#3d3000', bg: '#faf8f0', navBg: '#3d3000' },
+  'conn-ferreira-familia':     { accent: '#1f3f5a', bg: '#f0f5fa', navBg: '#1f3f5a' },
+  'conn-barbosa-trabalhista':  { accent: '#3d1a00', bg: '#faf5f0', navBg: '#3d1a00' },
+};
+
+const PAGE_CONTENT_MAP: Record<string, { hero: string; body: string[]; section: string }> = {
+  home:                    { hero: 'Advocacia especializada com excelência e ética',        body: ['Atendimento personalizado', 'Mais de 15 anos de experiência', 'Resultados comprovados'],                                                              section: 'Nossas Áreas de Atuação' },
+  'areas-de-atuacao':      { hero: 'Áreas de Atuação',                                      body: ['Direito Civil', 'Direito Trabalhista', 'Direito de Família', 'Planejamento Patrimonial'],                                                             section: 'Como Podemos Ajudar' },
+  sobre:                   { hero: 'Sobre o Escritório',                                     body: ['Fundado em 2009', 'Equipe multidisciplinar', 'Atuação em todo território nacional'],                                                                  section: 'Nossa Equipe' },
+  blog:                    { hero: 'Blog Jurídico',                                          body: ['Como funciona a aposentadoria por invalidez', 'Direitos do trabalhador em 2024', 'Planejamento sucessório: o que você precisa saber'],                section: 'Artigos Recentes' },
+  contato:                 { hero: 'Entre em Contato',                                       body: ['Atendimento de segunda a sexta', '(11) 3000-0000', 'contato@escritorio.adv.br'],                                                                    section: 'Localização' },
+  'direito-criminal':      { hero: 'Direito Criminal',                                       body: ['Defesa em inquéritos policiais', 'Habeas corpus e liberdade provisória', 'Recursos em instâncias superiores'],                                       section: 'Casos Atendidos' },
+  'habeas-corpus':         { hero: 'Habeas Corpus',                                          body: ['Análise do caso em 24h', 'Experiência em instâncias superiores', 'Atendimento emergencial'],                                                         section: 'Como Funciona' },
+  divorcio:                { hero: 'Divórcio Consensual e Litigioso',                        body: ['Divórcio extrajudicial em cartório', 'Partilha de bens', 'Guarda e alimentos'],                                                                     section: 'Etapas do Processo' },
+  'guarda-de-filhos':      { hero: 'Guarda de Filhos',                                       body: ['Guarda compartilhada', 'Regulamentação de visitas', 'Revisão de acordos'],                                                                          section: 'Tipos de Guarda' },
+  'aposentadoria-invalidez': { hero: 'Aposentadoria por Invalidez',                          body: ['Análise do histórico previdenciário', 'Recurso contra indeferimento', 'Cálculo de benefícios'],                                                     section: 'Documentos Necessários' },
+};
+
+const MockPagePreview: React.FC<{ page: ClientPage }> = ({ page }) => {
+  const theme = MOCK_PREVIEW_THEMES[page.connection_id] ?? { accent: '#1e3a5f', bg: '#f0f4f8', navBg: '#1e3a5f' };
+  const content = PAGE_CONTENT_MAP[page.slug] ?? {
+    hero: page.title,
+    body: ['Informações sobre ' + page.title, 'Consulte nossos especialistas', 'Atendimento personalizado'],
+    section: 'Saiba Mais',
+  };
+
+  return (
+    <div className="w-full h-full flex flex-col text-[8px] leading-tight overflow-hidden select-none" style={{ background: theme.bg }}>
+      {/* Nav */}
+      <div className="flex items-center justify-between px-3 py-1.5 flex-shrink-0" style={{ background: theme.navBg }}>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3.5 h-3.5 rounded-full bg-white/30" />
+          <div className="w-10 h-1.5 rounded bg-white/60" />
+        </div>
+        <div className="flex gap-2">
+          {['Início', 'Áreas', 'Sobre', 'Contato'].map((label) => (
+            <div key={label} className="text-[6px] text-white/70 font-medium">{label}</div>
+          ))}
+        </div>
+        <div className="rounded px-1.5 py-0.5 text-[6px] font-semibold text-white" style={{ background: 'rgba(255,255,255,0.2)' }}>
+          Consulta grátis
+        </div>
+      </div>
+
+      {/* Hero */}
+      <div className="px-3 py-2 flex-shrink-0 flex flex-col items-start gap-1" style={{ background: theme.accent }}>
+        <div className="text-[8px] font-bold text-white leading-tight max-w-[80%]">{content.hero}</div>
+        <div className="w-14 h-1 rounded-full mt-0.5" style={{ background: 'rgba(255,255,255,0.35)' }} />
+        <div className="rounded px-1.5 py-0.5 text-[6px] font-bold text-white mt-1" style={{ background: 'rgba(255,255,255,0.25)' }}>
+          Fale conosco →
+        </div>
+      </div>
+
+      {/* Body bullets */}
+      <div className="px-3 py-1.5 flex flex-col gap-1 flex-shrink-0">
+        <div className="text-[7px] font-semibold mb-0.5" style={{ color: theme.accent }}>{content.section}</div>
+        {content.body.map((item, i) => (
+          <div key={i} className="flex items-start gap-1">
+            <div className="w-1 h-1 rounded-full mt-0.5 flex-shrink-0" style={{ background: theme.accent }} />
+            <div className="text-[7px] text-gray-600 leading-snug">{item}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Cards row */}
+      <div className="px-3 pb-1.5 flex gap-1.5 flex-shrink-0">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex-1 rounded-lg border border-gray-200 bg-white p-1.5 flex flex-col gap-0.5">
+            <div className="w-4 h-4 rounded-md" style={{ background: theme.accent + '20' }} />
+            <div className="w-8 h-1 rounded bg-gray-200 mt-0.5" />
+            <div className="w-10 h-0.5 rounded bg-gray-100" />
+          </div>
+        ))}
+      </div>
+
+      {/* Footer strip */}
+      <div className="mt-auto px-3 py-1 flex items-center justify-between flex-shrink-0" style={{ background: theme.navBg + 'cc' }}>
+        <div className="text-[5.5px] text-white/50">© 2024 — Escritório de Advocacia</div>
+        <div className="text-[5.5px] text-white/50">{page.url.replace('https://', '').replace(/\/$/, '')}</div>
+      </div>
+    </div>
+  );
+};
 
 // ─── Animation variants ───────────────────────────────────────────────────────
 
@@ -192,6 +291,7 @@ const PageCard = React.memo(({
   page,
   score,
   isScanningBackground,
+  isMock = false,
   onPageSpeed,
   onSync,
   onDelete,
@@ -202,7 +302,9 @@ const PageCard = React.memo(({
     <div className="group rounded-2xl border border-gray-200/70 bg-white shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden flex flex-col">
       {/* Preview area */}
       <div className="aspect-[16/9] relative overflow-hidden bg-gray-50 flex-shrink-0">
-        {hasPreview ? (
+        {isMock && hasPreview ? (
+          <MockPagePreview page={page} />
+        ) : hasPreview ? (
           <OptimizedDynamicIframe url={page.url} title={page.title} />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-2">
@@ -310,22 +412,54 @@ const ClientAccountDetail = () => {
   const [pageScores, setPageScores] = useState<PageScoreCache>({});
   const [isScanningInBackground, setIsScanningInBackground] = useState(false);
 
-  const connection = connectionId ? getConnectionById(connectionId) : null;
+  // Detect mock connection by checking if it belongs to OUSEN_CONNECTIONS
+  const isMockConnection = connectionId
+    ? OUSEN_CONNECTIONS.some((c) => c.id === connectionId)
+    : false;
+
+  // For mock connections, resolve from the mock list directly (store may not be populated yet)
+  const connection = connectionId
+    ? (isMockConnection
+        ? OUSEN_CONNECTIONS.find((c) => c.id === connectionId) ?? null
+        : getConnectionById(connectionId))
+    : null;
 
   useEffect(() => {
     if (connectionId) {
       fetchPages();
     }
-  }, [connectionId]);
+  }, [connectionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    // Don't auto-import for mock connections
+    if (isMockConnection) return;
     if (connectionId && !isLoading && pages.length === 0 && connection && !isImporting) {
       importPages();
     }
-  }, [connectionId, isLoading, pages.length, connection]);
+  }, [connectionId, isLoading, pages.length, connection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchPages = async () => {
     if (!connectionId) return;
+
+    // Mock: serve pages directly from the mock file
+    if (isMockConnection) {
+      const mockPages = OUSEN_CLIENT_PAGES.filter((p) => p.connection_id === connectionId);
+      setPages(mockPages as ClientPage[]);
+      // Load mock scores
+      const scores: PageScoreCache = {};
+      for (const perf of OUSEN_PAGE_PERFORMANCE) {
+        if (mockPages.some((p) => p.id === perf.client_page_id)) {
+          scores[perf.client_page_id] = {
+            performance_score: perf.performance_score,
+            fetched_at: perf.analyzed_at,
+          };
+        }
+      }
+      setPageScores(scores);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { data, error } = await supabase
@@ -594,6 +728,29 @@ const ClientAccountDetail = () => {
     setAnalysisData(null);
     setIsAnalysisCached(false);
     setPageSpeedStrategy('mobile');
+
+    // Mock: serve performance data directly from mock file
+    if (isMockConnection) {
+      const mockPerf = OUSEN_PAGE_PERFORMANCE.find(
+        (p) => p.client_page_id === page.id && p.strategy === 'desktop'
+      ) ?? OUSEN_PAGE_PERFORMANCE.find((p) => p.client_page_id === page.id);
+      if (mockPerf) {
+        setPageSpeedData({
+          performance_score: mockPerf.performance_score,
+          lcp_ms: mockPerf.lcp_ms,
+          inp_ms: mockPerf.inp_ms,
+          tbt_ms: mockPerf.tbt_ms,
+          cls: mockPerf.cls,
+          strategy: mockPerf.strategy,
+          fetched_at: mockPerf.analyzed_at,
+        });
+      } else {
+        setPageSpeedData(null);
+      }
+      setIsPageSpeedOpen(true);
+      return;
+    }
+
     const localScore = pageScores[page.id];
     if (localScore) {
       setPageSpeedData({
@@ -745,26 +902,28 @@ const ClientAccountDetail = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={importPages}
-                disabled={isImporting}
-              >
-                {isImporting ? (
-                  <>
-                    <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" />
-                    Importando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="mr-2 h-3.5 w-3.5" />
-                    Importar páginas
-                  </>
-                )}
-              </Button>
-            </div>
+            {!isMockConnection && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={importPages}
+                  disabled={isImporting}
+                >
+                  {isImporting ? (
+                    <>
+                      <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" />
+                      Importando...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-3.5 w-3.5" />
+                      Importar páginas
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         </motion.section>
 
@@ -850,6 +1009,7 @@ const ClientAccountDetail = () => {
                     page={page}
                     score={pageScores[page.id]}
                     isScanningBackground={isScanningInBackground}
+                    isMock={isMockConnection}
                     onPageSpeed={openPageSpeedModal}
                     onSync={syncPage}
                     onDelete={deletePage}

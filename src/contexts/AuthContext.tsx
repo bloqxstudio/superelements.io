@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { PhoneCollectionModal } from '@/components/PhoneCollectionModal';
+import { OUSEN_WORKSPACE } from '@/mocks/ousenWorkspace';
+import { isMockOusenEnabled } from '@/store/connectionsStore';
 
 export type AppRole = 'free' | 'pro' | 'admin';
 export type WorkspaceRole = 'owner' | 'member' | 'manager';
@@ -70,10 +72,26 @@ async function fetchProfile(userId: string): Promise<UserProfile | null> {
     role: m.role as WorkspaceRole,
   }));
 
+  // Auto-enable mock for manager and pro users (no localStorage toggle needed)
+  const appRole = (roleResult.data?.role as AppRole) || 'free';
+  const isManagerUser = workspaceMemberships.some((m) => m.role === 'manager');
+  const isProOrManager = isManagerUser || appRole === 'pro';
+  const shouldInjectMock = isMockOusenEnabled() || isProOrManager;
+
+  const mockMembership: WorkspaceMembership = {
+    workspace_id: OUSEN_WORKSPACE.id,
+    workspace_name: OUSEN_WORKSPACE.name,
+    workspace_slug: OUSEN_WORKSPACE.slug,
+    // Managers get the mock workspace as manager; pro users and dev toggle as owner
+    role: isManagerUser ? 'manager' : OUSEN_WORKSPACE.role,
+  };
+
   return {
     ...profileData,
-    role: (roleResult.data?.role as AppRole) || 'free',
-    workspaceMemberships,
+    role: appRole,
+    workspaceMemberships: shouldInjectMock
+      ? [...workspaceMemberships, mockMembership]
+      : workspaceMemberships,
   } as UserProfile;
 }
 

@@ -74,10 +74,12 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     }
 
     if (activeWorkspaceId && !workspaces.some((w) => w.id === activeWorkspaceId)) {
-      setActiveWorkspaceId(null);
-      localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+      // Auto-select first available workspace instead of clearing
+      const first = workspaces[0];
+      setActiveWorkspaceId(first.id);
+      localStorage.setItem(ACTIVE_WORKSPACE_KEY, first.id);
     }
-  }, [loading, user, profile]);
+  }, [loading, user, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const switchWorkspace = (workspaceId: string) => {
     const target = workspaces.find((w) => w.id === workspaceId);

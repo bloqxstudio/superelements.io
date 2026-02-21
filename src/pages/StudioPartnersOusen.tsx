@@ -11,7 +11,6 @@ import {
   useScroll,
   useTransform,
   useInView,
-  AnimatePresence,
   useMotionValue,
   useSpring,
 } from "framer-motion";
@@ -27,7 +26,6 @@ const GREEN_BG   = "rgba(210,245,37,0.10)"; // fundo suave verde
 const BG         = "#0f0f0f";
 const BG2        = "#141414";
 const BG3        = "#1a1a1a";
-const BG4        = "#1f1f1f";
 
 // Texto
 const TEXT_1     = "#f5f5f5";   // primary
@@ -100,7 +98,7 @@ function Reveal({
 
 function SectionDivider({ label }: { label: string }) {
   return (
-    <div style={{
+    <div className="spo-divider-inner" style={{
       display: "flex", alignItems: "center", gap: 16,
       maxWidth: 1100, margin: "0 auto", padding: "0 48px",
     }}>
@@ -234,15 +232,15 @@ function Nav() {
 // ─── HERO ─────────────────────────────────────────────────────────────────────
 
 function Hero() {
-  const stats = [
-    { value: "3 dias",  desc: "prazo médio de entrega por página" },
-    { value: "R$600",   desc: "custo fixo por página criada" },
-    { value: "60%",     desc: "de margem líquida no modelo padrão" },
-    { value: "2.900+",  desc: "componentes Elementor da biblioteca" },
+  const highlights = [
+    { value: "2.900+",  desc: "componentes Elementor prontos" },
+    { value: "3 dias",  desc: "do briefing à página publicada" },
+    { value: "R$ 600,00", desc: "por projeto criado" },
+    { value: "R$ 99,00", desc: "por mês de acompanhamento" },
   ];
 
   return (
-    <section style={{ padding: "140px 48px 100px", maxWidth: 1100, margin: "0 auto" }}>
+    <section className="spo-hero-section" style={{ padding: "140px 48px 100px", maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 64, alignItems: "center" }} className="spo-hero-grid">
 
         {/* Left */}
@@ -259,8 +257,8 @@ function Hero() {
               margin: "20px 0 20px",
             }}
           >
-            A Ousen vende.<br />
-            A gente <span style={{ color: GREEN }}>entrega.</span>
+            A ousen vende,<br />
+            nós <span style={{ color: GREEN }}>cuidamos do resto.</span>
           </motion.h1>
 
           <motion.p
@@ -270,12 +268,11 @@ function Hero() {
               maxWidth: 520, lineHeight: 1.7, marginBottom: 36,
             }}
           >
-            Produção de páginas Elementor em até 3 dias, com processo definido, painel centralizado e acompanhamento ativo — invisível para o seu cliente.
+            A SuperElements entrega páginas Elementor em até 3 dias — com processo definido, biblioteca de 2.900+ componentes e um painel centralizado onde a Ousen acompanha tudo em tempo real.
           </motion.p>
 
           <motion.div variants={vFadeUp} style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
-            <MagBtn href="#contato" primary>Quero ser parceiro</MagBtn>
-            <MagBtn href="#solucao">Entender a proposta →</MagBtn>
+            <MagBtn href="#solucao" primary>Ver como funcionando</MagBtn>
           </motion.div>
         </motion.div>
 
@@ -293,9 +290,9 @@ function Hero() {
             fontFamily: "Inter, sans-serif", fontSize: 10, fontWeight: 700,
             letterSpacing: "0.12em", textTransform: "uppercase", color: TEXT_3,
             marginBottom: 20, paddingBottom: 14, borderBottom: `1px solid ${BORDER}`,
-          }}>Em números</div>
+          }}>O que você ganha</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {stats.map((s, i) => (
+            {highlights.map((s, i) => (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
@@ -303,12 +300,12 @@ function Hero() {
                 style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}
               >
                 <span style={{
-                  fontFamily: "Inter, sans-serif", fontWeight: 700, fontSize: 26,
+                  fontFamily: "Inter, sans-serif", fontWeight: 700, fontSize: 22,
                   color: GREEN, lineHeight: 1, letterSpacing: "-0.03em",
                 }}>{s.value}</span>
                 <span style={{
                   fontFamily: "Inter, sans-serif", fontSize: 12,
-                  color: TEXT_3, textAlign: "right", maxWidth: 120, lineHeight: 1.45,
+                  color: TEXT_3, textAlign: "right", maxWidth: 130, lineHeight: 1.45,
                 }}>{s.desc}</span>
               </motion.div>
             ))}
@@ -325,134 +322,51 @@ function Hero() {
   );
 }
 
-// ─── PROBLEMA ─────────────────────────────────────────────────────────────────
-
-const pains = [
-  { icon: "💸", title: "Os bons cobram caro e demoram",        desc: "Webdesigners de qualidade têm agenda cheia. Quando precisar de urgência, não estão disponíveis — e o funil fica parado." },
-  { icon: "⏳", title: "Os baratos entregam sem processo",    desc: "Sem briefing estruturado, sem revisão, sem padrão. O resultado é retrabalho e prazo estourado toda vez." },
-  { icon: "📊", title: "Gestão por planilha e WhatsApp",     desc: "Links salvos em tabelas, histórico perdido em grupos, ninguém sabe o status real de cada projeto sem perguntar." },
-  { icon: "🔗", title: "Zero visibilidade dos projetos ativos", desc: "Múltiplos clientes, múltiplas páginas, múltiplas URLs — tudo espalhado. Sem visão centralizada de nada." },
-];
-
-function ProblemSection() {
-  return (
-    <section style={{ padding: "80px 0" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 48px" }}>
-        <Reveal style={{ marginBottom: 48 }}>
-          <Eyebrow>O gargalo que trava a operação</Eyebrow>
-          <motion.h2
-            variants={vFadeUp}
-            style={{
-              fontFamily: "Inter, sans-serif",
-              fontSize: "clamp(28px, 4vw, 46px)", fontWeight: 700,
-              lineHeight: 1.08, letterSpacing: "-0.03em", color: TEXT_1,
-              margin: "16px 0 18px",
-            }}
-          >
-            A venda está resolvida.<br />
-            <span style={{ color: GREEN }}>A entrega não.</span>
-          </motion.h2>
-          <motion.p
-            variants={vFadeUp}
-            style={{
-              fontFamily: "Inter, sans-serif", fontSize: 17, color: TEXT_2,
-              maxWidth: 600, lineHeight: 1.7,
-            }}
-          >
-            Toda vez que a Ousen fecha um contrato, começa o mesmo ciclo — e o tempo perdido gerenciando produção é tempo que devia estar em vendas.
-          </motion.p>
-        </Reveal>
-
-        {/* Grid 2×2 */}
-        <motion.div
-          initial="hidden" whileInView="visible"
-          viewport={{ once: true, amount: 0.1 }}
-          variants={vStagger(0, 0.08)}
-          style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr",
-            gap: 1, background: BORDER,
-            border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden",
-            marginBottom: 48,
-          }}
-          className="spo-pain-grid"
-        >
-          {pains.map((p, i) => (
-            <motion.div
-              key={i}
-              variants={vFadeUp}
-              whileHover={{ backgroundColor: BG3 }}
-              style={{
-                background: BG2, padding: "28px 24px",
-                display: "flex", gap: 16, alignItems: "flex-start",
-                transition: "background 0.2s",
-              }}
-            >
-              <span style={{ fontSize: 20, flexShrink: 0, marginTop: 2 }}>{p.icon}</span>
-              <div>
-                <div style={{
-                  fontFamily: "Inter, sans-serif", fontWeight: 600,
-                  fontSize: 14, color: TEXT_1, marginBottom: 7, lineHeight: 1.35,
-                }}>{p.title}</div>
-                <div style={{
-                  fontFamily: "Inter, sans-serif", fontSize: 13.5,
-                  color: TEXT_2, lineHeight: 1.65,
-                }}>{p.desc}</div>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Pull quote */}
-        <Reveal>
-          <motion.blockquote
-            variants={vFadeUp}
-            style={{
-              borderLeft: `3px solid ${GREEN}`,
-              background: BG2, border: `1px solid ${BORDER2}`,
-              borderLeftColor: GREEN,
-              padding: "32px 36px", borderRadius: "0 10px 10px 0",
-              margin: 0,
-            }}
-          >
-            <p style={{
-              fontFamily: "Inter, sans-serif",
-              fontSize: "clamp(16px, 2.2vw, 22px)",
-              color: TEXT_2, lineHeight: 1.6, margin: "0 0 16px",
-            }}>
-              A operação que deveria escalar começa a travar 
-            </p>
-            <cite style={{
-              fontFamily: "Inter, sans-serif", fontSize: 11,
-              fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase",
-              color: GREEN, fontStyle: "normal",
-            }}>O cenário que a SuperElements resolve</cite>
-          </motion.blockquote>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
 
 // ─── SOLUÇÃO ──────────────────────────────────────────────────────────────────
 
 const steps = [
-  { num: "01", title: "Briefing estruturado",  desc: "Formulário direto. Sem reunião longa, sem e-mail perdido." },
-  { num: "02", title: "Produção no Elementor", desc: "2.900+ componentes. Rápido e com padrão garantido." },
-  { num: "03", title: "Revisão e ajuste",      desc: "Uma rodada clara, escopo definido. Sem voltar à estaca zero." },
-  { num: "04", title: "Entrega em até 3 dias", desc: "Publicada, testada, conectada ao painel. A Ousen apresenta." },
-  { num: "05", title: "Acompanhamento ativo",  desc: "Monitoramos diariamente. Bugs e ajustes sem a Ousen cobrar." },
+  { num: "01", title: "Briefing pelo painel",   desc: "Formulário estruturado direto na ferramenta. Sem reunião, sem e-mail perdido." },
+  { num: "02", title: "Produção no Elementor",  desc: "2.900+ componentes prontos. Velocidade e padrão em todo projeto." },
+  { num: "03", title: "Revisão e aprovação",    desc: "Uma rodada clara com escopo definido. Tudo registrado no painel." },
+  { num: "04", title: "Entrega em até 3 dias",  desc: "Publicada, testada e conectada ao painel. A Ousen apresenta ao cliente." },
+  { num: "05", title: "Acompanhamento contínuo", desc: "Monitoramento diário, bugs corrigidos, performance otimizada — sem a Ousen ter que cobrar." },
+];
+
+const toolFeatures = [
+  {
+    icon: "🏠",
+    title: "Painel inicial",
+    desc: "Visão geral da operação em tempo real: clientes ativos, status de conexão, alertas e acesso rápido a tudo que importa. Sem precisar acessar o site de cada cliente.",
+  },
+  {
+    icon: "👥",
+    title: "Todos os clientes num lugar",
+    desc: "Veja todos os clientes num único lugar, páginas ativas, score de performance e status — sem planilha, sem grupo de WhatsApp.",
+  },
+  {
+    icon: "📄",
+    title: "Todas as páginas de um cliente",
+    desc: "Acesse cada site da conta com URLs, score de performance por página e status de publicação — tudo centralizado num único lugar.",
+  },
+  {
+    icon: "🧩",
+    title: "1.900+ componentes Elementor",
+    desc: "Biblioteca filtrada por nicho e categoria. A produção começa com o bloco certo, não do zero — isso é o que garante 3 dias.",
+  },
 ];
 
 function SolutionSection() {
   return (
     <section id="solucao" style={{ padding: "80px 0 56px" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 48px" }}>
+      <div className="spo-section-inner" style={{ maxWidth: 1100, margin: "0 auto", padding: "0 48px" }}>
 
+        {/* Intro + processo */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 64, marginBottom: 72 }} className="spo-sol-grid">
 
           {/* Left */}
           <Reveal>
-            <Eyebrow>Como a SuperElements entra na operação</Eyebrow>
+            <Eyebrow>Como a SuperElements opera</Eyebrow>
             <motion.h2
               variants={vFadeUp}
               style={{
@@ -462,15 +376,14 @@ function SolutionSection() {
                 margin: "16px 0 24px",
               }}
             >
-              Processo, ferramenta<br />
-              e <span style={{ color: GREEN }}>entrega real.</span>
+              Da venda ao ar<br />
+              em <span style={{ color: GREEN }}>3 dias.</span>
             </motion.h2>
 
             {[
-              "A SuperElements é um estúdio de produção de páginas especializado em Wordpress e Elementor.",
-              "O que nos permite entregar em 3 dias não é sorte — é processo.",
-              "Desenvolvemos um fluxo de produção otimizado de ponta a ponta: do briefing estruturado à entrega final, cada etapa tem responsável, prazo e padrão de qualidade definido. Sem achismo, sem retrabalho, sem projeto parado.",
-              "Por trás disso, existe uma ferramenta própria — o painel SuperElements. É onde a Ousen acompanha todos os projetos em tempo real, num único lugar. Cada cliente, cada página, cada status. Sem planilha, sem ficar procurando em grupos de WhatsApp.",
+              "A Ousen fecha o contrato. Passa o briefing no painel. O restante é com a gente.",
+              "Cada página é construída no Elementor com componentes da nossa biblioteca — 2.900+ blocos prontos, organizados por nicho. Isso elimina o tempo de criação do zero e garante consistência em cada entrega.",
+              "E tudo o que acontece no processo aparece no painel SuperElements: briefings, status de cada página, performance, propostas e recursos — num único lugar, em tempo real.",
             ].map((p, i) => (
               <motion.p key={i} variants={vFadeUp} style={{
                 fontFamily: "Inter, sans-serif", fontSize: 15.5, color: TEXT_2,
@@ -491,12 +404,12 @@ function SolutionSection() {
                 fontFamily: "Inter, sans-serif", fontSize: 10, fontWeight: 600,
                 letterSpacing: "0.12em", textTransform: "uppercase", color: GREEN,
                 marginBottom: 9,
-              }}>Como funciona na prática</div>
+              }}>White label, de ponta a ponta</div>
               <p style={{
                 fontFamily: "Inter, sans-serif", fontSize: 14, color: TEXT_2,
                 lineHeight: 1.7, margin: 0,
               }}>
-                A Ousen fecha o contrato com o escritório. Passa o briefing pra nós. Aprovamos todas etapas em entregáveis rápidos. Em até 3 dias úteis a página está no ar — construída no Elementor, testada, responsiva, com a marca da Ousen. 
+                O cliente final não sabe que a SuperElements existe. A Ousen apresenta, a Ousen entrega — nós somos a operação por trás, invisíveis e funcionando.
               </p>
             </motion.div>
           </Reveal>
@@ -561,341 +474,455 @@ function SolutionSection() {
           </Reveal>
         </div>
 
-        {/* Dashboard */}
-        <Dashboard />
+        {/* Tool features grid */}
+        <Reveal style={{ marginBottom: 56 }}>
+          <Eyebrow>O painel SuperElements</Eyebrow>
+          <motion.h2
+            variants={vFadeUp}
+            style={{
+              fontFamily: "Inter, sans-serif",
+              fontSize: "clamp(26px, 3.5vw, 40px)", fontWeight: 700,
+              lineHeight: 1.08, letterSpacing: "-0.03em", color: TEXT_1,
+              margin: "16px 0 12px",
+            }}
+          >
+            Tudo que importa,<br />
+            <span style={{ color: GREEN }}>num único lugar.</span>
+          </motion.h2>
+          <motion.p variants={vFadeUp} style={{
+            fontFamily: "Inter, sans-serif", fontSize: 16, color: TEXT_2,
+            maxWidth: 560, lineHeight: 1.7, marginBottom: 40,
+          }}>
+            A ferramenta que desenvolvemos centraliza toda a operação: clientes, páginas, propostas e componentes — acessíveis em tempo real, sem planilha, sem WhatsApp.
+          </motion.p>
+
+          <motion.div
+            variants={vStagger(0, 0.08)}
+            style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr",
+              gap: 1, background: BORDER,
+              border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden",
+              marginBottom: 48,
+            }}
+            className="spo-pain-grid"
+          >
+            {toolFeatures.map((f, i) => (
+              <motion.div
+                key={i}
+                variants={vFadeUp}
+                whileHover={{ backgroundColor: BG3 }}
+                style={{
+                  background: BG2, padding: "28px 24px",
+                  display: "flex", gap: 16, alignItems: "flex-start",
+                  transition: "background 0.2s",
+                }}
+              >
+                <span style={{ fontSize: 20, flexShrink: 0, marginTop: 2 }}>{f.icon}</span>
+                <div>
+                  <div style={{
+                    fontFamily: "Inter, sans-serif", fontWeight: 600,
+                    fontSize: 14, color: TEXT_1, marginBottom: 7, lineHeight: 1.35,
+                  }}>{f.title}</div>
+                  <div style={{
+                    fontFamily: "Inter, sans-serif", fontSize: 13.5,
+                    color: TEXT_2, lineHeight: 1.65,
+                  }}>{f.desc}</div>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        </Reveal>
+
+        {/* Product mockups em sequência */}
+        <ProductShowcase />
       </div>
     </section>
   );
 }
 
-// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+// ─── SCALED SCREEN WRAPPER ────────────────────────────────────────────────────
+// Renders children at a fixed 860px width, scaled to fit the available container.
+// On desktop it fills naturally; on mobile it shrinks without reflowing.
 
-type NavId = "inicio" | "clientes" | "paginas" | "propostas" | "recursos" | "componentes";
+const FRAME_W = 860;
+const FRAME_H = 420;
 
-const navItems: { id: NavId; icon: string; label: string }[] = [
-  { id: "inicio",      icon: "🏠", label: "Início" },
-  { id: "clientes",    icon: "👥", label: "Clientes" },
-  { id: "paginas",     icon: "📄", label: "Páginas" },
-  { id: "propostas",   icon: "📋", label: "Propostas" },
-  { id: "recursos",    icon: "📦", label: "Recursos" },
-  { id: "componentes", icon: "🧩", label: "Componentes" },
+function ScaledScreen({ url, activeItem, children }: {
+  url: string;
+  activeItem: string;
+  children: React.ReactNode;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => {
+      const available = el.offsetWidth;
+      setScale(available >= FRAME_W ? 1 : available / FRAME_W);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    // Outer: clips to the scaled height so it doesn't leave a gap
+    <div
+      ref={wrapRef}
+      style={{
+        width: "100%",
+        height: Math.round(FRAME_H * scale),
+        overflow: "hidden",
+        borderRadius: 10,
+        position: "relative",
+      }}
+    >
+      {/* Inner: fixed 860×420, scaled from top-left */}
+      <div style={{
+        width: FRAME_W,
+        height: FRAME_H,
+        transform: `scale(${scale})`,
+        transformOrigin: "top left",
+        borderRadius: 10,
+        border: `1px solid ${L_BORDER}`,
+        overflow: "hidden",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.10), 0 1.5px 4px rgba(0,0,0,0.06)",
+        display: "flex",
+        flexDirection: "column",
+      }}>
+        <ChromeBar url={url} />
+        <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+          <ProductSidebar activeItem={activeItem} />
+          <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── PRODUCT SHOWCASE ─────────────────────────────────────────────────────────
+
+function ShowcaseTag({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{
+      padding: "4px 12px", borderRadius: 999,
+      border: `1px solid ${BORDER2}`, background: BG3,
+      fontFamily: "Inter, sans-serif", fontSize: 12, color: TEXT_2,
+      display: "inline-block",
+    }}>{children}</span>
+  );
+}
+
+interface ShowcaseRowProps {
+  title: string;
+  tags: string[];
+  url: string;
+  activeItem: string;
+  children: React.ReactNode;
+  flip?: boolean;
+}
+
+function ShowcaseRow({ title, tags, url, activeItem, children, flip = false }: ShowcaseRowProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+
+  const contentCol = (
+    <motion.div
+      initial={{ opacity: 0, x: flip ? 24 : -24 }}
+      animate={inView ? { opacity: 1, x: 0 } : {}}
+      transition={{ duration: 0.6, ease: E1 }}
+      className="spo-showcase-content"
+      style={{
+        width: 280, flexShrink: 0,
+        display: "flex", flexDirection: "column",
+        justifyContent: "center", gap: 16,
+        paddingRight: flip ? 0 : 8, paddingLeft: flip ? 8 : 0,
+      }}
+    >
+      <h3 style={{
+        fontFamily: "Inter, sans-serif", fontSize: 20, fontWeight: 700,
+        color: TEXT_1, lineHeight: 1.25, letterSpacing: "-0.02em",
+        margin: 0,
+      }}>{title}</h3>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {tags.map(t => <ShowcaseTag key={t}>{t}</ShowcaseTag>)}
+      </div>
+    </motion.div>
+  );
+
+  const screenCol = (
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.7, ease: E1, delay: 0.1 }}
+      style={{ flex: 1, minWidth: 0 }}
+    >
+      <ScaledScreen url={url} activeItem={activeItem}>
+        {children}
+      </ScaledScreen>
+    </motion.div>
+  );
+
+  return (
+    <div
+      ref={ref}
+      className="spo-showcase-row"
+      style={{
+        display: "flex", alignItems: "center",
+        gap: 40,
+        flexDirection: flip ? "row-reverse" : "row",
+      }}
+    >
+      {contentCol}
+      {screenCol}
+    </div>
+  );
+}
+
+function ProductShowcase() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 72 }}>
+
+      {/* Tela 1: Início */}
+      <ShowcaseRow
+        title="Painel inicial"
+        tags={["Visão geral em tempo real", "Alertas automáticos", "Acesso rápido"]}
+        url="app.superelements.io/inicio"
+        activeItem="Início"
+      >
+        <MockupInicio />
+      </ShowcaseRow>
+
+      {/* Tela 2: Clientes */}
+      <ShowcaseRow
+        title="Todos os clientes num lugar"
+        tags={["Domínio e área de atuação", "Score de performance", "Status de conexão"]}
+        url="app.superelements.io/clientes"
+        activeItem="Clientes"
+        flip
+      >
+        <MockupClientes />
+      </ShowcaseRow>
+
+      {/* Tela 3: Detalhe de cliente */}
+      <ShowcaseRow
+        title="Todas as páginas de um cliente"
+        tags={["URLs indexadas", "Score por página", "Sincronização diária"]}
+        url="app.superelements.io/clientes/torres-advocacia"
+        activeItem="Clientes"
+      >
+        <MockupClienteDetalhe />
+      </ShowcaseRow>
+
+      {/* Tela 4: Componentes */}
+      <ShowcaseRow
+        title="1.900+ componentes Elementor"
+        tags={["Filtros por nicho", "Pronto para usar", "Atualizado semanalmente"]}
+        url="app.superelements.io/componentes"
+        activeItem="Componentes"
+        flip
+      >
+        <MockupComponentes />
+      </ShowcaseRow>
+
+    </div>
+  );
+}
+
+// ─── PRODUCT MOCKUPS ──────────────────────────────────────────────────────────
+
+// Light theme tokens (produto real)
+const L_BG      = "#f7f7f8";
+const L_WHITE   = "#ffffff";
+const L_BORDER  = "#e5e7eb";
+const L_TEXT1   = "#111827";
+const L_TEXT2   = "#6b7280";
+const L_TEXT3   = "#9ca3af";
+const L_GREEN   = "#D2F525"; // verde primário real
+
+// Sidebar nav items do produto real
+const REAL_NAV = [
+  { label: "Início",      active: false },
+  { label: "Clientes",    active: false },
+  { label: "Propostas",   active: false },
+  { label: "Recursos",    active: false },
+  { label: "Componentes", active: false },
 ];
 
-function Dashboard() {
-  const [active, setActive] = useState<NavId>("inicio");
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-80px" });
+function ProductSidebar({ activeItem }: { activeItem: string }) {
+  return (
+    <div style={{
+      width: 160, background: L_WHITE, borderRight: `1px solid ${L_BORDER}`,
+      display: "flex", flexDirection: "column", flexShrink: 0,
+    }} className="spo-dash-sidebar">
+      {/* Logo area */}
+      <div style={{ padding: "12px 12px 10px", borderBottom: `1px solid ${L_BORDER}` }}>
+        <LogoSVG size={20} />
+      </div>
+      {/* Nav */}
+      <nav style={{ padding: "8px 8px", flex: 1 }}>
+        {REAL_NAV.map(item => {
+          const isActive = item.label === activeItem;
+          return (
+            <div key={item.label} style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "7px 10px", borderRadius: 8, marginBottom: 2,
+              background: isActive ? L_GREEN : "transparent",
+              color: isActive ? "#111" : L_TEXT2,
+              fontSize: 13, fontWeight: isActive ? 600 : 400,
+              fontFamily: "Inter, sans-serif",
+            }}>{item.label}</div>
+          );
+        })}
+      </nav>
+      {/* Workspace badge */}
+      <div style={{
+        margin: "8px", padding: "10px 12px", borderRadius: 10,
+        border: `1px solid ${L_BORDER}`, background: L_BG,
+      }}>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: L_TEXT3, marginBottom: 4, fontFamily: "Inter, sans-serif" }}>WORKSPACE ATIVO</div>
+        <div style={{ color: L_TEXT1, fontSize: 13, fontWeight: 700, fontFamily: "Inter, sans-serif" }}>Ousen</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3 }}>
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e" }} />
+          <span style={{ color: "#22c55e", fontSize: 10, fontWeight: 600, fontFamily: "Inter, sans-serif" }}>Ativo</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
+function ChromeBar({ url }: { url: string }) {
+  return (
+    <div style={{
+      background: "#f0f0f0", padding: "8px 14px",
+      display: "flex", alignItems: "center", gap: 10,
+      borderBottom: `1px solid ${L_BORDER}`,
+    }}>
+      <div style={{ display: "flex", gap: 5 }}>
+        {["#ff5f57","#ffbd2e","#28c840"].map(c => (
+          <div key={c} style={{ width: 10, height: 10, borderRadius: "50%", background: c }} />
+        ))}
+      </div>
+      <div style={{
+        flex: 1, background: "white", borderRadius: 5, border: `1px solid ${L_BORDER}`,
+        padding: "3px 12px", fontSize: 11, color: L_TEXT3, fontFamily: "monospace",
+      }}>{url}</div>
+    </div>
+  );
+}
+
+function MockupFrame({ children, url, label }: { children: React.ReactNode; url: string; label: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: 40 }}
+      initial={{ opacity: 0, y: 32 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.8, ease: E1 }}
-      style={{
-        borderRadius: 12, border: `1px solid ${BORDER2}`, overflow: "hidden",
-        boxShadow: `0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px ${BORDER}`,
-      }}
+      transition={{ duration: 0.7, ease: E1 }}
     >
-      {/* Chrome bar */}
+      {/* Label acima do frame */}
       <div style={{
-        background: BG3, padding: "10px 16px",
-        display: "flex", alignItems: "center", gap: 12,
-        borderBottom: `1px solid ${BORDER}`,
+        display: "flex", alignItems: "center", gap: 10, marginBottom: 12,
       }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          {["#ff5f57","#ffbd2e","#28c840"].map(c => (
-            <div key={c} style={{ width: 11, height: 11, borderRadius: "50%", background: c }} />
-          ))}
-        </div>
-        <div style={{
-          flex: 1, background: "rgba(255,255,255,0.05)", borderRadius: 5,
-          padding: "4px 13px", fontSize: 11, color: TEXT_3,
-          fontFamily: "monospace",
-        }}>
-          app.superelements.io/dashboard
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {["Compartilhar","•••"].map(l => (
-            <div key={l} style={{
-              padding: "3px 8px", borderRadius: 5,
-              background: "rgba(255,255,255,0.04)",
-              color: TEXT_3, fontSize: 10,
-            }}>{l}</div>
-          ))}
-        </div>
+        <div style={{ width: 3, height: 16, borderRadius: 2, background: GREEN }} />
+        <span style={{
+          fontFamily: "Inter, sans-serif", fontSize: 11, fontWeight: 700,
+          letterSpacing: "0.10em", textTransform: "uppercase", color: TEXT_3,
+        }}>{label}</span>
       </div>
 
-      <div style={{ display: "flex", height: 500 }}>
-        {/* Sidebar */}
-        <div className="spo-dash-sidebar" style={{
-          width: 200, background: BG2,
-          borderRight: `1px solid ${BORDER}`,
-          display: "flex", flexDirection: "column", padding: "12px 0", flexShrink: 0,
-        }}>
-          {/* Logo no sidebar */}
-          <div style={{
-            padding: "0 12px 12px",
-            borderBottom: `1px solid ${BORDER}`, marginBottom: 6,
-          }}>
-            <LogoSVG size={18} />
-          </div>
-
-          <nav style={{ flex: 1, padding: "0 6px" }}>
-            {navItems.map(item => (
-              <motion.button
-                key={item.id}
-                onClick={() => setActive(item.id)}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", gap: 8,
-                  padding: "7px 9px", borderRadius: 6, border: "none",
-                  background: "transparent",
-                  color: active === item.id ? TEXT_1 : TEXT_3,
-                  fontSize: 12.5,
-                  fontWeight: active === item.id ? 600 : 400,
-                  fontFamily: "Inter, sans-serif",
-                  cursor: "pointer", textAlign: "left", marginBottom: 1, position: "relative",
-                }}
-                whileHover={{ backgroundColor: active === item.id ? undefined : "rgba(255,255,255,0.04)" }}
-              >
-                {active === item.id && (
-                  <motion.span
-                    layoutId="spo-nav-pill"
-                    style={{
-                      position: "absolute", inset: 0, borderRadius: 6,
-                      background: `${GREEN}18`, border: `1px solid ${GREEN}44`,
-                    }}
-                    transition={{ type: "spring", stiffness: 420, damping: 30 }}
-                  />
-                )}
-                <span style={{ fontSize: 13, position: "relative", zIndex: 1 }}>{item.icon}</span>
-                <span style={{ position: "relative", zIndex: 1 }}>{item.label}</span>
-              </motion.button>
-            ))}
-          </nav>
-
-          <div style={{
-            margin: "0 6px", padding: "9px 11px", borderRadius: 7,
-            border: `1px solid ${BORDER}`,
-            background: "rgba(255,255,255,0.02)",
-          }}>
-            <div style={{
-              fontSize: 9, fontWeight: 600, letterSpacing: "0.1em",
-              color: TEXT_3, textTransform: "uppercase",
-              marginBottom: 4, fontFamily: "Inter, sans-serif",
-            }}>WORKSPACE</div>
-            <div style={{ color: TEXT_1, fontSize: 12, fontWeight: 600, marginBottom: 4, fontFamily: "Inter, sans-serif" }}>Ousen</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <motion.div
-                style={{ width: 6, height: 6, borderRadius: "50%", background: GREEN }}
-                animate={{ opacity: [1, 0.35, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              />
-              <span style={{ color: GREEN, fontSize: 10, fontWeight: 600, fontFamily: "Inter, sans-serif" }}>Ativo</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Main panel */}
-        <div style={{ flex: 1, overflow: "auto", padding: "18px 20px", background: BG }}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={active}
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18, ease: E2 }}
-            >
-              {active === "inicio"      && <DScreenInicio />}
-              {active === "clientes"    && <DScreenClientes />}
-              {active === "paginas"     && <DScreenPaginas />}
-              {active === "propostas"   && <DScreenPropostas />}
-              {active === "recursos"    && <DScreenRecursos />}
-              {active === "componentes" && <DScreenComponentes />}
-            </motion.div>
-          </AnimatePresence>
+      <div style={{
+        borderRadius: 10, border: `1px solid ${L_BORDER}`, overflow: "hidden",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.10), 0 1.5px 4px rgba(0,0,0,0.06)",
+      }}>
+        <ChromeBar url={url} />
+        <div style={{ display: "flex" }}>
+          {children}
         </div>
       </div>
     </motion.div>
   );
 }
 
-// ─── Dashboard Screens ─────────────────────────────────────────────────────────
+// ── Tela 1: Início ─────────────────────────────────────────────────────────────
 
-const DS = {
-  primary: TEXT_1,
-  sub: TEXT_2,
-  muted: TEXT_3,
-  accent: GREEN,
-  border: BORDER,
-  card: BG2,
-};
-
-function DScreenInicio() {
-  const kpis = [
-    { label: "Clientes ativos", value: "8",  hi: false },
-    { label: "Conectados",      value: "8",  hi: true  },
-    { label: "Páginas live",    value: "24", hi: false },
-    { label: "Em produção",     value: "3",  hi: false },
+function MockupInicio() {
+  const stats = [
+    { label: "Total de Clientes", value: "8", icon: "👥", noteRed: false },
+    { label: "Conectados",        value: "5", icon: "✓",  note: "online", noteRed: false },
+    { label: "Com Problema",      value: "1", icon: "⚠",  note: "atenção", noteRed: true },
+    { label: "Propostas Ativas",  value: "5", icon: "📄",  note: "em aberto", noteRed: false },
   ];
-  const rows = [
-    { name: "dr-joao-advogados.com.br",  pages: "5 págs.", upd: "Hoje"  },
-    { name: "escritorio-silva.com.br",   pages: "3 págs.", upd: "Hoje"  },
-    { name: "advocacia-torres.com",      pages: "8 págs.", upd: "Ontem" },
+  const clients = [
+    { name: "Dra. Camila Mendes",           url: "camilamendes-adv.com.br",  pages: "2 páginas",  date: "18/02/2024", status: "Erro",         statusColor: "#ef4444", statusBg: "#fef2f2" },
+    { name: "Lima Tributário Consultores",   url: "limatributario.com.br",    pages: "—",          date: "10/02/2024", status: "Desconectado", statusColor: L_TEXT3,  statusBg: L_BG },
+    { name: "Barbosa Advocacia Trabalhista", url: "barbosatrabalhista.com.br", pages: "—",         date: "Nunca testado", status: "Conectando...", statusColor: "#f59e0b", statusBg: "#fffbeb" },
+    { name: "Dr. João Advogados",            url: "dr-joao-advogados.com.br", pages: "5 páginas", date: "20/02/2024", status: "Conectado",    statusColor: "#16a34a", statusBg: "#f0fdf4" },
+    { name: "Escritório Silva & Associados", url: "escritorio-silva.com.br",  pages: "3 páginas", date: "20/02/2024", status: "Conectado",    statusColor: "#16a34a", statusBg: "#f0fdf4" },
   ];
   return (
-    <div>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ color: DS.primary, fontWeight: 700, fontSize: 15, marginBottom: 2, fontFamily: "Inter, sans-serif" }}>Boa tarde, Ousen 👋</div>
-        <div style={{ color: DS.muted, fontSize: 11, fontFamily: "Inter, sans-serif" }}>Visão geral dos seus projetos ativos no nicho jurídico</div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 16 }}>
-        {kpis.map(k => (
-          <div key={k.label} style={{
-            borderRadius: 8,
-            border: k.hi ? `1px solid ${GREEN}55` : `1px solid ${DS.border}`,
-            background: k.hi ? `${GREEN}15` : DS.card,
-            padding: "11px 12px",
-          }}>
-            <div style={{ color: k.hi ? GREEN : DS.primary, fontWeight: 800, fontSize: 22, marginBottom: 2, fontFamily: "Inter, sans-serif" }}>{k.value}</div>
-            <div style={{ color: DS.muted, fontSize: 10, fontFamily: "Inter, sans-serif" }}>{k.label}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ borderRadius: 8, border: `1px solid ${DS.border}`, background: DS.card, padding: "12px 14px" }}>
-        <div style={{ color: DS.primary, fontWeight: 600, fontSize: 12, marginBottom: 3, fontFamily: "Inter, sans-serif" }}>Carteira de Clientes</div>
-        <div style={{ color: DS.muted, fontSize: 10, marginBottom: 11, fontFamily: "Inter, sans-serif" }}>Todas as contas operando normalmente</div>
-        {rows.map((r, i) => (
-          <div key={r.name} style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "7px 0",
-            borderBottom: i < rows.length - 1 ? `1px solid ${DS.border}` : "none",
-          }}>
-            <span style={{ color: DS.sub, fontSize: 11, fontFamily: "Inter, sans-serif" }}>{r.name}</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <span style={{ color: DS.muted, fontSize: 10, fontFamily: "Inter, sans-serif" }}>{r.pages}</span>
-              <span style={{ color: DS.muted, fontSize: 10, fontFamily: "Inter, sans-serif" }}>{r.upd}</span>
-              <span style={{ color: GREEN, fontSize: 10, fontWeight: 600, fontFamily: "Inter, sans-serif" }}>● Conectado</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DScreenClientes() {
-  const cl = [
-    { name: "Dr. João Advogados",       domain: "dr-joao-advogados.com.br", niche: "Dir. Trabalhista", pages: 5, score: "98/100" },
-    { name: "Escritório Silva & Assoc.", domain: "escritorio-silva.com.br",  niche: "Dir. Civil",       pages: 3, score: "94/100" },
-    { name: "Advocacia Torres",          domain: "advocacia-torres.com",     niche: "Dir. Criminal",    pages: 8, score: "91/100" },
-    { name: "Dra. Camila Mendes",        domain: "camilamendes-adv.com.br",  niche: "Dir. Família",     pages: 2, score: "96/100" },
-  ];
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+    <div style={{ flex: 1, background: L_BG, overflow: "hidden", padding: "20px 24px", height: "100%" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: L_WHITE, borderRadius: 16, padding: "16px 20px", marginBottom: 16, border: `1px solid ${L_BORDER}` }}>
         <div>
-          <div style={{ color: DS.primary, fontWeight: 700, fontSize: 14, fontFamily: "Inter, sans-serif" }}>Carteira de Clientes</div>
-          <div style={{ color: DS.muted, fontSize: 10, marginTop: 2, fontFamily: "Inter, sans-serif" }}>8 clientes · todos conectados</div>
+          <div style={{ fontFamily: "Inter, sans-serif", fontSize: 18, fontWeight: 700, color: L_TEXT1 }}>Boa tarde, Ousen</div>
+          <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: L_TEXT2, marginTop: 2 }}>Visão geral da sua operação</div>
         </div>
-        <button style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid ${GREEN}55`, background: `${GREEN}15`, color: GREEN, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>+ Novo</button>
-      </div>
-      {cl.map(c => (
-        <div key={c.name} style={{ borderRadius: 8, border: `1px solid ${DS.border}`, background: DS.card, padding: "10px 13px", marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ color: DS.primary, fontWeight: 600, fontSize: 12, fontFamily: "Inter, sans-serif" }}>{c.name}</div>
-            <div style={{ color: DS.muted, fontSize: 10, marginTop: 2, fontFamily: "Inter, sans-serif" }}>{c.domain} · {c.niche}</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ color: DS.muted, fontSize: 10, fontFamily: "Inter, sans-serif" }}>{c.pages} págs.</span>
-            <span style={{ color: GREEN, fontSize: 11, fontWeight: 700, fontFamily: "Inter, sans-serif" }}>{c.score}</span>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: GREEN }} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function DScreenPaginas() {
-  const rows = [
-    { name: "Home",                       url: "advocacia-torres.com/",  speed: "97", sc: "#4ade80", status: "Live" },
-    { name: "Landing — Dir. Criminal",    url: "/direito-criminal",      speed: "91", sc: "#4ade80", status: "Live" },
-    { name: "Landing — Defesa Penal",     url: "/defesa-penal",          speed: "88", sc: "#facc15", status: "Live" },
-    { name: "Obrigado — Lead Captado",    url: "/obrigado",              speed: "99", sc: "#4ade80", status: "Live" },
-    { name: "Landing — Prisão Flagrante", url: "/prisao-flagrante",      speed: "93", sc: "#4ade80", status: "Live" },
-    { name: "Nova página",                url: "—",                      speed: "—",  sc: DS.muted,  status: "Em produção" },
-  ];
-  return (
-    <div>
-      <div style={{ color: DS.muted, fontSize: 10, marginBottom: 8, fontFamily: "Inter, sans-serif" }}>Clientes → Advocacia Torres → Páginas</div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }}>
-        <div>
-          <div style={{ color: DS.primary, fontWeight: 700, fontSize: 13, fontFamily: "Inter, sans-serif" }}>Advocacia Torres</div>
-          <div style={{ color: DS.muted, fontSize: 10, marginTop: 2, fontFamily: "Inter, sans-serif" }}>advocacia-torres.com · 8 páginas · performance média 93/100</div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: GREEN }} />
-          <span style={{ color: GREEN, fontSize: 10, fontWeight: 600, fontFamily: "Inter, sans-serif" }}>Conectado</span>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${L_BORDER}`, background: L_WHITE, fontSize: 12, fontWeight: 500, color: L_TEXT2, fontFamily: "Inter, sans-serif" }}>Clientes</div>
+          <div style={{ padding: "6px 12px", borderRadius: 8, background: L_GREEN, fontSize: 12, fontWeight: 600, color: "#111", fontFamily: "Inter, sans-serif" }}>+ Novo Cliente</div>
         </div>
       </div>
-      <div style={{ borderRadius: 8, border: `1px solid ${DS.border}`, overflow: "hidden" }}>
-        {rows.map((r, i) => (
+      {/* KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
+        {stats.map((s, i) => (
           <div key={i} style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "8px 12px",
-            borderBottom: i < rows.length - 1 ? `1px solid ${DS.border}` : "none",
-            background: i % 2 === 0 ? DS.card : "transparent",
+            background: i === 2 ? "#fef2f2" : L_WHITE,
+            border: `1px solid ${i === 2 ? "#fca5a5" : L_BORDER}`,
+            borderRadius: 12, padding: "14px 16px",
           }}>
-            <div>
-              <div style={{ color: DS.sub, fontSize: 11, fontWeight: 500, fontFamily: "Inter, sans-serif" }}>{r.name}</div>
-              <div style={{ color: DS.muted, fontSize: 9, marginTop: 1, fontFamily: "Inter, sans-serif" }}>{r.url}</div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <span style={{ color: r.sc, fontSize: 11, fontWeight: 700, fontFamily: "Inter, sans-serif" }}>{r.speed !== "—" ? `${r.speed}/100` : "—"}</span>
-              <span style={{
-                color: r.status === "Live" ? GREEN : "rgba(255,180,50,0.9)",
-                fontSize: 9, fontWeight: 600, padding: "2px 8px", borderRadius: 999,
-                background: r.status === "Live" ? `${GREEN}20` : "rgba(255,180,50,0.12)",
-                fontFamily: "Inter, sans-serif",
-              }}>{r.status}</span>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontFamily: "Inter, sans-serif", fontSize: 11, color: L_TEXT2, marginBottom: 4 }}>{s.label}</div>
+                <div style={{ fontFamily: "Inter, sans-serif", fontSize: 26, fontWeight: 800, color: i === 2 ? "#ef4444" : i === 1 ? "#16a34a" : L_TEXT1, lineHeight: 1 }}>{s.value}</div>
+              </div>
+              {s.noteRed && <span style={{ fontSize: 10, color: "#ef4444", background: "#fef2f2", padding: "2px 7px", borderRadius: 999, fontFamily: "Inter, sans-serif", fontWeight: 600, border: "1px solid #fca5a5" }}>{s.note}</span>}
             </div>
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-function DScreenPropostas() {
-  const cols = [
-    { label: "Em aberto",   color: "#facc15", cards: [{ client: "Dra. Roberta Fonseca", svc: "Landing Dir. Prev.",  val: "R$1.800" }] },
-    { label: "Em produção", color: "#60a5fa", cards: [{ client: "Advocacia Torres",     svc: "Nova landing page",   val: "R$600" }, { client: "Dr. João Advogados", svc: "Obrigado + Upsell", val: "R$600" }] },
-    { label: "Entregue",    color: GREEN,     cards: [{ client: "Escritório Silva",      svc: "Home + 2 Landings",  val: "R$1.800" }] },
-  ];
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div>
-          <div style={{ color: DS.primary, fontWeight: 700, fontSize: 14, fontFamily: "Inter, sans-serif" }}>Propostas</div>
-          <div style={{ color: DS.muted, fontSize: 10, marginTop: 2, fontFamily: "Inter, sans-serif" }}>Pipeline comercial · 4 propostas ativas</div>
+      {/* Carteira */}
+      <div style={{ background: L_WHITE, borderRadius: 16, border: `1px solid ${L_BORDER}`, overflow: "hidden" }}>
+        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${L_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 14, fontWeight: 700, color: L_TEXT1 }}>Carteira de Clientes</div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 11, color: L_TEXT2, marginTop: 1 }}>1 conta precisando de atenção</div>
+          </div>
+          <span style={{ fontFamily: "Inter, sans-serif", fontSize: 11, color: L_TEXT2, cursor: "pointer" }}>Ver todos →</span>
         </div>
-        <button style={{ padding: "5px 10px", borderRadius: 5, border: `1px solid ${GREEN}55`, background: `${GREEN}15`, color: GREEN, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>+ Nova</button>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
-        {cols.map(col => (
-          <div key={col.label}>
-            <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 8 }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: col.color }} />
-              <span style={{ color: DS.muted, fontSize: 10, fontWeight: 600, fontFamily: "Inter, sans-serif" }}>{col.label}</span>
-              <span style={{ color: DS.muted, fontSize: 9, marginLeft: "auto", fontFamily: "Inter, sans-serif" }}>{col.cards.length}</span>
+        {clients.map((c, i) => (
+          <div key={i} style={{
+            display: "flex", alignItems: "center", padding: "10px 18px",
+            borderBottom: i < clients.length - 1 ? `1px solid ${L_BORDER}` : "none",
+            gap: 12,
+          }}>
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: c.statusColor, flexShrink: 0 }} />
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: L_BG, border: `1px solid ${L_BORDER}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ fontSize: 10 }}>🌐</span>
             </div>
-            {col.cards.map((card, i) => (
-              <div key={i} style={{ borderRadius: 7, border: `1px solid ${DS.border}`, background: DS.card, padding: "9px 11px", marginBottom: 6 }}>
-                <div style={{ color: DS.primary, fontWeight: 600, fontSize: 11, fontFamily: "Inter, sans-serif" }}>{card.client}</div>
-                <div style={{ color: DS.muted, fontSize: 9.5, margin: "3px 0 5px", fontFamily: "Inter, sans-serif" }}>{card.svc}</div>
-                <div style={{ color: col.color, fontWeight: 700, fontSize: 12, fontFamily: "Inter, sans-serif" }}>{card.val}</div>
-              </div>
-            ))}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 600, color: L_TEXT1 }}>{c.name}</div>
+              <div style={{ fontFamily: "Inter, sans-serif", fontSize: 10, color: L_TEXT3, marginTop: 1 }}>{c.url}</div>
+            </div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 10, color: L_TEXT3, flexShrink: 0 }}>{c.pages}</div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 10, color: L_TEXT3, flexShrink: 0 }}>{c.date}</div>
+            <div style={{ padding: "2px 10px", borderRadius: 999, background: c.statusBg, color: c.statusColor, fontSize: 10, fontWeight: 600, fontFamily: "Inter, sans-serif", border: `1px solid ${c.statusColor}33`, flexShrink: 0 }}>{c.status}</div>
           </div>
         ))}
       </div>
@@ -903,81 +930,198 @@ function DScreenPropostas() {
   );
 }
 
-function DScreenRecursos() {
-  const cats = [
-    { name: "Templates de Briefing", items: [
-      { name: "Briefing — Landing Jurídica",    type: "PDF", dl: 12 },
-      { name: "Briefing — Site Institucional",  type: "PDF", dl: 7  },
-      { name: "Checklist de Entrega",           type: "PDF", dl: 19 },
-    ]},
-    { name: "Templates Elementor", items: [
-      { name: "Kit Jurídico — Advocacia Criminal", type: "ZIP", dl: 24 },
-      { name: "Kit Jurídico — Família",            type: "ZIP", dl: 18 },
-      { name: "Kit — Previdenciário",              type: "ZIP", dl: 11 },
-    ]},
+// ── Tela 2: Clientes (detalhe) ─────────────────────────────────────────────────
+
+function MockupClientes() {
+  const clients = [
+    { name: "Dr. João Advogados",           url: "dr-joao-advogados.com.br",  area: "Dir. Trabalhista", pages: 5,  score: 94, status: "Conectado", sc: "#16a34a", sb: "#f0fdf4" },
+    { name: "Escritório Silva & Associados", url: "escritorio-silva.com.br",   area: "Dir. Civil",       pages: 3,  score: 92, status: "Conectado", sc: "#16a34a", sb: "#f0fdf4" },
+    { name: "Torres Advocacia Criminal",     url: "advocacia-torres.com",      area: "Dir. Criminal",    pages: 8,  score: 93, status: "Conectado", sc: "#16a34a", sb: "#f0fdf4" },
+    { name: "Ramos & Ramos Previdenciário",  url: "ramosprevidenciario.adv.br", area: "Previdenciário",  pages: 6,  score: 90, status: "Conectado", sc: "#16a34a", sb: "#f0fdf4" },
+    { name: "Ferreira Direito de Família",   url: "ferreirafamilia.adv.br",    area: "Dir. Família",     pages: 4,  score: 97, status: "Conectado", sc: "#16a34a", sb: "#f0fdf4" },
+    { name: "Dra. Camila Mendes",            url: "camilamendes-adv.com.br",   area: "Dir. Família",     pages: 2,  score: null, status: "Erro",   sc: "#ef4444", sb: "#fef2f2" },
+    { name: "Barbosa Advocacia Trabalhista", url: "barbosatrabalhista.com.br", area: "Dir. Trabalhista", pages: null, score: null, status: "Conectando...", sc: "#f59e0b", sb: "#fffbeb" },
+    { name: "Lima Tributário Consultores",   url: "limatributario.com.br",     area: "Dir. Tributário",  pages: null, score: null, status: "Desconectado", sc: L_TEXT3, sb: L_BG },
   ];
   return (
-    <div>
-      <div style={{ color: DS.primary, fontWeight: 700, fontSize: 14, marginBottom: 3, fontFamily: "Inter, sans-serif" }}>Recursos</div>
-      <div style={{ color: DS.muted, fontSize: 10, marginBottom: 16, fontFamily: "Inter, sans-serif" }}>Templates, briefings e arquivos do parceiro</div>
-      {cats.map(cat => (
-        <div key={cat.name} style={{ marginBottom: 18 }}>
-          <div style={{ color: DS.muted, fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8, fontFamily: "Inter, sans-serif" }}>{cat.name}</div>
-          {cat.items.map(item => (
-            <div key={item.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 11px", borderRadius: 6, border: `1px solid ${DS.border}`, background: DS.card, marginBottom: 5 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13 }}>{item.type === "PDF" ? "📄" : "📦"}</span>
-                <span style={{ color: DS.sub, fontSize: 11, fontFamily: "Inter, sans-serif" }}>{item.name}</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ color: DS.muted, fontSize: 9.5, fontFamily: "Inter, sans-serif" }}>{item.dl} dl</span>
-                <span style={{ padding: "2px 7px", borderRadius: 999, background: "rgba(255,255,255,0.05)", color: DS.muted, fontSize: 9, fontWeight: 600, fontFamily: "Inter, sans-serif" }}>{item.type}</span>
-              </div>
-            </div>
+    <div style={{ flex: 1, background: L_BG, overflow: "hidden", padding: "20px 24px", height: "100%" }}>
+      <div style={{ background: L_WHITE, borderRadius: 16, border: `1px solid ${L_BORDER}`, overflow: "hidden" }}>
+        {/* Header */}
+        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${L_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 18, fontWeight: 700, color: L_TEXT1 }}>Clientes</div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: L_TEXT2, marginTop: 2 }}>8 contas · 5 conectadas</div>
+          </div>
+          <div style={{ padding: "6px 14px", borderRadius: 8, background: L_GREEN, fontSize: 12, fontWeight: 600, color: "#111", fontFamily: "Inter, sans-serif" }}>+ Novo</div>
+        </div>
+        {/* Search bar */}
+        <div style={{ padding: "10px 16px", borderBottom: `1px solid ${L_BORDER}`, background: L_BG }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: L_WHITE, border: `1px solid ${L_BORDER}`, borderRadius: 8, padding: "6px 12px" }}>
+            <span style={{ color: L_TEXT3, fontSize: 12 }}>🔍</span>
+            <span style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: L_TEXT3 }}>Buscar cliente...</span>
+          </div>
+        </div>
+        {/* Table header */}
+        <div style={{ display: "grid", gridTemplateColumns: "200px 130px 70px 80px 120px", padding: "8px 20px", background: L_BG, borderBottom: `1px solid ${L_BORDER}` }}>
+          {["Cliente", "Área", "Páginas", "Score", "Status"].map(h => (
+            <div key={h} style={{ fontFamily: "Inter, sans-serif", fontSize: 10, fontWeight: 700, color: L_TEXT3, letterSpacing: "0.08em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</div>
           ))}
         </div>
-      ))}
+        {/* Rows */}
+        {clients.map((c, i) => (
+          <div key={i} style={{
+            display: "grid", gridTemplateColumns: "200px 130px 70px 80px 120px",
+            padding: "10px 20px", alignItems: "center",
+            borderBottom: i < clients.length - 1 ? `1px solid ${L_BORDER}` : "none",
+            background: i % 2 === 0 ? L_WHITE : "#fafafa",
+          }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 600, color: L_TEXT1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
+              <div style={{ fontFamily: "Inter, sans-serif", fontSize: 10, color: L_TEXT3, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.url}</div>
+            </div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 11, color: L_TEXT2, whiteSpace: "nowrap" }}>{c.area}</div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 600, color: L_TEXT1 }}>{c.pages ?? "—"}</div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 700, color: c.score && c.score >= 90 ? "#16a34a" : c.score ? "#f59e0b" : L_TEXT3, whiteSpace: "nowrap" }}>{c.score ? `${c.score}/100` : "—"}</div>
+            <div style={{ padding: "3px 10px", borderRadius: 999, background: c.sb, color: c.sc, fontSize: 10, fontWeight: 600, fontFamily: "Inter, sans-serif", display: "inline-flex", alignItems: "center", border: `1px solid ${c.sc}33`, whiteSpace: "nowrap", width: "fit-content" }}>{c.status}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function DScreenComponentes() {
-  const [filter, setFilter] = useState("Jurídico");
-  const filters = ["Todos","Hero","CTA","Formulários","FAQ","Jurídico"];
+// ── Tela 3: Detalhe de cliente — Torres Advocacia Criminal ─────────────────────
+
+function MockupClienteDetalhe() {
+  const pages = [
+    { title: "Home",                  slug: "advocacia-torres.com",                    score: 96, status: "Publicada" },
+    { title: "Direito Criminal",      slug: "advocacia-torres.com/direito-criminal",   score: 93, status: "Publicada" },
+    { title: "Habeas Corpus",         slug: "advocacia-torres.com/habeas-corpus",      score: 91, status: "Publicada" },
+    { title: "Sobre o Escritório",    slug: "advocacia-torres.com/sobre",              score: 88, status: "Publicada" },
+    { title: "Áreas de Atuação",     slug: "advocacia-torres.com/areas-de-atuacao",  score: 87, status: "Publicada" },
+    { title: "Blog Jurídico",        slug: "advocacia-torres.com/blog",               score: 85, status: "Publicada" },
+    { title: "Contato",              slug: "advocacia-torres.com/contato",            score: 90, status: "Publicada" },
+    { title: "Depoimentos",          slug: "advocacia-torres.com/depoimentos",        score: 92, status: "Publicada" },
+  ];
+
+  const scoreColor = (s: number) => s >= 90 ? "#16a34a" : s >= 80 ? "#f59e0b" : "#ef4444";
+  const scoreBg    = (s: number) => s >= 90 ? "#f0fdf4" : s >= 80 ? "#fffbeb" : "#fef2f2";
+
+  return (
+    <div style={{ flex: 1, background: L_BG, overflow: "hidden", padding: "20px 24px", height: "100%" }}>
+      {/* Client header */}
+      <div style={{
+        background: L_WHITE, borderRadius: 16, border: `1px solid ${L_BORDER}`,
+        padding: "16px 20px", marginBottom: 14,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: "#3b1f1f", display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <span style={{ color: "#fff", fontSize: 14 }}>⚖</span>
+          </div>
+          <div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 16, fontWeight: 700, color: L_TEXT1 }}>Torres Advocacia Criminal</div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 11, color: L_TEXT2, marginTop: 1 }}>advocacia-torres.com · 8 páginas ativas</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ padding: "2px 10px", borderRadius: 999, background: "#f0fdf4", color: "#16a34a", fontSize: 10, fontWeight: 700, fontFamily: "Inter, sans-serif", border: "1px solid #16a34a33" }}>Conectado</div>
+          <div style={{ padding: "5px 12px", borderRadius: 8, background: L_GREEN, fontSize: 11, fontWeight: 600, color: "#111", fontFamily: "Inter, sans-serif" }}>+ Página</div>
+        </div>
+      </div>
+
+      {/* Pages table */}
+      <div style={{ background: L_WHITE, borderRadius: 16, border: `1px solid ${L_BORDER}`, overflow: "hidden" }}>
+        {/* Table header */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "140px 1fr 90px 100px",
+          padding: "8px 20px", background: L_BG, borderBottom: `1px solid ${L_BORDER}`,
+        }}>
+          {["Página", "URL", "Score", "Status"].map(h => (
+            <div key={h} style={{ fontFamily: "Inter, sans-serif", fontSize: 10, fontWeight: 700, color: L_TEXT3, letterSpacing: "0.08em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</div>
+          ))}
+        </div>
+        {pages.map((p, i) => (
+          <div key={i} style={{
+            display: "grid", gridTemplateColumns: "140px 1fr 90px 100px",
+            padding: "10px 20px", alignItems: "center",
+            borderBottom: i < pages.length - 1 ? `1px solid ${L_BORDER}` : "none",
+            background: i % 2 === 0 ? L_WHITE : "#fafafa",
+          }}>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 600, color: L_TEXT1, whiteSpace: "nowrap" }}>{p.title}</div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 10, color: L_TEXT3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>{p.slug}</div>
+            <div>
+              <div style={{
+                padding: "3px 9px", borderRadius: 999, display: "inline-flex", alignItems: "center",
+                background: scoreBg(p.score), color: scoreColor(p.score),
+                fontSize: 11, fontWeight: 700, fontFamily: "Inter, sans-serif",
+                border: `1px solid ${scoreColor(p.score)}33`, whiteSpace: "nowrap",
+              }}>{p.score}/100</div>
+            </div>
+            <div style={{ padding: "3px 10px", borderRadius: 999, background: "#f0fdf4", color: "#16a34a", fontSize: 10, fontWeight: 600, fontFamily: "Inter, sans-serif", display: "inline-flex", alignItems: "center", border: "1px solid #16a34a33", whiteSpace: "nowrap", width: "fit-content" }}>{p.status}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Tela 4: Biblioteca de Componentes ──────────────────────────────────────────
+
+function MockupComponentes() {
+  const [activeFilter, setActiveFilter] = useState("Jurídico");
+  const filters = ["Todos", "Hero", "CTA", "Formulários", "Depoimentos", "FAQ", "Jurídico"];
   const components = [
-    { name: "Hero — Advogado Dark",     cat: "Hero"       },
-    { name: "CTA — Consulta Gratuita",  cat: "CTA"        },
-    { name: "Form — Lead Jurídico",     cat: "Formulários" },
-    { name: "Depoimentos — Ganhos",     cat: "Depoimentos" },
-    { name: "FAQ — Dúvidas Jurídicas",  cat: "FAQ"        },
-    { name: "Área de Prática — Cards",  cat: "Jurídico"   },
+    { name: "Hero — Advogado Dark",       cat: "Hero",        preview: "linear-gradient(135deg,#1a1a2e,#16213e)" },
+    { name: "CTA — Consulta Gratuita",    cat: "CTA",         preview: "linear-gradient(135deg,#0f3460,#533483)" },
+    { name: "Form — Lead Jurídico",       cat: "Formulários", preview: "linear-gradient(135deg,#1b1b2f,#162447)" },
+    { name: "Depoimentos — Resultados",   cat: "Depoimentos", preview: "linear-gradient(135deg,#2c2c54,#474787)" },
+    { name: "FAQ — Dúvidas Jurídicas",    cat: "FAQ",         preview: "linear-gradient(135deg,#1a1a1a,#2d2d2d)" },
+    { name: "Área de Prática — Cards",    cat: "Jurídico",    preview: "linear-gradient(135deg,#0d0d0d,#1a1a1a)" },
+    { name: "Hero — Advogado Light",      cat: "Hero",        preview: "linear-gradient(135deg,#f5f5f5,#e8e8e8)" },
+    { name: "Seção Sobre — Perfil",       cat: "Jurídico",    preview: "linear-gradient(135deg,#f0fdf4,#dcfce7)" },
+    { name: "Contato — Mapa + Form",      cat: "Formulários", preview: "linear-gradient(135deg,#eff6ff,#dbeafe)" },
   ];
   return (
-    <div>
-      <div style={{ color: DS.primary, fontWeight: 700, fontSize: 13, marginBottom: 2, fontFamily: "Inter, sans-serif" }}>Biblioteca de Componentes</div>
-      <div style={{ color: DS.muted, fontSize: 10, marginBottom: 11, fontFamily: "Inter, sans-serif" }}>2.900+ componentes prontos pra usar no Elementor</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
+    <div style={{ flex: 1, background: L_BG, overflow: "hidden", padding: "20px 24px", height: "100%" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontFamily: "Inter, sans-serif", fontSize: 18, fontWeight: 700, color: L_TEXT1 }}>Biblioteca de Componentes</div>
+        <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: L_TEXT2, marginTop: 2 }}>1.900+ componentes prontos para Elementor · filtrados por nicho</div>
+      </div>
+      {/* Filters */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
         {filters.map(f => (
-          <button key={f} onClick={() => setFilter(f)} style={{
-            padding: "3px 9px", borderRadius: 999,
-            border: f === filter ? `1px solid ${GREEN}66` : `1px solid ${DS.border}`,
-            background: f === filter ? `${GREEN}18` : "transparent",
-            color: f === filter ? GREEN : DS.muted,
-            fontSize: 9.5, fontWeight: 600, cursor: "pointer",
-            fontFamily: "Inter, sans-serif",
+          <button key={f} onClick={() => setActiveFilter(f)} style={{
+            padding: "4px 12px", borderRadius: 999, border: "none",
+            background: f === activeFilter ? L_GREEN : L_WHITE,
+            color: f === activeFilter ? "#111" : L_TEXT2,
+            fontSize: 11, fontWeight: f === activeFilter ? 700 : 500,
+            cursor: "pointer", fontFamily: "Inter, sans-serif",
+            boxShadow: `0 0 0 1px ${f === activeFilter ? "transparent" : L_BORDER}`,
           }}>{f}</button>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 7 }}>
-        {components.map(c => (
-          <div key={c.name} style={{ borderRadius: 7, border: `1px solid ${DS.border}`, overflow: "hidden" }}>
-            <div style={{
-              height: 52,
-              background: `linear-gradient(135deg, ${BG3}, ${GREEN}22)`,
-            }} />
-            <div style={{ padding: "7px 9px", background: BG2 }}>
-              <div style={{ color: DS.sub, fontSize: 9.5, fontWeight: 600, fontFamily: "Inter, sans-serif" }}>{c.name}</div>
-              <div style={{ color: DS.muted, fontSize: 8.5, marginTop: 1, fontFamily: "Inter, sans-serif" }}>{c.cat}</div>
+      {/* Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
+        {components.map((c, i) => (
+          <div key={i} style={{ borderRadius: 10, border: `1px solid ${L_BORDER}`, overflow: "hidden", background: L_WHITE }}>
+            <div style={{ height: 64, background: c.preview, position: "relative" }}>
+              <div style={{
+                position: "absolute", top: 6, right: 6,
+                background: "rgba(0,0,0,0.35)", borderRadius: 4,
+                padding: "2px 7px", fontSize: 9, color: "rgba(255,255,255,0.8)",
+                fontFamily: "Inter, sans-serif",
+              }}>{c.cat}</div>
+            </div>
+            <div style={{ padding: "8px 10px" }}>
+              <div style={{ fontFamily: "Inter, sans-serif", fontSize: 11, fontWeight: 600, color: L_TEXT1 }}>{c.name}</div>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 5 }}>
+                <div style={{ padding: "2px 8px", borderRadius: 5, background: L_GREEN, fontSize: 9, fontWeight: 700, color: "#111", fontFamily: "Inter, sans-serif" }}>Usar</div>
+              </div>
             </div>
           </div>
         ))}
@@ -1000,9 +1144,9 @@ function PricingSection() {
 
   return (
     <section id="preco" style={{ padding: "80px 0" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 48px" }}>
+      <div className="spo-section-inner" style={{ maxWidth: 1100, margin: "0 auto", padding: "0 48px" }}>
         <Reveal style={{ marginBottom: 48 }}>
-          <Eyebrow>Entregáveis e investimento</Eyebrow>
+          <Eyebrow>Investimento</Eyebrow>
           <motion.h2
             variants={vFadeUp}
             style={{
@@ -1012,14 +1156,14 @@ function PricingSection() {
               margin: "16px 0 16px",
             }}
           >
-            Preço fixo.<br />
-            <span style={{ color: GREEN }}>Sem surpresas.</span>
+            Custo previsível.<br />
+            <span style={{ color: GREEN }}>Margem garantida.</span>
           </motion.h2>
           <motion.p variants={vFadeUp} style={{
             fontFamily: "Inter, sans-serif", fontSize: 16, color: TEXT_2,
             maxWidth: 560, lineHeight: 1.7,
           }}>
-            A Ousen sabe exatamente o custo antes de fechar qualquer contrato. Sem variação, sem negociação a cada projeto.
+            Modelo simples: a Ousen sabe exatamente quanto vai pagar antes de fechar cada contrato — e embolsa a diferença sem tocar na produção.
           </motion.p>
         </Reveal>
 
@@ -1032,18 +1176,22 @@ function PricingSection() {
             }}
           >
             {/* Header */}
-            <div style={{
+            <div className="spo-price-header" style={{
               display: "grid", gridTemplateColumns: "1fr 2fr 130px",
               background: BG2, borderBottom: `1px solid ${BORDER}`,
             }}>
-              {["Entregável", "O que está incluso", "Valor"].map((h, i) => (
-                <div key={h} style={{
+              {[
+                { label: "Entregável", cls: "" },
+                { label: "O que está incluso", cls: "spo-price-col-hd-tags" },
+                { label: "Valor", cls: "" },
+              ].map(({ label, cls }, i) => (
+                <div key={label} className={cls} style={{
                   padding: "11px 18px",
                   fontFamily: "Inter, sans-serif", fontSize: 10, fontWeight: 700,
                   letterSpacing: "0.12em", textTransform: "uppercase",
                   color: TEXT_3, textAlign: i === 2 ? "center" : "left",
                   borderLeft: i > 0 ? `1px solid ${BORDER}` : "none",
-                }}>{h}</div>
+                }}>{label}</div>
               ))}
             </div>
 
@@ -1053,6 +1201,7 @@ function PricingSection() {
             ].map((row, ri) => (
               <motion.div
                 key={row.name}
+                className="spo-price-table-grid"
                 whileHover={{ backgroundColor: BG3 }}
                 style={{
                   display: "grid", gridTemplateColumns: "1fr 2fr 130px",
@@ -1067,7 +1216,7 @@ function PricingSection() {
                     fontWeight: 600, color: TEXT_1,
                   }}>{row.name}</span>
                 </div>
-                <div style={{ padding: "16px 18px", borderLeft: `1px solid ${BORDER}`, display: "flex", flexWrap: "wrap", gap: 5, alignContent: "flex-start" }}>
+                <div className="spo-price-col-tags" style={{ padding: "16px 18px", borderLeft: `1px solid ${BORDER}`, display: "flex", flexWrap: "wrap", gap: 5, alignContent: "flex-start" }}>
                   {row.tags.map(tag => (
                     <span key={tag} style={{
                       padding: "2px 9px", borderRadius: 100,
@@ -1107,19 +1256,19 @@ function PricingSection() {
                 fontFamily: "Inter, sans-serif", fontSize: 10, fontWeight: 700,
                 letterSpacing: "0.12em", textTransform: "uppercase",
                 color: "rgba(0,0,0,0.45)", marginBottom: 10,
-              }}>Exemplo de margem</div>
+              }}>Como a margem funciona</div>
               <p style={{
                 fontFamily: "Inter, sans-serif",
                 fontWeight: 700, fontSize: 20, color: "#111",
                 lineHeight: 1.3, margin: "0 0 10px",
               }}>
-                A Ousen cobra R$1.500 do cliente
+                Ousen cobra R$1.500 → paga R$600 pra nós
               </p>
               <p style={{
                 fontFamily: "Inter, sans-serif", fontSize: 14, lineHeight: 1.65,
                 color: "rgba(0,0,0,0.6)", margin: 0,
               }}>
-                Paga R$600 pra nós → fica com <strong style={{ color: "#111" }}>R$900 líquido</strong> sem produzir nada, sem contratar ninguém, sem gerenciar um designer.
+                Fica com <strong style={{ color: "#111" }}>R$900 líquido por página</strong> — sem tocar na produção, sem gerenciar designer, sem preocupação com prazo.
               </p>
             </div>
             <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -1144,7 +1293,7 @@ function PricingSection() {
 
 function Footer() {
   return (
-    <footer style={{
+    <footer className="spo-footer" style={{
       maxWidth: 1100, margin: "0 auto", padding: "24px 48px",
       display: "flex", alignItems: "center", justifyContent: "space-between",
       flexWrap: "wrap", gap: 12,
@@ -1167,7 +1316,18 @@ const GLOBAL_CSS = `
     overflow-x: hidden;
   }
 
+  /* ── Showcase: frame fixo de 860px que escala no mobile ── */
+  .spo-screen-clip {
+    width: 100%;
+    overflow: hidden;
+    border-radius: 10px;
+  }
+  .spo-screen-frame {
+    /* largura fixa, transform-origin top left — JS calcula o scale */
+  }
+
   @media (max-width: 860px) {
+    /* Layout grids */
     .spo-hero-grid    { grid-template-columns: 1fr !important; }
     .spo-hero-aside   { display: none !important; }
     .spo-sol-grid     { grid-template-columns: 1fr !important; gap: 32px !important; }
@@ -1176,7 +1336,33 @@ const GLOBAL_CSS = `
     .spo-closing-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
     .spo-margin-grid  { grid-template-columns: 1fr !important; }
     .spo-hide-mobile  { display: none !important; }
+
+    /* Showcase: conteúdo acima, tela abaixo */
+    .spo-showcase-row {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 20px !important;
+    }
+    .spo-showcase-content {
+      width: 100% !important;
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+    }
+
+    /* Paddings laterais globais */
+    .spo-section-inner { padding-left: 20px !important; padding-right: 20px !important; }
+    .spo-hero-section  { padding: 100px 20px 60px !important; }
+    .spo-divider-wrap  { padding: 24px 0 32px !important; }
+    .spo-divider-inner { padding: 0 20px !important; }
+    .spo-footer        { padding: 20px !important; }
+
+    /* Pricing table: esconder colunas extras, simplificar */
+    .spo-price-table-grid { grid-template-columns: 1fr 110px !important; }
+    .spo-price-col-tags   { display: none !important; }
+    .spo-price-header     { grid-template-columns: 1fr 110px !important; }
+    .spo-price-col-hd-tags { display: none !important; }
   }
+
   @media (max-width: 700px) {
     .spo-dash-sidebar { display: none !important; }
   }
@@ -1207,19 +1393,13 @@ export default function StudioPartnersOusen() {
       <Nav />
       <Hero />
 
-      <div style={{ padding: "40px 0 48px" }}>
-        <SectionDivider label="O problema" />
-      </div>
-
-      <ProblemSection />
-
-      <div style={{ padding: "40px 0 48px" }}>
-        <SectionDivider label="A solução" />
+      <div className="spo-divider-wrap" style={{ padding: "40px 0 48px" }}>
+        <SectionDivider label="Como funciona" />
       </div>
 
       <SolutionSection />
 
-      <div style={{ padding: "40px 0 48px" }}>
+      <div className="spo-divider-wrap" style={{ padding: "40px 0 48px" }}>
         <SectionDivider label="Investimento" />
       </div>
 
