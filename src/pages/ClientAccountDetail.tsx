@@ -298,8 +298,16 @@ const PageCard = React.memo(({
 }: PageCardProps) => {
   const hasPreview = page.status === 'publish' && !!page.url;
 
+  // Truncate URL-style slug with ellipsis in the middle for long values
+  const formatSlug = (slug: string) => {
+    if (!slug) return '—';
+    const full = `/${slug}`;
+    if (full.length <= 28) return full;
+    return `/${slug.slice(0, 12)}...${slug.slice(-8)}`;
+  };
+
   return (
-    <div className="group rounded-2xl border border-gray-200/70 bg-white shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden flex flex-col">
+    <div className="group rounded-2xl border border-gray-200/70 bg-white shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 overflow-hidden flex flex-col">
       {/* Preview area */}
       <div className="aspect-[16/9] relative overflow-hidden bg-gray-50 flex-shrink-0">
         {isMock && hasPreview ? (
@@ -315,7 +323,7 @@ const PageCard = React.memo(({
 
         {/* Status badge — top left */}
         <div className="absolute top-2 left-2 z-10">
-          <Badge variant={getPageStatusBadge(page.status)} className="text-[10px] px-1.5 py-0.5">
+          <Badge variant={getPageStatusBadge(page.status)} className="text-[10px] px-1.5 py-0.5 shadow-sm">
             {getPageStatusLabel(page.status)}
           </Badge>
         </div>
@@ -336,8 +344,8 @@ const PageCard = React.memo(({
           ) : null}
         </div>
 
-        {/* Hover actions — bottom right */}
-        <div className="absolute bottom-2 right-2 z-10 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        {/* Actions — always visible on mobile, hover on desktop */}
+        <div className="absolute bottom-2 right-2 z-10 flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
           <button
             onClick={(e) => { e.stopPropagation(); onPageSpeed(page); }}
             className="h-7 w-7 rounded-lg bg-white/95 shadow-sm border border-gray-200/80 flex items-center justify-center hover:bg-white transition-colors"
@@ -352,16 +360,18 @@ const PageCard = React.memo(({
           >
             <RefreshCw className="h-3.5 w-3.5 text-gray-700" />
           </button>
-          <a
-            href={page.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="h-7 w-7 rounded-lg bg-white/95 shadow-sm border border-gray-200/80 flex items-center justify-center hover:bg-white transition-colors"
-            title="Abrir página"
-          >
-            <ExternalLink className="h-3.5 w-3.5 text-gray-700" />
-          </a>
+          {hasPreview && (
+            <a
+              href={page.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="h-7 w-7 rounded-lg bg-white/95 shadow-sm border border-gray-200/80 flex items-center justify-center hover:bg-white transition-colors"
+              title="Abrir página"
+            >
+              <ExternalLink className="h-3.5 w-3.5 text-gray-700" />
+            </a>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(page.id); }}
             className="h-7 w-7 rounded-lg bg-white/95 shadow-sm border border-gray-200/80 flex items-center justify-center hover:bg-red-50 hover:border-red-200 transition-colors"
@@ -373,11 +383,22 @@ const PageCard = React.memo(({
       </div>
 
       {/* Info footer */}
-      <div className="p-3 flex-1 flex flex-col justify-between">
-        <p className="text-sm font-semibold text-gray-900 line-clamp-1">{page.title}</p>
-        <div className="flex items-center justify-between mt-1.5">
-          <p className="text-xs text-muted-foreground truncate">/{page.slug || '—'}</p>
-          <p className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+      <div className="px-3 py-2.5 flex-1 flex flex-col justify-between gap-1">
+        {/* Title com truncate + tooltip nativo */}
+        <p
+          className="text-sm font-semibold text-gray-900 truncate leading-snug"
+          title={page.title}
+        >
+          {page.title}
+        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p
+            className="text-xs text-muted-foreground font-mono truncate"
+            title={`/${page.slug}`}
+          >
+            {formatSlug(page.slug)}
+          </p>
+          <p className="text-xs text-muted-foreground flex-shrink-0">
             {getRelativeTime(page.modified_date)}
           </p>
         </div>
@@ -848,37 +869,51 @@ const ClientAccountDetail = () => {
       >
         {/* ── Header ── */}
         <motion.section variants={itemVariants} className={sectionClass}>
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="flex items-start gap-4">
+          {/* Top row: back + title + badge + import button */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2 sm:gap-3 min-w-0">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => navigate('/client-accounts')}
-                className="-ml-2 mt-0.5"
+                className="-ml-2 mt-0.5 flex-shrink-0 px-2"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
-              <div>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-2xl font-bold text-gray-900">{connection.name}</h1>
-                  <Badge variant={connection.status === 'connected' ? 'default' : 'destructive'} className="capitalize">
+              <div className="min-w-0">
+                {/* Name + badge */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1
+                    className="text-xl sm:text-2xl font-bold text-gray-900 truncate max-w-[180px] sm:max-w-xs md:max-w-md lg:max-w-lg"
+                    title={connection.name}
+                  >
+                    {connection.name}
+                  </h1>
+                  <Badge
+                    variant={connection.status === 'connected' ? 'default' : 'destructive'}
+                    className="capitalize flex-shrink-0"
+                  >
                     {connection.status === 'connected' ? 'Conectado' : connection.status}
                   </Badge>
                 </div>
+
+                {/* URL */}
                 <a
                   href={connection.base_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 mt-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex items-center gap-1.5 mt-1 text-sm text-muted-foreground hover:text-foreground transition-colors min-w-0"
                 >
-                  <Globe className="h-3.5 w-3.5" />
-                  {connection.base_url}
-                  <ExternalLink className="h-3 w-3" />
+                  <Globe className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span className="truncate max-w-[200px] sm:max-w-xs md:max-w-sm">
+                    {connection.base_url}
+                  </span>
+                  <ExternalLink className="h-3 w-3 flex-shrink-0" />
                 </a>
 
                 {/* Compact stats */}
                 {!isLoading && pages.length > 0 && (
-                  <div className="flex items-center gap-4 mt-3">
+                  <div className="flex items-center gap-3 mt-3 flex-wrap">
                     <span className="text-sm text-muted-foreground">
                       <span className="font-semibold text-gray-900">{pages.length}</span> páginas
                     </span>
@@ -894,7 +929,7 @@ const ClientAccountDetail = () => {
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500" />
                         </span>
-                        Analisando performance...
+                        <span className="hidden sm:inline">Analisando performance...</span>
                       </span>
                     )}
                   </div>
@@ -903,26 +938,25 @@ const ClientAccountDetail = () => {
             </div>
 
             {!isMockConnection && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={importPages}
-                  disabled={isImporting}
-                >
-                  {isImporting ? (
-                    <>
-                      <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" />
-                      Importando...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="mr-2 h-3.5 w-3.5" />
-                      Importar páginas
-                    </>
-                  )}
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={importPages}
+                disabled={isImporting}
+                className="flex-shrink-0"
+              >
+                {isImporting ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin sm:mr-2" />
+                    <span className="hidden sm:inline">Importando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-3.5 w-3.5 sm:mr-2" />
+                    <span className="hidden sm:inline">Importar páginas</span>
+                  </>
+                )}
+              </Button>
             )}
           </div>
         </motion.section>
