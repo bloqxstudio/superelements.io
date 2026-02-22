@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Logo } from '@/components/Logo';
-import { Home, Building2, Download, LayoutGrid, LogOut, FileText } from 'lucide-react';
+import { Home, Building2, Download, LayoutGrid, LogOut, FileText, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -30,7 +30,12 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => (
   </button>
 );
 
-export const AppSidebar: React.FC = () => {
+interface AppSidebarProps {
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+}
+
+export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClose }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -43,11 +48,11 @@ export const AppSidebar: React.FC = () => {
   const isManager = activeWorkspace?.role === 'manager';
 
   const isActive = (path: string) => {
-    if (path === '/inicio') return location.pathname === '/inicio';
-    if (path === '/') {
+    if (path === '/') return location.pathname === '/';
+    if (path === '/componentes') {
       return (
-        location.pathname === '/' ||
-        (location.pathname !== '/inicio' &&
+        location.pathname === '/componentes' ||
+        (location.pathname !== '/' &&
           location.pathname !== '/client-accounts' &&
           !location.pathname.startsWith('/client-accounts/') &&
           location.pathname !== '/resources' &&
@@ -66,12 +71,17 @@ export const AppSidebar: React.FC = () => {
   // Show workspace content nav if: admin entered a workspace, OR member with a workspace
   const showWorkspaceNav = !!activeWorkspace;
 
-  return (
-    <div className="w-64 fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 shadow-sm hidden md:flex flex-col">
+  const handleNavClick = (path: string) => {
+    navigate(path);
+    onMobileClose();
+  };
+
+  const SidebarContent = () => (
+    <>
       {/* Logo */}
       <div
         className="px-4 py-5 border-b border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
-        onClick={() => navigate('/inicio')}
+        onClick={() => { navigate('/'); onMobileClose(); }}
       >
         <Logo />
       </div>
@@ -91,6 +101,7 @@ export const AppSidebar: React.FC = () => {
               onClick={() => {
                 exitWorkspace();
                 navigate('/workspace');
+                onMobileClose();
               }}
             >
               <LogOut className="h-3.5 w-3.5 mr-1" />
@@ -105,12 +116,11 @@ export const AppSidebar: React.FC = () => {
         <NavItem
           icon={<Home className="h-4 w-4" />}
           label="Início"
-          path="/inicio"
-          active={isActive('/inicio')}
-          onClick={() => navigate('/inicio')}
+          path="/"
+          active={isActive('/')}
+          onClick={() => handleNavClick('/')}
         />
 
-        {/* Workspace content nav — visible to members and to admin when inside a workspace */}
         {showWorkspaceNav && (
           <>
             <NavItem
@@ -118,7 +128,7 @@ export const AppSidebar: React.FC = () => {
               label="Clientes"
               path="/client-accounts"
               active={isActive('/client-accounts')}
-              onClick={() => navigate('/client-accounts')}
+              onClick={() => handleNavClick('/client-accounts')}
             />
 
             {!isManager && (
@@ -127,10 +137,9 @@ export const AppSidebar: React.FC = () => {
                 label="Propostas"
                 path="/proposals"
                 active={isActive('/proposals')}
-                onClick={() => navigate('/proposals')}
+                onClick={() => handleNavClick('/proposals')}
               />
             )}
-
           </>
         )}
 
@@ -140,7 +149,7 @@ export const AppSidebar: React.FC = () => {
             label="Recursos"
             path="/resources"
             active={isActive('/resources')}
-            onClick={() => navigate('/resources')}
+            onClick={() => handleNavClick('/resources')}
           />
         )}
 
@@ -148,9 +157,9 @@ export const AppSidebar: React.FC = () => {
           <NavItem
             icon={<LayoutGrid className="h-4 w-4" />}
             label="Componentes"
-            path="/"
-            active={isActive('/')}
-            onClick={() => navigate('/')}
+            path="/componentes"
+            active={isActive('/componentes')}
+            onClick={() => handleNavClick('/componentes')}
           />
         )}
       </nav>
@@ -162,21 +171,56 @@ export const AppSidebar: React.FC = () => {
             Workspace Ativo
           </p>
           <div className="rounded-lg bg-gray-50 px-2.5 py-2">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-gray-900 truncate">{activeWorkspace.name}</p>
-              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate min-w-0">{activeWorkspace.name}</p>
+              <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                 Ativo
               </span>
             </div>
             <button
               className="mt-1 text-xs text-muted-foreground hover:text-primary transition-colors"
-              onClick={() => navigate('/workspace')}
+              onClick={() => { navigate('/workspace'); onMobileClose(); }}
             >
               Trocar workspace
             </button>
           </div>
         </div>
       )}
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <div className="w-64 fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 shadow-sm hidden md:flex flex-col">
+        <SidebarContent />
+      </div>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+          onClick={onMobileClose}
+        />
+      )}
+
+      {/* Mobile drawer */}
+      <div
+        className={cn(
+          'md:hidden fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-gray-200 shadow-xl flex flex-col transition-transform duration-300',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+      >
+        {/* Close button */}
+        <button
+          className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          onClick={onMobileClose}
+          aria-label="Fechar menu"
+        >
+          <X className="h-5 w-5 text-gray-600" />
+        </button>
+        <SidebarContent />
+      </div>
+    </>
   );
 };

@@ -240,21 +240,21 @@ const Home: React.FC = () => {
       >
       {/* ── A: Header ── */}
       <motion.section variants={itemVariants} className={sectionClass}>
-        <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-start sm:items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               {getGreeting()}, {activeWorkspace?.name || 'Admin'}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">Visão geral da sua operação</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate('/client-accounts')}>
-              <Users className="h-4 w-4 mr-2" />
-              Clientes
+              <Users className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Clientes</span>
             </Button>
             <Button size="sm" onClick={() => navigate('/connections')}>
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Cliente
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Novo Cliente</span>
             </Button>
           </div>
         </div>
@@ -266,16 +266,16 @@ const Home: React.FC = () => {
           {/* Total de Clientes */}
           <motion.div variants={cardItem}>
             <Card className="border-gray-200/70 bg-white shadow-sm">
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Total de Clientes</p>
-                    <p className="text-3xl font-bold mt-1">{clientAccounts.length}</p>
+                    <p className="text-xs sm:text-sm font-medium text-muted-foreground">Total de Clientes</p>
+                    <p className="text-2xl sm:text-3xl font-bold mt-1">{clientAccounts.length}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <Users className="h-5 w-5 text-muted-foreground" />
+                    <Users className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
                     {errorAccounts.length > 0 && (
-                      <Badge variant="destructive" className="text-xs">
+                      <Badge variant="destructive" className="text-[10px] sm:text-xs">
                         {errorAccounts.length} erro{errorAccounts.length > 1 ? 's' : ''}
                       </Badge>
                     )}
@@ -288,15 +288,15 @@ const Home: React.FC = () => {
           {/* Conectados */}
           <motion.div variants={cardItem}>
             <Card className="border-gray-200/70 bg-white shadow-sm">
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Conectados</p>
-                    <p className="text-3xl font-bold mt-1 text-green-600">
+                    <p className="text-xs sm:text-sm font-medium text-muted-foreground">Conectados</p>
+                    <p className="text-2xl sm:text-3xl font-bold mt-1 text-green-600">
                       {connectedAccounts.length}
                     </p>
                   </div>
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
                 </div>
               </CardContent>
             </Card>
@@ -307,12 +307,12 @@ const Home: React.FC = () => {
             <Card
               className={errorAccounts.length > 0 ? 'border-destructive/50 bg-destructive/5 shadow-sm' : 'border-gray-200/70 bg-white shadow-sm'}
             >
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Com Problema</p>
+                    <p className="text-xs sm:text-sm font-medium text-muted-foreground">Com Problema</p>
                     <p
-                      className={`text-3xl font-bold mt-1 ${
+                      className={`text-2xl sm:text-3xl font-bold mt-1 ${
                         errorAccounts.length > 0 ? 'text-red-600' : ''
                       }`}
                     >
@@ -320,7 +320,7 @@ const Home: React.FC = () => {
                     </p>
                   </div>
                   <AlertCircle
-                    className={`h-5 w-5 ${
+                    className={`h-4 w-4 sm:h-5 sm:w-5 ${
                       errorAccounts.length > 0 ? 'text-destructive' : 'text-muted-foreground'
                     }`}
                   />
@@ -332,17 +332,17 @@ const Home: React.FC = () => {
           {/* Propostas Ativas */}
           <motion.div variants={cardItem}>
             <Card className="border-gray-200/70 bg-white shadow-sm">
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Propostas Ativas</p>
+                    <p className="text-xs sm:text-sm font-medium text-muted-foreground">Propostas Ativas</p>
                     {isProposalsLoading ? (
-                      <Skeleton className="h-9 w-16 mt-1" />
+                      <Skeleton className="h-8 w-14 mt-1" />
                     ) : (
-                      <p className="text-3xl font-bold mt-1">{proposalsCount ?? '—'}</p>
+                      <p className="text-2xl sm:text-3xl font-bold mt-1">{proposalsCount ?? '—'}</p>
                     )}
                   </div>
-                  <FileText className="h-5 w-5 text-muted-foreground" />
+                  <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">em aberto</p>
               </CardContent>
@@ -390,12 +390,12 @@ const Home: React.FC = () => {
                 {prioritizedAccounts.map((account) => (
                   <div
                     key={account.id}
-                    className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50 cursor-pointer transition-colors group"
+                    className="px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 hover:bg-gray-50 cursor-pointer transition-colors group"
                     onClick={() => navigate(`/client-accounts/${account.id}`)}
                   >
                     {/* Status dot */}
                     <div
-                      className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                      className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full flex-shrink-0 ${
                         account.status === 'connected'
                           ? 'bg-green-500'
                           : account.status === 'error'
@@ -407,28 +407,21 @@ const Home: React.FC = () => {
                     />
 
                     {/* Globe avatar */}
-                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                      <Globe className="h-4 w-4 text-muted-foreground" />
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                      <Globe className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                     </div>
 
                     {/* Account info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-gray-900 truncate">
-                          {account.name}
-                        </p>
-                        {account.status === 'error' && account.error && (
-                          <span className="text-xs text-red-500 truncate max-w-[200px] hidden sm:inline">
-                            — {account.error}
-                          </span>
-                        )}
-                      </div>
+                      <p className="text-sm font-semibold text-gray-900 truncate">
+                        {account.name}
+                      </p>
                       <p className="text-xs text-muted-foreground truncate">
                         {account.base_url}
                       </p>
                     </div>
 
-                    {/* Page count */}
+                    {/* Page count — only md+ */}
                     {pageCountByConnection[account.id] !== undefined && (
                       <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
                         <LayoutGrid className="h-3.5 w-3.5" />
@@ -437,18 +430,15 @@ const Home: React.FC = () => {
                     )}
 
                     {/* Right side */}
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className="text-xs text-muted-foreground hidden md:block">
-                        {getRelativeTime(account.lastTested)}
-                      </span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <Badge
                         variant={getStatusBadgeVariant(account.status)}
-                        className="hidden sm:inline-flex"
+                        className="text-[10px] sm:text-xs"
                       >
                         {getStatusLabel(account.status)}
                       </Badge>
                       <button
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block"
                         onClick={(e) => {
                           e.stopPropagation();
                           window.open(account.base_url, '_blank', 'noopener,noreferrer');

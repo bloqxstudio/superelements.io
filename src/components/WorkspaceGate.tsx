@@ -43,14 +43,14 @@ export const WorkspaceGate: React.FC<WorkspaceGateProps> = ({ children }) => {
     );
   }
 
-  // Managers can only access /inicio and /client-accounts
+  // Managers can only access / and /client-accounts
   if (activeWorkspace.role === 'manager') {
     const allowed =
-      location.pathname === '/inicio' ||
+      location.pathname === '/' ||
       location.pathname === '/client-accounts' ||
       location.pathname.startsWith('/client-accounts/');
     if (!allowed) {
-      return <Navigate to="/inicio" replace />;
+      return <Navigate to="/" replace />;
     }
   }
 

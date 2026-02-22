@@ -68,13 +68,13 @@ function App() {
                     index
                     element={
                       <WorkspaceGate>
-                        <Components />
+                        <Home />
                       </WorkspaceGate>
                     }
                   />
-                  <Route path="inicio" element={
+                  <Route path="componentes" element={
                     <WorkspaceGate>
-                      <Home />
+                      <Components />
                     </WorkspaceGate>
                   } />
 

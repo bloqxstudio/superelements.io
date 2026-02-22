@@ -119,51 +119,51 @@ const WorkspacesPage = () => {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-start sm:items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Workspaces</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Workspaces</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Gerencie os workspaces da plataforma e seus membros
           </p>
         </div>
-        <Button onClick={() => setCreateDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Criar Workspace
+        <Button onClick={() => setCreateDialog(true)} size="sm" className="flex-shrink-0">
+          <Plus className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Criar Workspace</span>
         </Button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6">
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <Building2 className="h-8 w-8 text-primary" />
+          <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+            <Building2 className="h-6 w-6 sm:h-8 sm:w-8 text-primary flex-shrink-0" />
             <div>
-              <p className="text-2xl font-bold">{workspaces?.length ?? 0}</p>
-              <p className="text-sm text-muted-foreground">Total de workspaces</p>
+              <p className="text-xl sm:text-2xl font-bold">{workspaces?.length ?? 0}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Workspaces</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <Users className="h-8 w-8 text-blue-500" />
+          <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+            <Users className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 flex-shrink-0" />
             <div>
-              <p className="text-2xl font-bold">
+              <p className="text-xl sm:text-2xl font-bold">
                 {workspaces?.reduce((acc, ws) => acc + ws.member_count, 0) ?? 0}
               </p>
-              <p className="text-sm text-muted-foreground">Total de membros</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Membros</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <Building2 className="h-8 w-8 text-green-500" />
+          <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+            <Building2 className="h-6 w-6 sm:h-8 sm:w-8 text-green-500 flex-shrink-0" />
             <div>
-              <p className="text-2xl font-bold">
+              <p className="text-xl sm:text-2xl font-bold">
                 {workspaces?.reduce((acc, ws) => acc + ws.connection_count, 0) ?? 0}
               </p>
-              <p className="text-sm text-muted-foreground">Total de conexões</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Conexões</p>
             </div>
           </CardContent>
         </Card>
@@ -180,8 +180,8 @@ const WorkspacesPage = () => {
         />
       </div>
 
-      {/* Table */}
-      <Card>
+      {/* Desktop Table */}
+      <Card className="hidden md:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -226,18 +226,13 @@ const WorkspacesPage = () => {
                       {format(new Date(ws.created_at), 'dd/MM/yyyy', { locale: ptBR })}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => {
-                            enterWorkspace({
-                              id: ws.id,
-                              name: ws.name,
-                              slug: ws.slug,
-                              role: 'owner',
-                            });
-                            navigate('/inicio');
+                            enterWorkspace({ id: ws.id, name: ws.name, slug: ws.slug, role: 'owner' });
+                            navigate('/');
                           }}
                         >
                           <LogIn className="h-4 w-4 mr-1" />
@@ -272,6 +267,79 @@ const WorkspacesPage = () => {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-3">
+        {isLoading ? (
+          <p className="text-center text-muted-foreground py-8">Carregando...</p>
+        ) : filteredWorkspaces.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">Nenhum workspace encontrado</p>
+        ) : (
+          filteredWorkspaces.map((ws) => (
+            <Card key={ws.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 truncate">{ws.name}</p>
+                    <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 mt-0.5 inline-block">
+                      {ws.slug}
+                    </code>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => {
+                        enterWorkspace({ id: ws.id, name: ws.name, slug: ws.slug, role: 'owner' });
+                        navigate('/');
+                      }}
+                      title="Entrar"
+                    >
+                      <LogIn className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() =>
+                        setMembersDialog({ open: true, workspaceId: ws.id, workspaceName: ws.name })
+                      }
+                      title="Membros"
+                    >
+                      <Users className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                      onClick={() =>
+                        setDeleteDialog({ open: true, workspaceId: ws.id, workspaceName: ws.name })
+                      }
+                      title="Excluir"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground truncate mb-2">{ws.owner_email}</p>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Users className="h-3 w-3" />
+                    {ws.member_count} membros
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {ws.connection_count} conexões
+                  </span>
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {format(new Date(ws.created_at), 'dd/MM/yy', { locale: ptBR })}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
 
       {/* Create Workspace Dialog */}
       <Dialog open={createDialog} onOpenChange={setCreateDialog}>
@@ -334,7 +402,7 @@ const WorkspacesPage = () => {
           </DialogHeader>
 
           {/* Add member form */}
-          <div className="flex items-end gap-2 py-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 py-2">
             <div className="flex-1 space-y-1">
               <Label>Email do usuário</Label>
               <Input
@@ -345,7 +413,7 @@ const WorkspacesPage = () => {
                 onKeyDown={(e) => e.key === 'Enter' && handleAddMember()}
               />
             </div>
-            <div className="w-36 space-y-1">
+            <div className="sm:w-36 space-y-1">
               <Label>Role</Label>
               <Select value={addMemberRole} onValueChange={(v) => setAddMemberRole(v as 'owner' | 'member' | 'manager')}>
                 <SelectTrigger>
@@ -361,6 +429,7 @@ const WorkspacesPage = () => {
             <Button
               onClick={handleAddMember}
               disabled={!addMemberEmail.trim() || addMember.isPending}
+              className="w-full sm:w-auto"
             >
               <Plus className="h-4 w-4 mr-1" />
               Adicionar

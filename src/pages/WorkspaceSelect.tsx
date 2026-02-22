@@ -40,12 +40,12 @@ const WorkspaceSelect: React.FC = () => {
 
   const handleSelectOwn = (workspaceId: string) => {
     switchWorkspace(workspaceId);
-    navigate('/inicio', { replace: true });
+    navigate('/', { replace: true });
   };
 
   const handleAdminEnter = (ws: { id: string; name: string; slug: string }) => {
     enterWorkspace({ id: ws.id, name: ws.name, slug: ws.slug, role: 'owner' });
-    navigate('/inicio', { replace: true });
+    navigate('/', { replace: true });
   };
 
   const loading = authLoading || isLoading || (isAdmin && adminLoading);
@@ -105,23 +105,35 @@ const WorkspaceSelect: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#f7f7f8] flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
+      <header className="bg-white border-b px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
         <Logo />
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 sm:gap-3">
           {isAdmin && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => navigate('/admin/workspaces')}
+              className="hidden sm:inline-flex"
             >
               <Settings className="h-4 w-4 mr-2" />
               Gerenciar Workspaces
             </Button>
           )}
-          <span className="text-sm text-muted-foreground hidden sm:block">{profile?.email}</span>
-          <Button variant="ghost" size="sm" onClick={signOut}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Sair
+          {isAdmin && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/admin/workspaces')}
+              className="sm:hidden px-2"
+              title="Gerenciar Workspaces"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          )}
+          <span className="text-sm text-muted-foreground hidden md:block truncate max-w-[160px]">{profile?.email}</span>
+          <Button variant="ghost" size="sm" onClick={signOut} className="px-2 sm:px-3">
+            <LogOut className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Sair</span>
           </Button>
         </div>
       </header>
