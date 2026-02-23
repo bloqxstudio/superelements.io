@@ -1108,6 +1108,221 @@ export type Database = {
           },
         ]
       }
+      service_catalog: {
+        Row: {
+          id: string
+          workspace_id: string
+          name: string
+          description: string | null
+          default_hourly_rate: number
+          is_active: boolean
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          name: string
+          description?: string | null
+          default_hourly_rate?: number
+          is_active?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          workspace_id?: string
+          name?: string
+          description?: string | null
+          default_hourly_rate?: number
+          is_active?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_catalog_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_catalog_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          id: string
+          workspace_id: string
+          client_account_id: string | null
+          name: string
+          description: string | null
+          status: Database["public"]["Enums"]["project_status"]
+          budget: number | null
+          deadline: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          client_account_id?: string | null
+          name: string
+          description?: string | null
+          status?: Database["public"]["Enums"]["project_status"]
+          budget?: number | null
+          deadline?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          workspace_id?: string
+          client_account_id?: string | null
+          name?: string
+          description?: string | null
+          status?: Database["public"]["Enums"]["project_status"]
+          budget?: number | null
+          deadline?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_client_account_id_fkey"
+            columns: ["client_account_id"]
+            isOneToOne: false
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_tasks: {
+        Row: {
+          id: string
+          project_id: string
+          workspace_id: string
+          title: string
+          description: string | null
+          kanban_status: Database["public"]["Enums"]["task_status"]
+          position: number
+          service_catalog_id: string | null
+          hourly_rate: number | null
+          estimated_hours: number | null
+          actual_hours: number
+          task_cost: number | null
+          assignee_id: string | null
+          billing_status: string
+          billed_at: string | null
+          due_date: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          workspace_id: string
+          title: string
+          description?: string | null
+          kanban_status?: Database["public"]["Enums"]["task_status"]
+          position?: number
+          service_catalog_id?: string | null
+          hourly_rate?: number | null
+          estimated_hours?: number | null
+          actual_hours?: number
+          assignee_id?: string | null
+          billing_status?: string
+          billed_at?: string | null
+          due_date?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          workspace_id?: string
+          title?: string
+          description?: string | null
+          kanban_status?: Database["public"]["Enums"]["task_status"]
+          position?: number
+          service_catalog_id?: string | null
+          hourly_rate?: number | null
+          estimated_hours?: number | null
+          actual_hours?: number
+          assignee_id?: string | null
+          billing_status?: string
+          billed_at?: string | null
+          due_date?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_service_catalog_id_fkey"
+            columns: ["service_catalog_id"]
+            isOneToOne: false
+            referencedRelation: "service_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       figma_conversion_stats: {
@@ -1164,6 +1379,31 @@ export type Database = {
         }
         Relationships: []
       }
+      project_cost_summary: {
+        Row: {
+          project_id: string | null
+          workspace_id: string | null
+          client_account_id: string | null
+          project_name: string | null
+          project_status: Database["public"]["Enums"]["project_status"] | null
+          budget: number | null
+          deadline: string | null
+          total_tasks: number | null
+          total_actual_hours: number | null
+          total_estimated_hours: number | null
+          total_cost: number | null
+          unbilled_cost: number | null
+          billed_cost: number | null
+          completed_tasks: number | null
+        }
+        Insert: {
+          [_ in never]: never
+        }
+        Update: {
+          [_ in never]: never
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_user_role: {
@@ -1195,6 +1435,8 @@ export type Database = {
     Enums: {
       app_role: "free" | "pro" | "admin"
       workspace_role: "owner" | "member" | "manager"
+      project_status: "planning" | "active" | "on_hold" | "completed" | "cancelled"
+      task_status: "backlog" | "todo" | "in_progress" | "in_review" | "done" | "billed"
     }
     CompositeTypes: {
       [_ in never]: never

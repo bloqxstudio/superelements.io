@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Logo } from '@/components/Logo';
-import { Home, Building2, Download, LayoutGrid, LogOut, FileText, X } from 'lucide-react';
+import { Home, Building2, Download, LayoutGrid, LogOut, FileText, X, FolderOpen, Layers, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -61,7 +61,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
           location.pathname !== '/admin/resources' &&
           location.pathname !== '/admin/workspaces' &&
           location.pathname !== '/partners' &&
-          location.pathname !== '/proposals'
+          location.pathname !== '/proposals' &&
+          !location.pathname.startsWith('/projects') &&
+          location.pathname !== '/projects/overview' &&
+          !location.pathname.startsWith('/leads')
           )
       );
     }
@@ -112,7 +115,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
       )}
 
       {/* Nav Items */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
         <NavItem
           icon={<Home className="h-4 w-4" />}
           label="Início"
@@ -123,44 +126,100 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
 
         {showWorkspaceNav && (
           <>
-            <NavItem
-              icon={<Building2 className="h-4 w-4" />}
-              label="Clientes"
-              path="/client-accounts"
-              active={isActive('/client-accounts')}
-              onClick={() => handleNavClick('/client-accounts')}
-            />
-
-            {!isManager && (
+            {/* Gestão */}
+            <p className="mt-5 mb-1 px-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              Gestão
+            </p>
+            <div className="space-y-0.5">
               <NavItem
-                icon={<FileText className="h-4 w-4" />}
-                label="Propostas"
-                path="/proposals"
-                active={isActive('/proposals')}
-                onClick={() => handleNavClick('/proposals')}
+                icon={<Building2 className="h-4 w-4" />}
+                label="Clientes"
+                path="/client-accounts"
+                active={isActive('/client-accounts')}
+                onClick={() => handleNavClick('/client-accounts')}
               />
+
+              {!isManager && (
+                <NavItem
+                  icon={<FileText className="h-4 w-4" />}
+                  label="Propostas"
+                  path="/proposals"
+                  active={isActive('/proposals')}
+                  onClick={() => handleNavClick('/proposals')}
+                />
+              )}
+            </div>
+
+            {/* Projetos */}
+            {!isManager && (
+              <>
+                <p className="mt-5 mb-1 px-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                  Projetos
+                </p>
+                <div className="space-y-0.5">
+                  <NavItem
+                    icon={<FolderOpen className="h-4 w-4" />}
+                    label="Projetos"
+                    path="/projects"
+                    active={location.pathname === '/projects'}
+                    onClick={() => handleNavClick('/projects')}
+                  />
+                  <NavItem
+                    icon={<Layers className="h-4 w-4" />}
+                    label="Kanban"
+                    path="/projects/overview"
+                    active={location.pathname === '/projects/overview'}
+                    onClick={() => handleNavClick('/projects/overview')}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Comercial */}
+            {!isManager && (
+              <>
+                <p className="mt-5 mb-1 px-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                  Comercial
+                </p>
+                <div className="space-y-0.5">
+                  <NavItem
+                    icon={<TrendingUp className="h-4 w-4" />}
+                    label="Comercial"
+                    path="/leads"
+                    active={isActive('/leads')}
+                    onClick={() => handleNavClick('/leads')}
+                  />
+                </div>
+              </>
             )}
           </>
         )}
 
-        {!isManager && profile?.role && ['pro', 'admin'].includes(profile.role) && (
-          <NavItem
-            icon={<Download className="h-4 w-4" />}
-            label="Recursos"
-            path="/resources"
-            active={isActive('/resources')}
-            onClick={() => handleNavClick('/resources')}
-          />
-        )}
-
+        {/* Biblioteca */}
         {!isManager && (
-          <NavItem
-            icon={<LayoutGrid className="h-4 w-4" />}
-            label="Componentes"
-            path="/componentes"
-            active={isActive('/componentes')}
-            onClick={() => handleNavClick('/componentes')}
-          />
+          <>
+            <p className="mt-5 mb-1 px-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              Biblioteca
+            </p>
+            <div className="space-y-0.5">
+              {profile?.role && ['pro', 'admin'].includes(profile.role) && (
+                <NavItem
+                  icon={<Download className="h-4 w-4" />}
+                  label="Recursos"
+                  path="/resources"
+                  active={isActive('/resources')}
+                  onClick={() => handleNavClick('/resources')}
+                />
+              )}
+              <NavItem
+                icon={<LayoutGrid className="h-4 w-4" />}
+                label="Componentes"
+                path="/componentes"
+                active={isActive('/componentes')}
+                onClick={() => handleNavClick('/componentes')}
+              />
+            </div>
+          </>
         )}
       </nav>
 

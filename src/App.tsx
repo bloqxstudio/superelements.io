@@ -29,6 +29,10 @@ import StudioPartnersOusen from "@/pages/StudioPartnersOusen";
 import WorkspaceSelect from "@/pages/WorkspaceSelect";
 import Proposals from "@/pages/Proposals";
 import ProposalView from "@/pages/ProposalView";
+import Projects from "@/pages/Projects";
+import ProjectDetail from "@/pages/ProjectDetail";
+import ProjectsOverview from "@/pages/ProjectsOverview";
+import Leads from "@/pages/Leads";
 
 
 const queryClient = new QueryClient();
@@ -124,6 +128,28 @@ function App() {
                   <Route path="proposals" element={
                     <WorkspaceGate>
                       <Proposals />
+                    </WorkspaceGate>
+                  } />
+
+                  <Route path="projects" element={
+                    <WorkspaceGate>
+                      <Projects />
+                    </WorkspaceGate>
+                  } />
+                  <Route path="projects/overview" element={
+                    <WorkspaceGate>
+                      <ProjectsOverview />
+                    </WorkspaceGate>
+                  } />
+                  <Route path="projects/:projectId" element={
+                    <WorkspaceGate>
+                      <ProjectDetail />
+                    </WorkspaceGate>
+                  } />
+
+                  <Route path="leads" element={
+                    <WorkspaceGate>
+                      <Leads />
                     </WorkspaceGate>
                   } />
 
