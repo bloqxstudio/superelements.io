@@ -106,37 +106,39 @@ const Leads: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#f7f7f8]">
       <motion.div
-        className="px-4 sm:px-6 lg:px-8 py-6 max-w-[100vw] space-y-6"
+        className="px-4 sm:px-6 lg:px-8 py-6 max-w-6xl mx-auto space-y-6"
         variants={containerVariants}
         initial="hidden"
         animate="show"
       >
         {/* Header */}
-        <motion.div
+        <motion.section
           variants={itemVariants}
-          className="flex items-start sm:items-center justify-between flex-wrap gap-3"
+          className="rounded-3xl border border-gray-200/70 bg-white p-5 shadow-sm sm:p-6"
         >
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <TrendingUp className="h-6 w-6" />
-              Comercial
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Gerencie leads e acompanhe o funil de vendas
-            </p>
+          <div className="flex items-start sm:items-center justify-between flex-wrap gap-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <TrendingUp className="h-6 w-6" />
+                Comercial
+              </h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Gerencie leads e acompanhe o funil de vendas
+              </p>
+            </div>
+            <Button
+              size="sm"
+              className="rounded-xl"
+              onClick={() => {
+                setCreateLeadStatus('new_lead');
+                setCreateOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Novo lead
+            </Button>
           </div>
-          <Button
-            size="sm"
-            className="rounded-xl"
-            onClick={() => {
-              setCreateLeadStatus('new_lead');
-              setCreateOpen(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Novo lead
-          </Button>
-        </motion.div>
+        </motion.section>
 
         {/* Kanban */}
         <motion.div variants={itemVariants}>

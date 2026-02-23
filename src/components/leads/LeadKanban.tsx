@@ -36,6 +36,12 @@ interface ColumnProps {
   onAddLead: (status: LeadStatus) => void;
 }
 
+const formatCurrency = (value: number) => {
+  if (value >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `R$ ${(value / 1_000).toFixed(0)}k`;
+  return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+};
+
 const KanbanColumn: React.FC<ColumnProps> = ({
   columnId,
   label,
@@ -49,6 +55,8 @@ const KanbanColumn: React.FC<ColumnProps> = ({
 }) => {
   const { setNodeRef, isOver } = useDroppable({ id: columnId });
 
+  const totalValue = leads.reduce((sum, l) => sum + (l.estimated_value ?? 0), 0);
+
   return (
     <div className={cn('flex flex-col rounded-lg border w-72 shrink-0', colorClass, isOver && 'ring-2 ring-primary/50')}>
       {/* Column header */}
@@ -60,6 +68,11 @@ const KanbanColumn: React.FC<ColumnProps> = ({
           <span className="text-xs bg-white/60 rounded-full px-1.5 py-0.5 font-medium">
             {leads.length}
           </span>
+          {totalValue > 0 && (
+            <span className="text-xs bg-white/60 rounded-full px-1.5 py-0.5 font-medium">
+              {formatCurrency(totalValue)}
+            </span>
+          )}
         </div>
         <Button
           size="icon"

@@ -105,36 +105,38 @@ const Projects: React.FC = () => {
         animate="show"
       >
         {/* Header */}
-        <motion.div variants={itemVariants} className="flex items-start sm:items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <FolderOpen className="h-6 w-6" />
-              Projetos
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Gerencie projetos, tarefas e horas trabalhadas
-            </p>
+        <motion.section variants={itemVariants} className="rounded-3xl border border-gray-200/70 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex items-start sm:items-center justify-between flex-wrap gap-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <FolderOpen className="h-6 w-6" />
+                Projetos
+              </h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Gerencie projetos, tarefas e horas trabalhadas
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-xl border-gray-200 hover:border-gray-300 hover:bg-white hover:shadow-sm"
+                onClick={() => setServiceCatalogOpen(true)}
+              >
+                <Settings2 className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">Serviços</span>
+              </Button>
+              <Button
+                size="sm"
+                className="rounded-xl"
+                onClick={() => setFormOpen(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Novo projeto
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-xl border-gray-200 hover:border-gray-300 hover:bg-white hover:shadow-sm"
-              onClick={() => setServiceCatalogOpen(true)}
-            >
-              <Settings2 className="mr-2 h-4 w-4" />
-              <span className="hidden sm:inline">Serviços</span>
-            </Button>
-            <Button
-              size="sm"
-              className="rounded-xl"
-              onClick={() => setFormOpen(true)}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Novo projeto
-            </Button>
-          </div>
-        </motion.div>
+        </motion.section>
 
         {/* Content */}
         {isLoading ? (

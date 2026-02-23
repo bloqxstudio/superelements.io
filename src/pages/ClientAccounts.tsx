@@ -94,8 +94,8 @@ const ClientAccounts = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#f7f7f8] px-4 pb-12 pt-6 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-6xl">
+      <div className="min-h-screen bg-[#f7f7f8]">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-6xl mx-auto">
           <div className="flex items-center justify-center h-64">
             <p className="text-muted-foreground">Carregando contas...</p>
           </div>
@@ -105,9 +105,9 @@ const ClientAccounts = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f7f8] px-4 pb-12 pt-6 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#f7f7f8]">
       <motion.div
-        className="mx-auto max-w-6xl space-y-7"
+        className="px-4 sm:px-6 lg:px-8 py-6 max-w-6xl mx-auto space-y-7"
         variants={containerVariants}
         initial="hidden"
         animate="show"

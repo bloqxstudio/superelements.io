@@ -318,11 +318,13 @@ const ProjectsOverview: React.FC = () => {
 
   if (projectsLoading) {
     return (
-      <div className="min-h-screen bg-[#f7f7f8] px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto space-y-5">
-        <Skeleton className="h-5 w-32 rounded-full" />
-        <Skeleton className="h-12 w-full rounded-2xl" />
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          {[...Array(6)].map((_, i) => <Skeleton key={i} className="w-72 h-64 rounded-2xl shrink-0" />)}
+      <div className="min-h-screen bg-[#f7f7f8]">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-6xl mx-auto space-y-5">
+          <Skeleton className="h-5 w-32 rounded-full" />
+          <Skeleton className="h-12 w-full rounded-2xl" />
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {[...Array(6)].map((_, i) => <Skeleton key={i} className="w-72 h-64 rounded-2xl shrink-0" />)}
+          </div>
         </div>
       </div>
     );
@@ -331,30 +333,32 @@ const ProjectsOverview: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#f7f7f8]">
       <motion.div
-        className="px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto space-y-4"
+        className="px-4 sm:px-6 lg:px-8 py-6 max-w-6xl mx-auto space-y-4"
         variants={containerVariants}
         initial="hidden"
         animate="show"
       >
         {/* Header */}
-        <motion.div variants={itemVariants} className="flex items-start sm:items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <LayoutGrid className="h-6 w-6" />
-              Kanban
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Visão unificada de todos os projetos</p>
+        <motion.section variants={itemVariants} className="rounded-3xl border border-gray-200/70 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex items-start sm:items-center justify-between flex-wrap gap-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <LayoutGrid className="h-6 w-6" />
+                Kanban
+              </h1>
+              <p className="text-sm text-muted-foreground mt-0.5">Visão unificada de todos os projetos</p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl border-gray-200 hover:border-gray-300 hover:bg-white"
+              onClick={() => navigate('/projects')}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Projetos
+            </Button>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="rounded-xl border-gray-200 hover:border-gray-300 hover:bg-white"
-            onClick={() => navigate('/projects')}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Projetos
-          </Button>
-        </motion.div>
+        </motion.section>
 
         {/* Filters card */}
         {projects.length > 0 && (

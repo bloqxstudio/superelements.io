@@ -207,8 +207,8 @@ const Home: React.FC = () => {
 
   if (isLoading && !isMockOusen) {
     return (
-      <div className="min-h-screen bg-[#f7f7f8] px-4 pb-12 pt-6 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-6xl space-y-7">
+      <div className="min-h-screen bg-[#f7f7f8]">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-6xl mx-auto space-y-7">
           <Skeleton className="h-10 w-64" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map((i) => (
@@ -231,9 +231,9 @@ const Home: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f7f8] px-4 pb-12 pt-6 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#f7f7f8]">
       <motion.div
-        className="mx-auto max-w-6xl space-y-7"
+        className="px-4 sm:px-6 lg:px-8 py-6 max-w-6xl mx-auto space-y-7"
         variants={containerVariants}
         initial={false}
         animate="show"

@@ -454,8 +454,8 @@ export default function Proposals() {
   }).format(metrics.totalValue);
 
   return (
-    <div className="min-h-screen bg-[#f7f7f8] px-4 pb-12 pt-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl">
+    <div className="min-h-screen bg-[#f7f7f8]">
+      <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-6xl mx-auto">
         <motion.section className="mb-8 rounded-3xl border border-gray-200/70 bg-white p-6 shadow-sm sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div className="max-w-2xl space-y-3">
