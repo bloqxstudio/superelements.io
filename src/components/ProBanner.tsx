@@ -19,7 +19,7 @@ export const ProBanner: React.FC = () => {
             <Zap className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold truncate">Desbloqueie toda plataforma por apenas R$47 por mês</p>
+            <p className="text-sm font-semibold truncate">Desbloqueie toda plataforma por apenas R$99 por mês</p>
             <p className="text-xs text-white/80 hidden sm:block">Acesse todos os componentes, plugins e a comunidade</p>
           </div>
         </div>
