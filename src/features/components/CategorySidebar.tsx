@@ -11,6 +11,7 @@ import { useCategoryCache } from '@/hooks/useCategoryCache';
 import { useComponentMetadataCache } from '@/hooks/useComponentMetadataCache';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { toast } from '@/hooks/use-toast';
 
 export const CategorySidebar: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
@@ -49,8 +50,11 @@ export const CategorySidebar: React.FC = () => {
   };
 
   const handleConnectionClick = (connectionId: string) => {
+    const isExpanded = expandedConnections.has(connectionId);
     toggleConnectionExpansion(connectionId);
-    selectAllFromConnection(connectionId);
+    if (!isExpanded) {
+      selectAllFromConnection(connectionId);
+    }
   };
 
   const handleCategoryClick = (connectionId: string, categoryId: number) => {
@@ -122,11 +126,7 @@ export const CategorySidebar: React.FC = () => {
                                 </Badge>
                               );
                             }
-                            return (
-                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 flex-shrink-0">
-                                Free
-                              </Badge>
-                            );
+                            return null;
                           })()}
                         </div>
                         {libCount?.byConnection[connection.connectionId] != null ? (

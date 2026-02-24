@@ -244,9 +244,6 @@ export const useMultiConnectionData = (workspaceId?: string) => {
     setIsFastLoading(false);
     setFastLoadingPage(0);
     
-    // Keep the connection expanded when selecting "All" from it
-    setExpandedConnections(new Set([connectionId]));
-    
     console.log('All components from connection selected and maintained');
   }, [activeConnections, setActiveConnection, setSelectedCategories, clearLoadedPages, setIsFastLoading, setFastLoadingPage]);
 

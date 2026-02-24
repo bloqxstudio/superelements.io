@@ -9,6 +9,7 @@ export interface ComponentMetadata {
   preview_url: string;
   connection_id: string;
   connection_name: string;
+  connection_access_level?: 'free' | 'pro' | 'admin';
   link: string;
   date: string;
   modified: string;
@@ -165,7 +166,7 @@ export const useComponentMetadataCache = create<ComponentMetadataCache>()(
     }),
     {
       name: 'component-metadata-cache',
-      version: 1,
+      version: 2,
     }
   )
 );

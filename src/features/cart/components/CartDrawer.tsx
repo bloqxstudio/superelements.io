@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Trash2, ShoppingCart, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { Copy, Trash2, ShoppingCart, Sparkles, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -10,7 +10,6 @@ import {
   DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -27,13 +26,24 @@ import { useConnectionsStore } from '@/store/connectionsStore';
 import { useAuth } from '@/contexts/AuthContext';
 
 export const CartDrawer: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { items, isOpen, closeCart, clearCart, reorderItems } = useCartStore();
   const { copyAllToClipboard, copying } = useCartCopy();
   const { personalizeAndCopy, personalizing, progress } = useCartPersonalize();
   const { getConnectionById } = useConnectionsStore();
   const [personalizeOpen, setPersonalizeOpen] = useState(false);
   const [rawCopy, setRawCopy] = useState('');
+
+  // Demo users: cart is fully blocked
+  const isDemo = profile?.is_demo === true;
+
+  // Bloqueia cópia se qualquer item do carrinho for PRO e o usuário for free
+  const hasBlockedItems = items.some(item => {
+    const connection = getConnectionById(item.connectionId);
+    const isPro = (connection?.accessLevel === 'pro') || (item.component?.connection_access_level === 'pro');
+    return isPro && profile?.role !== 'pro' && profile?.role !== 'admin';
+  });
+  const canCopy = !isDemo && !hasBlockedItems;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -94,7 +104,21 @@ export const CartDrawer: React.FC = () => {
           </SheetTitle>
         </SheetHeader>
 
-        {items.length === 0 ? (
+        {isDemo ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-8 gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+              <Lock className="h-7 w-7 text-gray-400" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-gray-900 mb-1">
+                Carrinho indisponível
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-[220px] mx-auto">
+                O carrinho não está disponível no ambiente de demonstração. Copie os componentes diretamente pela visualização.
+              </p>
+            </div>
+          </div>
+        ) : items.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
             <ShoppingCart className="h-16 w-16 text-muted-foreground/50 mb-4" />
             <h3 className="text-lg font-medium text-foreground mb-2">
@@ -162,16 +186,18 @@ export const CartDrawer: React.FC = () => {
                   />
                   <Button
                     onClick={handlePersonalizeAndCopy}
-                    disabled={personalizing || !user || !rawCopy.trim()}
+                    disabled={personalizing || !user || !rawCopy.trim() || !canCopy}
                     className="w-full"
                     size="sm"
-                    title={!user ? "Faça login para personalizar" : undefined}
+                    title={!user ? "Faça login para personalizar" : !canCopy ? "Remova os componentes PRO do carrinho para usar esta função" : undefined}
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
                     {personalizing
                       ? `Personalizando ${progress.current}/${progress.total}...`
                       : !user
                       ? 'Login Necessário'
+                      : !canCopy
+                      ? 'Carrinho contém itens PRO'
                       : 'Personalizar e Copiar Tudo'}
                   </Button>
                 </div>
@@ -181,14 +207,20 @@ export const CartDrawer: React.FC = () => {
             <SheetFooter className="flex-col sm:flex-col gap-2 mt-4">
               <Button
                 onClick={handleCopyAll}
-                disabled={copying || !user}
+                disabled={copying || !user || !canCopy}
                 className="w-full"
                 size="lg"
                 variant="outline"
-                title={!user ? "Faça login para copiar" : undefined}
+                title={!user ? "Faça login para copiar" : !canCopy ? "Remova os componentes PRO do carrinho para copiar" : undefined}
               >
                 <Copy className="h-4 w-4 mr-2" />
-                {copying ? 'Copiando...' : !user ? 'Login Necessário' : 'Copiar Tudo (sem IA)'}
+                {copying
+                  ? 'Copiando...'
+                  : !user
+                  ? 'Login Necessário'
+                  : !canCopy
+                  ? 'Carrinho contém itens PRO'
+                  : 'Copiar Tudo (sem IA)'}
               </Button>
               <Button
                 onClick={handleClearCart}

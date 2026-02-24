@@ -16,6 +16,7 @@ interface PreviewModalHeaderProps {
   onTogglePersonalizedCopy: () => void;
   personalizedCopyOpen: boolean;
   onOpenInNewTab: () => void;
+  canCopy?: boolean;
 }
 
 const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
@@ -24,7 +25,8 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
   onCopyJson,
   onTogglePersonalizedCopy,
   personalizedCopyOpen,
-  onOpenInNewTab
+  onOpenInNewTab,
+  canCopy = true,
 }) => {
   const { user } = useAuth();
   const { viewport, getViewportWidth } = useViewport();
@@ -75,9 +77,9 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
                     variant={personalizedCopyOpen ? "default" : "outline"}
                     size="sm"
                     onClick={onTogglePersonalizedCopy}
-                    disabled={!user}
+                    disabled={!user || !canCopy}
                     className="flex items-center gap-2 text-xs sm:text-sm"
-                    title={!user ? "Faça login para usar copy personalizada" : undefined}
+                    title={!user ? "Faça login para usar copy personalizada" : !canCopy ? "Componente PRO — faça upgrade para usar IA" : undefined}
                   >
                     <Copy className="h-3 w-3 sm:h-4 sm:w-4" />
                     <span className="hidden sm:inline">COPY IA</span>
@@ -85,7 +87,7 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{!user ? 'Faça login para usar copy personalizada' : 'Abrir copy personalizada com IA'}</p>
+                  <p>{!user ? 'Faça login para usar copy personalizada' : !canCopy ? 'Componente PRO — faça upgrade' : 'Abrir copy personalizada com IA'}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -97,17 +99,17 @@ const PreviewModalHeader: React.FC<PreviewModalHeaderProps> = ({
                     variant="outline"
                     size="sm"
                     onClick={onCopyJson}
-                    disabled={!user}
+                    disabled={!user || !canCopy}
                     className="flex items-center gap-2 text-xs sm:text-sm"
-                    title={!user ? "Faça login para copiar" : undefined}
+                    title={!user ? "Faça login para copiar" : !canCopy ? "Componente PRO — faça upgrade para copiar" : undefined}
                   >
                     <Copy className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden sm:inline">{!user ? 'LOGIN NECESSÁRIO' : 'COPIAR'}</span>
-                    <span className="sm:hidden">{!user ? 'LOGIN' : 'COPIAR'}</span>
+                    <span className="hidden sm:inline">{!user ? 'LOGIN NECESSÁRIO' : !canCopy ? '🔒 PRO' : 'COPIAR'}</span>
+                    <span className="sm:hidden">{!user ? 'LOGIN' : !canCopy ? 'PRO' : 'COPIAR'}</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{!user ? 'Faça login para copiar' : 'Copiar componente'}</p>
+                  <p>{!user ? 'Faça login para copiar' : !canCopy ? 'Componente PRO — faça upgrade para copiar' : 'Copiar componente'}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

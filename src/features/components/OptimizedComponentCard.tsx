@@ -2,7 +2,6 @@
 import React, { memo, useCallback } from 'react';
 import { Copy, Check, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Badge } from '@/components/ui/badge';
 import { useEnhancedCopyComponent } from './hooks/useEnhancedCopyComponent';
 import { useAuth } from '@/contexts/AuthContext';
 import OptimizedDynamicIframe from './OptimizedDynamicIframe';
@@ -52,27 +51,19 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
       return { canCopy: false, requiresUpgrade: false, reason: 'login' };
     }
 
-    // Demo users can see everything but cannot copy anything
-    if (profile.is_demo) {
-      return { canCopy: false, requiresUpgrade: false, reason: 'demo' };
-    }
-
     if (profile.role === 'admin') {
       return { canCopy: true, requiresUpgrade: false };
     }
 
-    if (accessLevel === 'free') {
-      return { canCopy: true, requiresUpgrade: false };
-    }
-
     if (accessLevel === 'pro') {
+      // PRO component: only pro/admin can copy — demo and free are blocked
       if (profile.role === 'pro') {
         return { canCopy: true, requiresUpgrade: false };
-      } else {
-        return { canCopy: false, requiresUpgrade: true, reason: 'upgrade' };
       }
+      return { canCopy: false, requiresUpgrade: true, reason: 'upgrade' };
     }
 
+    // Free component: demo and free users can copy
     return { canCopy: true, requiresUpgrade: false };
   }, [profile, accessLevel]);
   
@@ -92,16 +83,6 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
       return;
     }
     
-    if (accessInfo.reason === 'demo') {
-      toast({
-        title: "🔒 Modo demonstração",
-        description: "Esta é uma conta de demonstração. Entre em contato para liberar o acesso completo.",
-        variant: "default",
-        duration: 5000
-      });
-      return;
-    }
-
     if (accessInfo.requiresUpgrade) {
       toast({
         title: "🔒 Componente PRO",
@@ -126,14 +107,6 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
         icon: <Lock className="h-3 w-3 opacity-60" />,
         text: 'LOGIN',
         className: 'bg-muted border-muted-foreground/20 text-muted-foreground hover:bg-muted/80 cursor-pointer'
-      };
-    }
-
-    if (accessInfo.reason === 'demo') {
-      return {
-        icon: <Lock className="h-3 w-3" />,
-        text: 'DEMO',
-        className: 'bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed'
       };
     }
 
@@ -238,7 +211,8 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
     prevProps.component.id === nextProps.component.id &&
     prevProps.component.originalId === nextProps.component.originalId &&
     prevProps.component.connection_id === nextProps.component.connection_id &&
-    prevProps.baseUrl === nextProps.baseUrl
+    prevProps.baseUrl === nextProps.baseUrl &&
+    prevProps.accessLevel === nextProps.accessLevel
   );
 });
 

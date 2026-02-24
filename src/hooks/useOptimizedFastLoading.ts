@@ -216,6 +216,7 @@ export const useOptimizedFastLoading = ({
           preview_url: comp.link || '',
           connection_id: comp.connection_id,
           connection_name: comp.connection_name,
+          connection_access_level: comp.connection_access_level,
           link: comp.link || '',
           date: comp.date || '',
           modified: comp.modified || '',

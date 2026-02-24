@@ -11,6 +11,8 @@ import { useViewport, ViewportProvider } from '@/hooks/useViewport';
 import PreviewModalHeader from '@/components/preview/PreviewModalHeader';
 import ScaledIframe from '@/components/preview/ScaledIframe';
 import { useCopyComponent } from '@/components/preview/hooks/useCopyComponent';
+import { useAuth } from '@/contexts/AuthContext';
+import { useConnectionsStore } from '@/store/connectionsStore';
 
 interface PreviewModalProps {
   isOpen: boolean;
@@ -32,6 +34,16 @@ const PreviewModalContent: React.FC<{
   const [customPrompt, setCustomPrompt] = React.useState('');
   const [referenceUrl, setReferenceUrl] = React.useState('');
   const [isGeneratingPersonalizedCopy, setIsGeneratingPersonalizedCopy] = React.useState(false);
+
+  // Bloqueia cópia se o componente for PRO e o usuário não for pro/admin
+  const { profile } = useAuth();
+  const { getConnectionById } = useConnectionsStore();
+  const connectionAccessLevel =
+    component?.connection_access_level ||
+    (component?.connection_id ? getConnectionById(component.connection_id)?.accessLevel : undefined) ||
+    'free';
+  const isPro = connectionAccessLevel === 'pro';
+  const canCopy = !isPro || profile?.role === 'pro' || profile?.role === 'admin';
 
   const openInNewTab = () => {
     window.open(previewUrl, '_blank', 'noopener,noreferrer');
@@ -69,6 +81,7 @@ const PreviewModalContent: React.FC<{
         onTogglePersonalizedCopy={() => setPersonalizedCopyOpen((prev) => !prev)}
         personalizedCopyOpen={personalizedCopyOpen}
         onOpenInNewTab={openInNewTab}
+        canCopy={canCopy}
       />
 
       {personalizedCopyOpen && (
@@ -103,9 +116,10 @@ const PreviewModalContent: React.FC<{
               <Button
                 size="sm"
                 onClick={handlePersonalizedCopy}
-                disabled={isGeneratingPersonalizedCopy || !customPrompt.trim()}
+                disabled={isGeneratingPersonalizedCopy || !customPrompt.trim() || !canCopy}
+                title={!canCopy ? "Componente PRO — faça upgrade para usar esta função" : undefined}
               >
-                {isGeneratingPersonalizedCopy ? 'Gerando...' : 'Gerar e Copiar'}
+                {isGeneratingPersonalizedCopy ? 'Gerando...' : !canCopy ? '🔒 PRO' : 'Gerar e Copiar'}
               </Button>
             </div>
           </div>
