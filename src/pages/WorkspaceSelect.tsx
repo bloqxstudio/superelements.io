@@ -30,13 +30,20 @@ const WorkspaceSelect: React.FC = () => {
   const { data: allWorkspaces, isLoading: adminLoading } = useAdminWorkspaces();
 
   // Redireciona para /auth se não autenticado
-  // Usa `user` (não `profile`) para evitar loop: user é setado junto com loading=true,
-  // profile só fica disponível depois do fetch async — mas loading ainda está true nesse período
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth', { replace: true });
     }
   }, [authLoading, user, navigate]);
+
+  // Usuários não-admin com apenas 1 workspace entram direto, sem ver esta tela
+  useEffect(() => {
+    if (authLoading || isLoading) return;
+    if (isAdmin) return;
+    if (workspaces.length === 1) {
+      navigate('/', { replace: true });
+    }
+  }, [authLoading, isLoading, isAdmin, workspaces.length, navigate]);
 
   const handleSelectOwn = (workspaceId: string) => {
     switchWorkspace(workspaceId);
@@ -138,8 +145,8 @@ const WorkspaceSelect: React.FC = () => {
         </div>
       </header>
 
-      {/* Dev mock toggle */}
-      {import.meta.env.DEV && (
+      {/* Dev mock toggle — only for non-demo users */}
+      {import.meta.env.DEV && !profile?.is_demo && (
         <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center justify-between text-xs text-amber-800">
           <span className="flex items-center gap-1.5">
             <FlaskConical className="h-3.5 w-3.5" />

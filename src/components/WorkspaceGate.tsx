@@ -10,12 +10,12 @@ interface WorkspaceGateProps {
 
 export const WorkspaceGate: React.FC<WorkspaceGateProps> = ({ children }) => {
   const { user, loading } = useAuth();
-  const { activeWorkspace } = useWorkspace();
+  const { activeWorkspace, workspaces, isLoading } = useWorkspace();
   const location = useLocation();
   const navigate = useNavigate();
 
   // Wait for auth + profile to finish loading
-  if (loading) {
+  if (loading || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -25,6 +25,16 @@ export const WorkspaceGate: React.FC<WorkspaceGateProps> = ({ children }) => {
 
   if (!user) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
+
+  // If workspaces are available but none is active yet (auto-select still propagating),
+  // show a spinner instead of the "select workspace" error screen
+  if (!activeWorkspace && workspaces.length > 0) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
   }
 
   if (!activeWorkspace) {

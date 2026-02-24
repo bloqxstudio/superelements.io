@@ -287,7 +287,10 @@ const LeadDetailSheet: React.FC<Props> = ({ leadId, onClose, onEditLead }) => {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                            <span className="font-medium">
+                            <span
+                              className="font-medium text-gray-700"
+                              title={interaction.author?.email ?? undefined}
+                            >
                               {interaction.author?.email?.split('@')[0] ?? 'Usuário'}
                             </span>
                             <span>·</span>

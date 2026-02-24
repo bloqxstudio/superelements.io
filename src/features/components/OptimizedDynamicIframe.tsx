@@ -268,11 +268,11 @@ const OptimizedDynamicIframe: React.FC<OptimizedDynamicIframeProps> = memo(({ ur
   
   // Determine if iframe should be rendered
   const shouldRenderIframe = isIntersecting || hasBeenInView;
-  
+
   return (
     <div ref={containerRef} className="w-full h-full relative overflow-hidden">
       {!loaded && shouldRenderIframe && <LoadingSkeleton />}
-      
+
       {shouldRenderIframe && (
         <iframe 
           ref={iframeRef} 

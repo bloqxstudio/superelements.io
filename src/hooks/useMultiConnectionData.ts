@@ -32,7 +32,8 @@ export const useMultiConnectionData = (workspaceId?: string) => {
       conn => {
         const isDesignerConn = conn.isActive && (!conn.connection_type || conn.connection_type === 'designer_connection');
         // If workspaceId is provided, filter by workspace (belt-and-suspenders on top of RLS)
-        const inWorkspace = !workspaceId || conn.workspace_id === workspaceId;
+        // Global connections (workspace_id === null) are always visible regardless of workspace
+        const inWorkspace = !workspaceId || conn.workspace_id === workspaceId || conn.workspace_id === null;
         return isDesignerConn && inWorkspace;
       }
     );

@@ -63,7 +63,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     role: m.role,
   }));
 
-  // Once profile is loaded, validate the persisted workspace ID is still valid
+  // Once profile is loaded, validate the persisted workspace ID or auto-select
   useEffect(() => {
     if (loading || !user || !profile) return;
 
@@ -73,8 +73,11 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
       return;
     }
 
-    if (activeWorkspaceId && !workspaces.some((w) => w.id === activeWorkspaceId)) {
-      // Auto-select first available workspace instead of clearing
+    const selectionInvalid = activeWorkspaceId && !workspaces.some((w) => w.id === activeWorkspaceId);
+    const noSelection = !activeWorkspaceId;
+
+    // Auto-select: no current selection, or current selection is no longer valid
+    if (noSelection || selectionInvalid) {
       const first = workspaces[0];
       setActiveWorkspaceId(first.id);
       localStorage.setItem(ACTIVE_WORKSPACE_KEY, first.id);

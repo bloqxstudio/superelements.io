@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { ExternalLink, Plus, Search } from 'lucide-react';
+import { AddClientDialog } from '@/components/AddClientDialog';
+import { ExternalLink, Plus, Search, Globe } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const containerVariants = {
@@ -51,9 +52,10 @@ const sectionClass =
 
 const ClientAccounts = () => {
   const navigate = useNavigate();
-  const { connections, isLoading, fetchConnections, getClientAccounts } = useConnectionsStore();
+  const { isLoading, fetchConnections, getClientAccounts } = useConnectionsStore();
   const { activeWorkspace } = useWorkspace();
   const [searchTerm, setSearchTerm] = useState('');
+  const [showAddClient, setShowAddClient] = useState(false);
 
   useEffect(() => {
     fetchConnections();
@@ -121,7 +123,7 @@ const ClientAccounts = () => {
             Gerencie os sites WordPress dos seus clientes
           </p>
         </div>
-        <Button onClick={() => navigate('/connections')}>
+        <Button onClick={() => setShowAddClient(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Adicionar Cliente
         </Button>
@@ -185,20 +187,44 @@ const ClientAccounts = () => {
       {filteredAccounts.length === 0 ? (
         <motion.section variants={itemVariants} className={sectionClass}>
         <Card className="border-gray-200/70 bg-white shadow-sm">
-          <CardContent className="p-12">
-            <div className="text-center">
-              <p className="text-muted-foreground mb-4">
-                {searchTerm
-                  ? 'Nenhum cliente encontrado com esse critério de busca.'
-                  : 'Nenhuma conta de cliente cadastrada ainda.'}
-              </p>
-              {!searchTerm && (
-                <Button onClick={() => navigate('/connections')}>
+          <CardContent className="p-10">
+            {searchTerm ? (
+              <div className="text-center">
+                <p className="text-muted-foreground">
+                  Nenhum cliente encontrado com esse critério de busca.
+                </p>
+              </div>
+            ) : (
+              <div className="max-w-sm mx-auto text-center">
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                  <Globe className="h-7 w-7 text-primary" />
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">
+                  Nenhum cliente ainda
+                </h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Adicione o site WordPress de um cliente para acompanhar o status e as páginas em um só lugar.
+                </p>
+                <ol className="text-left space-y-3 mb-6">
+                  {[
+                    'Informe a URL do site WordPress do cliente',
+                    'Insira o usuário e a senha de aplicação',
+                    'Pronto — o cliente aparece aqui automaticamente',
+                  ].map((step, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center mt-0.5">
+                        {i + 1}
+                      </span>
+                      <span className="text-sm text-gray-700">{step}</span>
+                    </li>
+                  ))}
+                </ol>
+                <Button className="w-full sm:w-auto" onClick={() => setShowAddClient(true)}>
                   <Plus className="mr-2 h-4 w-4" />
-                  Adicionar Primeiro Cliente
+                  Adicionar primeiro cliente
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </CardContent>
         </Card>
         </motion.section>
@@ -261,6 +287,12 @@ const ClientAccounts = () => {
         </motion.section>
       )}
       </motion.div>
+
+      <AddClientDialog
+        open={showAddClient}
+        onClose={() => setShowAddClient(false)}
+        onSuccess={() => fetchConnections()}
+      />
     </div>
   );
 };

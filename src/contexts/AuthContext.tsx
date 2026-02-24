@@ -20,6 +20,7 @@ export interface UserProfile {
   email: string;
   role: AppRole;
   phone?: string;
+  is_demo: boolean;
   workspaceMemberships: WorkspaceMembership[];
 }
 
@@ -43,11 +44,11 @@ export const useAuth = () => {
 };
 
 async function fetchProfile(userId: string): Promise<UserProfile | null> {
-  let profileData: { id: string; email: string; phone?: string } | null = null;
+  let profileData: { id: string; email: string; phone?: string; is_demo: boolean } | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, phone')
+      .select('id, email, phone, is_demo')
       .eq('id', userId)
       .single();
     if (!error) { profileData = data; break; }
@@ -72,8 +73,21 @@ async function fetchProfile(userId: string): Promise<UserProfile | null> {
     role: m.role as WorkspaceRole,
   }));
 
-  // Auto-enable mock for manager and pro users (no localStorage toggle needed)
   const appRole = (roleResult.data?.role as AppRole) || 'free';
+  const isDemo = profileData.is_demo ?? false;
+
+  // Demo users: expose only their first own workspace, no mock injection
+  if (isDemo) {
+    const ownMembership = workspaceMemberships[0] ?? null;
+    return {
+      ...profileData,
+      role: appRole,
+      is_demo: true,
+      workspaceMemberships: ownMembership ? [ownMembership] : [],
+    } as UserProfile;
+  }
+
+  // Auto-enable mock for manager and pro users (no localStorage toggle needed)
   const isManagerUser = workspaceMemberships.some((m) => m.role === 'manager');
   const isProOrManager = isManagerUser || appRole === 'pro';
   const shouldInjectMock = isMockOusenEnabled() || isProOrManager;
@@ -89,6 +103,7 @@ async function fetchProfile(userId: string): Promise<UserProfile | null> {
   return {
     ...profileData,
     role: appRole,
+    is_demo: false,
     workspaceMemberships: shouldInjectMock
       ? [...workspaceMemberships, mockMembership]
       : workspaceMemberships,

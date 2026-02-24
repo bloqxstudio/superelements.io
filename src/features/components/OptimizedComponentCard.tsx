@@ -51,15 +51,20 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
     if (!profile) {
       return { canCopy: false, requiresUpgrade: false, reason: 'login' };
     }
-    
+
+    // Demo users can see everything but cannot copy anything
+    if (profile.is_demo) {
+      return { canCopy: false, requiresUpgrade: false, reason: 'demo' };
+    }
+
     if (profile.role === 'admin') {
       return { canCopy: true, requiresUpgrade: false };
     }
-    
+
     if (accessLevel === 'free') {
       return { canCopy: true, requiresUpgrade: false };
     }
-    
+
     if (accessLevel === 'pro') {
       if (profile.role === 'pro') {
         return { canCopy: true, requiresUpgrade: false };
@@ -67,7 +72,7 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
         return { canCopy: false, requiresUpgrade: true, reason: 'upgrade' };
       }
     }
-    
+
     return { canCopy: true, requiresUpgrade: false };
   }, [profile, accessLevel]);
   
@@ -87,6 +92,16 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
       return;
     }
     
+    if (accessInfo.reason === 'demo') {
+      toast({
+        title: "🔒 Modo demonstração",
+        description: "Esta é uma conta de demonstração. Entre em contato para liberar o acesso completo.",
+        variant: "default",
+        duration: 5000
+      });
+      return;
+    }
+
     if (accessInfo.requiresUpgrade) {
       toast({
         title: "🔒 Componente PRO",
@@ -111,6 +126,14 @@ const OptimizedComponentCard: React.FC<OptimizedComponentCardProps> = memo(({
         icon: <Lock className="h-3 w-3 opacity-60" />,
         text: 'LOGIN',
         className: 'bg-muted border-muted-foreground/20 text-muted-foreground hover:bg-muted/80 cursor-pointer'
+      };
+    }
+
+    if (accessInfo.reason === 'demo') {
+      return {
+        icon: <Lock className="h-3 w-3" />,
+        text: 'DEMO',
+        className: 'bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed'
       };
     }
 

@@ -4,15 +4,17 @@ import { useLeads, useLeadMutations } from '@/hooks/useLeads';
 import { useLeadsStore } from '@/store/leadsStore';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { TrendingUp, Plus } from 'lucide-react';
+import { TrendingUp, Plus, LayoutGrid, List } from 'lucide-react';
 import { motion } from 'framer-motion';
 import LeadKanban from '@/components/leads/LeadKanban';
+import LeadListView from '@/components/leads/LeadListView';
 import LeadForm from '@/components/leads/LeadForm';
 import LeadDetailSheet from '@/components/leads/LeadDetailSheet';
 import type { Lead, LeadStatus, LeadFormValues } from '@/types/leads';
@@ -39,7 +41,7 @@ const Leads: React.FC = () => {
   const wsId = activeWorkspace?.id;
 
   const { data: leads = [], isLoading } = useLeads(wsId);
-  const { createLead, updateLead, deleteLead, moveLead } = useLeadMutations();
+  const { createLead, updateLead, moveLead } = useLeadMutations();
 
   const {
     optimisticLeads,
@@ -55,6 +57,7 @@ const Leads: React.FC = () => {
   } = useLeadsStore();
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
 
   const displayLeads = optimisticLeads ?? leads;
   const editingLead = leads.find((l) => l.id === editingLeadId) ?? null;
@@ -126,21 +129,51 @@ const Leads: React.FC = () => {
                 Gerencie leads e acompanhe o funil de vendas
               </p>
             </div>
-            <Button
-              size="sm"
-              className="rounded-xl"
-              onClick={() => {
-                setCreateLeadStatus('new_lead');
-                setCreateOpen(true);
-              }}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Novo lead
-            </Button>
+            <div className="flex items-center gap-2">
+              {/* View toggle */}
+              <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+                <button
+                  onClick={() => setViewMode('kanban')}
+                  className={cn(
+                    'p-1.5 rounded-md transition-colors',
+                    viewMode === 'kanban'
+                      ? 'bg-white shadow-sm text-gray-900'
+                      : 'text-gray-400 hover:text-gray-600'
+                  )}
+                  title="Visualização Kanban"
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={cn(
+                    'p-1.5 rounded-md transition-colors',
+                    viewMode === 'list'
+                      ? 'bg-white shadow-sm text-gray-900'
+                      : 'text-gray-400 hover:text-gray-600'
+                  )}
+                  title="Visualização em lista"
+                >
+                  <List className="h-4 w-4" />
+                </button>
+              </div>
+
+              <Button
+                size="sm"
+                className="rounded-xl"
+                onClick={() => {
+                  setCreateLeadStatus('new_lead');
+                  setCreateOpen(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Novo lead
+              </Button>
+            </div>
           </div>
         </motion.section>
 
-        {/* Kanban */}
+        {/* Main view */}
         <motion.div variants={itemVariants}>
           {isLoading ? (
             <div className="flex gap-3 overflow-x-auto pb-4">
@@ -148,13 +181,19 @@ const Leads: React.FC = () => {
                 <Skeleton key={i} className="h-64 w-72 shrink-0 rounded-lg" />
               ))}
             </div>
-          ) : (
+          ) : viewMode === 'kanban' ? (
             <LeadKanban
               leads={displayLeads}
               onLeadsChange={handleLeadsChange}
               onEditLead={handleEditLead}
               onLeadClick={(lead) => setDetailLeadId(lead.id)}
               onAddLead={handleOpenCreate}
+            />
+          ) : (
+            <LeadListView
+              leads={displayLeads}
+              onEditLead={handleEditLead}
+              onLeadClick={(lead) => setDetailLeadId(lead.id)}
             />
           )}
         </motion.div>

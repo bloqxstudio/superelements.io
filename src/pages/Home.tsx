@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useConnectionsStore } from '@/store/connectionsStore';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { supabase } from '@/integrations/supabase/client';
-import { OUSEN_CONNECTIONS, OUSEN_PROPOSALS, OUSEN_CLIENT_PAGES } from '@/mocks/ousenWorkspace';
+import { OUSEN_CONNECTIONS, OUSEN_CLIENT_PAGES } from '@/mocks/ousenWorkspace';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AddClientDialog } from '@/components/AddClientDialog';
 import {
   Users,
   CheckCircle2,
@@ -17,8 +18,6 @@ import {
   ArrowRight,
   ExternalLink,
   Globe,
-  Link2,
-  FileText,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -97,36 +96,22 @@ const getStatusLabel = (status: string): string => {
   }
 };
 
-const getRelativeTime = (date?: Date): string => {
-  if (!date) return 'Nunca testado';
-  const diffDays = Math.floor((Date.now() - new Date(date).getTime()) / 86400000);
-  if (diffDays === 0) return 'Hoje';
-  if (diffDays === 1) return 'Ontem';
-  if (diffDays < 7) return `${diffDays} dias atrás`;
-  return new Date(date).toLocaleDateString('pt-BR');
-};
-
 const quickActions = [
-  { label: 'Gerenciar Conexões', description: 'Adicionar e configurar', icon: Link2, path: '/connections' },
-  { label: 'Ver Propostas', description: 'Pipeline comercial', icon: FileText, path: '/proposals' },
-  { label: 'Clientes', description: 'Carteira completa', icon: Users, path: '/client-accounts' },
-  { label: 'Componentes', description: 'Biblioteca Elementor', icon: LayoutGrid, path: '/components' },
+  { label: 'Clientes', description: 'Carteira de sites WordPress', icon: Users, path: '/client-accounts' },
+  { label: 'Componentes', description: 'Biblioteca Elementor', icon: LayoutGrid, path: '/componentes' },
 ];
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const { activeWorkspace } = useWorkspace();
-  const { isLoading, getClientAccounts } = useConnectionsStore();
+  const { isLoading, getClientAccounts, fetchConnections } = useConnectionsStore();
+  const [showAddClient, setShowAddClient] = useState(false);
 
-  // Detecta workspace mock pelo slug — funciona independente de flag ou store
   const isMockOusen = activeWorkspace?.slug === 'ousen';
 
-  const [proposalsCount, setProposalsCount] = useState<number | null>(null);
-  const [isProposalsLoading, setIsProposalsLoading] = useState(false);
   const [pageCountByConnection, setPageCountByConnection] = useState<Record<string, number>>({});
 
   const { clientAccounts, errorAccounts, connectedAccounts, prioritizedAccounts } = useMemo(() => {
-    // Mock: serve dados direto do arquivo, sem depender do store
     if (isMockOusen) {
       const accounts = OUSEN_CONNECTIONS;
       const errorAccounts = accounts.filter((a) => a.status === 'error');
@@ -154,27 +139,6 @@ const Home: React.FC = () => {
     ].slice(0, 6);
     return { clientAccounts, errorAccounts, connectedAccounts, prioritizedAccounts };
   }, [isMockOusen, getClientAccounts, activeWorkspace]);
-
-  useEffect(() => {
-    if (isMockOusen) {
-      setProposalsCount(OUSEN_PROPOSALS.filter((p) => p.status !== 'rejected').length);
-      return;
-    }
-    if (!activeWorkspace?.id) {
-      setProposalsCount(0);
-      return;
-    }
-    setIsProposalsLoading(true);
-    supabase
-      .from('proposals')
-      .select('id', { count: 'exact', head: true })
-      .eq('workspace_id', activeWorkspace.id)
-      .neq('status', 'rejected')
-      .then(({ count, error }) => {
-        if (!error) setProposalsCount(count ?? 0);
-        setIsProposalsLoading(false);
-      });
-  }, [isMockOusen, activeWorkspace?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isMockOusen) {
@@ -208,20 +172,20 @@ const Home: React.FC = () => {
   if (isLoading && !isMockOusen) {
     return (
       <div className="min-h-screen bg-[#f7f7f8]">
-        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-6xl mx-auto space-y-7">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-4xl mx-auto space-y-7">
           <Skeleton className="h-10 w-64" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-28 rounded-lg" />
             ))}
           </div>
           <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map((i) => (
+            {[1, 2, 3, 4].map((i) => (
               <Skeleton key={i} className="h-16 rounded-lg" />
             ))}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
+          <div className="grid grid-cols-2 gap-4">
+            {[1, 2].map((i) => (
               <Skeleton key={i} className="h-24 rounded-lg" />
             ))}
           </div>
@@ -233,11 +197,12 @@ const Home: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#f7f7f8]">
       <motion.div
-        className="px-4 sm:px-6 lg:px-8 py-6 max-w-6xl mx-auto space-y-7"
+        className="px-4 sm:px-6 lg:px-8 py-6 max-w-4xl mx-auto space-y-7"
         variants={containerVariants}
         initial={false}
         animate="show"
       >
+
       {/* ── A: Header ── */}
       <motion.section variants={itemVariants} className={sectionClass}>
         <div className="flex items-start sm:items-center justify-between flex-wrap gap-3">
@@ -245,14 +210,14 @@ const Home: React.FC = () => {
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               {getGreeting()}, {activeWorkspace?.name || 'Admin'}
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">Visão geral da sua operação</p>
+            <p className="text-sm text-muted-foreground mt-1">Visão geral dos seus clientes</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate('/client-accounts')}>
               <Users className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Clientes</span>
             </Button>
-            <Button size="sm" onClick={() => navigate('/connections')}>
+            <Button size="sm" onClick={() => setShowAddClient(true)}>
               <Plus className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Novo Cliente</span>
             </Button>
@@ -260,10 +225,9 @@ const Home: React.FC = () => {
         </div>
       </motion.section>
 
-      {/* ── B: Stats Row ── */}
+      {/* ── B: Stats ── */}
       <motion.section variants={itemVariants} className={sectionClass}>
-        <motion.div variants={cardStagger} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* Total de Clientes */}
+        <motion.div variants={cardStagger} className="grid grid-cols-3 gap-4">
           <motion.div variants={cardItem}>
             <Card className="border-gray-200/70 bg-white shadow-sm">
               <CardContent className="p-4 sm:p-6">
@@ -285,7 +249,6 @@ const Home: React.FC = () => {
             </Card>
           </motion.div>
 
-          {/* Conectados */}
           <motion.div variants={cardItem}>
             <Card className="border-gray-200/70 bg-white shadow-sm">
               <CardContent className="p-4 sm:p-6">
@@ -302,7 +265,6 @@ const Home: React.FC = () => {
             </Card>
           </motion.div>
 
-          {/* Com Problema */}
           <motion.div variants={cardItem}>
             <Card
               className={errorAccounts.length > 0 ? 'border-destructive/50 bg-destructive/5 shadow-sm' : 'border-gray-200/70 bg-white shadow-sm'}
@@ -311,40 +273,12 @@ const Home: React.FC = () => {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-xs sm:text-sm font-medium text-muted-foreground">Com Problema</p>
-                    <p
-                      className={`text-2xl sm:text-3xl font-bold mt-1 ${
-                        errorAccounts.length > 0 ? 'text-red-600' : ''
-                      }`}
-                    >
+                    <p className={`text-2xl sm:text-3xl font-bold mt-1 ${errorAccounts.length > 0 ? 'text-red-600' : ''}`}>
                       {errorAccounts.length}
                     </p>
                   </div>
-                  <AlertCircle
-                    className={`h-4 w-4 sm:h-5 sm:w-5 ${
-                      errorAccounts.length > 0 ? 'text-destructive' : 'text-muted-foreground'
-                    }`}
-                  />
+                  <AlertCircle className={`h-4 w-4 sm:h-5 sm:w-5 ${errorAccounts.length > 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Propostas Ativas */}
-          <motion.div variants={cardItem}>
-            <Card className="border-gray-200/70 bg-white shadow-sm">
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs sm:text-sm font-medium text-muted-foreground">Propostas Ativas</p>
-                    {isProposalsLoading ? (
-                      <Skeleton className="h-8 w-14 mt-1" />
-                    ) : (
-                      <p className="text-2xl sm:text-3xl font-bold mt-1">{proposalsCount ?? '—'}</p>
-                    )}
-                  </div>
-                  <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">em aberto</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -366,24 +300,47 @@ const Home: React.FC = () => {
                     : 'Nenhuma conta cadastrada'}
                 </CardDescription>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/client-accounts')}>
-                Ver todos
-                <ArrowRight className="h-4 w-4 ml-1" />
-              </Button>
+              {clientAccounts.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => navigate('/client-accounts')}>
+                  Ver todos
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              )}
             </div>
           </CardHeader>
 
           <CardContent className="p-0">
             {clientAccounts.length === 0 ? (
-              <div className="px-6 py-10 text-center">
-                <Users className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground mb-4">
-                  Nenhuma conta de cliente cadastrada ainda.
-                </p>
-                <Button size="sm" onClick={() => navigate('/connections')}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Adicionar Cliente
-                </Button>
+              <div className="px-6 py-10">
+                <div className="max-w-sm mx-auto text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                    <Globe className="h-7 w-7 text-primary" />
+                  </div>
+                  <h3 className="text-base font-semibold text-gray-900 mb-1">
+                    Conecte seu primeiro cliente
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Adicione o site WordPress de um cliente para acompanhar o status, páginas e histórico — tudo em um só lugar.
+                  </p>
+                  <ol className="text-left space-y-3 mb-6">
+                    {[
+                      'Informe a URL do site WordPress do cliente',
+                      'Insira o usuário e a senha de aplicação',
+                      'Pronto — o cliente aparece aqui automaticamente',
+                    ].map((step, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center mt-0.5">
+                          {i + 1}
+                        </span>
+                        <span className="text-sm text-gray-700">{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                  <Button className="w-full sm:w-auto" onClick={() => setShowAddClient(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar primeiro cliente
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -393,7 +350,6 @@ const Home: React.FC = () => {
                     className="px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 hover:bg-gray-50 cursor-pointer transition-colors group"
                     onClick={() => navigate(`/client-accounts/${account.id}`)}
                   >
-                    {/* Status dot */}
                     <div
                       className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full flex-shrink-0 ${
                         account.status === 'connected'
@@ -405,36 +361,21 @@ const Home: React.FC = () => {
                           : 'bg-gray-400'
                       }`}
                     />
-
-                    {/* Globe avatar */}
                     <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
                       <Globe className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                     </div>
-
-                    {/* Account info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">
-                        {account.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {account.base_url}
-                      </p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">{account.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{account.base_url}</p>
                     </div>
-
-                    {/* Page count — only md+ */}
                     {pageCountByConnection[account.id] !== undefined && (
                       <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
                         <LayoutGrid className="h-3.5 w-3.5" />
                         <span>{pageCountByConnection[account.id]} páginas</span>
                       </div>
                     )}
-
-                    {/* Right side */}
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <Badge
-                        variant={getStatusBadgeVariant(account.status)}
-                        className="text-[10px] sm:text-xs"
-                      >
+                      <Badge variant={getStatusBadgeVariant(account.status)} className="text-[10px] sm:text-xs">
                         {getStatusLabel(account.status)}
                       </Badge>
                       <button
@@ -473,7 +414,7 @@ const Home: React.FC = () => {
           <h2 className="text-base font-semibold text-gray-900">Acesso Rápido</h2>
           <p className="text-xs text-muted-foreground mt-0.5">Atalhos para as principais áreas</p>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {quickActions.map((item) => {
             const Icon = item.icon;
             return (
@@ -496,6 +437,12 @@ const Home: React.FC = () => {
       </motion.section>
 
       </motion.div>
+
+      <AddClientDialog
+        open={showAddClient}
+        onClose={() => setShowAddClient(false)}
+        onSuccess={() => fetchConnections()}
+      />
     </div>
   );
 };

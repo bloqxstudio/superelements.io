@@ -47,6 +47,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
   // Manager role: can only access /inicio and /client-accounts
   const isManager = activeWorkspace?.role === 'manager';
 
+  // Demo users only see: Início, Clientes and Biblioteca
+  const isDemo = profile?.is_demo ?? false;
+
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
     if (path === '/componentes') {
@@ -139,7 +142,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
                 onClick={() => handleNavClick('/client-accounts')}
               />
 
-              {!isManager && (
+              {!isManager && !isDemo && (
                 <NavItem
                   icon={<FileText className="h-4 w-4" />}
                   label="Propostas"
@@ -151,7 +154,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
             </div>
 
             {/* Projetos */}
-            {!isManager && (
+            {!isManager && !isDemo && (
               <>
                 <p className="mt-5 mb-1 px-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
                   Projetos
@@ -176,7 +179,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
             )}
 
             {/* Comercial */}
-            {!isManager && (
+            {!isManager && !isDemo && (
               <>
                 <p className="mt-5 mb-1 px-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
                   Comercial

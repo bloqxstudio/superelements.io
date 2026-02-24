@@ -2,12 +2,13 @@
 import React from 'react';
 import { useMultiConnectionData } from '@/hooks/useMultiConnectionData';
 import { useLibraryComponentCount } from '@/hooks/useLibraryComponentCount';
+import { useConnectionsStore } from '@/store/connectionsStore';
 import { Button } from '@/components/ui/button';
-import { Folder, FolderOpen, Globe, RefreshCw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Folder, FolderOpen, Globe } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCategoryCache } from '@/hooks/useCategoryCache';
 import { useComponentMetadataCache } from '@/hooks/useComponentMetadataCache';
-import { toast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
@@ -16,6 +17,7 @@ export const CategorySidebar: React.FC = () => {
   const { invalidateCache: invalidateCategoryCache } = useCategoryCache();
   const { invalidateCache: invalidateComponentCache } = useComponentMetadataCache();
   const queryClient = useQueryClient();
+  const { getConnectionById } = useConnectionsStore();
   const { data: libCount } = useLibraryComponentCount(activeWorkspace?.id);
   const {
     connectionsData,
@@ -64,17 +66,6 @@ export const CategorySidebar: React.FC = () => {
         {/* Header Section */}
         <div className="px-4 border-b border-gray-200 py-[8px]">
 
-          {/* Force Refresh Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full justify-center text-xs font-medium mb-2"
-            onClick={handleForceRefresh}
-          >
-            <RefreshCw className="h-3 w-3 mr-2" />
-            Forçar Atualização
-          </Button>
-
           {/* All Components Option */}
           <Button
             variant={isInAllComponentsState ? "default" : "ghost"}
@@ -114,13 +105,29 @@ export const CategorySidebar: React.FC = () => {
                         }`}
                         onClick={() => handleConnectionClick(connection.connectionId)}
                       >
-                        <div className="flex items-center truncate">
+                        <div className="flex items-center gap-1.5 truncate">
                           {expandedConnections.has(connection.connectionId) ? (
-                            <FolderOpen className="h-3 w-3 mr-2 flex-shrink-0" />
+                            <FolderOpen className="h-3 w-3 flex-shrink-0" />
                           ) : (
-                            <Folder className="h-3 w-3 mr-2 flex-shrink-0" />
+                            <Folder className="h-3 w-3 flex-shrink-0" />
                           )}
                           <span className="truncate">{connection.connectionName}</span>
+                          {(() => {
+                            const conn = getConnectionById(connection.connectionId);
+                            if (!conn) return null;
+                            if (conn.accessLevel === 'pro') {
+                              return (
+                                <Badge className="text-[10px] px-1.5 py-0 h-4 flex-shrink-0 bg-gradient-to-r from-pro-gradient-from to-pro-gradient-to text-white border-0">
+                                  PRO
+                                </Badge>
+                              );
+                            }
+                            return (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 flex-shrink-0">
+                                Free
+                              </Badge>
+                            );
+                          })()}
                         </div>
                         {libCount?.byConnection[connection.connectionId] != null ? (
                           <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
