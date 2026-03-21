@@ -439,7 +439,7 @@ export type Database = {
           status: string
           updated_at: string
           user_type: string
-          workspace_id: string
+          workspace_id: string | null
         }
         Insert: {
           access_level?: Database["public"]["Enums"]["app_role"] | null
@@ -460,7 +460,7 @@ export type Database = {
           status?: string
           updated_at?: string
           user_type?: string
-          workspace_id: string
+          workspace_id?: string | null
         }
         Update: {
           access_level?: Database["public"]["Enums"]["app_role"] | null
@@ -481,7 +481,7 @@ export type Database = {
           status?: string
           updated_at?: string
           user_type?: string
-          workspace_id?: string
+          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -609,6 +609,167 @@ export type Database = {
           use_count?: number | null
         }
         Relationships: []
+      }
+      lead_interactions: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          lead_id: string
+          workspace_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id: string
+          workspace_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_interactions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_interactions_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_interactions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_projects: {
+        Row: {
+          created_at: string
+          id: string
+          lead_id: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lead_id: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lead_id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_projects_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_cost_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "lead_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          company: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          estimated_value: number | null
+          id: string
+          kanban_status: Database["public"]["Enums"]["lead_status"]
+          name: string
+          notes: string | null
+          phone: string | null
+          position: number
+          source: Database["public"]["Enums"]["lead_source"]
+          tags: string[]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          estimated_value?: number | null
+          id?: string
+          kanban_status?: Database["public"]["Enums"]["lead_status"]
+          name: string
+          notes?: string | null
+          phone?: string | null
+          position?: number
+          source?: Database["public"]["Enums"]["lead_source"]
+          tags?: string[]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          estimated_value?: number | null
+          id?: string
+          kanban_status?: Database["public"]["Enums"]["lead_status"]
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          position?: number
+          source?: Database["public"]["Enums"]["lead_source"]
+          tags?: string[]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       page_analytics: {
         Row: {
@@ -805,6 +966,7 @@ export type Database = {
           created_at: string
           email: string
           id: string
+          is_demo: boolean
           phone: string | null
           updated_at: string
         }
@@ -813,6 +975,7 @@ export type Database = {
           created_at?: string
           email: string
           id: string
+          is_demo?: boolean
           phone?: string | null
           updated_at?: string
         }
@@ -821,10 +984,191 @@ export type Database = {
           created_at?: string
           email?: string
           id?: string
+          is_demo?: boolean
           phone?: string | null
           updated_at?: string
         }
         Relationships: []
+      }
+      project_tasks: {
+        Row: {
+          actual_hours: number
+          assignee_id: string | null
+          billed_at: string | null
+          billing_status: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          estimated_hours: number | null
+          hourly_rate: number | null
+          id: string
+          kanban_status: Database["public"]["Enums"]["task_status"]
+          position: number
+          project_id: string
+          service_catalog_id: string | null
+          task_cost: number | null
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          actual_hours?: number
+          assignee_id?: string | null
+          billed_at?: string | null
+          billing_status?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          estimated_hours?: number | null
+          hourly_rate?: number | null
+          id?: string
+          kanban_status?: Database["public"]["Enums"]["task_status"]
+          position?: number
+          project_id: string
+          service_catalog_id?: string | null
+          task_cost?: number | null
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          actual_hours?: number
+          assignee_id?: string | null
+          billed_at?: string | null
+          billing_status?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          estimated_hours?: number | null
+          hourly_rate?: number | null
+          id?: string
+          kanban_status?: Database["public"]["Enums"]["task_status"]
+          position?: number
+          project_id?: string
+          service_catalog_id?: string | null
+          task_cost?: number | null
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_tasks_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_cost_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_service_catalog_id_fkey"
+            columns: ["service_catalog_id"]
+            isOneToOne: false
+            referencedRelation: "service_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          budget: number | null
+          client_account_id: string | null
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          description: string | null
+          id: string
+          name: string
+          status: Database["public"]["Enums"]["project_status"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          budget?: number | null
+          client_account_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          status?: Database["public"]["Enums"]["project_status"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          budget?: number | null
+          client_account_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          status?: Database["public"]["Enums"]["project_status"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_client_account_id_fkey"
+            columns: ["client_account_id"]
+            isOneToOne: false
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_client_account_id_fkey"
+            columns: ["client_account_id"]
+            isOneToOne: false
+            referencedRelation: "shared_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       proposals: {
         Row: {
@@ -940,6 +1284,57 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "resources_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_catalog: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          default_hourly_rate: number
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          default_hourly_rate?: number
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          default_hourly_rate?: number
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_catalog_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_catalog_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1108,221 +1503,6 @@ export type Database = {
           },
         ]
       }
-      service_catalog: {
-        Row: {
-          id: string
-          workspace_id: string
-          name: string
-          description: string | null
-          default_hourly_rate: number
-          is_active: boolean
-          created_by: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          workspace_id: string
-          name: string
-          description?: string | null
-          default_hourly_rate?: number
-          is_active?: boolean
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          workspace_id?: string
-          name?: string
-          description?: string | null
-          default_hourly_rate?: number
-          is_active?: boolean
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "service_catalog_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "service_catalog_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      projects: {
-        Row: {
-          id: string
-          workspace_id: string
-          client_account_id: string | null
-          name: string
-          description: string | null
-          status: Database["public"]["Enums"]["project_status"]
-          budget: number | null
-          deadline: string | null
-          created_by: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          workspace_id: string
-          client_account_id?: string | null
-          name: string
-          description?: string | null
-          status?: Database["public"]["Enums"]["project_status"]
-          budget?: number | null
-          deadline?: string | null
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          workspace_id?: string
-          client_account_id?: string | null
-          name?: string
-          description?: string | null
-          status?: Database["public"]["Enums"]["project_status"]
-          budget?: number | null
-          deadline?: string | null
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "projects_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_client_account_id_fkey"
-            columns: ["client_account_id"]
-            isOneToOne: false
-            referencedRelation: "connections"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      project_tasks: {
-        Row: {
-          id: string
-          project_id: string
-          workspace_id: string
-          title: string
-          description: string | null
-          kanban_status: Database["public"]["Enums"]["task_status"]
-          position: number
-          service_catalog_id: string | null
-          hourly_rate: number | null
-          estimated_hours: number | null
-          actual_hours: number
-          task_cost: number | null
-          assignee_id: string | null
-          billing_status: string
-          billed_at: string | null
-          due_date: string | null
-          created_by: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          project_id: string
-          workspace_id: string
-          title: string
-          description?: string | null
-          kanban_status?: Database["public"]["Enums"]["task_status"]
-          position?: number
-          service_catalog_id?: string | null
-          hourly_rate?: number | null
-          estimated_hours?: number | null
-          actual_hours?: number
-          assignee_id?: string | null
-          billing_status?: string
-          billed_at?: string | null
-          due_date?: string | null
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          project_id?: string
-          workspace_id?: string
-          title?: string
-          description?: string | null
-          kanban_status?: Database["public"]["Enums"]["task_status"]
-          position?: number
-          service_catalog_id?: string | null
-          hourly_rate?: number | null
-          estimated_hours?: number | null
-          actual_hours?: number
-          assignee_id?: string | null
-          billing_status?: string
-          billed_at?: string | null
-          due_date?: string | null
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_tasks_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_service_catalog_id_fkey"
-            columns: ["service_catalog_id"]
-            isOneToOne: false
-            referencedRelation: "service_catalog"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_assignee_id_fkey"
-            columns: ["assignee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Views: {
       figma_conversion_stats: {
@@ -1333,6 +1513,47 @@ export type Database = {
           total_uses: number | null
         }
         Relationships: []
+      }
+      project_cost_summary: {
+        Row: {
+          billed_cost: number | null
+          budget: number | null
+          client_account_id: string | null
+          completed_tasks: number | null
+          deadline: string | null
+          project_id: string | null
+          project_name: string | null
+          project_status: Database["public"]["Enums"]["project_status"] | null
+          total_actual_hours: number | null
+          total_cost: number | null
+          total_estimated_hours: number | null
+          total_tasks: number | null
+          unbilled_cost: number | null
+          workspace_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_client_account_id_fkey"
+            columns: ["client_account_id"]
+            isOneToOne: false
+            referencedRelation: "connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_client_account_id_fkey"
+            columns: ["client_account_id"]
+            isOneToOne: false
+            referencedRelation: "shared_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shared_connections: {
         Row: {
@@ -1379,31 +1600,6 @@ export type Database = {
         }
         Relationships: []
       }
-      project_cost_summary: {
-        Row: {
-          project_id: string | null
-          workspace_id: string | null
-          client_account_id: string | null
-          project_name: string | null
-          project_status: Database["public"]["Enums"]["project_status"] | null
-          budget: number | null
-          deadline: string | null
-          total_tasks: number | null
-          total_actual_hours: number | null
-          total_estimated_hours: number | null
-          total_cost: number | null
-          unbilled_cost: number | null
-          billed_cost: number | null
-          completed_tasks: number | null
-        }
-        Insert: {
-          [_ in never]: never
-        }
-        Update: {
-          [_ in never]: never
-        }
-        Relationships: []
-      }
     }
     Functions: {
       get_user_role: {
@@ -1434,9 +1630,34 @@ export type Database = {
     }
     Enums: {
       app_role: "free" | "pro" | "admin"
+      lead_source:
+        | "indication"
+        | "instagram"
+        | "linkedin"
+        | "website"
+        | "cold_outreach"
+        | "other"
+      lead_status:
+        | "new_lead"
+        | "contacted"
+        | "proposal"
+        | "negotiation"
+        | "won"
+        | "lost"
+      project_status:
+        | "planning"
+        | "active"
+        | "on_hold"
+        | "completed"
+        | "cancelled"
+      task_status:
+        | "backlog"
+        | "todo"
+        | "in_progress"
+        | "in_review"
+        | "done"
+        | "billed"
       workspace_role: "owner" | "member" | "manager"
-      project_status: "planning" | "active" | "on_hold" | "completed" | "cancelled"
-      task_status: "backlog" | "todo" | "in_progress" | "in_review" | "done" | "billed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1565,6 +1786,37 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["free", "pro", "admin"],
+      lead_source: [
+        "indication",
+        "instagram",
+        "linkedin",
+        "website",
+        "cold_outreach",
+        "other",
+      ],
+      lead_status: [
+        "new_lead",
+        "contacted",
+        "proposal",
+        "negotiation",
+        "won",
+        "lost",
+      ],
+      project_status: [
+        "planning",
+        "active",
+        "on_hold",
+        "completed",
+        "cancelled",
+      ],
+      task_status: [
+        "backlog",
+        "todo",
+        "in_progress",
+        "in_review",
+        "done",
+        "billed",
+      ],
       workspace_role: ["owner", "member", "manager"],
     },
   },
