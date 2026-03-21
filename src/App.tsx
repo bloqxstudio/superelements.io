@@ -33,6 +33,8 @@ import Projects from "@/pages/Projects";
 import ProjectDetail from "@/pages/ProjectDetail";
 import ProjectsOverview from "@/pages/ProjectsOverview";
 import Leads from "@/pages/Leads";
+import Space from "@/pages/Space";
+import CartPreview from "@/pages/CartPreview";
 
 
 const queryClient = new QueryClient();
@@ -153,6 +155,12 @@ function App() {
                     </WorkspaceGate>
                   } />
 
+                  <Route path="space" element={
+                    <WorkspaceGate>
+                      <Space />
+                    </WorkspaceGate>
+                  } />
+
                   <Route path="partners" element={<Partners />} />
                 </Route>
 
@@ -161,6 +169,16 @@ function App() {
 
                 {/* Studio Partners — versão Paper & Ink para Ousen */}
                 <Route path="/studio-partners-ousen" element={<StudioPartnersOusen />} />
+
+                {/* Cart preview — public within auth, no sidebar */}
+                <Route
+                  path="/carrinho"
+                  element={
+                    <WorkspaceGate>
+                      <CartPreview />
+                    </WorkspaceGate>
+                  }
+                />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>

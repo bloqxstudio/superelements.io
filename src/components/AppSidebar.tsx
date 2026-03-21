@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { Logo } from '@/components/Logo';
-import { Home, Building2, Download, LayoutGrid, LogOut, FileText, X, FolderOpen, Layers, TrendingUp } from 'lucide-react';
+import { Home, Building2, Download, LayoutGrid, LogOut, FileText, X, FolderOpen, Layers, TrendingUp, Network } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -67,7 +67,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
           location.pathname !== '/proposals' &&
           !location.pathname.startsWith('/projects') &&
           location.pathname !== '/projects/overview' &&
-          !location.pathname.startsWith('/leads')
+          !location.pathname.startsWith('/leads') &&
+          location.pathname !== '/space' &&
+          location.pathname !== '/carrinho'
           )
       );
     }
@@ -195,6 +197,24 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
                 </div>
               </>
             )}
+          </>
+        )}
+
+        {/* Ferramentas */}
+        {!isManager && !isDemo && (
+          <>
+            <p className="mt-5 mb-1 px-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              Ferramentas
+            </p>
+            <div className="space-y-0.5">
+              <NavItem
+                icon={<Network className="h-4 w-4" />}
+                label="Space"
+                path="/space"
+                active={isActive('/space')}
+                onClick={() => handleNavClick('/space')}
+              />
+            </div>
           </>
         )}
 

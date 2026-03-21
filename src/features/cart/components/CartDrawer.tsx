@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Copy, Trash2, ShoppingCart, Sparkles, ChevronDown, ChevronUp, Lock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Copy, Trash2, ShoppingCart, Sparkles, ChevronDown, ChevronUp, Lock, Eye } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -26,6 +27,7 @@ import { useConnectionsStore } from '@/store/connectionsStore';
 import { useAuth } from '@/contexts/AuthContext';
 
 export const CartDrawer: React.FC = () => {
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
   const { items, isOpen, closeCart, clearCart, reorderItems } = useCartStore();
   const { copyAllToClipboard, copying } = useCartCopy();
@@ -205,6 +207,15 @@ export const CartDrawer: React.FC = () => {
             </div>
 
             <SheetFooter className="flex-col sm:flex-col gap-2 mt-4">
+              <Button
+                onClick={() => { closeCart(); navigate('/carrinho'); }}
+                className="w-full"
+                size="lg"
+                variant="secondary"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                Ver Projeto Completo
+              </Button>
               <Button
                 onClick={handleCopyAll}
                 disabled={copying || !user || !canCopy}
