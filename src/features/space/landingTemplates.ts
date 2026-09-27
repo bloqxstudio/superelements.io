@@ -438,7 +438,7 @@ export const createLandingTemplates = (): LandingTemplate[] => [
   createUglyCashTemplate(),
   createMenuzitoTemplate(),
   createProcessBaseTemplate(),
-  createPdvLightLibraryTemplate(),
+  ...[createPdvLightLibraryTemplate()].filter((template): template is LandingTemplate => template !== null),
   {
     id: 'portfolio-editorial',
     name: 'Portfólio editorial',

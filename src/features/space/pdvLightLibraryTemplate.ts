@@ -1,11 +1,17 @@
 import type { SectionNodeData } from '@/types/space'
 import type { LandingTemplate } from './landingTemplates'
-import c1Raw from '../../../data/section-express/sections/c1.json?raw'
-import c25Raw from '../../../data/section-express/sections/c25.json?raw'
-import c37Raw from '../../../data/section-express/sections/c37.json?raw'
-import c53Raw from '../../../data/section-express/sections/c53.json?raw'
-import c60Raw from '../../../data/section-express/sections/c60.json?raw'
-import c71Raw from '../../../data/section-express/sections/c71.json?raw'
+
+// O pack fica fora do git (data/section-express/ no .gitignore). Com glob, um
+// clone sem o pack ainda compila: o modelo só aparece onde o pack existe.
+const PACK = import.meta.glob<string>('/data/section-express/sections/{c1,c25,c37,c53,c60,c71}.json', { query: '?raw', import: 'default', eager: true })
+const packSection = (id: string) => PACK[`/data/section-express/sections/${id}.json`] ?? ''
+const c1Raw = packSection('c1')
+const c25Raw = packSection('c25')
+const c37Raw = packSection('c37')
+const c53Raw = packSection('c53')
+const c60Raw = packSection('c60')
+const c71Raw = packSection('c71')
+const PACK_READY = [c1Raw, c25Raw, c37Raw, c53Raw, c60Raw, c71Raw].every(Boolean)
 
 type JsonRecord = Record<string, unknown>
 type ElementorNode = {
@@ -321,11 +327,11 @@ selector .elementor-widget-image img{width:100%;aspect-ratio:1/1;object-fit:cove
   mergeSettings(images[0], { image: imageValue(media.operation, 'Restaurante usando a Saipos para organizar pedidos do iFood') })
 })
 
-export const createPdvLightLibraryTemplate = (): LandingTemplate => ({
+export const createPdvLightLibraryTemplate = (): LandingTemplate | null => PACK_READY ? ({
   id: 'pdv-light-biblioteca',
   name: 'PDV Light · biblioteca',
   description: 'Landing montada exclusivamente com seis seções reais do pack local, customizadas para a iniciativa PDV Light.',
   audience: 'Teste da biblioteca',
   componentIds: ['c1', 'c25', 'c37', 'c53', 'c71', 'c60'],
   sections: [makeHero(), makeJourney(), makeDemo(), makeReadiness(), makePilotFaq(), makeFinalCta()],
-})
+}) : null
