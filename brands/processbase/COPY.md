@@ -119,6 +119,11 @@ Duração, personalização, quem conduz, formato, quem participa, pagamento e o
 - Rótulo: Conversa de diagnóstico · Título: **Conte o momento da empresa.** · Texto: O Gian responde para marcar a conversa de diagnóstico. *(da seção 13)*
 - Foto e nome do Gian com a frase da agenda limitada, o mesmo formulário e "Usamos estes dados só para responder você."
 
+## 13c. WhatsApp flutuante
+
+- Botão fixo no canto inferior direito: "Falar com o Gian" com o ícone do WhatsApp (no celular, só o círculo verde). Abre `wa.me` com a mensagem "Olá, Gian. Vim pelo site da ProcessBase e quero conversar sobre o diagnóstico."
+- **Pendente:** o número do Gian (`GIAN_WHATSAPP` em `processbaseTemplate.ts`). Enquanto estiver vazio, o botão abre a modal de diagnóstico.
+
 ## 14. Rodapé
 
 Assinatura "Estrutura para melhorar. Ritmo para crescer." (Figma), categoria, links e "© 2026 ProcessBase · São Leopoldo, RS".
@@ -129,6 +134,6 @@ Assinatura "Estrutura para melhorar. Ritmo para crescer." (Figma), categoria, li
 
 1. **Resultados:** os quatro clientes aceitaram dar depoimento (respostas do Gian, bloco 5), mas o que existe hoje é o tema do resultado, não a frase de cada um. Confirmar se os nomes podem aparecer e, quando as falas forem coletadas, trocar os cards por citações.
 2. **Fotos:** o retrato do Gian tem 400 × 400 px e fica um pouco mole no card de "Quem conduz"; pedir a versão em alta (de 1200 px para cima). A `photos/operacao-estruturada.jpg` do protótipo saiu da página; o DESIGN.md ainda pede foto real de operação (§7, item 3) se ela voltar.
-3. **Contato:** o vault não tem WhatsApp nem e-mail público da ProcessBase. O formulário precisa de destinatário e anti-spam no WordPress.
+3. **Contato:** o vault não tem WhatsApp nem e-mail público da ProcessBase. O botão flutuante de WhatsApp já está pronto e só espera o número do Gian (`GIAN_WHATSAPP`). O formulário precisa de destinatário e anti-spam no WordPress.
 4. **Hipótese do inimigo:** a página usa a palavra do cliente ("depender de você", "organização") e deixa "dependência de pessoas" como leitura por trás, como recomenda o StoryBrand. Revisar se novas entrevistas mudarem isso.
 5. **Nomes dos testes** (LAPL, Tavistock): ficaram fora da página até o Gian confirmar a grafia (Método §12).

@@ -6,7 +6,7 @@ import { PROCESSBASE_EMBLEM_SCRIPT } from '@/features/processbase/emblem3d'
 import { PROCESSBASE_MODAL_SCRIPT } from '@/features/processbase/modal'
 import { PROCESSBASE_STORY_SCRIPT } from '@/features/processbase/story'
 import {
-  ARROW, bg, border, createBuilder, FIXED, fluid, gap, hl, link, maxw, pct, px, reveal, RING_CSS, sides, T, texture, tweak,
+  ARROW, bg, border, createBuilder, FIXED, fluid, gap, hl, link, maxw, pct, px, reveal, RING_CSS, sides, T, texture, tweak, typography,
   type PBBuilder, type Tone,
 } from '@/features/processbase/elementor'
 import { PB, PB_EASE, PB_FONT, PB_LAYOUT as L } from '@/features/processbase/tokens'
@@ -878,6 +878,59 @@ const makeModal = (): SectionNodeData => {
   return b.section('ProcessBase · Modal de diagnóstico', 'processbase-modal', root)
 }
 
+// ── whatsapp flutuante ──────────────────────────────────────────────────────
+
+/**
+ * WhatsApp do Gian, só dígitos com país e DDD (ex.: 5551999999999). O vault
+ * não tem o número público (COPY.md, "Antes de publicar"): enquanto estiver
+ * vazio, o botão abre a modal de diagnóstico em vez de um número errado.
+ */
+const GIAN_WHATSAPP = ''
+const WHATSAPP_MESSAGE = 'Olá, Gian. Vim pelo site da ProcessBase e quero conversar sobre o diagnóstico.'
+const WHATSAPP_GREEN = '#25D366'
+
+/**
+ * Botão fixo no canto inferior direito: pílula navy "Falar com o Gian" com o
+ * ícone do WhatsApp num círculo verde; no celular, só o círculo. Abre a
+ * conversa direto com o Gian, com a mensagem pronta.
+ */
+const makeWhatsApp = (): SectionNodeData => {
+  const b = createBuilder('pbw')
+  const url = GIAN_WHATSAPP ? `https://wa.me/${GIAN_WHATSAPP}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}` : '#contato'
+  const button = b.widget('button', {
+    text: 'Falar com o Gian', size: 'md',
+    link: { url, is_external: GIAN_WHATSAPP ? 'on' : '', nofollow: '', custom_attributes: '' },
+    selected_icon: { value: 'fab fa-whatsapp', library: 'fa-brands' }, icon_align: 'row', icon_indent: px(12),
+    ...typography({ size: 14, weight: 600, line: 1.2 }),
+    text_padding: sides(6, 20, 6, 6), border_radius: sides(L.radius.pill),
+    background_color: PB.navy, button_text_color: PB.white,
+    button_background_hover_color: PB.navyRaised, hover_color: PB.white,
+    border_border: 'solid', border_width: sides(1), border_color: 'rgba(255,255,255,0.14)', button_hover_border_color: 'rgba(255,255,255,0.28)',
+    _css_classes: 'pb-wa',
+  })
+
+  const root = b.root([button], {
+    background: 'transparent', tag: 'div', pad: false,
+    settings: { css_classes: 'pb-wa-dock' },
+    css: [
+      // preso no canto, abaixo da modal (1000) e acima do navbar (100)
+      'selector{position:fixed!important;right:24px;bottom:24px;left:auto;top:auto;z-index:900;width:auto!important;max-width:none;padding:0!important;background:transparent!important;overflow:visible}',
+      'selector>.e-con-inner{width:auto;max-width:none;padding:0}',
+      // flutua sobre navy e sobre branco: a sombra separa, o filete segura no escuro
+      'selector .pb-wa .elementor-button{min-height:52px;box-shadow:0 1px 2px rgba(23,26,44,.18),0 10px 28px -6px rgba(23,26,44,.38)}',
+      'selector .pb-wa .elementor-button-content-wrapper{display:flex;align-items:center}',
+      `selector .pb-wa .elementor-button-icon{width:40px;height:40px;border-radius:50%;justify-content:center;background:${WHATSAPP_GREEN};color:${PB.white}}`,
+      'selector .pb-wa .elementor-button-icon i{font-size:22px}selector .pb-wa .elementor-button-icon svg{width:22px;height:22px}',
+      // o ícone não desliza como a seta dos CTAs
+      'selector .pb-wa .elementor-button:hover .elementor-button-icon{transform:none}',
+      '@media(prefers-reduced-motion:no-preference){@keyframes pbWaIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}selector{animation:pbWaIn 360ms cubic-bezier(.2,.7,.2,1) 700ms both}}',
+      // celular: só o círculo verde; o texto some da tela mas continua para o leitor
+      `@media(max-width:767px){selector{right:16px;bottom:16px}selector .pb-wa .elementor-button{width:56px;height:56px;min-height:56px;padding:0!important;border:0;background:${WHATSAPP_GREEN}}selector .pb-wa .elementor-button-content-wrapper{gap:0!important}selector .pb-wa .elementor-button-icon{width:56px;height:56px;background:transparent}selector .pb-wa .elementor-button-icon i{font-size:28px}selector .pb-wa .elementor-button-icon svg{width:28px;height:28px}selector .pb-wa .elementor-button-text{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}`,
+    ].join(''),
+  })
+  return b.section('ProcessBase · WhatsApp flutuante', 'processbase-whatsapp', root)
+}
+
 export const createProcessBaseTemplate = (): LandingTemplate => ({
   id: 'processbase',
   name: 'ProcessBase',
@@ -885,6 +938,6 @@ export const createProcessBaseTemplate = (): LandingTemplate => ({
   audience: 'ProcessBase',
   sections: [
     makeNavbar(), makeHero(), makeAntesDepois(), makeComoFunciona(), makeOQueFica(),
-    makeQuemConduz(), makeDuvidas(), makeContato(), makeRodape(), makeModal(),
+    makeQuemConduz(), makeDuvidas(), makeContato(), makeRodape(), makeModal(), makeWhatsApp(),
   ],
 })
