@@ -270,7 +270,7 @@ export const categorize = (entries: PackEntry[]): PackEntry[] => {
   });
 };
 
-const fold = (text: string) =>
+export const fold = (text: string) =>
   text
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')

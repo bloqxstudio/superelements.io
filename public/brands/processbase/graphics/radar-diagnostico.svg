@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" fill="none">
+  <g stroke="#829AAF" stroke-opacity=".24" stroke-width="1">
+    <polygon points="200,30 370,200 200,370 30,200"/>
+    <polygon points="200,72.5 327.5,200 200,327.5 72.5,200"/>
+    <polygon points="200,115 285,200 200,285 115,200"/>
+    <polygon points="200,157.5 242.5,200 200,242.5 157.5,200"/>
+    <line x1="200" y1="30" x2="200" y2="370"/>
+    <line x1="30" y1="200" x2="370" y2="200"/>
+  </g>
+  <polygon points="200,47 353,200 200,353 47,200" stroke="#829AAF" stroke-width="1.5" stroke-dasharray="4 6" stroke-linejoin="round"/>
+  <polygon points="200,106.5 259.5,200 200,251 123.5,200" fill="#FF5900" fill-opacity=".2" stroke="#FF5900" stroke-width="2" stroke-linejoin="round"/>
+  <g fill="#1E2237" stroke="#FF5900" stroke-width="3">
+    <circle cx="200" cy="106.5" r="5"/>
+    <circle cx="259.5" cy="200" r="5"/>
+    <circle cx="200" cy="251" r="5"/>
+    <circle cx="123.5" cy="200" r="5"/>
+  </g>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 140" preserveAspectRatio="none" fill="none">
+  <defs>
+    <linearGradient id="pb-area" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF5900" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#FF5900" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <path d="M0,122 C50,118 58,104 100,108 S160,92 205,97 S268,64 315,72 S382,44 420,50 S468,22 500,26 L500,140 L0,140 Z" fill="url(#pb-area)"/>
+  <path d="M0,122 C50,118 58,104 100,108 S160,92 205,97 S268,64 315,72 S382,44 420,50 S468,22 500,26" stroke="#FF5900" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+</svg>

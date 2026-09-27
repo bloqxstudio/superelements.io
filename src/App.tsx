@@ -18,6 +18,7 @@ import UglyCashStyleGuide from "@/pages/UglyCashStyleGuide";
 import UglyCashElementorPreview from "@/pages/UglyCashElementorPreview";
 import ZeloStyleGuide from "@/pages/ZeloStyleGuide";
 import ZeloElementorPreview from "@/pages/ZeloElementorPreview";
+import ProcessBaseElementorPreview from "@/pages/ProcessBaseElementorPreview";
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
               <Route path="/uglycash-elementor-preview" element={<UglyCashElementorPreview />} />
               <Route path="/zelo-style-guide" element={<ZeloStyleGuide />} />
               <Route path="/zelo-elementor-preview" element={<ZeloElementorPreview />} />
+              <Route path="/processbase-elementor-preview" element={<ProcessBaseElementorPreview />} />
 
               {/* Projetos (um por cliente); cada um abre o seu Space */}
               <Route

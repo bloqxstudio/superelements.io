@@ -48,3 +48,22 @@ Scope: `/zelo-style-guide`, `/zelo-elementor-preview`, `src/features/zelo/**`, `
 - Templates are native Elementor trees built with `src/features/zelo/elementor.ts`. Constrain reading width with `min(100%, Npx)`, never a fixed width. Every section root keeps `overflow-x: clip`.
 - The only HTML widget is the ledger script in "A conta": it holds behavior only, all content is native.
 - Motion stays inside `prefers-reduced-motion: no-preference`. Hover never carries essential content.
+
+### ProcessBase model
+
+Scope: `/processbase-elementor-preview`, `src/features/processbase/**`, `src/features/space/processbaseTemplate.ts`, `src/features/space/processbaseGraph.ts`, `brands/processbase/**` and `public/brands/processbase/**`.
+
+- Source of truth: `brands/processbase/DESIGN.md` (tokens from processbase.fig) and `brands/processbase/COPY.md` (copy from the client vault, with sources and open items).
+- Font: Inter only, headings at weight 400 with tight line-height and negative tracking. Lexend Deca lives only inside the logo files.
+- Headline highlight (`hl()` in `src/features/processbase/elementor.ts`, as in the hero): one key phrase per headline in semibold 600, slate `#829AAF` on navy, slate-ink `#5F7A91` on light (the plain slate fails contrast on white), weight only on the orange card. Prefer highlighting the whole last line so a line break never splits it.
+- Core colors: navy `#171A2C`, navy raised `#1E2237`, orange `#FF5900`, slate `#829AAF`, white, mist `#F2F3F5`, body `#5E6472`, border `#C9CCD3`. Text on orange buttons is white semibold with the arrow icon (`ARROW`, Font Awesome) and hover `#E24E00`: the user chose it knowing it is 3.1:1, below AA for small text. Do not switch back to navy text without asking.
+- One orange accent per screen. Orange is never a background block: it lives in CTAs, small marks and the lit emblem. The contact block is navy with square corners (the orange version failed contrast).
+- Cards use the double frame (6px shell + core with 16px radius, panel head with label and tag). No shadows: depth comes from navy against white.
+- Section order: navbar, hero + pillar cards, o que muda, como funciona, o que fica, especialista, FAQ, form, footer. Tones alternate navy, white, mist, navy, white, mist, white, navy. No background color transitions between sections (tried and removed by the user): each section always shows its own color. The logo story stays reversible: formation, turn, fills and legend go back and forth with the scroll.
+- Textures come from the library backgrounds (`src/features/section-pack/decorativeBackgroundPresets.ts`) adapted to the brand through `texture` in `src/features/processbase/elementor.ts`: dots, grid, grain, glow, plus the 2:1 hatch from the emblem cuts. Nothing behind the logo. Always masked and faint; no orbital circles (no curves as decoration).
+- The navbar is the one glass surface, by the user's request: navy at 82% with backdrop blur, overlapping the hero (negative margin), solid navy where blur is unsupported. Below 82% it turns gray over the white sections.
+- Small labels on light backgrounds are navy with an orange bar in front, because orange text fails contrast at small sizes.
+- Diagonals follow the emblem: 2:1 cuts (about 63°) or 45° chamfers. No curves or waves as decoration.
+- Hover only changes color. Motion is a short entrance, plus the one scroll story in the first section: the hero graph flows into the flat emblem, the emblem turns into a 3D block in 2:1 isometry, then the pillar cards stack and fill its pieces in orange (GSAP ScrollTrigger from jsDelivr, `src/features/processbase/story.ts`). Every rule stays behind `prefers-reduced-motion`, and without GSAP the page shows the final state.
+- Templates are native Elementor trees built with `src/features/processbase/elementor.ts`. The only HTML widgets are the mobile menu, the hero sky (graph canvas plus the story script), the emblem block canvas (`src/features/processbase/emblem3d.ts`) and the diagnosis modal's close button plus behavior (`src/features/processbase/modal.ts`); the legend, the cards, the modal content and all text stay native.
+- Every "Agendar diagnóstico" link points to `#contato`; the modal script intercepts those clicks and opens `#agendar-diagnostico` (last section). Without JS the link still scrolls to the open form at the bottom, which stays for people who never click. The two forms use different field ids (`modal_` prefix).
