@@ -3,6 +3,7 @@ import { Link, Outlet, useMatch } from 'react-router-dom';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Logo } from '@/components/Logo';
 import { ProjectBreadcrumb, ProjectContextButton } from '@/features/projects/ProjectHeader';
+import { ProjectWordPressButton } from '@/features/wordpress/WordPressDialog';
 
 /** Altura do header (56px + 1px de borda): o Space ocupa o resto da tela. */
 const Layout: React.FC = () => {
@@ -19,6 +20,7 @@ const Layout: React.FC = () => {
             {projectId && <ProjectBreadcrumb projectId={projectId} />}
           </nav>
           <div className="flex shrink-0 items-center gap-2">
+            {projectId && <ProjectWordPressButton projectId={projectId} />}
             {projectId && <ProjectContextButton projectId={projectId} />}
             <UserAvatar />
           </div>

@@ -32,7 +32,7 @@ export const sides = (top: number, right = top, bottom = top, left = right) => (
   isLinked: top === right && right === bottom && bottom === left,
 })
 export const media = (url: string, alt = '') => ({ id: '', url, alt, source: 'url', size: '' })
-export const link = (url: string) => ({ url, is_external: '', nofollow: '', custom_attributes: '' })
+export const link = (url: string, external = false) => ({ url, is_external: external ? 'on' : '', nofollow: '', custom_attributes: '' })
 export const bg = (color: string) => ({ background_background: 'classic', background_color: color })
 export const border = (color: string, width = sides(1)) => ({ border_border: 'solid', border_width: width, border_color: color })
 

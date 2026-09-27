@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { ClipboardPaste, Copy, FileText, MoreHorizontal, Pencil, Play, Plus, Trash2 } from 'lucide-react'
+import { ClipboardPaste, CloudUpload, Copy, FileText, Globe, MoreHorizontal, Pencil, Play, Plus, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -10,6 +10,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { STATUS_LABELS, useWordPressUi } from '@/features/wordpress/uiStore'
+import { useActiveWordPress } from '@/features/wordpress/useWordPressConnection'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { SpaceNode, SpacePage } from '@/types/space'
 import { Hint } from '../ToolbarIsland'
@@ -71,6 +73,8 @@ const PageFrame: React.FC<PageFrameProps> = ({ page, nodes, onlyPage }) => {
   const clipboardCount = useSpaceStore((s) => s.clipboard?.sections.length ?? 0)
   const { movePage, setActivePage, setRenamingPage, openPlayer, duplicatePage, removePage, pasteSections } = useSpaceStore.getState()
   const [dragging, setDragging] = useState(false)
+  const wordpress = useActiveWordPress()
+  const siteLink = page.wordpress
   // O menu devolve o foco ao botão ao fechar; em Renomear o foco tem de ficar no campo
   const keepFocus = useRef(false)
   const bodyDown = useRef({ x: 0, y: 0 })
@@ -150,6 +154,20 @@ const PageFrame: React.FC<PageFrameProps> = ({ page, nodes, onlyPage }) => {
               {page.name}
             </h2>
             <span className="shrink-0 text-[11px] tabular-nums text-gray-400">{count ? plural(count, 'seção', 'seções') : 'vazia'}</span>
+            {siteLink && (
+              <Hint label={`No WordPress: ${siteLink.title}`} hint={`${STATUS_LABELS[siteLink.status] ?? siteLink.status} · publicar atualiza essa página`}>
+                <a
+                  href={siteLink.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onMouseDown={stop}
+                  className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-sky-50 px-1.5 text-[11px] font-medium text-sky-700 transition-colors hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Globe className="h-3 w-3" aria-hidden />
+                  No site
+                </a>
+              </Hint>
+            )}
           </>
         )}
 
@@ -165,7 +183,8 @@ const PageFrame: React.FC<PageFrameProps> = ({ page, nodes, onlyPage }) => {
               Player
             </button>
           </Hint>
-          <DropdownMenu>
+          {/* Não modal: o menu modal bloqueia os cliques da tela e, se abre um diálogo, o bloqueio fica preso */}
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
@@ -205,6 +224,14 @@ const PageFrame: React.FC<PageFrameProps> = ({ page, nodes, onlyPage }) => {
               <DropdownMenuItem className="gap-2 rounded-lg text-xs" onSelect={() => duplicatePage(page.id)}>
                 <Copy className="h-3.5 w-3.5" /> Duplicar
               </DropdownMenuItem>
+              <DropdownMenuItem className="gap-2 rounded-lg text-xs" onSelect={() => useWordPressUi.getState().openDetails(page.id)}>
+                <Search className="h-3.5 w-3.5" /> Detalhes e SEO…
+              </DropdownMenuItem>
+              {wordpress && (
+                <DropdownMenuItem className="gap-2 rounded-lg text-xs" disabled={!count} onSelect={() => useWordPressUi.getState().openPublish(page.id)}>
+                  <CloudUpload className="h-3.5 w-3.5" /> {siteLink?.siteUrl === wordpress.site.siteUrl ? 'Atualizar no site…' : 'Publicar no site…'}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="gap-2 rounded-lg text-xs text-red-600 focus:bg-red-50 focus:text-red-700"

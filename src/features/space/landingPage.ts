@@ -118,7 +118,9 @@ export function sectionBase(section: SpaceNode, nodes: SpaceNode[], connections:
  * Elementos de uma seção com as conexões de texto e paleta aplicadas. A marca
  * entra por último e prevalece sobre a paleta conectada; o movimento escolhido
  * para a seção no nível Movimento (ou `motion`, um rascunho) vale no lugar do
- * movimento da marca.
+ * movimento da marca. Seção importada do site do cliente não recebe a marca:
+ * a troca de cada cor pela cor da marca mais próxima desfiguraria o site ao
+ * publicar de volta. Só o movimento escolhido para ela entra.
  */
 export function sectionWithTransforms(
   section: SpaceNode,
@@ -129,7 +131,8 @@ export function sectionWithTransforms(
 ): Element[] | null {
   const elements = sectionBase(section, nodes, connections)
   if (!elements) return null
-  const effective = sectionBrand(brand ?? null, motion ?? (section.data as SectionNodeData).levels?.motion)
+  const data = section.data as SectionNodeData
+  const effective = sectionBrand(data.origin ? null : brand ?? null, motion ?? data.levels?.motion)
   return effective ? applyBrand(elements, effective) : elements
 }
 

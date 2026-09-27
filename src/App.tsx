@@ -11,6 +11,7 @@ import Auth from "@/pages/Auth";
 import NotFound from "@/pages/NotFound";
 import Projects from "@/pages/Projects";
 import ProjectSpace from "@/pages/ProjectSpace";
+import WordPressCallback from "@/pages/WordPressCallback";
 import MenuzitoModel from "@/pages/MenuzitoModel";
 import MenuzitoStyleGuide from "@/pages/MenuzitoStyleGuide";
 import UglyCashModel from "@/pages/UglyCashModel";
@@ -31,6 +32,8 @@ function App() {
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/login" element={<Auth />} />
+              {/* Volta da aprovação no WordPress; sem login no caminho para não perder a senha da URL */}
+              <Route path="/wordpress/retorno" element={<WordPressCallback />} />
               <Route path="/menuzito-modelo" element={<MenuzitoModel />} />
               <Route path="/menuzito-style-guide" element={<MenuzitoStyleGuide />} />
               <Route path="/uglycash-modelo" element={<UglyCashModel />} />

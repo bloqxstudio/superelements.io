@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useSpaceStore } from '@/store/spaceStore'
 import { useBrandStore } from '@/features/space/brand/brandStore'
+import { useSiteKitStore } from '@/features/wordpress/siteKitStore'
 import { summarize, useProjectStore } from './projectStore'
 import { loadProjectDoc, saveProjectDoc } from './storage'
 
@@ -28,11 +29,13 @@ export const useProjectSession = (projectId: string | undefined) => {
       timer = undefined
       const { nodes, connections, pages, canvasTransform } = useSpaceStore.getState()
       const { source, enabled, logoRatios, brand } = useBrandStore.getState()
+      const { kit } = useSiteKitStore.getState()
       useProjectStore.getState().saved(projectId, summarize(nodes, brand, pages), edited)
       edited = false
       saveProjectDoc(projectId, {
         canvas: { nodes, connections, pages, canvasTransform },
         brand: { source, enabled, logoRatios },
+        site: kit,
       }).catch((error) => {
         console.error('[projetos] falha ao salvar', error)
         if (warned) return
@@ -64,6 +67,7 @@ export const useProjectSession = (projectId: string | undefined) => {
         if (cancelled) return
         useSpaceStore.getState().loadCanvas(doc?.canvas)
         useBrandStore.getState().load(doc?.brand)
+        useSiteKitStore.getState().load(doc?.site)
 
         unsubscribers.push(
           useSpaceStore.subscribe((s, prev) => {
@@ -73,6 +77,9 @@ export const useProjectSession = (projectId: string | undefined) => {
           useBrandStore.subscribe((s, prev) => {
             if (s.source !== prev.source || s.enabled !== prev.enabled) schedule(true)
             else if (s.logoRatios !== prev.logoRatios) schedule(false)
+          }),
+          useSiteKitStore.subscribe((s, prev) => {
+            if (s.kit !== prev.kit) schedule(true)
           })
         )
         window.addEventListener('pagehide', flush)

@@ -7,7 +7,8 @@ import { SCREEN_HEIGHT, VIEWPORT_WIDTH, type PreviewViewport } from '@/features/
 import { useSpaceStore } from '@/store/spaceStore'
 import { buildLandingPage } from '../landingPage'
 import { copyLandingToElementor, downloadLandingHtml } from '../exportLanding'
-import { brandKit } from '../brand/applyBrand'
+import { useSiteKit } from '@/features/wordpress/siteKitStore'
+import { isFromSite, renderKit } from '../renderKit'
 import { useActiveBrand } from '../brand/brandStore'
 import { pageSections, plural } from './pages'
 
@@ -80,6 +81,7 @@ export const PagePlayer: React.FC = () => {
   const connections = useSpaceStore((s) => s.connections)
   const closePlayer = useSpaceStore((s) => s.closePlayer)
   const brand = useActiveBrand()
+  const siteKit = useSiteKit()
   const [viewport, setViewport] = useState<PreviewViewport>('desktop')
   const [replay, setReplay] = useState(0)
 
@@ -90,9 +92,13 @@ export const PagePlayer: React.FC = () => {
   const html = useMemo(
     () =>
       built?.elements.length && page
-        ? renderElementorDocument(built.elements, { title: page.name, kit: brand ? brandKit(brand) : undefined, motion: 'play' }).document
+        ? renderElementorDocument(built.elements, {
+            title: page.name,
+            kit: renderKit(brand, siteKit, pageSections(page, nodes).some(isFromSite)),
+            motion: 'play',
+          }).document
         : null,
-    [built, page, brand]
+    [built, page, nodes, brand, siteKit]
   )
 
   const count = built?.sectionCount ?? 0

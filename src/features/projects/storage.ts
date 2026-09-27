@@ -1,3 +1,4 @@
+import type { WordPressConnection } from '@/features/wordpress/types'
 import type { ProjectDoc } from './types'
 
 /**
@@ -38,4 +39,40 @@ export const saveProjectDoc = async (id: string, doc: ProjectDoc) => {
 
 export const deleteProjectDoc = async (id: string) => {
   await run('readwrite', (s) => s.delete(id))
+}
+
+// A conexão com o WordPress fica fora do documento do projeto, que o canvas regrava a cada edição
+const connectionKey = (id: string) => `wordpress:${id}`
+
+export const loadWordPressConnection = (id: string) =>
+  run<WordPressConnection | undefined>('readonly', (s) => s.get(connectionKey(id)))
+
+export const saveWordPressConnection = async (id: string, connection: WordPressConnection) => {
+  await run('readwrite', (s) => s.put(connection, connectionKey(id)))
+}
+
+export const deleteWordPressConnection = async (id: string) => {
+  await run('readwrite', (s) => s.delete(connectionKey(id)))
+}
+
+/** O conteúdo que uma página do site tinha antes de cada atualização feita daqui, o mais novo primeiro. */
+export interface PublishBackup {
+  elementorData: string
+  modifiedGmt: string
+  savedAt: number
+}
+
+const backupKey = (id: string, postId: number) => `wordpress-backup:${id}:${postId}`
+
+export const loadPublishBackups = async (id: string, postId: number) =>
+  (await run<PublishBackup[] | undefined>('readonly', (s) => s.get(backupKey(id, postId)))) ?? []
+
+export const savePublishBackups = async (id: string, postId: number, backups: PublishBackup[]) => {
+  await run('readwrite', (s) => s.put(backups, backupKey(id, postId)))
+}
+
+/** Apaga as cópias de segurança de todas as páginas do projeto. */
+export const deletePublishBackups = async (id: string) => {
+  const prefix = `wordpress-backup:${id}:`
+  await run('readwrite', (s) => s.delete(IDBKeyRange.bound(prefix, `${prefix}\uffff`)))
 }

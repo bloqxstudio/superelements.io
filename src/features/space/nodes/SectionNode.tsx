@@ -4,6 +4,7 @@ import { useSpaceStore } from '@/store/spaceStore'
 import { PreviewFrame } from '@/features/elementor-preview/PreviewFrame'
 import { parseSectionElements } from '@/features/space/landingPage'
 import { useActiveBrand } from '@/features/space/brand/brandStore'
+import { useSiteKit } from '@/features/wordpress/siteKitStore'
 import { sectionLensDocument } from '@/features/space/levels/lens'
 import { sectionMotionLabel } from '@/features/space/levels/motion'
 import { pageOf } from '@/features/space/pages/pages'
@@ -34,6 +35,7 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   )
 
   const brand = useActiveBrand()
+  const siteKit = useSiteKit()
 
   // No nível Movimento, a seção selecionada já aparece com o rascunho
   const draft = editLevel === 'motion' && selected ? motionDraft ?? undefined : undefined
@@ -42,9 +44,9 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   const rendered = useMemo(() => {
     const { nodes: all, connections: conns } = useSpaceStore.getState()
     const current = all.find((n) => n.id === node.id)
-    return current ? sectionLensDocument({ section: current, nodes: all, connections: conns, brand, level: editLevel, draft, replay }) : null
+    return current ? sectionLensDocument({ section: current, nodes: all, connections: conns, brand, site: siteKit, level: editLevel, draft, replay }) : null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node.id, data.elementorJson, data.title, data.levels, transformKey, brand, editLevel, draft, replay])
+  }, [node.id, data.elementorJson, data.title, data.levels, transformKey, brand, siteKit, editLevel, draft, replay])
 
   const motionLabel = sectionMotionLabel(data.levels?.motion)
 

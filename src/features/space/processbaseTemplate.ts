@@ -314,8 +314,8 @@ const makeHero = (): SectionNodeData => {
       'selector .pb-hero-proof{max-width:100%}selector .pb-hero-proof .e-con{min-width:0}',
       'selector .pb-hero-lede p{text-wrap:pretty}',
       'selector .pb-avatar{width:48px;height:48px;border-radius:50%;overflow:hidden;outline:1px solid rgba(255,255,255,.12);outline-offset:-1px}',
-      // a foto é o Gian inteiro: amplia a partir do rosto
-      'selector .pb-avatar img{display:block;width:48px;height:48px;object-fit:cover;transform:scale(2.7);transform-origin:61% 19%}',
+      // a foto é o Gian inteiro: amplia 2,7× e leva o rosto (61,5% 21% da foto) ao centro do círculo (50% − 2,7 × ponto)
+      'selector .pb-avatar img{display:block;width:48px;height:48px;object-fit:cover;transform-origin:0 0;transform:translate(-116.05%,-6.7%) scale(2.7)}',
       `selector .pb-story-fold{scroll-margin-top:${L.nav}px}`,
       // desktop: o logo ocupa a coluna esquerda desde o topo da seção, ao lado do
       // título; título e cards ficam à direita. No celular, título, logo e cards em coluna.
@@ -547,7 +547,7 @@ const makeAntesDepois = (): SectionNodeData => {
 const makeQuemConduz = (): SectionNodeData => {
   const b = createBuilder('pbx')
   const photo = b.frame([
-    b.image('photos/gian-bianchin-machado.png', 'Gian Bianchin Machado, sentado, de camisa azul-marinho, sorrindo', { width: pct(100), _css_classes: 'pb-photo' }),
+    b.image('photos/gian-bianchin-machado-retrato.jpg', 'Gian Bianchin Machado, de camisa azul-marinho, com a mão no queixo, sorrindo', { width: pct(100), _css_classes: 'pb-photo' }),
     b.col([
       b.heading('Quem conduz', tweak(T.micro, { size: 10, weight: 700, letter: 0.18 }), PB.orange),
       b.heading('Todas as reuniões,<br>pessoalmente.', tweak(T.cardSm, { size: 17, line: 1.25 }), PB.white),
@@ -584,7 +584,8 @@ const makeQuemConduz = (): SectionNodeData => {
       // hachura 2:1 do emblema no canto de baixo, atrás da foto
       texture.hatch('rgba(23,26,44,.08)', '0% 100%', 12, '45% 60%'),
       'selector .pb-photo-core{position:relative}',
-      'selector .pb-photo img{display:block;width:100%;aspect-ratio:1;object-fit:cover;object-position:50% 30%}',
+      // retrato vertical: o corte deixa respiro acima da cabeça no quadrado e no 4:3
+      'selector .pb-photo img{display:block;width:100%;aspect-ratio:1;object-fit:cover;object-position:50% 24%}',
       // retrato: sem as linhas diagonais da marca, que cortariam o Gian
       'selector .pb-photo-label{position:absolute!important;left:20px;bottom:20px;width:auto!important;z-index:1}',
       `selector .pb-quote .elementor-heading-title{padding-left:20px;border-left:3px solid ${PB.orange}}`,
@@ -659,6 +660,16 @@ const makeDuvidas = (): SectionNodeData => {
 
 // ── contato ─────────────────────────────────────────────────────────────────
 
+/** Contato público da ProcessBase, enviado pelo Gian em 2026-09-27 (COPY.md §13d). */
+const GIAN_WHATSAPP = '5551985445411'
+const GIAN_WHATSAPP_LABEL = '(51) 98544-5411'
+const WHATSAPP_MESSAGE = 'Olá, Gian. Vim pelo site da ProcessBase e quero conversar sobre o diagnóstico.'
+const WHATSAPP_URL = `https://wa.me/${GIAN_WHATSAPP}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`
+/** Caixa que recebe os formulários e aparece no rodapé. */
+const CONTACT_EMAIL = 'processbase08@gmail.com'
+const INSTAGRAM_HANDLE = '@process_base01'
+const INSTAGRAM_URL = 'https://www.instagram.com/process_base01/'
+
 /** Borda dos campos: 3,2:1 no branco (a #C9CCD3 dava 1,6:1 e o campo sumia). */
 const FIELD_BORDER = '#8A909C'
 
@@ -680,6 +691,7 @@ const contactForm = (b: PBBuilder, prefix = '') => {
     })),
     input_size: 'sm', show_labels: 'true', button_size: 'md', button_width: '100', button_align: 'stretch', button_text: 'Agendar diagnóstico',
     submit_actions: ['email'],
+    email_to: CONTACT_EMAIL,
     email_subject: 'Novo pedido de diagnóstico pelo site da ProcessBase',
     success_message: 'Recebemos. O Gian responde para marcar a conversa.',
     error_message: 'Não foi possível enviar agora. Tente de novo em instantes.',
@@ -766,11 +778,11 @@ const makeContato = (): SectionNodeData => {
 
 const makeRodape = (): SectionNodeData => {
   const b = createBuilder('pbz')
-  const footLink = (label: string, url: string) => b.heading(label, T.small, PB.onNavy, { link: link(url), title_hover_color: PB.white })
-  const column = (title: string, links: Array<[string, string]>) => b.col([
+  const footLink = (label: string, url: string) => b.heading(label, T.small, PB.onNavy, { link: link(url, url.startsWith('https:')), title_hover_color: PB.white })
+  const column = (title: string, links: Array<[string, string]>, settings = {}) => b.col([
     b.heading(title, T.micro, PB.slate, { _margin: sides(0, 0, 6, 0) }),
     ...links.map(([label, url]) => footLink(label, url)),
-  ], 10)
+  ], 10, settings)
 
   const main = b.grid([
     b.col([
@@ -781,7 +793,12 @@ const makeRodape = (): SectionNodeData => {
     b.grid([
       column('Método Base', [['Cultura e pessoas', '#metodo'], ['Processos', '#metodo'], ['Treinamentos', '#metodo'], ['Planejamento estratégico', '#metodo']]),
       column('A ProcessBase', [['O que muda', '#o-que-muda'], ['Como funciona', '#como-funciona'], ['O que fica com você', '#o-que-fica'], ['Especialista', '#quem-conduz'], ['Dúvidas', '#duvidas']]),
-      column('Contato', [['Agendar diagnóstico', '#contato']]),
+      column('Contato', [
+        ['Agendar diagnóstico', '#contato'],
+        [`WhatsApp ${GIAN_WHATSAPP_LABEL}`, WHATSAPP_URL],
+        [CONTACT_EMAIL, `mailto:${CONTACT_EMAIL}`],
+        [`Instagram ${INSTAGRAM_HANDLE}`, INSTAGRAM_URL],
+      ], { css_classes: 'pb-foot-contact' }),
     ], 'repeat(3,minmax(0,1fr))', 24, {}, { mobile: 'repeat(2,minmax(0,1fr))' }),
   ], 'minmax(0,1fr) minmax(0,1.3fr)', [40, 56], { padding: sides(72, 0, 56), padding_mobile: sides(56, 0, 40), css_classes: 'pb-foot-main' }, { tablet: '1fr', mobile: '1fr' })
 
@@ -803,6 +820,8 @@ const makeRodape = (): SectionNodeData => {
       'selector{position:relative;isolation:isolate}',
       texture.grain('rgba(255,255,255,.12)', '50% 100%', '80% 80%'),
       'selector .pb-foot-logo img{display:block;height:28px;width:auto}',
+      // e-mail e telefone não cabem em meia coluna no celular: o contato ocupa a linha
+      '@media(max-width:767px){selector .pb-foot-contact{grid-column:1/-1}}',
       // supergráfico: o emblema em branco a 6%, grande, à direita (DESIGN.md §3)
       'selector .pb-super{position:absolute!important;right:-80px;top:50%;width:460px!important;max-width:none!important;margin:0!important;transform:translateY(-50%);opacity:.06;pointer-events:none;z-index:-1}',
       'selector .pb-super img{display:block;width:100%;height:auto}',
@@ -880,13 +899,6 @@ const makeModal = (): SectionNodeData => {
 
 // ── whatsapp flutuante ──────────────────────────────────────────────────────
 
-/**
- * WhatsApp do Gian, só dígitos com país e DDD (ex.: 5551999999999). O vault
- * não tem o número público (COPY.md, "Antes de publicar"): enquanto estiver
- * vazio, o botão abre a modal de diagnóstico em vez de um número errado.
- */
-const GIAN_WHATSAPP = ''
-const WHATSAPP_MESSAGE = 'Olá, Gian. Vim pelo site da ProcessBase e quero conversar sobre o diagnóstico.'
 const WHATSAPP_GREEN = '#25D366'
 
 /**
@@ -896,10 +908,9 @@ const WHATSAPP_GREEN = '#25D366'
  */
 const makeWhatsApp = (): SectionNodeData => {
   const b = createBuilder('pbw')
-  const url = GIAN_WHATSAPP ? `https://wa.me/${GIAN_WHATSAPP}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}` : '#contato'
   const button = b.widget('button', {
     text: 'Falar com o Gian', size: 'md',
-    link: { url, is_external: GIAN_WHATSAPP ? 'on' : '', nofollow: '', custom_attributes: '' },
+    link: link(WHATSAPP_URL, true),
     selected_icon: { value: 'fab fa-whatsapp', library: 'fa-brands' }, icon_align: 'row', icon_indent: px(12),
     ...typography({ size: 14, weight: 600, line: 1.2 }),
     text_padding: sides(6, 20, 6, 6), border_radius: sides(L.radius.pill),

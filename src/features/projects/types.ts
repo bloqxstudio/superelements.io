@@ -1,5 +1,6 @@
 import type { SpaceCanvas } from '@/store/spaceStore'
 import type { BrandSnapshot } from '@/features/space/brand/brandStore'
+import type { SiteKit } from '@/features/wordpress/siteKitStore'
 
 /** O que o card mostra sem abrir o projeto; refeito a cada salvamento. */
 export interface ProjectSummary {
@@ -29,4 +30,6 @@ export interface Project {
 export interface ProjectDoc {
   canvas: SpaceCanvas
   brand: BrandSnapshot
+  /** Cores e fontes globais do WordPress do cliente, para as páginas importadas. */
+  site?: SiteKit | null
 }

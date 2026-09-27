@@ -94,7 +94,7 @@ Na página, vem logo depois do Método Base.
 
 - Título: **Não nasceu numa sala de reunião.** *(protótipo)*
 - Texto: oito anos de melhoria contínua na indústria, com POPs, PPAP, SMED implantado em duas empresas e certificação de operadores *(Perfil)*
-- Foto: `photos/gian-bianchin-machado.png` (retrato enviado pelo usuário, 400 × 400 px), com a etiqueta "Quem conduz · Todas as reuniões, pessoalmente."
+- Foto: `photos/gian-bianchin-machado-retrato.jpg` (retrato vertical enviado pelo usuário em 2026-09-27, 853 × 1280 px, fundo escuro com luz azul), com a etiqueta "Quem conduz · Todas as reuniões, pessoalmente."
 - Assinatura: Gian Bianchin Machado · Engenheiro de Produção · Green Belt Six Sigma. Conduz pessoalmente todas as reuniões *(respostas do Gian, bloco 4)*
 - Frase: "O método que a ProcessBase vende é o método que ela pratica." *(Método §7)*
 
@@ -121,12 +121,20 @@ Duração, personalização, quem conduz, formato, quem participa, pagamento e o
 
 ## 13c. WhatsApp flutuante
 
-- Botão fixo no canto inferior direito: "Falar com o Gian" com o ícone do WhatsApp (no celular, só o círculo verde). Abre `wa.me` com a mensagem "Olá, Gian. Vim pelo site da ProcessBase e quero conversar sobre o diagnóstico."
-- **Pendente:** o número do Gian (`GIAN_WHATSAPP` em `processbaseTemplate.ts`). Enquanto estiver vazio, o botão abre a modal de diagnóstico.
+- Botão fixo no canto inferior direito: "Falar com o Gian" com o ícone do WhatsApp (no celular, só o círculo verde). Abre a conversa direto no WhatsApp, numa aba nova, com a mensagem "Olá, Gian. Vim pelo site da ProcessBase e quero conversar sobre o diagnóstico." Não passa pela modal.
+
+## 13d. Dados de contato
+
+Enviados pelo Gian em 2026-09-27. Ficam nas constantes do topo da seção de contato em `processbaseTemplate.ts`.
+
+- WhatsApp: (51) 98544-5411 (`wa.me/5551985445411`)
+- E-mail: processbase08@gmail.com. É a caixa que recebe os dois formulários (`email_to`) e aparece no rodapé.
+- Instagram: @process_base01 (`instagram.com/process_base01`)
+- **Pendente:** o LinkedIn. O Gian não conseguiu mandar o link.
 
 ## 14. Rodapé
 
-Assinatura "Estrutura para melhorar. Ritmo para crescer." (Figma), categoria, links e "© 2026 ProcessBase · São Leopoldo, RS".
+Assinatura "Estrutura para melhorar. Ritmo para crescer." (Figma), categoria, links e "© 2026 ProcessBase · São Leopoldo, RS". A coluna Contato tem Agendar diagnóstico, WhatsApp, e-mail e Instagram. No celular ela ocupa a linha inteira para o e-mail caber.
 
 ---
 
@@ -134,6 +142,6 @@ Assinatura "Estrutura para melhorar. Ritmo para crescer." (Figma), categoria, li
 
 1. **Resultados:** os quatro clientes aceitaram dar depoimento (respostas do Gian, bloco 5), mas o que existe hoje é o tema do resultado, não a frase de cada um. Confirmar se os nomes podem aparecer e, quando as falas forem coletadas, trocar os cards por citações.
 2. **Fotos:** o retrato do Gian tem 400 × 400 px e fica um pouco mole no card de "Quem conduz"; pedir a versão em alta (de 1200 px para cima). A `photos/operacao-estruturada.jpg` do protótipo saiu da página; o DESIGN.md ainda pede foto real de operação (§7, item 3) se ela voltar.
-3. **Contato:** o vault não tem WhatsApp nem e-mail público da ProcessBase. O botão flutuante de WhatsApp já está pronto e só espera o número do Gian (`GIAN_WHATSAPP`). O formulário precisa de destinatário e anti-spam no WordPress.
+3. **Contato:** WhatsApp, e-mail e Instagram já estão na página (§13d). Falta o LinkedIn e o anti-spam do formulário no WordPress. Os formulários enviam para processbase08@gmail.com: testar se a mensagem chega, porque o e-mail do WordPress costuma cair no spam do Gmail sem SMTP configurado.
 4. **Hipótese do inimigo:** a página usa a palavra do cliente ("depender de você", "organização") e deixa "dependência de pessoas" como leitura por trás, como recomenda o StoryBrand. Revisar se novas entrevistas mudarem isso.
 5. **Nomes dos testes** (LAPL, Tavistock): ficaram fora da página até o Gian confirmar a grafia (Método §12).

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, Copy, LayoutTemplate, Library, Palette, Play, Plus, Sparkles, Type, type LucideIcon } from 'lucide-react'
+import { Check, CloudDownload, CloudUpload, Copy, LayoutTemplate, Library, Palette, Play, Plus, Sparkles, Type, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -13,6 +13,8 @@ import { hasSectionPack } from '@/features/section-pack/pack'
 import { BrandButton } from '@/features/space/brand/BrandButton'
 import { LevelBar } from '@/features/space/levels/LevelBar'
 import { PagePicker } from '@/features/space/pages/PagePicker'
+import { useWordPressUi } from '@/features/wordpress/uiStore'
+import { useActiveWordPress } from '@/features/wordpress/useWordPressConnection'
 import { LIBRARY_PANEL_WIDTH } from './SpaceLibraryPanel'
 import type { NodeType } from '@/types/space'
 import { Hint, ToolButton, ToolDivider, ToolbarIsland } from './ToolbarIsland'
@@ -51,6 +53,10 @@ export const SpaceToolbar: React.FC<SpaceToolbarProps> = ({ libraryOpen, onToggl
   const pageName = activePage?.name ?? 'página'
   const compact = canvasWidth < COMPACT_WIDTH
   const tight = canvasWidth < TIGHT_WIDTH
+  // Com o WordPress do cliente conectado, publicar no site vira a ação principal
+  const wordpress = useActiveWordPress()
+  const linked = !!activePage?.wordpress && activePage.wordpress.siteUrl === wordpress?.site.siteUrl
+  const { openImport, openPublish } = useWordPressUi.getState()
 
   const handleAdd = (type: NodeType) => {
     const { canvasTransform, viewport, nodes } = useSpaceStore.getState()
@@ -85,6 +91,11 @@ export const SpaceToolbar: React.FC<SpaceToolbarProps> = ({ libraryOpen, onToggl
         <Hint label="Modelos de página" hint="Uma landing pronta numa página">
           <ToolButton icon={Sparkles} label="Modelos" showLabel={!tight} onClick={onOpenTemplates} />
         </Hint>
+        {wordpress && (
+          <Hint label="Importar do WordPress" hint={`Páginas e marca de ${wordpress.site.name}`}>
+            <ToolButton icon={CloudDownload} label="Do site" showLabel={!tight} onClick={openImport} />
+          </Hint>
+        )}
         <DropdownMenu>
           <Hint label="Adicionar ao canvas" hint="Seção solta, texto ou paleta">
             <DropdownMenuTrigger asChild>
@@ -122,7 +133,8 @@ export const SpaceToolbar: React.FC<SpaceToolbarProps> = ({ libraryOpen, onToggl
         <Hint label="Copiar para o Elementor" hint={`A página ${pageName}, na ordem dela`}>
           <Button
             size="sm"
-            className="h-8 gap-1.5 rounded-lg px-3 text-xs transition-[color,background-color,transform] active:scale-[0.96]"
+            variant={wordpress ? 'ghost' : 'default'}
+            className={`h-8 gap-1.5 rounded-lg px-3 text-xs transition-[color,background-color,transform] active:scale-[0.96]${wordpress ? ' text-gray-600' : ''}`}
             onClick={handleCopy}
             disabled={!hasSections}
           >
@@ -140,9 +152,25 @@ export const SpaceToolbar: React.FC<SpaceToolbarProps> = ({ libraryOpen, onToggl
                 </motion.span>
               </AnimatePresence>
             </span>
-            Copiar para o Elementor
+            {wordpress ? 'Copiar' : 'Copiar para o Elementor'}
           </Button>
         </Hint>
+        {wordpress && (
+          <Hint
+            label={linked ? `Atualizar ${pageName} no site` : `Publicar ${pageName} no site`}
+            hint={linked ? `Na mesma página, em ${wordpress.site.name}` : `Página nova em ${wordpress.site.name}`}
+          >
+            <Button
+              size="sm"
+              className="h-8 gap-1.5 rounded-lg px-3 text-xs transition-[color,background-color,transform] active:scale-[0.96]"
+              onClick={() => activePage && openPublish(activePage.id)}
+              disabled={!hasSections}
+            >
+              <CloudUpload className="h-3.5 w-3.5" />
+              {linked ? 'Atualizar no site' : 'Publicar no site'}
+            </Button>
+          </Hint>
+        )}
       </ToolbarIsland>
     </div>
   )

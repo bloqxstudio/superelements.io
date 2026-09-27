@@ -10,6 +10,8 @@ import { useSectionShortcuts } from '@/features/space/pages/useSectionShortcuts'
 import { LibraryDragChip } from '@/features/space/pages/LibraryDragChip'
 import { copyLandingToElementor } from '@/features/space/exportLanding'
 import { hasSectionPack } from '@/features/section-pack/pack'
+import { WordPressImportDialog } from '@/features/wordpress/WordPressImportDialog'
+import { WordPressPageDialogs } from '@/features/wordpress/WordPressPageDialogs'
 import { useSpaceStore } from '@/store/spaceStore'
 
 // Visualizar e Copiar da barra agem sobre a página ativa
@@ -56,6 +58,8 @@ const Space: React.FC = () => {
         onOpenChange={setTemplatesOpen}
         onLoaded={(pageId) => useSpaceStore.getState().openPlayer(pageId)}
       />
+      <WordPressImportDialog />
+      <WordPressPageDialogs />
     </div>
   )
 }

@@ -16,12 +16,20 @@ export interface SectionLevels {
 /** Camada que o Space está editando. 'structure' é o canvas de sempre (ordem e conteúdo das seções). */
 export type EditLevel = 'structure' | 'motion' | 'colors' | 'typography' | 'shape' | 'photos'
 
+/** Seção importada do WordPress do cliente: fica como veio, sem a troca de cores e fontes da marca. */
+export interface SectionOrigin {
+  kind: 'wordpress'
+  siteUrl: string
+  postId: number
+}
+
 export interface SectionNodeData {
   title: string
   elementorJson: string
   /** Id da seção no pack Section Express, quando veio da biblioteca. */
   sourceId?: string
   levels?: SectionLevels
+  origin?: SectionOrigin
 }
 
 export interface TextNodeData {
@@ -57,6 +65,56 @@ export interface SpacePage {
   y: number
   /** Seções da página, de cima para baixo. */
   sectionIds: string[]
+  /** Página do WordPress do cliente que esta página atualiza ao publicar. */
+  wordpress?: PageWordPressLink
+  /** Título, endereço, SEO e imagem destacada que vão junto ao publicar. */
+  details?: PageDetails
+}
+
+/** O que a página leva ao site além das seções. Campo vazio fica com o padrão do WordPress ou do plugin de SEO. */
+export interface PageDetails {
+  /** Título da página no WordPress; sem ele vale o nome da página no canvas. */
+  title?: string
+  /** Endereço (slug); sem ele o WordPress cria pelo título. */
+  slug?: string
+  seoTitle?: string
+  /** Meta descrição, a que aparece no Google. */
+  description?: string
+  focusKeyword?: string
+  featured?: FeaturedImage
+}
+
+/** Campos do modelo de imagem destacada, para abrir de novo e editar. */
+export interface FeaturedFields {
+  title: string
+  subtitle?: string
+  /** Foto do modelo: endereço ou data URL. */
+  photo?: string
+  /** Cor de fundo, em hex. */
+  color?: string
+  logo: boolean
+}
+
+/**
+ * Imagem destacada: montada por um modelo (a imagem pronta vai em data URL),
+ * um arquivo enviado daqui, uma imagem que já está na biblioteca do site, ou
+ * nenhuma (tira a que o site tem). Sem valor, a do site fica como está.
+ */
+export type FeaturedImage =
+  | { kind: 'template'; template: string; fields: FeaturedFields; image: string }
+  | { kind: 'upload'; image: string; name: string }
+  | { kind: 'media'; id: number; url: string }
+  | { kind: 'none' }
+
+export interface PageWordPressLink {
+  siteUrl: string
+  postId: number
+  title: string
+  link: string
+  status: string
+  /** `modified_gmt` do WordPress na última importação ou publicação, para saber se alguém mexeu depois. */
+  modifiedGmt: string
+  syncedAt: number
 }
 
 /** Onde uma seção arrastada entraria: página e posição na coluna (contada sem a própria seção). */

@@ -59,16 +59,17 @@ export function isLocalUrl(url: string): boolean {
 /**
  * Troca as imagens enviadas para o site de destino pelo anexo novo e tira o
  * `id` das demais: sem id, o Elementor usa a URL em vez de um anexo errado.
+ * `keepId` diz quais já são do site de destino e ficam com o id delas.
  * Altera os elementos recebidos.
  */
-export function applyMediaReplacements(elements: unknown[], replacements: Map<string, MediaReplacement>) {
+export function applyMediaReplacements(elements: unknown[], replacements: Map<string, MediaReplacement>, keepId?: (url: string) => boolean) {
   walkElements(elements, (media) => {
     const uploaded = replacements.get(media.url)
     if (uploaded) {
       media.id = uploaded.id
       media.url = uploaded.url
       media.source = 'library'
-    } else if ('id' in media) {
+    } else if ('id' in media && !keepId?.(media.url)) {
       // `0` também: o editor só deixa de consultar o servidor com o id vazio
       media.id = ''
     }

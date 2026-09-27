@@ -2,14 +2,15 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Brand } from '@/features/space/brand/designMd'
 import type { SpaceNode, SpacePage } from '@/types/space'
-import { deleteProjectDoc } from './storage'
+import { disconnectWordPress } from '@/features/wordpress/connect'
+import { deleteProjectDoc, deletePublishBackups } from './storage'
 import type { Project, ProjectSummary } from './types'
 
 interface ProjectState {
   projects: Project[]
   create: (fields: { name: string; context?: string }) => Project
   update: (id: string, fields: Partial<Pick<Project, 'name' | 'context'>>) => void
-  /** Apaga o projeto da lista e o canvas e a marca dele. */
+  /** Apaga o projeto da lista, o canvas, a marca e a conexão com o WordPress. */
   remove: (id: string) => Promise<void>
   /** Chamado a cada salvamento do canvas; `edited` diz se o conteúdo mudou. */
   saved: (id: string, summary: ProjectSummary, edited: boolean) => void
@@ -82,7 +83,9 @@ export const useProjectStore = create<ProjectState>()(
 
       remove: async (id) => {
         set({ projects: get().projects.filter((p) => p.id !== id) })
-        await deleteProjectDoc(id)
+        // Sem esperar o site: se ele não responder, a conexão some daqui do mesmo jeito
+        disconnectWordPress(id).catch((error) => console.error('[wordpress] falha ao desconectar', error))
+        await Promise.all([deleteProjectDoc(id), deletePublishBackups(id)])
       },
 
       saved: (id, summary, edited) => {

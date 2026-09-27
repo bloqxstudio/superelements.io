@@ -6,7 +6,8 @@ import { copyToClipboardEnhanced } from '@/utils/enhancedRobustClipboard'
 import { useSpaceStore } from '@/store/spaceStore'
 import { buildLandingPage } from './landingPage'
 import { applyMediaReplacements, collectImageUrls, dropCustomImageSizes, type MediaReplacement } from './pageImages'
-import { brandKit } from './brand/applyBrand'
+import { getSiteKit } from '@/features/wordpress/siteKitStore'
+import { isFromSite, renderKit } from './renderKit'
 import { getActiveBrand } from './brand/brandStore'
 import { pageSections, pageSlug } from './pages/pages'
 
@@ -15,7 +16,7 @@ const buildPage = (pageId?: string | null) => {
   const { nodes, connections, pages, activePageId } = useSpaceStore.getState()
   const page = pages.find((p) => p.id === (pageId ?? activePageId)) ?? pages[0]
   const sections = page ? pageSections(page, nodes) : []
-  return { name: page?.name ?? 'Página', ...buildLandingPage(sections, nodes, connections, getActiveBrand()) }
+  return { name: page?.name ?? 'Página', fromSite: sections.some(isFromSite), ...buildLandingPage(sections, nodes, connections, getActiveBrand()) }
 }
 
 const emptyPageError = (name: string) => toast.error(`A página ${name} não tem seção com JSON válido`)
@@ -72,7 +73,7 @@ export function downloadLandingHtml(pageId?: string | null) {
   }
 
   const brand = getActiveBrand()
-  const { document } = renderElementorDocument(page.elements, { title: page.name, kit: brand ? brandKit(brand) : undefined, motion: 'play' })
+  const { document } = renderElementorDocument(page.elements, { title: page.name, kit: renderKit(brand, getSiteKit(), page.fromSite), motion: 'play' })
   const url = URL.createObjectURL(new Blob([document], { type: 'text/html;charset=utf-8' }))
   const link = window.document.createElement('a')
   link.href = url

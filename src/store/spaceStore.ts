@@ -21,6 +21,8 @@ import type {
   SpaceNode,
   SpaceConnection,
   SpacePage,
+  PageWordPressLink,
+  PageDetails,
   PageDropTarget,
   CanvasTransform,
   PendingConnection,
@@ -123,6 +125,15 @@ interface SpaceActions {
   removePage: (id: string) => void
   /** Cópia da página, com as seções e os textos/paletas ligados a elas, à direita das outras. */
   duplicatePage: (id: string) => void
+  /**
+   * Página vinda do WordPress: uma nova, ou `replacePageId` com as seções
+   * trocadas pela versão do site. Devolve o id da página.
+   */
+  loadSitePage: (name: string, sections: SectionNodeData[], link: PageWordPressLink, replacePageId?: string) => string
+  /** Liga a página do canvas a uma página do WordPress (ou desliga, sem link). */
+  setPageWordPress: (pageId: string, link: PageWordPressLink | undefined) => void
+  /** Título, endereço, SEO e imagem destacada da página. */
+  setPageDetails: (pageId: string, details: PageDetails | undefined) => void
   /** Move o quadro da página; as seções e o que está ligado a elas vão junto. */
   movePage: (id: string, x: number, y: number) => void
   setActivePage: (id: string) => void
@@ -212,6 +223,15 @@ const layoutPage = (page: SpacePage, nodes: SpaceNode[], connections: SpaceConne
 
 const layoutPages = (pages: SpacePage[], nodes: SpaceNode[], connections: SpaceConnection[]) =>
   pages.reduce((acc, page) => layoutPage(page, acc, connections), nodes)
+
+/** As seções e os textos e paletas que só alimentavam elas, que saem junto. */
+function withFeeders(sectionIds: string[], nodes: SpaceNode[], connections: SpaceConnection[]) {
+  const removed = new Set(sectionIds)
+  const feeders = new Set(connections.filter((c) => removed.has(c.targetId)).map((c) => c.sourceId))
+  for (const c of connections) if (!removed.has(c.targetId)) feeders.delete(c.sourceId)
+  for (const n of nodes) if (feeders.has(n.id) && n.type !== 'section') removed.add(n.id)
+  return removed
+}
 
 type CanvasParts = Pick<SpaceState, 'nodes' | 'connections' | 'pages'>
 
@@ -539,12 +559,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const page = pages.find((p) => p.id === id)
         if (!page || pages.length <= 1) return
 
-        const removed = new Set(page.sectionIds)
-        // Textos e paletas que só alimentavam seções desta página saem com ela
-        const feeders = new Set(connections.filter((c) => removed.has(c.targetId)).map((c) => c.sourceId))
-        for (const c of connections) if (!removed.has(c.targetId)) feeders.delete(c.sourceId)
-        for (const n of nodes) if (feeders.has(n.id) && n.type !== 'section') removed.add(n.id)
-
+        const removed = withFeeders(page.sectionIds, nodes, connections)
         const rest = pages.filter((p) => p.id !== id)
         set(
           {
@@ -579,6 +594,46 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           false,
           'duplicatePage'
         )
+      },
+
+      loadSitePage: (name, sections, link, replacePageId) => {
+        const { pages, nodes, connections, selectedIds } = get()
+        const existing = replacePageId ? pages.find((p) => p.id === replacePageId) : undefined
+        // Na página que já estava ligada, a versão do site entra no lugar das seções dela
+        const removed = existing ? withFeeders(existing.sectionIds, nodes, connections) : new Set<string>()
+        const base = existing ?? newPage(name, nextPagePosition(pages, nodes))
+
+        const { width, height } = NODE_DIMENSIONS.section
+        const created: SpaceNode[] = sections.map((data) => ({ id: crypto.randomUUID(), type: 'section', x: base.x, y: base.y, width, height, data }))
+        const page: SpacePage = { ...base, sectionIds: created.map((n) => n.id), wordpress: link }
+        const nextConnections = connections.filter((c) => !removed.has(c.sourceId) && !removed.has(c.targetId))
+        const kept = nodes.filter((n) => !removed.has(n.id))
+
+        set(
+          {
+            pages: existing ? pages.map((p) => (p.id === page.id ? page : p)) : [...pages, page],
+            nodes: layoutPage(page, [...kept, ...created], nextConnections),
+            connections: nextConnections,
+            selectedIds: selectedIds.filter((id) => !removed.has(id)),
+            activePageId: page.id,
+            canvasTransform: focusOn(page.x + PAGE_WIDTH / 2, page.y),
+          },
+          false,
+          'loadSitePage'
+        )
+        return page.id
+      },
+
+      setPageWordPress: (pageId, link) => {
+        set(
+          (state) => ({ pages: state.pages.map((p) => (p.id === pageId ? { ...p, wordpress: link } : p)) }),
+          false,
+          'setPageWordPress'
+        )
+      },
+
+      setPageDetails: (pageId, details) => {
+        set((state) => ({ pages: state.pages.map((p) => (p.id === pageId ? { ...p, details } : p)) }), false, 'setPageDetails')
       },
 
       movePage: (id, x, y) => {

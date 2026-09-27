@@ -1,6 +1,7 @@
 import { renderElementorDocument } from '@/engine/elementor'
 import type { EditLevel, SectionMotion, SectionNodeData, SpaceConnection, SpaceNode } from '@/types/space'
-import { brandKit } from '../brand/applyBrand'
+import type { SiteKit } from '@/features/wordpress/siteKitStore'
+import { isFromSite, renderKit } from '../renderKit'
 import type { Brand } from '../brand/designMd'
 import { sectionBase, sectionWithTransforms } from '../landingPage'
 import { diffTag, elementDiffs } from './brandDiff'
@@ -19,13 +20,15 @@ interface LensInput {
   nodes: SpaceNode[]
   connections: SpaceConnection[]
   brand: Brand | null
+  /** Kit do site do cliente, para as seções importadas dele. */
+  site?: SiteKit | null
   level: EditLevel
   /** Rascunho do nível Movimento, só para seções selecionadas. */
   draft?: SectionMotion
   replay?: number
 }
 
-export function sectionLensDocument({ section, nodes, connections, brand, level, draft, replay = 0 }: LensInput) {
+export function sectionLensDocument({ section, nodes, connections, brand, site = null, level, draft, replay = 0 }: LensInput) {
   const motionDraft = level === 'motion' ? draft : undefined
   const elements = sectionWithTransforms(section, nodes, connections, brand, motionDraft)
   if (!elements) return null
@@ -33,7 +36,7 @@ export function sectionLensDocument({ section, nodes, connections, brand, level,
   const title = (section.data as SectionNodeData).title
   const rendered = renderElementorDocument(elements, {
     title,
-    kit: brand ? brandKit(brand) : undefined,
+    kit: renderKit(brand, site, isFromSite(section)),
     motion: level === 'motion' ? 'play' : 'static',
   })
   if (level === 'structure' || level === 'colors' || level === 'photos') return rendered
