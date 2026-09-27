@@ -1,0 +1,16 @@
+{
+  "source": "https://ugly.cash/",
+  "targetRoute": "/uglycash-modelo",
+  "styleGuideRoute": "/uglycash-style-guide",
+  "phase": "homepage-and-native-elementor-complete",
+  "templates": [{ "name": "homepage", "source": "https://ugly.cash/", "status": "implemented-and-verified" }],
+  "needsYou": [],
+  "decisions": {
+    "content": "Static React content and source-derived local assets",
+    "forms": "No account, trading or download workflow is connected",
+    "font": "Helvetica Now Display Condensed plus Inter",
+    "thirdParty": "Tracking, financial services and store integrations excluded"
+  },
+  "cannotComeAcross": ["Financial account creation or authentication", "Trading, payment and self-custody functionality", "App Store and Google Play deep-link behavior", "Analytics and social platform tracking"],
+  "preservedModels": ["/menuzito-modelo", "/menuzito-style-guide"]
+}

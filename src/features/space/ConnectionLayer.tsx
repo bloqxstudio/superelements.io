@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { CanvasTransform, SpaceNode, SpaceConnection } from '@/types/space'
 
@@ -96,9 +96,15 @@ const ConnectionPath: React.FC<ConnectionPathProps> = ({ connection, nodes, tran
 
 export const ConnectionLayer: React.FC = () => {
   const { nodes, connections, pendingConnection, canvasTransform, removeConnection } = useSpaceStore()
+  const svgRef = useRef<SVGSVGElement>(null)
+  // A conexão pendente vem em coordenadas da janela; o SVG começa no canto do canvas
+  const origin = pendingConnection ? svgRef.current?.getBoundingClientRect() : undefined
+  const ox = origin?.left ?? 0
+  const oy = origin?.top ?? 0
 
   return (
     <svg
+      ref={svgRef}
       style={{
         position: 'absolute',
         top: 0,
@@ -126,10 +132,10 @@ export const ConnectionLayer: React.FC = () => {
       {pendingConnection && (
         <path
           d={buildBezierPath(
-            pendingConnection.sourceX,
-            pendingConnection.sourceY,
-            pendingConnection.currentX,
-            pendingConnection.currentY
+            pendingConnection.sourceX - ox,
+            pendingConnection.sourceY - oy,
+            pendingConnection.currentX - ox,
+            pendingConnection.currentY - oy
           )}
           stroke="#94a3b8"
           strokeWidth={1.5}

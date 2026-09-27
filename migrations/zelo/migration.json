@@ -1,0 +1,86 @@
+{
+  "source": "https://zelosistemas.com.br/",
+  "slug": "zelo",
+  "phase": "all-templates-native-and-verified",
+  "styleGuideRoute": "/zelo-style-guide",
+  "elementorPreviewRoute": "/zelo-elementor-preview",
+  "templateSource": "src/features/space/zeloTemplate.ts",
+  "templates": [
+    {
+      "id": "zelo-home",
+      "name": "home",
+      "source": "https://zelosistemas.com.br/",
+      "status": "native-and-verified"
+    },
+    {
+      "id": "zelo-contato",
+      "name": "contato",
+      "source": "https://zelosistemas.com.br/contato",
+      "status": "native-and-verified"
+    },
+    {
+      "id": "zelo-privacidade",
+      "name": "legal",
+      "source": "https://zelosistemas.com.br/privacidade.html",
+      "status": "native-and-verified"
+    }
+  ],
+  "decisions": {
+    "theme": "Default dark theme only; the light theme toggle is not reproduced",
+    "fonts": "Plus Jakarta Sans, Nunito, Figtree and Spline Sans Mono (OFL) through Elementor Google Fonts; local woff2 only for the style guide",
+    "canvas": "Particle field and adoption curve become static SVG images",
+    "calculator": "Native rows plus one script-only HTML widget that toggles rows and updates the total",
+    "operations": "Mini product screens rebuilt natively in their final state",
+    "form": "Elementor Pro form widget replaces the custom backend and Turnstile",
+    "chat": "Zelo IA chat launcher omitted"
+  },
+  "needsYou": [
+    "Configure the Elementor form actions (recipient e-mail, anti-spam) in WordPress",
+    "Create the WordPress pages with slugs /contato and /privacidade so internal links resolve",
+    "Allow SVG uploads (or keep the Superelements asset URLs public) before importing the SVG images"
+  ],
+  "cannotComeAcross": [
+    "Contact backend, Cloudflare Turnstile and the admin panel",
+    "Zelo IA chat (Groq)",
+    "Light theme toggle",
+    "Scroll reveal, card mouse glow and reading progress bar"
+  ],
+  "preservedModels": [
+    "/menuzito-modelo",
+    "/uglycash-modelo"
+  ],
+  "validation": {
+    "date": "2026-09-27",
+    "renderer": {
+      "unsupported": 0,
+      "warnings": 0,
+      "duplicateIds": 0,
+      "sectionsWithoutContainer": 0
+    },
+    "home": {
+      "sections": 12,
+      "containers": 174,
+      "htmlWidgets": 1,
+      "heightAt1440": {
+        "source": 8740,
+        "elementor": 8659
+      }
+    },
+    "contato": {
+      "sections": 3,
+      "htmlWidgets": 0
+    },
+    "privacidade": {
+      "sections": 3,
+      "htmlWidgets": 0
+    },
+    "breakpoints": [
+      1440,
+      1024,
+      768,
+      390
+    ],
+    "horizontalOverflow": false,
+    "skillValidator": "contato and privacidade pass; home fails only because the script lists neither nested-accordion (supported by src/engine/elementor) nor the documented html exception"
+  }
+}

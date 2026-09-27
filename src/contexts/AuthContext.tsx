@@ -2,26 +2,14 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { PhoneCollectionModal } from '@/components/PhoneCollectionModal';
-import { OUSEN_WORKSPACE } from '@/mocks/ousenWorkspace';
-import { isMockOusenEnabled } from '@/store/connectionsStore';
 
 export type AppRole = 'free' | 'pro' | 'admin';
-export type WorkspaceRole = 'owner' | 'member' | 'manager';
-
-export interface WorkspaceMembership {
-  workspace_id: string;
-  workspace_name: string;
-  workspace_slug: string;
-  role: WorkspaceRole;
-}
 
 export interface UserProfile {
   id: string;
   email: string;
   role: AppRole;
   phone?: string;
-  is_demo: boolean;
-  workspaceMemberships: WorkspaceMembership[];
 }
 
 interface AuthContextType {
@@ -44,11 +32,11 @@ export const useAuth = () => {
 };
 
 async function fetchProfile(userId: string): Promise<UserProfile | null> {
-  let profileData: { id: string; email: string; phone?: string; is_demo: boolean } | null = null;
+  let profileData: { id: string; email: string; phone?: string } | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, phone, is_demo')
+      .select('id, email, phone')
       .eq('id', userId)
       .single();
     if (!error) { profileData = data; break; }
@@ -61,53 +49,25 @@ async function fetchProfile(userId: string): Promise<UserProfile | null> {
   }
   if (!profileData) return null;
 
-  const [roleResult, membershipResult] = await Promise.all([
-    supabase.from('user_roles').select('role').eq('user_id', userId).single(),
-    supabase.from('workspace_members').select('workspace_id, role, workspaces(name, slug)').eq('user_id', userId),
-  ]);
+  const { data: roleData } = await supabase.from('user_roles').select('role').eq('user_id', userId).single();
 
-  const workspaceMemberships: WorkspaceMembership[] = (membershipResult.data || []).map((m) => ({
-    workspace_id: m.workspace_id,
-    workspace_name: (m.workspaces as { name: string; slug: string } | null)?.name ?? '',
-    workspace_slug: (m.workspaces as { name: string; slug: string } | null)?.slug ?? '',
-    role: m.role as WorkspaceRole,
-  }));
+  return { ...profileData, role: (roleData?.role as AppRole) || 'free' };
+}
 
-  const appRole = (roleResult.data?.role as AppRole) || 'free';
-  const isDemo = profileData.is_demo ?? false;
-
-  // Demo users: expose only their first own workspace, no mock injection
-  if (isDemo) {
-    const ownMembership = workspaceMemberships[0] ?? null;
-    return {
-      ...profileData,
-      role: appRole,
-      is_demo: true,
-      workspaceMemberships: ownMembership ? [ownMembership] : [],
-    } as UserProfile;
+/**
+ * Só no servidor de dev: entra sozinho com a conta de `.env.development.local`
+ * (DEV_AUTH_EMAIL / DEV_AUTH_PASSWORD) para pular a tela de login. O Supabase
+ * recebe uma sessão real, então RLS funciona normalmente.
+ * `__DEV_AUTH__` vem do vite.config e é sempre `null` em qualquer build.
+ */
+async function devAutoSignIn(): Promise<Session | null> {
+  if (!__DEV_AUTH__) return null;
+  const { data, error } = await supabase.auth.signInWithPassword(__DEV_AUTH__);
+  if (error) {
+    console.warn('[dev] Login automático falhou:', error.message);
+    return null;
   }
-
-  // Auto-enable mock for manager and pro users (no localStorage toggle needed)
-  const isManagerUser = workspaceMemberships.some((m) => m.role === 'manager');
-  const isProOrManager = isManagerUser || appRole === 'pro';
-  const shouldInjectMock = isMockOusenEnabled() || isProOrManager;
-
-  const mockMembership: WorkspaceMembership = {
-    workspace_id: OUSEN_WORKSPACE.id,
-    workspace_name: OUSEN_WORKSPACE.name,
-    workspace_slug: OUSEN_WORKSPACE.slug,
-    // Managers get the mock workspace as manager; pro users and dev toggle as owner
-    role: isManagerUser ? 'manager' : OUSEN_WORKSPACE.role,
-  };
-
-  return {
-    ...profileData,
-    role: appRole,
-    is_demo: false,
-    workspaceMemberships: shouldInjectMock
-      ? [...workspaceMemberships, mockMembership]
-      : workspaceMemberships,
-  } as UserProfile;
+  return data.session;
 }
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -123,7 +83,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let cancelled = false;
 
     // Bootstrap: getSession → fetchProfile → done
-    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: existing } }) => {
+      if (cancelled) return;
+      const s = existing ?? (await devAutoSignIn());
       if (cancelled) return;
       setSession(s);
       setUser(s?.user ?? null);
@@ -202,8 +164,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (err) {
       console.error('Error signing out:', err);
     } finally {
-      localStorage.removeItem('superelements_active_workspace_id');
-      sessionStorage.removeItem('superelements_admin_entered_workspace');
       setUser(null);
       setSession(null);
       setProfile(null);

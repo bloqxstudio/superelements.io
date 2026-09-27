@@ -1,0 +1,178 @@
+{
+  "collection": "C25 — Negócios com presença",
+  "version": 2,
+  "basePath": "/sections/c25",
+  "ratio": "4:5",
+  "dimensions": {
+    "width": 1122,
+    "height": 1402
+  },
+  "usage": ["card", "hero", "feature", "gallery", "testimonial", "call-to-action"],
+  "assets": [
+    {
+      "id": "atelie-ceramica",
+      "business": "artesanato",
+      "path": "/sections/c25/businesses/atelie-ceramica.webp",
+      "source": "/sections/c25/businesses/atelie-ceramica.png",
+      "alt": "Ceramista brasileira modelando um grande vaso de terracota à mão",
+      "focalPoint": "center"
+    },
+    {
+      "id": "bar-noturno",
+      "business": "gastronomia-noturna",
+      "path": "/sections/c25/businesses/bar-noturno.webp",
+      "source": "/sections/c25/businesses/bar-noturno.png",
+      "alt": "Pequeno bar de noodles iluminado durante uma noite de chuva",
+      "focalPoint": "center"
+    },
+    {
+      "id": "floricultura-tropical",
+      "business": "floricultura",
+      "path": "/sections/c25/businesses/floricultura-tropical.webp",
+      "source": "/sections/c25/businesses/floricultura-tropical.png",
+      "alt": "Florista criando um arranjo tropical exuberante e colorido",
+      "focalPoint": "center"
+    },
+    {
+      "id": "estudio-moda",
+      "business": "moda",
+      "path": "/sections/c25/businesses/estudio-moda.webp",
+      "source": "/sections/c25/businesses/estudio-moda.png",
+      "alt": "Designer de moda ajustando tecido amarelo em um manequim",
+      "focalPoint": "center"
+    },
+    {
+      "id": "barbearia",
+      "business": "cuidados-pessoais",
+      "path": "/sections/c25/businesses/barbearia.webp",
+      "source": "/sections/c25/businesses/barbearia.png",
+      "alt": "Barbeiro realizando um corte preciso diante de espelhos verdes",
+      "focalPoint": "center"
+    },
+    {
+      "id": "pet-daycare",
+      "business": "serviços-pet",
+      "path": "/sections/c25/businesses/pet-daycare.webp",
+      "source": "/sections/c25/businesses/pet-daycare.png",
+      "alt": "Cachorro saltando por um arco de água em uma creche pet colorida",
+      "focalPoint": "center"
+    },
+    {
+      "id": "cosmeticos-still-life",
+      "business": "cosméticos",
+      "path": "/sections/c25/businesses/cosmeticos-still-life.webp",
+      "source": "/sections/c25/businesses/cosmeticos-still-life.png",
+      "alt": "Composição editorial colorida de cosméticos sem marca e grapefruit",
+      "focalPoint": "center"
+    },
+    {
+      "id": "estudio-musica",
+      "business": "música",
+      "path": "/sections/c25/businesses/estudio-musica.webp",
+      "source": "/sections/c25/businesses/estudio-musica.png",
+      "alt": "Produtora musical trabalhando em uma mesa analógica durante a noite",
+      "focalPoint": "center"
+    },
+    {
+      "id": "laboratorio-materiais",
+      "business": "inovação",
+      "path": "/sections/c25/businesses/laboratorio-materiais.webp",
+      "source": "/sections/c25/businesses/laboratorio-materiais.png",
+      "alt": "Pesquisadora comparando biomateriais translúcidos e compósitos reciclados",
+      "focalPoint": "center"
+    },
+    {
+      "id": "vinicola-colheita",
+      "business": "vinícola",
+      "path": "/sections/c25/businesses/vinicola-colheita.webp",
+      "source": "/sections/c25/businesses/vinicola-colheita.png",
+      "alt": "Duas pessoas carregando caixas de uvas ao entardecer em um vinhedo",
+      "focalPoint": "center"
+    },
+    {
+      "id": "movimento-rooftop",
+      "business": "movimento",
+      "path": "/sections/c25/businesses/movimento-rooftop.webp",
+      "source": "/sections/c25/businesses/movimento-rooftop.png",
+      "alt": "Grupo diverso em uma aula de movimento com tecidos coloridos no rooftop",
+      "focalPoint": "center"
+    },
+    {
+      "id": "oficina-bicicletas",
+      "business": "mobilidade",
+      "path": "/sections/c25/businesses/oficina-bicicletas.webp",
+      "source": "/sections/c25/businesses/oficina-bicicletas.png",
+      "alt": "Mecânico alinhando uma roda vermelha em uma oficina de bicicletas",
+      "focalPoint": "center"
+    },
+    {
+      "id": "restaurante-orla",
+      "business": "gastronomia",
+      "path": "/sections/c25/businesses/restaurante-orla.webp",
+      "source": "/sections/c25/businesses/restaurante-orla.png",
+      "alt": "Restaurante contemporâneo com madeira, pedra e jardim tropical ao pôr do sol",
+      "focalPoint": "center"
+    },
+    {
+      "id": "casa-serena-wellness",
+      "business": "bem-estar",
+      "path": "/sections/c25/businesses/casa-serena-wellness.webp",
+      "source": "/sections/c25/businesses/casa-serena-wellness.png",
+      "alt": "Clínica de bem-estar serena com materiais naturais e jardim interno",
+      "focalPoint": "center"
+    },
+    {
+      "id": "forma-boutique",
+      "business": "moda",
+      "path": "/sections/c25/businesses/forma-boutique.webp",
+      "source": "/sections/c25/businesses/forma-boutique.png",
+      "alt": "Boutique de moda autoral com jardim interno e mobiliário escultórico",
+      "focalPoint": "center"
+    },
+    {
+      "id": "hotel-vereda",
+      "business": "hotelaria",
+      "path": "/sections/c25/businesses/hotel-vereda.webp",
+      "source": "/sections/c25/businesses/hotel-vereda.png",
+      "alt": "Lobby de hotel boutique aberto para um jardim tropical",
+      "focalPoint": "center"
+    },
+    {
+      "id": "pausa-padaria-cafe",
+      "business": "cafeteria",
+      "path": "/sections/c25/businesses/pausa-padaria-cafe.webp",
+      "source": "/sections/c25/businesses/pausa-padaria-cafe.png",
+      "alt": "Padaria artesanal e cafeteria com balcão de pães e jardim",
+      "focalPoint": "center"
+    },
+    {
+      "id": "nexo-estudio-criativo",
+      "business": "serviços-criativos",
+      "path": "/sections/c25/businesses/nexo-estudio-criativo.webp",
+      "source": "/sections/c25/businesses/nexo-estudio-criativo.png",
+      "alt": "Estúdio criativo com mesa coletiva, biblioteca e vegetação interna",
+      "focalPoint": "center"
+    },
+    {
+      "id": "casa-horizonte",
+      "business": "arquitetura-residencial",
+      "path": "/sections/c25/casa-horizonte.png",
+      "alt": "Casa costeira contemporânea em concreto e madeira",
+      "focalPoint": "center"
+    },
+    {
+      "id": "apartamento-jardins",
+      "business": "interiores",
+      "path": "/sections/c25/apartamento-jardins.png",
+      "alt": "Interior residencial com madeira, pedra e vegetação",
+      "focalPoint": "center"
+    },
+    {
+      "id": "pavilhao-terra",
+      "business": "cultura",
+      "path": "/sections/c25/pavilhao-terra.png",
+      "alt": "Pavilhão cultural em tijolo com pátio tropical",
+      "focalPoint": "center"
+    }
+  ]
+}

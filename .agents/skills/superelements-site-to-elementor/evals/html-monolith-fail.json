@@ -1,0 +1,24 @@
+{
+  "version": "0.4",
+  "title": "HTML monolith fixture",
+  "type": "page",
+  "content": [
+    {
+      "id": "legacy1",
+      "elType": "container",
+      "isInner": false,
+      "settings": {},
+      "elements": [
+        {
+          "id": "legacy2",
+          "elType": "widget",
+          "widgetType": "html",
+          "isInner": false,
+          "settings": { "html": "<section><h1>Everything is trapped here</h1></section>" },
+          "elements": []
+        }
+      ]
+    }
+  ],
+  "page_settings": []
+}

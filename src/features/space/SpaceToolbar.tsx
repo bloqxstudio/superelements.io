@@ -1,278 +1,149 @@
-import React from 'react'
-import { LayoutTemplate, Type, Palette, Copy, Trash2 } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Check, Copy, LayoutTemplate, Library, Palette, Play, Plus, Sparkles, Type, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useSpaceStore } from '@/store/spaceStore'
-import { toast } from 'sonner'
-import type { NodeType, SectionNodeData, TextNodeData, ColorPaletteNodeData } from '@/types/space'
+import { hasSectionPack } from '@/features/section-pack/pack'
+import { BrandButton } from '@/features/space/brand/BrandButton'
+import { LevelBar } from '@/features/space/levels/LevelBar'
+import { PagePicker } from '@/features/space/pages/PagePicker'
+import { LIBRARY_PANEL_WIDTH } from './SpaceLibraryPanel'
+import type { NodeType } from '@/types/space'
+import { Hint, ToolButton, ToolDivider, ToolbarIsland } from './ToolbarIsland'
 
-// ─── Elementor JSON transformation helpers ──────────────────────────────────
+/** Abaixo desta largura do canvas os níveis e o Visualizar ficam só com ícone. */
+const COMPACT_WIDTH = 1320
+/** Abaixo desta, Biblioteca e Modelos também. */
+const TIGHT_WIDTH = 960
 
-/**
- * Recursively walk all elements in the Elementor JSON tree and apply a
- * visitor function to each element's settings object.
- */
-function walkElements(elements: any[], visitor: (el: any) => void): void {
-  for (const el of elements) {
-    visitor(el)
-    if (Array.isArray(el.elements) && el.elements.length > 0) {
-      walkElements(el.elements, visitor)
-    }
-  }
+const ADD_ITEMS: { type: NodeType; label: string; hint: string; icon: LucideIcon; tint: string }[] = [
+  { type: 'section', label: 'Seção solta', hint: 'Fora das páginas, para colar um JSON', icon: LayoutTemplate, tint: 'bg-gray-100 text-gray-600' },
+  { type: 'text', label: 'Texto', hint: 'Copy para ligar a uma seção', icon: Type, tint: 'bg-amber-50 text-amber-600' },
+  { type: 'color-palette', label: 'Paleta de cores', hint: 'Cores para ligar a uma seção', icon: Palette, tint: 'bg-violet-50 text-violet-600' },
+]
+
+const ICON_SPRING = { type: 'spring', duration: 0.3, bounce: 0 } as const
+
+interface SpaceToolbarProps {
+  libraryOpen: boolean
+  onToggleLibrary: () => void
+  onPreview: () => void
+  onOpenTemplates: () => void
+  onCopy: () => Promise<boolean>
 }
 
 /**
- * Apply a color palette to an Elementor JSON.
- * Strategy: replace every background_color found with colors cycling through the palette.
+ * Barra do Space em três ilhas, na ordem do trabalho: montar a página (esquerda),
+ * aplicar a marca por camada (centro) e publicar (direita).
  */
-function applyColorsToJson(json: any, colors: string[]): any {
-  if (!colors.length) return json
-  const result = JSON.parse(JSON.stringify(json)) // deep clone
-  let colorIndex = 0
-
-  const elements = result.elements ?? result.content ?? []
-  walkElements(elements, (el) => {
-    const s = el.settings
-    if (!s) return
-    if (s.background_color && typeof s.background_color === 'string' && s.background_color.startsWith('#')) {
-      s.background_color = colors[colorIndex % colors.length]
-      colorIndex++
-    }
-    if (s.title_color && typeof s.title_color === 'string' && s.title_color.startsWith('#')) {
-      s.title_color = colors[colorIndex % colors.length]
-    }
-    if (s.text_color && typeof s.text_color === 'string' && s.text_color.startsWith('#')) {
-      s.text_color = colors[colorIndex % colors.length]
-    }
-  })
-
-  return result
-}
-
-/**
- * Apply copy text to an Elementor JSON.
- * Strategy: split the copy by double-newlines (paragraphs) and distribute them
- * across heading widgets (title field) and text-editor widgets (editor field).
- */
-function applyCopyToJson(json: any, copy: string): any {
-  if (!copy.trim()) return json
-  const result = JSON.parse(JSON.stringify(json)) // deep clone
-
-  // Split copy into chunks separated by blank lines
-  const chunks = copy
-    .split(/\n\n+/)
-    .map((c) => c.trim())
-    .filter(Boolean)
-
-  let chunkIndex = 0
-  const elements = result.elements ?? result.content ?? []
-
-  walkElements(elements, (el) => {
-    if (chunkIndex >= chunks.length) return
-    const s = el.settings
-    if (!s) return
-
-    if (el.widgetType === 'heading' && s.title !== undefined) {
-      s.title = chunks[chunkIndex++]
-    } else if (el.widgetType === 'text-editor' && s.editor !== undefined) {
-      s.editor = `<p>${chunks[chunkIndex++]}</p>`
-    }
-  })
-
-  return result
-}
-
-// ─── Main JSON generator ─────────────────────────────────────────────────────
-
-function generateElementorJson(): string {
-  const { nodes, connections } = useSpaceStore.getState()
-
-  const sectionNodes = nodes
-    .filter((n) => n.type === 'section')
-    .sort((a, b) => a.y - b.y)
-
-  if (sectionNodes.length === 0) return ''
-
-  const resultElements: any[] = []
-
-  for (const sectionNode of sectionNodes) {
-    const sectionData = sectionNode.data as SectionNodeData
-
-    let parsedJson: any = null
-    try {
-      if (sectionData.elementorJson.trim()) {
-        parsedJson = JSON.parse(sectionData.elementorJson)
-      }
-    } catch {
-      // invalid JSON — skip this section
-      continue
-    }
-
-    if (!parsedJson) continue
-
-    // Find incoming connections to this section
-    const incomingConnections = connections.filter((c) => c.targetId === sectionNode.id)
-
-    let modifiedJson = parsedJson
-
-    for (const conn of incomingConnections) {
-      const sourceNode = nodes.find((n) => n.id === conn.sourceId)
-      if (!sourceNode) continue
-
-      if (conn.type === 'apply-colors') {
-        const palette = sourceNode.data as ColorPaletteNodeData
-        modifiedJson = applyColorsToJson(modifiedJson, palette.colors)
-      }
-
-      if (conn.type === 'apply-copy') {
-        const text = sourceNode.data as TextNodeData
-        modifiedJson = applyCopyToJson(modifiedJson, text.content)
-      }
-    }
-
-    // Collect the top-level elements from this section's JSON
-    const topElements = modifiedJson.elements ?? modifiedJson.content ?? []
-    resultElements.push(...topElements)
-  }
-
-  // If only one section, return the full original JSON structure with modified elements
-  if (sectionNodes.length === 1) {
-    const sectionData = sectionNodes[0].data as SectionNodeData
-    try {
-      const base = JSON.parse(sectionData.elementorJson)
-      const incomingConnections = connections.filter((c) => c.targetId === sectionNodes[0].id)
-      let modified = base
-      for (const conn of incomingConnections) {
-        const sourceNode = nodes.find((n) => n.id === conn.sourceId)
-        if (!sourceNode) continue
-        if (conn.type === 'apply-colors') modified = applyColorsToJson(modified, (sourceNode.data as ColorPaletteNodeData).colors)
-        if (conn.type === 'apply-copy') modified = applyCopyToJson(modified, (sourceNode.data as TextNodeData).content)
-      }
-      return JSON.stringify(modified, null, 2)
-    } catch {
-      return ''
-    }
-  }
-
-  // Multiple sections: wrap all elements into the first section's container structure
-  const firstSectionData = sectionNodes[0].data as SectionNodeData
-  try {
-    const base = JSON.parse(firstSectionData.elementorJson)
-    const combined = { ...base, elements: resultElements }
-    return JSON.stringify(combined, null, 2)
-  } catch {
-    return JSON.stringify({ elements: resultElements }, null, 2)
-  }
-}
-
-// ─── Toolbar component ────────────────────────────────────────────────────────
-
-export const SpaceToolbar: React.FC = () => {
-  const { addNode, clearCanvas, canvasTransform, nodes, connections } = useSpaceStore()
+export const SpaceToolbar: React.FC<SpaceToolbarProps> = ({ libraryOpen, onToggleLibrary, onPreview, onOpenTemplates, onCopy }) => {
+  const addNode = useSpaceStore((s) => s.addNode)
+  const canvasWidth = useSpaceStore((s) => s.viewport.width)
+  // Visualizar e Copiar agem sobre a página ativa
+  const activePage = useSpaceStore((s) => s.pages.find((p) => p.id === s.activePageId))
+  const hasSections = !!activePage?.sectionIds.length
+  const pageName = activePage?.name ?? 'página'
+  const compact = canvasWidth < COMPACT_WIDTH
+  const tight = canvasWidth < TIGHT_WIDTH
 
   const handleAdd = (type: NodeType) => {
-    const viewportCenterX = window.innerWidth / 2
-    const viewportCenterY = window.innerHeight / 2
-    const worldX = (viewportCenterX - canvasTransform.x) / canvasTransform.zoom
-    const worldY = (viewportCenterY - canvasTransform.y) / canvasTransform.zoom
+    const { canvasTransform, viewport, nodes } = useSpaceStore.getState()
+    const worldX = (viewport.width / 2 - canvasTransform.x) / canvasTransform.zoom
+    const worldY = (viewport.height / 2 - canvasTransform.y) / canvasTransform.zoom
     const offset = nodes.length * 30
     addNode(type, worldX + offset, worldY + offset)
   }
 
-  const handleGenerateJson = async () => {
-    const sectionCount = nodes.filter((n) => n.type === 'section').length
-    if (sectionCount === 0) {
-      toast.error('Adicione ao menos uma seção antes de gerar o JSON')
-      return
-    }
-
-    const jsonString = generateElementorJson()
-    if (!jsonString) {
-      toast.error('Nenhum JSON válido encontrado nas seções')
-      return
-    }
-
-    try {
-      await navigator.clipboard.writeText(jsonString)
-      toast.success('JSON copiado!', {
-        description: `${sectionCount} seção(ões) · ${connections.length} conexão(ões) aplicadas`,
-      })
-    } catch {
-      toast.error('Não foi possível copiar. Verifique as permissões do navegador.')
-    }
+  // O ícone do Copiar vira um check por um instante depois de copiar
+  const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef<number>()
+  useEffect(() => () => window.clearTimeout(copiedTimer.current), [])
+  const handleCopy = async () => {
+    if (!(await onCopy())) return
+    setCopied(true)
+    window.clearTimeout(copiedTimer.current)
+    copiedTimer.current = window.setTimeout(() => setCopied(false), 1800)
   }
-
-  const handleClear = () => {
-    if (nodes.length === 0 && connections.length === 0) return
-    if (confirm('Limpar o canvas? Todas as seções e conexões serão removidas.')) {
-      clearCanvas()
-    }
-  }
-
-  const sectionCount = nodes.filter((n) => n.type === 'section').length
 
   return (
-    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 bg-white rounded-xl border border-gray-200 shadow-md px-3 py-2 select-none">
-      <span className="text-[10px] font-semibold text-gray-400 mr-1 uppercase tracking-wide">Adicionar</span>
+    <div className="pointer-events-none absolute inset-x-3 top-3 z-50 grid select-none grid-cols-[1fr_auto_1fr] items-start gap-2">
+      {/* Montar: de onde vêm as seções */}
+      <ToolbarIsland aria-label="Montar a página" className="justify-self-start">
+        <PagePicker leftInset={libraryOpen ? LIBRARY_PANEL_WIDTH + 24 : 0} compact={tight} />
+        <ToolDivider />
+        {hasSectionPack && (
+          <Hint label="Biblioteca de seções" hint="Seções do pack, por tipo">
+            <ToolButton icon={Library} label="Biblioteca" showLabel={!tight} pressed={libraryOpen} onClick={onToggleLibrary} />
+          </Hint>
+        )}
+        <Hint label="Modelos de página" hint="Uma landing pronta numa página">
+          <ToolButton icon={Sparkles} label="Modelos" showLabel={!tight} onClick={onOpenTemplates} />
+        </Hint>
+        <DropdownMenu>
+          <Hint label="Adicionar ao canvas" hint="Seção solta, texto ou paleta">
+            <DropdownMenuTrigger asChild>
+              <ToolButton icon={Plus} label="Adicionar ao canvas" showLabel={false} />
+            </DropdownMenuTrigger>
+          </Hint>
+          <DropdownMenuContent align="start" sideOffset={8} className="w-60 rounded-xl p-1">
+            {ADD_ITEMS.map(({ type, label, hint, icon: Icon, tint }) => (
+              <DropdownMenuItem key={type} onSelect={() => handleAdd(type)} className="gap-2.5 rounded-lg px-2 py-1.5">
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${tint}`}>
+                  <Icon className="h-3.5 w-3.5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-medium text-gray-900">{label}</span>
+                  <span className="block text-[11px] text-gray-500">{hint}</span>
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </ToolbarIsland>
 
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-7 text-xs gap-1.5"
-        onClick={() => handleAdd('section')}
-      >
-        <LayoutTemplate className="h-3.5 w-3.5" />
-        Seção
-      </Button>
+      {/* Marca e a camada em edição */}
+      <ToolbarIsland aria-label="Marca e nível de edição">
+        <BrandButton />
+        <ToolDivider />
+        <LevelBar variant="inline" compact={compact} />
+      </ToolbarIsland>
 
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-7 text-xs gap-1.5 border-amber-200 text-amber-600 hover:bg-amber-50"
-        onClick={() => handleAdd('text')}
-      >
-        <Type className="h-3.5 w-3.5" />
-        Texto
-      </Button>
-
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-7 text-xs gap-1.5 border-violet-200 text-violet-600 hover:bg-violet-50"
-        onClick={() => handleAdd('color-palette')}
-      >
-        <Palette className="h-3.5 w-3.5" />
-        Paleta
-      </Button>
-
-      <div className="w-px h-5 bg-gray-200 mx-1" />
-
-      <Button
-        size="sm"
-        className="h-7 text-xs gap-1.5"
-        onClick={handleGenerateJson}
-        disabled={sectionCount === 0}
-      >
-        <Copy className="h-3.5 w-3.5" />
-        Gerar JSON
-      </Button>
-
-      {(nodes.length > 0 || connections.length > 0) && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs gap-1.5 text-gray-400 hover:text-red-500 ml-1"
-          onClick={handleClear}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      )}
-
-      {nodes.length > 0 && (
-        <span className="ml-1 text-[10px] text-gray-400">
-          {nodes.length} nó{nodes.length !== 1 ? 's' : ''}
-          {connections.length > 0 && ` · ${connections.length} conex${connections.length !== 1 ? 'ões' : 'ão'}`}
-        </span>
-      )}
+      {/* Publicar */}
+      <ToolbarIsland aria-label="Publicar" className="justify-self-end">
+        <Hint label={`Player da página ${pageName}`} hint="Só esta página, com a marca e as animações, rolando como no site">
+          <ToolButton icon={Play} label="Player" showLabel={!compact} onClick={onPreview} disabled={!hasSections} />
+        </Hint>
+        <Hint label="Copiar para o Elementor" hint={`A página ${pageName}, na ordem dela`}>
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 rounded-lg px-3 text-xs transition-[color,background-color,transform] active:scale-[0.96]"
+            onClick={handleCopy}
+            disabled={!hasSections}
+          >
+            <span className="relative h-3.5 w-3.5">
+              <AnimatePresence initial={false}>
+                <motion.span
+                  key={copied ? 'check' : 'copy'}
+                  className="absolute inset-0"
+                  initial={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }}
+                  animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, scale: 0.25, filter: 'blur(4px)' }}
+                  transition={ICON_SPRING}
+                >
+                  {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                </motion.span>
+              </AnimatePresence>
+            </span>
+            Copiar para o Elementor
+          </Button>
+        </Hint>
+      </ToolbarIsland>
     </div>
   )
 }

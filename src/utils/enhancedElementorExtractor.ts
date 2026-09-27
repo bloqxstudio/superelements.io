@@ -491,8 +491,8 @@ export const extractComponentForClipboard = async (
   }
 };
 
-// Extract Elementor data from local component object  
-const extractLocalElementorData = (component: any): ElementorElement[] | null => {
+// Extract Elementor data from local component object
+export const extractLocalElementorData =(component: any): ElementorElement[] | null => {
   if (!component) return null;
   
   const possibleSources = [

@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# ShipStudio metadata
+.shipstudio/
+
+# Pack Section Express importado (npm run sections:import): 46 MB, conteúdo licenciado
+/data/section-express/

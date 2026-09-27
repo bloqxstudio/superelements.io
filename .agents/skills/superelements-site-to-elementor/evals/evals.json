@@ -1,0 +1,23 @@
+{
+  "skill_name": "superelements-site-to-elementor",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use https://ugly.cash/ como referência e construa o site no Superelements para eu levar ao Elementor. Quero editar cada título, imagem e card no Navigator.",
+      "expected_output": "Survey, imported assets, registered native Elementor landing template, renderer-backed preview, zero monolithic HTML sections, responsive and build validation.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Migre este site institucional com home, serviços, cases e contato para o restante do projeto em Elementor. Preserve a marca e não faça tudo em widget HTML: https://example.com/",
+      "expected_output": "Template inventory followed by separate native Elementor page templates, shared brand tokens, portable assets, and verification for every representative template.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "A cópia em React ficou bonita, mas quando colo no Elementor a estrutura some. Corrija a exportação e deixe o conteúdo editável.",
+      "expected_output": "Diagnosis of monolithic HTML serialization, replacement with native container/widget trees, stale-canvas reload instruction, and structural renderer counts.",
+      "files": []
+    }
+  ]
+}

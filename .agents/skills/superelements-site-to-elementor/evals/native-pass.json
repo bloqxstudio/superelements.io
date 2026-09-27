@@ -1,0 +1,40 @@
+{
+  "version": "0.4",
+  "title": "Native fixture",
+  "type": "page",
+  "content": [
+    {
+      "id": "native1",
+      "elType": "container",
+      "isInner": false,
+      "settings": {
+        "content_width": "boxed",
+        "padding_mobile": { "unit": "px", "top": "24", "right": "16", "bottom": "24", "left": "16" }
+      },
+      "elements": [
+        {
+          "id": "native2",
+          "elType": "widget",
+          "widgetType": "heading",
+          "isInner": false,
+          "settings": {
+            "title": "Editable heading",
+            "typography_font_size_mobile": { "unit": "px", "size": 32 }
+          },
+          "elements": []
+        },
+        {
+          "id": "native3",
+          "elType": "widget",
+          "widgetType": "image",
+          "isInner": false,
+          "settings": {
+            "image": { "id": "", "url": "https://cdn.example.com/image.webp", "alt": "Fixture", "source": "url", "size": "" }
+          },
+          "elements": []
+        }
+      ]
+    }
+  ],
+  "page_settings": []
+}

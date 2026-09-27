@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,18 +21,18 @@ export default function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
   
   const { signIn, signUp, signInWithGoogle, user, loading: authLoading } = useAuth();
-  const { activeWorkspace, isLoading: workspaceLoading } = useWorkspace();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
 
   // Redirect if already authenticated (e.g. user visits /auth while logged in)
-  // If workspace is selected, go to /inicio. Otherwise, force /workspace selection.
   useEffect(() => {
-    if (authLoading || workspaceLoading) return;
+    if (authLoading) return;
 
     if (user) {
-      navigate(activeWorkspace ? '/' : '/workspace', { replace: true });
+      navigate(from, { replace: true });
     }
-  }, [user, activeWorkspace, authLoading, workspaceLoading, navigate]);
+  }, [user, authLoading, from, navigate]);
 
   const handleLoginClick = () => {
     if (!email || !email.includes('@')) {
@@ -98,9 +97,7 @@ export default function Auth() {
       setStep('confirm-email');
       setLoading(false);
     } else {
-      // Deixa o useEffect reagir ao user/activeWorkspace após o onAuthStateChange
-      // completar o fetchProfile. Não navegamos manualmente para evitar redirect
-      // prematuro antes do profile (e workspaceMemberships) estar disponível.
+      // Deixa o useEffect reagir ao user após o onAuthStateChange completar.
       setLoading(false);
     }
   };

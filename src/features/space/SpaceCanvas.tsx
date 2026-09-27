@@ -1,9 +1,15 @@
-import React, { useRef, useCallback, useEffect } from 'react'
+import React, { useRef, useCallback, useEffect, useState } from 'react'
 import { useSpaceStore } from '@/store/spaceStore'
 import { SectionNode } from './nodes/SectionNode'
 import { TextNode } from './nodes/TextNode'
 import { ColorPaletteNode } from './nodes/ColorPaletteNode'
 import { ConnectionLayer } from './ConnectionLayer'
+import { PagesLayer } from './pages/PageFrame'
+
+/** Foco num campo ou num controle: ali o Espaço digita ou aciona o botão, não arrasta o canvas. */
+const ownsSpace = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  !!target.closest('input, textarea, select, button, a[href], [contenteditable="true"], [role="button"], [role="menuitem"], [role="dialog"], [role="menu"]')
 
 // Dot grid pattern for the canvas background
 const DotPattern: React.FC<{ transform: { x: number; y: number; zoom: number } }> = ({ transform }) => {
@@ -41,12 +47,21 @@ const DotPattern: React.FC<{ transform: { x: number; y: number; zoom: number } }
 }
 
 export const SpaceCanvas: React.FC = () => {
-  const { nodes, canvasTransform, updatePendingConnection, cancelConnection, setCanvasTransform, panCanvas } =
+  const { nodes, canvasTransform, updatePendingConnection, cancelConnection, setCanvasTransform, panCanvas, setViewport, clearSelection } =
     useSpaceStore()
 
   const isPanning = useRef(false)
   const lastPos = useRef({ x: 0, y: 0 })
   const viewportRef = useRef<HTMLDivElement>(null)
+
+  // Tamanho visível do canvas, usado para centralizar as seções adicionadas pela biblioteca
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el) return
+    const observer = new ResizeObserver(() => setViewport(el.clientWidth, el.clientHeight))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [setViewport])
 
   // Track pending connection state via ref to avoid stale closures in document listeners
   const pendingRef = useRef(useSpaceStore.getState().pendingConnection)
@@ -84,13 +99,12 @@ export const SpaceCanvas: React.FC = () => {
     }
   }, [updatePendingConnection, cancelConnection])
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      // Only pan if clicking directly on canvas background (not on a node)
-      const target = e.target as HTMLElement
-      if (target !== e.currentTarget && !target.classList.contains('canvas-background')) return
+  /** Arrasta o canvas até soltar o mouse; clique sem arrastar no fundo desfaz a seleção. */
+  const startPan = useCallback(
+    (e: React.MouseEvent, clickClears: boolean) => {
       isPanning.current = true
       lastPos.current = { x: e.clientX, y: e.clientY }
+      const start = { x: e.clientX, y: e.clientY }
 
       const handleMouseMove = (e: MouseEvent) => {
         if (!isPanning.current) return
@@ -100,16 +114,72 @@ export const SpaceCanvas: React.FC = () => {
         lastPos.current = { x: e.clientX, y: e.clientY }
       }
 
-      const handleMouseUp = () => {
+      const handleMouseUp = (e: MouseEvent) => {
         isPanning.current = false
         document.removeEventListener('mousemove', handleMouseMove)
         document.removeEventListener('mouseup', handleMouseUp)
+        document.body.style.cursor = ''
+        // Clique no fundo (sem arrastar o canvas) desfaz a seleção
+        if (clickClears && Math.hypot(e.clientX - start.x, e.clientY - start.y) < 4) clearSelection()
       }
 
       document.addEventListener('mousemove', handleMouseMove)
       document.addEventListener('mouseup', handleMouseUp)
     },
-    [panCanvas]
+    [panCanvas, clearSelection]
+  )
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      // Only pan if clicking directly on canvas background (not on a node)
+      const target = e.target as HTMLElement
+      if (target !== e.currentTarget && !target.classList.contains('canvas-background')) return
+      startPan(e, true)
+    },
+    [startPan]
+  )
+
+  // Espaço segurado (ou o botão do meio) arrasta o canvas por cima de qualquer coisa,
+  // já que arrastar uma seção leva a seção
+  const spaceHeld = useRef(false)
+  const [handMode, setHandMode] = useState(false)
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || ownsSpace(e.target)) return
+      e.preventDefault()
+      if (!spaceHeld.current) {
+        spaceHeld.current = true
+        setHandMode(true)
+      }
+    }
+    const up = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return
+      spaceHeld.current = false
+      setHandMode(false)
+    }
+    const reset = () => {
+      spaceHeld.current = false
+      setHandMode(false)
+    }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    window.addEventListener('blur', reset)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', reset)
+    }
+  }, [])
+
+  const handleMouseDownCapture = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 1 && !(e.button === 0 && spaceHeld.current)) return
+      e.preventDefault()
+      e.stopPropagation()
+      document.body.style.cursor = 'grabbing'
+      startPan(e, false)
+    },
+    [startPan]
   )
 
   const handleWheel = useCallback(
@@ -118,11 +188,14 @@ export const SpaceCanvas: React.FC = () => {
       const delta = e.deltaY > 0 ? 0.9 : 1.1
       const newZoom = Math.max(0.2, Math.min(2.5, canvasTransform.zoom * delta))
 
-      // Zoom toward cursor position
-      const worldX = (e.clientX - canvasTransform.x) / canvasTransform.zoom
-      const worldY = (e.clientY - canvasTransform.y) / canvasTransform.zoom
-      const newX = e.clientX - worldX * newZoom
-      const newY = e.clientY - worldY * newZoom
+      // Zoom toward cursor position; o canvas não começa na origem da janela (menu lateral e cabeçalho)
+      const rect = e.currentTarget.getBoundingClientRect()
+      const cursorX = e.clientX - rect.left
+      const cursorY = e.clientY - rect.top
+      const worldX = (cursorX - canvasTransform.x) / canvasTransform.zoom
+      const worldY = (cursorY - canvasTransform.y) / canvasTransform.zoom
+      const newX = cursorX - worldX * newZoom
+      const newY = cursorY - worldY * newZoom
 
       setCanvasTransform({ zoom: newZoom, x: newX, y: newY })
     },
@@ -132,11 +205,13 @@ export const SpaceCanvas: React.FC = () => {
   return (
     <div
       ref={viewportRef}
-      className="canvas-background absolute inset-0 overflow-hidden"
+      data-space-canvas
+      className={`canvas-background absolute inset-0 overflow-hidden ${handMode ? '[&_*]:!cursor-grab' : ''}`}
       style={{
         cursor: 'grab',
         backgroundColor: '#f4f4f5',
       }}
+      onMouseDownCapture={handleMouseDownCapture}
       onMouseDown={handleMouseDown}
       onWheel={handleWheel}
     >
@@ -157,6 +232,8 @@ export const SpaceCanvas: React.FC = () => {
           overflow: 'visible',
         }}
       >
+        {/* Páginas por baixo: as seções delas são nós como os outros, posicionados na coluna */}
+        <PagesLayer />
         {nodes.map((node) => {
           if (node.type === 'section') return <SectionNode key={node.id} node={node} />
           if (node.type === 'text') return <TextNode key={node.id} node={node} />
@@ -165,10 +242,6 @@ export const SpaceCanvas: React.FC = () => {
         })}
       </div>
 
-      {/* Zoom indicator */}
-      <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-sm text-xs text-gray-500 font-medium px-2 py-1 rounded-lg border border-gray-200 pointer-events-none">
-        {Math.round(canvasTransform.zoom * 100)}%
-      </div>
     </div>
   )
 }
