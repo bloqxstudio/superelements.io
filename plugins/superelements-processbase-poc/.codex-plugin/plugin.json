@@ -1,0 +1,23 @@
+{
+  "name": "superelements-processbase-poc",
+  "version": "0.1.0",
+  "description": "POC local para consultar a base da ProcessBase e criar rascunhos Elementor por chat.",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Superelements · ProcessBase POC",
+    "shortDescription": "Consulta a marca e cria rascunhos Elementor locais.",
+    "longDescription": "POC sem autenticação e sem publicação no WordPress. Lê a base local da ProcessBase e cria rascunhos Elementor reversíveis.",
+    "developerName": "Superelements",
+    "category": "Productivity",
+    "capabilities": [
+      "Consultar a base de marca da ProcessBase",
+      "Listar páginas e capacidades disponíveis na POC",
+      "Criar rascunhos Elementor locais"
+    ],
+    "defaultPrompt": "Abra o projeto ProcessBase, consulte a marca e crie um rascunho de página sem publicar no WordPress."
+  },
+  "mcpServers": "./.mcp.json"
+}
