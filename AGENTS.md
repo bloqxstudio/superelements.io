@@ -111,3 +111,18 @@ Scope: `src/features/junior/**`, `src/features/space/juniorTemplate.ts`, `brands
 - Templates are native Elementor trees built with `src/features/junior/elementor.ts`. Zero HTML widgets: the mobile menu and the FAQ are nested accordions, the map is `google_maps`.
 - Applying the Júnior brand to its own template must leave it unchanged. The DESIGN.md has no `label` role, no `divider` and no `button-secondary` on purpose (each one rewrote the page); diff `applyBrand` output against the raw template before editing the front matter.
 - Motion: 180ms color changes, cards only get the gold border on mouse hover, buttons scale to 0.96 on press, short fade-up entrances, and the hero P R N D selector shifts into D once. All behind `prefers-reduced-motion`; without motion D is already lit.
+
+### Leo Scherer model
+
+Scope: `/leoscherer-style-guide`, `/leoscherer-elementor-preview`, `/leoscherer-redesign`, `/leoscherer-redesign-proposta`, `src/features/leoscherer/**`, `src/features/space/leoschererTemplate.ts`, `src/pages/LeoSchererRedesign*`, `public/leoscherer/**` and `migrations/leoscherer/**`.
+
+- Source: https://leoscherer.com.br/ (WordPress + WooCommerce + Elementor). The public sitemap contains 2,094 product URLs and nine product categories, represented by home, category and product template families.
+- Fonts measured from the source: Helvetica for display/editorial text, Source Sans Pro for Storefront body copy and Inter only in the agency credit. Helvetica has no transported font file; use `Helvetica, Arial, sans-serif` and document the destination fallback.
+- Core colors: canvas `#000000`, raised `#101010`, hero navy `#151C25`, paper `#FFFFFF`, theme body `#6D6D6D`, soft `#B6B6B6`, WooCommerce purple `#7F54B3`, action blue `#6EC1E4`, signal red `#FF0000`.
+- Desktop content is approximately 1120px with 20px gutters; tablet changes at 1024px and mobile at 767px. Mobile gutters are 16px.
+- Hero type is 52/52px weight 600 on desktop; Watch and story headings are 40/40px; the immersive statement is 75/75px. Body follows the source's 16/25.888px Source Sans Pro rhythm.
+- The language is a black editorial stage: isolated product renders, long negative-space bands, one white AirPods band and sparse blue/red accents. Do not turn it into a generic rounded ecommerce grid, bright SaaS page or glass interface.
+- Gradients are source-derived radials only: `#151C25` to `#010101` in hero/history and `#0B1B33` to `#00040A`/black in financing. Radii and shadows are rare.
+- Assets are local under `/leoscherer/assets`; do not hotlink uploads or copy analytics, pixels, WooCommerce sessions, cart, checkout, payment or account scripts.
+- Templates are native Elementor trees. Search, gallery, video and newsletter use supported widgets; the newsletter has no destination action until configured in the target WordPress.
+- Hover never carries essential content. Controls scale to 0.96 on press; motion is guarded by `prefers-reduced-motion`.

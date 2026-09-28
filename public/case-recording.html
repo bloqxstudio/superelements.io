@@ -1,0 +1,18 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Gravação dos cases desktop</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0b0b0c}iframe{border:0;width:calc(100vw - 32px);height:calc(100vh - 32px);display:block;margin:16px}</style>
+<iframe title="Case desktop"></iframe><script>
+const p=new URLSearchParams(location.search), frame=document.querySelector('iframe');
+const name=p.get('case')==='processbase'?'processbase':'junior';
+frame.src=`/${name}-elementor-preview?raw=1&motion=play`;
+frame.onload=()=>{setTimeout(()=>{
+  const win=frame.contentWindow, doc=frame.contentDocument;
+  const duration=Number(p.get('duration')||44000), start=performance.now();
+  function tick(now){
+    const elapsed=now-start, progress=Math.max(0,Math.min(1,(elapsed-4000)/duration));
+    const max=doc.documentElement.scrollHeight-win.innerHeight;
+    win.scrollTo({top:max*progress,behavior:'instant'});
+    if(progress<1)requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+},5000)};
+</script></html>

@@ -21,8 +21,12 @@ import UglyCashElementorPreview from "@/pages/UglyCashElementorPreview";
 import ZeloStyleGuide from "@/pages/ZeloStyleGuide";
 import ZeloElementorPreview from "@/pages/ZeloElementorPreview";
 import ProcessBaseElementorPreview from "@/pages/ProcessBaseElementorPreview";
+import ProcessBaseBragaProposalPreview from "@/pages/ProcessBaseBragaProposalPreview";
 import InpelElementorPreview from "@/pages/InpelElementorPreview";
 import JuniorElementorPreview from "@/pages/JuniorElementorPreview";
+import LeoSchererElementorPreview from "@/pages/LeoSchererElementorPreview";
+import LeoSchererStyleGuide from "@/pages/LeoSchererStyleGuide";
+import LeoSchererRedesign from "@/pages/LeoSchererRedesign";
 
 function App() {
   return (
@@ -47,8 +51,13 @@ function App() {
               <Route path="/zelo-style-guide" element={<ZeloStyleGuide />} />
               <Route path="/zelo-elementor-preview" element={<ZeloElementorPreview />} />
               <Route path="/processbase-elementor-preview" element={<ProcessBaseElementorPreview />} />
+              <Route path="/processbase-proposta-braga" element={<ProcessBaseBragaProposalPreview />} />
               <Route path="/inpel-elementor-preview" element={<InpelElementorPreview />} />
               <Route path="/junior-elementor-preview" element={<JuniorElementorPreview />} />
+              <Route path="/leoscherer-style-guide" element={<LeoSchererStyleGuide />} />
+              <Route path="/leoscherer-elementor-preview" element={<LeoSchererElementorPreview />} />
+              <Route path="/leoscherer-redesign" element={<LeoSchererRedesign />} />
+              <Route path="/leoscherer-redesign-proposta" element={<LeoSchererRedesign proposal />} />
 
               {/* Projetos (um por cliente); cada um abre o seu Space */}
               <Route

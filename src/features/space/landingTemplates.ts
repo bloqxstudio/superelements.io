@@ -3,10 +3,12 @@ import { createPdvLightLibraryTemplate } from './pdvLightLibraryTemplate'
 import { createMenuzitoTemplate } from './menuzitoTemplate'
 import { createUglyCashTemplate } from './uglyCashTemplate'
 import { createProcessBaseTemplate } from './processbaseTemplate'
+import { createProcessBaseBragaProposalTemplate } from './processbaseBragaProposalTemplate'
 import { createZeloTemplates } from './zeloTemplate'
 import { createInpelTemplates } from './inpelTemplate'
 import { createPetshopTemplate } from './petshopTemplate'
 import { createJuniorTemplate } from './juniorTemplate'
+import { createLeoSchererTemplates } from './leoschererTemplate'
 
 type JsonRecord = Record<string, unknown>
 type ElementorNode = JsonRecord & { id: string; elType: 'container' | 'widget'; settings: JsonRecord; elements: ElementorNode[]; widgetType?: string }
@@ -437,6 +439,7 @@ const makeCourseFinalCta = (): SectionNodeData => {
 }
 
 export const createLandingTemplates = (): LandingTemplate[] => [
+  ...createLeoSchererTemplates(),
   createJuniorTemplate(),
   createPetshopTemplate(),
   ...createInpelTemplates(),
@@ -444,6 +447,7 @@ export const createLandingTemplates = (): LandingTemplate[] => [
   createUglyCashTemplate(),
   createMenuzitoTemplate(),
   createProcessBaseTemplate(),
+  createProcessBaseBragaProposalTemplate(),
   ...[createPdvLightLibraryTemplate()].filter((template): template is LandingTemplate => template !== null),
   {
     id: 'portfolio-editorial',

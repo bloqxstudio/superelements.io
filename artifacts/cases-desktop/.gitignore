@@ -1,0 +1,5 @@
+*-frames/
+*-take/
+capture-*
+browser-framing*
+test-*

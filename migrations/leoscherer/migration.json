@@ -1,0 +1,27 @@
+{
+  "source": "https://leoscherer.com.br/",
+  "targetRoutes": ["/leoscherer-style-guide", "/leoscherer-elementor-preview"],
+  "phase": "complete",
+  "templates": [
+    { "name": "home", "source": "https://leoscherer.com.br/", "status": "implemented-and-verified" },
+    { "name": "category", "source": "https://leoscherer.com.br/categoria-produto/novos-iphone/", "status": "implemented-and-verified" },
+    { "name": "product", "source": "https://leoscherer.com.br/produto/iphone-16-128gb-rosa-seminovo/", "status": "implemented-and-verified" }
+  ],
+  "inventory": { "productUrls": 2094, "productCategories": 9 },
+  "decisions": {
+    "content": "Public content snapshot and representative native Elementor templates",
+    "forms": "Newsletter and simulation remain links until a destination backend is supplied",
+    "font": "Helvetica system stack for display, Source Sans Pro fallback for body",
+    "commerce": "WooCommerce data and checkout are outside the static Elementor import"
+  },
+  "needsYou": [
+    { "item": "WooCommerce destination", "recommendation": "Connect the destination WordPress catalog after visual approval if the imported project must sell products." },
+    { "item": "Newsletter destination", "recommendation": "Replace the source link with the destination Mailchimp or Elementor Form action." }
+  ],
+  "cannotComeAcross": [
+    "WooCommerce product database, stock and live prices",
+    "Cart, checkout, payments, orders and customer accounts",
+    "Newsletter and simulator backend",
+    "Analytics and marketing trackers"
+  ]
+}

@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProcessBase · Cards para Instagram</title>
+  <style>
+    :root {
+      --navy: #171a2c;
+      --navy-raised: #1e2237;
+      --orange: #ff5900;
+      --slate: #829aaf;
+      --slate-ink: #5f7a91;
+      --white: #ffffff;
+      --mist: #f2f3f5;
+      --body: #5e6472;
+      --line: #c9ccd3;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      background: #dfe2e6;
+      font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+      color: var(--navy);
+    }
+
+    body { display: grid; place-items: start center; }
+
+    .post {
+      position: relative;
+      display: none;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .post.is-active { display: block; }
+    .dark { background: var(--navy); color: var(--white); }
+    .light { background: var(--mist); color: var(--navy); }
+    .paper { background: var(--white); color: var(--navy); }
+
+    .brand {
+      position: absolute;
+      z-index: 8;
+      top: 58px;
+      left: 64px;
+      width: 214px;
+      height: auto;
+    }
+
+    .brand.reverse { filter: none; }
+
+    .index {
+      position: absolute;
+      z-index: 8;
+      top: 68px;
+      right: 64px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--slate);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    .index::before,
+    .eyebrow::before {
+      content: "";
+      width: 28px;
+      height: 3px;
+      background: var(--orange);
+      transform: skewY(-27deg);
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 0 0 22px;
+      color: var(--slate);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    .light .eyebrow,
+    .paper .eyebrow { color: var(--navy); }
+
+    h1, h2, p { margin: 0; }
+
+    h1, h2 {
+      font-weight: 400;
+      line-height: .98;
+      letter-spacing: -.052em;
+    }
+
+    .accent { color: var(--slate); font-weight: 600; }
+    .light .accent, .paper .accent { color: var(--slate-ink); }
+
+    .screen {
+      position: absolute;
+      overflow: hidden;
+      background: var(--navy-raised);
+      border: 6px solid currentColor;
+      outline: 1px solid rgba(130, 154, 175, .55);
+      outline-offset: -12px;
+      border-radius: 22px;
+    }
+
+    .screen img {
+      width: calc(100% + 18px);
+      height: 100%;
+      display: block;
+      object-fit: cover;
+      max-width: none;
+    }
+
+    .screen.navy-frame { color: var(--navy); }
+    .screen.white-frame { color: var(--white); }
+    .screen .hero-shot { object-position: center top; }
+    .screen .method-shot { object-position: center top; }
+    .screen .change-shot { object-position: center top; }
+    .screen .flow-shot { object-position: center top; }
+    .screen .brain-shot { object-position: center top; }
+    .screen .expert-shot { object-position: center top; }
+
+    .cut {
+      position: absolute;
+      z-index: 2;
+      width: 2px;
+      height: 360px;
+      background: var(--orange);
+      transform: rotate(26.565deg);
+      transform-origin: center;
+    }
+
+    .grid {
+      position: absolute;
+      inset: 0;
+      opacity: .12;
+      background-image:
+        linear-gradient(rgba(130,154,175,.25) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(130,154,175,.25) 1px, transparent 1px);
+      background-size: 72px 72px;
+      mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
+      pointer-events: none;
+    }
+
+    .dots {
+      position: absolute;
+      inset: 0;
+      opacity: .22;
+      background-image: radial-gradient(var(--slate) 1px, transparent 1px);
+      background-size: 24px 24px;
+      mask-image: linear-gradient(110deg, transparent 5%, #000 40%, transparent 75%);
+      pointer-events: none;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      padding: 0 16px;
+      border: 1px solid currentColor;
+      border-radius: 8px;
+      color: var(--orange);
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .micro {
+      color: var(--body);
+      font-size: 18px;
+      line-height: 1.45;
+    }
+
+    .dark .micro { color: #bec6cf; }
+
+    /* 01 — manifesto + hero */
+    #card-1 .copy {
+      position: absolute;
+      z-index: 5;
+      left: 64px;
+      top: 170px;
+      width: 680px;
+    }
+
+    #card-1 h1 { font-size: 88px; }
+    #card-1 .screen {
+      z-index: 3;
+      left: 64px;
+      top: 610px;
+      width: 952px;
+      height: 390px;
+      color: var(--navy-raised);
+    }
+
+    #card-1 .screen img { object-position: center 1%; }
+    #card-1 .cut.a { right: 124px; top: 108px; }
+    #card-1 .cut.b { right: 84px; top: 142px; height: 280px; opacity: .45; }
+
+    /* 02 — method */
+    #card-2 .copy {
+      position: absolute;
+      z-index: 5;
+      left: 64px;
+      top: 160px;
+      width: 920px;
+    }
+
+    #card-2 h2 { font-size: 78px; width: 840px; }
+    #card-2 .screen {
+      left: 148px;
+      top: 522px;
+      width: 880px;
+      height: 480px;
+      transform: rotate(-2.3deg);
+      color: var(--white);
+    }
+
+    #card-2 .screen img { object-position: center 4%; }
+    #card-2 .tag { position: absolute; z-index: 7; left: 64px; bottom: 92px; }
+
+    /* 03 — before / after */
+    #card-3 .copy {
+      position: absolute;
+      z-index: 5;
+      left: 64px;
+      top: 156px;
+      width: 860px;
+    }
+
+    #card-3 h2 { font-size: 82px; }
+    #card-3 .screen {
+      left: 64px;
+      top: 508px;
+      width: 952px;
+      height: 480px;
+      color: var(--navy);
+    }
+
+    #card-3 .screen img { object-position: center 3%; }
+
+    /* 04 — cadence */
+    #card-4 .copy {
+      position: absolute;
+      z-index: 5;
+      left: 64px;
+      top: 162px;
+      width: 880px;
+    }
+
+    #card-4 h2 { font-size: 76px; }
+    #card-4 .screen {
+      left: 98px;
+      top: 500px;
+      width: 920px;
+      height: 480px;
+      transform: rotate(1.8deg);
+      color: var(--white);
+    }
+
+    #card-4 .screen img { object-position: center 2%; }
+    #card-4 .step {
+      position: absolute;
+      z-index: 7;
+      left: 64px;
+      bottom: 70px;
+      width: 184px;
+      height: 168px;
+      display: grid;
+      place-items: center;
+      background: var(--navy);
+      color: var(--white);
+      font-size: 46px;
+      font-weight: 400;
+      letter-spacing: -.05em;
+      clip-path: polygon(0 0, 82% 0, 100% 18%, 100% 100%, 18% 100%, 0 82%);
+    }
+
+    /* 05 — knowledge */
+    #card-5 .copy {
+      position: absolute;
+      z-index: 5;
+      left: 64px;
+      top: 162px;
+      width: 880px;
+    }
+
+    #card-5 h2 { font-size: 76px; }
+    #card-5 .screen {
+      left: 64px;
+      top: 542px;
+      width: 952px;
+      height: 455px;
+      color: var(--navy-raised);
+    }
+
+    #card-5 .screen img { object-position: center 1%; }
+
+    /* 06 — specialist */
+    #card-6 .copy {
+      position: absolute;
+      z-index: 5;
+      left: 560px;
+      top: 174px;
+      width: 450px;
+    }
+
+    #card-6 h2 { font-size: 66px; }
+    #card-6 .copy .micro { margin-top: 28px; width: 420px; }
+    #card-6 .screen {
+      left: 64px;
+      top: 156px;
+      width: 436px;
+      height: 790px;
+      color: var(--navy);
+      border-radius: 22px;
+    }
+
+    #card-6 .screen img {
+      width: calc(100% + 18px);
+      height: 100%;
+      object-fit: cover;
+      object-position: center 20%;
+    }
+
+    #card-6 .quote {
+      position: absolute;
+      z-index: 6;
+      left: 560px;
+      bottom: 138px;
+      width: 430px;
+      padding-left: 24px;
+      border-left: 3px solid var(--orange);
+      font-size: 28px;
+      line-height: 1.28;
+      letter-spacing: -.025em;
+    }
+
+    #card-6 .cut { right: 12px; bottom: -82px; height: 340px; opacity: .45; }
+  </style>
+</head>
+<body>
+  <article class="post dark" id="card-1" aria-label="Card 1">
+    <div class="dots"></div>
+    <img class="brand reverse" src="/brands/processbase/logo/processbase-logo-reverse.svg" alt="ProcessBase" />
+    <span class="index">01 / 06</span>
+    <div class="copy">
+      <p class="eyebrow">Sistema de crescimento operacional</p>
+      <h1>Estrutura para melhorar.<br><span class="accent">Ritmo para crescer.</span></h1>
+    </div>
+    <div class="screen white-frame"><img class="hero-shot" src="/brands/processbase/social/site-shots/hero.png" alt="Tela inicial do site ProcessBase" /></div>
+    <span class="cut a"></span><span class="cut b"></span>
+  </article>
+
+  <article class="post dark" id="card-2" aria-label="Card 2">
+    <div class="grid"></div>
+    <img class="brand reverse" src="/brands/processbase/logo/processbase-logo-reverse.svg" alt="ProcessBase" />
+    <span class="index">02 / 06</span>
+    <div class="copy">
+      <p class="eyebrow">Método Base</p>
+      <h2>Quatro pilares.<br>Uma empresa <span class="accent">mais capaz de funcionar.</span></h2>
+    </div>
+    <div class="screen white-frame"><img class="method-shot" src="/brands/processbase/social/site-shots/metodo.png" alt="Tela do Método Base" /></div>
+    <span class="tag">Cultura · Processos · Treinamentos · Estratégia</span>
+  </article>
+
+  <article class="post paper" id="card-3" aria-label="Card 3">
+    <div class="dots"></div>
+    <img class="brand" src="/brands/processbase/logo/processbase-logo.svg" alt="ProcessBase" />
+    <span class="index">03 / 06</span>
+    <div class="copy">
+      <p class="eyebrow">O que muda</p>
+      <h2>Menos improviso.<br><span class="accent">Mais empresa.</span></h2>
+    </div>
+    <div class="screen navy-frame"><img class="change-shot" src="/brands/processbase/social/site-shots/mudanca.png" alt="Tela de antes e depois" /></div>
+  </article>
+
+  <article class="post light" id="card-4" aria-label="Card 4">
+    <div class="grid"></div>
+    <img class="brand" src="/brands/processbase/logo/processbase-logo.svg" alt="ProcessBase" />
+    <span class="index">04 / 06</span>
+    <div class="copy">
+      <p class="eyebrow">Como funciona</p>
+      <h2>Do diagnóstico <span class="accent">à rotina,</span><br>reunião a reunião.</h2>
+    </div>
+    <div class="screen white-frame"><img class="flow-shot" src="/brands/processbase/social/site-shots/funciona.png" alt="Tela das etapas do projeto" /></div>
+    <div class="step">01 → 03</div>
+  </article>
+
+  <article class="post dark" id="card-5" aria-label="Card 5">
+    <div class="dots"></div>
+    <img class="brand reverse" src="/brands/processbase/logo/processbase-logo-reverse.svg" alt="ProcessBase" />
+    <span class="index">05 / 06</span>
+    <div class="copy">
+      <p class="eyebrow">O que fica</p>
+      <h2>O conhecimento sai da cabeça de alguém <span class="accent">e passa a ser da empresa.</span></h2>
+    </div>
+    <div class="screen white-frame"><img class="brain-shot" src="/brands/processbase/social/site-shots/entregaveis.png" alt="Tela do cérebro da empresa" /></div>
+  </article>
+
+  <article class="post paper" id="card-6" aria-label="Card 6">
+    <div class="grid"></div>
+    <img class="brand" src="/brands/processbase/logo/processbase-logo.svg" alt="ProcessBase" />
+    <span class="index">06 / 06</span>
+    <div class="screen navy-frame"><img class="expert-shot" src="/brands/processbase/photos/gian-bianchin-machado-retrato.jpg" alt="Gian Bianchin Machado" /></div>
+    <div class="copy">
+      <p class="eyebrow">Especialista</p>
+      <h2>Primeiro, <span class="accent">a prática.</span><br>Depois, o método.</h2>
+      <p class="micro">Oito anos de melhoria contínua na indústria, sistematizados no Método Base.</p>
+    </div>
+    <p class="quote">“O método que a ProcessBase vende é o método que ela pratica.”</p>
+    <span class="cut"></span>
+  </article>
+
+  <script>
+    const requested = Number(new URLSearchParams(location.search).get('card') || 1);
+    const active = document.querySelector(`#card-${Math.min(6, Math.max(1, requested))}`);
+    active?.classList.add('is-active');
+  </script>
+</body>
+</html>

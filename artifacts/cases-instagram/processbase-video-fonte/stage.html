@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>ProcessBase · vídeo 4:5</title>
+<style>
+@font-face{font-family:Inter;src:url('/menuzito/assets/fonts/inter-latin.woff2') format('woff2');font-weight:100 900;font-display:block}
+:root{
+  --navy:#171A2C;--raised:#1E2237;--shell:#1F2335;--orange:#FF5900;--slate:#829AAF;--slate-ink:#5F7A91;
+  --mist:#F2F3F5;--body:#5E6472;--border:#C9CCD3;--on-navy:rgba(255,255,255,.72);
+  --line:rgba(130,154,175,.18);--line-strong:rgba(130,154,175,.32);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1350px;overflow:hidden;background:var(--navy)}
+body{font-family:Inter,sans-serif;color:#fff;-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 0}
+.layer{position:absolute;inset:0;overflow:hidden}
+
+/* ── HUD: logo, etiqueta e capítulos (uma cópia por camada, o corte diagonal revela a certa) ── */
+.hud-top{position:absolute;left:72px;right:72px;top:58px;height:32px;display:flex;align-items:center;justify-content:space-between;z-index:20}
+.hud-top img{height:30px;width:auto;display:block}
+.hud-tag{font-size:15px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--hud-muted)}
+.chapters{position:absolute;left:72px;right:72px;top:1262px;display:grid;grid-template-columns:repeat(5,1fr);gap:14px;z-index:20}
+.chapter{position:relative;padding-top:16px}
+.chapter::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:var(--hud-line)}
+.chapter i{position:absolute;left:0;top:0;height:2px;width:100%;background:var(--orange);transform-origin:0 50%;transform:scaleX(0)}
+.chapter span{display:block;font-size:15px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--hud-muted);white-space:nowrap}
+.chapter b{font-weight:600;margin-right:8px;font-feature-settings:"tnum" 1}
+.chapter.on span{color:var(--hud-ink)}
+.dark-hud .chapters::before{content:"";position:absolute;left:-72px;right:-72px;top:-110px;height:198px;background:linear-gradient(rgba(23,26,44,0),#171A2C 62%);z-index:-1}
+.chapters{isolation:isolate}
+.dark-hud{--hud-ink:#fff;--hud-muted:rgba(130,154,175,.9);--hud-line:rgba(130,154,175,.24)}
+.light-hud{--hud-ink:var(--navy);--hud-muted:#7B8190;--hud-line:#D5D8DE}
+
+/* ── camada navy: hero, formação, giro e pilares ── */
+#storyLayer{background:var(--navy);z-index:3}
+#storyLayer::before{content:"";position:absolute;inset:0;background:radial-gradient(900px 620px at 50% 0,rgba(130,154,175,.16),transparent 70%);pointer-events:none}
+#story{position:absolute;inset:0}
+#sky{position:absolute;inset:0;opacity:.78;transform-origin:50% 42%}
+.pb-graph{display:block;width:1080px;height:1350px}
+.hatch{position:absolute;left:-200px;right:-200px;top:330px;height:700px;opacity:0;pointer-events:none;
+  background:repeating-linear-gradient(116.565deg,rgba(130,154,175,.16) 0 1px,transparent 1px 34px),repeating-linear-gradient(63.435deg,rgba(130,154,175,.16) 0 1px,transparent 1px 34px);
+  -webkit-mask-image:radial-gradient(420px 220px at 50% 42%,#000,transparent 75%);mask-image:radial-gradient(420px 220px at 50% 42%,#000,transparent 75%)}
+
+.pb-hero-content{position:absolute;left:72px;right:72px;top:360px;text-align:center}
+.eyebrow{font-size:17px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--slate)}
+.h-hero{margin-top:30px;font-size:104px;font-weight:400;line-height:1.04;letter-spacing:-.05em;color:#fff}
+.line{display:block;overflow:hidden;padding:0 .06em .08em;margin-bottom:-.08em}
+.w{display:inline-block;will-change:transform}
+.hl{font-weight:600;letter-spacing:-.035em;color:var(--slate)}
+
+#emblemWrap{position:absolute;left:190px;top:290px;width:700px;height:700px;transform-origin:50% 63.96%}
+.pb-emblem-canvas{display:block;width:700px;height:700px}
+
+.caption{position:absolute;left:72px;right:72px;top:1010px}
+.caption .eyebrow{display:flex;align-items:center;gap:14px;font-size:15px;color:var(--slate)}
+.caption .eyebrow::before{content:"";width:24px;height:2px;background:var(--orange)}
+.caption p{margin-top:18px;font-size:50px;line-height:1.08;letter-spacing:-.04em;font-weight:400;color:#fff}
+.caption .line{padding-bottom:.1em}
+
+#legend{position:absolute;left:231px;width:618px;top:544px;display:grid;grid-template-columns:repeat(4,1fr);gap:18px;opacity:0}
+.lg{border-top:2px solid var(--line-strong);padding-top:14px}
+.lg b{display:block;font-size:18px;font-weight:500;color:var(--slate);font-feature-settings:"tnum" 1}
+.lg span{display:block;margin-top:6px;font-size:18px;color:var(--slate)}
+
+.card{position:absolute;left:72px;width:936px;padding:7px;border-radius:26px;background:var(--shell);border:1px solid rgba(130,154,175,.16);transform-origin:50% 0}
+.core{position:relative;border-radius:19px;background:var(--raised);border:1px solid rgba(255,255,255,.06);overflow:hidden}
+.head{display:flex;align-items:center;justify-content:space-between;height:78px;padding:0 34px;border-bottom:1px solid var(--line)}
+.head span{font-size:21px;color:var(--on-navy)}
+.head .tag{font-size:14px;font-weight:700;letter-spacing:.16em;color:var(--orange);padding:8px 12px;border:1px solid var(--line-strong);border-radius:5px;font-feature-settings:"tnum" 1}
+.body{padding:36px 40px 38px}
+.body h3{font-size:60px;font-weight:400;line-height:1.04;letter-spacing:-.04em}
+.body p{margin-top:14px;font-size:25px;line-height:1.42;color:var(--on-navy)}
+.steps{margin-top:26px;display:grid;grid-template-columns:1fr 1fr;column-gap:28px;list-style:none}
+.steps li{position:relative;padding:11px 0 11px 22px;border-top:1px solid var(--line);font-size:19px;line-height:1.3;color:var(--on-navy)}
+.steps li::before{content:"";position:absolute;left:0;top:calc(11px + .66em);width:10px;height:2px;background:var(--orange)}
+.out{margin-top:30px;padding-top:24px;border-top:1px solid var(--line)}
+.out small{display:block;font-size:14px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--slate)}
+.out strong{display:block;margin-top:8px;font-size:25px;font-weight:500;line-height:1.3}
+.card .dim{position:absolute;inset:0;border-radius:26px;background:var(--navy);opacity:0}
+
+.sum{position:absolute;left:72px;right:72px;top:760px;text-align:center;font-weight:400;font-size:84px;line-height:1.04;letter-spacing:-.05em}
+
+/* ── camada névoa: o site de verdade, no desktop e no celular ── */
+#siteLayer{background:var(--mist);z-index:1}
+#siteLayer::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(23,26,44,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(23,26,44,.06) 1px,transparent 1px);background-size:54px 54px;
+  -webkit-mask-image:radial-gradient(70% 55% at 50% 0,#000,transparent);mask-image:radial-gradient(70% 55% at 50% 0,#000,transparent)}
+.browser{position:absolute;left:54px;top:142px;width:972px;padding:6px;border-radius:24px;background:#E6E8EC;border:1px solid #DADDE3}
+.browser .core{background:#fff;border-color:#DDE0E5;border-radius:18px}
+.bar{height:44px;display:flex;align-items:center;gap:8px;padding:0 18px;border-bottom:1px solid #E3E5EA}
+.bar i{width:10px;height:10px;border-radius:50%;background:#D5D8DE}
+.bar em{margin-left:auto;margin-right:auto;transform:translateX(-26px);font-style:normal;font-size:14px;letter-spacing:.02em;color:var(--body);padding:6px 16px;border-radius:999px;background:var(--mist)}
+.screen{position:relative;overflow:hidden}
+.browser .screen{width:958px;height:599px}
+.browser iframe{position:absolute;left:0;top:0;width:1440px;height:900px;border:0;transform-origin:0 0;transform:scale(.66528)}
+.phone{position:absolute;left:684px;top:466px;width:346px;padding:11px;border-radius:52px;background:var(--navy);box-shadow:0 0 0 1px rgba(23,26,44,.08)}
+.phone .screen{width:324px;height:731px;border-radius:40px;background:#171A2C}
+.phone iframe{position:absolute;left:0;top:30px;width:390px;height:844px;border:0;transform-origin:0 0;transform:scale(.83077)}
+.phone .notch{position:absolute;left:50%;top:17px;width:84px;height:22px;margin-left:-42px;border-radius:999px;background:var(--navy);z-index:2}
+.site-cap{position:absolute;left:72px;top:838px;width:560px}
+.site-cap .eyebrow{display:flex;align-items:center;gap:14px;font-size:15px;color:var(--navy)}
+.site-cap .eyebrow::before{content:"";width:24px;height:2px;background:var(--orange)}
+.site-cap p{margin-top:20px;font-size:52px;line-height:1.06;letter-spacing:-.045em;color:var(--navy)}
+.site-cap .hl{color:var(--slate-ink)}
+.site-cap .line{padding-bottom:.1em}
+.site-note{position:absolute;left:72px;top:1150px;width:540px;font-size:21px;line-height:1.45;color:var(--body)}
+
+/* ── camada final ── */
+#endLayer{background:var(--navy);z-index:5;clip-path:polygon(1755px 0,1755px 0,1080px 1350px,1080px 1350px)}
+#endLayer::before{content:"";position:absolute;inset:0;background:radial-gradient(900px 620px at 50% 30%,rgba(130,154,175,.14),transparent 70%)}
+.end-hatch{position:absolute;inset:0;opacity:.0;
+  background:repeating-linear-gradient(116.565deg,rgba(130,154,175,.12) 0 1px,transparent 1px 30px);
+  -webkit-mask-image:radial-gradient(520px 380px at 50% 38%,#000,transparent 72%);mask-image:radial-gradient(520px 380px at 50% 38%,#000,transparent 72%)}
+.end-tag{position:absolute;left:0;right:0;top:340px;text-align:center}
+.end-logo{position:absolute;left:170px;top:440px;width:740px}
+.end-logo svg{display:block;width:740px;height:auto;overflow:visible}
+.end-title{position:absolute;left:72px;right:72px;top:700px;text-align:center;font-weight:400;font-size:96px;line-height:1.02;letter-spacing:-.05em}
+.end-cta{position:absolute;left:0;right:0;top:1040px;display:flex;justify-content:center}
+.end-cta div{display:inline-flex;align-items:center;gap:16px;font-size:32px;font-weight:600;letter-spacing:-.01em;padding-bottom:14px;position:relative}
+.end-cta div::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--orange);transform-origin:0 50%;transform:scaleX(var(--u,0))}
+.end-cta svg{width:34px;height:34px;color:var(--orange)}
+.end-sub{position:absolute;left:0;right:0;top:1128px;text-align:center;font-size:24px;color:var(--on-navy)}
+
+.edge{position:absolute;top:0;left:0;width:1px;height:1350px;z-index:6;pointer-events:none}
+#black{position:absolute;inset:0;background:#0B0D17;z-index:50}
+</style>
+</head>
+<body>
+
+<!-- camada 1: o site (fica por baixo e é revelada pelo corte 2:1) -->
+<section class="layer light-hud" id="siteLayer">
+  <div class="hud-top"><img src="/brands/processbase/logo/processbase-logo.svg" alt="ProcessBase"><span class="hud-tag">Case · Web design</span></div>
+  <div class="browser" id="browser"><div class="core"><div class="bar"><i></i><i></i><i></i><em>ProcessBase · desktop</em></div><div class="screen"><iframe id="deskFrame" title="Site desktop" src="/reel/pb-page.html"></iframe></div></div></div>
+  <div class="site-cap" id="siteCap">
+    <div class="eyebrow">No site</div>
+    <p><span class="line"><span class="w">O</span> <span class="w">scroll</span> <span class="w">conduz</span></span><span class="line"><span class="w">a</span> <span class="w">história,</span> <span class="w hl">no</span></span><span class="line"><span class="w hl">desktop</span> <span class="w hl">e</span> <span class="w hl">no</span></span><span class="line"><span class="w hl">celular.</span></span></p>
+  </div>
+  <div class="phone" id="phone"><div class="notch"></div><div class="screen"><iframe id="mobFrame" title="Site celular" src="/reel/pb-page.html"></iframe></div></div>
+  <div class="chapters" data-chapters></div>
+</section>
+
+<!-- camada 2: a história em navy -->
+<section class="layer dark-hud" id="storyLayer">
+  <div class="hud-top"><img src="/brands/processbase/logo/processbase-logo-reverse.svg" alt="ProcessBase"><span class="hud-tag">Case · Web design</span></div>
+  <div class="pb-story" id="story">
+    <div class="pb-sky" id="sky"><canvas class="pb-graph" data-line="#829AAF" data-accent="#FF5900"></canvas></div>
+    <div class="hatch" id="hatch"></div>
+    <div class="pb-hero-content" id="heroCopy">
+      <div class="eyebrow" id="heroEyebrow">Sistemas de crescimento operacional</div>
+      <h1 class="h-hero">
+        <span class="line"><span class="w">Sua</span> <span class="w">empresa</span> <span class="w">pode</span></span>
+        <span class="line"><span class="w">dar</span> <span class="w">certo</span></span>
+        <span class="line"><span class="w hl">com</span> <span class="w hl">ou</span> <span class="w hl">sem</span> <span class="w hl">você</span></span>
+        <span class="line"><span class="w hl">por</span> <span class="w hl">perto.</span></span>
+      </h1>
+    </div>
+    <div id="emblemWrap"><canvas class="pb-emblem-canvas"></canvas></div>
+    <div id="legend">
+      <div class="lg"><b>01</b><span>Cultura</span></div>
+      <div class="lg"><b>02</b><span>Processos</span></div>
+      <div class="lg"><b>03</b><span>Treinamentos</span></div>
+      <div class="lg"><b>04</b><span>Planejamento</span></div>
+    </div>
+    <div id="cards"></div>
+    <div class="caption" id="capForm"><div class="eyebrow">02 · Forma</div><p><span class="line"><span class="w">Cada</span> <span class="w">ideia</span> <span class="w">encontra</span></span><span class="line"><span class="w hl">o</span> <span class="w hl">seu</span> <span class="w hl">lugar.</span></span></p></div>
+    <div class="caption" id="capTurn"><div class="eyebrow">03 · Volume</div><p><span class="line"><span class="w">O</span> <span class="w">emblema</span> <span class="w">vira</span> <span class="w">bloco,</span></span><span class="line"><span class="w hl">em</span> <span class="w hl">isometria</span> <span class="w hl">2:1.</span></span></p></div>
+    <h2 class="sum" id="sum"><span class="line"><span class="w">Uma</span> <span class="w">sequência.</span></span><span class="line"><span class="w">Quatro</span> <span class="w">pilares.</span></span><span class="line"><span class="w hl">Um</span> <span class="w hl">sistema.</span></span></h2>
+  </div>
+  <div class="chapters" data-chapters></div>
+</section>
+
+<!-- camada 3: assinatura -->
+<section class="layer" id="endLayer">
+  <div class="end-hatch" id="endHatch"></div>
+  <div class="end-tag"><div class="eyebrow" id="endTag">Web design · Case selecionado</div></div>
+  <div class="end-logo" id="endLogo"></div>
+  <h2 class="end-title" id="endTitle"><span class="line"><span class="w">Estratégia</span> <span class="w">que</span></span><span class="line"><span class="w hl">ganha</span> <span class="w hl">forma.</span></span></h2>
+  <div class="end-cta" id="endCta"><div><span>Vamos criar o seu site?</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square"><path d="M7 17L17 7M9 7h8v8"/></svg></div></div>
+  <p class="end-sub" id="endSub">Fale comigo no Direct.</p>
+</section>
+
+<svg class="edge" id="edgeA" width="1080" height="1350" viewBox="0 0 1080 1350" style="width:1080px"><polygon id="edgeAPoly" fill="#FF5900" points="0,0 0,0 0,0 0,0"/></svg>
+<div id="black"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="/reel/pb-scripts.js"></script>
+<script>
+// os scripts de verdade da página (emblem3d e grafo), rodando no palco
+;[window.PB_EMBLEM, window.PB_GRAPH].forEach(function (code) { var s = document.createElement('script'); s.textContent = code; document.body.appendChild(s) })
+</script>
+<script>
+(function () {
+  var $ = function (s, r) { return (r || document).querySelector(s) }
+  var $$ = function (s, r) { return [].slice.call((r || document).querySelectorAll(s)) }
+
+  // ── cards dos pilares (copy do template) ──
+  var PILLARS = [
+    ['01', 'Cultura e pessoas', 'A estrutura começa sabendo quem faz o quê, e por quê.', ['Perfil comportamental da equipe', 'Cultura de hoje e cultura desejada', 'Organograma e descrição de cargos', 'Missão, visão e valores'], 'Organograma, cargos e responsabilidades'],
+    ['02', 'Processos', 'O jeito certo de fazer deixa de morar na cabeça de alguém.', ['Macroprocessos e prioridades', 'Mapeamento com quem executa', 'Procedimentos e checklists', 'Gestão diária e semanal de 15 minutos'], 'Processos padronizados e gestão à vista'],
+    ['03', 'Treinamentos', 'Quem aprende também aprende a ensinar.', ['Integração na cultura da empresa', 'Treinamento dos processos mapeados', 'Pontos críticos de cada entrega', 'Treinar os treinadores'], 'Trilhas de treinamento e treinadores internos'],
+    ['04', 'Planejamento estratégico', 'A rotina passa a responder a uma direção maior.', ['Forças, fraquezas, ameaças e oportunidades', 'Prioridades da empresa', 'Plano de ação', 'Horizonte de até 3 anos'], 'Direção estratégica e plano de ação'],
+  ]
+  var cardsBox = $('#cards')
+  PILLARS.forEach(function (p, k) {
+    var el = document.createElement('div')
+    el.className = 'card'
+    el.innerHTML = '<div class="core"><div class="head"><span>Pilar ' + p[0] + '</span><span class="tag">' + p[0] + ' / 04</span></div><div class="body"><h3>' + p[1] + '</h3><p>' + p[2] + '</p><div class="out"><small>Fica na empresa</small><strong>' + p[4] + '</strong></div></div></div><i class="dim"></i>'
+    el.style.top = (664 + k * 16) + 'px'
+    cardsBox.appendChild(el)
+  })
+
+  // ── capítulos ──
+  var CHAPTERS = [['01', 'Ideias'], ['02', 'Forma'], ['03', 'Volume'], ['04', 'Pilares'], ['05', 'Site']]
+  $$('[data-chapters]').forEach(function (box) {
+    box.innerHTML = CHAPTERS.map(function (c) { return '<div class="chapter"><i></i><span><b>' + c[0] + '</b>' + c[1] + '</span></div>' }).join('')
+  })
+
+  window.__stageReady = function () {
+    var d = $('#deskFrame').contentWindow, m = $('#mobFrame').contentWindow
+    var ok = function (w) { try { return w.document.readyState === 'complete' && !!w.ScrollTrigger && !!w.document.querySelector('.pb-story[data-pb-story]') } catch (e) { return false } }
+    return !!window.gsap && !!$('.pb-emblem-canvas').pbEmblem && document.fonts.status === 'loaded' && ok(d) && ok(m) && !!window.__logoSvg
+  }
+  fetch('/brands/processbase/logo/processbase-logo-reverse.svg').then(function (r) { return r.text() }).then(function (t) { $('#endLogo').innerHTML = t; window.__logoSvg = true })
+
+  // avança o relógio de todos os documentos (palco e iframes)
+  var frames = function () { return [$('#deskFrame').contentWindow, $('#mobFrame').contentWindow] }
+  window.__warm = function (T) {
+    window.__vt.advance(T)
+    frames().forEach(function (w) { try { w.__vt && w.__vt.advance(T) } catch (e) {} })
+  }
+
+  window.__setup = function (BASE) {
+    var gsap = window.gsap
+    var api = $('.pb-emblem-canvas').pbEmblem
+    var story = $('#story')
+    api.tilt.v = 0; api.fills.forEach(function (f) { f.v = 0 }); api.draw()
+    story.pbForm = 0
+    var paint = function () { api.draw() }
+    var desk = { y: 0, win: frames()[0] }, mob = { y: 0, win: frames()[1] }
+    var measure = function (w) {
+      var doc = w.document, st = doc.querySelector('.pb-story')
+      var top = function (sel) { var el = doc.querySelector(sel); return el ? el.getBoundingClientRect().top + w.pageYOffset : 0 }
+      return { story: st.offsetHeight - w.innerHeight, muda: top('#o-que-muda'), fica: top('#o-que-fica'), como: top('#como-funciona'), max: doc.documentElement.scrollHeight - w.innerHeight }
+    }
+    var D = measure(desk.win), M = measure(mob.win)
+    window.__measures = { D: D, M: M }
+
+    var tl = gsap.timeline({ paused: true })
+    gsap.set('#edgeA', { autoAlpha: 0 })
+    window.__tl = tl
+    var E = 'power3.out'
+
+    // HUD e capítulos: [início, fim]
+    var CH = [[0, 4.3], [4.3, 7.9], [7.9, 10.6], [10.6, 19.0], [19.0, 27.6]]
+    var chapterState = { t: 0 }
+    var chapterEls = $$('[data-chapters]').map(function (b) { return $$('.chapter', b) })
+    tl.to(chapterState, { t: 27.6, duration: 27.6, ease: 'none', onUpdate: function () {
+      var t = chapterState.t
+      chapterEls.forEach(function (list) {
+        list.forEach(function (el, i) {
+          var a = CH[i][0], b = CH[i][1], p = Math.max(0, Math.min(1, (t - a) / (b - a)))
+          el.firstChild.style.transform = 'scaleX(' + p.toFixed(4) + ')'
+          el.classList.toggle('on', t >= a && t < b + (i === 4 ? 9 : 0))
+        })
+      })
+    } }, 0)
+    tl.fromTo('.hud-top, .chapters', { autoAlpha: 0 }, { autoAlpha: 1, duration: .6, ease: 'none' }, .5)
+
+    // ── 01 Ideias: o hero ──
+    tl.fromTo('#black', { autoAlpha: .6 }, { autoAlpha: 0, duration: .5, ease: 'none' }, 0)
+    tl.fromTo('#sky', { scale: 1.16 }, { scale: 1, duration: 4.3, ease: 'power2.out' }, 0)
+    tl.fromTo('#heroEyebrow', { autoAlpha: 0, letterSpacing: '.42em' }, { autoAlpha: 1, letterSpacing: '.16em', duration: 1.1, ease: 'power3.out' }, .45)
+    var heroWords = $$('#heroCopy .h-hero .w')
+    tl.fromTo(heroWords, { yPercent: 115 }, { yPercent: 0, duration: 1, ease: 'power4.out', stagger: .075 }, .7)
+    tl.to(heroWords, { yPercent: -115, duration: .55, ease: 'power3.in', stagger: .03 }, 3.75)
+    tl.to('#heroEyebrow', { autoAlpha: 0, y: -20, duration: .4, ease: 'power2.in' }, 3.8)
+
+    // ── 02 Forma: as ideias viram o logo ──
+    var form = { v: 0 }
+    tl.to(form, { v: 1, duration: 3.1, ease: 'sine.inOut', onUpdate: function () { story.pbForm = form.v } }, 4.3)
+    tl.fromTo('#emblemWrap', { autoAlpha: 0 }, { autoAlpha: 1, duration: .45, ease: 'none' }, 4.3 + 3.1 * .86)
+    tl.to('#sky', { autoAlpha: 0, duration: .45, ease: 'none' }, 7.45)
+    var capIn = function (sel, at, color) {
+      var words = $$(sel + ' .w')
+      tl.fromTo(sel + ' .eyebrow', { autoAlpha: 0, x: -24 }, { autoAlpha: 1, x: 0, duration: .6, ease: E }, at)
+      tl.fromTo(words, { yPercent: 115 }, { yPercent: 0, duration: .85, ease: 'power4.out', stagger: .05 }, at + .08)
+      return words
+    }
+    var capOut = function (sel, at) {
+      tl.to($$(sel + ' .w'), { yPercent: -115, duration: .45, ease: 'power3.in', stagger: .025 }, at)
+      tl.to(sel + ' .eyebrow', { autoAlpha: 0, duration: .35, ease: 'none' }, at + .1)
+    }
+    gsap.set('#capForm .w, #capTurn .w, #sum .w, #siteCap .w, #endTitle .w', { yPercent: 115 })
+    gsap.set('#capForm .eyebrow, #capTurn .eyebrow, #siteCap .eyebrow', { autoAlpha: 0 })
+    capIn('#capForm', 4.75)
+    capOut('#capForm', 7.35)
+
+    // ── 03 Volume: o logo gira e deita em isometria 2:1 ──
+    var tilt = { v: 0 }
+    tl.to(tilt, { v: 1, duration: 2.1, ease: 'power2.inOut', onUpdate: function () { api.tilt.v = tilt.v; paint() } }, 8.0)
+    tl.to('#emblemWrap', { y: -98, duration: 2.1, ease: 'power2.inOut' }, 8.0)
+    tl.to('#hatch', { autoAlpha: 1, duration: 1.4, ease: 'none' }, 8.6)
+    capIn('#capTurn', 8.2)
+    capOut('#capTurn', 10.25)
+
+    // ── 04 Pilares: cada card acende a sua peça, no sentido horário ──
+    tl.to('#emblemWrap', { y: -398, scale: .8, duration: 1, ease: 'power3.inOut' }, 10.5)
+    tl.to('#hatch', { autoAlpha: 0, duration: .6, ease: 'none' }, 10.5)
+    tl.fromTo('#legend', { autoAlpha: 0, y: 30 }, { autoAlpha: 1, y: 0, duration: .7, ease: E }, 11.0)
+    var cards = $$('.card'), labels = $$('.lg')
+    var P0 = 11.2, STEP = 1.75
+    cards.forEach(function (card, k) {
+      var at = P0 + k * STEP
+      tl.fromTo(card, { y: 820 }, { y: 0, duration: .85, ease: 'power3.out' }, at)
+      if (k) {
+        tl.to(cards[k - 1], { scale: .95, duration: .85, ease: 'power3.out' }, at)
+        tl.to($('.dim', cards[k - 1]), { opacity: .55, duration: .85, ease: 'none' }, at)
+      }
+      var f = { v: 0 }
+      tl.to(f, { v: 1, duration: 1.15, ease: 'power1.inOut', onUpdate: function () { api.fills[k].v = f.v; paint() } }, at + .2)
+      tl.to(labels[k], { borderTopColor: '#FF5900', duration: .25, ease: 'none' }, at + .55)
+      tl.to($$('b, span', labels[k]), { color: '#FFFFFF', duration: .25, ease: 'none' }, at + .55)
+    })
+    gsap.set(cards, { y: 820 })
+    var PEND = P0 + 3 * STEP + 1.4   // ~17.85: logo todo laranja
+
+    // ── fecho da história: um sistema ──
+    tl.to(cards.slice().reverse(), { y: 900, duration: .6, ease: 'power3.in', stagger: .06 }, PEND - .2)
+    tl.to('#legend', { autoAlpha: 0, y: 20, duration: .4, ease: 'power2.in' }, PEND - .15)
+    tl.to('#emblemWrap', { y: -300, scale: .84, duration: .9, ease: 'power3.inOut' }, PEND + .1)
+    tl.to($$('#sum .w'), { yPercent: 0, duration: .85, ease: 'power4.out', stagger: .06 }, PEND + .45)
+
+    // corte 2:1 (os cortes do emblema): a navy recua para a esquerda e revela o site
+    var WIPE1 = 19.0
+    var wipe = { e: 1080 }
+    var edgeA = $('#edgeAPoly')
+    var setWipe1 = function () {
+      var e = wipe.e
+      $('#storyLayer').style.clipPath = 'polygon(0 0,' + (e + 675) + 'px 0,' + e + 'px 1350px,0 1350px)'
+      var w = 10
+      edgeA.setAttribute('points', (e + 675) + ',0 ' + (e + 675 + w) + ',0 ' + (e + w) + ',1350 ' + e + ',1350')
+    }
+    tl.set('#edgeA', { autoAlpha: 1 }, WIPE1)
+    tl.fromTo(wipe, { e: 1100 }, { e: -700, duration: .8, ease: 'power3.inOut', onUpdate: setWipe1 }, WIPE1)
+    tl.set('#storyLayer', { autoAlpha: 0 }, WIPE1 + .82)
+    tl.set('#edgeA', { autoAlpha: 0 }, WIPE1 + .82)
+
+    // ── 05 Site: a página real, rolando com a história de verdade ──
+    tl.fromTo('#browser', { y: 90, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 1, ease: E }, WIPE1 + .25)
+    tl.fromTo('#phone', { x: 160, y: 60, rotation: 4, autoAlpha: 0 }, { x: 0, y: 0, rotation: 0, autoAlpha: 1, duration: 1.1, ease: E }, WIPE1 + .55)
+    tl.fromTo('#siteCap .eyebrow', { autoAlpha: 0, x: -24 }, { autoAlpha: 1, x: 0, duration: .6, ease: E }, WIPE1 + .8)
+    tl.to($$('#siteCap .w'), { yPercent: 0, duration: .9, ease: 'power4.out', stagger: .05 }, WIPE1 + .9)
+
+    var S0 = WIPE1 + .6
+    tl.to(desk, { y: D.story, duration: 5.4, ease: 'power1.inOut' }, S0)
+    tl.to(desk, { y: D.fica, duration: 2.0, ease: 'power2.inOut' }, S0 + 5.7)
+    tl.to(mob, { y: M.story, duration: 5.6, ease: 'power1.inOut' }, S0 + .5)
+    tl.to(mob, { y: Math.min(M.max, M.muda + 40), duration: 1.6, ease: 'power2.inOut' }, S0 + 6.3)
+
+    // ── assinatura: o corte volta pelo outro lado ──
+    var WIPE2 = 27.6
+    var wipe2 = { e: 1080 }
+    var setWipe2 = function () {
+      var e = wipe2.e
+      $('#endLayer').style.clipPath = 'polygon(' + (e + 675) + 'px 0,1760px 0,1760px 1350px,' + e + 'px 1350px)'
+      edgeA.setAttribute('points', (e + 675 - 10) + ',0 ' + (e + 675) + ',0 ' + e + ',1350 ' + (e - 10) + ',1350')
+    }
+    tl.set('#edgeA', { autoAlpha: 1 }, WIPE2)
+    tl.fromTo(wipe2, { e: 1100 }, { e: -700, duration: .8, ease: 'power3.inOut', onUpdate: setWipe2 }, WIPE2)
+    tl.set('#endLayer', { clipPath: 'none' }, WIPE2 + .82)
+    tl.set('#edgeA', { autoAlpha: 0 }, WIPE2 + .82)
+
+    var paths = $$('#endLogo path')
+    var symbol = paths.slice(0, 4), word = paths.slice(4)
+    // as peças chegam no sentido horário a partir do alto à esquerda: Cultura, Processos, Treinamentos, Planejamento
+    var order = [3, 0, 1, 2]
+    var from = [[-26, -26], [26, -26], [26, 26], [-26, 26]]
+    var byPillar = [symbol[3], symbol[0], symbol[1], symbol[2]]
+    gsap.set(symbol, { transformOrigin: '50% 50%', transformBox: 'fill-box' })
+    gsap.set(symbol, { autoAlpha: 0 })
+    gsap.set(word, { autoAlpha: 0 })
+    byPillar.forEach(function (p, k) {
+      tl.fromTo(p, { autoAlpha: 0, x: from[k][0], y: from[k][1], scale: .6 }, { autoAlpha: 1, x: 0, y: 0, scale: 1, duration: .7, ease: 'back.out(1.6)' }, WIPE2 + .45 + k * .12)
+    })
+    tl.fromTo(word, { autoAlpha: 0, x: -40 }, { autoAlpha: 1, x: 0, duration: .9, ease: E }, WIPE2 + 1.05)
+    tl.fromTo('#endHatch', { autoAlpha: 0 }, { autoAlpha: 1, duration: 1.2, ease: 'none' }, WIPE2 + .6)
+    tl.fromTo('#endTag', { autoAlpha: 0, letterSpacing: '.4em' }, { autoAlpha: 1, letterSpacing: '.16em', duration: 1, ease: E }, WIPE2 + .8)
+    tl.to($$('#endTitle .w'), { yPercent: 0, duration: .95, ease: 'power4.out', stagger: .07 }, WIPE2 + 1.35)
+    tl.fromTo('#endCta div', { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: .8, ease: E }, WIPE2 + 2.0)
+    tl.fromTo('#endCta div', { '--u': 0 }, { '--u': 1, duration: .8, ease: 'power3.inOut' }, WIPE2 + 2.4)
+    tl.fromTo('#endCta svg', { x: -8, y: 8, autoAlpha: 0 }, { x: 0, y: 0, autoAlpha: 1, duration: .6, ease: E }, WIPE2 + 2.5)
+    tl.fromTo('#endSub', { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: .7, ease: E }, WIPE2 + 2.6)
+    tl.to({}, { duration: .01 }, 33)
+
+    window.__duration = 33
+    window.__frame = function (t) {
+      tl.time(t, false)
+      var T = BASE + t * 1000
+      window.__vt.advance(T)
+      ;[desk, mob].forEach(function (d) {
+        try {
+          if (Math.abs(d.win.pageYOffset - d.y) > .5) { d.win.scrollTo({ top: d.y, behavior: 'instant' }); d.win.dispatchEvent(new d.win.Event('scroll')) }
+          d.win.__vt.advance(T)
+        } catch (e) {}
+      })
+    }
+    return window.__measures
+  }
+})()
+</script>
+</body>
+</html>
