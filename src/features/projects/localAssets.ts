@@ -13,6 +13,14 @@ const APP_FOLDERS = ['sections', 'brands', 'inpel', 'zelo', 'menuzito', 'uglycas
 
 const LOCAL_APP_ASSET = new RegExp(`https?://(?:localhost|127\\.0\\.0\\.1)(?::\\d+)?(?=/(?:${APP_FOLDERS.join('|')})/)`, 'g')
 
+/**
+ * Imagens do app gravadas com um endereço local viram caminho da raiz
+ * (`/sections/...`). Num iframe `srcdoc` o caminho resolve pelo endereço da
+ * página que o mostra, então a foto do link de aprovação abre em qualquer porta,
+ * num túnel ou no app publicado.
+ */
+export const rootRelativeAssets = (html: string) => html.replace(LOCAL_APP_ASSET, '')
+
 /** O endereço de uma imagem do app com a origem de agora; qualquer outro fica como está. */
 export const currentAssetUrl = (url: string) => url.replace(LOCAL_APP_ASSET, window.location.origin)
 

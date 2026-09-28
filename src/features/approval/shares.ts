@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client'
+import { rootRelativeAssets } from '@/features/projects/localAssets'
 
 /**
  * Link de aprovação de uma página: uma foto do HTML renderizado que o cliente
@@ -48,8 +49,6 @@ export interface PublicShare {
 
 // Endereço público
 
-const LOCAL_ORIGIN = /https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?/g
-
 /** Onde o app está publicado; sem `VITE_PUBLIC_APP_URL`, o endereço aberto agora. */
 export const publicAppUrl = () => (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.replace(/\/+$/, '') || window.location.origin
 
@@ -58,19 +57,17 @@ export const isLocalAppUrl = () => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$
 
 export const shareUrl = (id: string) => `${publicAppUrl()}/aprovar/${id}`
 
-/** Imagens do próprio app (logos, fotos do banco) apontam para o endereço público, não para o local. */
-const forPublic = (html: string) => (isLocalAppUrl() ? html : html.replace(LOCAL_ORIGIN, publicAppUrl()))
-
-/** Resumo curto do HTML, para saber se a página mudou depois da foto. */
+/** Resumo curto do HTML, para saber se a página mudou depois da foto. Mudar só a porta local não conta. */
 export async function htmlHash(html: string) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(html))
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(rootRelativeAssets(html)))
   return [...new Uint8Array(digest)].slice(0, 16).map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 const filePath = (id: string, version: number) => `${id}/v${version}-${crypto.randomUUID().slice(0, 8)}.html`
 
+/** As imagens do app vão como caminho da raiz: abrem de onde o link for aberto. */
 async function upload(path: string, html: string) {
-  const body = new Blob([forPublic(html)], { type: 'text/html' })
+  const body = new Blob([rootRelativeAssets(html)], { type: 'text/html' })
   const { error } = await bucket().upload(path, body, { contentType: 'text/html', cacheControl: '3600' })
   if (error) throw error
 }
@@ -210,7 +207,8 @@ export async function fetchShareHtml(path: string) {
   const { publicUrl } = bucket().getPublicUrl(path).data
   const response = await fetch(publicUrl)
   if (!response.ok) throw new Error(`Foto da página não encontrada (${response.status})`)
-  return response.text()
+  // Fotos gravadas antes com o endereço local completo também abrem
+  return rootRelativeAssets(await response.text())
 }
 
 export type RespondError = 'link_inativo' | 'versao_antiga' | 'comentario_obrigatorio' | 'limite_respostas' | 'erro'
