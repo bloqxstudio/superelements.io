@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ISLAND_SURFACE } from '@/features/space/ToolbarIsland'
 import { cn } from '@/lib/utils'
+import { currentAssetUrl } from './localAssets'
 import type { Project, ProjectSummary } from './types'
 
 const relative = new Intl.RelativeTimeFormat('pt-BR', { numeric: 'auto' })
@@ -52,7 +53,7 @@ const ProjectCover: React.FC<{ name: string; summary: ProjectSummary }> = ({ nam
     <div className="relative flex aspect-[16/9] items-center justify-center border-b border-gray-100 bg-zinc-50 bg-[radial-gradient(#e4e4e7_1px,transparent_1px)] [background-size:16px_16px]">
       {summary.logo && !logoFailed ? (
         <img
-          src={summary.logo}
+          src={currentAssetUrl(summary.logo)}
           alt=""
           className="max-h-12 max-w-[55%] object-contain"
           onError={() => setLogoFailed(true)}

@@ -7,6 +7,7 @@ import { useSiteKitStore } from '@/features/wordpress/siteKitStore'
 import { deleteDraft, loadDraft, saveDraft, type ProjectDraft } from './browserDb'
 import { summarize, useProjectStore } from './projectStore'
 import { loadDocHead, loadProjectDoc, saveProjectDoc } from './storage'
+import { withCurrentOrigin } from './localAssets'
 import type { ProjectDoc, ProjectSummary } from './types'
 
 /** Rascunho neste navegador, rápido: fechar a aba não perde nada. */
@@ -46,7 +47,9 @@ const collect = (): Snapshot => {
   }
 }
 
-const apply = (doc?: ProjectDoc) => {
+const apply = (saved?: ProjectDoc) => {
+  // Imagens do app gravadas com outra porta local (ou antes de publicar) voltam a abrir
+  const doc = withCurrentOrigin(saved)
   useSpaceStore.getState().loadCanvas(doc?.canvas)
   useBrandStore.getState().load(doc?.brand)
   useSiteKitStore.getState().load(doc?.site)
