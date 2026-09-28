@@ -14,6 +14,7 @@ import { STATUS_LABELS, useWordPressUi } from '@/features/wordpress/uiStore'
 import { useActiveWordPress } from '@/features/wordpress/useWordPressConnection'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { SpaceNode, SpacePage } from '@/types/space'
+import { ApprovalChip } from '@/features/approval/ApprovalChip'
 import { Hint } from '../ToolbarIsland'
 import { MOD_KEY } from './clipboard'
 import { EMPTY_PAGE_BODY, PAGE_HEADER, PAGE_PAD, PAGE_WIDTH, SECTION_GAP, SECTION_WIDTH, nextPagePosition, pageFrame, pageSections, plural } from './pages'
@@ -168,6 +169,7 @@ const PageFrame: React.FC<PageFrameProps> = ({ page, nodes, onlyPage }) => {
                 </a>
               </Hint>
             )}
+            <ApprovalChip pageId={page.id} />
           </>
         )}
 

@@ -22,7 +22,9 @@ export const googleFontsUrl = (families: string[]) => {
 const CAROUSEL_SCRIPT = `
 document.querySelectorAll('[data-se-carousel]').forEach(function (track) {
   var widget = track.closest('.elementor-widget');
-  var step = function () { var s = track.querySelector('.swiper-slide'); return s ? s.getBoundingClientRect().width + parseFloat(getComputedStyle(track).columnGap || 0) : track.clientWidth; };
+  var group = function () { var g = (track.dataset.seScroll || '1,1,1').split(','); return Number(innerWidth <= 767 ? g[2] : innerWidth <= 1024 ? g[1] : g[0]) || 1; };
+  var slide = function () { var s = track.querySelector('.swiper-slide'); return s ? s.getBoundingClientRect().width + parseFloat(getComputedStyle(track).columnGap || 0) : track.clientWidth; };
+  var step = function () { return slide() * group(); };
   var prev = widget.querySelector('.elementor-swiper-button-prev');
   var next = widget.querySelector('.elementor-swiper-button-next');
   if (prev) prev.addEventListener('click', function () { track.scrollBy({ left: -step() }); });

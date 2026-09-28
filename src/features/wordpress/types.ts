@@ -4,7 +4,7 @@ import type { WordPressSite } from './rest'
 export interface WordPressConnection {
   site: WordPressSite
   userLogin: string
-  /** Senha de aplicação criada na aprovação. Fica só neste navegador; desconectar revoga no site. */
+  /** Senha de aplicação criada na aprovação. Fica no projeto, na conta; desconectar revoga no site. */
   password: string
   /** Id da senha no WordPress, para revogar ao desconectar. */
   passwordUuid?: string

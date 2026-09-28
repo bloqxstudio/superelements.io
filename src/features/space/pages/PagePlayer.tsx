@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Copy, Download, Monitor, RotateCcw, Smartphone, Tablet } from 'lucide-react'
+import { Copy, Download, Link2, Monitor, RotateCcw, Smartphone, Tablet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { renderElementorDocument } from '@/engine/elementor'
@@ -10,6 +10,8 @@ import { copyLandingToElementor, downloadLandingHtml } from '../exportLanding'
 import { useSiteKit } from '@/features/wordpress/siteKitStore'
 import { isFromSite, renderKit } from '../renderKit'
 import { useActiveBrand } from '../brand/brandStore'
+import { ApprovalPanel } from '@/features/approval/ApprovalPanel'
+import { shareState, useApprovalStore } from '@/features/approval/approvalStore'
 import { pageSections, plural } from './pages'
 
 /** Altura da legenda abaixo da tela, fora da conta da escala. */
@@ -84,6 +86,9 @@ export const PagePlayer: React.FC = () => {
   const siteKit = useSiteKit()
   const [viewport, setViewport] = useState<PreviewViewport>('desktop')
   const [replay, setReplay] = useState(0)
+  const approvalOpen = useApprovalStore((s) => s.panelOpen)
+  const approval = shareState(useApprovalStore((s) => (page ? s.shares[page.id] : undefined))).kind
+  const setApprovalOpen = useApprovalStore((s) => s.setPanelOpen)
 
   const built = useMemo(
     () => (page ? buildLandingPage(pageSections(page, nodes), nodes, connections, brand) : null),
@@ -105,7 +110,14 @@ export const PagePlayer: React.FC = () => {
   const skipped = built?.skipped ? ` · ${plural(built.skipped, 'seção sem JSON ficou', 'seções sem JSON ficaram')} de fora` : ''
 
   return (
-    <Dialog open={!!playing} onOpenChange={(open) => !open && closePlayer()}>
+    <Dialog
+      open={!!playing}
+      onOpenChange={(open) => {
+        if (open) return
+        closePlayer()
+        setApprovalOpen(false)
+      }}
+    >
       <DialogContent className="flex h-[92vh] w-[95vw] max-w-6xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0 border-b px-4 py-3 pr-12">
           <div className="min-w-0">
@@ -140,6 +152,25 @@ export const PagePlayer: React.FC = () => {
             >
               <RotateCcw className="h-3.5 w-3.5" /> Recomeçar
             </Button>
+            <Button
+              size="sm"
+              variant={approvalOpen ? 'secondary' : 'outline'}
+              className="relative h-8 gap-1.5 text-xs active:scale-[0.96]"
+              aria-expanded={approvalOpen}
+              onClick={() => setApprovalOpen(!approvalOpen)}
+              title="Link para o cliente ver a página e aprovar, sem login"
+            >
+              <Link2 className="h-3.5 w-3.5" /> Aprovação
+              {approval !== 'none' && (
+                <>
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${approval === 'approved' ? 'bg-emerald-500' : approval === 'changes' ? 'bg-amber-500' : 'bg-gray-400'}`}
+                    aria-hidden
+                  />
+                  <span className="sr-only">{approval === 'approved' ? '(aprovada)' : approval === 'changes' ? '(ajuste pedido)' : '(aguardando resposta)'}</span>
+                </>
+              )}
+            </Button>
             <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs active:scale-[0.96]" onClick={() => downloadLandingHtml(pageId)} disabled={!html}>
               <Download className="h-3.5 w-3.5" /> Baixar HTML
             </Button>
@@ -148,6 +179,8 @@ export const PagePlayer: React.FC = () => {
             </Button>
           </div>
         </DialogHeader>
+
+        {approvalOpen && page && <ApprovalPanel pageId={page.id} pageName={page.name} html={html} />}
 
         <div className="flex min-h-0 flex-1 flex-col bg-muted/40 p-4">
           {html ? (

@@ -237,7 +237,7 @@ const ConnectedView: React.FC<{
       {refreshError && <p className="text-sm text-destructive">{refreshError}</p>}
 
       <p className="text-xs text-muted-foreground">
-        A senha de aplicação fica guardada só neste navegador. Desconectar apaga a senha daqui e do WordPress.
+        A senha de aplicação fica guardada no projeto, na sua conta. Desconectar apaga a senha daqui e do WordPress.
       </p>
 
       {confirming ? (

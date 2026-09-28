@@ -154,28 +154,30 @@ export async function refreshConnection(projectId: string, connection: WordPress
   return next
 }
 
+/** Apaga a senha de aplicação no WordPress; `false` se o site não respondeu. */
+export async function revokeApplicationPassword(connection: WordPressConnection): Promise<boolean> {
+  try {
+    const creds = credentialsOf(connection)
+    const uuid =
+      connection.passwordUuid ?? (await wpRequest<{ uuid?: string }>(creds, 'wp/v2/users/me/application-passwords/introspect')).uuid
+    if (!uuid) return false
+    await wpRequest(creds, `wp/v2/users/me/application-passwords/${uuid}`, { method: 'DELETE' })
+    return true
+  } catch (error) {
+    // Senha já apagada no site: não há o que revogar
+    return error instanceof WordPressError && (error.code === 'incorrect_password' || error.status === 404)
+  }
+}
+
 /**
- * Revoga a senha no WordPress e apaga a conexão daqui. Se o site não
+ * Revoga a senha no WordPress e apaga a conexão do projeto. Se o site não
  * responder, apaga mesmo assim e devolve `false` para avisar.
  */
 export async function disconnectWordPress(projectId: string): Promise<boolean> {
   const connection = await loadWordPressConnection(projectId)
   if (!connection) return true
 
-  let revoked = false
-  try {
-    const creds = credentialsOf(connection)
-    const uuid =
-      connection.passwordUuid ?? (await wpRequest<{ uuid?: string }>(creds, 'wp/v2/users/me/application-passwords/introspect')).uuid
-    if (uuid) {
-      await wpRequest(creds, `wp/v2/users/me/application-passwords/${uuid}`, { method: 'DELETE' })
-      revoked = true
-    }
-  } catch (error) {
-    // Senha já apagada no site: não há o que revogar
-    revoked = error instanceof WordPressError && (error.code === 'incorrect_password' || error.status === 404)
-  }
-
+  const revoked = await revokeApplicationPassword(connection)
   await deleteWordPressConnection(projectId)
   announce({ type: 'disconnected', projectId })
   return revoked

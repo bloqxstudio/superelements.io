@@ -1342,6 +1342,162 @@ export type Database = {
           },
         ]
       }
+      space_page_share_responses: {
+        Row: {
+          created_at: string
+          decision: string
+          id: string
+          name: string
+          note: string
+          share_id: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          decision: string
+          id?: string
+          name?: string
+          note?: string
+          share_id: string
+          version: number
+        }
+        Update: {
+          created_at?: string
+          decision?: string
+          id?: string
+          name?: string
+          note?: string
+          share_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "space_page_share_responses_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "space_page_shares"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      space_page_shares: {
+        Row: {
+          created_at: string
+          html_hash: string
+          html_path: string
+          id: string
+          owner_id: string
+          page_id: string
+          page_name: string
+          project_id: string
+          project_name: string
+          shared_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          html_hash: string
+          html_path: string
+          id?: string
+          owner_id?: string
+          page_id: string
+          page_name: string
+          project_id: string
+          project_name: string
+          shared_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          html_hash?: string
+          html_path?: string
+          id?: string
+          owner_id?: string
+          page_id?: string
+          page_name?: string
+          project_id?: string
+          project_name?: string
+          shared_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "space_page_shares_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "space_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      space_projects: {
+        Row: {
+          context: string
+          created_at: string
+          doc_path: string | null
+          id: string
+          name: string
+          owner_id: string
+          revision: number
+          summary: Json
+          updated_at: string
+        }
+        Insert: {
+          context?: string
+          created_at?: string
+          doc_path?: string | null
+          id: string
+          name: string
+          owner_id?: string
+          revision?: number
+          summary?: Json
+          updated_at?: string
+        }
+        Update: {
+          context?: string
+          created_at?: string
+          doc_path?: string | null
+          id?: string
+          name?: string
+          owner_id?: string
+          revision?: number
+          summary?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      space_wordpress_connections: {
+        Row: {
+          connection: Json
+          owner_id: string
+          password: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          connection: Json
+          owner_id?: string
+          password: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          connection?: Json
+          owner_id?: string
+          password?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "space_wordpress_connections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "space_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -1602,6 +1758,7 @@ export type Database = {
       }
     }
     Functions: {
+      get_page_share: { Args: { p_id: string }; Returns: Json }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -1626,6 +1783,16 @@ export type Database = {
       public_set_proposal_status_by_token: {
         Args: { p_status: string; p_token: string }
         Returns: boolean
+      }
+      respond_page_share: {
+        Args: {
+          p_decision: string
+          p_id: string
+          p_name: string
+          p_note: string
+          p_version: number
+        }
+        Returns: string
       }
     }
     Enums: {

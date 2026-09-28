@@ -11,7 +11,8 @@ interface ProjectDialogProps {
   onOpenChange: (open: boolean) => void
   /** Sem projeto, o diálogo cria um novo. */
   project?: Project
-  onSubmit: (fields: { name: string; context: string }) => void
+  /** Com promessa, o diálogo espera e só fecha se der certo. */
+  onSubmit: (fields: { name: string; context: string }) => void | Promise<void>
 }
 
 const CONTEXT_PLACEHOLDER =
@@ -21,6 +22,7 @@ const CONTEXT_PLACEHOLDER =
 export const ProjectDialog: React.FC<ProjectDialogProps> = ({ open, onOpenChange, project, onSubmit }) => {
   const [name, setName] = useState('')
   const [context, setContext] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -28,11 +30,18 @@ export const ProjectDialog: React.FC<ProjectDialogProps> = ({ open, onOpenChange
     setContext(project?.context ?? '')
   }, [open, project])
 
-  const submit = (event: React.FormEvent) => {
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!name.trim()) return
-    onSubmit({ name: name.trim(), context })
-    onOpenChange(false)
+    if (!name.trim() || submitting) return
+    setSubmitting(true)
+    try {
+      await onSubmit({ name: name.trim(), context })
+      onOpenChange(false)
+    } catch {
+      // Quem chamou já avisou; o que foi digitado fica no formulário
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -77,8 +86,8 @@ export const ProjectDialog: React.FC<ProjectDialogProps> = ({ open, onOpenChange
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={!name.trim()}>
-              {project ? 'Salvar' : 'Criar projeto'}
+            <Button type="submit" disabled={!name.trim() || submitting}>
+              {submitting ? (project ? 'Salvando…' : 'Criando…') : project ? 'Salvar' : 'Criar projeto'}
             </Button>
           </DialogFooter>
         </form>

@@ -1,0 +1,65 @@
+{
+  "source": "https://www.inpel.com.br/",
+  "slug": "inpel",
+  "phase": "all-templates-native-and-verified",
+  "elementorPreviewRoute": "/inpel-elementor-preview",
+  "templateSource": "src/features/space/inpelTemplate.ts",
+  "content": "src/features/inpel/content.ts",
+  "brand": "brands/inpel/DESIGN.md",
+  "templates": [
+    { "id": "inpel-home", "name": "home", "source": "https://www.inpel.com.br/", "status": "native-and-verified" },
+    { "id": "inpel-sobre", "name": "sobre", "source": "https://www.inpel.com.br/sobre", "status": "native-and-verified" },
+    { "id": "inpel-caixas", "name": "catálogo de aplicações", "source": "https://www.inpel.com.br/segmentos", "status": "native-and-verified" },
+    { "id": "inpel-produtos", "name": "produtos de uma aplicação", "source": "https://www.inpel.com.br/produtos/24/ROÇADEIRAS", "status": "native-and-verified" },
+    { "id": "inpel-produto", "name": "detalhe do produto", "source": "https://www.inpel.com.br/produtoDetalhe/801/CAIXA-DE-TRANSMISSÃO-INPEL-CT-145", "status": "native-and-verified" },
+    { "id": "inpel-blog", "name": "blog", "source": "https://www.inpel.com.br/blog", "status": "native-and-verified" },
+    { "id": "inpel-post", "name": "post", "source": "https://www.inpel.com.br/blogDetalhe/363/RECORDE-DE-COLHEITA", "status": "native-and-verified" },
+    { "id": "inpel-contato", "name": "contato", "source": "https://www.inpel.com.br/contato", "status": "native-and-verified" },
+    { "id": "inpel-sugestoes", "name": "reclamações e sugestões", "source": "https://www.inpel.com.br/sugestoes", "status": "native-and-verified" },
+    { "id": "inpel-lgpd-194", "name": "termos de uso", "source": "https://www.inpel.com.br/InformacoesLgpd/194/Termos-de-Uso", "status": "native-and-verified" },
+    { "id": "inpel-lgpd-195", "name": "política de privacidade", "source": "https://www.inpel.com.br/InformacoesLgpd/195/Política-de-Privacidade", "status": "native-and-verified" },
+    { "id": "inpel-lgpd-196", "name": "política de cookies", "source": "https://www.inpel.com.br/InformacoesLgpd/196/Política-Cookies", "status": "native-and-verified" },
+    { "id": "inpel-lgpd-197", "name": "código de ética", "source": "https://www.inpel.com.br/InformacoesLgpd/197/Código-de-Ética", "status": "native-and-verified" }
+  ],
+  "decisions": {
+    "content": "Read from the public CMS API (controle.inpel.com.br/api), visible items in the site's own order",
+    "font": "Montserrat 400/500/700 through Elementor Google Fonts; 800 is requested by the source but never loaded, so 700",
+    "mobileMenu": "Native nested accordion instead of the Bootstrap sidebar; desktop/mobile switch at 992px with custom CSS",
+    "search": "Elementor Pro search-form (added to the local renderer); searches WordPress, not the old catalog API",
+    "configurator": "Construction table as an image plus a native form with the five selects, sent to vendas@inpel.com.br",
+    "rating": "Native radio group 1-10 drawn as stars with CSS",
+    "copy": "Kept as published, including known errors listed under improvements"
+  },
+  "needsYou": [
+    "Create the WordPress pages /sobre, /segmentos, /contato, /blog and /sugestoes so the menu and footer links resolve",
+    "Decide how the product catalog lives in WordPress (pages, custom post type or WooCommerce) before building the other 20 applications and their models",
+    "Configure the form actions (recipient, anti-spam) for Contato, Sugestões and the CT-145 quote",
+    "Decide the future of the quote cart, account area and checkout"
+  ],
+  "cannotComeAcross": [
+    "Quote cart, login, account area and PagSeguro/Yapay checkout",
+    "Catalog search over the old API",
+    "Dependent dropdowns and per-combination drawing of 'Monte a sua caixa'",
+    "Google Translate widget",
+    "Yeastar live chat"
+  ],
+  "improvementsFound": [
+    "No <title> or meta description; content only renders with JavaScript",
+    "Privacy policy says 'entre em contato com EMAIL AQUI'",
+    "Home heading typo 'Útimos Posts'",
+    "Horizontal scroll on phones (418px page at 390px)",
+    "Slider text baked into 0.4-1 MB PNGs",
+    "38 of 43 home images without alt text",
+    "Post links and top-bar phone/e-mail use href='#'",
+    "Muted grey #8D99AE on white is 2.9:1",
+    "Montserrat 800 requested but not loaded",
+    "API still holds the old careers URL"
+  ],
+  "validation": {
+    "date": "2026-09-27",
+    "widths": [1440, 1024, 768, 390],
+    "renderer": { "html": 0, "unsupported": 0, "warnings": 0, "duplicateIds": 0, "sectionsWithoutContainer": 0 },
+    "horizontalOverflow": "none at any width, all templates",
+    "home": { "sourceHeight": 2880, "nativeHeight": 2892, "containers": 109, "widgets": 122 }
+  }
+}

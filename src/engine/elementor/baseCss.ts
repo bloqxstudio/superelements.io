@@ -260,6 +260,13 @@ ${['', 'tablet-', 'mobile-']
 .elementor-button-align-center .elementor-field-type-submit{justify-content:center}
 .elementor-button-align-start .elementor-field-type-submit{justify-content:flex-start}
 .elementor-button-align-end .elementor-field-type-submit{justify-content:flex-end}
+
+/* Search form (skin clássica) */
+.elementor-search-form{display:block}
+.elementor-search-form__container{display:flex;overflow:hidden;border:0 solid transparent;min-height:50px}
+.elementor-search-form input[type=search]{flex-basis:100%;flex-grow:1;min-width:0;width:auto;margin:0;border:0;border-radius:0;background:none;padding:0 15px;font-size:15px;color:inherit;outline:0;appearance:none;-webkit-appearance:none}
+.elementor-search-form__input::-webkit-search-cancel-button{display:none}
+.elementor-search-form__submit{display:flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0;border:0;border-radius:0;padding:0 12px;background-color:#69727d;color:#fff;font-size:16px;cursor:pointer;transition:color .3s,background .3s}
 ${[10, 11, 12, 14, 16, 20, 25, 30, 33, 40, 50, 60, 66, 70, 75, 80, 83, 90, 100]
   .map((n) => `.elementor-col-${n}{width:${n === 33 ? 33.333 : n === 66 ? 66.666 : n === 16 ? 16.666 : n === 83 ? 83.333 : n === 14 ? 14.285 : n === 11 ? 11.111 : n === 12 ? 12.5 : n}%}`)
   .join('')}

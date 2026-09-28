@@ -138,7 +138,9 @@ const nestedCarousel: WidgetRenderer = ({ el, s, sel, ctx }) => {
   );
 
   const perView = sliderNumber(s.slides_to_show) ?? 3;
-  const pages = Math.max(1, slides.length - perView + 1);
+  // Um ponto por grupo, como o Swiper com slidesPerGroup = slides_to_scroll.
+  const perScroll = Math.max(1, sliderNumber(s.slides_to_scroll) ?? 1);
+  const pages = Math.max(1, Math.ceil((slides.length - perView) / perScroll) + 1);
   const dots = dotsOn && slides.length > perView
     ? `<div class="swiper-pagination">${Array.from({ length: pages }, (_, i) => `<span class="swiper-pagination-bullet${i === 0 ? ' swiper-pagination-bullet-active' : ''}" data-index="${i}"></span>`).join('')}</div>`
     : '';
@@ -146,7 +148,8 @@ const nestedCarousel: WidgetRenderer = ({ el, s, sel, ctx }) => {
     ? `<div class="elementor-swiper-button elementor-swiper-button-prev" role="button" tabindex="0" aria-label="Anterior">${CHEVRON('left')}</div><div class="elementor-swiper-button elementor-swiper-button-next" role="button" tabindex="0" aria-label="Próximo">${CHEVRON('right')}</div>`
     : '';
 
-  return `<div class="e-n-carousel"><div class="swiper-wrapper" data-se-carousel>${slides.join('')}</div>${arrows}</div>${dots}`;
+  const scroll = ['', '_tablet', '_mobile'].map((suffix) => Math.max(1, sliderNumber(s[`slides_to_scroll${suffix}`]) ?? perScroll)).join(',');
+  return `<div class="e-n-carousel"><div class="swiper-wrapper" data-se-carousel data-se-scroll="${scroll}">${slides.join('')}</div>${arrows}</div>${dots}`;
 };
 
 const TEXT_FIELDS = new Set(['text', 'email', 'tel', 'url', 'number', 'password', 'date', 'time', 'search']);
@@ -233,8 +236,51 @@ const form: WidgetRenderer = ({ s, sel, ctx, classes }) => {
   return `<form class="elementor-form" method="post" name="${escapeAttr(s.form_name || 'form')}"><div class="elementor-form-fields-wrapper elementor-labels-above">${fields.join('')}${submit}</div></form>`;
 };
 
+/**
+ * Busca (Pro), skin clássica: campo e botão lado a lado, enviando `?s=` para
+ * a busca do WordPress. `size` é a altura; `button_width` multiplica essa
+ * altura para dar a largura mínima do botão, como no Elementor.
+ */
+const searchForm: WidgetRenderer = ({ el, s, sel, ctx }) => {
+  const box = `${sel} .elementor-search-form__container`;
+  const input = `${sel} .elementor-search-form__input`;
+  const submit = `${sel} .elementor-search-form__submit`;
+  const height = slider(s.size) || '50px';
+  const multiplier = sliderNumber(s.button_width) ?? 1;
+
+  ctx.sheet.add(box, [
+    `min-height:${height}`,
+    color(s, 'input_background_color') && `background-color:${color(s, 'input_background_color')}`,
+    color(s, 'input_border_color') && `border-color:${color(s, 'input_border_color')}`,
+    dims(s.border_width) && `border-style:solid;border-width:${dims(s.border_width)}`,
+    slider(s.border_radius) && `border-radius:${slider(s.border_radius)}`,
+  ]);
+  ctx.sheet.add(input, color(s, 'input_text_color') && `color:${color(s, 'input_text_color')}`);
+  if (color(s, 'input_placeholder_color')) ctx.sheet.add(`${input}::placeholder`, `color:${color(s, 'input_placeholder_color')};opacity:1`);
+  responsive(ctx, input, (d) => typography(s, 'input_typography', d, ctx.fonts));
+  ctx.sheet.add(submit, [
+    `min-width:calc(${multiplier} * ${height})`,
+    color(s, 'button_text_color') && `color:${color(s, 'button_text_color')}`,
+    color(s, 'button_background_color') && `background-color:${color(s, 'button_background_color')}`,
+  ]);
+  ctx.sheet.add(`${submit}:hover, ${submit}:focus`, [
+    color(s, 'button_text_color_hover') && `color:${color(s, 'button_text_color_hover')}`,
+    color(s, 'button_background_color_hover') && `background-color:${color(s, 'button_background_color_hover')}`,
+  ]);
+  responsive(ctx, submit, (d) => typography(s, 'button_typography', d, ctx.fonts));
+
+  const id = `elementor-search-form-${escapeAttr(el.id)}`;
+  const label = escapeAttr(s.button_text || 'Pesquisar');
+  const icon = hasIcon(s.selected_icon) ? renderIcon(s.selected_icon, ctx) : '';
+  const content = s.button_type === 'text'
+    ? `${icon ? `${icon} ` : ''}<span class="elementor-search-form__submit-text">${escapeHtml(s.button_text || 'Pesquisar')}</span>`
+    : renderIcon({ value: 'fas fa-search', library: 'fa-solid' }, ctx) + '<span class="elementor-screen-only">Pesquisar</span>';
+  return `<search role="search"><form class="elementor-search-form" action="/" method="get"><div class="elementor-search-form__container"><label class="elementor-screen-only" for="${id}">${label}</label><input id="${id}" placeholder="${escapeAttr(s.placeholder ?? 'Pesquisar...')}" class="elementor-search-form__input" type="search" name="s" value=""><button class="elementor-search-form__submit" type="submit" aria-label="${label}">${content}</button></div></form></search>`;
+};
+
 export const proWidgets: Record<string, WidgetRenderer> = {
   counter,
   'nested-carousel': nestedCarousel,
   form,
+  'search-form': searchForm,
 };

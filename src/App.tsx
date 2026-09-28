@@ -12,6 +12,7 @@ import NotFound from "@/pages/NotFound";
 import Projects from "@/pages/Projects";
 import ProjectSpace from "@/pages/ProjectSpace";
 import WordPressCallback from "@/pages/WordPressCallback";
+import PageApproval from "@/pages/PageApproval";
 import MenuzitoModel from "@/pages/MenuzitoModel";
 import MenuzitoStyleGuide from "@/pages/MenuzitoStyleGuide";
 import UglyCashModel from "@/pages/UglyCashModel";
@@ -20,6 +21,7 @@ import UglyCashElementorPreview from "@/pages/UglyCashElementorPreview";
 import ZeloStyleGuide from "@/pages/ZeloStyleGuide";
 import ZeloElementorPreview from "@/pages/ZeloElementorPreview";
 import ProcessBaseElementorPreview from "@/pages/ProcessBaseElementorPreview";
+import InpelElementorPreview from "@/pages/InpelElementorPreview";
 
 function App() {
   return (
@@ -34,6 +36,8 @@ function App() {
               <Route path="/login" element={<Auth />} />
               {/* Volta da aprovação no WordPress; sem login no caminho para não perder a senha da URL */}
               <Route path="/wordpress/retorno" element={<WordPressCallback />} />
+              {/* Link de aprovação: o cliente abre sem login */}
+              <Route path="/aprovar/:shareId" element={<PageApproval />} />
               <Route path="/menuzito-modelo" element={<MenuzitoModel />} />
               <Route path="/menuzito-style-guide" element={<MenuzitoStyleGuide />} />
               <Route path="/uglycash-modelo" element={<UglyCashModel />} />
@@ -42,6 +46,7 @@ function App() {
               <Route path="/zelo-style-guide" element={<ZeloStyleGuide />} />
               <Route path="/zelo-elementor-preview" element={<ZeloElementorPreview />} />
               <Route path="/processbase-elementor-preview" element={<ProcessBaseElementorPreview />} />
+              <Route path="/inpel-elementor-preview" element={<InpelElementorPreview />} />
 
               {/* Projetos (um por cliente); cada um abre o seu Space */}
               <Route

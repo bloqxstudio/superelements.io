@@ -1,24 +1,34 @@
+import { useEffect } from 'react'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { toast } from 'sonner'
+import { useAuth } from '@/contexts/AuthContext'
 import type { Brand } from '@/features/space/brand/designMd'
 import type { SpaceNode, SpacePage } from '@/types/space'
-import { disconnectWordPress } from '@/features/wordpress/connect'
-import { deleteProjectDoc, deletePublishBackups } from './storage'
+import { revokeApplicationPassword } from '@/features/wordpress/connect'
+import { forgetBrowserProject } from './browserDb'
+import { deleteProject, insertProject, listProjects, loadWordPressConnection, updateProject } from './storage'
 import type { Project, ProjectSummary } from './types'
 
+export type ListStatus = 'loading' | 'ready' | 'error'
+
 interface ProjectState {
+  /** Conta da lista carregada. */
+  userId?: string
+  status: ListStatus
   projects: Project[]
-  create: (fields: { name: string; context?: string }) => Project
-  update: (id: string, fields: Partial<Pick<Project, 'name' | 'context'>>) => void
-  /** Apaga o projeto da lista, o canvas, a marca e a conexão com o WordPress. */
+  /** Lê a lista da conta; trocar de conta esvazia a lista antes. */
+  load: (userId: string) => Promise<void>
+  create: (fields: { name: string; context?: string }) => Promise<Project>
+  update: (id: string, fields: Partial<Pick<Project, 'name' | 'context'>>) => Promise<void>
+  /** Apaga da conta o projeto, o canvas, a marca e a conexão com o WordPress (revogada no site). */
   remove: (id: string) => Promise<void>
-  /** Chamado a cada salvamento do canvas; `edited` diz se o conteúdo mudou. */
+  /** Chamado a cada mudança no canvas; `edited` diz se o conteúdo mudou. Só atualiza o card daqui. */
   saved: (id: string, summary: ProjectSummary, edited: boolean) => void
 }
 
 const EMPTY_SUMMARY: ProjectSummary = { sections: 0, colors: [] }
 
-// Logo em data URL muito grande não entra na lista (localStorage)
+// Logo em data URL muito grande não entra no resumo, que vem junto com a lista
 const MAX_LOGO_LENGTH = 20_000
 
 const luminance = (hex: string) => {
@@ -51,54 +61,114 @@ export const summarize = (nodes: SpaceNode[], brand: Brand | null, pages?: Space
   }
 }
 
-/** A lista de projetos, pequena o bastante para o localStorage. */
-export const useProjectStore = create<ProjectState>()(
-  persist(
-    (set, get) => ({
-      projects: [],
+const replace = (projects: Project[], project: Project) => projects.map((p) => (p.id === project.id ? project : p))
 
-      create: ({ name, context = '' }) => {
-        const now = Date.now()
-        const project: Project = {
-          id: crypto.randomUUID(),
-          name: name.trim() || 'Projeto sem nome',
-          context,
-          createdAt: now,
-          updatedAt: now,
-          summary: EMPTY_SUMMARY,
-        }
-        set({ projects: [...get().projects, project] })
-        return project
-      },
+/** A lista de projetos da conta aberta. O conteúdo de cada um só é lido ao abrir. */
+export const useProjectStore = create<ProjectState>()((set, get) => ({
+  status: 'loading',
+  projects: [],
 
-      update: (id, fields) => {
-        set({
-          projects: get().projects.map((p) =>
-            p.id === id
-              ? { ...p, ...fields, name: fields.name?.trim() || p.name, updatedAt: Date.now() }
-              : p
-          ),
-        })
-      },
+  load: async (userId) => {
+    if (get().userId !== userId) set({ userId, projects: [], status: 'loading' })
+    else if (get().status === 'error') set({ status: 'loading' })
+    try {
+      const listed = await listProjects()
+      if (get().userId !== userId) return
+      // O projeto que acabou de ser fechado pode ainda estar subindo: o card daqui é mais novo
+      const local = new Map(get().projects.map((p) => [p.id, p]))
+      const projects = listed.map((p) => {
+        const mine = local.get(p.id)
+        return mine && mine.updatedAt > p.updatedAt ? { ...p, summary: mine.summary, updatedAt: mine.updatedAt } : p
+      })
+      set({ projects, status: 'ready' })
+    } catch (error) {
+      console.error('[projetos] falha ao ler a lista', error)
+      if (get().userId === userId && get().status !== 'ready') set({ status: 'error' })
+    }
+  },
 
-      remove: async (id) => {
-        set({ projects: get().projects.filter((p) => p.id !== id) })
-        // Sem esperar o site: se ele não responder, a conexão some daqui do mesmo jeito
-        disconnectWordPress(id).catch((error) => console.error('[wordpress] falha ao desconectar', error))
-        await Promise.all([deleteProjectDoc(id), deletePublishBackups(id)])
-      },
+  create: async ({ name, context = '' }) => {
+    const now = Date.now()
+    const project: Project = {
+      id: crypto.randomUUID(),
+      name: name.trim() || 'Projeto sem nome',
+      context,
+      createdAt: now,
+      updatedAt: now,
+      summary: EMPTY_SUMMARY,
+    }
+    await insertProject(project)
+    set({ projects: [...get().projects, project] })
+    return project
+  },
 
-      saved: (id, summary, edited) => {
-        set({
-          projects: get().projects.map((p) =>
-            p.id === id ? { ...p, summary, updatedAt: edited ? Date.now() : p.updatedAt } : p
-          ),
-        })
-      },
-    }),
-    { name: 'superelements-projects' }
-  )
-)
+  update: async (id, fields) => {
+    const before = get().projects.find((p) => p.id === id)
+    if (!before) return
+    const next = { ...before, ...fields, name: fields.name?.trim() || before.name, updatedAt: Date.now() }
+    set({ projects: replace(get().projects, next) })
+    try {
+      await updateProject(id, next)
+    } catch (error) {
+      console.error('[projetos] falha ao salvar nome e contexto', error)
+      const current = get().projects.find((p) => p.id === id)
+      if (current) set({ projects: replace(get().projects, { ...current, name: before.name, context: before.context }) })
+      toast.error('Não foi possível salvar o nome e o contexto', { description: 'Confira a internet e tente de novo.' })
+    }
+  },
+
+  remove: async (id) => {
+    const index = get().projects.findIndex((p) => p.id === id)
+    const project = get().projects[index]
+    // A conexão sai junto com o projeto: lida antes, para revogar a senha no site depois
+    const connection = await loadWordPressConnection(id).catch(() => undefined)
+    set({ projects: get().projects.filter((p) => p.id !== id) })
+    try {
+      await deleteProject(id)
+    } catch (error) {
+      if (project) {
+        const projects = [...get().projects]
+        projects.splice(index, 0, project)
+        set({ projects })
+      }
+      throw error
+    }
+    // Sem esperar o site: se ele não responder, a conexão some daqui do mesmo jeito
+    if (connection) revokeApplicationPassword(connection).catch((error) => console.error('[wordpress] falha ao revogar', error))
+    forgetBrowserProject(id).catch((error) => console.warn('[projetos] cópia do navegador não apagada', error))
+  },
+
+  saved: (id, summary, edited) => {
+    set({
+      projects: get().projects.map((p) =>
+        p.id === id ? { ...p, summary, updatedAt: edited ? Date.now() : p.updatedAt } : p
+      ),
+    })
+  },
+}))
+
+/** Lê de novo a lista da conta carregada (depois de uma falha, por exemplo). */
+export const reloadProjects = () => {
+  const { userId, load } = useProjectStore.getState()
+  if (userId) void load(userId)
+}
 
 export const useProject = (id: string | undefined) =>
   useProjectStore((s) => s.projects.find((p) => p.id === id))
+
+/**
+ * Carrega a lista da conta aberta e diz em que pé ela está. `refresh` relê
+ * mesmo já carregada: outro aparelho pode ter mudado a lista.
+ */
+export function useProjectList({ refresh = false } = {}): ListStatus {
+  const userId = useAuth().user?.id
+  const status = useProjectStore((s) => (s.userId === userId ? s.status : 'loading'))
+
+  useEffect(() => {
+    if (!userId) return
+    const state = useProjectStore.getState()
+    if (refresh || state.userId !== userId || state.status === 'error') state.load(userId)
+  }, [userId, refresh])
+
+  return status
+}

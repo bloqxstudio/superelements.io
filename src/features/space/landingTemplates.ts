@@ -4,6 +4,8 @@ import { createMenuzitoTemplate } from './menuzitoTemplate'
 import { createUglyCashTemplate } from './uglyCashTemplate'
 import { createProcessBaseTemplate } from './processbaseTemplate'
 import { createZeloTemplates } from './zeloTemplate'
+import { createInpelTemplates } from './inpelTemplate'
+import { createPetshopTemplate } from './petshopTemplate'
 
 type JsonRecord = Record<string, unknown>
 type ElementorNode = JsonRecord & { id: string; elType: 'container' | 'widget'; settings: JsonRecord; elements: ElementorNode[]; widgetType?: string }
@@ -434,6 +436,8 @@ const makeCourseFinalCta = (): SectionNodeData => {
 }
 
 export const createLandingTemplates = (): LandingTemplate[] => [
+  createPetshopTemplate(),
+  ...createInpelTemplates(),
   ...createZeloTemplates(),
   createUglyCashTemplate(),
   createMenuzitoTemplate(),

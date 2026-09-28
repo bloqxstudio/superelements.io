@@ -1,35 +1,83 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FolderPlus, Plus } from 'lucide-react'
+import { CircleAlert, CloudUpload, FolderPlus, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ProjectCard } from '@/features/projects/ProjectCard'
 import { ProjectDialog } from '@/features/projects/ProjectDialog'
-import { importLegacySpace } from '@/features/projects/legacy'
-import { useProjectStore } from '@/features/projects/projectStore'
+import { browserProjects, moveBrowserProjects } from '@/features/projects/browserImport'
+import { reloadProjects, useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import type { Project } from '@/features/projects/types'
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+
+/** Projetos que só este navegador tem, com o botão para levar para a conta. */
+const BrowserProjectsBanner: React.FC = () => {
+  const [waiting, setWaiting] = useState(() => browserProjects())
+  const [moving, setMoving] = useState(false)
+  if (!waiting.length) return null
+
+  const move = async () => {
+    setMoving(true)
+    try {
+      const { moved, failed } = await moveBrowserProjects()
+      reloadProjects()
+      if (moved) {
+        toast.success(`${plural(moved, 'projeto foi', 'projetos foram')} para a sua conta`, {
+          description: 'A cópia deste navegador continua guardada aqui, por segurança.',
+        })
+      }
+      if (failed) toast.error(`${plural(failed, 'projeto não subiu', 'projetos não subiram')}`, { description: 'Confira a internet e tente de novo.' })
+    } catch (error) {
+      toast.error('Não foi possível levar os projetos', { description: error instanceof Error ? error.message : undefined })
+    } finally {
+      setMoving(false)
+      setWaiting(browserProjects())
+    }
+  }
+
+  return (
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-gray-900">
+          Este navegador tem {plural(waiting.length, 'projeto que ainda não está', 'projetos que ainda não estão')} na sua conta
+        </p>
+        <p className="mt-0.5 truncate text-sm text-gray-600">{waiting.map((p) => p.name).join(', ')}</p>
+      </div>
+      <Button size="sm" onClick={move} disabled={moving} className="gap-1.5">
+        <CloudUpload className="h-4 w-4" />
+        {moving ? 'Levando…' : 'Levar para a conta'}
+      </Button>
+    </div>
+  )
+}
 
 const Projects: React.FC = () => {
   const navigate = useNavigate()
+  // Voltar à lista relê da conta: outro aparelho pode ter mudado
+  const status = useProjectList({ refresh: true })
   const { projects, create, update, remove } = useProjectStore()
   // Sem projeto, o diálogo cria um novo; o projeto fica enquanto o diálogo fecha
   const [dialog, setDialog] = useState<{ open: boolean; project?: Project }>({ open: false })
   const [deleting, setDeleting] = useState<Project | null>(null)
 
-  useEffect(() => {
-    importLegacySpace()
-  }, [])
-
   const sorted = useMemo(() => [...projects].sort((a, b) => b.updatedAt - a.updatedAt), [projects])
+  const ready = status === 'ready'
 
-  const submit = (fields: { name: string; context: string }) => {
+  const submit = async (fields: { name: string; context: string }) => {
     if (dialog.project) {
-      update(dialog.project.id, fields)
+      await update(dialog.project.id, fields)
       return
     }
-    const project = create(fields)
-    navigate(`/projetos/${project.id}`)
+    try {
+      const project = await create(fields)
+      navigate(`/projetos/${project.id}`)
+    } catch (error) {
+      console.error('[projetos] falha ao criar', error)
+      toast.error('Não foi possível criar o projeto', { description: 'Confira a internet e tente de novo.' })
+      throw error
+    }
   }
 
   const confirmDelete = async () => {
@@ -39,8 +87,9 @@ const Projects: React.FC = () => {
     try {
       await remove(id)
       toast.success(`${name} excluído`)
-    } catch {
-      toast.error('O projeto saiu da lista, mas o conteúdo não pôde ser apagado do navegador')
+    } catch (error) {
+      console.error('[projetos] falha ao excluir', error)
+      toast.error(`Não foi possível excluir ${name}`, { description: 'Confira a internet e tente de novo.' })
     }
   }
 
@@ -54,7 +103,7 @@ const Projects: React.FC = () => {
               Um projeto por cliente: a marca, o contexto e as páginas montadas no canvas.
             </p>
           </div>
-          {sorted.length > 0 && (
+          {ready && sorted.length > 0 && (
             <Button onClick={() => setDialog({ open: true })} className="gap-1.5">
               <Plus className="h-4 w-4" />
               Novo projeto
@@ -62,7 +111,24 @@ const Projects: React.FC = () => {
           )}
         </div>
 
-        {sorted.length ? (
+        {ready && <BrowserProjectsBanner />}
+
+        {status === 'loading' ? (
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Carregando projetos">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-44 animate-pulse rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06)]" />
+            ))}
+          </div>
+        ) : status === 'error' ? (
+          <div className="mt-8 flex flex-col items-center rounded-xl border border-dashed border-gray-300 px-6 py-16 text-center" role="alert">
+            <CircleAlert className="h-5 w-5 text-destructive" aria-hidden />
+            <h2 className="mt-3 text-sm font-semibold text-gray-900">Não foi possível ler os projetos da conta</h2>
+            <p className="mt-1 max-w-sm text-sm text-gray-500">Confira a internet e tente de novo.</p>
+            <Button onClick={reloadProjects} className="mt-5">
+              Tentar de novo
+            </Button>
+          </div>
+        ) : sorted.length ? (
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {sorted.map((project) => (
               <ProjectCard
@@ -89,7 +155,7 @@ const Projects: React.FC = () => {
           </div>
         )}
 
-        <p className="mt-10 text-xs text-gray-400">Os projetos ficam salvos neste navegador.</p>
+        <p className="mt-10 text-xs text-gray-400">Os projetos ficam salvos na sua conta e abrem em qualquer navegador em que você entrar.</p>
       </div>
 
       <ProjectDialog
@@ -104,7 +170,7 @@ const Projects: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Excluir {deleting?.name}?</DialogTitle>
             <DialogDescription>
-              O canvas, a marca e o contexto deste projeto são apagados deste navegador. Não dá para desfazer.
+              O canvas, a marca, o contexto e a conexão com o WordPress deste projeto são apagados da sua conta. Não dá para desfazer.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -26,10 +26,17 @@ export interface Project {
   summary: ProjectSummary
 }
 
-/** O conteúdo pesado do projeto, guardado à parte no IndexedDB. */
+/** O conteúdo pesado do projeto (todas as páginas do canvas), guardado à parte num arquivo da conta. */
 export interface ProjectDoc {
   canvas: SpaceCanvas
   brand: BrandSnapshot
   /** Cores e fontes globais do WordPress do cliente, para as páginas importadas. */
   site?: SiteKit | null
+}
+
+/** O conteúdo que uma página do site tinha antes de cada atualização feita daqui, o mais novo primeiro. */
+export interface PublishBackup {
+  elementorData: string
+  modifiedGmt: string
+  savedAt: number
 }

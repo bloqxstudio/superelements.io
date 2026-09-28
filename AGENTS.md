@@ -68,3 +68,31 @@ Scope: `/processbase-elementor-preview`, `src/features/processbase/**`, `src/fea
 - Templates are native Elementor trees built with `src/features/processbase/elementor.ts`. The only HTML widgets are the mobile menu, the hero sky (graph canvas plus the story script), the emblem block canvas (`src/features/processbase/emblem3d.ts`) and the diagnosis modal's close button plus behavior (`src/features/processbase/modal.ts`); the legend, the cards, the modal content and all text stay native.
 - WhatsApp float (`makeWhatsApp`): fixed bottom-right, z-index 900 (under the modal), WhatsApp green only on the icon circle. It is the one element with a shadow, because it floats over both navy and white. It opens the WhatsApp chat directly (new tab), not the modal. The real contact data (WhatsApp `GIAN_WHATSAPP`, form inbox `CONTACT_EMAIL`, Instagram) sits at the top of the contato block in `processbaseTemplate.ts` and in `brands/processbase/COPY.md` §13d. Never invent contact data: the LinkedIn is still missing.
 - Every "Agendar diagnóstico" link points to `#contato`; the modal script intercepts those clicks and opens `#agendar-diagnostico` (last section). Without JS the link still scrolls to the open form at the bottom, which stays for people who never click. The two forms use different field ids (`modal_` prefix).
+
+### Inpel model
+
+Scope: `/inpel-elementor-preview`, `src/features/inpel/**`, `src/features/space/inpelTemplate.ts`, `brands/inpel/**`, `public/inpel/**` and `migrations/inpel/**`.
+
+- Source: https://www.inpel.com.br/ (Vue app on the Bootstrap 3 "Electro" theme). Texts, products and posts come from its public API into `src/features/inpel/content.ts`; do not retype them from screenshots. Record in `migrations/inpel/`.
+- Font: Montserrat 400/500/700 only (the source asks for 800 but never loads it).
+- Core colors: red `#D10024` (hover `#A8001D`), ink `#2B2D42`, body `#333333`, muted `#8D99AE`, line `#E4E7ED`, mist `#FBFBFC`, bar `#1E1F29`, footer `#15161D`, footer text `#B9BABC`. One red only; no gradients.
+- Content is 1140px with 15px gutters; sections have 30px top and bottom; grids use a 30px gutter. The header switches to the mobile bar below 992px with custom CSS, like Bootstrap.
+- Shapes are square (cards, images, fields, social icons); only the search and the red buttons use the 40px pill. The highlight cards keep the two red bands skewed −45° at 90% opacity.
+- Cards: 1px `#E4E7ED` outline that becomes a 2px red outline on hover. No other shadows.
+- Motion stays at the source level: 0.2s color and underline on links, 1.1 zoom on highlight photos, all behind `prefers-reduced-motion`.
+- Templates are native Elementor trees built with `src/features/inpel/elementor.ts`. Zero HTML widgets: the mobile menu is a nested accordion, the search is `search-form`, the rating is a radio group drawn as stars.
+- The import is faithful on purpose, errors included (see "Improvements found" in `migrations/inpel/MIGRATION.md`). Fix them as improvements, one at a time, and update the record.
+
+### Caramelo Pet model (petshop example)
+
+Scope: `src/features/petshop/**`, `src/features/space/petshopTemplate.ts`, `brands/caramelo-pet/**` and `public/brands/caramelo-pet/**`.
+
+- A fictional neighborhood petshop, made as the Space's example project. Phone, address, prices and reviews are sample data; the contact constants sit in `PET_CONTACT` (`src/features/petshop/tokens.ts`). Never present them as a real business.
+- Source of truth: `brands/caramelo-pet/DESIGN.md`. The palette comes from the local photo `/sections/c25/businesses/pet-daycare.webp`, the only photo on the page; everything else is icons and flat color blocks.
+- Fonts: Fredoka 600 for headings, Nunito for text and UI. Eyebrows are Nunito 800 uppercase 12px; every other small text (menu, prices, names) stays in normal case.
+- Core colors: navy `#1F2A44`, caramel `#F2994A` (hover `#E5832C`), caramel ink `#9A4A0B` for small labels on cream, pool blue `#9ED8F7`, cream `#FFF7EC`, warm `#FDE9D3`, body `#4B5468`, line `#EEDFCB`. Text on caramel is always navy (6.4:1); white on caramel fails.
+- One caramel accent family: buttons, icons and small marks. The pool blue only paints the shop band. On the blue band the eyebrow is navy (caramel ink fails there).
+- Content is 1200px inside 32/24/16px gutters; sections 96/72/56px. Pill buttons, 14px fields, 24px cards, 32px large surfaces. Light cards use the 1px line; cards on the navy band are `#2A3656` with an 8% white hairline. The only shadows are on the featured plan and the chip over the photo.
+- Templates are native Elementor trees built with `src/features/petshop/elementor.ts`. Zero HTML widgets: the mobile menu is a nested accordion, the FAQ is a nested accordion, the booking form is the native form. Colored boxes behind text are native containers, never CSS backgrounds on a heading, so the brand pass sees them.
+- Applying the Caramelo Pet brand to its own template must leave it nearly unchanged. Before editing the DESIGN.md front matter, diff `applyBrand` output against the raw template: a `label` typography role, a `card` component or a vague `motion.hover` rewrite the whole page.
+- Motion: 180ms color changes, cards lift 4px on mouse hover, buttons scale to 0.96 on press, short fade-up entrances, all behind `prefers-reduced-motion`.
