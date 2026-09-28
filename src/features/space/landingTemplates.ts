@@ -6,6 +6,7 @@ import { createProcessBaseTemplate } from './processbaseTemplate'
 import { createZeloTemplates } from './zeloTemplate'
 import { createInpelTemplates } from './inpelTemplate'
 import { createPetshopTemplate } from './petshopTemplate'
+import { createJuniorTemplate } from './juniorTemplate'
 
 type JsonRecord = Record<string, unknown>
 type ElementorNode = JsonRecord & { id: string; elType: 'container' | 'widget'; settings: JsonRecord; elements: ElementorNode[]; widgetType?: string }
@@ -436,6 +437,7 @@ const makeCourseFinalCta = (): SectionNodeData => {
 }
 
 export const createLandingTemplates = (): LandingTemplate[] => [
+  createJuniorTemplate(),
   createPetshopTemplate(),
   ...createInpelTemplates(),
   ...createZeloTemplates(),

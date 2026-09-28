@@ -1,12 +1,13 @@
 /** DESIGN.md de exemplo para começar e para comparar como a marca muda as seções. */
 
-// Os arquivos em brands/ são a fonte. ProcessBase veio do Figma, Inpel do site publicado, Caramelo Pet é
-// a marca fictícia do projeto de exemplo de petshop;
+// Os arquivos em brands/ são a fonte. ProcessBase veio do Figma, Inpel do site publicado, Júnior
+// Automáticos do logo do cliente, Caramelo Pet é a marca fictícia do projeto de exemplo de petshop;
 // ORYZO é um "Style Reference" do Refero, colado como está, e serve de teste do leitor.
 import PROCESSBASE from '../../../../brands/processbase/DESIGN.md?raw'
 import ORYZO from '../../../../brands/oryzo/DESIGN.md?raw'
 import INPEL from '../../../../brands/inpel/DESIGN.md?raw'
 import CARAMELO_PET from '../../../../brands/caramelo-pet/DESIGN.md?raw'
+import JUNIOR from '../../../../brands/junior-automaticos/DESIGN.md?raw'
 
 const LINHA_NORTE = `---
 name: Linha Norte
@@ -75,6 +76,7 @@ export const DESIGN_MD_EXAMPLES = [
   { id: 'brasa', label: 'Brasa', source: BRASA },
   { id: 'processbase', label: 'ProcessBase', source: PROCESSBASE },
   { id: 'inpel', label: 'Inpel', source: INPEL },
+  { id: 'junior-automaticos', label: 'Júnior Automáticos', source: JUNIOR },
   { id: 'caramelo-pet', label: 'Caramelo Pet (petshop)', source: CARAMELO_PET },
   { id: 'oryzo', label: 'ORYZO', source: ORYZO },
 ]

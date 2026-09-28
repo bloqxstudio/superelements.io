@@ -22,6 +22,7 @@ import ZeloStyleGuide from "@/pages/ZeloStyleGuide";
 import ZeloElementorPreview from "@/pages/ZeloElementorPreview";
 import ProcessBaseElementorPreview from "@/pages/ProcessBaseElementorPreview";
 import InpelElementorPreview from "@/pages/InpelElementorPreview";
+import JuniorElementorPreview from "@/pages/JuniorElementorPreview";
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
               <Route path="/zelo-elementor-preview" element={<ZeloElementorPreview />} />
               <Route path="/processbase-elementor-preview" element={<ProcessBaseElementorPreview />} />
               <Route path="/inpel-elementor-preview" element={<InpelElementorPreview />} />
+              <Route path="/junior-elementor-preview" element={<JuniorElementorPreview />} />
 
               {/* Projetos (um por cliente); cada um abre o seu Space */}
               <Route
