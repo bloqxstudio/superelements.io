@@ -3,6 +3,7 @@ import { AlignHorizontalSpaceAround, Minus, Plus, Scan, Trash2 } from 'lucide-re
 import { useSpaceStore } from '@/store/spaceStore'
 import { LIBRARY_PANEL_WIDTH } from './SpaceLibraryPanel'
 import { LEVEL_PANEL_WIDTH } from './levels/LevelPanel'
+import { NAVIGATOR_PANEL_WIDTH } from './navigator/ElementorNavigatorPanel'
 import { canvasBounds, plural } from './pages/pages'
 import { Hint, ToolButton, ToolDivider, ToolbarIsland } from './ToolbarIsland'
 
@@ -24,10 +25,11 @@ const clampZoom = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
 
 interface SpaceCanvasBarProps {
   libraryOpen: boolean
+  navigatorOpen?: boolean
 }
 
 /** Ferramentas do próprio canvas, no rodapé da área livre: zoom, organizar, contagem e limpar. */
-export const SpaceCanvasBar: React.FC<SpaceCanvasBarProps> = ({ libraryOpen }) => {
+export const SpaceCanvasBar: React.FC<SpaceCanvasBarProps> = ({ libraryOpen, navigatorOpen = false }) => {
   const zoom = useSpaceStore((s) => s.canvasTransform.zoom)
   const nodes = useSpaceStore((s) => s.nodes)
   const pageCount = useSpaceStore((s) => s.pages.length)
@@ -38,7 +40,7 @@ export const SpaceCanvasBar: React.FC<SpaceCanvasBarProps> = ({ libraryOpen }) =
   const canvasWidth = useSpaceStore((s) => s.viewport.width)
   const sectionCount = nodes.filter((n) => n.type === 'section').length
   const leftInset = libraryOpen ? EDGE + LIBRARY_PANEL_WIDTH + EDGE : 0
-  const rightInset = levelPanelOpen ? EDGE + LEVEL_PANEL_WIDTH + EDGE : 0
+  const rightInset = levelPanelOpen || navigatorOpen ? EDGE + Math.max(LEVEL_PANEL_WIDTH, NAVIGATOR_PANEL_WIDTH) + EDGE : 0
   // Entre os dois painéis abertos numa tela estreita, a barra perde os textos para caber
   const freeWidth = canvasWidth - leftInset - rightInset
   const compact = freeWidth < COMPACT_FREE_WIDTH

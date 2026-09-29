@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { renderElementorDocument } from '@/engine/elementor'
 import { collectImageUrls, isLocalUrl } from '@/features/space/pageImages'
-import { createProcessBaseBragaProposalTemplate } from '@/features/space/processbaseBragaProposalTemplate'
+import type { LandingTemplate } from '@/features/space/landingTemplates'
 
 type Node = { id?: string; elType?: string; widgetType?: string; elements?: Node[] }
 
@@ -28,10 +28,18 @@ const inspect = (sections: Node[][]) => {
   }
 }
 
-const ProcessBaseBragaProposalPreview = () => {
+interface Props {
+  create: () => LandingTemplate
+  /** título da barra da prévia */
+  label: string
+  defaultWidth?: number
+}
+
+/** Prévia de um modelo extra da ProcessBase: larguras, movimento, tela cheia (?raw=1) e checagem do Elementor. */
+const ProcessBaseTemplatePreview = ({ create, label, defaultWidth = 1440 }: Props) => {
   const [params, setParams] = useSearchParams()
-  const template = useMemo(() => createProcessBaseBragaProposalTemplate(), [])
-  const width = WIDTHS.includes(Number(params.get('w'))) ? Number(params.get('w')) : 1440
+  const template = useMemo(() => create(), [create])
+  const width = WIDTHS.includes(Number(params.get('w'))) ? Number(params.get('w')) : defaultWidth
   const raw = params.get('raw') === '1'
   const motion = params.get('motion') === 'play' ? 'play' : 'static'
 
@@ -75,7 +83,7 @@ const ProcessBaseBragaProposalPreview = () => {
     <main className="min-h-screen bg-zinc-950 p-4 text-sm text-zinc-100">
       <header className="mx-auto mb-4 max-w-[1440px] space-y-3 rounded-xl bg-zinc-900 px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <strong>ProcessBase · Proposta Braga · Elementor nativo</strong>
+          <strong>{label}</strong>
           <div className="flex flex-wrap gap-1.5">
             {WIDTHS.map((value) => (
               <button key={value} type="button" onClick={() => set('w', String(value))} aria-pressed={value === width}
@@ -107,4 +115,4 @@ const ProcessBaseBragaProposalPreview = () => {
   )
 }
 
-export default ProcessBaseBragaProposalPreview
+export default ProcessBaseTemplatePreview

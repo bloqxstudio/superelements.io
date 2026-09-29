@@ -4,7 +4,7 @@ import {
   bg, border, createBuilder, FIXED, fluid, hl, link, maxw, px, reveal, sides, T, texture, tweak,
   type PBBuilder,
 } from '@/features/processbase/elementor'
-import { PB, PB_LAYOUT as L } from '@/features/processbase/tokens'
+import { PB, PB_CONTACT, PB_LAYOUT as L, pbWhatsApp } from '@/features/processbase/tokens'
 
 /**
  * Proposta comercial da ProcessBase para a Braga Advocacia.
@@ -14,8 +14,8 @@ import { PB, PB_LAYOUT as L } from '@/features/processbase/tokens'
 
 type JsonRecord = Record<string, unknown>
 
-const WHATSAPP_URL = `https://wa.me/5551985445411?text=${encodeURIComponent('Olá, Gian. Quero conversar sobre a proposta da Braga Advocacia.')}`
-const CONTACT_EMAIL = 'processbase08@gmail.com'
+const WHATSAPP_URL = pbWhatsApp('Olá, Gian. Quero conversar sobre a proposta da Braga Advocacia.')
+const CONTACT_EMAIL = PB_CONTACT.email
 
 const list = (b: PBBuilder, items: string[], options: JsonRecord = {}) => b.text(
   `<ul>${items.map((item) => `<li>${item}</li>`).join('')}</ul>`,

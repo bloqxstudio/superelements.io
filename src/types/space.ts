@@ -28,8 +28,16 @@ export interface SectionNodeData {
   elementorJson: string
   /** Id da seção no pack Section Express, quando veio da biblioteca. */
   sourceId?: string
+  /** Nomes amigáveis das camadas no Navigator, por id do elemento. Não entram no export Elementor. */
+  navigatorLabels?: Record<string, string>
   levels?: SectionLevels
   origin?: SectionOrigin
+}
+
+/** Elemento aberto no Navigator. Vive só na sessão e não entra no JSON do projeto. */
+export interface NavigatorSelection {
+  sectionId: string
+  elementId: string
 }
 
 export interface TextNodeData {

@@ -21,7 +21,9 @@ import UglyCashElementorPreview from "@/pages/UglyCashElementorPreview";
 import ZeloStyleGuide from "@/pages/ZeloStyleGuide";
 import ZeloElementorPreview from "@/pages/ZeloElementorPreview";
 import ProcessBaseElementorPreview from "@/pages/ProcessBaseElementorPreview";
-import ProcessBaseBragaProposalPreview from "@/pages/ProcessBaseBragaProposalPreview";
+import ProcessBaseTemplatePreview from "@/pages/ProcessBaseTemplatePreview";
+import { createProcessBaseBragaProposalTemplate } from "@/features/space/processbaseBragaProposalTemplate";
+import { createProcessBaseLinksTemplate } from "@/features/space/processbaseLinksTemplate";
 import InpelElementorPreview from "@/pages/InpelElementorPreview";
 import JuniorElementorPreview from "@/pages/JuniorElementorPreview";
 import LeoSchererElementorPreview from "@/pages/LeoSchererElementorPreview";
@@ -51,7 +53,8 @@ function App() {
               <Route path="/zelo-style-guide" element={<ZeloStyleGuide />} />
               <Route path="/zelo-elementor-preview" element={<ZeloElementorPreview />} />
               <Route path="/processbase-elementor-preview" element={<ProcessBaseElementorPreview />} />
-              <Route path="/processbase-proposta-braga" element={<ProcessBaseBragaProposalPreview />} />
+              <Route path="/processbase-proposta-braga" element={<ProcessBaseTemplatePreview create={createProcessBaseBragaProposalTemplate} label="ProcessBase · Proposta Braga · Elementor nativo" />} />
+              <Route path="/processbase-links" element={<ProcessBaseTemplatePreview create={createProcessBaseLinksTemplate} label="ProcessBase · Cartão de links · Elementor nativo" defaultWidth={390} />} />
               <Route path="/inpel-elementor-preview" element={<InpelElementorPreview />} />
               <Route path="/junior-elementor-preview" element={<JuniorElementorPreview />} />
               <Route path="/leoscherer-style-guide" element={<LeoSchererStyleGuide />} />

@@ -16,12 +16,21 @@ interface SectionNodeProps {
   node: SpaceNode
 }
 
+/** Contorno efêmero do Navigator: entra só no preview, nunca no JSON exportado. */
+const withNavigatorHighlight = (document: string, elementId?: string) => {
+  const safeId = elementId?.replace(/[^a-zA-Z0-9_-]/g, '')
+  if (!safeId) return document
+  const style = `<style data-se-navigator-highlight>.elementor .elementor-element.elementor-element-${safeId}{outline:3px solid #7c3aed!important;outline-offset:2px;position:relative;z-index:2}</style>`
+  return document.includes('</head>') ? document.replace('</head>', `${style}</head>`) : `${style}${document}`
+}
+
 export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   const { nodes, connections, pages, updateNodeData, updateNodeSize, removeNode, moveSection, startConnection, completeConnection } = useSpaceStore()
   const editLevel = useSpaceStore((s) => s.editLevel)
   const selected = useSpaceStore((s) => s.selectedIds.includes(node.id))
   const motionDraft = useSpaceStore((s) => s.motionDraft)
   const motionReplay = useSpaceStore((s) => s.motionReplay)
+  const navigatorSelection = useSpaceStore((s) => s.navigatorSelection)
   const data = node.data as SectionNodeData
   const cardRef = useRef<HTMLDivElement>(null)
   const hasElements = useMemo(() => !!parseSectionElements(data.elementorJson), [data.elementorJson])
@@ -44,9 +53,13 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   const rendered = useMemo(() => {
     const { nodes: all, connections: conns } = useSpaceStore.getState()
     const current = all.find((n) => n.id === node.id)
-    return current ? sectionLensDocument({ section: current, nodes: all, connections: conns, brand, site: siteKit, level: editLevel, draft, replay }) : null
+    if (!current) return null
+    const result = sectionLensDocument({ section: current, nodes: all, connections: conns, brand, site: siteKit, level: editLevel, draft, replay })
+    return navigatorSelection?.sectionId === node.id
+      ? { ...result, document: withNavigatorHighlight(result.document, navigatorSelection.elementId) }
+      : result
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node.id, data.elementorJson, data.title, data.levels, transformKey, brand, siteKit, editLevel, draft, replay])
+  }, [node.id, data.elementorJson, data.title, data.levels, transformKey, brand, siteKit, editLevel, draft, replay, navigatorSelection])
 
   const motionLabel = sectionMotionLabel(data.levels?.motion)
 

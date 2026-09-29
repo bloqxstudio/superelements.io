@@ -40,5 +40,26 @@ export const PB_LAYOUT = {
   radius: { button: 8, card: 16, shell: 22, pill: 999 },
 } as const
 
+/**
+ * Contato público da ProcessBase, enviado pelo Gian em 2026-09-27 (COPY.md
+ * §13d). Home, proposta e cartão de links leem daqui. Nunca inventar dado de
+ * contato: o LinkedIn ainda falta.
+ */
+export const PB_CONTACT = {
+  whatsapp: '5551985445411',
+  whatsappLabel: '(51) 98544-5411',
+  /** caixa que recebe os formulários e aparece no rodapé */
+  email: 'processbase08@gmail.com',
+  instagramHandle: '@process_base01',
+  instagramUrl: 'https://www.instagram.com/process_base01/',
+  site: 'https://processbase.com.br/',
+  siteLabel: 'processbase.com.br',
+  /** pendente: quando chegar, o cartão de links mostra a linha do LinkedIn sozinho */
+  linkedin: null as string | null,
+}
+
+/** Conversa direta com o Gian, com a mensagem pronta. */
+export const pbWhatsApp = (message: string) => `https://wa.me/${PB_CONTACT.whatsapp}?text=${encodeURIComponent(message)}`
+
 /** Arquivos em public/brands/processbase. */
 export const pbAsset = (path: string) => `${window.location.origin}/brands/processbase/${path}`

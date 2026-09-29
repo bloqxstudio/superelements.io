@@ -31,6 +31,7 @@ import type {
   TextNodeData,
   ColorPaletteNodeData,
   EditLevel,
+  NavigatorSelection,
   SectionLevels,
   SectionMotion,
 } from '@/types/space'
@@ -58,6 +59,8 @@ interface SpaceState {
   libraryPointer: { x: number; y: number; title: string } | null
   /** Seções selecionadas, na ordem em que foram clicadas. */
   selectedIds: string[]
+  /** Camada Elementor escolhida no Navigator; não é persistida com o canvas. */
+  navigatorSelection: NavigatorSelection | null
   /** Camada em edição; muda o que o canvas mostra e abre o painel do nível. */
   editLevel: EditLevel
   /** Movimento ainda não aplicado: o canvas mostra nas seções selecionadas como elas ficariam. */
@@ -162,6 +165,7 @@ interface SpaceActions {
   selectSection: (id: string, additive?: boolean) => void
   setSelection: (ids: string[]) => void
   clearSelection: () => void
+  selectNavigatorElement: (selection: NavigatorSelection | null) => void
   setEditLevel: (level: EditLevel) => void
   setMotionDraft: (draft: SectionMotion | null) => void
   replayMotion: () => void
@@ -321,6 +325,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       libraryGhost: null,
       libraryPointer: null,
       selectedIds: [],
+      navigatorSelection: null,
       editLevel: 'structure',
       motionDraft: null,
       motionReplay: 0,
@@ -338,6 +343,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
             playingPageId: null,
             dropTarget: null,
             selectedIds: [],
+            navigatorSelection: null,
             editLevel: 'structure',
             motionDraft: null,
           },
@@ -555,7 +561,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       },
 
       removePage: (id) => {
-        const { pages, nodes, connections, activePageId, selectedIds, playingPageId } = get()
+        const { pages, nodes, connections, activePageId, selectedIds, playingPageId, navigatorSelection } = get()
         const page = pages.find((p) => p.id === id)
         if (!page || pages.length <= 1) return
 
@@ -567,6 +573,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
             nodes: nodes.filter((n) => !removed.has(n.id)),
             connections: connections.filter((c) => !removed.has(c.sourceId) && !removed.has(c.targetId)),
             selectedIds: selectedIds.filter((s) => !removed.has(s)),
+            navigatorSelection: navigatorSelection && removed.has(navigatorSelection.sectionId) ? null : navigatorSelection,
             activePageId: activePageId === id ? rest[0].id : activePageId,
             playingPageId: playingPageId === id ? null : playingPageId,
           },
@@ -597,7 +604,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       },
 
       loadSitePage: (name, sections, link, replacePageId) => {
-        const { pages, nodes, connections, selectedIds } = get()
+        const { pages, nodes, connections, selectedIds, navigatorSelection } = get()
         const existing = replacePageId ? pages.find((p) => p.id === replacePageId) : undefined
         // Na página que já estava ligada, a versão do site entra no lugar das seções dela
         const removed = existing ? withFeeders(existing.sectionIds, nodes, connections) : new Set<string>()
@@ -615,6 +622,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
             nodes: layoutPage(page, [...kept, ...created], nextConnections),
             connections: nextConnections,
             selectedIds: selectedIds.filter((id) => !removed.has(id)),
+            navigatorSelection: navigatorSelection && removed.has(navigatorSelection.sectionId) ? null : navigatorSelection,
             activePageId: page.id,
             canvasTransform: focusOn(page.x + PAGE_WIDTH / 2, page.y),
           },
@@ -645,13 +653,13 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       },
 
       setActivePage: (id) => {
-        if (get().activePageId !== id) set({ activePageId: id }, false, 'setActivePage')
+        if (get().activePageId !== id) set({ activePageId: id, navigatorSelection: null }, false, 'setActivePage')
       },
 
       focusPage: (id, options = {}) => {
         const page = get().pages.find((p) => p.id === id)
         if (!page) return
-        set({ activePageId: id, canvasTransform: focusOn(page.x + PAGE_WIDTH / 2, page.y, options.leftInset) }, false, 'focusPage')
+        set({ activePageId: id, navigatorSelection: null, canvasTransform: focusOn(page.x + PAGE_WIDTH / 2, page.y, options.leftInset) }, false, 'focusPage')
       },
 
       arrangePages: () => {
@@ -687,7 +695,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       },
 
       openPlayer: (pageId) => {
-        set({ playingPageId: pageId, activePageId: pageId }, false, 'openPlayer')
+        set({ playingPageId: pageId, activePageId: pageId, navigatorSelection: null }, false, 'openPlayer')
       },
 
       closePlayer: () => {
@@ -771,7 +779,13 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const shrunk = page && nextPages.find((p) => p.id === page.id)
         if (shrunk) nextNodes = layoutPage(shrunk, nextNodes, nextConnections)
         set(
-          { pages: nextPages, nodes: nextNodes, connections: nextConnections, selectedIds: selectedIds.filter((s) => s !== id) },
+          {
+            pages: nextPages,
+            nodes: nextNodes,
+            connections: nextConnections,
+            selectedIds: selectedIds.filter((s) => s !== id),
+            navigatorSelection: get().navigatorSelection?.sectionId === id ? null : get().navigatorSelection,
+          },
           false,
           'removeNode'
         )
@@ -933,8 +947,8 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
             // Clicar numa seção de página torna a página ativa
             const activePageId = pageOf(state.pages, id)?.id ?? state.activePageId
             const selected = state.selectedIds.includes(id)
-            if (!additive) return { activePageId, selectedIds: selected && state.selectedIds.length === 1 ? [] : [id] }
-            return { activePageId, selectedIds: selected ? state.selectedIds.filter((s) => s !== id) : [...state.selectedIds, id] }
+            if (!additive) return { activePageId, navigatorSelection: null, selectedIds: selected && state.selectedIds.length === 1 ? [] : [id] }
+            return { activePageId, navigatorSelection: null, selectedIds: selected ? state.selectedIds.filter((s) => s !== id) : [...state.selectedIds, id] }
           },
           false,
           'selectSection'
@@ -942,11 +956,30 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       },
 
       setSelection: (ids) => {
-        set({ selectedIds: ids }, false, 'setSelection')
+        set(
+          (state) => ({
+            selectedIds: ids,
+            navigatorSelection: ids.length === 1 && state.navigatorSelection?.sectionId === ids[0] ? state.navigatorSelection : null,
+          }),
+          false,
+          'setSelection'
+        )
       },
 
       clearSelection: () => {
-        if (get().selectedIds.length) set({ selectedIds: [] }, false, 'clearSelection')
+        if (get().selectedIds.length || get().navigatorSelection) set({ selectedIds: [], navigatorSelection: null }, false, 'clearSelection')
+      },
+
+      selectNavigatorElement: (selection) => {
+        set(
+          (state) => ({
+            navigatorSelection: selection,
+            selectedIds: selection ? [selection.sectionId] : state.selectedIds,
+            activePageId: selection ? pageOf(state.pages, selection.sectionId)?.id ?? state.activePageId : state.activePageId,
+          }),
+          false,
+          'selectNavigatorElement'
+        )
       },
 
       setEditLevel: (level) => {
@@ -993,6 +1026,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
             dropTarget: null,
             pendingConnection: null,
             selectedIds: [],
+            navigatorSelection: null,
             motionDraft: null,
           },
           false,

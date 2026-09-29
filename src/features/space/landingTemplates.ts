@@ -4,6 +4,7 @@ import { createMenuzitoTemplate } from './menuzitoTemplate'
 import { createUglyCashTemplate } from './uglyCashTemplate'
 import { createProcessBaseTemplate } from './processbaseTemplate'
 import { createProcessBaseBragaProposalTemplate } from './processbaseBragaProposalTemplate'
+import { createProcessBaseLinksTemplate } from './processbaseLinksTemplate'
 import { createZeloTemplates } from './zeloTemplate'
 import { createInpelTemplates } from './inpelTemplate'
 import { createPetshopTemplate } from './petshopTemplate'
@@ -448,6 +449,7 @@ export const createLandingTemplates = (): LandingTemplate[] => [
   createMenuzitoTemplate(),
   createProcessBaseTemplate(),
   createProcessBaseBragaProposalTemplate(),
+  createProcessBaseLinksTemplate(),
   ...[createPdvLightLibraryTemplate()].filter((template): template is LandingTemplate => template !== null),
   {
     id: 'portfolio-editorial',

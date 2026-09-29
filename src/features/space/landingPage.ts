@@ -2,22 +2,24 @@ import type { ColorPaletteNodeData, SectionMotion, SectionNodeData, SpaceConnect
 import { applyBrand } from './brand/applyBrand'
 import type { Brand } from './brand/designMd'
 import { sectionBrand } from './levels/motion'
+import { applyNavigatorTitles } from './navigator/navigatorLabels'
 
 /**
  * Monta a landing page do Space: as seções na ordem vertical do canvas, cada
  * uma com o texto e a paleta conectados a ela já aplicados, e a marca por cima.
  */
 
-interface Element {
+export interface SectionElement {
   id?: string
+  elType?: string
   widgetType?: string
   // O PHP do Elementor exporta settings vazio como []
   settings?: Record<string, unknown> | unknown[]
-  elements?: Element[]
+  elements?: SectionElement[]
   [key: string]: unknown
 }
 
-function walkElements(elements: Element[], visitor: (el: Element) => void): void {
+function walkElements(elements: SectionElement[], visitor: (el: SectionElement) => void): void {
   for (const el of elements) {
     visitor(el)
     if (Array.isArray(el.elements) && el.elements.length > 0) walkElements(el.elements, visitor)
@@ -25,7 +27,7 @@ function walkElements(elements: Element[], visitor: (el: Element) => void): void
 }
 
 /** Elementos de um JSON colado: template exportado, clipboard do Elementor ou array cru. */
-export function parseSectionElements(json: string): Element[] | null {
+export function parseSectionElements(json: string): SectionElement[] | null {
   if (!json.trim()) return null
   try {
     const data = JSON.parse(json)
@@ -43,8 +45,8 @@ const newElementId = () => Math.random().toString(16).slice(2, 9).padEnd(7, '0')
  * Cópia com ids novos: a mesma seção pode entrar duas vezes na página, e o
  * CSS gerado pelo motor (e o Elementor) identifica cada elemento pelo id.
  */
-export function withFreshIds(elements: Element[]): Element[] {
-  const copy: Element[] = JSON.parse(JSON.stringify(elements))
+export function withFreshIds(elements: SectionElement[]): SectionElement[] {
+  const copy: SectionElement[] = JSON.parse(JSON.stringify(elements))
   walkElements(copy, (el) => {
     el.id = newElementId()
   })
@@ -52,9 +54,9 @@ export function withFreshIds(elements: Element[]): Element[] {
 }
 
 /** Troca background_color pelas cores da paleta, em ciclo; títulos e textos seguem a cor atual. */
-export function applyColors(elements: Element[], colors: string[]): Element[] {
+export function applyColors(elements: SectionElement[], colors: string[]): SectionElement[] {
   if (!colors.length) return elements
-  const result: Element[] = JSON.parse(JSON.stringify(elements))
+  const result: SectionElement[] = JSON.parse(JSON.stringify(elements))
   let colorIndex = 0
 
   walkElements(result, (el) => {
@@ -76,9 +78,9 @@ export function applyColors(elements: Element[], colors: string[]): Element[] {
 }
 
 /** Distribui os parágrafos do texto (separados por linha em branco) pelos headings e text-editors. */
-export function applyCopy(elements: Element[], copy: string): Element[] {
+export function applyCopy(elements: SectionElement[], copy: string): SectionElement[] {
   if (!copy.trim()) return elements
-  const result: Element[] = JSON.parse(JSON.stringify(elements))
+  const result: SectionElement[] = JSON.parse(JSON.stringify(elements))
   const chunks = copy
     .split(/\n\n+/)
     .map((c) => c.trim())
@@ -100,7 +102,7 @@ export function applyCopy(elements: Element[], copy: string): Element[] {
 }
 
 /** Elementos de uma seção só com as conexões de texto e paleta, antes da marca e dos níveis. */
-export function sectionBase(section: SpaceNode, nodes: SpaceNode[], connections: SpaceConnection[]): Element[] | null {
+export function sectionBase(section: SpaceNode, nodes: SpaceNode[], connections: SpaceConnection[]): SectionElement[] | null {
   let elements = parseSectionElements((section.data as SectionNodeData).elementorJson)
   if (!elements) return null
 
@@ -128,7 +130,7 @@ export function sectionWithTransforms(
   connections: SpaceConnection[],
   brand?: Brand | null,
   motion?: SectionMotion,
-): Element[] | null {
+): SectionElement[] | null {
   const elements = sectionBase(section, nodes, connections)
   if (!elements) return null
   const data = section.data as SectionNodeData
@@ -141,7 +143,7 @@ export const orderedSections = (nodes: SpaceNode[]) =>
   nodes.filter((n) => n.type === 'section').sort((a, b) => a.y - b.y)
 
 export interface LandingPage {
-  elements: Element[]
+  elements: SectionElement[]
   sectionCount: number
   /** Seções sem JSON válido, que ficam de fora. */
   skipped: number
@@ -152,7 +154,7 @@ export interface LandingPage {
  * trazer os mesmos ids; o CSS do motor (e o do Elementor) é por id, então um
  * id repetido faz o estilo de uma seção vazar para outra.
  */
-function uniqueIds(elements: Element[]): Element[] {
+function uniqueIds(elements: SectionElement[]): SectionElement[] {
   const seen = new Set<string>()
   walkElements(elements, (el) => {
     let id = typeof el.id === 'string' && el.id ? el.id : newElementId()
@@ -170,14 +172,16 @@ export function buildLandingPage(
   connections: SpaceConnection[],
   brand?: Brand | null,
 ): LandingPage {
-  const elements: Element[] = []
+  const elements: SectionElement[] = []
   let skipped = 0
 
   for (const section of sections) {
     // Elementos recém-lidos do JSON do nó: trocar ids aqui não altera o nó
     const sectionElements = sectionWithTransforms(section, nodes, connections, brand)
-    if (sectionElements) elements.push(...sectionElements)
-    else skipped++
+    if (sectionElements) {
+      const data = section.data as SectionNodeData
+      elements.push(...applyNavigatorTitles(sectionElements, data.title, data.navigatorLabels))
+    } else skipped++
   }
 
   return { elements: uniqueIds(elements), sectionCount: sections.length - skipped, skipped }

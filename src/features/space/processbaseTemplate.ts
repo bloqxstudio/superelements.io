@@ -9,7 +9,7 @@ import {
   ARROW, bg, border, createBuilder, FIXED, fluid, gap, hl, link, maxw, pct, px, reveal, RING_CSS, sides, T, texture, tweak, typography,
   type PBBuilder, type Tone,
 } from '@/features/processbase/elementor'
-import { PB, PB_EASE, PB_FONT, PB_LAYOUT as L } from '@/features/processbase/tokens'
+import { PB, PB_CONTACT, PB_EASE, PB_FONT, PB_LAYOUT as L, pbWhatsApp } from '@/features/processbase/tokens'
 
 /**
  * Home da ProcessBase em containers e widgets nativos do Elementor, com os
@@ -660,15 +660,12 @@ const makeDuvidas = (): SectionNodeData => {
 
 // ── contato ─────────────────────────────────────────────────────────────────
 
-/** Contato público da ProcessBase, enviado pelo Gian em 2026-09-27 (COPY.md §13d). */
-const GIAN_WHATSAPP = '5551985445411'
-const GIAN_WHATSAPP_LABEL = '(51) 98544-5411'
-const WHATSAPP_MESSAGE = 'Olá, Gian. Vim pelo site da ProcessBase e quero conversar sobre o diagnóstico.'
-const WHATSAPP_URL = `https://wa.me/${GIAN_WHATSAPP}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`
-/** Caixa que recebe os formulários e aparece no rodapé. */
-const CONTACT_EMAIL = 'processbase08@gmail.com'
-const INSTAGRAM_HANDLE = '@process_base01'
-const INSTAGRAM_URL = 'https://www.instagram.com/process_base01/'
+/** Contato público da ProcessBase (PB_CONTACT em processbase/tokens, COPY.md §13d). */
+const GIAN_WHATSAPP_LABEL = PB_CONTACT.whatsappLabel
+const WHATSAPP_URL = pbWhatsApp('Olá, Gian. Vim pelo site da ProcessBase e quero conversar sobre o diagnóstico.')
+const CONTACT_EMAIL = PB_CONTACT.email
+const INSTAGRAM_HANDLE = PB_CONTACT.instagramHandle
+const INSTAGRAM_URL = PB_CONTACT.instagramUrl
 
 /** Borda dos campos: 3,2:1 no branco (a #C9CCD3 dava 1,6:1 e o campo sumia). */
 const FIELD_BORDER = '#8A909C'
