@@ -29,6 +29,7 @@ import { ISLAND_SURFACE } from '@/features/space/ToolbarIsland'
 import { MOD_KEY } from '@/features/space/pages/clipboard'
 import type { SectionNodeData } from '@/types/space'
 import { PropertiesPanel } from '@/features/space/editor/PropertiesPanel'
+import { PanelBoundary } from '@/features/space/editor/PanelBoundary'
 import { deleteSelectedElement, duplicateSelectedElement, moveElementAcross, selectElement } from '@/features/space/editor/actions'
 import { accepts, containsId, locate, settingsOf } from '@/features/space/editor/tree'
 import { findElement } from './elementorContentEditor'
@@ -444,6 +445,7 @@ export const ElementorNavigatorPanel: React.FC<ElementorNavigatorPanelProps> = (
 
       <TreeDragContext.Provider value={dragApi}>
         <div className="min-h-0 overflow-y-auto p-2" style={selectedElement ? { flex: '0 0 34%' } : { flex: '1 1 auto' }}>
+          <PanelBoundary what="as camadas desta página" resetKey={`${page?.id}:${sections.length}`}>
           {visibleSections.length ? (
             <ul role="tree" aria-label={`Camadas de ${page?.name ?? 'página'}`} className="space-y-1">
               {visibleSections.map((section, index) => {
@@ -516,12 +518,15 @@ export const ElementorNavigatorPanel: React.FC<ElementorNavigatorPanelProps> = (
               </p>
             </div>
           )}
+          </PanelBoundary>
         </div>
       </TreeDragContext.Provider>
 
       {selection && selectedElement ? (
         <div className="flex min-h-0 flex-1 flex-col border-t border-gray-200">
-          <PropertiesPanel key={`${selection.sectionId}:${selection.elementId}`} sectionId={selection.sectionId} elementId={selection.elementId} />
+          <PanelBoundary what="as propriedades desta camada" resetKey={`${selection.sectionId}:${selection.elementId}`}>
+            <PropertiesPanel key={`${selection.sectionId}:${selection.elementId}`} sectionId={selection.sectionId} elementId={selection.elementId} />
+          </PanelBoundary>
         </div>
       ) : (
         <footer className="border-t border-gray-100 px-3 py-2 text-[10px] leading-relaxed text-gray-400">

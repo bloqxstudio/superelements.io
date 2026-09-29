@@ -94,8 +94,9 @@ const usefulExplicitTitle = (element: SectionElement, context: LayerContext) => 
   if (!explicit) return ''
 
   const normalized = explicit.toLocaleLowerCase('pt-BR')
-  const parentNames = [explicitTitle(context.parent), context.parent ? namedRole(context.parent) : '']
-  const repeatsParent = parentNames.some((name) => name.toLocaleLowerCase('pt-BR') === normalized)
+  // Pai sem papel reconhecido não tem nome (namedRole devolve undefined)
+  const parentNames = [explicitTitle(context.parent), context.parent ? namedRole(context.parent) ?? '' : '']
+  const repeatsParent = parentNames.some((name) => !!name && name.toLocaleLowerCase('pt-BR') === normalized)
   const repeatedSiblings = context.siblings.filter(
     (sibling) => explicitTitle(sibling).toLocaleLowerCase('pt-BR') === normalized,
   ).length > 1
