@@ -188,10 +188,15 @@ export const SpaceLibraryPanel: React.FC<SpaceLibraryPanelProps> = ({ onClose })
 
       {index === null && (
         <div className="p-4 text-xs text-gray-500 space-y-2">
-          <p>O pack Section Express não foi importado. Rode no terminal:</p>
-          <pre className="overflow-x-auto rounded-md bg-muted px-2 py-1.5 text-[10px]">
-            npm run sections:import -- "caminho/do/3500-sections.zip"
-          </pre>
+          <p>A biblioteca não carregou. Feche e abra de novo para tentar outra vez.</p>
+          {import.meta.env.DEV && (
+            <>
+              <p>Para usar o pack neste computador, importe no terminal:</p>
+              <pre className="overflow-x-auto rounded-md bg-muted px-2 py-1.5 text-[10px]">
+                npm run sections:import -- "caminho/do/3500-sections.zip"
+              </pre>
+            </>
+          )}
         </div>
       )}
 

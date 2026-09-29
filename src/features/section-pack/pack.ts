@@ -2,11 +2,13 @@ import { isWidgetSupported } from '@/engine/elementor';
 import { categorize, type SectionCategoryKey, type SectionFormat } from './categories';
 import { applyLocalSectionCustomization } from './customizations';
 import { DECORATIVE_BACKGROUND_ENTRIES, loadDecorativeBackgroundRaw } from './decorativeBackgroundPresets';
+import { supabase } from '@/integrations/supabase/client';
 
 /**
  * Pack Section Express importado por `npm run sections:import` para
- * data/section-express/. A pasta fica fora do git: sem ela os globs vêm
- * vazios e a biblioteca mostra como importar.
+ * data/section-express/. A pasta fica fora do git (o repositório é público e o
+ * pack é licenciado): sem ela os arquivos vêm do bucket privado `section-pack`,
+ * que só quem está logado lê. `npm run sections:upload` envia a pasta para lá.
  */
 
 export type PackKind = 'section' | 'loop' | 'popup';
@@ -45,34 +47,46 @@ const sectionFiles = import.meta.glob<string>('/data/section-express/{sections,l
 /** Onde o pack hospeda as imagens; vai como `siteurl` no JSON copiado para o Elementor. */
 export const PACK_SITE_URL = 'https://preview.section.express';
 
-export const hasSectionPack = Object.keys(indexFile).length > 0;
+const PACK_BUCKET = 'section-pack';
+const localFiles = { ...indexFile, ...sectionFiles };
+const hasLocalPack = Object.keys(indexFile).length > 0;
 
-let indexPromise: Promise<PackIndex | null> | null = null;
+/** `file` é relativo a data/section-express/, o mesmo caminho dentro do bucket. */
+const readPackFile = async (file: string): Promise<string> => {
+  if (hasLocalPack) {
+    const load = localFiles[PACK_ROOT + file];
+    if (!load) throw new Error(`Arquivo ${file} não está em data/section-express`);
+    return load();
+  }
+  const { data, error } = await supabase.storage.from(PACK_BUCKET).download(file);
+  if (error) throw error;
+  return data.text();
+};
 
-export const loadPackIndex = (): Promise<PackIndex | null> => {
-  indexPromise ??= hasSectionPack
-    ? Object.values(indexFile)[0]().then((raw) => {
-        const pack = JSON.parse(raw) as PackIndex;
-        return {
-          ...pack,
-          source: `${pack.source} + Fundos visuais`,
-          entries: categorize([...DECORATIVE_BACKGROUND_ENTRIES, ...pack.entries]),
-        };
-      })
-    : Promise.resolve({
-        source: 'Fundos visuais incluídos',
-        importedAt: new Date(0).toISOString(),
-        entries: categorize(DECORATIVE_BACKGROUND_ENTRIES),
-      });
+let indexPromise: Promise<PackIndex> | null = null;
+
+export const loadPackIndex = (): Promise<PackIndex> => {
+  if (!indexPromise) {
+    indexPromise = readPackFile('index.json').then((raw) => {
+      const pack = JSON.parse(raw) as PackIndex;
+      return {
+        ...pack,
+        source: `${pack.source} + Fundos visuais`,
+        entries: categorize([...DECORATIVE_BACKGROUND_ENTRIES, ...pack.entries]),
+      };
+    });
+    // Falha (rede, bucket vazio) não fica guardada: abrir a biblioteca de novo tenta outra vez
+    indexPromise.catch(() => {
+      indexPromise = null;
+    });
+  }
   return indexPromise;
 };
 
 export const loadSectionRaw = (entry: PackEntry): Promise<string> => {
   const builtIn = loadDecorativeBackgroundRaw(entry.id);
   if (builtIn) return Promise.resolve(builtIn);
-  const load = sectionFiles[PACK_ROOT + entry.file];
-  if (!load) return Promise.reject(new Error(`Arquivo ${entry.file} não está em data/section-express`));
-  return load().then((raw) => applyLocalSectionCustomization(entry.id, raw));
+  return readPackFile(entry.file).then((raw) => applyLocalSectionCustomization(entry.id, raw));
 };
 
 export const missingWidgets = (entry: PackEntry) => Object.keys(entry.widgets).filter((w) => !isWidgetSupported(w));

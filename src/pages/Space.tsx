@@ -9,7 +9,6 @@ import { PagePlayer } from '@/features/space/pages/PagePlayer'
 import { useSectionShortcuts } from '@/features/space/pages/useSectionShortcuts'
 import { LibraryDragChip } from '@/features/space/pages/LibraryDragChip'
 import { copyLandingToElementor } from '@/features/space/exportLanding'
-import { hasSectionPack } from '@/features/section-pack/pack'
 import { WordPressImportDialog } from '@/features/wordpress/WordPressImportDialog'
 import { WordPressPageDialogs } from '@/features/wordpress/WordPressPageDialogs'
 import { useSpaceStore } from '@/store/spaceStore'
@@ -25,7 +24,7 @@ const playActivePage = () => {
 const PANEL_GUTTER = 24
 
 const Space: React.FC = () => {
-  const [libraryOpen, setLibraryOpen] = useState(hasSectionPack)
+  const [libraryOpen, setLibraryOpen] = useState(true)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const editLevel = useSpaceStore((s) => s.editLevel)
   useSectionShortcuts()

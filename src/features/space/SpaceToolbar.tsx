@@ -9,7 +9,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useSpaceStore } from '@/store/spaceStore'
-import { hasSectionPack } from '@/features/section-pack/pack'
 import { BrandButton } from '@/features/space/brand/BrandButton'
 import { LevelBar } from '@/features/space/levels/LevelBar'
 import { PagePicker } from '@/features/space/pages/PagePicker'
@@ -83,11 +82,9 @@ export const SpaceToolbar: React.FC<SpaceToolbarProps> = ({ libraryOpen, onToggl
       <ToolbarIsland aria-label="Montar a página" className="justify-self-start">
         <PagePicker leftInset={libraryOpen ? LIBRARY_PANEL_WIDTH + 24 : 0} compact={tight} />
         <ToolDivider />
-        {hasSectionPack && (
-          <Hint label="Biblioteca de seções" hint="Seções do pack, por tipo">
-            <ToolButton icon={Library} label="Biblioteca" showLabel={!tight} pressed={libraryOpen} onClick={onToggleLibrary} />
-          </Hint>
-        )}
+        <Hint label="Biblioteca de seções" hint="Seções do pack, por tipo">
+          <ToolButton icon={Library} label="Biblioteca" showLabel={!tight} pressed={libraryOpen} onClick={onToggleLibrary} />
+        </Hint>
         <Hint label="Modelos de página" hint="Uma landing pronta numa página">
           <ToolButton icon={Sparkles} label="Modelos" showLabel={!tight} onClick={onOpenTemplates} />
         </Hint>
