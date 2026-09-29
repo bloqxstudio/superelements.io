@@ -34,7 +34,8 @@ const SYNC: Record<SyncStatus, { icon: typeof Cloud; label: string; className: s
 const ProjectSaveStatus: React.FC<{ projectId: string }> = ({ projectId }) => {
   const sync = useProjectSync()
   if (sync.projectId !== projectId) return null
-  const { icon: Icon, label, className } = SYNC[sync.status]
+  const { icon: Icon, className } = SYNC[sync.status]
+  const label = sync.status === 'saved' && sync.note ? sync.note : SYNC[sync.status].label
   const time =
     sync.status === 'saved' && sync.savedAt
       ? ` às ${new Date(sync.savedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`

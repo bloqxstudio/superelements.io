@@ -5,6 +5,10 @@ import { TextNode } from './nodes/TextNode'
 import { ColorPaletteNode } from './nodes/ColorPaletteNode'
 import { ConnectionLayer } from './ConnectionLayer'
 import { PagesLayer } from './pages/PageFrame'
+import { MAX_ZOOM, MIN_ZOOM } from './SpaceCanvasBar'
+
+/** Altura de uma linha quando a roda vem em linhas (Firefox). */
+const WHEEL_LINE = 16
 
 /** Foco num campo ou num controle: ali o Espaço digita ou aciona o botão, não arrasta o canvas. */
 const ownsSpace = (target: EventTarget | null) =>
@@ -140,7 +144,7 @@ export const SpaceCanvas: React.FC = () => {
   )
 
   // Espaço segurado (ou o botão do meio) arrasta o canvas por cima de qualquer coisa,
-  // já que arrastar uma seção leva a seção
+  // já que arrastar uma seção leva a seção; com o Espaço, os previews deixam de receber o mouse
   const spaceHeld = useRef(false)
   const [handMode, setHandMode] = useState(false)
   useEffect(() => {
@@ -182,38 +186,60 @@ export const SpaceCanvas: React.FC = () => {
     [startPan]
   )
 
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
+  // Roda e pinça dão zoom em direção ao cursor, também por cima das seções (o preview devolve a roda).
+  // Ouvinte nativo: o onWheel do React é passivo e não impediria a pinça de dar zoom na página inteira.
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el) return
+    let pending: { factor: number; x: number; y: number } | null = null
+    let frame = 0
+
+    // Um passo por quadro, sempre a partir do zoom atual, para os eventos rápidos não se perderem
+    const apply = () => {
+      frame = 0
+      if (!pending) return
+      const { factor, x, y } = pending
+      pending = null
+      const t = useSpaceStore.getState().canvasTransform
+      const zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, t.zoom * factor))
+      if (zoom === t.zoom) return
+      setCanvasTransform({ zoom, x: x - ((x - t.x) / t.zoom) * zoom, y: y - ((y - t.y) / t.zoom) * zoom })
+    }
+
+    const onWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement
+      // O JSON da seção rola; com Ctrl o gesto volta a ser zoom
+      const scroller = !e.ctrlKey && target.closest?.('textarea')
+      if (scroller && scroller.scrollHeight > scroller.clientHeight) return
       e.preventDefault()
-      const delta = e.deltaY > 0 ? 0.9 : 1.1
-      const newZoom = Math.max(0.2, Math.min(2.5, canvasTransform.zoom * delta))
+      const rect = el.getBoundingClientRect()
+      const pixels = e.deltaY * (e.deltaMode === 1 ? WHEEL_LINE : e.deltaMode === 2 ? rect.height : 1)
+      // A roda do mouse anda em degraus de ~100px; a pinça do trackpad chega com Ctrl e passos curtos
+      const limit = e.ctrlKey ? 25 : 100
+      const step = Math.max(-limit, Math.min(limit, pixels)) * (e.ctrlKey ? 0.006 : 0.001)
+      // O canvas não começa na origem da janela (menu lateral e cabeçalho)
+      pending = { factor: (pending?.factor ?? 1) * Math.exp(-step), x: e.clientX - rect.left, y: e.clientY - rect.top }
+      if (!frame) frame = requestAnimationFrame(apply)
+    }
 
-      // Zoom toward cursor position; o canvas não começa na origem da janela (menu lateral e cabeçalho)
-      const rect = e.currentTarget.getBoundingClientRect()
-      const cursorX = e.clientX - rect.left
-      const cursorY = e.clientY - rect.top
-      const worldX = (cursorX - canvasTransform.x) / canvasTransform.zoom
-      const worldY = (cursorY - canvasTransform.y) / canvasTransform.zoom
-      const newX = cursorX - worldX * newZoom
-      const newY = cursorY - worldY * newZoom
-
-      setCanvasTransform({ zoom: newZoom, x: newX, y: newY })
-    },
-    [canvasTransform, setCanvasTransform]
-  )
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      cancelAnimationFrame(frame)
+    }
+  }, [setCanvasTransform])
 
   return (
     <div
       ref={viewportRef}
       data-space-canvas
-      className={`canvas-background absolute inset-0 overflow-hidden ${handMode ? '[&_*]:!cursor-grab' : ''}`}
+      className={`canvas-background absolute inset-0 overflow-hidden ${handMode ? '[&_*]:!cursor-grab [&_iframe]:pointer-events-none' : ''}`}
       style={{
         cursor: 'grab',
         backgroundColor: '#f4f4f5',
       }}
       onMouseDownCapture={handleMouseDownCapture}
       onMouseDown={handleMouseDown}
-      onWheel={handleWheel}
     >
       {/* Dot grid background */}
       <DotPattern transform={canvasTransform} />

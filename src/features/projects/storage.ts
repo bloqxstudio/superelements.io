@@ -8,9 +8,9 @@ export type { PublishBackup } from './types'
 
 /**
  * Os projetos ficam na conta de quem cria. A lista e a conexão com o WordPress
- * ficam em tabelas que só o dono lê; o conteúdo vai para o bucket privado
- * `space-projects`, em `<dono>/<projeto>/`, porque passa fácil de 1 MB
- * (seções do Elementor e logos em data URL), grande demais para uma linha.
+ * ficam em tabelas que só o dono e quem ele convidou leem; o conteúdo vai para
+ * o bucket privado `space-projects`, em `<dono>/<projeto>/`, porque passa fácil
+ * de 1 MB (seções do Elementor e logos em data URL), grande demais para uma linha.
  */
 const BUCKET = 'space-projects'
 
@@ -21,6 +21,21 @@ export async function currentUserId(): Promise<string> {
   const id = data.session?.user.id
   if (!id) throw new Error('Entre na sua conta para salvar os projetos.')
   return id
+}
+
+/** Dono de cada projeto já visto: os arquivos ficam na pasta dele, mesmo quando quem salva é um convidado. */
+const owners = new Map<string, string>()
+
+async function projectFolder(id: string) {
+  let owner = owners.get(id)
+  if (!owner) {
+    const { data, error } = await supabase.from('space_projects').select('owner_id').eq('id', id).maybeSingle()
+    if (error) throw error
+    if (!data) throw new Error('Este projeto não está na sua conta.')
+    owner = data.owner_id
+    owners.set(id, owner)
+  }
+  return `${owner}/${id}`
 }
 
 const iso = (time: number) => new Date(time).toISOString()
@@ -70,10 +85,11 @@ async function removeFolder(folder: string) {
 
 // Lista de projetos
 
-const LIST_COLUMNS = 'id, name, context, summary, created_at, updated_at'
+const LIST_COLUMNS = 'id, owner_id, name, context, summary, created_at, updated_at'
 
 interface ProjectRow {
   id: string
+  owner_id: string
   name: string
   context: string
   summary: Json
@@ -81,22 +97,29 @@ interface ProjectRow {
   updated_at: string
 }
 
-const toProject = (row: ProjectRow): Project => ({
-  id: row.id,
-  name: row.name,
-  context: row.context,
-  createdAt: Date.parse(row.created_at),
-  updatedAt: Date.parse(row.updated_at),
-  summary: { sections: 0, colors: [], ...(row.summary as object) } as ProjectSummary,
-})
+const toProject = (row: ProjectRow, userId: string): Project => {
+  owners.set(row.id, row.owner_id)
+  return {
+    id: row.id,
+    role: row.owner_id === userId ? 'owner' : 'editor',
+    name: row.name,
+    context: row.context,
+    createdAt: Date.parse(row.created_at),
+    updatedAt: Date.parse(row.updated_at),
+    summary: { sections: 0, colors: [], ...(row.summary as object) } as ProjectSummary,
+  }
+}
 
+/** Os projetos da conta e os compartilhados com ela. */
 export async function listProjects(): Promise<Project[]> {
+  const userId = await currentUserId()
   const { data, error } = await supabase.from('space_projects').select(LIST_COLUMNS).order('updated_at', { ascending: false })
   if (error) throw error
-  return data.map(toProject)
+  return data.map((row) => toProject(row, userId))
 }
 
 export async function insertProject(project: Project) {
+  owners.set(project.id, await currentUserId())
   const { error } = await supabase.from('space_projects').insert({
     id: project.id,
     name: project.name,
@@ -116,7 +139,7 @@ export async function updateProject(id: string, fields: Pick<Project, 'name' | '
   if (error) throw error
 }
 
-/** Apaga o projeto e, em cascata, a conexão com o WordPress; depois os arquivos. */
+/** Só o dono: apaga o projeto e, em cascata, a conexão com o WordPress e os acessos; depois os arquivos. */
 export async function deleteProject(id: string) {
   const owner = await currentUserId()
   // As fotos dos links de aprovação são públicas: saem antes, enquanto a linha do link ainda dá permissão
@@ -141,9 +164,11 @@ export interface CloudDoc extends DocHead {
 
 /** Revisão e arquivo atuais; undefined se o projeto não está (mais) na conta. */
 export async function loadDocHead(id: string): Promise<DocHead | undefined> {
-  const { data, error } = await supabase.from('space_projects').select('revision, doc_path').eq('id', id).maybeSingle()
+  const { data, error } = await supabase.from('space_projects').select('owner_id, revision, doc_path').eq('id', id).maybeSingle()
   if (error) throw error
-  return data ? { revision: data.revision, path: data.doc_path } : undefined
+  if (!data) return undefined
+  owners.set(id, data.owner_id)
+  return { revision: data.revision, path: data.doc_path }
 }
 
 /** O conteúdo salvo na conta; undefined se o projeto não está (mais) lá. */
@@ -178,8 +203,7 @@ interface SaveOptions {
  * ninguém salvou depois de `base`. Quem lê nunca pega um arquivo pela metade.
  */
 export async function saveProjectDoc(id: string, doc: ProjectDoc, { base, previousPath, summary, edited }: SaveOptions): Promise<SaveResult> {
-  const owner = await currentUserId()
-  const path = `${owner}/${id}/doc-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}.json`
+  const path = `${await projectFolder(id)}/doc-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}.json`
   await uploadJson(path, doc)
 
   const { data, error } = await supabase
@@ -233,16 +257,14 @@ export async function deleteWordPressConnection(projectId: string) {
 
 // Versões anteriores das páginas publicadas, para desfazer de qualquer aparelho
 
-const backupPath = (owner: string, id: string, postId: number) => `${owner}/${id}/wordpress-backups/${postId}.json`
+const backupPath = async (id: string, postId: number) => `${await projectFolder(id)}/wordpress-backups/${postId}.json`
 
 export async function loadPublishBackups(id: string, postId: number): Promise<PublishBackup[]> {
-  const owner = await currentUserId()
-  return (await downloadJson<PublishBackup[]>(backupPath(owner, id, postId))) ?? []
+  return (await downloadJson<PublishBackup[]>(await backupPath(id, postId))) ?? []
 }
 
 export async function savePublishBackups(id: string, postId: number, backups: PublishBackup[]) {
-  const owner = await currentUserId()
-  const path = backupPath(owner, id, postId)
+  const path = await backupPath(id, postId)
   if (backups.length) {
     await uploadJson(path, backups, { upsert: true, cacheControl: '0' })
     return

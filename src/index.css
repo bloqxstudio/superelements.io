@@ -99,3 +99,12 @@
     animation: shimmer 2s infinite;
   }
 }
+
+/*
+ * Arrasto que começou na página (alça, fundo do canvas, seção, painel): os previews
+ * rodam em outro processo e o navegador mandaria o movimento para o iframe sob o
+ * cursor, mesmo com o ponteiro capturado. Até soltar, eles não pegam o mouse.
+ */
+.se-frames-frozen iframe {
+  pointer-events: none !important;
+}

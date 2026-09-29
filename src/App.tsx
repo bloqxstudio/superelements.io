@@ -13,6 +13,7 @@ import Projects from "@/pages/Projects";
 import ProjectSpace from "@/pages/ProjectSpace";
 import WordPressCallback from "@/pages/WordPressCallback";
 import PageApproval from "@/pages/PageApproval";
+import ProjectInvite from "@/pages/ProjectInvite";
 import MenuzitoModel from "@/pages/MenuzitoModel";
 import MenuzitoStyleGuide from "@/pages/MenuzitoStyleGuide";
 import UglyCashModel from "@/pages/UglyCashModel";
@@ -45,6 +46,8 @@ function App() {
               <Route path="/wordpress/retorno" element={<WordPressCallback />} />
               {/* Link de aprovação: o cliente abre sem login */}
               <Route path="/aprovar/:shareId" element={<PageApproval />} />
+              {/* Convite para editar um projeto junto: mostra o convite antes do login */}
+              <Route path="/convite/:inviteId" element={<ProjectInvite />} />
               <Route path="/menuzito-modelo" element={<MenuzitoModel />} />
               <Route path="/menuzito-style-guide" element={<MenuzitoStyleGuide />} />
               <Route path="/uglycash-modelo" element={<UglyCashModel />} />

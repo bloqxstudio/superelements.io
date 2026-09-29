@@ -3,6 +3,7 @@ import { applyBrand } from './brand/applyBrand'
 import type { Brand } from './brand/designMd'
 import { sectionBrand } from './levels/motion'
 import { applyNavigatorTitles } from './navigator/navigatorLabels'
+import { restorePinned } from './editor/pinned'
 
 /**
  * Monta a landing page do Space: as seções na ordem vertical do canvas, cada
@@ -122,7 +123,8 @@ export function sectionBase(section: SpaceNode, nodes: SpaceNode[], connections:
  * para a seção no nível Movimento (ou `motion`, um rascunho) vale no lugar do
  * movimento da marca. Seção importada do site do cliente não recebe a marca:
  * a troca de cada cor pela cor da marca mais próxima desfiguraria o site ao
- * publicar de volta. Só o movimento escolhido para ela entra.
+ * publicar de volta. Só o movimento escolhido para ela entra. Os ajustes feitos
+ * à mão no painel de propriedades voltam por cima da marca.
  */
 export function sectionWithTransforms(
   section: SpaceNode,
@@ -135,7 +137,7 @@ export function sectionWithTransforms(
   if (!elements) return null
   const data = section.data as SectionNodeData
   const effective = sectionBrand(data.origin ? null : brand ?? null, motion ?? data.levels?.motion)
-  return effective ? applyBrand(elements, effective) : elements
+  return effective ? restorePinned(applyBrand(elements, effective), elements, data.pinned) : elements
 }
 
 /** Seções do canvas de cima para baixo (as soltas se organizam assim). */

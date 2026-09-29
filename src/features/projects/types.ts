@@ -14,9 +14,14 @@ export interface ProjectSummary {
   logo?: string
 }
 
+/** Dono criou o projeto; editor entrou por convite e faz tudo menos excluir e convidar. */
+export type ProjectRole = 'owner' | 'editor'
+
 /** Um projeto por cliente: nome, contexto e o resumo do que está no canvas. */
 export interface Project {
   id: string
+  /** Sem papel, o projeto é de quem está na conta (os criados antes do compartilhamento). */
+  role?: ProjectRole
   name: string
   /** Briefing do cliente (negócio, público, tom, ofertas) para usar depois. */
   context: string

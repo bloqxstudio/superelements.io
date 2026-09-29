@@ -5,6 +5,7 @@ import { Logo } from '@/components/Logo';
 import { ProjectBreadcrumb, ProjectContextButton } from '@/features/projects/ProjectHeader';
 import { ProjectChatGPTButton } from '@/features/chatgpt/ChatGPTConnectionDialog';
 import { ProjectWordPressButton } from '@/features/wordpress/WordPressDialog';
+import { ProjectShareButton } from '@/features/projects/ProjectAccessDialog';
 
 /** Altura do header (56px + 1px de borda): o Space ocupa o resto da tela. */
 const Layout: React.FC = () => {
@@ -21,6 +22,7 @@ const Layout: React.FC = () => {
             {projectId && <ProjectBreadcrumb projectId={projectId} />}
           </nav>
           <div className="flex shrink-0 items-center gap-2">
+            {projectId && <ProjectShareButton projectId={projectId} />}
             {projectId && <ProjectChatGPTButton projectId={projectId} />}
             {projectId && <ProjectWordPressButton projectId={projectId} />}
             {projectId && <ProjectContextButton projectId={projectId} />}

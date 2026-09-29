@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import { orderedSections } from '@/features/space/landingPage'
 import {
   DEFAULT_PAGE_NAME,
   PAGE_HEADER,
@@ -17,6 +16,8 @@ import {
   pageSlots,
 } from '@/features/space/pages/pages'
 import { instantiateSnapshot, snapshotSections, type SectionSnapshot } from '@/features/space/pages/clipboard'
+import { findElement } from '@/features/space/navigator/elementorContentEditor'
+import { orderedSections, parseSectionElements, type SectionElement } from '@/features/space/landingPage'
 import type {
   SpaceNode,
   SpaceConnection,
@@ -34,6 +35,7 @@ import type {
   NavigatorSelection,
   SectionLevels,
   SectionMotion,
+  EditorDevice,
 } from '@/types/space'
 
 interface SpaceState {
@@ -69,7 +71,20 @@ interface SpaceState {
   motionReplay: number
   /** Tamanho da área do canvas na tela, para centralizar nós novos. */
   viewport: { width: number; height: number }
+  /** Estados anteriores do canvas para o Ctrl+Z, do mais antigo ao mais recente. */
+  past: CanvasSnapshot[]
+  /** O que o Ctrl+Z desfez, para o Ctrl+Shift+Z refazer. */
+  future: CanvasSnapshot[]
+  /** Tela em que as seções aparecem no canvas; o painel de propriedades grava os ajustes nela. */
+  previewDevice: EditorDevice
+  /** Elementos copiados de dentro de uma seção (Ctrl+C numa camada), com as settings fixadas deles. */
+  elementClipboard: { elements: SectionElement[]; pinned: Record<string, string[]> } | null
+  /** Camada sob o mouse na árvore do Navigator, destacada no canvas. */
+  hoveredElement: NavigatorSelection | null
 }
+
+/** O que o desfazer guarda: só o que o usuário edita. */
+export type CanvasSnapshot = Pick<SpaceState, 'nodes' | 'pages' | 'connections'>
 
 /**
  * O que o projeto guarda do canvas; o resto (seleção, nível, rascunho) é da sessão.
@@ -93,6 +108,12 @@ interface InsertOptions extends FocusOptions {
 interface SpaceActions {
   /** Troca o canvas pelo de um projeto (ou por um vazio) e zera o estado da sessão. */
   loadCanvas: (canvas?: SpaceCanvas) => void
+  /**
+   * Troca o conteúdo pelo que outra pessoa (ou aba) salvou, mantendo a sessão
+   * daqui: zoom, página ativa, player e seleção que ainda existirem. O desfazer
+   * recomeça, para não desfazer o trabalho do outro.
+   */
+  syncCanvas: (canvas: SpaceCanvas) => void
   addNode: (type: NodeType, x: number, y: number) => void
   /** Adiciona uma seção no fim da página ativa (ou da indicada) e leva o canvas até ela. */
   addSection: (data: SectionNodeData, options?: InsertOptions) => string
@@ -152,7 +173,12 @@ interface SpaceActions {
   setViewport: (width: number, height: number) => void
   removeNode: (id: string) => void
   updateNodePosition: (id: string, x: number, y: number) => void
-  updateNodeData: (id: string, data: Partial<SectionNodeData | TextNodeData | ColorPaletteNodeData>) => void
+  /**
+   * Troca dados do nó. Mudanças seguidas no mesmo nó e campos viram um passo só
+   * do desfazer (digitar); `merge: false` sempre cria um passo, e uma string
+   * junta os passos com a mesma chave (arrastar uma alça).
+   */
+  updateNodeData: (id: string, data: Partial<SectionNodeData | TextNodeData | ColorPaletteNodeData>, options?: { merge?: string | false }) => void
   updateNodeSize: (id: string, width: number, height: number) => void
   startConnection: (sourceId: string, sourceX: number, sourceY: number) => void
   updatePendingConnection: (currentX: number, currentY: number) => void
@@ -173,6 +199,12 @@ interface SpaceActions {
   setSectionLevels: (updates: Record<string, SectionLevels | undefined>) => void
   /** Remove tudo e deixa só uma página Home vazia. */
   clearCanvas: () => void
+  /** Volta o canvas ao estado antes da última mudança; devolve se havia o que desfazer. */
+  undo: () => boolean
+  redo: () => boolean
+  setPreviewDevice: (device: EditorDevice) => void
+  setElementClipboard: (clipboard: SpaceState['elementClipboard']) => void
+  hoverNavigatorElement: (element: NavigatorSelection | null) => void
 }
 
 const NODE_DIMENSIONS: Record<NodeType, { width: number; height: number }> = {
@@ -266,6 +298,26 @@ const inCanvasOrder = (ids: string[], pages: SpacePage[], nodes: SpaceNode[]) =>
     .map((s) => s.id)
 }
 
+/** Passos guardados pelo desfazer. */
+const HISTORY_LIMIT = 100
+/** Mudanças com a mesma chave dentro deste intervalo viram um passo só (digitar, arrastar). */
+const MERGE_WINDOW = 800
+
+/**
+ * Canvas de um passo do desfazer, com o tamanho atual das seções: a altura
+ * medida vem do preview, que não mede de novo se nada mudou na tela.
+ */
+function restoreSnapshot(snapshot: CanvasSnapshot, current: SpaceNode[]) {
+  const sizes = new Map(current.map((n) => [n.id, n]))
+  const nodes = snapshot.nodes.map((n) => {
+    const now = sizes.get(n.id)
+    return now && (now.width !== n.width || now.height !== n.height) ? { ...n, width: now.width, height: now.height } : n
+  })
+  return { nodes: layoutPages(snapshot.pages, nodes, snapshot.connections), pages: snapshot.pages, connections: snapshot.connections }
+}
+
+const sameCanvas = (a: CanvasSnapshot, b: CanvasSnapshot) => a.nodes === b.nodes && a.pages === b.pages && a.connections === b.connections
+
 /** Distância de uma cópia de seção solta até a original. */
 const LOOSE_COPY_OFFSET = 40
 
@@ -300,6 +352,31 @@ function openCanvas(canvas?: SpaceCanvas) {
 export const useSpaceStore = create<SpaceState & SpaceActions>()(
   devtools(
     (set, get) => {
+      let lastTrack = { key: '', at: 0 }
+      /**
+       * Guarda o canvas antes de uma mudança do usuário, para o desfazer. Chamar
+       * logo antes do set, depois das validações. Com `merge`, mudanças seguidas
+       * com a mesma chave (digitar, arrastar) viram um passo só.
+       */
+      const track = (merge?: string) => {
+        const now = Date.now()
+        const merged = !!merge && merge === lastTrack.key && now - lastTrack.at < MERGE_WINDOW
+        lastTrack = { key: merge ?? '', at: now }
+        if (merged) return
+        const { nodes, pages, connections, past } = get()
+        set({ past: [...past.slice(-(HISTORY_LIMIT - 1)), { nodes, pages, connections }], future: [] }, false, 'history')
+      }
+
+      /** Seleção que ainda existe no canvas depois de desfazer ou refazer. */
+      const validSelection = (nodes: SpaceNode[]) => {
+        const { selectedIds, navigatorSelection } = get()
+        const ids = new Set(nodes.map((n) => n.id))
+        const section = navigatorSelection && nodes.find((n) => n.id === navigatorSelection.sectionId)
+        const keepsElement =
+          section?.type === 'section' && !!findElement(parseSectionElements((section.data as SectionNodeData).elementorJson), navigatorSelection!.elementId)
+        return { selectedIds: selectedIds.filter((id) => ids.has(id)), navigatorSelection: keepsElement ? navigatorSelection : null }
+      }
+
       /** Transform que leva o ponto do mundo (x no centro da área livre, y no topo). */
       const focusOn = (worldCenterX: number, worldTop: number, leftInset = 0): CanvasTransform => {
         const { viewport, canvasTransform } = get()
@@ -330,9 +407,15 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       motionDraft: null,
       motionReplay: 0,
       viewport: { width: 1024, height: 768 },
+      past: [],
+      future: [],
+      previewDevice: 'desktop',
+      elementClipboard: null,
+      hoveredElement: null,
 
       loadCanvas: (canvas) => {
         const opened = openCanvas(canvas)
+        lastTrack = { key: '', at: 0 }
         set(
           {
             ...opened,
@@ -346,9 +429,35 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
             navigatorSelection: null,
             editLevel: 'structure',
             motionDraft: null,
+            // Outro projeto: o desfazer não volta para o canvas anterior
+            past: [],
+            future: [],
+            hoveredElement: null,
           },
           false,
           'loadCanvas'
+        )
+      },
+
+      syncCanvas: (canvas) => {
+        const opened = openCanvas(canvas)
+        const { activePageId, renamingPageId, playingPageId } = get()
+        const pageIds = new Set(opened.pages.map((p) => p.id))
+        const keep = (id: string | null) => (id && pageIds.has(id) ? id : null)
+        lastTrack = { key: '', at: 0 }
+        set(
+          {
+            ...opened,
+            ...validSelection(opened.nodes),
+            activePageId: keep(activePageId) ?? opened.pages[0].id,
+            renamingPageId: keep(renamingPageId),
+            playingPageId: keep(playingPageId),
+            pendingConnection: null,
+            past: [],
+            future: [],
+          },
+          false,
+          'syncCanvas'
         )
       },
 
@@ -372,6 +481,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const nextNodes = layoutPage(target, [...nodes, ...created], connections)
         const first = created[0] && nextNodes.find((n) => n.id === created[0].id)
 
+        track()
         set(
           {
             nodes: nextNodes,
@@ -388,6 +498,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
 
       addLooseSection: (data, x, y) => {
         const node: SpaceNode = { id: crypto.randomUUID(), type: 'section', x, y, ...NODE_DIMENSIONS.section, data }
+        track()
         set((state) => ({ nodes: [...state.nodes, node] }), false, 'addLooseSection')
         return node.id
       },
@@ -396,7 +507,8 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const { nodes, connections, pages } = get()
         const snapshot = snapshotSections(inCanvasOrder(ids, pages, nodes), nodes, connections)
         if (!snapshot.sections.length) return 0
-        set({ clipboard: snapshot }, false, 'copySections')
+        // Colar pega o que foi copiado por último: seções agora, não a camada de antes
+        set({ clipboard: snapshot, elementClipboard: null }, false, 'copySections')
         return snapshot.sections.length
       },
 
@@ -410,6 +522,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           index = selected.length ? Math.max(...selected) + 1 : page.sectionIds.length
         }
         const result = insertSnapshot(get(), clipboard, page.id, index)
+        track()
         set(
           { pages: result.pages, nodes: result.nodes, connections: result.connections, selectedIds: result.ids, activePageId: page.id },
           false,
@@ -424,6 +537,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const snapshot = snapshotSections(inCanvasOrder(ids, pages, nodes), nodes, connections)
         if (!snapshot.sections.length) return 0
         const result = insertSnapshot(get(), snapshot, pageId, index)
+        track()
         set(
           { pages: result.pages, nodes: result.nodes, connections: result.connections, selectedIds: result.ids, activePageId: pageId },
           false,
@@ -461,6 +575,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         }
 
         if (!created.length) return 0
+        track()
         set({ pages: canvas.pages, nodes: canvas.nodes, connections: canvas.connections, selectedIds: created }, false, 'duplicateSections')
         return created.length
       },
@@ -475,6 +590,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         if (j < 0 || j >= order.length) return
         ;[order[i], order[j]] = [order[j], order[i]]
         const next = { ...page, sectionIds: order }
+        track()
         set(
           { pages: pages.map((p) => (p.id === page.id ? next : p)), nodes: layoutPage(next, nodes, connections) },
           false,
@@ -513,6 +629,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           nextNodes = moveSections(nextNodes, connections, new Map([[sectionId, spot]]))
         }
 
+        track()
         set({ pages: nextPages, nodes: nextNodes, activePageId: target?.id ?? activePageId }, false, 'moveSectionToPage')
       },
 
@@ -522,6 +639,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         if (!original) return null
         const fresh = instantiateSnapshot(snapshotSections([sectionId], nodes, connections))
         const shift = (n: SpaceNode) => ({ ...n, x: n.x + x - original.x, y: n.y + y - original.y })
+        track()
         set(
           {
             nodes: [...nodes, ...fresh.sections.map(shift), ...fresh.feeders.map(shift)],
@@ -537,6 +655,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       addPage: (name, options = {}) => {
         const { pages, nodes } = get()
         const page = newPage(name?.trim() || nextPageName(pages), nextPagePosition(pages, nodes))
+        track()
         set(
           {
             pages: [...pages, page],
@@ -552,7 +671,8 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
 
       renamePage: (id, name) => {
         const trimmed = name.trim()
-        if (!trimmed) return
+        if (!trimmed || get().pages.find((p) => p.id === id)?.name === trimmed) return
+        track(`renamePage:${id}`)
         set((state) => ({ pages: state.pages.map((p) => (p.id === id && p.name !== trimmed ? { ...p, name: trimmed } : p)) }), false, 'renamePage')
       },
 
@@ -567,6 +687,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
 
         const removed = withFeeders(page.sectionIds, nodes, connections)
         const rest = pages.filter((p) => p.id !== id)
+        track()
         set(
           {
             pages: rest,
@@ -590,6 +711,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         // Seções com os textos e paletas ligados a elas, numa página nova à direita
         const copy = newPage(`${page.name} (cópia)`, nextPagePosition(pages, nodes))
         const result = insertSnapshot({ nodes, connections, pages: [...pages, copy] }, snapshotSections(page.sectionIds, nodes, connections), copy.id)
+        track()
         set(
           {
             pages: result.pages,
@@ -616,6 +738,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const nextConnections = connections.filter((c) => !removed.has(c.sourceId) && !removed.has(c.targetId))
         const kept = nodes.filter((n) => !removed.has(n.id))
 
+        track()
         set(
           {
             pages: existing ? pages.map((p) => (p.id === page.id ? page : p)) : [...pages, page],
@@ -641,6 +764,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       },
 
       setPageDetails: (pageId, details) => {
+        track(`details:${pageId}`)
         set((state) => ({ pages: state.pages.map((p) => (p.id === pageId ? { ...p, details } : p)) }), false, 'setPageDetails')
       },
 
@@ -649,6 +773,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const page = pages.find((p) => p.id === id)
         if (!page || (page.x === x && page.y === y)) return
         const moved = { ...page, x, y }
+        track(`movePage:${id}`)
         set({ pages: pages.map((p) => (p.id === id ? moved : p)), nodes: layoutPage(moved, nodes, connections) }, false, 'movePage')
       },
 
@@ -674,6 +799,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           x += PAGE_WIDTH + PAGE_GAP
         }
         const nextPages = pages.map((p) => placed.get(p.id) ?? p)
+        track()
         set({ pages: nextPages, nodes: layoutPages(nextPages, nodes, connections) }, false, 'arrangePages')
       },
 
@@ -738,6 +864,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const connType: 'apply-copy' | 'apply-colors' =
           type === 'color-palette' ? 'apply-colors' : 'apply-copy'
 
+        track()
         set(
           (state) => ({
             nodes: [
@@ -778,6 +905,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         // A página fecha o buraco que a seção deixou
         const shrunk = page && nextPages.find((p) => p.id === page.id)
         if (shrunk) nextNodes = layoutPage(shrunk, nextNodes, nextConnections)
+        track()
         set(
           {
             pages: nextPages,
@@ -794,6 +922,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       updateNodePosition: (id, x, y) => {
         // Seção de página fica no lugar da coluna; só a página se move
         if (pageOf(get().pages, id)) return
+        track(`position:${id}`)
         set(
           (state) => ({
             nodes: state.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)),
@@ -803,7 +932,9 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         )
       },
 
-      updateNodeData: (id, data) => {
+      updateNodeData: (id, data, options = {}) => {
+        const merge = options.merge === undefined ? `data:${id}:${Object.keys(data).sort().join(',')}` : options.merge || undefined
+        track(merge)
         set(
           (state) => ({
             nodes: state.nodes.map((n) =>
@@ -894,6 +1025,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           connType = 'apply-copy'
         }
 
+        track()
         set(
           (state) => ({
             connections: [
@@ -912,6 +1044,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       },
 
       removeConnection: (id) => {
+        track()
         set(
           (state) => ({ connections: state.connections.filter((c) => c.id !== id) }),
           false,
@@ -996,6 +1129,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       },
 
       setSectionLevels: (updates) => {
+        track()
         set(
           (state) => ({
             nodes: state.nodes.map((n) => {
@@ -1015,6 +1149,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       clearCanvas: () => {
         const first = get().pages[0]
         const home = newPage(DEFAULT_PAGE_NAME, first ? { x: first.x, y: first.y } : nextPagePosition([], []))
+        track()
         set(
           {
             nodes: [],
@@ -1032,6 +1167,46 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           false,
           'clearCanvas'
         )
+      },
+
+      undo: () => {
+        const { past, future, nodes, pages, connections } = get()
+        const current = { nodes, pages, connections }
+        // Passos que não mudaram nada (um campo que recebeu o mesmo valor) são pulados
+        let i = past.length - 1
+        while (i >= 0 && sameCanvas(past[i], current)) i--
+        if (i < 0) {
+          if (past.length) set({ past: [] }, false, 'undo')
+          return false
+        }
+        lastTrack = { key: '', at: 0 }
+        const restored = restoreSnapshot(past[i], nodes)
+        set({ ...restored, ...validSelection(restored.nodes), past: past.slice(0, i), future: [...future, current] }, false, 'undo')
+        return true
+      },
+
+      redo: () => {
+        const { past, future, nodes, pages, connections } = get()
+        const next = future[future.length - 1]
+        if (!next) return false
+        lastTrack = { key: '', at: 0 }
+        const restored = restoreSnapshot(next, nodes)
+        set({ ...restored, ...validSelection(restored.nodes), past: [...past, { nodes, pages, connections }], future: future.slice(0, -1) }, false, 'redo')
+        return true
+      },
+
+      setPreviewDevice: (device) => {
+        if (get().previewDevice !== device) set({ previewDevice: device }, false, 'setPreviewDevice')
+      },
+
+      setElementClipboard: (clipboard) => {
+        set({ elementClipboard: clipboard }, false, 'setElementClipboard')
+      },
+
+      hoverNavigatorElement: (element) => {
+        const current = get().hoveredElement
+        if (current?.sectionId === element?.sectionId && current?.elementId === element?.elementId) return
+        set({ hoveredElement: element }, false, 'hoverNavigatorElement')
       },
       }
     },

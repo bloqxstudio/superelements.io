@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react'
 import { X, GripVertical, ChevronUp, ChevronDown, Code2 } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { useSpaceStore } from '@/store/spaceStore'
-import { PreviewFrame } from '@/features/elementor-preview/PreviewFrame'
+import { PreviewFrame, type PreviewEditorMessage } from '@/features/elementor-preview/PreviewFrame'
 import { parseSectionElements } from '@/features/space/landingPage'
 import { useActiveBrand } from '@/features/space/brand/brandStore'
 import { useSiteKit } from '@/features/wordpress/siteKitStore'
@@ -10,31 +11,41 @@ import { sectionMotionLabel } from '@/features/space/levels/motion'
 import { pageOf } from '@/features/space/pages/pages'
 import { SectionMenu } from '@/features/space/pages/SectionMenu'
 import { useSectionDrag } from '@/features/space/pages/useSectionDrag'
+import { findElement, updateElementContent } from '@/features/space/navigator/elementorContentEditor'
+import { layerKind } from '@/features/space/navigator/navigatorLabels'
+import type { BridgeGeometry, BridgeIndicator } from '@/features/elementor-preview/editorBridge'
+import { EditorOverlay } from '@/features/space/editor/EditorOverlay'
+import { moveElementTo, selectElement } from '@/features/space/editor/actions'
+import { registerFrame, resolveHit } from '@/features/space/editor/frames'
+import { useInsertDrag } from '@/features/space/editor/insertDrag'
 import type { SpaceNode, SectionNodeData } from '@/types/space'
 
 interface SectionNodeProps {
   node: SpaceNode
 }
 
-/** Contorno efêmero do Navigator: entra só no preview, nunca no JSON exportado. */
-const withNavigatorHighlight = (document: string, elementId?: string) => {
-  const safeId = elementId?.replace(/[^a-zA-Z0-9_-]/g, '')
-  if (!safeId) return document
-  const style = `<style data-se-navigator-highlight>.elementor .elementor-element.elementor-element-${safeId}{outline:3px solid #7c3aed!important;outline-offset:2px;position:relative;z-index:2}</style>`
-  return document.includes('</head>') ? document.replace('</head>', `${style}</head>`) : `${style}${document}`
-}
-
 export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
-  const { nodes, connections, pages, updateNodeData, updateNodeSize, removeNode, moveSection, startConnection, completeConnection } = useSpaceStore()
+  // Só o que a seção desenha: assinar a store inteira redesenharia todas a cada passo do zoom
+  const { nodes, connections, pages } = useSpaceStore(useShallow((s) => ({ nodes: s.nodes, connections: s.connections, pages: s.pages })))
+  const { updateNodeData, updateNodeSize, removeNode, moveSection, startConnection, completeConnection } = useSpaceStore.getState()
   const editLevel = useSpaceStore((s) => s.editLevel)
   const selected = useSpaceStore((s) => s.selectedIds.includes(node.id))
   const motionDraft = useSpaceStore((s) => s.motionDraft)
   const motionReplay = useSpaceStore((s) => s.motionReplay)
-  const navigatorSelection = useSpaceStore((s) => s.navigatorSelection)
+  const selectedElementId = useSpaceStore((s) => (s.navigatorSelection?.sectionId === node.id ? s.navigatorSelection.elementId : undefined))
+  const hoveredElementId = useSpaceStore((s) => (s.hoveredElement?.sectionId === node.id ? s.hoveredElement.elementId : undefined))
+  const previewDevice = useSpaceStore((s) => s.previewDevice)
   const data = node.data as SectionNodeData
   const cardRef = useRef<HTMLDivElement>(null)
-  const hasElements = useMemo(() => !!parseSectionElements(data.elementorJson), [data.elementorJson])
+  const elements = useMemo(() => parseSectionElements(data.elementorJson), [data.elementorJson])
+  const hasElements = !!elements
   const [showJson, setShowJson] = useState(!hasElements)
+  // Na Estrutura o preview é o editor: seleção, arrasto, texto direto e alças
+  const editing = editLevel === 'structure'
+  const frameRef = useRef<HTMLIFrameElement | null>(null)
+  const [geometry, setGeometry] = useState<BridgeGeometry | null>(null)
+  const [dragIndicator, setDragIndicator] = useState<BridgeIndicator | null>(null)
+  const insertIndicator = useInsertDrag((s) => (s.drop?.sectionId === node.id ? s.drop.target.indicator : null))
 
   // Texto e paleta conectados entram no preview; a chave muda só quando eles mudam
   const transformKey = JSON.stringify(
@@ -54,12 +65,81 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
     const { nodes: all, connections: conns } = useSpaceStore.getState()
     const current = all.find((n) => n.id === node.id)
     if (!current) return null
-    const result = sectionLensDocument({ section: current, nodes: all, connections: conns, brand, site: siteKit, level: editLevel, draft, replay })
-    return navigatorSelection?.sectionId === node.id
-      ? { ...result, document: withNavigatorHighlight(result.document, navigatorSelection.elementId) }
-      : result
+    return sectionLensDocument({ section: current, nodes: all, connections: conns, brand, site: siteKit, level: editLevel, draft, replay })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node.id, data.elementorJson, data.title, data.levels, transformKey, brand, siteKit, editLevel, draft, replay, navigatorSelection])
+  }, [node.id, data.elementorJson, data.title, data.levels, data.pinned, transformKey, brand, siteKit, editLevel, draft, replay])
+
+  // O preview é a única fonte das caixas; fora da Estrutura (ou no JSON) não há o que desenhar
+  useEffect(() => {
+    if (editing && !showJson) return
+    setGeometry(null)
+    setDragIndicator(null)
+  }, [editing, showJson])
+
+  const mounted = !!rendered && !showJson
+  useEffect(() => {
+    const frame = frameRef.current
+    if (!editing || !mounted || !frame) return
+    return registerFrame(node.id, frame)
+  }, [editing, mounted, node.id])
+
+  // Mensagens da ponte do preview; o iframe também roda os widgets HTML da seção, então tudo é conferido
+  const handlePreviewEditor = useCallback((message: PreviewEditorMessage) => {
+    const text = (value: unknown) => (typeof value === 'string' ? value : '')
+    switch (message.type) {
+      case 'se-select':
+        selectElement(node.id, text(message.elementId) || null)
+        return
+      case 'se-geometry':
+        setGeometry(message.geometry ?? null)
+        return
+      case 'se-drag':
+        setDragIndicator(message.indicator ?? null)
+        return
+      case 'se-drop':
+        if (text(message.elementId) && Number.isInteger(message.index)) {
+          moveElementTo(node.id, message.elementId, { parentId: text(message.parentId) || null, index: message.index })
+        }
+        return
+      case 'se-hit-result':
+        resolveHit(message.token, message.target ?? null)
+        return
+      case 'se-inline-edit': {
+        const current = useSpaceStore.getState().nodes.find((candidate) => candidate.id === node.id)
+        if (!current || current.type !== 'section' || typeof message.value !== 'string') return
+        const json = (current.data as SectionNodeData).elementorJson
+        const element = findElement(parseSectionElements(json), message.elementId)
+        const expectedField = element?.widgetType === 'heading' ? 'title' : element?.widgetType === 'text-editor' ? 'editor' : element?.widgetType === 'button' ? 'text' : null
+        if (message.field !== expectedField) return
+        const next = updateElementContent(json, message.elementId, { field: message.field, value: message.value })
+        if (next && next !== json) updateNodeData(node.id, { elementorJson: next }, { merge: false })
+      }
+    }
+  }, [node.id, updateNodeData])
+
+  const selectedElement = useMemo(() => (selectedElementId ? findElement(elements, selectedElementId) : null), [elements, selectedElementId])
+  const labelOf = (id: string | undefined) => {
+    const element = id ? findElement(elements, id) : null
+    return element && id ? data.navigatorLabels?.[id] || layerKind(element) : ''
+  }
+  const selectedLabel = labelOf(geometry?.selected?.id)
+  const hoverLabel = labelOf(geometry?.hover?.id)
+  const indicator = dragIndicator ?? insertIndicator
+
+  const overlay = useCallback(
+    (scale: number) => (
+      <EditorOverlay
+        sectionId={node.id}
+        scale={scale}
+        geometry={geometry}
+        indicator={indicator}
+        element={selectedElement}
+        label={selectedLabel}
+        hoverLabel={hoverLabel}
+      />
+    ),
+    [node.id, geometry, indicator, selectedElement, selectedLabel, hoverLabel]
+  )
 
   const motionLabel = sectionMotionLabel(data.levels?.motion)
 
@@ -181,7 +261,7 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
           <SectionMenu sectionId={node.id} className={headerButton} />
           <button
             className={`${headerButton} ${showJson ? 'text-blue-500' : ''}`}
-            title={showJson ? 'Esconder JSON' : 'Editar JSON'}
+            title={showJson ? 'Voltar ao visual' : 'Ver código da seção'}
             onClick={() => setShowJson((v) => !v)}
           >
             <Code2 className="h-3.5 w-3.5" />
@@ -203,10 +283,25 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
           className="w-full text-xs font-medium text-gray-700 bg-transparent border-0 border-b border-gray-100 pb-1 focus:outline-none focus:border-blue-300 placeholder-gray-300"
         />
 
-        {/* Seção desenhada pelo motor em 1440px e reduzida; o iframe não recebe o mouse, para o nó continuar arrastável */}
-        {rendered && (
-          <div className="pointer-events-none">
-            <PreviewFrame html={rendered.document} viewport="desktop" showSize={false} />
+        {/* Seção desenhada pelo motor na largura da tela escolhida e reduzida. Na Estrutura o iframe
+            recebe o mouse para editar; nos outros níveis não, para o nó continuar arrastável */}
+        {rendered && !showJson && (
+          <div
+            data-section-preview={node.id}
+            className={editing ? undefined : 'pointer-events-none'}
+            onMouseDown={(event) => editing && event.stopPropagation()}
+          >
+            <PreviewFrame
+              html={rendered.document}
+              viewport={previewDevice}
+              showSize={false}
+              interactive={editing}
+              selectedElementId={selectedElementId}
+              hoveredElementId={hoveredElementId}
+              onEditorMessage={handlePreviewEditor}
+              frameRef={frameRef}
+              overlay={editing ? overlay : undefined}
+            />
           </div>
         )}
 
@@ -217,14 +312,20 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
         )}
 
         {showJson && (
-          <textarea
-            value={data.elementorJson}
-            onChange={(e) => updateNodeData(node.id, { elementorJson: e.target.value })}
-            onMouseDown={(e) => e.stopPropagation()}
-            placeholder='Cole o JSON do Elementor aqui...'
-            rows={4}
-            className="w-full text-[10px] font-mono text-gray-600 bg-gray-50 rounded-lg border border-gray-100 px-2 py-1.5 focus:outline-none focus:border-blue-300 resize-none placeholder-gray-300"
-          />
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-[#111318]" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-300">JSON da seção</span>
+              <span className="text-[10px] text-gray-500">Fonte nativa do Elementor</span>
+            </div>
+            <textarea
+              value={data.elementorJson}
+              onChange={(e) => updateNodeData(node.id, { elementorJson: e.target.value })}
+              placeholder='Cole o JSON do Elementor aqui...'
+              rows={16}
+              spellCheck={false}
+              className="block w-full resize-y bg-transparent px-3 py-3 font-mono text-[11px] leading-relaxed text-gray-300 outline-none placeholder:text-gray-600"
+            />
+          </div>
         )}
         {data.elementorJson && !hasElements && (
           <p className="text-[10px] text-red-400 font-medium">⚠ JSON inválido ou sem elementos do Elementor</p>

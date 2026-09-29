@@ -12,6 +12,9 @@ import { LibraryDragChip } from '@/features/space/pages/LibraryDragChip'
 import { copyLandingToElementor } from '@/features/space/exportLanding'
 import { WordPressImportDialog } from '@/features/wordpress/WordPressImportDialog'
 import { WordPressPageDialogs } from '@/features/wordpress/WordPressPageDialogs'
+import { InsertPanel } from '@/features/space/editor/InsertPanel'
+import { useEditorShortcuts } from '@/features/space/editor/useEditorShortcuts'
+import { useFrameGestureGuard } from '@/features/space/editor/frames'
 import { useSpaceStore } from '@/store/spaceStore'
 
 // Visualizar e Copiar da barra agem sobre a página ativa
@@ -24,19 +27,27 @@ const playActivePage = () => {
 /** Margem de cada painel lateral somada à largura dele. */
 const PANEL_GUTTER = 24
 
+/** Painel da esquerda: seções prontas da biblioteca ou elementos para criar. Um de cada vez. */
+type LeftPanel = 'library' | 'insert' | null
+
 const Space: React.FC = () => {
-  const [libraryOpen, setLibraryOpen] = useState(true)
+  const [leftPanel, setLeftPanel] = useState<LeftPanel>('library')
+  const libraryOpen = leftPanel !== null
+  const togglePanel = (panel: Exclude<LeftPanel, null>) => setLeftPanel((open) => (open === panel ? null : panel))
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [navigatorOpen, setNavigatorOpen] = useState(false)
   const editLevel = useSpaceStore((s) => s.editLevel)
+  const navigatorSelection = useSpaceStore((s) => s.navigatorSelection)
   useSectionShortcuts()
+  useEditorShortcuts()
+  useFrameGestureGuard()
 
   // Numa tela estreita a biblioteca e o painel do nível não cabem juntos com o canvas:
   // abrir um nível fecha a biblioteca, que o botão da barra abre de novo
   useEffect(() => {
     if (editLevel === 'structure') return
     const { width } = useSpaceStore.getState().viewport
-    if (width - LIBRARY_PANEL_WIDTH - LEVEL_PANEL_WIDTH - PANEL_GUTTER * 2 < MIN_FREE_WIDTH) setLibraryOpen(false)
+    if (width - LIBRARY_PANEL_WIDTH - LEVEL_PANEL_WIDTH - PANEL_GUTTER * 2 < MIN_FREE_WIDTH) setLeftPanel(null)
   }, [editLevel])
 
   // Navigator pertence a Estrutura. Outros níveis usam o mesmo lado direito para seus controles.
@@ -44,12 +55,17 @@ const Space: React.FC = () => {
     if (editLevel !== 'structure') setNavigatorOpen(false)
   }, [editLevel])
 
+  // Clicar num widget dentro do preview abre o inspetor correspondente.
+  useEffect(() => {
+    if (editLevel === 'structure' && navigatorSelection) setNavigatorOpen(true)
+  }, [editLevel, navigatorSelection])
+
   const toggleNavigator = () => {
     const opening = !navigatorOpen
     if (opening) {
       useSpaceStore.getState().setEditLevel('structure')
       const { width } = useSpaceStore.getState().viewport
-      if (width - LIBRARY_PANEL_WIDTH - NAVIGATOR_PANEL_WIDTH - PANEL_GUTTER * 2 < MIN_FREE_WIDTH) setLibraryOpen(false)
+      if (width - LIBRARY_PANEL_WIDTH - NAVIGATOR_PANEL_WIDTH - PANEL_GUTTER * 2 < MIN_FREE_WIDTH) setLeftPanel(null)
     }
     setNavigatorOpen(opening)
   }
@@ -57,15 +73,18 @@ const Space: React.FC = () => {
   return (
     <div className="relative w-full overflow-hidden" style={{ height: 'calc(100vh - 57px)' }}>
       <SpaceToolbar
-        libraryOpen={libraryOpen}
+        libraryOpen={leftPanel === 'library'}
+        insertOpen={leftPanel === 'insert'}
         navigatorOpen={navigatorOpen}
-        onToggleLibrary={() => setLibraryOpen((open) => !open)}
+        onToggleLibrary={() => togglePanel('library')}
+        onToggleInsert={() => togglePanel('insert')}
         onToggleNavigator={toggleNavigator}
         onPreview={playActivePage}
         onOpenTemplates={() => setTemplatesOpen(true)}
         onCopy={copyPage}
       />
-      {libraryOpen && <SpaceLibraryPanel onClose={() => setLibraryOpen(false)} />}
+      {leftPanel === 'library' && <SpaceLibraryPanel onClose={() => setLeftPanel(null)} />}
+      {leftPanel === 'insert' && <InsertPanel onClose={() => setLeftPanel(null)} />}
       <SpaceCanvas />
       <LevelPanel />
       {navigatorOpen && editLevel === 'structure' && <ElementorNavigatorPanel onClose={() => setNavigatorOpen(false)} />}

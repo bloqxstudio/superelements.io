@@ -1430,6 +1430,79 @@ export type Database = {
           },
         ]
       }
+      space_project_invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          label: string
+          project_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          label?: string
+          project_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          label?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "space_project_invites_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "space_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      space_project_members: {
+        Row: {
+          created_at: string
+          invited_by: string | null
+          project_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          invited_by?: string | null
+          project_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          invited_by?: string | null
+          project_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "space_project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "space_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       space_projects: {
         Row: {
           context: string
@@ -1758,7 +1831,9 @@ export type Database = {
       }
     }
     Functions: {
+      accept_space_invite: { Args: { p_id: string }; Returns: string }
       get_page_share: { Args: { p_id: string }; Returns: Json }
+      get_space_invite: { Args: { p_id: string }; Returns: Json }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -1793,6 +1868,15 @@ export type Database = {
           p_version: number
         }
         Returns: string
+      }
+      space_project_people: {
+        Args: { p_project: string }
+        Returns: {
+          email: string
+          joined_at: string
+          role: string
+          user_id: string
+        }[]
       }
     }
     Enums: {

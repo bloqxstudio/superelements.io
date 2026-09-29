@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import type { Brand } from '@/features/space/brand/designMd'
 import type { SpaceNode, SpacePage } from '@/types/space'
 import { revokeApplicationPassword } from '@/features/wordpress/connect'
+import { removePerson } from './access'
 import { forgetBrowserProject } from './browserDb'
 import { deleteProject, insertProject, listProjects, loadWordPressConnection, updateProject } from './storage'
 import type { Project, ProjectSummary } from './types'
@@ -20,8 +21,10 @@ interface ProjectState {
   load: (userId: string) => Promise<void>
   create: (fields: { name: string; context?: string }) => Promise<Project>
   update: (id: string, fields: Partial<Pick<Project, 'name' | 'context'>>) => Promise<void>
-  /** Apaga da conta o projeto, o canvas, a marca e a conexão com o WordPress (revogada no site). */
+  /** Apaga da conta o projeto, o canvas, a marca e a conexão com o WordPress (revogada no site). Só o dono. */
   remove: (id: string) => Promise<void>
+  /** Quem entrou por convite deixa o projeto; ele continua com o dono. */
+  leave: (id: string) => Promise<void>
   /** Chamado a cada mudança no canvas; `edited` diz se o conteúdo mudou. Só atualiza o card daqui. */
   saved: (id: string, summary: ProjectSummary, edited: boolean) => void
 }
@@ -91,6 +94,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     const now = Date.now()
     const project: Project = {
       id: crypto.randomUUID(),
+      role: 'owner',
       name: name.trim() || 'Projeto sem nome',
       context,
       createdAt: now,
@@ -135,6 +139,14 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     }
     // Sem esperar o site: se ele não responder, a conexão some daqui do mesmo jeito
     if (connection) revokeApplicationPassword(connection).catch((error) => console.error('[wordpress] falha ao revogar', error))
+    forgetBrowserProject(id).catch((error) => console.warn('[projetos] cópia do navegador não apagada', error))
+  },
+
+  leave: async (id) => {
+    const userId = get().userId
+    if (!userId) return
+    await removePerson(id, userId)
+    set({ projects: get().projects.filter((p) => p.id !== id) })
     forgetBrowserProject(id).catch((error) => console.warn('[projetos] cópia do navegador não apagada', error))
   },
 

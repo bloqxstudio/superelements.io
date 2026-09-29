@@ -32,6 +32,8 @@ export interface SectionNodeData {
   navigatorLabels?: Record<string, string>
   levels?: SectionLevels
   origin?: SectionOrigin
+  /** Settings ajustadas à mão no painel de propriedades, por id do elemento: valem por cima da marca. */
+  pinned?: Record<string, string[]>
 }
 
 /** Elemento aberto no Navigator. Vive só na sessão e não entra no JSON do projeto. */
@@ -39,6 +41,9 @@ export interface NavigatorSelection {
   sectionId: string
   elementId: string
 }
+
+/** Tamanho de tela em que o canvas desenha as seções e o painel grava os ajustes. */
+export type EditorDevice = 'desktop' | 'tablet' | 'mobile'
 
 export interface TextNodeData {
   content: string

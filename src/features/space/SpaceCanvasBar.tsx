@@ -1,15 +1,17 @@
 import React from 'react'
-import { AlignHorizontalSpaceAround, Minus, Plus, Scan, Trash2 } from 'lucide-react'
+import { AlignHorizontalSpaceAround, Minus, Monitor, Plus, Redo2, Scan, Smartphone, Tablet, Trash2, Undo2, type LucideIcon } from 'lucide-react'
 import { useSpaceStore } from '@/store/spaceStore'
 import { LIBRARY_PANEL_WIDTH } from './SpaceLibraryPanel'
 import { LEVEL_PANEL_WIDTH } from './levels/LevelPanel'
 import { NAVIGATOR_PANEL_WIDTH } from './navigator/ElementorNavigatorPanel'
 import { canvasBounds, plural } from './pages/pages'
 import { Hint, ToolButton, ToolDivider, ToolbarIsland } from './ToolbarIsland'
+import { MOD_KEY } from './pages/clipboard'
+import type { EditorDevice } from '@/types/space'
 
-// Mesmos limites do zoom pela roda do mouse no canvas
-const MIN_ZOOM = 0.2
-const MAX_ZOOM = 2.5
+// Limites do zoom pelos botões e pela roda do mouse no canvas
+export const MIN_ZOOM = 0.2
+export const MAX_ZOOM = 2.5
 const ZOOM_STEP = 1.25
 const EDGE = 12
 /** Altura ocupada pela barra de cima e por esta, somadas às margens. */
@@ -20,6 +22,12 @@ const FIT_PADDING = 32
 const COMPACT_FREE_WIDTH = 440
 /** Abaixo desta, nem a versão só com ícones cabe. */
 export const MIN_FREE_WIDTH = 280
+
+const DEVICES: { id: EditorDevice; label: string; hint: string; icon: LucideIcon }[] = [
+  { id: 'desktop', label: 'Desktop', hint: 'Seções em 1440px; os ajustes valem para todas as telas', icon: Monitor },
+  { id: 'tablet', label: 'Tablet', hint: 'Seções em 768px; os ajustes valem do tablet para baixo', icon: Tablet },
+  { id: 'mobile', label: 'Celular', hint: 'Seções em 375px; os ajustes valem só no celular', icon: Smartphone },
+]
 
 const clampZoom = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
 
@@ -35,7 +43,10 @@ export const SpaceCanvasBar: React.FC<SpaceCanvasBarProps> = ({ libraryOpen, nav
   const pageCount = useSpaceStore((s) => s.pages.length)
   const connectionCount = useSpaceStore((s) => s.connections.length)
   const levelPanelOpen = useSpaceStore((s) => s.editLevel !== 'structure')
-  const { setCanvasTransform, arrangePages, clearCanvas } = useSpaceStore.getState()
+  const canUndo = useSpaceStore((s) => s.past.length > 0)
+  const canRedo = useSpaceStore((s) => s.future.length > 0)
+  const device = useSpaceStore((s) => s.previewDevice)
+  const { setCanvasTransform, arrangePages, clearCanvas, undo, redo, setPreviewDevice } = useSpaceStore.getState()
 
   const canvasWidth = useSpaceStore((s) => s.viewport.width)
   const sectionCount = nodes.filter((n) => n.type === 'section').length
@@ -85,6 +96,32 @@ export const SpaceCanvasBar: React.FC<SpaceCanvasBarProps> = ({ libraryOpen, nav
 
   return (
     <ToolbarIsland aria-label="Canvas" className="absolute bottom-3 z-40 select-none" style={{ left: leftInset || EDGE }}>
+      <Hint label="Desfazer" hint={`${MOD_KEY}Z`} side="top">
+        <ToolButton icon={Undo2} label="Desfazer" showLabel={false} onClick={() => undo()} disabled={!canUndo} />
+      </Hint>
+      <Hint label="Refazer" hint={`${MOD_KEY}Shift+Z`} side="top">
+        <ToolButton icon={Redo2} label="Refazer" showLabel={false} onClick={() => redo()} disabled={!canRedo} />
+      </Hint>
+
+      <ToolDivider />
+
+      {/* A tela em que as seções aparecem é a que o painel de propriedades ajusta */}
+      <div role="group" aria-label="Tamanho de tela" className="flex items-center gap-0.5">
+        {DEVICES.map(({ id, label, hint, icon }) => (
+          <Hint key={id} label={label} hint={hint} side="top">
+            <ToolButton
+              icon={icon}
+              label={label}
+              showLabel={false}
+              pressed={device === id}
+              onClick={() => setPreviewDevice(id)}
+            />
+          </Hint>
+        ))}
+      </div>
+
+      <ToolDivider />
+
       <Hint label="Diminuir zoom" side="top">
         <ToolButton icon={Minus} label="Diminuir zoom" showLabel={false} onClick={() => zoomTo(zoom / ZOOM_STEP)} disabled={zoom <= MIN_ZOOM} />
       </Hint>

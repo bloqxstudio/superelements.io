@@ -21,6 +21,12 @@ const LOCAL_APP_ASSET = new RegExp(`https?://(?:localhost|127\\.0\\.0\\.1)(?::\\
  */
 export const rootRelativeAssets = (html: string) => html.replace(LOCAL_APP_ASSET, '')
 
+// Qualquer origem antes de uma pasta do app (local, túnel ou publicado)
+const ANY_APP_ASSET = new RegExp(`https?://[^/"'\\s)\\\\]+(?=/(?:${APP_FOLDERS.join('|')})/)`, 'g')
+
+/** Para comparar conteúdo salvo de endereços diferentes: as imagens do app ficam só com o caminho. */
+export const withoutAppOrigin = (text: string) => text.replace(ANY_APP_ASSET, '')
+
 /** O endereço de uma imagem do app com a origem de agora; qualquer outro fica como está. */
 export const currentAssetUrl = (url: string) => url.replace(LOCAL_APP_ASSET, window.location.origin)
 

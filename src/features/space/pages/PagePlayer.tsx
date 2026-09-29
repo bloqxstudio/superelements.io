@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Copy, Download, Link2, Monitor, RotateCcw, Smartphone, Tablet } from 'lucide-react'
+import { Columns3, Copy, Download, Link2, Monitor, RotateCcw, Smartphone, Tablet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { renderElementorDocument } from '@/engine/elementor'
@@ -17,10 +17,21 @@ import { pageSections, plural } from './pages'
 /** Altura da legenda abaixo da tela, fora da conta da escala. */
 const CAPTION_HEIGHT = 24
 
-const VIEWPORTS: { key: PreviewViewport; label: string; icon: React.ElementType }[] = [
+/** 'all': as três telas lado a lado, para comparar o responsivo. */
+type PlayerView = PreviewViewport | 'all'
+
+const VIEWPORTS: { key: PlayerView; label: string; icon: React.ElementType }[] = [
   { key: 'desktop', label: 'Desktop', icon: Monitor },
   { key: 'tablet', label: 'Tablet', icon: Tablet },
   { key: 'mobile', label: 'Mobile', icon: Smartphone },
+  { key: 'all', label: 'Lado a lado', icon: Columns3 },
+]
+
+/** Parte da largura de cada tela no lado a lado, perto da proporção entre elas. */
+const SIDE_BY_SIDE: { viewport: PreviewViewport; grow: number }[] = [
+  { viewport: 'desktop', grow: 5 },
+  { viewport: 'tablet', grow: 3 },
+  { viewport: 'mobile', grow: 2 },
 ]
 
 /**
@@ -84,7 +95,11 @@ export const PagePlayer: React.FC = () => {
   const closePlayer = useSpaceStore((s) => s.closePlayer)
   const brand = useActiveBrand()
   const siteKit = useSiteKit()
-  const [viewport, setViewport] = useState<PreviewViewport>('desktop')
+  const [viewport, setViewport] = useState<PlayerView>('desktop')
+  // Abre na tela que o canvas está mostrando
+  useEffect(() => {
+    if (pageId) setViewport(useSpaceStore.getState().previewDevice)
+  }, [pageId])
   const [replay, setReplay] = useState(0)
   const approvalOpen = useApprovalStore((s) => s.panelOpen)
   const approval = shareState(useApprovalStore((s) => (page ? s.shares[page.id] : undefined))).kind
@@ -183,8 +198,16 @@ export const PagePlayer: React.FC = () => {
         {approvalOpen && page && <ApprovalPanel pageId={page.id} pageName={page.name} html={html} />}
 
         <div className="flex min-h-0 flex-1 flex-col bg-muted/40 p-4">
-          {html ? (
-            <Screen html={html} viewport={viewport} replay={replay} />
+          {html && viewport === 'all' ? (
+            <div className="flex min-h-0 flex-1 gap-4">
+              {SIDE_BY_SIDE.map(({ viewport: device, grow }) => (
+                <div key={device} className="flex min-h-0 min-w-0 flex-col" style={{ flex: `${grow} 1 0` }}>
+                  <Screen html={html} viewport={device} replay={replay} />
+                </div>
+              ))}
+            </div>
+          ) : html ? (
+            <Screen html={html} viewport={viewport === 'all' ? 'desktop' : viewport} replay={replay} />
           ) : (
             <p className="py-16 text-center text-sm text-muted-foreground">
               A página {page?.name} ainda não tem seção com JSON válido.

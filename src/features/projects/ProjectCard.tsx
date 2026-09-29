@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { LogOut, MoreHorizontal, Pencil, Trash2, Users } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -95,10 +95,13 @@ const ProjectCover: React.FC<{ name: string; summary: ProjectSummary }> = ({ nam
 interface ProjectCardProps {
   project: Project
   onEdit: () => void
+  /** Dono: exclui o projeto. */
   onDelete: () => void
+  /** Quem entrou por convite: sai do projeto. */
+  onLeave: () => void
 }
 
-export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDelete }) => (
+export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDelete, onLeave }) => (
   <article
     className={cn(
       'group relative overflow-hidden rounded-xl transition-shadow duration-200',
@@ -110,7 +113,15 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDel
       to={`/projetos/${project.id}`}
       className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
-      <ProjectCover name={project.name} summary={project.summary} />
+      <div className="relative">
+        <ProjectCover name={project.name} summary={project.summary} />
+        {project.role === 'editor' && (
+          <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-gray-600 shadow-[0_0_0_1px_rgb(0_0_0/0.08)]">
+            <Users className="h-3 w-3" aria-hidden />
+            Compartilhado com você
+          </span>
+        )}
+      </div>
       <div className="px-4 py-3 pr-12">
         <h2 className="truncate text-sm font-semibold text-gray-900">{project.name}</h2>
         <p className="mt-0.5 truncate text-xs text-gray-500">
@@ -135,10 +146,17 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDel
           Editar detalhes
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onDelete} className="text-destructive focus:text-destructive">
-          <Trash2 className="mr-2 h-3.5 w-3.5" />
-          Excluir
-        </DropdownMenuItem>
+        {project.role === 'editor' ? (
+          <DropdownMenuItem onSelect={onLeave}>
+            <LogOut className="mr-2 h-3.5 w-3.5" />
+            Sair do projeto
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onSelect={onDelete} className="text-destructive focus:text-destructive">
+            <Trash2 className="mr-2 h-3.5 w-3.5" />
+            Excluir
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   </article>

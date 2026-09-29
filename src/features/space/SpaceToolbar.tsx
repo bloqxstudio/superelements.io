@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, CloudDownload, CloudUpload, Copy, Layers3, LayoutTemplate, Library, Palette, Play, Plus, Sparkles, Type, type LucideIcon } from 'lucide-react'
+import { Check, CloudDownload, CloudUpload, Copy, Layers3, LayoutTemplate, Library, Palette, Play, Plus, Sparkles, SquarePlus, Type, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -33,8 +33,11 @@ const ICON_SPRING = { type: 'spring', duration: 0.3, bounce: 0 } as const
 
 interface SpaceToolbarProps {
   libraryOpen: boolean
+  /** Painel Inserir aberto; ocupa o lugar da biblioteca. */
+  insertOpen: boolean
   navigatorOpen: boolean
   onToggleLibrary: () => void
+  onToggleInsert: () => void
   onToggleNavigator: () => void
   onPreview: () => void
   onOpenTemplates: () => void
@@ -45,7 +48,7 @@ interface SpaceToolbarProps {
  * Barra do Space em três ilhas, na ordem do trabalho: montar a página (esquerda),
  * aplicar a marca por camada (centro) e publicar (direita).
  */
-export const SpaceToolbar: React.FC<SpaceToolbarProps> = ({ libraryOpen, navigatorOpen, onToggleLibrary, onToggleNavigator, onPreview, onOpenTemplates, onCopy }) => {
+export const SpaceToolbar: React.FC<SpaceToolbarProps> = ({ libraryOpen, insertOpen, navigatorOpen, onToggleLibrary, onToggleInsert, onToggleNavigator, onPreview, onOpenTemplates, onCopy }) => {
   const addNode = useSpaceStore((s) => s.addNode)
   const canvasWidth = useSpaceStore((s) => s.viewport.width)
   // Visualizar e Copiar agem sobre a página ativa
@@ -82,11 +85,14 @@ export const SpaceToolbar: React.FC<SpaceToolbarProps> = ({ libraryOpen, navigat
     <div className="pointer-events-none absolute inset-x-3 top-3 z-50 grid select-none grid-cols-[1fr_auto_1fr] items-start gap-2">
       {/* Montar: de onde vêm as seções */}
       <ToolbarIsland aria-label="Montar a página" className="justify-self-start">
-        <PagePicker leftInset={libraryOpen ? LIBRARY_PANEL_WIDTH + 24 : 0} compact={tight} />
+        <PagePicker leftInset={libraryOpen || insertOpen ? LIBRARY_PANEL_WIDTH + 24 : 0} compact={tight} />
         <Hint label="Navigator" hint="Ver a árvore nativa de containers e widgets">
           <ToolButton icon={Layers3} label="Navigator" showLabel={!tight} pressed={navigatorOpen} onClick={onToggleNavigator} />
         </Hint>
         <ToolDivider />
+        <Hint label="Inserir" hint="Stacks, títulos, textos, botões e imagens para criar nas seções">
+          <ToolButton icon={SquarePlus} label="Inserir" showLabel={!tight} pressed={insertOpen} onClick={onToggleInsert} />
+        </Hint>
         <Hint label="Biblioteca de seções" hint="Seções do pack, por tipo">
           <ToolButton icon={Library} label="Biblioteca" showLabel={!tight} pressed={libraryOpen} onClick={onToggleLibrary} />
         </Hint>

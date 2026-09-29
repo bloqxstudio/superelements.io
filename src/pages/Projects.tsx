@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CircleAlert, CloudUpload, FolderPlus, Plus } from 'lucide-react'
 import { toast } from 'sonner'
@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ProjectCard } from '@/features/projects/ProjectCard'
 import { ProjectDialog } from '@/features/projects/ProjectDialog'
 import { browserProjects, moveBrowserProjects } from '@/features/projects/browserImport'
+import { pendingInvite } from '@/features/projects/access'
 import { reloadProjects, useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import type { Project } from '@/features/projects/types'
 
@@ -57,10 +58,17 @@ const Projects: React.FC = () => {
   const navigate = useNavigate()
   // Voltar à lista relê da conta: outro aparelho pode ter mudado
   const status = useProjectList({ refresh: true })
-  const { projects, create, update, remove } = useProjectStore()
+  const { projects, create, update, remove, leave } = useProjectStore()
   // Sem projeto, o diálogo cria um novo; o projeto fica enquanto o diálogo fecha
   const [dialog, setDialog] = useState<{ open: boolean; project?: Project }>({ open: false })
   const [deleting, setDeleting] = useState<Project | null>(null)
+  const [leaving, setLeaving] = useState<Project | null>(null)
+
+  // Entrou (ou criou a conta) pelo link de um convite: volta para ele
+  useEffect(() => {
+    const invite = pendingInvite()
+    if (invite) navigate(`/convite/${invite}`, { replace: true })
+  }, [navigate])
 
   const sorted = useMemo(() => [...projects].sort((a, b) => b.updatedAt - a.updatedAt), [projects])
   const ready = status === 'ready'
@@ -90,6 +98,19 @@ const Projects: React.FC = () => {
     } catch (error) {
       console.error('[projetos] falha ao excluir', error)
       toast.error(`Não foi possível excluir ${name}`, { description: 'Confira a internet e tente de novo.' })
+    }
+  }
+
+  const confirmLeave = async () => {
+    if (!leaving) return
+    const { id, name } = leaving
+    setLeaving(null)
+    try {
+      await leave(id)
+      toast.success(`Você saiu de ${name}`)
+    } catch (error) {
+      console.error('[projetos] falha ao sair', error)
+      toast.error(`Não foi possível sair de ${name}`, { description: 'Confira a internet e tente de novo.' })
     }
   }
 
@@ -136,6 +157,7 @@ const Projects: React.FC = () => {
                 project={project}
                 onEdit={() => setDialog({ open: true, project })}
                 onDelete={() => setDeleting(project)}
+                onLeave={() => setLeaving(project)}
               />
             ))}
           </div>
@@ -170,7 +192,7 @@ const Projects: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Excluir {deleting?.name}?</DialogTitle>
             <DialogDescription>
-              O canvas, a marca, o contexto e a conexão com o WordPress deste projeto são apagados da sua conta. Não dá para desfazer.
+              O canvas, a marca, o contexto e a conexão com o WordPress deste projeto são apagados da sua conta, e quem você convidou perde o acesso. Não dá para desfazer.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -179,6 +201,25 @@ const Projects: React.FC = () => {
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
               Excluir projeto
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!leaving} onOpenChange={(open) => !open && setLeaving(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Sair de {leaving?.name}?</DialogTitle>
+            <DialogDescription>
+              O projeto continua com quem te convidou; você só deixa de ver e editar. Para voltar, precisa de um convite novo.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setLeaving(null)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={confirmLeave}>
+              Sair do projeto
             </Button>
           </DialogFooter>
         </DialogContent>
