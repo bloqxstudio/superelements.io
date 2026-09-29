@@ -4,6 +4,25 @@
 
 This repository contains multiple explicit brand scopes. Do not blend them.
 
+### MSA — Marketing sem Agência model
+
+Scope: `/msa-style-guide`, `/msa-elementor-preview`, `src/features/msa/**`, `src/features/space/msaTemplate.ts`, `brands/marketing-sem-agencia/**`, `public/brands/marketing-sem-agencia/**` and `migrations/msa/**`.
+
+- Source: `https://marketingsemagencia.com.br/`; public founder context: `https://www.instagram.com/hzanotti/`. The public spelling is **Henrique Zanotti**; the user-written “Zanote” remains an explicit confirmation item.
+- Sources of truth: `brands/marketing-sem-agencia/DESIGN.md` and `brands/marketing-sem-agencia/COPY.md`. Keep facts, brand claims, interpretations and open evidence gaps distinct.
+- Fonts: local Syne for display and Urbanist for body/UI. Install through Elementor Custom Fonts or stable licensed URLs for WordPress portability.
+- Core colors: paper `#F3EFE4`, ink `#2F2317`, muted `#61695B`, sage `#BED499`, soft `#E6E1D2` and white.
+- Content is 1180px inside 32/24/20px gutters; section rhythm is 112/84/64px. Buttons are nearly square at 2px. Avoid generic gradients, glassmorphism and large shadows.
+- Complex content goes in cards (the user asked for them): 2px radius, 1px structural border, no shadow. Tones `msa-card-light` (paper on soft), `msa-card-ink`, `msa-card-dark` (translucent on ink) and `msa-card-sage` for the one destination card. Lists inside cards use `msa-list-check` (sage square with a check) or `msa-list-dash`. Comparisons sit side by side and read top-down; never stack from the bottom up.
+- The brand grammar is architectural: foundation, layers, rules, numbered stages and hand-off. Lines are straight; avoid orbital decoration and generic dashboards.
+- Lead with positive internal capability. The enemy is dependency and improvisation, not every agency. “Marketing construtivo” is a working category until Henrique approves its definition.
+- Do not present the award, Head-of-the-Year title, record revenue, agency-attention percentages or client results as verified facts until documentary evidence is supplied.
+- The transported portrait is a working local asset from the current public site. Final publication still needs confirmation of rights and the original supplied by Henrique.
+- Templates are native Elementor trees. Content stays in native widgets; motion is progressive enhancement behind `prefers-reduced-motion`, and focus-visible states remain explicit.
+- Motion is subtle, by the user's decision (a pinned scaffold story, a bottom-up comparison and a counter preloader were tried and rejected as complex): one behavior-only HTML widget, the first child of the hero, loads GSAP and ScrollTrigger from jsDelivr (`src/features/msa/story.ts`). Preloader: ink panel, MSA and a sage line filling, then the panel lifts. Hero items rise 14px and fade in; blocks marked `.msa-rise` rise 18px once as they enter, in batches; the footer wordmark drifts up slowly. No pins, no scrubbed stories, no word-by-word fills.
+- The CSS alone is always the final composition; the script only arms `msa-pending`, `msa-loading` and the hidden reveal states. Reduced motion, no GSAP, the static preview, the Elementor editor (`elementor-editor-active`) and the Space canvas thumbnails run nothing (no preloader). Never put Elementor entrance animations on anything GSAP moves: their `fill-mode: both` overrides the transforms.
+- Only the hero has a texture: a faint static planning grid. No diagonal lines (the user disliked them in the footer). The footer is structured (brand, navigation, contact, CTA) over a large MSA wordmark at 8% opacity; keep all footer text and links native.
+
 ### Menuzito model
 
 Scope: `/menuzito-modelo`, `/menuzito-style-guide`, `src/features/menuzito/**`, and `public/menuzito/**`.

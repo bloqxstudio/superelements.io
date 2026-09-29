@@ -10,6 +10,7 @@ import { createInpelTemplates } from './inpelTemplate'
 import { createPetshopTemplate } from './petshopTemplate'
 import { createJuniorTemplate } from './juniorTemplate'
 import { createLeoSchererTemplates } from './leoschererTemplate'
+import { createMsaTemplate } from './msaTemplate'
 
 type JsonRecord = Record<string, unknown>
 type ElementorNode = JsonRecord & { id: string; elType: 'container' | 'widget'; settings: JsonRecord; elements: ElementorNode[]; widgetType?: string }
@@ -440,6 +441,7 @@ const makeCourseFinalCta = (): SectionNodeData => {
 }
 
 export const createLandingTemplates = (): LandingTemplate[] => [
+  createMsaTemplate(),
   ...createLeoSchererTemplates(),
   createJuniorTemplate(),
   createPetshopTemplate(),

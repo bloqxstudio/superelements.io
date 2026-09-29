@@ -1,0 +1,114 @@
+{
+  "brand": {
+    "name": "MSA — Marketing sem Agência",
+    "website": "https://marketingsemagencia.com.br/",
+    "tagline": "Marketing não se aluga, se constrói.",
+    "analyzed_date": "2026-09-29"
+  },
+  "visual": {
+    "colors": {
+      "paper": "#F3EFE4",
+      "ink": "#2F2317",
+      "muted": "#61695B",
+      "accent": "#BED499",
+      "soft": "#E6E1D2"
+    },
+    "typography": {
+      "headings": "Syne 700–800",
+      "body": "Urbanist 300–600",
+      "style": "Editorial, architectural and operational"
+    },
+    "logo": {
+      "description": "Typographic MSA wordmark with a tracked Marketing sem Agência descriptor",
+      "usage": "Ink on paper or paper on ink"
+    },
+    "imagery_style": {
+      "type": "Founder-led photography",
+      "mood": "Direct, composed and credible",
+      "subjects": "Henrique in portrait, work and speaking contexts",
+      "treatment": "Neutral light, restrained color, no generic office imagery"
+    }
+  },
+  "voice": {
+    "tone": ["Direct", "Pragmatic", "Contrarian", "Responsible"],
+    "personality": "An operator who builds capability and transfers it to the client",
+    "formality": "Professional and conversational",
+    "style_notes": [
+      "Short sentences and clear contrasts",
+      "Concrete operational language",
+      "Founder warmth without motivational-guru excess",
+      "Evidence before superlatives"
+    ],
+    "example_headlines": [
+      "Marketing não se aluga, se constrói.",
+      "Não é curso. Não é agência.",
+      "Eu saio. A máquina fica."
+    ],
+    "words_to_use": ["Construir", "Dentro", "Estrutura", "Operação", "Processo", "Autonomia", "Resultado"],
+    "words_to_avoid": ["Fórmula", "Milagre", "Garantido", "Hack", "Escala infinita"]
+  },
+  "products": {
+    "category": "Marketing operating-model implementation",
+    "offerings": [
+      {
+        "name": "Implantação MSA",
+        "description": "Six-month implementation of an internal marketing operation followed by three months of follow-up",
+        "key_features": [
+          "Diagnosis and direction",
+          "Organization and hiring support",
+          "Onboarding, tools and documentation",
+          "Management rituals and monitoring",
+          "Governance hand-off"
+        ]
+      }
+    ],
+    "usps": [
+      "Builds internal capability instead of permanent task outsourcing",
+      "Connects marketing and commercial operations",
+      "Ends with documented processes and a prepared internal team"
+    ],
+    "pricing_model": "Application and diagnosis before proposal; public price not available",
+    "value_proposition": "Transform outsourced and fragmented marketing into a capability owned by the company"
+  },
+  "audience": {
+    "primary": {
+      "who": "Owners, partners and directors of companies with an Inside Sales motion",
+      "demographics": "Not publicly specified",
+      "psychographics": "Wants control, accumulated knowledge and predictable operating routines"
+    },
+    "secondary": {
+      "who": "Marketing and commercial managers tasked with building or reorganizing an internal team",
+      "demographics": "Not publicly specified"
+    },
+    "pain_points": [
+      "Dependence on external suppliers",
+      "Knowledge and history leaving the company",
+      "Marketing and sales operating separately",
+      "Hiring without a clear operating model"
+    ],
+    "aspirations": [
+      "Own the marketing capability",
+      "Align marketing and sales",
+      "Build a team that can operate with documented routines",
+      "Reduce continuous dependency on Henrique or an agency"
+    ]
+  },
+  "positioning": {
+    "market": "Marketing consultancy, internal capability building and fractional leadership",
+    "competitors": ["Agencies", "Marketing consultancies", "Mentorships", "Fractional CMOs", "AI marketing platforms", "DIY internal teams"],
+    "differentiation": "Implementation with a planned transfer of capability and governance",
+    "market_position": "Founder-led, selective and operationally rigorous",
+    "competitive_advantages": [
+      "Clear end state of internal ownership",
+      "Three-stage implementation narrative",
+      "Founder experience in marketing and commercial operations"
+    ]
+  },
+  "evidence_gaps": [
+    "Official award record",
+    "Publishable named cases and metrics",
+    "Original photo licensing",
+    "Formal definition of marketing construtivo",
+    "Production form destination and privacy policy"
+  ]
+}

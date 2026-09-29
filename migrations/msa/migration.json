@@ -1,0 +1,81 @@
+{
+  "brand": "MSA — Marketing sem Agência",
+  "slug": "msa",
+  "sourceUrl": "https://marketingsemagencia.com.br/",
+  "researchUrls": [
+    "https://www.instagram.com/hzanotti/",
+    "https://msaforms.netlify.app/",
+    "https://br.linkedin.com/in/henrique-zanotti-765076123"
+  ],
+  "phase": {
+    "active": 4,
+    "label": "homepage-v3-motion-awaiting-review",
+    "doing": null,
+    "done": [
+      "source survey",
+      "evidence classification",
+      "asset inventory",
+      "local working portrait and Latin font extraction",
+      "brand foundation and style guide",
+      "four-section native Elementor first slice",
+      "desktop and 390px responsive preview validation",
+      "lint and production build",
+      "homepage V2 with nine native sections",
+      "staged native entrance motion for the MSA system",
+      "desktop, 1024px, 768px and 390px browser validation",
+      "GSAP ScrollTrigger parallax and pinned system assembly",
+      "full-viewport parallax footer with translucent MSA mark",
+      "architectural background textures across all sections",
+      "desktop motion and mobile no-pin fallback validation"
+    ],
+    "notDone": [
+      "stakeholder approval of homepage V3 Motion",
+      "production qualification form and privacy flow",
+      "Elementor export and publication"
+    ]
+  },
+  "templates": [
+    {
+      "id": "msa-home",
+      "family": "marketing-homepage",
+      "source": "https://marketingsemagencia.com.br/",
+      "target": "/msa-elementor-preview",
+      "status": "homepage-v3-motion-validated"
+    },
+    {
+      "id": "msa-qualification",
+      "family": "qualification-form",
+      "source": "https://msaforms.netlify.app/",
+      "target": null,
+      "status": "external-not-migrated"
+    }
+  ],
+  "breakpoints": [900, 640],
+  "needsYou": [
+    {
+      "id": "surname",
+      "question": "Confirm whether the public spelling Henrique Zanotti is correct.",
+      "recommendation": "Use Zanotti because the supplied Instagram and public LinkedIn consistently do."
+    },
+    {
+      "id": "photos",
+      "question": "Provide original high-resolution photos and permission for site use.",
+      "recommendation": "Use the current public portrait only as a temporary research reference."
+    },
+    {
+      "id": "proof",
+      "question": "Provide official award evidence and publishable case documentation.",
+      "recommendation": "Keep unsupported awards and performance claims out of the first headline."
+    },
+    {
+      "id": "formDestination",
+      "question": "Choose the production destination and privacy flow for applications.",
+      "recommendation": "Use one form experience, submit by POST and keep personal data out of URLs."
+    },
+    {
+      "id": "programDuration",
+      "question": "Confirm whether the market-facing duration is six or nine months.",
+      "recommendation": "Say six months of implementation plus three months of follow-up."
+    }
+  ]
+}
