@@ -72,6 +72,7 @@ The posts support a persona that is candid about imperfection, insistent on conc
   - Dependência card list: “Estratégia dispersa entre fornecedores e campanhas”, “Pessoas sem uma rotina de gestão compartilhada”, “O que foi aprendido sai junto com cada entrega”.
   - Capacidade card list: “Papéis claros dentro do time”, “Critérios e documentação próprios”, “Leitura de resultado dentro da operação”.
   - Footer: “Marketing que fica dentro da empresa: direção, time e gestão que continuam depois da consultoria.” and “© 2026 Marketing Sem Agência” (confirm the legal name).
+- Henrique spec card (from sources above): “Estratégia, liderança de equipes e operações de marketing e vendas.” (public trajectory) and “Construo operações próprias de marketing.” (public Instagram bio). Comparison tags: “Sem a MSA” / “Com a MSA”.
 - Lines from the first V4 pass that left the page with its design: “O andaime sai. A estrutura fica.”, “Cada ciclo soma ao anterior.”, “Ao fim de cada ciclo, recomeça.” and the preloader tagline.
 
 ## Open items

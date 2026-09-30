@@ -82,9 +82,8 @@ Lines should be straight. Motion can reveal, align or fill blocks; it should nev
 
 ## 6. Imagery
 
-- Current authorized status: the portrait was extracted from the public site bundle and is suitable for a local working draft.
-- Final publication still needs confirmation of rights and the original supplied by Henrique.
-- Use portraits with neutral environments, direct eye contact and visible working context. Stage and microphone images can support authority only after original files and permission are supplied.
+- Working set (2026-09-29): the seated studio portrait from the public site bundle and three stage photos supplied by the user (green-lit stage, microphone at the Bazze 2025 event, walkway with his name on the screen). Final publication still needs Henrique's confirmation of rights and, ideally, the originals (the walkway photo is only 640px wide).
+- Mix the studio portrait with the stage photos: the studio frame shows the operator, the stage frames show authority in context. No captions on photos.
 - Avoid generic teams around laptops, fake dashboards and AI-generated office scenes.
 
 ## 7. Motion

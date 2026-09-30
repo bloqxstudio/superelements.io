@@ -22,17 +22,17 @@ What V4 is now, section by section (`src/features/space/msaTemplate.ts`, motion 
 
 1. Preloader inside the hero: ink panel, MSA and a sage line filling, then the panel lifts.
 2. Hero: full-width headline; the System MSA card read top-down (01 Direção to 04 Autonomia in sage).
-3. O que muda: two cards side by side, Dependência (paper, dash list) × Capacidade (ink, check list).
+3. O que muda: two cards side by side, tagged "SEM A MSA" (Dependência, paper, dash list) and "COM A MSA" (Capacidade, ink, check list).
 4. Método: four stage cards; each has four ticks at the top and lights its own; Autonomia is the sage card.
 5. Programa: three phase cards sized by months (2/4/3), then six deliverable cards.
-6. Henrique: portrait and the quote "Eu saio. A máquina fica."
+6. Henrique: espresso editorial with a giant "HENRIQUE / ZANOTTI" (the surname as a filled ghost), four photos in two offset columns that drift in opposite directions, frames opening once, and the quote, bio and spec card sticky beside them. Photos: the site portrait plus three stage photos supplied by the user.
 7. Para quem faz sentido: three criterion cards with a sage check.
 8. FAQ: native nested accordion with a drawn plus/minus and CSS-counter numbers.
 9. Próximo passo: one ink card with the CTA and three step cards. Footer: brand, navigation, contact and CTA over an 8% MSA wordmark; no diagonal lines.
 
 Motion: hero items and `.msa-rise` blocks rise and fade in once; only the footer wordmark moves with the scroll. No pins.
 
-Native tree: 9 sections, 1 behavior-only HTML widget (first child of the hero), 1 nested accordion, 98 headings, 39 text widgets, 5 buttons, 1 local image. Engine report: 0 unsupported widgets, 0 warnings. Checked at 1440, 1024 and 390px, with reduced motion, without JavaScript, reloading mid-page and in the real `/msa-elementor-preview` route in both modes.
+Native tree: 9 sections, 1 behavior-only HTML widget (first child of the hero), 1 nested accordion, 99 headings, 41 text widgets, 5 buttons, 4 local images. Engine report: 0 unsupported widgets, 0 warnings. Checked at 1440, 1024 and 390px, with reduced motion, without JavaScript, reloading mid-page and in the real `/msa-elementor-preview` route in both modes.
 
 ## Homepage V3 Motion validation (superseded)
 
