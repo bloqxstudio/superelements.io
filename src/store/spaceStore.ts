@@ -114,6 +114,12 @@ interface SpaceActions {
    * recomeça, para não desfazer o trabalho do outro.
    */
   syncCanvas: (canvas: SpaceCanvas) => void
+  /**
+   * Troca nós, páginas e conexões de uma vez, como um passo só do desfazer.
+   * Para mudanças montadas fora do canvas (a ponte do Claude); as seções das
+   * páginas voltam para os lugares da coluna.
+   */
+  commitCanvas: (next: Partial<CanvasSnapshot>) => void
   addNode: (type: NodeType, x: number, y: number) => void
   /** Adiciona uma seção no fim da página ativa (ou da indicada) e leva o canvas até ela. */
   addSection: (data: SectionNodeData, options?: InsertOptions) => string
@@ -458,6 +464,22 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           },
           false,
           'syncCanvas'
+        )
+      },
+
+      commitCanvas: (next) => {
+        const { nodes, pages, connections } = { ...get(), ...next }
+        track()
+        set(
+          (state) => ({
+            pages,
+            connections,
+            nodes: layoutPages(pages, nodes, connections),
+            ...validSelection(nodes),
+            activePageId: pages.some((p) => p.id === state.activePageId) ? state.activePageId : pages[0]?.id ?? null,
+          }),
+          false,
+          'commitCanvas'
         )
       },
 

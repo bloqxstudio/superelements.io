@@ -18,6 +18,7 @@ import { EditorOverlay } from '@/features/space/editor/EditorOverlay'
 import { moveElementTo, selectElement } from '@/features/space/editor/actions'
 import { registerFrame, resolveHit } from '@/features/space/editor/frames'
 import { useInsertDrag } from '@/features/space/editor/insertDrag'
+import { useClaudeBridge } from '@/features/space/bridge/bridgeStore'
 import type { SpaceNode, SectionNodeData } from '@/types/space'
 
 interface SectionNodeProps {
@@ -35,6 +36,20 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   const selectedElementId = useSpaceStore((s) => (s.navigatorSelection?.sectionId === node.id ? s.navigatorSelection.elementId : undefined))
   const hoveredElementId = useSpaceStore((s) => (s.hoveredElement?.sectionId === node.id ? s.hoveredElement.elementId : undefined))
   const previewDevice = useSpaceStore((s) => s.previewDevice)
+  // Última mudança do agente (Claude ou Codex) pela ponte do dev: a seção fica marcada até a próxima
+  const touchedBy = useClaudeBridge((s) => s.touched[node.id])
+  const agent = useClaudeBridge((s) => s.touchedBy)
+  // O agente mexendo aqui agora, a seção ainda em esqueleto, e a revelação quando ele grava
+  const working = useClaudeBridge((s) => s.working[node.id])
+  const pending = useClaudeBridge((s) => !!s.pending[node.id])
+  const reveals = useClaudeBridge((s) => s.reveals[node.id] ?? 0)
+  const [revealing, setRevealing] = useState(false)
+  useEffect(() => {
+    if (!reveals) return
+    setRevealing(true)
+    const timer = setTimeout(() => setRevealing(false), 1000)
+    return () => clearTimeout(timer)
+  }, [reveals])
   const data = node.data as SectionNodeData
   const cardRef = useRef<HTMLDivElement>(null)
   const elements = useMemo(() => parseSectionElements(data.elementorJson), [data.elementorJson])
@@ -216,7 +231,7 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
         zIndex: dragging || settling ? 10 : undefined,
         opacity: dragging ? 0.94 : undefined,
       }}
-      className={`rounded-xl border bg-white transition-shadow ${dragging ? 'shadow-2xl' : 'shadow-md'} ${selected ? 'border-violet-500 ring-2 ring-violet-500/70 ring-offset-2 ring-offset-[#f4f4f5]' : 'border-gray-200'}`}
+      className={`rounded-xl border bg-white transition-shadow ${dragging ? 'shadow-2xl' : 'shadow-md'} ${selected ? 'border-violet-500 ring-2 ring-violet-500/70 ring-offset-2 ring-offset-[#f4f4f5]' : touchedBy ? 'border-[#D97757] ring-2 ring-[#D97757]/40 ring-offset-2 ring-offset-[#f4f4f5]' : 'border-gray-200'}`}
     >
       {dragging && (lift?.copy || lift?.loose) && (
         <span className="pointer-events-none absolute -top-3 left-3 z-20 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
@@ -240,6 +255,11 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
           </span>
           {data.sourceId && (
             <span className="rounded bg-gray-200/70 px-1.5 py-0.5 font-mono text-[10px] text-gray-500">{data.sourceId}</span>
+          )}
+          {touchedBy && (
+            <span className="rounded bg-[#D97757]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#A94E2F]" title={`Última mudança do ${agent}; Ctrl+Z desfaz`}>
+              {agent} {touchedBy === 'created' ? 'criou' : 'mudou'}
+            </span>
           )}
           {motionLabel && (
             <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700" title="Movimento escolhido no nível Movimento">
@@ -288,20 +308,32 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
         {rendered && !showJson && (
           <div
             data-section-preview={node.id}
-            className={editing ? undefined : 'pointer-events-none'}
+            className={editing ? 'relative' : 'relative pointer-events-none'}
             onMouseDown={(event) => editing && event.stopPropagation()}
           >
-            <PreviewFrame
-              html={rendered.document}
-              viewport={previewDevice}
-              showSize={false}
-              interactive={editing}
-              selectedElementId={selectedElementId}
-              hoveredElementId={hoveredElementId}
-              onEditorMessage={handlePreviewEditor}
-              frameRef={frameRef}
-              overlay={editing ? overlay : undefined}
-            />
+            <div className={pending ? 'se-agent-pending' : working ? 'se-agent-working' : revealing ? 'se-agent-reveal' : undefined}>
+              <PreviewFrame
+                html={rendered.document}
+                viewport={previewDevice}
+                showSize={false}
+                interactive={editing}
+                selectedElementId={selectedElementId}
+                hoveredElementId={hoveredElementId}
+                onEditorMessage={handlePreviewEditor}
+                frameRef={frameRef}
+                overlay={editing ? overlay : undefined}
+              />
+            </div>
+            {(pending || working) && (
+              <>
+                <div aria-hidden className="se-agent-scan" />
+                <span className="pointer-events-none absolute left-1/2 top-1/2 z-10 inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-medium text-gray-800 shadow-sm">
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#D97757] motion-safe:animate-pulse" />
+                  {working ? `${working.agent}: ${working.text}` : 'Na fila para construir'}
+                  <span aria-hidden className="se-agent-dots" />
+                </span>
+              </>
+            )}
           </div>
         )}
 

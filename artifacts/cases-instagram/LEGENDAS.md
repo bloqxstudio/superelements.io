@@ -52,6 +52,30 @@ Texto: Uma marca forte merece um site à altura. Veja como a identidade da Júni
 
 Título: Um site com personalidade
 
+## MSA · Marketing sem Agência
+
+### Legenda para o Feed
+
+Do método ao site.
+
+A MSA ajuda empresas a construir o marketing por dentro. O site segue a mesma lógica: fundação, camadas e etapas numeradas, com o conteúdo organizado em cards que se leem de cima para baixo. Papel, espresso e sálvia, Syne nos títulos, e um movimento discreto que acompanha a leitura sem chamar atenção.
+
+Quer um site com a clareza do seu método? Me chama no Direct.
+
+### Anúncio — variação A
+
+Texto: Um método claro merece um site claro. No case MSA, cada seção mostra uma etapa, do diagnóstico ao próximo passo. Vamos criar o site do seu negócio?
+
+Título: Do método ao site
+
+CTA sugerido no anúncio: Enviar mensagem
+
+### Anúncio — variação B
+
+Texto: Menos efeito, mais estrutura. Veja como a identidade da MSA vira página: cards, etapas numeradas e movimento discreto. Fale comigo no Direct.
+
+Título: Um site com estrutura
+
 ## Uso
 
 - Feed: PNG em 1080 × 1350 (4:5); vídeo com a mesma composição.

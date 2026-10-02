@@ -32,6 +32,7 @@ import LeoSchererStyleGuide from "@/pages/LeoSchererStyleGuide";
 import LeoSchererRedesign from "@/pages/LeoSchererRedesign";
 import MsaStyleGuide from "@/pages/MsaStyleGuide";
 import { createMsaTemplate } from "@/features/space/msaTemplate";
+import SuperElementsLanding from "@/pages/SuperElementsLanding";
 
 function App() {
   return (
@@ -68,6 +69,7 @@ function App() {
               <Route path="/leoscherer-redesign-proposta" element={<LeoSchererRedesign proposal />} />
               <Route path="/msa-style-guide" element={<MsaStyleGuide />} />
               <Route path="/msa-elementor-preview" element={<ProcessBaseTemplatePreview create={createMsaTemplate} label="MSA · Homepage V4 · Elementor nativo" />} />
+              <Route path="/superelements" element={<SuperElementsLanding />} />
 
               {/* Projetos (um por cliente); cada um abre o seu Space */}
               <Route

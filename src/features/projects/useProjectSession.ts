@@ -37,6 +37,8 @@ interface SyncState {
   savedAt?: number
   /** O canvas acabou de receber mudanças de outra pessoa ou aba ("Com as mudanças de Rafael"). */
   note?: string
+  /** Projeto com o conteúdo da conta já no canvas (a ponte do Claude só mexe nele). */
+  openId?: string
 }
 
 /** Em que pé está o salvamento do projeto aberto, para o header. */
@@ -531,6 +533,7 @@ export const useProjectSession = (projectId: string | undefined) => {
       window.addEventListener('online', onOnline)
       document.addEventListener('visibilitychange', onHidden)
       setSession({ id: projectId, state: 'ready' })
+      useProjectSync.setState({ openId: projectId })
 
       if (resume) {
         version++
@@ -552,6 +555,7 @@ export const useProjectSession = (projectId: string | undefined) => {
 
     return () => {
       active = false
+      if (useProjectSync.getState().openId === projectId) useProjectSync.setState({ openId: undefined })
       unsubscribers.forEach((unsubscribe) => unsubscribe())
       window.removeEventListener('pagehide', leave)
       window.removeEventListener('online', onOnline)

@@ -108,3 +108,81 @@
 .se-frames-frozen iframe {
   pointer-events: none !important;
 }
+
+/*
+ * Agente (Claude ou Codex) trabalhando no canvas, pela ponte do dev:
+ * esqueleto borrado do plano, varredura onde ele está mexendo e a seção
+ * saindo do borrado quando ele grava. Sem movimento, fica só o borrado.
+ */
+.se-agent-pending,
+.se-agent-working {
+  transition: filter 500ms ease, opacity 500ms ease;
+}
+.se-agent-pending {
+  filter: blur(6px) saturate(0.5);
+  opacity: 0.7;
+}
+.se-agent-working {
+  filter: blur(1.5px);
+}
+.se-agent-reveal {
+  animation: se-agent-reveal 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes se-agent-reveal {
+  from {
+    filter: blur(12px) saturate(0.5);
+    opacity: 0.5;
+  }
+  to {
+    filter: none;
+    opacity: 1;
+  }
+}
+.se-agent-scan {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.se-agent-scan::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -35%;
+  height: 35%;
+  background: linear-gradient(180deg, transparent, rgb(217 119 87 / 0.16), transparent);
+  animation: se-agent-scan 1.8s ease-in-out infinite;
+}
+@keyframes se-agent-scan {
+  to {
+    transform: translateY(400%);
+  }
+}
+.se-agent-dots::after {
+  content: '';
+  display: inline-block;
+  width: 1.2em;
+  text-align: left;
+  animation: se-agent-dots 1.2s steps(4, end) infinite;
+}
+@keyframes se-agent-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .se-agent-reveal,
+  .se-agent-scan::after,
+  .se-agent-dots::after {
+    animation: none;
+  }
+  .se-agent-scan::after {
+    opacity: 0;
+  }
+  .se-agent-dots::after {
+    content: '…';
+  }
+}

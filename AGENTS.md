@@ -1,5 +1,9 @@
 # Project instructions
 
+## Working on a client page
+
+Each Space project is a client. When the user asks to analyze or change a page, or to create, change or reorder a section, the deliverable is that change made in the project's page in the Space canvas (through `scripts/space/space.mjs`), not a new template. Follow `.claude/skills/cliente/SKILL.md`.
+
 ## Visual language
 
 This repository contains multiple explicit brand scopes. Do not blend them.

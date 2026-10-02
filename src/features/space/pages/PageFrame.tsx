@@ -15,6 +15,7 @@ import { useActiveWordPress } from '@/features/wordpress/useWordPressConnection'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { SpaceNode, SpacePage } from '@/types/space'
 import { ApprovalChip } from '@/features/approval/ApprovalChip'
+import { useClaudeBridge } from '@/features/space/bridge/bridgeStore'
 import { Hint } from '../ToolbarIsland'
 import { MOD_KEY } from './clipboard'
 import { EMPTY_PAGE_BODY, PAGE_HEADER, PAGE_PAD, PAGE_WIDTH, SECTION_GAP, SECTION_WIDTH, nextPagePosition, pageFrame, pageSections, plural } from './pages'
@@ -83,6 +84,8 @@ const PageFrame: React.FC<PageFrameProps> = ({ page, nodes, onlyPage }) => {
   const frame = pageFrame(page, nodes)
   const sections = pageSections(page, nodes)
   const count = sections.length
+  // Agente construindo a página pelo plano (ponte do dev)
+  const building = useClaudeBridge((s) => s.working[page.id])
 
   const handleHeaderMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return
@@ -170,6 +173,12 @@ const PageFrame: React.FC<PageFrameProps> = ({ page, nodes, onlyPage }) => {
               </Hint>
             )}
             <ApprovalChip pageId={page.id} />
+            {building && (
+              <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-[#D97757]/10 px-1.5 text-[11px] font-medium text-[#A94E2F]">
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#D97757] motion-safe:animate-pulse" />
+                {building.agent} construindo
+              </span>
+            )}
           </>
         )}
 

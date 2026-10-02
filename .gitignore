@@ -26,5 +26,8 @@ dist-ssr
 # ShipStudio metadata
 .shipstudio/
 
+# Claude no Space: chave da ponte e as páginas baixadas dos projetos (o que vale está na conta)
+/.space/
+
 # Pack Section Express importado (npm run sections:import): 46 MB, conteúdo licenciado
 /data/section-express/

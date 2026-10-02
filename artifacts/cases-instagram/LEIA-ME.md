@@ -1,9 +1,10 @@
-# Entrega — ProcessBase e Júnior Automáticos
+# Entrega — ProcessBase, Júnior Automáticos e MSA
 
 - `*-feed.png`: arte de Feed, 1080 × 1350.
 - `*-story.png`: arte de Story, 1080 × 1920.
 - `*-desktop.mp4`: navegação desktop pelas páginas, Full HD, sem áudio.
 - `processbase-video-4x5.mp4`: vídeo de Feed em 1080 × 1350 (4:5), 33 s, 30 fps, sem áudio. Foco na animação: grafo, formação do emblema, giro em 3D e pilares, e depois o site real no desktop e no celular. Capa sugerida em `processbase-video-capa.png`. A fonte para renderizar de novo está em `processbase-video-fonte/`.
+- `msa-video-4x5.mp4`: vídeo de Feed da MSA em 1080 × 1350 (4:5), 40 s, 30 fps, sem áudio. A homepage rola do início ao fim entre duas margens: a marca em cima e as cinco partes da página embaixo. O preloader e o movimento são os do site real. Fecha num card com o projeto e o convite para o Direct. Capa sugerida em `msa-video-capa.png`. Fonte em `msa-video-fonte/`, gravada quadro a quadro no relógio virtual. Antes de postar, o Henrique ainda precisa confirmar os direitos das fotos e aprovar as linhas novas da copy (`brands/marketing-sem-agencia/COPY.md`).
 - `LEGENDAS.md`: legendas e duas variações de anúncio por case.
 
 Direção: portfólio de criação de sites, com convite para o Direct. Nenhuma assinatura ou contato foi inventado. Os arquivos estão prontos para revisão e postagem manual; nada foi publicado e nenhuma campanha foi criada.

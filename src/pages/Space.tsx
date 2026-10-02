@@ -15,6 +15,7 @@ import { WordPressPageDialogs } from '@/features/wordpress/WordPressPageDialogs'
 import { InsertPanel } from '@/features/space/editor/InsertPanel'
 import { useEditorShortcuts } from '@/features/space/editor/useEditorShortcuts'
 import { useFrameGestureGuard } from '@/features/space/editor/frames'
+import { ClaudePanel } from '@/features/space/bridge/ClaudePanel'
 import { useSpaceStore } from '@/store/spaceStore'
 
 // Visualizar e Copiar da barra agem sobre a página ativa
@@ -89,6 +90,9 @@ const Space: React.FC = () => {
       <LevelPanel />
       {navigatorOpen && editLevel === 'structure' && <ElementorNavigatorPanel onClose={() => setNavigatorOpen(false)} />}
       <SpaceCanvasBar libraryOpen={libraryOpen} navigatorOpen={navigatorOpen} />
+      {import.meta.env.DEV && (
+        <ClaudePanel rightInset={editLevel !== 'structure' || navigatorOpen ? Math.max(LEVEL_PANEL_WIDTH, NAVIGATOR_PANEL_WIDTH) + 12 : 0} />
+      )}
       <PagePlayer />
       <LibraryDragChip />
       <LandingTemplateDialog
