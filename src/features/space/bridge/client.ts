@@ -2,6 +2,7 @@ import { renderElementorDocument } from '@/engine/elementor'
 import { useProjectStore } from '@/features/projects/projectStore'
 import { useProjectSync } from '@/features/projects/useProjectSession'
 import { getActiveBrand, useBrandStore } from '@/features/space/brand/brandStore'
+import { parseDesignMd } from '@/features/space/brand/designMd'
 import { buildLandingPage, parseSectionElements, type SectionElement } from '@/features/space/landingPage'
 import { findElement } from '@/features/space/navigator/elementorContentEditor'
 import { DEFAULT_PAGE_NAME, nextPagePosition, pageOf, pageSections, SECTION_WIDTH } from '@/features/space/pages/pages'
@@ -461,8 +462,11 @@ function plan(params: { titles: string[]; page?: string; newPage?: string; after
   return { pageId, sections: ids.map((id, i) => ({ id, title: params.titles[i], hash: result.hashes[id] })) }
 }
 
-/** A página (ou só algumas seções) como o player mostra, sem animação, para a foto conferir o resultado. */
-function render(params: { page?: string; sections?: string[]; device?: string }) {
+/**
+ * A página (ou só algumas seções) como o player mostra: sem animação para a
+ * foto conferir o resultado, ou com elas (`motion: 'play'`) para o vídeo.
+ */
+function render(params: { page?: string; sections?: string[]; device?: string; motion?: 'static' | 'play' }) {
   requireProject()
   const { nodes, pages, connections } = useSpaceStore.getState()
   const page = params.sections?.length ? undefined : findPage(pages, params.page)
@@ -473,10 +477,12 @@ function render(params: { page?: string; sections?: string[]; device?: string })
   const { document } = renderElementorDocument(built.elements, {
     title: page?.name ?? 'Seções',
     kit: renderKit(brand, getSiteKit(), sections.some(isFromSite)),
-    motion: 'static',
+    motion: params.motion ?? 'static',
   })
   const height = DEVICE_HEIGHT[params.device ?? 'desktop'] ?? DEVICE_HEIGHT.desktop
-  return document.replace('<head>', `<head>\n<base href="${location.origin}/">\n<style>:root{--se-vh:${height / 100}px}</style>`)
+  const html = document.replace('<head>', `<head>\n<base href="${location.origin}/">\n<style>:root{--se-vh:${height / 100}px}</style>`)
+  // No vídeo, a imagem preguiçosa entraria em branco no meio da rolagem
+  return params.motion === 'play' ? html.replaceAll(' loading="lazy"', '') : html
 }
 
 function projects() {
@@ -494,7 +500,25 @@ function open(params: { projectId: string }) {
   return { navigating: true }
 }
 
-const METHODS: Record<string, (params: never) => unknown> = { status, pull, apply, focus, say, work, plan, render, projects, open }
+/**
+ * A marca do projeto aberto (o DESIGN.md). Gravar troca o texto inteiro, como
+ * a tela da marca, e salva com o projeto: quem abrir o projeto vê a mesma marca.
+ */
+function brand(params: { source?: string; enabled?: boolean }) {
+  requireProject()
+  const store = useBrandStore.getState()
+  if (params.source !== undefined) {
+    const parsed = parseDesignMd(params.source)
+    if (!parsed.brand) throw new Error(`O DESIGN.md não foi aceito: ${parsed.errors.join(' ')}`)
+    store.setSource(params.source)
+  }
+  if (params.enabled !== undefined) store.setEnabled(params.enabled)
+  const { source, enabled, brand: current } = useBrandStore.getState()
+  const parsed = source.trim() ? parseDesignMd(source) : null
+  return { name: current?.name ?? null, enabled, source, format: parsed?.format ?? null, warnings: parsed?.warnings ?? [], notes: parsed?.notes ?? [] }
+}
+
+const METHODS: Record<string, (params: never) => unknown> = { status, pull, apply, focus, say, work, plan, render, projects, open, brand }
 
 export function startSpaceBridge(hot: Hot) {
   const send = () => hot.send('space-bridge:state', info())

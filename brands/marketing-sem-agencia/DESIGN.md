@@ -1,107 +1,141 @@
 ---
 name: MSA — Marketing sem Agência
-slug: msa
-source: https://marketingsemagencia.com.br/
-fonts:
-  display: Syne
-  body: Urbanist
+description: Programa de Henrique Zanotti que constrói, opera e transfere o marketing para dentro da empresa do cliente. Design system tirado das páginas do projeto MSA no Space (Homepage V4 e Página de vendas) em 2026-10-02; paleta e fontes medidas em marketingsemagencia.com.br.
 colors:
-  paper: "#F3EFE4"
-  ink: "#2F2317"
-  muted: "#61695B"
-  sage: "#BED499"
-  soft: "#E6E1D2"
+  primary: "#2F2317"
+  on-primary: "#F3EFE4"
+  accent: "#BED499"
+  on-accent: "#2F2317"
+  background: "#F3EFE4"
+  surface: "#E6E1D2"
+  text-body: "#61695B"
   white: "#FFFFFF"
-layout:
-  content: 1180
-  gutterDesktop: 32
-  gutterTablet: 24
-  gutterMobile: 20
-  sectionDesktop: 112
-  sectionTablet: 84
-  sectionMobile: 64
+fonts:
+  heading:
+    family: Syne
+  body:
+    family: Urbanist
 radius:
-  button: 2
-  panel: 0
-motion:
-  duration: 520
-  easing: cubic-bezier(.22,1,.36,1)
+  button: 2px
+logo:
+  on-light: /brands/marketing-sem-agencia/logo/msa-logo.svg
+  on-dark: /brands/marketing-sem-agencia/logo/msa-logo-on-dark.svg
+  symbol: /brands/marketing-sem-agencia/logo/msa-simbolo.svg
+  symbol-on-dark: /brands/marketing-sem-agencia/logo/msa-simbolo-on-dark.svg
+  alt: MSA — Marketing sem Agência
+photos:
+  - url: /brands/marketing-sem-agencia/assets/henrique-retrato.jpg
+    alt: Henrique Zanotti sentado numa poltrona de madeira, de terno azul
+  - url: /brands/marketing-sem-agencia/assets/henrique-palco.jpg
+    alt: Henrique Zanotti no palco, de camiseta verde, com um passador de slides na mão
+  - url: /brands/marketing-sem-agencia/assets/henrique-microfone.jpg
+    alt: Henrique Zanotti falando ao microfone num evento
+  - url: /brands/marketing-sem-agencia/assets/henrique-evento.jpg
+    alt: Palco de evento com o nome Henrique Zanotti no telão
 ---
 
-# MSA visual system
+# MSA — design system
 
-This file records the measured source system and the art direction for the first native Elementor slice.
+A MSA deve parecer um sistema de operação sendo montado: não um portfólio de agência nem um produto de IA. A linguagem é editorial e de obra: papel quente, tinta espresso, um verde-sálvia seco, réguas retas, etapas numeradas e bastante espaço vazio. Tudo aqui foi tirado das páginas que já estão no projeto (Homepage V4 e Página de vendas), que seguem valendo como referência.
 
-## 1. Visual idea
+O front matter guarda só o que o Space aplica sozinho em toda seção (cores, fontes, canto do botão, logo e banco de fotos). Ele não tem papel de rótulo, peso ou entrelinha de título, cards, divisores, sombra nem movimento, de propósito: cada um desses reescreveria as páginas da MSA, que já trazem tudo isso pronto. O resto do sistema está descrito abaixo.
 
-The MSA should feel like an operating system being assembled, not like an ad agency portfolio and not like an AI SaaS product. Its material language is editorial and architectural: warm paper, dark espresso ink, a dry sage accent, technical rules, numbered stages and generous negative space.
+## 1. Logo
 
-The first slice evolves the source without replacing its identity. It adds a visible construction grammar — foundations, layers and hand-off — while preserving the measured palette, typography and mostly square geometry.
+Wordmark tipográfico: **MSA** em Syne 800, com o descritor MARKETING SEM AGÊNCIA em Urbanist 600, caixa alta e espaçado (0,16em), alinhado pela base. O descritor tem 45% da altura do MSA e fica a uma distância de meio MSA.
 
-## 2. Typography
+| Arquivo | Uso |
+|---|---|
+| `logo/msa-logo.svg` | MSA em tinta e descritor em cinza-oliva, sobre papel ou areia |
+| `logo/msa-logo-on-dark.svg` | MSA em papel e descritor em papel a 74%, sobre espresso |
+| `logo/msa-simbolo.svg` | Só o MSA, em tinta: espaços pequenos e celular |
+| `logo/msa-simbolo-on-dark.svg` | Só o MSA, em papel |
+| `logo/msa-icone.svg` | Quadrado espresso com o MSA e a linha sálvia (o preloader): favicon e avatar |
 
-- Display: Syne 700–800. Use uppercase for major statements and titles, with tight tracking and line-height around 1.02–1.08.
-- Body/UI: Urbanist 300–600. Use 17–19px for primary reading copy and 12px tracked uppercase for labels.
-- Local transported files:
-  - `/brands/marketing-sem-agencia/assets/fonts/syne-latin.woff2`
-  - `/brands/marketing-sem-agencia/assets/fonts/urbanist-latin.woff2`
-- WordPress destination: install these through Elementor Custom Fonts or replace them with licensed stable font URLs. Local preview URLs alone are not portable.
+Os arquivos estão em `public/brands/marketing-sem-agencia/logo/` e são contornos vetoriais: não dependem da fonte instalada. Nas páginas, o logo do cabeçalho e do rodapé é texto nativo do Elementor (o mesmo desenho), e no rodapé o MSA aparece gigante a 8% de opacidade. No celular o descritor sai e fica só o MSA.
 
-## 3. Color roles
+## 2. Cores
 
-- Paper `#F3EFE4`: primary canvas.
-- Ink `#2F2317`: display text, dark sections and primary actions.
-- Muted `#61695B`: supporting text and system labels.
-- Sage `#BED499`: construction progress, small marks and selected states.
-- Soft `#E6E1D2`: secondary surfaces and image placeholders.
-- White `#FFFFFF`: used sparingly for high-contrast text where necessary.
+| Papel | Cor | Uso |
+|---|---|---|
+| Papel | `#F3EFE4` | Fundo principal, texto sobre o espresso |
+| Areia | `#E6E1D2` | Faixas alternadas, fundo dos cards de lista |
+| Tinta (espresso) | `#2F2317` | Títulos, faixas escuras, botão principal, card de destaque |
+| Cinza-oliva | `#61695B` | Texto de apoio, rótulos e números pequenos no claro |
+| Sálvia | `#BED499` | Um destino por bloco: a última etapa, o preço de fundador, os vistos das listas, o botão nas faixas escuras |
+| Branco | `#FFFFFF` | Só onde precisar de contraste máximo |
 
-Sage is an accent, not a default page background. Ink and paper create the main alternation.
+Derivadas (só em CSS, nunca como cor de marca): filete no claro tinta a 20% (estrutura) e 14% (entre linhas); filete no escuro papel a 18%; texto de apoio no escuro papel a 74%; card no escuro papel a 4%.
 
-## 4. Layout and shapes
+Contraste: tinta sobre papel 13,3:1; cinza-oliva sobre papel 5,0:1 (sobre a areia cai para 4,4:1, um pouco abaixo do AA para texto comum: é o caso dos textos de apoio direto na faixa de areia, ponto a rever); papel sobre tinta 13,3:1; tinta sobre sálvia 9,5:1. Sálvia nunca vira texto sobre o papel (1,4:1) e nunca pinta uma faixa inteira.
 
-- Content width: 1180px.
-- Gutters: 32px desktop, 24px tablet, 20px mobile.
-- Section rhythm: 112 / 84 / 64px.
-- Source breakpoints: 900px and 640px. The local renderer also receives explicit Elementor tablet/mobile values.
-- Buttons stay rectangular with 2px radius.
-- Cards carry complex content: 2px radius, 1px structural border, no shadow. Paper cards on soft sections, translucent cards on ink, one sage card for the destination (Autonomia, Acompanhamento). No glassmorphism or ambient shadows.
-- Comparisons are side by side and read top-down. Sequences read left to right or top to bottom, never from the bottom up.
-- Use rules, numbering and structural blocks instead of decorative blobs.
+## 3. Tipografia
 
-## 5. Construction grammar
+Syne nos títulos e nos números de destaque; Urbanist no texto, nos rótulos (inclusive os números pequenos e espaçados das etapas, 01, 02…), no menu e nos botões. Os títulos vão em caixa alta, com uma frase por linha.
 
-The visual metaphor is a system assembled in layers:
+| Papel | Desktop / tablet / celular | Fonte |
+|---|---|---|
+| Título do hero | 66–76 / 54–60 / 34–40px, entrelinha 1,02, −0,015em | Syne 700 |
+| Título de seção | 52 / 44 / 32px, entrelinha 1,06, −0,01em | Syne 700 |
+| Frase de destaque | 26–36px, entrelinha 1,1 | Syne 700 |
+| Título de card | 18–24px, entrelinha 1,12 | Syne 700 |
+| Número grande e preço | 34–56px, entrelinha 1 | Syne 700 |
+| Nome do Henrique | 132 / 96 / 50px, entrelinha 0,92 | Syne 700 |
+| Texto de abertura | 20 / 18px, entrelinha 1,6 | Urbanist 300 |
+| Texto | 16–17px, entrelinha 1,65 | Urbanist 400 |
+| Texto de apoio | 14px, entrelinha 1,55 | Urbanist 400 |
+| Rótulo (eyebrow) | 10–11px, caixa alta, 0,16–0,18em | Urbanist 600 |
+| Botão | 15px (14px no celular dentro de card), 0,03em | Urbanist 600 |
+| Pergunta do FAQ | 19 / 17px, caixa normal | Syne 600 |
 
-1. Direção — diagnose the business and choose a route.
-2. Pessoas — define roles and install the team.
-3. Processo — create routines, tools and documentation.
-4. Autonomia — transfer governance so the structure remains.
+Os arquivos das fontes ficam em `public/brands/marketing-sem-agencia/assets/fonts/` (Syne e Urbanist, latin). No WordPress, instalar pelo Elementor Custom Fonts.
 
-Lines should be straight. Motion can reveal, align or fill blocks; it should never orbit or float aimlessly.
+## 4. Layout
 
-## 6. Imagery
+- Conteúdo de 1180px, com margens de 32 / 24 / 20px.
+- Seções com 112 / 84 / 64px em cima e embaixo.
+- Cabeçalho de seção: rótulo, título na largura toda (uma frase por linha) e o texto de apoio embaixo, alinhado à direita no desktop.
+- Larguras de leitura sempre em `min(100%, Npx)`.
+- Faixas alternam papel, areia e espresso; a página nunca tem duas faixas escuras seguidas sem um motivo.
 
-- Working set (2026-09-29): the seated studio portrait from the public site bundle and three stage photos supplied by the user (green-lit stage, microphone at the Bazze 2025 event, walkway with his name on the screen). Final publication still needs Henrique's confirmation of rights and, ideally, the originals (the walkway photo is only 640px wide).
-- Mix the studio portrait with the stage photos: the studio frame shows the operator, the stage frames show authority in context. No captions on photos.
-- Avoid generic teams around laptops, fake dashboards and AI-generated office scenes.
+## 5. Componentes
 
-## 7. Motion
+Tudo que é complexo vai em card: canto de 2px, borda de 1px, sem sombra.
 
-Motion is quiet. It runs only with `prefers-reduced-motion: no-preference`, and the static page is always complete.
+- **Card claro**: papel sobre a faixa de areia (ou areia sobre o papel), borda tinta a 20%.
+- **Card espresso**: fundo tinta, para o lado "com a MSA" de uma comparação, o preço e o CTA final.
+- **Card no escuro**: papel a 4% sobre o espresso, borda papel a 18%.
+- **Card sálvia**: um por bloco, o destino (Transfiro, Governança, preço de fundador).
+- **Etiqueta**: rótulo em caixa com borda de 1px e canto de 2px; a etiqueta sálvia marca o lado bom ("COM A MSA", "MSA", "É PARA VOCÊ SE", "BÔNUS").
+- **Lista com visto**: quadrado sálvia de 18px com visto em tinta. **Lista com traço**: quadrado de contorno com um traço. Cada item tem um filete em cima.
+- **Comparação**: lado a lado, lida de cima para baixo. Quando os itens são pares, cada linha é um par alinhado; no celular, cada célula diz de que lado está.
+- **Etapas numeradas**: número em Syne, traços no topo que acendem até a etapa (1/3, 2/3, 3/3), a última em sálvia.
+- **Tabela de valores**: item e valor por linha, valor em Syne e alinhado à direita; total com filete em tinta.
+- **Card de preço**: espresso, preço em Syne 56px, preço de fundador num card sálvia dentro dele, botão em papel ocupando a largura.
+- **Botões**: retangulares, canto de 2px, Urbanist 600 com seta. Tinta com texto papel no claro; sálvia com texto tinta no escuro; contorno papel a 18% para a ação secundária no escuro. Ao passar o mouse, a seta anda 3px.
+- **Perguntas**: acordeão nativo com filetes, número 01–07 à esquerda e um quadrado com + que fica sálvia aberto.
+- **Ficha do Henrique**: rótulo sálvia à esquerda e o valor à direita, linha por linha, num card no escuro.
 
-- **Entry**: ink panel with the MSA mark; a thin sage line fills while the page loads, then the panel lifts over the hero (about 2s in total).
-- **Reveal**: content rises 14–18px and fades in, once, 0.8s `power2.out`, with 70–80ms between neighbours. Cards in a row enter in sequence.
-- **Scroll**: only the footer wordmark drifts up slowly. No pins, scrubbed stories or word-by-word fills: they were tried in V4 and rejected as complex.
-- **Controls**: 180–240ms color changes, arrow nudge on buttons, press scale 0.96.
+## 6. Fotos
 
-Do not animate layout properties. Use transform, opacity, clip-path and background/color changes only.
+Retrato de estúdio do Henrique e três fotos de palco (palco verde, microfone no Bazze 2025, telão com o nome), no banco de fotos da marca. Fotos sem legenda, em duas colunas defasadas. Evitar equipes genéricas em volta de notebook, dashboards falsos e escritórios gerados por IA. A publicação ainda depende da confirmação de direitos do Henrique, e a foto do telão tem só 640px: fica pequena.
 
-## 8. Accessibility
+## 7. Movimento
 
-- Keep explicit focus-visible outlines.
-- Pressable controls scale to 0.96 only when motion is allowed.
-- Do not remove input outlines without a replacement.
-- Hover is never required to reveal meaning.
-- At 390px every authored width must resolve through `min(100%, Npx)` or a responsive grid.
+O movimento é discreto e é da própria página, não da marca. Um único script de comportamento no hero carrega o GSAP: painel espresso com o MSA e a linha sálvia enchendo, entrada suave do hero, blocos que sobem 18px uma vez ao aparecer e o MSA do rodapé subindo devagar. Sem pin, sem história presa ao scroll e sem palavra por palavra. Sem script, ou com movimento reduzido, a página já está completa. Os botões trocam de cor num instante e encolhem levemente (para 96%) ao pressionar; esses detalhes já vêm no CSS de cada seção.
 
+## 8. Textura e forma
+
+Só o hero tem textura: uma grade de planta fraca e parada. Linhas retas; nada de diagonais, órbitas, bolhas, degradês genéricos, vidro ou sombras grandes.
+
+## 9. Acessibilidade
+
+Contorno de foco visível (tinta no claro, sálvia no escuro). Nada essencial depende de hover. No celular, toda largura cabe em 375px sem rolagem lateral.
+
+## 10. Voz
+
+- Direta, prática e em primeira pessoa quando quem fala é o Henrique ("eu construo, opero e transfiro").
+- Frases curtas e contrastes claros: alugar × ser dono, agência × time próprio.
+- Prova antes de superlativo. Números só com a fonte e o aviso dele.
+- O inimigo é o modelo de agência e a dependência, não as pessoas.
+- O texto de cada página e o que ainda falta confirmar estão em `brands/marketing-sem-agencia/COPY.md`.

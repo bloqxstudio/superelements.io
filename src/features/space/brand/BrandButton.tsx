@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRightLeft, CircleAlert, FileUp, Info, RotateCcw, SwatchBook, TriangleAlert } from 'lucide-react'
+import { ArrowRightLeft, CircleAlert, FileDown, FileUp, Info, RotateCcw, SwatchBook, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { renderElementorDocument } from '@/engine/elementor'
 import { PreviewFrame } from '@/features/elementor-preview/PreviewFrame'
 import { applyBrand, brandKit } from './applyBrand'
+import { withFullAssetUrls } from './assets'
 import { BrandAssets } from './BrandAssets'
 import { BrandLayersSummary } from './BrandLayersSummary'
 import { useBrandStore, withLogoRatios } from './brandStore'
@@ -72,6 +73,17 @@ export const BrandButton: React.FC = () => {
     if (fileRef.current) fileRef.current.value = ''
   }
 
+  // O guia que está na tela, no modelo do Space, para usar em outro agente
+  const downloadFile = () => {
+    const text = withFullAssetUrls(converted ?? draft).replace(/\s*$/, '\n')
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'DESIGN.md'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <>
       <Hint
@@ -125,6 +137,17 @@ export const BrandButton: React.FC = () => {
                 <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => fileRef.current?.click()}>
                   <FileUp className="h-3.5 w-3.5" />
                   Importar arquivo
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  onClick={downloadFile}
+                  disabled={!parsed?.brand}
+                  title="Baixar o guia da marca para usar em outro agente (Claude, Codex, Cursor…)"
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  Baixar DESIGN.md
                 </Button>
                 <input
                   ref={fileRef}

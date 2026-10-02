@@ -161,6 +161,34 @@ export function removePhoto(source: string, url: string): string | null {
   })
 }
 
+/**
+ * O guia para levar a outro agente: logo e fotos com o endereço completo, que
+ * abre fora do Space. Sem front matter (ou com YAML inválido) sai como está.
+ */
+export function withFullAssetUrls(source: string): string {
+  const full = (v: unknown) => (typeof v === 'string' ? assetUrl(v) : v)
+  return (
+    editFrontMatter(source, (doc) => {
+      const logo = doc.get('logo', true)
+      if (isMap(logo)) for (const pair of logo.items) pair.value = doc.createNode(full((pair.value as { value?: unknown } | null)?.value ?? pair.value))
+      else if (typeof doc.get('logo') === 'string') doc.set('logo', full(doc.get('logo')))
+      for (const key of ['photos', 'fotos']) {
+        const photos = doc.get(key, true)
+        if (!isSeq(photos)) continue
+        photos.items = photos.items.map((item) => {
+          const value = (item as { toJSON?: () => unknown }).toJSON?.() ?? item
+          if (typeof value === 'string') return doc.createNode(assetUrl(value))
+          if (value && typeof value === 'object') {
+            const photo = value as Record<string, unknown>
+            return doc.createNode({ ...photo, ...(photo.url ? { url: full(photo.url) } : {}), ...(photo.src ? { src: full(photo.src) } : {}) })
+          }
+          return item
+        }) as typeof photos.items
+      }
+    }) ?? source
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Medida dos arquivos do logo
 

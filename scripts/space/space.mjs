@@ -42,9 +42,13 @@ const HELP = `Agente no Space (Claude ou Codex) — trabalhar na página do clie
                                   gera uma seção com os builders do repo (export default: elemento, lista ou {title, elements})
   say "<texto>" [--kind note|question|done] [--section <seção>]
                                   escreve no painel do agente no canvas (nome: SPACE_AGENT, ou detectado)
+  brand [<DESIGN.md>] [--on | --off]
+                                  mostra, grava (e liga) ou liga/desliga a marca do projeto; a anterior fica em .space/<projeto>/marca-anterior.md
   focus <seção> | --page <nome>   leva o canvas até a seção ou a página
   shot [--page <nome>] [--section <seção>]... [--device desktop|tablet|mobile|all]
                                   fotos da página (ou das seções) como o player mostra, em .space/<projeto>/fotos/
+  video [--page <nome>] [--device desktop|mobile|all] [--pause <s>] [--speed <px/s>] [--out arquivo.mp4]
+                                  vídeo da página rolando do topo ao fim, com as animações (ffmpeg), em .space/<projeto>/videos/
 
   <seção> é o id (ou o começo dele), o número na página ("3", com --page) ou parte do título.
   Opções gerais: --tab <id> escolhe a aba; --json mostra a resposta crua.`
@@ -495,6 +499,33 @@ async function cmdBuild() {
   }
 }
 
+async function cmdBrand() {
+  const status = await readyStatus()
+  const file = positional[0]
+  const params = {}
+  if (file) {
+    if (!existsSync(file)) fail(`Arquivo não encontrado: ${file}`)
+    params.source = readFileSync(file, 'utf8')
+    params.enabled = true
+  }
+  if (flags.on) params.enabled = true
+  if (flags.off) params.enabled = false
+
+  if (params.source !== undefined) {
+    // A marca não entra no Ctrl+Z do canvas: a anterior fica guardada para voltar com "brand <arquivo>"
+    const before = await call('brand', {})
+    const backup = path.join(projectDir(status.project), 'marca-anterior.md')
+    mkdirSync(path.dirname(backup), { recursive: true })
+    writeFileSync(backup, before.source ?? '')
+    console.log(`Marca anterior (${before.name ?? 'nenhuma'}) guardada em ${rel(backup)}`)
+  }
+  const result = await call('brand', params)
+  if (flags.json) return console.log(JSON.stringify(result, null, 2))
+  console.log(`${params.source !== undefined || params.enabled !== undefined ? '✔ ' : ''}Marca: ${result.name ?? 'nenhuma'} · ${result.enabled ? 'ligada' : 'desligada'}${result.format ? ` · formato ${result.format}` : ''}`)
+  for (const w of result.warnings) console.log(`  aviso: ${w}`)
+  for (const n of result.notes) console.log(`  nota: ${n}`)
+}
+
 async function cmdSay() {
   const text = positional.join(' ')
   if (!text) fail('Diga o texto')
@@ -554,12 +585,14 @@ async function cdp(wsUrl) {
   }
 }
 
-async function capture(url, device, outBase) {
+/** Abre o Edge (ou o Chrome) headless, entrega a aba pelo CDP e fecha tudo no fim. */
+async function withBrowser(work) {
   const browser = BROWSERS.find((b) => existsSync(b))
-  if (!browser) fail('Não achei o Edge nem o Chrome para tirar a foto')
+  if (!browser) fail('Não achei o Edge nem o Chrome para abrir a página')
   const port = 9400 + Math.floor(Math.random() * 400)
   const profile = mkdtempSync(path.join(os.tmpdir(), 'space-shot-'))
-  const child = spawn(browser, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--hide-scrollbars', '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })
+  const args = ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--hide-scrollbars', '--no-first-run', '--no-default-browser-check', '--force-color-profile=srgb', 'about:blank']
+  const child = spawn(browser, args, { stdio: 'ignore' })
   try {
     let targets
     for (let i = 0; i < 50 && !targets; i++) {
@@ -569,6 +602,20 @@ async function capture(url, device, outBase) {
     const page = targets?.find((t) => t.type === 'page')
     if (!page) throw new Error('O navegador headless não abriu')
     const tab = await cdp(page.webSocketDebuggerUrl)
+    try {
+      return await work(tab)
+    } finally {
+      tab.close()
+    }
+  } finally {
+    child.kill()
+    await new Promise((r) => setTimeout(r, 300))
+    rmSync(profile, { recursive: true, force: true, maxRetries: 3 })
+  }
+}
+
+const capture = (url, device, outBase) =>
+  withBrowser(async (tab) => {
     const { width, height, slice } = DEVICES[device]
     await tab.send('Page.enable')
     await tab.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: device === 'mobile' })
@@ -588,13 +635,112 @@ async function capture(url, device, outBase) {
       writeFileSync(file, Buffer.from(data, 'base64'))
       files.push(file)
     }
-    tab.close()
     return { files, total }
-  } finally {
-    child.kill()
-    await new Promise((r) => setTimeout(r, 300))
-    rmSync(profile, { recursive: true, force: true, maxRetries: 3 })
+  })
+
+// ---------- vídeo (relógio virtual + ffmpeg) ----------
+
+const VIDEO = {
+  desktop: { width: 1440, height: 900, scale: 1 },
+  mobile: { width: 390, height: 844, scale: 2 },
+}
+const FPS = 30
+/** Rolagem: px por segundo, em média, e as pausas no topo (abertura e entrada do hero) e no fim. */
+const SCROLL_SPEED = 420
+const HOLD_TOP = 2.5
+const HOLD_END = 1.5
+/** Momentos da folha de conferência, em fração do vídeo. */
+const SHEET_AT = [0, 0.15, 0.3, 0.5, 0.75, 0.98]
+const smooth = (t) => t * t * (3 - 2 * t)
+
+/** Espera fontes e imagens carregarem (no tempo real; o relógio da página continua no 0). */
+const WAIT_ASSETS = `Promise.all([document.fonts.ready, ...[...document.images].map((img) => img.complete ? 0 : new Promise((done) => { img.addEventListener('load', done); img.addEventListener('error', done) }))]).then(() => true)`
+
+/**
+ * A página rolando do topo ao fim, com as animações, gravada quadro a quadro.
+ * O relógio da página (rAF, timers, animações CSS) só anda quando o gravador
+ * manda: cada quadro sai no tempo certo, por mais que a captura demore.
+ */
+const recordVideo = (url, device, out, { holdTop = HOLD_TOP, speed = SCROLL_SPEED } = {}) =>
+  withBrowser(async (tab) => {
+    const { width, height, scale } = VIDEO[device]
+    await tab.send('Page.enable')
+    await tab.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: scale, mobile: device === 'mobile' })
+    await tab.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] })
+    await tab.send('Page.addScriptToEvaluateOnNewDocument', { source: readFileSync(path.join(ROOT, 'scripts/space/vt.js'), 'utf8') })
+    const evaluate = async (expression) => (await tab.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })).result.value
+    const loaded = tab.once('Page.loadEventFired')
+    await tab.send('Page.navigate', { url })
+    await Promise.race([loaded, new Promise((r) => setTimeout(r, 30_000))])
+    await Promise.race([evaluate(WAIT_ASSETS), new Promise((r) => setTimeout(r, 20_000))])
+    await new Promise((r) => setTimeout(r, 1500))
+
+    const scrollable = await evaluate('Math.max(0, document.documentElement.scrollHeight - innerHeight)')
+    const travel = Math.max(3, scrollable / speed)
+    const duration = holdTop + (scrollable ? travel : 0) + HOLD_END
+    const frames = Math.round(duration * FPS)
+    const ff = spawn('ffmpeg', [
+      '-y', '-hide_banner', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-',
+      '-vf', `scale=${width * scale}:${height * scale}:flags=lanczos:in_range=full:out_range=tv,format=yuv420p`,
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p',
+      '-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
+      '-r', String(FPS), '-movflags', '+faststart', '-an', out,
+    ], { stdio: ['pipe', 'inherit', 'inherit'] })
+    const closed = new Promise((resolve, reject) => {
+      ff.on('error', () => reject(new Error('Não achei o ffmpeg (instale com: winget install ffmpeg)')))
+      ff.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`O ffmpeg parou com o código ${code}`))))
+    })
+
+    const started = Date.now()
+    for (let i = 0; i < frames; i++) {
+      const t = i / FPS
+      const progress = scrollable ? smooth(Math.min(1, Math.max(0, (t - holdTop) / travel))) : 0
+      // Rola, avisa a página, anda o relógio um quadro e espera o navegador desenhar
+      const top = Math.round(progress * scrollable)
+      await evaluate(`scrollTo({ top: ${top}, behavior: 'instant' }); dispatchEvent(new Event('scroll')); window.__vt.advance(${(t * 1000).toFixed(2)}); window.__vt.realFrame().then(() => true)`)
+      const { data } = await tab.send('Page.captureScreenshot', { format: 'jpeg', quality: 92 })
+      if (!ff.stdin.write(Buffer.from(data, 'base64'))) await new Promise((r) => ff.stdin.once('drain', r))
+      if (i % 90 === 0) process.stdout.write(`\r  quadro ${i}/${frames} · ${Math.round((Date.now() - started) / 1000)} s   `)
+    }
+    ff.stdin.end()
+    await closed
+    process.stdout.write('\r')
+    return { duration, frames }
+  })
+
+async function cmdVideo() {
+  const status = await readyStatus()
+  const { url, token } = bridge()
+  const page = resolvePage(status, one(flags.page))
+  const deviceFlag = one(flags.device) ?? 'desktop'
+  const devices = deviceFlag === 'all' ? ['desktop', 'mobile'] : [deviceFlag]
+  for (const d of devices) if (!VIDEO[d]) fail(`Tela desconhecida para vídeo: ${d} (desktop, mobile ou all)`)
+  const dir = path.join(projectDir(status.project), 'videos')
+  mkdirSync(dir, { recursive: true })
+  for (const device of devices) {
+    const query = new URLSearchParams({ token, device, motion: 'play', page: page.id })
+    if (flags.tab) query.set('tab', one(flags.tab))
+    const out = path.resolve(devices.length === 1 && one(flags.out) ? one(flags.out) : path.join(dir, `${slug(page.name)}-${device}.mp4`))
+    console.log(`Gravando ${page.name} (${device})…`)
+    const holdTop = flags.pause !== undefined ? Number(one(flags.pause)) : undefined
+    const speed = flags.speed !== undefined ? Number(one(flags.speed)) : undefined
+    if ((holdTop !== undefined && !(holdTop >= 0)) || (speed !== undefined && !(speed > 0))) fail('--pause é em segundos (0 ou mais) e --speed em px por segundo')
+    const { duration, frames } = await recordVideo(`${url}/__space/render?${query}`, device, out, { holdTop, speed })
+    const sheet = out.replace(/\.mp4$/i, '') + '-quadros.png'
+    await contactSheet(out, frames, sheet)
+    const size = (statSync(out).size / 1024 / 1024).toFixed(1)
+    console.log(`✔ ${device}: ${rel(out)} (${duration.toFixed(1)} s, ${size} MB) · conferência: ${rel(sheet)}`)
   }
+}
+
+/** Seis quadros do vídeo numa imagem só, para conferir abertura, meio e fim sem assistir. */
+function contactSheet(video, frames, out) {
+  const picks = SHEET_AT.map((f) => `eq(n\\,${Math.min(frames - 1, Math.round(f * (frames - 1)))})`).join('+')
+  return new Promise((resolve, reject) => {
+    const ff = spawn('ffmpeg', ['-y', '-v', 'error', '-i', video, '-vf', `select='${picks}',scale=480:-2,tile=3x2:padding=6:color=white`, '-frames:v', '1', '-fps_mode', 'passthrough', out], { stdio: 'inherit' })
+    ff.on('error', reject)
+    ff.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`A folha de quadros falhou (ffmpeg ${code})`))))
+  })
 }
 
 async function cmdShot() {
@@ -634,8 +780,10 @@ const COMMANDS = {
   plan: cmdPlan,
   build: cmdBuild,
   say: cmdSay,
+  brand: cmdBrand,
   focus: cmdFocus,
   shot: cmdShot,
+  video: cmdVideo,
 }
 
 if (!command || command === 'help' || flags.help) {

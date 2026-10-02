@@ -26,10 +26,11 @@ function headingKind(s: Settings): TextKind {
   const text = stripTags(s.title)
   const tag = String(s.header_size || 'h2').toLowerCase()
   const size = fontPx(s, 'typography') ?? DEFAULT_SIZE[tag] ?? 32
-  if (text && /\d/.test(text) && NUMERIC.test(text)) return 'numeric'
   const upper = s.typography_text_transform === 'uppercase'
   const tracking = sliderAt(s, 'typography_letter_spacing', '')
   const tracked = !!tracking && (tracking.unit === 'px' ? tracking.size >= 1 : tracking.size >= 0.06)
+  // Número pequeno e espaçado ("01" de etapa) é rótulo, não número de destaque
+  if (text && /\d/.test(text) && NUMERIC.test(text)) return size <= 16 && tracked ? 'label' : 'numeric'
   if (size <= 16 && text.length <= 60 && (upper || tracked || /^(p|span|div|h6)$/.test(tag))) return 'label'
   if (s._background_background === 'classic' && isSet(s._border_radius) && text.length <= 40) return 'label'
   if (/^(p|span|div)$/.test(tag) && size <= 20 && (text.length > 80 || text.split(' ').length >= 12)) return 'body'

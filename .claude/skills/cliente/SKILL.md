@@ -48,8 +48,10 @@ Cada pedido segue os mesmos passos. Escreva no painel do Claude no canvas (`spac
 | `work "…" --section <seção>` / `work --done` | Mostrar onde o agente está mexendo; `say --kind done` também limpa |
 | `build <arquivo.ts>` | Gerar a seção com os builders do repo (alias `@` para `src`) |
 | `say "…" [--kind note\|question\|done] [--section <seção>]` | Escrever no painel do Claude no canvas |
+| `brand [<DESIGN.md>] [--on\|--off]` | Ver, gravar (e ligar) ou ligar/desligar a marca do projeto. Ela vale para todas as seções e não entra no Ctrl+Z: a anterior fica em `.space/<projeto>/marca-anterior.md`. Antes de gravar, compare `applyBrand` com as seções cruas de todas as páginas; o esperado é quase nada mudar |
 | `focus <seção>` / `focus --page <nome>` | Levar o canvas do usuário até a seção ou a página |
 | `shot [--page <nome>] [--section <seção>]… [--device desktop\|tablet\|mobile\|all]` | Tirar fotos como o Player mostra; ficam em `.space/<projeto>/fotos/` |
+| `video [--page <nome>] [--device desktop\|mobile\|all]` | Gravar a página rolando do topo ao fim, com as animações (relógio virtual e ffmpeg); fica em `.space/<projeto>/videos/`. No Codex, roda fora do sandbox, como o `shot` |
 
 Uma `<seção>` pode ser o id (ou o começo dele), o número na página (`3`, junto com `--page`) ou parte do título.
 
