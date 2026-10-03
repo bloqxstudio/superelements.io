@@ -96,3 +96,7 @@ Pendências dessas páginas:
 - Os Macs "Air M5" usam fotos e endereços de "M4" no site (`macbook-air-m4-…`). Conferir nome e foto.
 - O iPhone 18 Pro da abertura da Home não aparece na categoria de iPhones novos do site.
 - As cores e o preço são texto fixo: no WordPress a página de produto vira o modelo do WooCommerce (seletor de cor, preço e estoque dinâmicos).
+
+## Vídeo da Experiência LS (2026-10-03)
+
+O embed antigo do YouTube (`B66M1DZZGtM`) aparecia preto. No lugar dele entrou o reel de 2026-10-02 do Instagram @leooscherer, "BOX LAUNCH EDITION 2026: Mais do que tecnologia, conexões reais." (`/reel/Dd_zUL8xYWa/`): o Leonardo apresenta na loja a caixa de lançamento da Tua Case ("A espera acabou!"). Arquivo em `public/brands/leo-scherer/video/box-launch-2026.mp4` (720×1280, 47 s, ~7 MB, sem recompressão) com capa `box-launch-2026-capa.webp`. Pendência: confirmar com o Leonardo o uso do vídeo no site; ao publicar no WordPress, o arquivo sobe para a biblioteca de mídia.
