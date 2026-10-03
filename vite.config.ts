@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { spaceBridge } from "./scripts/space/vitePlugin";
+import { prospecting } from "./scripts/prospects/vitePlugin";
 
 // Login automático do dev server (ver AuthContext). Sem prefixo VITE_ de propósito:
 // algumas dependências leem import.meta.env inteiro, o que colaria toda VITE_* no bundle.
@@ -48,6 +49,8 @@ export default defineConfig(({ command, mode }) => ({
     componentTagger(),
     // Claude no Space: o scripts/space/space.mjs fala com o canvas aberto (só no dev)
     spaceBridge(),
+    // Prospecção: busca empresas e lê os sites delas (só no dev, tela /prospeccao)
+    prospecting(),
   ].filter(Boolean),
   resolve: {
     alias: {

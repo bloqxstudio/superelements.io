@@ -31,3 +31,6 @@ dist-ssr
 
 # Pack Section Express importado (npm run sections:import): 46 MB, conteúdo licenciado
 /data/section-express/
+
+# Prospecção (npm run prospectar e a tela /prospeccao): contatos de empresas e pessoas, ficam só neste computador
+/data/prospeccao/

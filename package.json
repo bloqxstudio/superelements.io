@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "sections:import": "node scripts/import-section-express.mjs",
-    "sections:upload": "node scripts/upload-section-pack.mjs"
+    "sections:upload": "node scripts/upload-section-pack.mjs",
+    "prospectar": "node scripts/prospects/prospectar.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",
