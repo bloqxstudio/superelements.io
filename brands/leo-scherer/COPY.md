@@ -78,7 +78,7 @@ Lista de "Produtos em destaque" (carrossel dinâmico do WooCommerce); os quatro 
 2. **Produtos e preços:** na página nova os produtos são texto fixo, tirados do site em 2026-10-02 (o iPhone 16 Branco já aparece como vendido). Ao publicar no WordPress da LS, trocar a grade por um widget dinâmico do WooCommerce, ou combinar quem atualiza.
 3. **Watch:** o banner do site fala em Series 10 com foto da Series 9. Qual modelo destacar?
 4. **Fotos:** as fotos de produto são da Apple e de fabricantes, já usadas no site; as quatro dos serviços têm só 251 px de largura no site. Pedir originais maiores.
-5. **Contato:** confirmar se o Instagram segue como canal de venda ou se há WhatsApp para os botões.
+5. **Contato:** confirmar se o Instagram segue como canal de venda. O simulador já fecha pelo WhatsApp e precisa do número da LS (ver "Simulador de parcelas").
 6. **Links quebrados no site atual:** "Comprar" do Watch e "Saiba mais" da história apontam para "#".
 7. **Fotos do Instagram:** são as capas dos posts em 360×640 px e algumas têm outras pessoas ao fundo (fila da Apple Store, loja nos EUA). Pedir ao Leonardo os originais e a confirmação de uso no site.
 8. **Imagens oficiais da Apple:** o par e as quatro cores do iPhone 18 Pro (recortadas em PNG transparente) vieram do material de lançamento; confirmar o uso pela revenda.
@@ -96,13 +96,13 @@ O simulador do site (popup 9064) busca as parcelas em `leoscherer.com.br/simulat
 
 Na versão nova (`src/features/leoscherer/simulator.ts`) o simulador tem quatro telas: produto, entrada (com o usado na troca), cartão e parcelas. Ele abre num painel lateral, por cima da página, a partir de qualquer "Simule", e já vem com o produto da tela marcado (pedido do usuário em 2026-10-03). Também existe a página "Simulador" (`/simulador`). Os produtos da lista e os preços são os da home e da categoria em 2026-10-02/03.
 
-Textos novos (escritos por nós, a confirmar com o Leonardo): "Simule sua compra." · "Escolha o produto, a entrada e o cartão. As parcelas aparecem na hora, de 1x a 18x." · "Tenho um usado para dar na troca: a LS aceita seu usado na troca a partir do iPhone 7. Marque aqui e ele entra no resumo para a LS avaliar." · "Simulação com as taxas do simulador do site da LS. O valor final é confirmado na compra." · "Copie o resumo e cole na conversa com a LS pelo Instagram."
+Textos novos (escritos por nós, a confirmar com o Leonardo): "Simule sua compra." · "Escolha o produto, a entrada e o cartão. As parcelas aparecem na hora, de 1x a 18x." · "Tenho um usado para dar na troca: a LS aceita seu usado na troca a partir do iPhone 7. Marque aqui e ele entra no resumo para a LS avaliar." · "Simulação com as taxas do simulador do site da LS. O valor final é confirmado na compra." · "Fechar em 12x no WhatsApp" · "O botão do WhatsApp leva o resumo pronto na mensagem. Prefere o Instagram? Copie o resumo e cole na conversa."
 
 Pendências do simulador:
 - As taxas estão copiadas na página. Se a LS mudar as taxas no `simulate.php`, a página precisa ser atualizada (ou o script passa a ler o `simulate.php` quando estiver publicado no mesmo site).
 - Confirmar o aviso "O valor final é confirmado na compra" e o "para a LS avaliar" da troca.
 - O iPhone 18 Pro não tem preço no site: vindo da abertura da Home, o simulador pede o valor.
-- O "Fechar pelo Instagram" abre o perfil @leooscherer; o resumo vai pelo "Copiar resumo" (o Instagram não aceita mensagem pronta no link).
+- **Número de WhatsApp da LS:** o fechamento é pelo WhatsApp (pedido do usuário em 2026-10-03), com o resumo e a parcela escolhida na mensagem. O site atual não tem número (só os botões de compartilhar do Elementor). Até o número chegar (`LS_WHATSAPP` em `src/features/leoscherer/simulator.ts`), o link abre o WhatsApp com a mensagem pronta para a pessoa escolher o contato. Para o Instagram, o "Copiar resumo" (o Instagram não aceita mensagem pronta no link).
 
 ## Páginas internas de exemplo (2026-10-03)
 

@@ -76,7 +76,8 @@ export const LS_LOAD_SCRIPT = `
  *    CSS, desde a primeira pintura (`ls-enter`, ligado também pelo
  *    LS_LOAD_SCRIPT). O par de iPhone 18 Pro espera a própria foto e o GSAP
  *    (no máximo 2,6 s) e chega de baixo, inclinado em 3D, desfocado e menor, e
- *    assenta; um reflexo de luz atravessa o aparelho e ele flutua de leve. Se
+ *    assenta, com a luz bordô acendendo por trás; depois que ele assentou, um
+ *    reflexo de luz o atravessa uma vez e ele flutua de leve. Se
  *    o GSAP não chegou a tempo, o telefone só aparece devagar (`ls-soft`).
  *    No desktop (a partir de 1025px) o hero fica preso por um trecho curto do
  *    scroll: o texto sobe e some, o telefone sobe até o centro e cresce, o
@@ -142,7 +143,7 @@ export const LS_STORY_SCRIPT = `
   function intro(gsap) {
     var hero = $('.ls-hero');
     if (!hero) return;
-    var device = $('.ls-device', hero), glint = $('.ls-glint', hero), img = $('.ls-device img', hero);
+    var device = $('.ls-device', hero), glint = $('.ls-glint', hero), img = $('.ls-device img', hero), wine = $('.ls-wine', hero);
     // o reflexo é recortado pelo desenho do próprio aparelho (a máscara é a imagem publicada)
     if (glint && img) {
       var mask = 'url("' + (img.currentSrc || img.src) + '")';
@@ -157,8 +158,11 @@ export const LS_STORY_SCRIPT = `
       tl.fromTo(device, { y: 160, rotateX: 26, rotateZ: -3, scale: .84, autoAlpha: 0, filter: 'blur(12px)' },
         { y: 0, rotateX: 0, rotateZ: 0, scale: 1, autoAlpha: 1, filter: 'blur(0px)', duration: 2, ease: 'expo.out', clearProps: 'filter' }, 0);
     }
-    // só a faixa de luz corre (background-position); a camada fica parada, alinhada à máscara
-    if (glint) tl.fromTo(glint, { backgroundPosition: '100% 0%' }, { backgroundPosition: '0% 0%', duration: 1.5, ease: 'power2.inOut' }, .95);
+    // a luz bordô acende por trás do aparelho enquanto ele chega (até .55, o começo do scroll)
+    if (wine) tl.fromTo(wine, { opacity: 0 }, { opacity: .55, duration: 1.8, ease: 'power2.out' }, 0);
+    // só a faixa de luz corre (background-position); a camada fica parada, alinhada à máscara.
+    // Uma passada só, depois que o aparelho assentou (a máscara é o desenho dele já no lugar)
+    if (glint) tl.fromTo(glint, { backgroundPosition: '100% 0%' }, { backgroundPosition: '0% 0%', duration: 1.6, ease: 'power2.inOut' }, 1.15);
     // a flutuação move o palco inteiro (aparelho e reflexo juntos); no desktop o scroll anima o .ls-stage, por isso aqui é o .ls-float
     var float = $('.ls-float', hero);
     if (float) tl.to(float, { y: -8, duration: 3.4, ease: 'sine.inOut', yoyo: true, repeat: -1 }, 2);
@@ -196,7 +200,8 @@ export const LS_STORY_SCRIPT = `
             if (copy) tl.to(copy, { y: -110, autoAlpha: 0, ease: 'none', duration: .45 }, 0);
             if (stage) tl.to(stage, { y: function () { return -shift(); }, scale: 1.08, ease: 'none', duration: 1 }, 0);
             if (glint) tl.fromTo(glint, { backgroundPosition: '100% 0%' }, { backgroundPosition: '0% 0%', ease: 'none', duration: .55, immediateRender: false }, .4);
-            if (wine) tl.fromTo(wine, { opacity: .55 }, { opacity: 1, ease: 'none', duration: 1 }, 0);
+            // sem pintar ao armar: a entrada ainda pode estar acendendo a luz
+            if (wine) tl.fromTo(wine, { opacity: .55 }, { opacity: 1, ease: 'none', duration: 1, immediateRender: false }, 0);
           });
           mm.add('(max-width: 1024px)', function () {
             if (stage) gsap.to(stage, { y: -40, scale: 1.04, ease: 'none', scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: true } });

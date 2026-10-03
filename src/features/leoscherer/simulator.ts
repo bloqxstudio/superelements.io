@@ -25,6 +25,13 @@ export const LS_RATES: Record<CardBrand, number[]> = {
 
 export const CARD_LABEL: Record<CardBrand, string> = { master: 'Visa ou Mastercard', elo: 'Elo, AMEX ou Hiper' }
 
+/**
+ * WhatsApp da LS para fechar a compra (só números, com DDI e DDD: 55 51 9…). Vazio enquanto o
+ * número não for confirmado: o link abre o WhatsApp com a mensagem pronta para escolher o contato.
+ */
+export const LS_WHATSAPP = ''
+export const whatsappUrl = (number = LS_WHATSAPP) => `https://wa.me/${number.replace(/\D/g, '')}`
+
 /** Vezes sem juros (as mesmas nas duas bandeiras). */
 export const FREE_UP_TO = 6
 
@@ -55,7 +62,12 @@ export const SIMULATOR_CSS = (c: { white: string; black: string; line: string; l
   'selector.ls-sim-on .ls-sim-nav{display:flex!important}',
   'selector.ls-sim-on .ls-sim-entry.is-off{display:none!important}',
   'selector .ls-sim-hint{display:none}selector .ls-sim-hint.is-on{display:block}',
-  'selector.ls-sim-on .ls-sim-restart{display:none!important}selector.ls-sim-on.ls-sim-last .ls-sim-restart{display:block!important}selector.ls-sim-on.ls-sim-last .ls-sim-next{display:none!important}',
+  'selector .ls-sim-r-big .ls-sim-lines{margin-top:10px;border-top:1px solid ' + c.line + '}',
+  'selector .ls-sim-wa .elementor-button{background-color:#25D366!important;border-color:#25D366!important;color:#04170B!important;font-weight:700!important}',
+  'selector .ls-sim-wa .elementor-button:hover,selector .ls-sim-wa .elementor-button:focus-visible{background-color:#1FBF5B!important;border-color:#1FBF5B!important;color:#04170B!important}',
+  'selector .ls-sim-wa .elementor-button .elementor-button-icon i{font-size:1.15em}',
+  // na última tela o rodapé troca o Continuar pelo Fechar no WhatsApp
+  'selector .ls-sim-nav .ls-sim-wa{display:none!important}selector.ls-sim-on.ls-sim-last .ls-sim-nav .ls-sim-wa{display:block!important}selector.ls-sim-on.ls-sim-last .ls-sim-next{display:none!important}',
   'selector.ls-sim-on.ls-sim-first .ls-sim-back{visibility:hidden}',
   // passos no alto: o ativo em branco, os feitos com o traço cheio
   `selector .ls-sim-tab{position:relative;padding-top:16px;border-top:2px solid ${c.line};transition:border-color .3s}`,
@@ -92,34 +104,84 @@ export const SIMULATOR_CSS = (c: { white: string; black: string; line: string; l
   `selector .ls-sim-switch::before{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:${c.white};transition:transform .25s cubic-bezier(.2,.7,.2,1)}`,
   'selector .ls-sim-troca[aria-checked="true"] .ls-sim-switch{background:#34C759}selector .ls-sim-troca[aria-checked="true"] .ls-sim-switch::before{transform:translateX(18px)}',
   'selector .ls-sim-troca::after{display:none}',
-  // entrada das telas: desliza no sentido do passo
-  '@keyframes ls-sim-in{from{opacity:0;transform:translate3d(var(--ls-sim-from,28px),0,0)}to{opacity:1;transform:none}}',
-  '@keyframes ls-sim-pop{from{opacity:.25;transform:translateY(6px)}to{opacity:1;transform:none}}',
-  '@media(prefers-reduced-motion:no-preference){selector.ls-sim-on .ls-sim-panel.is-active{animation:ls-sim-in .5s cubic-bezier(.2,.7,.2,1) both}selector .ls-sim-pop{animation:ls-sim-pop .4s cubic-bezier(.2,.7,.2,1) both}}',
-  'selector.ls-sim-back-dir{--ls-sim-from:-28px}',
+  // entrada das telas: curta, no sentido do passo (troca de tela é frequente: pouco movimento)
+  '@keyframes ls-sim-in{from{opacity:0;transform:translate3d(var(--ls-sim-from,12px),0,0)}to{opacity:1;transform:none}}',
+  '@media(prefers-reduced-motion:no-preference){selector.ls-sim-on .ls-sim-panel.is-active{animation:ls-sim-in .32s cubic-bezier(.2,.7,.2,1) both}}',
+  'selector.ls-sim-back-dir{--ls-sim-from:-12px}',
   '@media(max-width:767px){selector .ls-sim-outro{grid-column:1/-1}selector .ls-sim-opt::after{top:10px;right:10px;width:18px;height:18px}}',
-  // painel lateral (o script põe ls-sim-drawer; sem ele a seção fica na página, antes do rodapé)
+  // painel lateral (o script põe ls-sim-drawer; sem ele a seção fica na página, antes do rodapé).
+  // Compacto: cabeçalho de uma linha, passos sem número, produtos em lista, Continuar na largura do rodapé.
   'selector .ls-sim-close{display:none!important}',
-  `selector.ls-sim-drawer{--ls-sim-pad:28px;position:fixed!important;top:0;right:0;bottom:0;left:auto;width:min(600px,100vw)!important;max-width:none!important;height:100vh;height:100dvh;margin:0!important;padding:0 var(--ls-sim-pad)!important;z-index:2147483000;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain;background:#0A0A0B!important;border-left:1px solid ${c.line};box-shadow:-24px 0 80px rgba(0,0,0,.5);transform:translate3d(104%,0,0);visibility:hidden;transition:transform .55s cubic-bezier(.2,.7,.2,1),visibility 0s linear .55s}`,
-  'selector.ls-sim-drawer.is-open{transform:none;visibility:visible;transition:transform .55s cubic-bezier(.2,.7,.2,1),visibility 0s}',
+  `selector.ls-sim-drawer{--ls-sim-pad:24px;position:fixed!important;top:0;right:0;bottom:0;left:auto;width:min(480px,100vw)!important;max-width:none!important;height:100vh;height:100dvh;margin:0!important;padding:0 var(--ls-sim-pad)!important;z-index:2147483000;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain;background:#0A0A0B!important;border-left:1px solid ${c.line};box-shadow:-24px 0 80px rgba(0,0,0,.5);transform:translate3d(104%,0,0);visibility:hidden;transition:transform .5s cubic-bezier(.2,.7,.2,1),visibility 0s linear .5s}`,
+  'selector.ls-sim-drawer.is-open{transform:none;visibility:visible;transition:transform .5s cubic-bezier(.2,.7,.2,1),visibility 0s}',
   '@media(max-width:600px){selector.ls-sim-drawer{--ls-sim-pad:16px;border-left:0}}',
   '@media(prefers-reduced-motion:reduce){selector.ls-sim-drawer{transition:none!important}}',
   // no celular o Elementor deixa o container quebrar linha: com a altura do painel, as partes iriam para o lado
   'selector.ls-sim-drawer,selector.ls-sim-drawer>.e-con-inner,selector.ls-sim-drawer .ls-sim-stage{flex-wrap:nowrap!important}',
-  'selector.ls-sim-drawer>.e-con-inner{max-width:none!important;padding:0!important;gap:24px!important;height:auto!important;flex-shrink:0}',
-  'selector.ls-sim-drawer .ls-bg,selector.ls-sim-drawer .ls-sim-stats,selector.ls-sim-drawer .ls-sim-lede{display:none!important}',
+  'selector.ls-sim-drawer>.e-con-inner{max-width:none!important;padding:0!important;gap:0!important;height:auto!important;min-height:100%;flex-shrink:0}',
+  'selector.ls-sim-drawer .ls-bg,selector.ls-sim-drawer .ls-sim-stats,selector.ls-sim-drawer .ls-sim-lede,selector.ls-sim-drawer .ls-sim-eyebrow,selector.ls-sim-drawer .ls-sim-step{display:none!important}',
+  // cabeçalho: título e o × redondo numa linha (o !important vence o position:relative do BASE_CSS nos filhos da raiz)
+  `selector.ls-sim-drawer .ls-sim-head{position:sticky!important;top:0;z-index:6!important;align-items:center!important;width:calc(100% + 2 * var(--ls-sim-pad))!important;max-width:none;margin:0 calc(-1 * var(--ls-sim-pad));padding:14px 14px 14px var(--ls-sim-pad)!important;gap:12px!important;background:rgba(10,10,11,.94);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid ${c.line}}`,
+  'selector.ls-sim-drawer .ls-sim-head>.e-con:first-child{gap:0!important}',
+  'selector.ls-sim-drawer .ls-sim-heading .elementor-heading-title{font-size:19px!important;font-weight:600!important;line-height:1.2!important;letter-spacing:-.02em!important}',
   'selector.ls-sim-drawer .ls-sim-close{display:block!important;flex:none}',
-  `selector.ls-sim-drawer .ls-sim-head{position:sticky;top:0;z-index:6;align-items:center!important;width:calc(100% + 2 * var(--ls-sim-pad))!important;max-width:none;margin:0 calc(-1 * var(--ls-sim-pad));padding:20px var(--ls-sim-pad) 16px!important;background:rgba(10,10,11,.94);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid ${c.line}}`,
-  'selector.ls-sim-drawer .ls-sim-head>.e-con:first-child{gap:6px!important}',
-  'selector.ls-sim-drawer .ls-sim-heading .elementor-heading-title{font-size:28px!important;line-height:1.05!important}',
-  'selector.ls-sim-drawer .ls-sim-title .elementor-heading-title{font-size:30px!important}',
-  'selector.ls-sim-drawer .ls-sim-stage{border:0!important;background:none!important;padding:0!important;border-radius:0!important;box-shadow:none!important;gap:28px!important}',
-  'selector.ls-sim-drawer .ls-sim-g-produto{grid-template-columns:repeat(2,minmax(0,1fr))!important}selector.ls-sim-drawer .ls-sim-outro{grid-column:1/-1}',
-  'selector.ls-sim-drawer .ls-sim-prod{flex-direction:column!important;align-items:flex-start!important;gap:10px!important;padding:12px 40px 14px 12px!important}selector.ls-sim-drawer .ls-sim-thumb{width:56px!important;height:56px!important}',
-  'selector.ls-sim-drawer .ls-sim-result{grid-template-columns:1fr!important;grid-template-rows:auto!important;grid-template-areas:"big" "tiles" "info"!important}',
-  'selector.ls-sim-drawer .ls-sim-g-parcelas{grid-template-columns:repeat(3,minmax(0,1fr))!important}',
-  `selector.ls-sim-drawer.ls-sim-on .ls-sim-nav{position:sticky;bottom:0;z-index:5;width:calc(100% + 2 * var(--ls-sim-pad))!important;max-width:none;margin:0 calc(-1 * var(--ls-sim-pad));padding:14px var(--ls-sim-pad) 18px!important;background:rgba(10,10,11,.92);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid ${c.line};border-radius:0}`,
-  'selector.ls-sim-drawer .ls-sim-note{padding-bottom:28px}',
+  'selector.ls-sim-drawer .ls-sim-close .elementor-button{width:36px;height:36px;min-height:36px!important;padding:0!important;border-radius:50%!important}',
+  'selector.ls-sim-drawer .ls-sim-close .elementor-button-text{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}',
+  'selector.ls-sim-drawer .ls-sim-close .elementor-button-icon{margin:0!important}',
+  // palco sem moldura; passos finos, só o nome
+  'selector.ls-sim-drawer .ls-sim-stage{flex:1 0 auto!important;border:0!important;background:none!important;padding:18px 0 0!important;border-radius:0!important;box-shadow:none!important;gap:22px!important}',
+  'selector.ls-sim-drawer .ls-sim-tabs{gap:6px!important}selector.ls-sim-drawer .ls-sim-tab{padding-top:9px;gap:0!important}',
+  'selector.ls-sim-drawer .ls-sim-tab .elementor-widget-heading:first-child{display:none}',
+  'selector.ls-sim-drawer .ls-sim-tab .elementor-heading-title{font-size:12px!important;font-weight:500!important}',
+  'selector.ls-sim-drawer .ls-sim-panel{gap:16px!important}selector.ls-sim-drawer .ls-sim-panel>.e-con:first-child{gap:4px!important}',
+  'selector.ls-sim-drawer .ls-sim-title .elementor-heading-title{font-size:22px!important;line-height:1.15!important;letter-spacing:-.025em!important}',
+  'selector.ls-sim-drawer .ls-sim-panel>.e-con:first-child .elementor-widget-text-editor{font-size:14px!important;line-height:1.45!important}',
+  // produtos em lista: foto, nome e capacidade à esquerda, preço e condição à direita
+  'selector.ls-sim-drawer .ls-sim-g-produto{grid-template-columns:1fr!important;gap:8px!important}selector.ls-sim-drawer .ls-sim-outro{grid-column:auto}',
+  'selector.ls-sim-drawer .ls-sim-prod{flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;gap:12px!important;padding:10px 44px 10px 10px!important;border-radius:18px!important}',
+  'selector.ls-sim-drawer .ls-sim-thumb{flex:none!important;width:44px!important;height:44px!important;padding:4px!important;border-radius:8px!important}',
+  'selector.ls-sim-drawer .ls-sim-prod>.e-con:last-child{display:grid!important;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name price" "spec tag";column-gap:12px;row-gap:1px;align-items:baseline;flex:1 1 auto;width:auto!important;min-width:0}',
+  'selector.ls-sim-drawer .ls-sim-prod .ls-sim-name{grid-area:name}selector.ls-sim-drawer .ls-sim-prod .ls-sim-spec{grid-area:spec}',
+  'selector.ls-sim-drawer .ls-sim-prod .ls-sim-price{grid-area:price;text-align:right}selector.ls-sim-drawer .ls-sim-prod .ls-sim-tag{grid-area:tag;text-align:right}',
+  'selector.ls-sim-drawer .ls-sim-prod .ls-sim-name .elementor-heading-title{font-size:15px!important;font-weight:600!important}',
+  'selector.ls-sim-drawer .ls-sim-prod .ls-sim-spec .elementor-heading-title,selector.ls-sim-drawer .ls-sim-prod .ls-sim-tag .elementor-heading-title{font-size:12px!important}',
+  'selector.ls-sim-drawer .ls-sim-prod .ls-sim-price .elementor-heading-title{font-size:15px!important;font-variant-numeric:tabular-nums}',
+  'selector.ls-sim-drawer .ls-sim-opt::after{top:50%;margin-top:-10px;right:14px}',
+  'selector.ls-sim-drawer .ls-sim-outro{padding:14px 44px 14px 14px!important;border-radius:18px!important;gap:6px!important}selector.ls-sim-drawer .ls-sim-outro::after{top:16px;margin-top:0}',
+  'selector.ls-sim-drawer .ls-sim-form input.elementor-field{height:48px;font-size:18px}',
+  // entrada, troca e cartão: cartões baixos
+  'selector.ls-sim-drawer .ls-sim-g-entrada,selector.ls-sim-drawer .ls-sim-g-cartao{gap:8px!important}',
+  'selector.ls-sim-drawer .ls-sim-sem,selector.ls-sim-drawer .ls-sim-com,selector.ls-sim-drawer .ls-sim-master,selector.ls-sim-drawer .ls-sim-elo{padding:14px 40px 14px 14px!important;border-radius:16px!important;gap:3px!important}',
+  'selector.ls-sim-drawer .ls-sim-g-entrada .ls-sim-name .elementor-heading-title,selector.ls-sim-drawer .ls-sim-g-cartao .ls-sim-name .elementor-heading-title{font-size:16px!important}',
+  'selector.ls-sim-drawer .ls-sim-g-cartao .ls-sim-opt>.e-con:first-child{display:none!important}',
+  'selector.ls-sim-drawer .ls-sim-entry{max-width:none}',
+  'selector.ls-sim-drawer .ls-sim-troca{padding:14px!important;border-radius:16px!important;gap:16px!important}selector.ls-sim-drawer .ls-sim-troca .ls-sim-name .elementor-heading-title{font-size:15px!important}',
+  'selector.ls-sim-drawer .ls-sim-g-entrada .elementor-heading-title,selector.ls-sim-drawer .ls-sim-g-cartao .elementor-heading-title,selector.ls-sim-drawer .ls-sim-troca .elementor-heading-title{line-height:1.35}',
+  // parcelas: resumo, grade de 3 e detalhes, tudo mais baixo
+  'selector.ls-sim-drawer .ls-sim-result{grid-template-columns:1fr!important;grid-template-rows:auto!important;grid-template-areas:"big" "tiles" "info"!important;gap:16px!important}',
+  'selector.ls-sim-drawer .ls-sim-r-big{position:sticky;top:65px;z-index:4;padding:14px 16px 6px!important;border-radius:18px!important;gap:2px!important;background:#161618!important;box-shadow:0 14px 24px -14px rgba(0,0,0,.9)}',
+  'selector.ls-sim-drawer .ls-sim-r-big .ls-sim-lines{margin-top:8px}selector.ls-sim-drawer .ls-sim-r-big .ls-sim-line{padding:6px 0!important}',
+  'selector.ls-sim-drawer .ls-sim-r-big .ls-sim-line .elementor-heading-title{font-size:12.5px!important}',
+  'selector.ls-sim-drawer .ls-sim-big .elementor-heading-title{font-size:28px!important;font-variant-numeric:tabular-nums}selector.ls-sim-drawer .ls-sim-sub .elementor-heading-title{font-size:14px!important}',
+  'selector.ls-sim-drawer .ls-sim-r-tiles{gap:10px!important}selector.ls-sim-drawer .ls-sim-g-parcelas{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important}',
+  'selector.ls-sim-drawer .ls-sim-x{padding:10px!important;border-radius:12px!important;gap:2px!important}',
+  'selector.ls-sim-drawer .ls-sim-x-n .elementor-heading-title{font-size:16px!important}selector.ls-sim-drawer .ls-sim-x-p .elementor-heading-title{font-size:14px!important;font-variant-numeric:tabular-nums}selector.ls-sim-drawer .ls-sim-x-t .elementor-heading-title{font-size:11px!important}',
+  'selector.ls-sim-drawer .ls-sim-r-info{gap:14px!important}selector.ls-sim-drawer .ls-sim-line{padding:9px 0!important}',
+  'selector.ls-sim-drawer .ls-sim-line .elementor-heading-title{font-size:13px!important}',
+  'selector.ls-sim-drawer .ls-sim-r-info .elementor-button{min-height:44px;padding:12px 18px}',
+  // rodapé: Voltar pequeno, Continuar na largura que sobra
+  `selector.ls-sim-drawer.ls-sim-on .ls-sim-nav{position:sticky;bottom:0;z-index:5;width:calc(100% + 2 * var(--ls-sim-pad))!important;max-width:none;margin:auto calc(-1 * var(--ls-sim-pad)) 0;padding:12px var(--ls-sim-pad) 16px!important;gap:10px!important;background:rgba(10,10,11,.92);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid ${c.line};border-radius:0}`,
+  'selector.ls-sim-drawer .ls-sim-nav>.e-con:last-child{flex:1 1 auto!important;width:auto!important}',
+  'selector.ls-sim-drawer .ls-sim-nav .ls-sim-next,selector.ls-sim-drawer .ls-sim-nav .ls-sim-wa{flex:1 1 auto}',
+  'selector.ls-sim-drawer .ls-sim-nav .ls-sim-next .elementor-button,selector.ls-sim-drawer .ls-sim-nav .ls-sim-wa .elementor-button{width:100%}',
+  'selector.ls-sim-drawer .ls-sim-nav .ls-sim-wa .elementor-button{min-height:52px;font-size:15px!important}',
+  // na última tela o Voltar vira só a seta, para o Fechar ganhar o rodapé
+  'selector.ls-sim-drawer.ls-sim-last .ls-sim-back .elementor-button{width:52px;height:52px;min-height:52px!important;padding:0!important;border-radius:50%!important}',
+  'selector.ls-sim-drawer.ls-sim-last .ls-sim-back .elementor-button-text{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}',
+  'selector.ls-sim-drawer.ls-sim-last .ls-sim-back .elementor-button-icon{margin:0!important}',
+  'selector.ls-sim-drawer .ls-sim-nav .elementor-button{min-height:44px;padding:12px 18px}',
+  'selector.ls-sim-drawer.ls-sim-first .ls-sim-back{display:none!important}',
+  'selector.ls-sim-drawer .ls-sim-note{display:none!important}selector:not(.ls-sim-drawer) .ls-sim-note-in{display:none!important}',
 ].join('')
 
 /**
@@ -280,10 +342,18 @@ export const simulatorScript = () => `
     set('.ls-sim-v-troca', state.trade ? 'Sim, a avaliar' : 'Não');
     set('.ls-sim-v-cartao', CARD[state.card]);
     set('.ls-sim-v-parcelado', brl(Math.max(base() - entry(), 0)));
-    if (pop && !reduce) {
-      var big = $('.ls-sim-big');
-      if (big) { big.classList.remove('ls-sim-pop'); void big.offsetWidth; big.classList.add('ls-sim-pop'); }
-    }
+    whatsapp();
+  }
+  // o botão do WhatsApp leva o resumo e diz a parcela escolhida; o número vem do próprio link
+  var was = $$('.ls-sim-wa').map(function (w) { return w.querySelector('a, .elementor-button'); }).filter(Boolean);
+  var waBase = was.length ? (was[0].getAttribute('href') || 'https://wa.me/').split('?')[0] : '';
+  function whatsapp() {
+    var r = rows()[state.times - 1];
+    was.forEach(function (a) {
+      a.setAttribute('href', waBase + '?text=' + encodeURIComponent(text()));
+      var label = a.querySelector('.elementor-button-text');
+      if (label) label.textContent = 'Fechar em ' + r.times + 'x no WhatsApp';
+    });
   }
   function text() {
     var r = rows()[state.times - 1];
@@ -404,7 +474,11 @@ export const simulatorScript = () => `
     sim.setAttribute('role', 'dialog');
     sim.setAttribute('aria-modal', 'true');
     sim.setAttribute('aria-hidden', 'true');
+    // vira painel já fora da tela: com a transição ligada ele atravessaria a página, visível, ao carregar
+    sim.style.transition = 'none';
     sim.classList.add('ls-sim-drawer');
+    void sim.offsetWidth;
+    sim.style.transition = '';
 
     // o produto de onde veio o clique: o mais próximo, ou o da página de produto
     function context(from) {
