@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { CircleAlert, Download, Loader2, Radar, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,8 @@ import { cn } from '@/lib/utils'
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 const nicheNames = (ids: string[]) => ids.map((id) => nicheFor(id).label).join(', ')
+/** Linhas desenhadas por vez: uma cidade grande traz mais de mil empresas. */
+const PAGE = 150
 const when = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 
 interface Running {
@@ -103,26 +106,41 @@ const Prospects: React.FC = () => {
   const [niche, setNiche] = useState('todos')
   const [contactOnly, setContactOnly] = useState(false)
   const [text, setText] = useState('')
+  const [limit, setLimit] = useState(PAGE)
   const runningRef = useRef<Running | null>(null)
+  // A busca aberta fica no endereço (?busca=): recarregar a página ou mandar o link reabre ela
+  const [params, setParams] = useSearchParams()
+  const linked = useRef(params.get('busca'))
 
   const reloadSaved = useCallback(() => {
     listSearches().then(setSaved).catch(() => {})
   }, [])
 
+  const show = useCallback(
+    (next: SearchRecord | null) => {
+      setRecord(next)
+      setLimit(PAGE)
+      setPlatform('todas')
+      setNiche('todos')
+      setParams(next ? { busca: next.id } : {}, { replace: true })
+    },
+    [setParams]
+  )
+
   useEffect(() => {
     getConfig().then((value) => {
       setConfig(value)
-      if (value) reloadSaved()
+      if (!value) return
+      reloadSaved()
+      if (linked.current) getSearch(linked.current).then(show).catch(() => show(null))
     })
     return () => runningRef.current?.controller.abort()
-  }, [reloadSaved])
+  }, [reloadSaved, show])
 
   const open = async (id: string) => {
     try {
-      setRecord(await getSearch(id))
+      show(await getSearch(id))
       setError(null)
-      setPlatform('todas')
-      setNiche('todos')
     } catch (e) {
       toast.error('Não deu para abrir a busca', { description: e instanceof Error ? e.message : undefined })
     }
@@ -131,7 +149,7 @@ const Prospects: React.FC = () => {
   const remove = async (id: string) => {
     try {
       await removeSearch(id)
-      if (record?.id === id) setRecord(null)
+      if (record?.id === id) show(null)
       reloadSaved()
     } catch (e) {
       toast.error('Não deu para apagar a busca', { description: e instanceof Error ? e.message : undefined })
@@ -160,7 +178,7 @@ const Prospects: React.FC = () => {
           else if (event.type === 'lead') update({ leads: [...state.leads, rescore(event.lead)], done: event.done, total: event.total })
           else if (event.type === 'error') setError(event.message)
           else if (event.type === 'done') {
-            setRecord({ ...event.record, leads: event.record.leads.map(rescore).sort(byScore) })
+            show({ ...event.record, leads: event.record.leads.map(rescore).sort(byScore) })
             toast.success(`${plural(event.record.stats.businesses, 'empresa', 'empresas')} em ${event.record.input.region}`, {
               description: `${event.record.stats.elementor} com WordPress + Elementor`,
             })
@@ -368,7 +386,16 @@ const Prospects: React.FC = () => {
                     </div>
                     <div className="mt-4">
                       {filtered.length ? (
-                        <LeadTable leads={filtered} />
+                        <>
+                          <LeadTable leads={filtered.slice(0, limit)} />
+                          {filtered.length > limit && (
+                            <div className="mt-4 flex justify-center">
+                              <Button variant="outline" size="sm" onClick={() => setLimit((n) => n + PAGE)}>
+                                Mostrar mais {Math.min(PAGE, filtered.length - limit)} de {filtered.length - limit}
+                              </Button>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <p className="rounded-xl border border-dashed border-gray-300 px-6 py-10 text-center text-sm text-gray-500">Nenhuma empresa com esses filtros.</p>
                       )}

@@ -32,7 +32,9 @@ const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.k
 const SITE_TIMEOUT = 12_000
 const MAX_HTML = 1_500_000
 const CONCURRENCY = 8
-const MAX_BUSINESSES = 400
+/** Sites lidos por busca; empresas sem site não custam leitura e têm um teto maior. */
+const MAX_SITES = 400
+const MAX_BUSINESSES = 1500
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -715,18 +717,21 @@ export const runSearch = async (input: SearchInput, options: SearchOptions = {})
 
   // A mesma empresa em dois nichos ou dois bairros conta uma vez
   const unique = [...new Map(businesses.map((b) => [b.id, b])).values()].filter((b) => !/\.gov\.br/i.test(b.website ?? ''))
-  if (unique.length > MAX_BUSINESSES) notes.push(`A busca trouxe ${unique.length} empresas; ficaram as ${MAX_BUSINESSES} primeiras.`)
-  const list = unique.slice(0, MAX_BUSINESSES)
-  emit({ type: 'businesses', count: list.length })
 
   // Redes com o mesmo site (várias unidades) leem o site uma vez só
   const byDomain = new Map<string, Business[]>()
   const withoutSite: Business[] = []
-  for (const business of list) {
+  for (const business of unique) {
     const host = business.website ? hostOf(/^https?:/i.test(business.website) ? business.website : `https://${business.website}`) : ''
     if (!host || profileOf(host)) withoutSite.push(business)
-    else byDomain.set(host, [...(byDomain.get(host) ?? []), business])
+    else if (byDomain.has(host) || byDomain.size < MAX_SITES) byDomain.set(host, [...(byDomain.get(host) ?? []), business])
   }
+  if (unique.length - withoutSite.length > [...byDomain.values()].flat().length) notes.push(`Ficaram os ${MAX_SITES} primeiros sites da busca.`)
+  if (withoutSite.length > MAX_BUSINESSES) {
+    notes.push(`Das ${withoutSite.length} empresas sem site, ficaram as ${MAX_BUSINESSES} primeiras.`)
+    withoutSite.length = MAX_BUSINESSES
+  }
+  emit({ type: 'businesses', count: withoutSite.length + [...byDomain.values()].flat().length })
 
   const leads: Lead[] = []
   const total = withoutSite.length + byDomain.size
