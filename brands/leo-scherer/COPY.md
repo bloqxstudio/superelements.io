@@ -38,7 +38,7 @@ Fotos usadas (capas dos posts, 360×640 px, a maior que o Instagram entrega sem 
 | História | + de 2 anos · + de 1500 aparelhos vendidos · Conheça nossa história. · Me chamo Leonardo Scherer, tenho 20 anos, empreendedor desde os 18 anos com a inserção da Tua Case no mercado de acessórios para iPhones (mas isso começou muito antes, por volta de uns 10 anos atrás, vem comigo que te conto mais sobre)! · Siga nosso Instagram |
 | Categorias | Produtos JBL · Acessórios · Outros produtos |
 | Experiência | Aperte o play para sentir esta experiência. (indicamos o uso de AirPods para melhorar sua experiência) — vídeo `youtube.com/watch?v=B66M1DZZGtM` |
-| Simulação | Parcelamento em até 18x · Simule sua compra · Simular agora. O simulador (popup do Elementor) pede o valor do produto, a entrada e a bandeira: Visa/Mastercard ou Elo/AMEX/Hiper |
+| Simulação | Parcelamento em até 18x · Simule sua compra · Simular agora. O simulador (popup do Elementor 9064) pede o valor do produto, a entrada e a bandeira: Visa/Mastercard ou Elo/AMEX/Hiper, e busca as parcelas em `simulate.php` (ver "Simulador de parcelas" abaixo) |
 | Serviços | Vale do Sinos e região metropolitana: entregamos seu produto no mesmo dia. · Fazemos toda a transferência de dados caso você tenha iPhone; se tiver Android, criamos seu Apple ID. · A partir do iPhone 7, aceitamos seu usado na troca. · Sempre na missão de estar inovando, aqui na LS ficamos ligados nos lançamentos da marca. |
 | Newsletter | Receba nossas novidades · Assine nossa newsletter e tenha acesso ao nosso conteúdo mensal, com novidades e ofertas Apple. |
 | Rodapé | Os equipamentos deste site podem sofrer reajustes de valores a qualquer momento, sem prévio aviso. Utilizamos o dólar como norte de mercado. |
@@ -83,7 +83,26 @@ Lista de "Produtos em destaque" (carrossel dinâmico do WooCommerce); os quatro 
 7. **Fotos do Instagram:** são as capas dos posts em 360×640 px e algumas têm outras pessoas ao fundo (fila da Apple Store, loja nos EUA). Pedir ao Leonardo os originais e a confirmação de uso no site.
 8. **Imagens oficiais da Apple:** o par e as quatro cores do iPhone 18 Pro (recortadas em PNG transparente) vieram do material de lançamento; confirmar o uso pela revenda.
 9. **Seguidores:** "17,6 mil" é a contagem de 2026-10-02; muda com o tempo (tirar ou atualizar antes de publicar).
-10. **Simulador e newsletter:** os botões usam os popups do Elementor do site (ids 2432, 9064 e 3993). Só funcionam publicados no WordPress da LS.
+10. **Newsletter:** o "Inscreva-se" usa o popup do Elementor do site (id 3993). Só funciona publicado no WordPress da LS. O simulador deixou de usar os popups 2432 e 9064 (ver "Simulador de parcelas").
+
+## Simulador de parcelas (2026-10-03)
+
+O simulador do site (popup 9064) busca as parcelas em `leoscherer.com.br/simulate.php?type=master|elo&value=…`. Lido em 2026-10-03: o total é o valor dividido por (1 − taxa), de 1x a 18x, e a parcela é o total dividido pelo número de vezes. (O popup 2432 é uma calculadora antiga, `/sistema-juros/`, com outras taxas; não é a usada.)
+
+| Vezes | 1x a 6x | 7x | 8x | 9x | 10x | 11x | 12x | 13x | 14x | 15x | 16x | 17x | 18x |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Visa/Mastercard | sem juros | 7,49% | 8,12% | 8,75% | 9,38% | 10,00% | 10,61% | 12,02% | 12,62% | 13,22% | 13,81% | 14,40% | 14,98% |
+| Elo/AMEX/Hiper | sem juros | 9,29% | 9,92% | 10,55% | 11,18% | 11,80% | 12,41% | 13,02% | 13,62% | 14,22% | 14,81% | 15,40% | 15,98% |
+
+Na versão nova (`src/features/leoscherer/simulator.ts`) o simulador tem quatro telas: produto, entrada (com o usado na troca), cartão e parcelas. Ele abre num painel lateral, por cima da página, a partir de qualquer "Simule", e já vem com o produto da tela marcado (pedido do usuário em 2026-10-03). Também existe a página "Simulador" (`/simulador`). Os produtos da lista e os preços são os da home e da categoria em 2026-10-02/03.
+
+Textos novos (escritos por nós, a confirmar com o Leonardo): "Simule sua compra." · "Escolha o produto, a entrada e o cartão. As parcelas aparecem na hora, de 1x a 18x." · "Tenho um usado para dar na troca: a LS aceita seu usado na troca a partir do iPhone 7. Marque aqui e ele entra no resumo para a LS avaliar." · "Simulação com as taxas do simulador do site da LS. O valor final é confirmado na compra." · "Copie o resumo e cole na conversa com a LS pelo Instagram."
+
+Pendências do simulador:
+- As taxas estão copiadas na página. Se a LS mudar as taxas no `simulate.php`, a página precisa ser atualizada (ou o script passa a ler o `simulate.php` quando estiver publicado no mesmo site).
+- Confirmar o aviso "O valor final é confirmado na compra" e o "para a LS avaliar" da troca.
+- O iPhone 18 Pro não tem preço no site: vindo da abertura da Home, o simulador pede o valor.
+- O "Fechar pelo Instagram" abre o perfil @leooscherer; o resumo vai pelo "Copiar resumo" (o Instagram não aceita mensagem pronta no link).
 
 ## Páginas internas de exemplo (2026-10-03)
 

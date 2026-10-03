@@ -1,4 +1,5 @@
 import type { SectionNodeData } from '@/types/space'
+import { LS_IMAGE_SIZES } from './imageSizes'
 
 /**
  * A nova versão do site da LS (brands/leo-scherer/DESIGN.md): a mesma marca do
@@ -50,16 +51,19 @@ const ORIGIN = typeof window !== 'undefined' && window.location?.origin ? window
  * lado do original no tamanho em que aparece (`.space/leo-scherer/build/webp.cjs`):
  * cerca de dez vezes mais leve que os PNG.
  */
-export const lsImg = (path: string) => (path.startsWith('http') ? path : `${ORIGIN}/brands/leo-scherer/${path.replace(/^\/+/, '').replace(/\.(png|jpe?g)$/i, '.webp')}`)
+const webp = (path: string) => path.replace(/^\/+/, '').replace(/\.(png|jpe?g)$/i, '.webp')
+export const lsImg = (path: string) => (path.startsWith('http') ? path : `${ORIGIN}/brands/leo-scherer/${webp(path)}`)
+/** Largura e altura do WebP (imageSizes.ts, gerado pelo webp.cjs), para reservar o espaço antes de carregar. */
+export const lsImgSize = (path: string): [number, number] | undefined => LS_IMAGE_SIZES[webp(path)]
 
 export const SITE = 'https://leoscherer.com.br'
 export const LS_LINKS = {
   instagram: 'https://instagram.com/leooscherer',
   tuaCase: 'https://tuacase.com.br',
   video: 'https://www.youtube.com/watch?v=B66M1DZZGtM',
-  // Popups do Elementor do site: abrem quando a página está publicada no WordPress da LS
-  simulator: '#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjI0MzIiLCJ0b2dnbGUiOnRydWV9',
-  simulatorHeader: '#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjkwNjQiLCJ0b2dnbGUiOnRydWV9',
+  // O simulador da própria página: abre no painel lateral (simulator.ts); sem script, rola até a seção
+  simulator: '#simulador',
+  simulatorHeader: '#simulador',
   newsletter: '#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjM5OTMiLCJ0b2dnbGUiOnRydWV9',
   search: `${SITE}/?s=&post_type=product`,
 } as const
@@ -202,6 +206,16 @@ const BASE_CSS = [
   `selector .ls-dot .elementor-button-text::before{content:"";display:inline-block;width:7px;height:7px;margin-right:9px;border-radius:50%;background:${LS2.red};vertical-align:.12em}`,
   `@media(prefers-reduced-motion:no-preference){selector .elementor-button,selector a{transition-property:color,background-color,border-color,opacity,transform;transition-duration:180ms;transition-timing-function:${LS2_EASE}}selector .elementor-button:active{transform:scale(.96)}}`,
   '@media(prefers-reduced-motion:reduce){selector *{transition:none!important;animation:none!important}}',
+  // imagens (story.ts › LS_LOAD_SCRIPT): a foto só aparece inteira e decodificada, nunca desenhando aos
+  // pedaços, e surge devagar. Só opacidade: o zoom do GSAP e as sombras por filtro seguem valendo.
+  'html.ls-img selector img:not(.ls-ready){opacity:0}html.ls-img selector img.ls-broken{visibility:hidden}',
+  `@media(prefers-reduced-motion:no-preference){html.ls-img selector img.ls-ready:not(.ls-now):not(.ls-done){animation:ls-img-in .8s ${LS2_EASE} backwards}}`,
+  '@keyframes ls-img-in{from{opacity:0}}',
+  // abertura: os textos sobem e aparecem desde a primeira pintura, sem esperar o GSAP; ls-i1… escalonam.
+  // ls-done (o script marca no fim): a entrada não se repete quando o pin do hero move o elemento no DOM
+  `@media(prefers-reduced-motion:no-preference){html.ls-enter selector .ls-intro:not(.ls-done){animation:ls-intro 1s ${LS2_EASE} backwards;animation-delay:var(--ls-delay,0s)}}`,
+  'selector .ls-i1{--ls-delay:.08s}selector .ls-i2{--ls-delay:.16s}selector .ls-i3{--ls-delay:.24s}selector .ls-i4{--ls-delay:.32s}selector .ls-i5{--ls-delay:.4s}',
+  '@keyframes ls-intro{from{opacity:0;transform:translate3d(0,28px,0)}}',
   // fundo de pontos e luzes (backdrop): uma camada nativa atrás do conteúdo da seção
   'selector .ls-bg{position:absolute!important;inset:0;z-index:0;pointer-events:none;overflow:hidden;width:auto!important;max-width:none!important;margin:0!important}',
   'selector>.e-con-inner>.e-con:not(.ls-bg),selector>.e-con-inner>.elementor-widget:not(.ls-behavior),selector>.e-con:not(.ls-bg),selector>.elementor-widget:not(.ls-behavior){position:relative;z-index:1}',
@@ -257,7 +271,15 @@ export const createBuilder = (prefix: string) => {
     widget('heading', { title: title.replace(/\s*<br>/g, ' <br>'), header_size: 'p', title_color: color, ...typography(spec), ...options })
   const text = (html: string, spec: TypeSpec = T.body, color: string = LS2.soft, options: JsonRecord = {}) =>
     widget('text-editor', { editor: html.startsWith('<') ? html : `<p>${html}</p>`, text_color: color, ...typography(spec), ...options })
-  const image = (path: string, alt: string, options: JsonRecord = {}) => widget('image', { image: media(lsImg(path), alt), image_size: 'full', ...options })
+  // a proporção fica reservada antes de a foto chegar: a página não cresce aos saltos
+  // e o ScrollTrigger mede as posições certas (`auto`: depois de carregar vale a da própria imagem)
+  const image = (path: string, alt: string, options: JsonRecord = {}) => {
+    const size = lsImgSize(path)
+    const ratio = size ? `selector img{aspect-ratio:auto ${size[0]}/${size[1]}}` : ''
+    const { custom_css, ...rest } = options
+    const css = [ratio, typeof custom_css === 'string' ? custom_css : ''].join('')
+    return widget('image', { image: media(lsImg(path), alt), image_size: 'full', ...rest, ...(css ? { custom_css: css } : {}) })
+  }
 
   const button = (label: string, url: string, variant: ButtonVariant = 'light', options: JsonRecord & { icon?: string; dot?: boolean } = {}) => {
     const { icon, dot, _css_classes, ...rest } = options
