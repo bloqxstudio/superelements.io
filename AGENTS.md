@@ -157,7 +157,20 @@ Scope: `src/features/junior/**`, `src/features/space/juniorTemplate.ts`, `brands
 
 ### Leo Scherer model
 
-Scope: `/leoscherer-style-guide`, `/leoscherer-elementor-preview`, `/leoscherer-redesign`, `/leoscherer-redesign-proposta`, `src/features/leoscherer/**`, `src/features/space/leoschererTemplate.ts`, `src/pages/LeoSchererRedesign*`, `public/leoscherer/**` and `migrations/leoscherer/**`.
+Scope: `/leoscherer-style-guide`, `/leoscherer-elementor-preview`, `/leoscherer-redesign`, `/leoscherer-redesign-proposta`, `src/features/leoscherer/**`, `src/features/space/leoschererTemplate.ts`, `src/pages/LeoSchererRedesign*`, `public/leoscherer/**`, `migrations/leoscherer/**`, `brands/leo-scherer/**`, `public/brands/leo-scherer/**` and the "Leo Scherer" project in the Space.
+
+New version in the Space (2026-10-02, "Home" page; "Site atual (importado)" is the faithful reference): same brand and logo, organized as an Apple-standard editorial showcase. Sources of truth: `brands/leo-scherer/DESIGN.md` and `brands/leo-scherer/COPY.md` (site and Instagram facts, open items). Builders: `src/features/leoscherer/redesign.ts` and `story.ts`; section build files in `.space/leo-scherer/build/home/`.
+
+- Contact and purchase go to Instagram @leooscherer, as on the site (no WhatsApp on record). "Simule" and "Inscreva-se" use the site's Elementor popup links (ids 2432, 9064, 3993); they only work published on the LS WordPress.
+- Helvetica only; content 1200px inside 32/24/16px gutters; sections 120/88/64px; pill buttons; cards 20–24px. Red `#FF0000` only for the dot before "Simule" and small labels on dark. One light band: "Em destaque" (white, product photos multiplied on `#F5F5F7` frames).
+- Backgrounds (the user asked for dots and soft lights, Apple elegance): each section has a native `.ls-bg` layer with a masked 24px dot grid and two or three heavily blurred lights. Keep the lights soft: the user found the blue too strong (2026-10-02). Never name a container class `ls-light` (it is the light).
+- Hero (the user asked for a phone animation): centered copy over the iPhone 18 Pro pair; the phone rises tilted in 3D and settles, a glint masked by the phone's own image sweeps it, and on desktop the hero pins briefly while the copy leaves and the phone grows to the center. Official Apple images with black backgrounds are converted to transparent PNGs; never use `mix-blend-mode` on a stage GSAP moves (it showed a border under the pin).
+- Hover only on the featured products (the user's decision): the image itself zooms inside its frame and "Ver produto" appears; the frame never turns white (scaling the wrapper isolates the multiply). No hover effects on the other cards.
+- "Novos e seminovos" cards put the phone beside the copy (on top on mobile), never below it (the user disliked it).
+- More buttons (the user asked, 2026-10-03): cards and tiles use small outline pill buttons with an arrow (`cta()` in `redesign.ts`), not text links. On the Watch photo tile the button gets a dark translucent backing.
+- Inner pages as examples (2026-10-03): "Categoria · iPhones novos" (dark hero with breadcrumb, lineup and category pills, white product grid) and "Produto · MacBook Neo", which is light by the user's request (white and `#F5F5F7` bands, black and outline buttons; only the header and footer stay black). Product cards everywhere use `productCard()` + `PRODUCT_CARD_CSS`, with the featured-products hover. Products, prices and colors are static text from the site; in WordPress they become WooCommerce templates.
+- Instagram photos are 360×640 post covers: keep them small (mosaic, service cards, JBL tile) until the client sends originals and confirms use.
+- The brand is saved in the Space but off: applying it recolors the light band and labels (157 changes on 2026-10-02).
 
 - Source: https://leoscherer.com.br/ (WordPress + WooCommerce + Elementor). The public sitemap contains 2,094 product URLs and nine product categories, represented by home, category and product template families.
 - Fonts measured from the source: Helvetica for display/editorial text, Source Sans Pro for Storefront body copy and Inter only in the agency credit. Helvetica has no transported font file; use `Helvetica, Arial, sans-serif` and document the destination fallback.

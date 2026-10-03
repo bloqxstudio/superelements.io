@@ -10,6 +10,21 @@ Tudo abaixo é do site do cliente. O que a nova versão reescreveu está marcado
 - Atende no Vale dos Sinos e na região metropolitana (RS). A cidade (São Leopoldo / RS) aparece só na foto do Instagram, não em texto do site.
 - Contato: o site manda tudo para o Instagram **@leooscherer** (`https://instagram.com/leooscherer`), inclusive os botões "Entre em contato para comprar" e "Clique aqui para encomendar o seu" das páginas de produto. Não há WhatsApp, telefone nem e-mail no site.
 
+## Do Instagram @leooscherer (lido em 2026-10-02, sem login)
+
+Perfil: "Leonardo Scherer · Apple. Negócios. Lifestyle." Bio: "+ 10 anos no mundo da Tecnologia". 17,6 mil seguidores. Destaques: +CLIENTES, iPhone 17, +OBRA 3.0, LOJA 3.0, TRAJETÓRIA, iPhone 16, Miami, Orlando.
+
+| Post | O que diz (fato usado na página) |
+|---|---|
+| 2025-09-08 (reel) | "Hoje faz 1 mês da nossa reinauguração oficial" → loja reinaugurada em agosto de 2025 |
+| 2026-08-10 (reel) | "somos revendedores autorizados da marca" (JBL), "única loja na região a ter grande parte do portfólio da JBL disponível em loja a pronta entrega" |
+| 2026-09-09 (foto) | Apple Event 2026: iPhone 18 Pro e Pro Max, Watch Series 12, Ultra 4ª geração, iPhone DUO (dobrável) |
+| 2026-09-19 (reel) | "HELLO IPHONE 18 PRO GLACIAL", iPhone 18 Pro 512GB Glacial |
+| 2026-09-22 (reel) | "Todas as cores do novo 18 Pro", "a pré-venda segue a milhão" |
+| 2026-10-02 (reel) | "BOX LAUNCH EDITION 2026", caixa da Tua Case "A espera acabou!" |
+
+Fotos usadas (capas dos posts, 360×640 px, a maior que o Instagram entrega sem login): `public/brands/leo-scherer/instagram/` — loja-reinauguracao, loja-jbl, caixa-lancamento, lancamento-eua, apple-store, unboxing-18-pro, troca-17-pro, miami.
+
 ## Textos do site
 
 | Bloco | Texto |
@@ -54,6 +69,8 @@ Lista de "Produtos em destaque" (carrossel dinâmico do WooCommerce); os quatro 
 - **Preços:** no formato brasileiro (R$ 4.890). O site mostra "R$4,890.00".
 - **Contato:** "Fale com a LS" e "Entre em contato" levam ao Instagram, como no site.
 - **Rodapé:** sem o crédito "Desenvolvido por Bexond", porque a nova versão não é dela.
+- **História:** soma os fatos do Instagram: +10 anos no mundo da tecnologia (bio), loja reinaugurada em agosto de 2025, revendedor autorizado JBL e 17,6 mil seguidores (em 2026-10-02).
+- **Quatro cores:** "Do branco ao bordô, a nova linha Pro chega em quatro acabamentos." Sem nome oficial das cores (o Instagram cita "Branco (Silver)" e "Glacial").
 
 ## Pendências (confirmar com o Leonardo antes de publicar)
 
@@ -63,4 +80,19 @@ Lista de "Produtos em destaque" (carrossel dinâmico do WooCommerce); os quatro 
 4. **Fotos:** as fotos de produto são da Apple e de fabricantes, já usadas no site; as quatro dos serviços têm só 251 px de largura no site. Pedir originais maiores.
 5. **Contato:** confirmar se o Instagram segue como canal de venda ou se há WhatsApp para os botões.
 6. **Links quebrados no site atual:** "Comprar" do Watch e "Saiba mais" da história apontam para "#".
-7. **Simulador e newsletter:** os botões usam os popups do Elementor do site (ids 2432, 9064 e 3993). Só funcionam publicados no WordPress da LS.
+7. **Fotos do Instagram:** são as capas dos posts em 360×640 px e algumas têm outras pessoas ao fundo (fila da Apple Store, loja nos EUA). Pedir ao Leonardo os originais e a confirmação de uso no site.
+8. **Imagens oficiais da Apple:** o par e as quatro cores do iPhone 18 Pro (recortadas em PNG transparente) vieram do material de lançamento; confirmar o uso pela revenda.
+9. **Seguidores:** "17,6 mil" é a contagem de 2026-10-02; muda com o tempo (tirar ou atualizar antes de publicar).
+10. **Simulador e newsletter:** os botões usam os popups do Elementor do site (ids 2432, 9064 e 3993). Só funcionam publicados no WordPress da LS.
+
+## Páginas internas de exemplo (2026-10-03)
+
+**Categoria · iPhones novos** (`/categoria-produto/novos-iphone/`, lida em 2026-10-03): 10 produtos, ordenados por preço. iPhone 16e 128 GB R$ 4.590 · 16e 256 GB R$ 5.690 · 16 128 GB R$ 5.890 · 17 256 GB R$ 6.790 · 17 Pro 256 GB R$ 8.990 · 17 Pro Max 256 GB R$ 9.990 · 17 Pro 512 GB, 17 Pro 1 TB, 17 Pro Max 512 GB e 1 TB sem preço ("Consulte o valor"). Texto da abertura: "Novos, todos originais e com garantia de 1 ano. Seu usado entra na troca e você parcela em até 18x." Bloco de encomenda: o site manda "Clique aqui para encomendar o seu" para o Instagram.
+
+**Produto · MacBook Neo** (`/produto/macbook-neo-256gb-ssd-8gb-ram-novo/`): MacBook NEO 256GB SSD 8GB RAM (NOVO), R$ 6.990, "Produto por encomenda", cores da variação Amarelo, Branco / Silver, Midnight e Rosa, "Macbook LACRADO com 1 ano de garantia Apple mundial". Os destaques (bateria de até 16 horas, tela Liquid Retina de 13 polegadas 2408 × 1506 com até 500 nits, chip A18 Pro, quatro cores com teclado na mesma cor, câmera FaceTime HD 1080p, dois microfones e alto-falantes com Áudio Espacial) são o texto da descrição no site. Relacionados: os outros Macs novos da categoria `novos-mac` (Neo 512 GB Touch ID R$ 7.990, Air M5 13″ R$ 9.890, Air M5 15″ e Pro M4 14″ sem preço).
+
+Pendências dessas páginas:
+- A descrição do MacBook Neo cita "prateado, blush, amarelo-cítrico ou índigo", mas a variação à venda lista Amarelo, Branco / Silver, Midnight e Rosa. A página usa a lista da variação.
+- Os Macs "Air M5" usam fotos e endereços de "M4" no site (`macbook-air-m4-…`). Conferir nome e foto.
+- O iPhone 18 Pro da abertura da Home não aparece na categoria de iPhones novos do site.
+- As cores e o preço são texto fixo: no WordPress a página de produto vira o modelo do WooCommerce (seletor de cor, preço e estoque dinâmicos).

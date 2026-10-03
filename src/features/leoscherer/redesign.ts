@@ -136,6 +136,46 @@ export const T = {
 
 export const tweak = (spec: TypeSpec, patch: Partial<TypeSpec>): TypeSpec => ({ ...spec, ...patch })
 
+/** Uma luz do fundo: posição e tamanho em CSS, cor com transparência. */
+export interface Light { left: string; top: string; size: string; color: string; cls?: string }
+
+/** As luzes do palco: azul derivado do marinho do site, bordô do iPhone 18 Pro e um branco quase apagado. */
+export const GLOW = {
+  blue: 'rgba(78,104,156,.16)',
+  navy: 'rgba(44,60,94,.3)',
+  wine: 'rgba(132,42,62,.26)',
+  white: 'rgba(255,255,255,.05)',
+  sky: 'rgba(120,150,210,.1)',
+} as const
+
+/** Máscaras da malha de pontos: onde os pontos aparecem. */
+export const DOTS = {
+  top: 'radial-gradient(ellipse 60% 55% at 50% 0%,#000 0%,transparent 72%)',
+  right: 'radial-gradient(ellipse 45% 60% at 92% 30%,#000 0%,transparent 70%)',
+  left: 'radial-gradient(ellipse 45% 60% at 8% 40%,#000 0%,transparent 70%)',
+  center: 'radial-gradient(ellipse 55% 50% at 50% 50%,#000 0%,transparent 72%)',
+  bottom: 'radial-gradient(ellipse 70% 50% at 50% 100%,#000 0%,transparent 70%)',
+} as const
+
+/** Produto do catálogo (texto fixo tirado do site; no WordPress vira grade dinâmica do WooCommerce). */
+export interface Product { name: string; spec: string; tag: 'Novo' | 'Seminovo'; price?: string; image: string; url: string }
+
+/**
+ * CSS do cartão de produto, numa faixa clara. Hover só aqui (decisão do
+ * usuário): a própria foto amplia dentro da moldura e aparece "Ver produto".
+ * Transformar o invólucro da foto isolaria o multiply e o fundo branco dela apareceria.
+ */
+export const PRODUCT_CARD_CSS = [
+  'selector .ls-shot{aspect-ratio:1/1;position:relative;overflow:hidden}',
+  'selector .ls-shot .elementor-widget-image{width:100%}selector .ls-shot img{width:100%;aspect-ratio:1/1;object-fit:contain;mix-blend-mode:multiply}',
+  `selector .ls-tag{position:absolute;top:14px;left:14px;padding:5px 9px;border-radius:999px;background:#FFFFFF}selector .ls-tag-new{background:#000000}`,
+  'selector .ls-card h3 a{color:inherit}',
+  'selector .ls-view{position:absolute;right:14px;bottom:14px;padding:9px 14px;border-radius:999px;background:#000000}selector .ls-view a{color:inherit;display:inline-flex;gap:6px}',
+  `@media(hover:hover){selector .ls-shot img{transition:transform .9s cubic-bezier(.2,.7,.2,1)}selector .ls-view{opacity:0;transform:translateY(8px);transition:opacity .3s,transform .45s cubic-bezier(.2,.7,.2,1)}selector .ls-card:hover .ls-shot img,selector .ls-card:focus-within .ls-shot img{transform:scale(1.14)}selector .ls-card:hover .ls-view,selector .ls-card:focus-within .ls-view{opacity:1;transform:none}selector .ls-card:hover h3 a{color:#6D6D6D}}`,
+  '@media(hover:none){selector .ls-view{display:none}}@media(prefers-reduced-motion:reduce){selector .ls-card .ls-shot img{transform:none!important;transition:none!important}}',
+  '@media(max-width:767px){selector .ls-tag{top:8px;left:8px;font-size:10px!important;padding:4px 7px}}',
+].join('')
+
 /** Bloco que o GSAP faz subir ao entrar (story.ts). Nada de entrada do Elementor no que o GSAP move. */
 export const RISE = 'ls-rise'
 
@@ -157,6 +197,16 @@ const BASE_CSS = [
   `selector .ls-dot .elementor-button-text::before{content:"";display:inline-block;width:7px;height:7px;margin-right:9px;border-radius:50%;background:${LS2.red};vertical-align:.12em}`,
   `@media(prefers-reduced-motion:no-preference){selector .elementor-button,selector a{transition-property:color,background-color,border-color,opacity,transform;transition-duration:180ms;transition-timing-function:${LS2_EASE}}selector .elementor-button:active{transform:scale(.96)}}`,
   '@media(prefers-reduced-motion:reduce){selector *{transition:none!important;animation:none!important}}',
+  // fundo de pontos e luzes (backdrop): uma camada nativa atrás do conteúdo da seção
+  'selector .ls-bg{position:absolute!important;inset:0;z-index:0;pointer-events:none;overflow:hidden;width:auto!important;max-width:none!important;margin:0!important}',
+  'selector>.e-con-inner>.e-con:not(.ls-bg),selector>.e-con-inner>.elementor-widget:not(.ls-behavior),selector>.e-con:not(.ls-bg),selector>.elementor-widget:not(.ls-behavior){position:relative;z-index:1}',
+  'selector .ls-bg::before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle,var(--ls-dot,rgba(255,255,255,.14)) 1px,transparent 1.5px);background-size:24px 24px;background-position:center 12px;-webkit-mask-image:var(--ls-dot-mask,none);mask-image:var(--ls-dot-mask,none)}',
+  'selector .ls-light{position:absolute!important;border-radius:50%;filter:blur(96px);pointer-events:none;max-width:none!important}',
+  '@media(prefers-reduced-motion:no-preference){selector .ls-light{animation:ls-drift 24s ease-in-out infinite alternate}selector .ls-light:nth-child(2n){animation-duration:31s;animation-direction:alternate-reverse}}',
+  '@keyframes ls-drift{0%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(4%,-5%,0) scale(1.07)}100%{transform:translate3d(-4%,4%,0) scale(.96)}}',
+  // filete de luz no alto dos cartões escuros, como nas superfícies da Apple
+  'selector .ls-sheen{box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}',
+  'selector .ls-arrow{display:inline-block}',
   `selector a:focus-visible,selector summary:focus-visible,selector button:focus-visible,selector .elementor-button:focus-visible,selector input:focus-visible{outline:2px solid ${LS2.white};outline-offset:3px;box-shadow:0 0 0 5px ${LS2.black}}`,
 ].join('')
 
@@ -220,6 +270,30 @@ export const createBuilder = (prefix: string) => {
   const more = (label: string, url: string, color: string = LS2.white, options: JsonRecord = {}) =>
     heading(`${label} <span class="ls-arrow" aria-hidden="true">→</span>`, tweak(T.button, { size: 15 }), color, { link: link(url), ...AUTO, _css_classes: 'ls-more', ...options })
 
+  /** Botão de contorno, menor, com a seta (no lugar dos links de texto): `ghost` no escuro, `outline` no claro. */
+  const cta = (label: string, url: string, tone: Tone = 'dark', options: JsonRecord = {}) =>
+    button(label, url, tone === 'dark' ? 'ghost' : 'outline', {
+      icon: 'fas fa-arrow-right', text_padding: sides(11, 18), ...typography(tweak(T.button, { size: 13 })), ...AUTO, ...options,
+    })
+
+  /**
+   * Cartão de produto (destaques, categoria, relacionados): foto multiplicada
+   * na moldura névoa, etiqueta Novo/Seminovo, nome, especificação e preço.
+   * O hover é o dos destaques (PRODUCT_CARD_CSS): a foto amplia e aparece "Ver produto".
+   */
+  const productCard = (p: Product) => col([
+    container({ ...bg(LS2.mist), border_radius: sides(16), padding: sides(28), padding_mobile: sides(16), flex_justify_content: 'center', flex_align_items: 'center', css_classes: 'ls-shot' }, [
+      image(p.image, `${p.name} ${p.spec}`, { width: { unit: '%', size: 100, sizes: [] }, link_to: 'custom', link: link(p.url) }),
+      heading(p.tag, T.label, p.tag === 'Novo' ? LS2.white : LS2.ink, { ...AUTO, _css_classes: `ls-tag ${p.tag === 'Novo' ? 'ls-tag-new' : ''}` }),
+      heading('Ver produto <span class="ls-arrow" aria-hidden="true">→</span>', tweak(T.button, { size: 13 }), LS2.white, { ...AUTO, link: link(p.url), _css_classes: 'ls-view' }),
+    ]),
+    col([
+      heading(p.name, T.product, LS2.ink, { header_size: 'h3', link: link(p.url) }),
+      heading(p.spec, tweak(T.small, { size: 13 }), LS2.body),
+    ], 4),
+    heading(p.price ?? 'Consulte o valor', T.price, p.price ? LS2.ink : LS2.body),
+  ], 14, { css_classes: `ls-card ${RISE}` })
+
   /** Rótulo pequeno em caixa alta (cinza no escuro; o ponto vermelho é opcional). */
   const label = (value: string, tone: Tone = 'dark', options: JsonRecord & { red?: boolean } = {}) => {
     const { red, ...rest } = options
@@ -253,12 +327,25 @@ export const createBuilder = (prefix: string) => {
     return node
   }
 
+  /**
+   * Fundo da seção: malha de pontos de 24px recortada por uma máscara (`dots`,
+   * um gradiente CSS) e luzes suaves desfocadas que derivam devagar. Devolve o
+   * nó (primeiro filho da raiz) e o CSS que vai junto no `css` da raiz.
+   */
+  const backdrop = (o: { dots?: string; dotColor?: string; lights?: Light[] }) => ({
+    node: container({ css_classes: 'ls-bg' }, (o.lights ?? []).map((l, i) => container({ css_classes: `ls-light ls-light-${i + 1}${l.cls ? ` ${l.cls}` : ''}` }))),
+    css: [
+      o.dots ? `selector .ls-bg{--ls-dot-mask:${o.dots};${o.dotColor ? `--ls-dot:${o.dotColor};` : ''}}` : 'selector .ls-bg::before{display:none}',
+      ...(o.lights ?? []).map((l, i) => `selector .ls-light-${i + 1}{left:${l.left};top:${l.top};width:${l.size};height:${l.size};background:radial-gradient(circle,${l.color} 0%,transparent 68%)}`),
+    ].join(''),
+  })
+
   /** Widget HTML só com comportamento (o script de movimento). */
   const behavior = (html: string) => widget('html', { html, _css_classes: 'ls-behavior' })
 
   const section = (title: string, sourceId: string, rootNode: ElementorNode): SectionNodeData => ({ title, sourceId, elementorJson: JSON.stringify([rootNode]) })
 
-  return { uid, container, widget, col, row, grid, heading, text, image, button, more, label, sectionHead, root, behavior, section }
+  return { uid, container, widget, col, row, grid, heading, text, image, button, cta, more, productCard, label, sectionHead, root, backdrop, behavior, section }
 }
 
 export type Ls2Builder = ReturnType<typeof createBuilder>
