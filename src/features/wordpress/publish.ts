@@ -40,7 +40,7 @@ export interface PublishOptions {
   pageId: string
   /** Na página ligada, sem valor fica a situação que ela tem no site. */
   status?: PageStatus
-  /** Só para página nova. */
+  /** Layout da página no WordPress. Na página ligada, sem valor fica o que ela tem no site. */
   template?: PageTemplate
   /** Atualiza mesmo que a página tenha mudado no site. */
   overwrite?: boolean
@@ -73,6 +73,8 @@ interface WpPage {
   slug?: string
   featured_media?: number
   title?: { raw?: string }
+  /** Modelo de página do tema ('' é o padrão do tema). */
+  template?: string
   meta?: { _elementor_data?: string }
 }
 
@@ -127,7 +129,7 @@ export async function publishPage({ connection, projectId, pageId, status, templ
     onProgress?.('Conferindo a página no site…')
     try {
       current = await wpRequest<WpPage>(creds, `wp/v2/pages/${link.postId}`, {
-        params: { context: 'edit', _fields: 'id,link,status,modified_gmt,title,slug,meta._elementor_data' },
+        params: { context: 'edit', _fields: 'id,link,status,modified_gmt,title,slug,template,meta._elementor_data' },
       })
     } catch (error) {
       if (error instanceof WordPressError && error.status === 404) {
@@ -175,7 +177,12 @@ export async function publishPage({ connection, projectId, pageId, status, templ
   if (link && current) {
     // Guarda o que o site tinha, para desfazer daqui
     const backups = await loadPublishBackups(projectId, link.postId)
-    const previous: PublishBackup = { elementorData: current.meta?._elementor_data ?? '', modifiedGmt: current.modified_gmt, savedAt: Date.now() }
+    const previous: PublishBackup = {
+      elementorData: current.meta?._elementor_data ?? '',
+      modifiedGmt: current.modified_gmt,
+      savedAt: Date.now(),
+      template: current.template,
+    }
     await savePublishBackups(projectId, link.postId, [previous, ...backups].slice(0, MAX_BACKUPS))
 
     onProgress?.('Gravando a página no WordPress…')
@@ -183,6 +190,7 @@ export async function publishPage({ connection, projectId, pageId, status, templ
     if (title && title !== current.title?.raw) body.title = title
     if (slug && slug !== current.slug) body.slug = slug
     if (status && status !== current.status) body.status = status
+    if (template && template !== current.template) body.template = template
     saved = await wpRequest<WpPage>(creds, `wp/v2/pages/${link.postId}`, { method: 'POST', params: { _fields: SAVED_FIELDS }, body })
   } else {
     onProgress?.('Criando a página no WordPress…')
@@ -256,7 +264,7 @@ export async function restoreLastBackup(connection: WordPressConnection, project
   const saved = await wpRequest<WpPage>(credentialsOf(connection), `wp/v2/pages/${link.postId}`, {
     method: 'POST',
     params: { _fields: 'id,link,status,modified_gmt,title' },
-    body: { meta: { _elementor_data: last.elementorData } },
+    body: { meta: { _elementor_data: last.elementorData }, ...(last.template !== undefined ? { template: last.template } : {}) },
   })
   await savePublishBackups(projectId, link.postId, rest)
   const cacheCleared = await clearElementorCache(connection)

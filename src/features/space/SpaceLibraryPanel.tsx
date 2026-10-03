@@ -48,7 +48,11 @@ import { useSpaceStore } from '@/store/spaceStore'
 import { withFreshIds } from './landingPage'
 import { consumeLibraryDrop, startLibraryDrag } from './pages/libraryDrag'
 import { brandCustomization } from './brand/applyBrand'
-import { useActiveBrand } from './brand/brandStore'
+import { usePackBrand } from './brand/usePackBrand'
+import { fillWithProjectCopy, type ProjectCopy } from './copy/projectCopy'
+import { useProjectCopy } from './copy/useProjectCopy'
+import type { ElementorCustomization } from '@/features/elementor-preview/useElementorDocument'
+import type { Brand } from './brand/designMd'
 import { ISLAND_SURFACE } from './ToolbarIsland'
 
 export const LIBRARY_PANEL_WIDTH = 320
@@ -80,6 +84,37 @@ type FormatFilter = SectionFormat | 'all'
 
 const NO_ENTRIES: PackEntry[] = []
 
+// Escolha de cada pessoa neste navegador: ver as seções com os textos do projeto ou com os do pack
+const PROJECT_COPY_FLAG = 'se-library-project-copy'
+const readProjectCopyFlag = () => {
+  try {
+    return localStorage.getItem(PROJECT_COPY_FLAG) !== 'off'
+  } catch {
+    return true
+  }
+}
+const saveProjectCopyFlag = (on: boolean) => {
+  try {
+    localStorage.setItem(PROJECT_COPY_FLAG, on ? 'on' : 'off')
+  } catch {
+    // Sem armazenamento a escolha vale só enquanto o painel está aberto
+  }
+}
+
+/** Miniatura como a seção vai entrar na página: com os textos do projeto e a marca por cima. */
+function libraryCustomization(brand: Brand | null, copy: ProjectCopy | null): ElementorCustomization | undefined {
+  if (!brand && !copy) return undefined
+  const branded = brand ? brandCustomization(brand) : null
+  return {
+    key: `${branded?.key ?? ''}|${copy?.key ?? ''}`,
+    transform: (elements) => {
+      const filled = copy ? fillWithProjectCopy(elements, copy) : elements
+      return branded ? branded.transform(filled) : filled
+    },
+    kit: branded?.kit,
+  }
+}
+
 interface SpaceLibraryPanelProps {
   onClose: () => void
 }
@@ -88,8 +123,11 @@ interface SpaceLibraryPanelProps {
 export const SpaceLibraryPanel: React.FC<SpaceLibraryPanelProps> = ({ onClose }) => {
   const addSection = useSpaceStore((s) => s.addSection)
   // As miniaturas já mostram a seção como ela vai entrar na página
-  const brand = useActiveBrand()
-  const customize = useMemo(() => (brand ? brandCustomization(brand) : undefined), [brand])
+  const brand = usePackBrand()
+  const projectCopy = useProjectCopy()
+  const [projectText, setProjectText] = useState(readProjectCopyFlag)
+  const copy = projectText ? projectCopy : null
+  const customize = useMemo(() => libraryCustomization(brand, copy), [brand, copy])
   const [index, setIndex] = useState<PackIndex | null | undefined>(undefined)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<SectionCategoryKey | null>(null)
@@ -142,11 +180,15 @@ export const SpaceLibraryPanel: React.FC<SpaceLibraryPanelProps> = ({ onClose })
       setFormat('all')
     })
 
-  const sectionData = (entry: PackEntry, component: PackComponent) => ({
-    title: entry.title,
-    sourceId: entry.id,
-    elementorJson: JSON.stringify(withFreshIds(component.meta._elementor_data)),
-  })
+  // A seção entra com os mesmos textos da miniatura (o sorteio usa os ids originais, antes dos novos)
+  const sectionData = (entry: PackEntry, component: PackComponent) => {
+    const elements = component.meta._elementor_data
+    return {
+      title: entry.title,
+      sourceId: entry.id,
+      elementorJson: JSON.stringify(withFreshIds(copy ? fillWithProjectCopy(elements, copy) : elements)),
+    }
+  }
 
   const handleAdd = (entry: PackEntry, component: PackComponent) => {
     const pageId = addSection(sectionData(entry, component), { leftInset: LIBRARY_PANEL_WIDTH + 24 })
@@ -252,6 +294,22 @@ export const SpaceLibraryPanel: React.FC<SpaceLibraryPanelProps> = ({ onClose })
               <label className="flex items-center justify-between text-[11px] text-gray-600">
                 Só as que o preview desenha por completo
                 <Switch checked={onlyComplete} onCheckedChange={(v) => changeFilter(() => setOnlyComplete(v))} />
+              </label>
+            )}
+
+            {!showCategories && projectCopy && (
+              <label
+                className="flex items-center justify-between text-[11px] text-gray-600"
+                title="Troca o lorem ipsum por títulos, textos e botões das páginas do projeto. Contato, números e nomes ficam como estão."
+              >
+                Com os textos do projeto
+                <Switch
+                  checked={projectText}
+                  onCheckedChange={(v) => {
+                    setProjectText(v)
+                    saveProjectCopyFlag(v)
+                  }}
+                />
               </label>
             )}
           </div>

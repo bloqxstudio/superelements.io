@@ -1,6 +1,8 @@
 import type { ColorPaletteNodeData, SectionMotion, SectionNodeData, SpaceConnection, SpaceNode, TextNodeData } from '@/types/space'
+import { isPackSection } from '@/features/section-pack/categories'
 import { applyBrand } from './brand/applyBrand'
 import type { Brand } from './brand/designMd'
+import { projectHouseStyle, withHouseStyle } from './brand/houseStyle'
 import { sectionBrand } from './levels/motion'
 import { applyNavigatorTitles } from './navigator/navigatorLabels'
 import { restorePinned } from './editor/pinned'
@@ -123,8 +125,10 @@ export function sectionBase(section: SpaceNode, nodes: SpaceNode[], connections:
  * para a seção no nível Movimento (ou `motion`, um rascunho) vale no lugar do
  * movimento da marca. Seção importada do site do cliente não recebe a marca:
  * a troca de cada cor pela cor da marca mais próxima desfiguraria o site ao
- * publicar de volta. Só o movimento escolhido para ela entra. Os ajustes feitos
- * à mão no painel de propriedades voltam por cima da marca.
+ * publicar de volta. Só o movimento escolhido para ela entra. Seção do pack
+ * recebe também o estilo das páginas do projeto onde o guia é omisso (peso,
+ * caixa e espaçamento dos títulos). Os ajustes feitos à mão no painel de
+ * propriedades voltam por cima da marca.
  */
 export function sectionWithTransforms(
   section: SpaceNode,
@@ -136,7 +140,8 @@ export function sectionWithTransforms(
   const elements = sectionBase(section, nodes, connections)
   if (!elements) return null
   const data = section.data as SectionNodeData
-  const effective = sectionBrand(data.origin ? null : brand ?? null, motion ?? data.levels?.motion)
+  let effective = sectionBrand(data.origin ? null : brand ?? null, motion ?? data.levels?.motion)
+  if (effective && isPackSection(data.sourceId)) effective = withHouseStyle(effective, projectHouseStyle(nodes, effective))
   return effective ? restorePinned(applyBrand(elements, effective), elements, data.pinned) : elements
 }
 

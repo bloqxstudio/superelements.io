@@ -44,4 +44,6 @@ export interface PublishBackup {
   elementorData: string
   modifiedGmt: string
   savedAt: number
+  /** Layout que a página tinha no site; ausente nas versões guardadas antes de o layout ir junto. */
+  template?: string
 }

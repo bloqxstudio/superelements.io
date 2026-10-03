@@ -197,6 +197,9 @@ export const getCategory = (key: SectionCategoryKey) => CATEGORY_BY_KEY.get(key)
 
 export const FORMAT_LABELS: Record<SectionFormat, string> = { fixed: 'Fixa', carousel: 'Carrossel' };
 
+/** Seção do pack Section Express (c1…c3500), e não um modelo feito para o cliente. */
+export const isPackSection = (sourceId?: string) => !!sourceId && /^c\d+$/.test(sourceId);
+
 const SOURCE_BY_NUMBER = new Map<number, string>();
 for (const [source, ranges] of Object.entries(SOURCE_CATEGORY_RANGES)) {
   for (const range of ranges.split(',')) {

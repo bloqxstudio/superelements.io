@@ -67,7 +67,7 @@ function Choices<T extends string>({ name, value, options, onChange }: { name: s
 }
 
 const TEMPLATE_OPTIONS: Choice<PageTemplate>[] = [
-  { value: 'elementor_canvas', label: 'Tela cheia', hint: 'Só as seções da página, sem o tema' },
+  { value: 'elementor_canvas', label: 'Tela cheia', hint: 'Tela do Elementor: só as seções da página, sem o cabeçalho e o rodapé do tema' },
   { value: 'elementor_header_footer', label: 'Com o tema', hint: 'Cabeçalho e rodapé do tema em volta' },
 ]
 
@@ -370,17 +370,17 @@ export const PublishPanel: React.FC = () => {
             </p>
           </div>
         ) : (
-          <>
-            <div className="grid gap-2">
-              <Label>Situação</Label>
-              <Choices name="Situação" value={status} onChange={(value) => setStatus(value)} options={statusOptions} />
-            </div>
-            <div className="grid gap-2">
-              <Label>Layout</Label>
-              <Choices name="Layout" value={template} onChange={(value) => setTemplate(value)} options={TEMPLATE_OPTIONS} />
-            </div>
-          </>
+          <div className="grid gap-2">
+            <Label>Situação</Label>
+            <Choices name="Situação" value={status} onChange={(value) => setStatus(value)} options={statusOptions} />
+          </div>
         )}
+
+        {/* Também na página ligada: a página do Space traz o próprio cabeçalho, e o layout do site pode ser o do tema */}
+        <div className="grid gap-2">
+          <Label>Layout</Label>
+          <Choices name="Layout" value={template} onChange={(value) => setTemplate(value)} options={TEMPLATE_OPTIONS} />
+        </div>
 
         <DetailsSummary pageId={page.id} />
 
