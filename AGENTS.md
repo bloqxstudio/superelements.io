@@ -32,6 +32,21 @@ Scope: `/msa-style-guide`, `/msa-elementor-preview`, `src/features/msa/**`, `src
 - The CSS alone is always the final composition; the script only arms `msa-pending`, `msa-loading` and the hidden reveal states. Reduced motion, no GSAP, the static preview, the Elementor editor (`elementor-editor-active`) and the Space canvas thumbnails run nothing (no preloader). Never put Elementor entrance animations on anything GSAP moves: their `fill-mode: both` overrides the transforms.
 - Only the hero has a texture: a faint static planning grid. No diagonal lines (the user disliked them in the footer). The footer is structured (brand, navigation, contact, CTA) over a large MSA wordmark at 8% opacity; keep all footer text and links native.
 
+### Superelements model (our own product page)
+
+Scope: `src/features/superelements/**`, `brands/superelements/**`, `public/brands/superelements/**` and the "Superelements" project in the Space (created 2026-10-02).
+
+- Our own product. Sources of truth: `brands/superelements/DESIGN.md` and `brands/superelements/COPY.md` (copy from the concept landing `src/pages/SuperElementsLanding.tsx`, with the open items). Never show prices, client names or numbers as facts; the demo project is the fictional Caramelo Pet on `caramelopet.exemplo`.
+- The user asked for a tech style with Space Mono: Space Grotesk 600 for titles, Space Grotesk 400 for text, Space Mono for labels (`[ 02 ] Como funciona`), buttons, indexes and UI. The product screens use Inter, the app's font. The logo never uses mono (the user asked): the wordmark and the big footer mark are Space Grotesk 700.
+- Site pages in the Space project: Home (`/inicio`), Produto (`/produto`), Preços (`/precos`), Agências (`/agencias`), Contato (`/contato`); the shared header and footer link them by slug (set with `space details`). Prices come from `src/features/superelements/plans.ts` (R$ 89 / 179 / 349, confirmed by the user on 2026-10-02).
+- Titles keep one sentence per line on desktop; on mobile the h2 `<br>` is hidden, so `heading()` always puts a space before `<br>`.
+- Core colors: ink `#09090B`, raised `#111114`, white text `#F4F4F5` / `#A1A1AA`, canvas `#F4F4F5`, white, light line `#E4E4E7`, lime `#D2F525` (hover `#DDFA47`) from the logo. Lime only on what you click and on small marks; never lime text on light. Inside the screens the app colors stay (violet `#8B5CF6` selection, `#D97757` agent, emerald published, Tailwind grays).
+- Content 1240px inside 32/24/16px gutters; sections 128/96/72px. Buttons 8px, cards 12–16px, windows 16px. No shadows outside the screens. The only texture is the canvas dot grid (24px).
+- The user asked to show the real product: the Space window, toolbar, library, page frame with the Caramelo Pet section photos, Claude panel and publish dialog are native containers copied from the app (`src/features/superelements/screens.ts`). Keep labels, icons and measures faithful to the app.
+- Motion (`src/features/superelements/story.ts`, one behavior-only HTML widget, first child of the hero): the scroll drives a publish. The window arrives tilted and settles, pins, the camera zooms into "Publicar no site" with a spotlight, the large cursor (38px, the user asked for it bigger) arcs in, the button lights up and the click releases two lime rings; the real publish dialog grows out of the button, runs its steps with a progress bar, and the page frame flashes lime and gets "No site". A mono ruler under the window lights the four steps. Reversible; no pin below 1025px, where a short sequence plays once. Containers here have no CSS `transform` transition (Elementor's 0.4s made the window slide at the pin end, the bug the user reported): keep `transition-property` without transform in `BASE_CSS`.
+- Brand in the Space stays saved but **off**: applying it recolors and refonts the product screens (804 changes in 11 sections on 2026-10-02). Build the pages in the brand instead.
+- The engine's hosted video now honors Elementor's autoplay, mute, loop and controls (the 3D symbol in the final CTA).
+
 ### Menuzito model
 
 Scope: `/menuzito-modelo`, `/menuzito-style-guide`, `src/features/menuzito/**`, and `public/menuzito/**`.

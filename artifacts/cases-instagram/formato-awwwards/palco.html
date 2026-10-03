@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Palco da tela flutuante</title>
+<style>
+  html, body { margin: 0; background: #0b0c10; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="palco"></canvas>
+<script>
+  // Compõe cada quadro do vídeo: o fundo é o próprio quadro do site, cortado para
+  // cobrir, reduzido e desfocado; a tela é o quadro inteiro, no centro, com sombra.
+  const canvas = document.getElementById('palco')
+  const ctx = canvas.getContext('2d')
+  const miniatura = document.createElement('canvas')
+  const mctx = miniatura.getContext('2d')
+  let cfg
+
+  window.configurar = (opcoes) => {
+    cfg = opcoes
+    canvas.width = cfg.w
+    canvas.height = cfg.h
+    canvas.style.width = `${cfg.w}px`
+    canvas.style.height = `${cfg.h}px`
+    // Reduzir antes de desfocar deixa o fundo liso e barato de desenhar
+    miniatura.width = Math.round(cfg.w / 18)
+    miniatura.height = Math.round(cfg.h / 18)
+    return true
+  }
+
+  window.desenhar = async (base64) => {
+    const blob = await (await fetch(`data:image/jpeg;base64,${base64}`)).blob()
+    const quadro = await createImageBitmap(blob)
+    const { w, h, tela, escurecer, desfoque, sombra } = cfg
+
+    const proporcao = w / h
+    let cw = quadro.width, ch = quadro.width / proporcao
+    if (ch > quadro.height) { ch = quadro.height; cw = quadro.height * proporcao }
+    mctx.drawImage(quadro, (quadro.width - cw) / 2, (quadro.height - ch) / 2, cw, ch, 0, 0, miniatura.width, miniatura.height)
+    ctx.save()
+    ctx.filter = `blur(${desfoque}px)`
+    ctx.drawImage(miniatura, -w * 0.1, -h * 0.1, w * 1.2, h * 1.2)
+    ctx.restore()
+    ctx.fillStyle = `rgba(0, 0, 0, ${escurecer})`
+    ctx.fillRect(0, 0, w, h)
+
+    const tw = tela
+    const th = Math.round(tela * quadro.height / quadro.width)
+    const x = Math.round((w - tw) / 2)
+    const y = Math.round((h - th) / 2)
+    ctx.save()
+    ctx.shadowColor = `rgba(0, 0, 0, ${sombra})`
+    ctx.shadowBlur = 70
+    ctx.shadowOffsetY = 26
+    ctx.fillStyle = '#000'
+    ctx.fillRect(x, y, tw, th)
+    ctx.restore()
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(quadro, x, y, tw, th)
+    quadro.close()
+    await new Promise((pronto) => requestAnimationFrame(() => pronto()))
+    return true
+  }
+</script>
+</body>
+</html>

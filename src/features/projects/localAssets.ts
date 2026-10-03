@@ -9,7 +9,7 @@
  * Só as pastas de `public/` entram: um WordPress local (Playground em outra
  * porta, com `/wp-content/`) continua com o endereço dele.
  */
-const APP_FOLDERS = ['sections', 'brands', 'inpel', 'zelo', 'menuzito', 'uglycash', 'pdv-light', 'lovable-uploads', 'wordpress']
+const APP_FOLDERS = ['sections', 'brands', 'inpel', 'zelo', 'leoscherer', 'menuzito', 'uglycash', 'pdv-light', 'lovable-uploads', 'wordpress']
 
 const LOCAL_APP_ASSET = new RegExp(`https?://(?:localhost|127\\.0\\.0\\.1)(?::\\d+)?(?=/(?:${APP_FOLDERS.join('|')})/)`, 'g')
 

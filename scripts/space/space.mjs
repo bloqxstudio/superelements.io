@@ -27,6 +27,10 @@ const HELP = `Agente no Space (Claude ou Codex) — trabalhar na página do clie
   status                          projeto aberto, páginas, seções e o que está selecionado
   projects                        projetos da conta
   open <nome|id>                  abre o projeto na aba do Space e espera ficar pronto
+  new <nome> [--context "<briefing>" | --context-file <arquivo>]
+                                  cria um projeto na conta e o abre na aba
+  brief [--set "<texto>" | --file <arquivo>]
+                                  mostra ou troca o briefing do projeto (o campo Contexto)
   pull [--page <nome>]...         baixa as páginas para .space/<projeto>/<página>/ (uma seção por arquivo)
   push <arquivo|pasta>... --label "<o que mudou>" [--force] [--no-focus]
                                   grava no canvas as seções alteradas e as novas (um passo do Ctrl+Z)
@@ -49,6 +53,24 @@ const HELP = `Agente no Space (Claude ou Codex) — trabalhar na página do clie
                                   fotos da página (ou das seções) como o player mostra, em .space/<projeto>/fotos/
   video [--page <nome>] [--device desktop|mobile|all] [--pause <s>] [--speed <px/s>] [--out arquivo.mp4]
                                   vídeo da página rolando do topo ao fim, com as animações (ffmpeg), em .space/<projeto>/videos/
+
+Com o cliente e o site (falam com a conta e com o WordPress; cada um é um passo combinado):
+  approval [--page <nome>] [--wait <min>]
+                                  links de aprovação e respostas do cliente; --wait espera ele responder à versão atual
+  approval send --page <nome> [--label "..."]
+                                  manda a página de agora para o cliente (cria o link ou troca a foto do mesmo link)
+  approval revoke --page <nome>   desativa o link
+  invite | invite create [--label "<para quem>"] | invite cancel <id>
+                                  pessoas e convites abertos; convite para editar o projeto junto (uma pessoa, 7 dias)
+  wp                              conexão com o WordPress e as páginas já ligadas ao site
+  wp connect <site> [--user <login> --password "<senha de aplicação>"]
+                                  sem senha: o link para o WordPress aprovar; com ela: grava a conexão
+  wp pages | wp import <id>...    páginas do site; trazer páginas do site para o canvas
+  details --page <nome> [--title --slug --seo-title --description --keyword]
+                                  título, endereço e SEO que vão junto ao publicar (--slug= limpa)
+  publish --page <nome> [--live] [--layout canvas|tema] [--overwrite] --yes
+                                  publica no WordPress (página nova vai como rascunho sem --live); sem --yes só mostra o que faria
+  restore --page <nome> --yes     volta a página do site para a versão de antes da última publicação daqui
 
   <seção> é o id (ou o começo dele), o número na página ("3", com --page) ou parte do título.
   Opções gerais: --tab <id> escolhe a aba; --json mostra a resposta crua.`
@@ -73,9 +95,23 @@ for (let i = 0; i < argv.length; i++) {
 const list = (value) => (value === undefined ? [] : [].concat(value).filter((v) => v !== true))
 const one = (value) => list(value)[0]
 
-const fail = (message) => {
+/**
+ * Sair com erro sem process.exit na hora: no Windows (Node 24) ele derruba o
+ * processo com "UV_HANDLE_CLOSING" quando o fetch ainda está fechando o socket.
+ * O erro sobe até a entrada, que define o código de saída.
+ */
+class Exit extends Error {
+  constructor(code) {
+    super(`saída ${code}`)
+    this.code = code
+  }
+}
+const quit = (code) => {
+  throw new Exit(code)
+}
+const fail = (message, code = 1) => {
   console.error(`✖ ${message}`)
-  process.exit(1)
+  quit(code)
 }
 
 // ---------- ponte ----------
@@ -138,7 +174,8 @@ const CLIENTS = [
   { match: /caramelo|petshop/i, brand: 'brands/caramelo-pet', builder: 'src/features/petshop/elementor.ts', scope: 'Caramelo Pet model (petshop example)' },
   { match: /inpel/i, brand: 'brands/inpel', builder: 'src/features/inpel/elementor.ts', scope: 'Inpel model' },
   { match: /zelo/i, brand: 'public/zelo', builder: 'src/features/zelo/elementor.ts', scope: 'Zelo model' },
-  { match: /leo\s*scherer/i, brand: 'public/leoscherer', builder: 'src/features/leoscherer', scope: 'Leo Scherer model' },
+  { match: /leo\s*scherer/i, brand: 'brands/leo-scherer', builder: 'src/features/leoscherer', scope: 'Leo Scherer model' },
+  { match: /super\s*elements/i, brand: 'brands/superelements', builder: 'src/features/superelements', scope: 'Superelements model (our own product page)' },
 ]
 const clientOf = (name = '') => CLIENTS.find((c) => c.match.test(name))
 
@@ -149,12 +186,13 @@ function resolveSection(status, ref, pageRef) {
   if (!ref) fail('Diga qual seção')
   const pages = pageRef ? [resolvePage(status, pageRef)] : status.pages
   const all = pages.flatMap((p) => p.sections.map((s) => ({ ...s, page: p }))).concat(pageRef ? [] : status.loose.map((s) => ({ ...s, page: null })))
-  const byId = all.filter((s) => s.id === ref || s.id.startsWith(ref))
-  if (byId.length === 1) return byId[0]
-  if (/^\d+$/.test(ref) && pages.length === 1) {
+  // "3" com uma página só em jogo é a posição, mesmo que algum id comece com 3
+  if (/^\d{1,3}$/.test(ref) && pages.length === 1) {
     const hit = pages[0].sections[Number(ref) - 1]
     if (hit) return { ...hit, page: pages[0] }
   }
+  const byId = all.filter((s) => s.id === ref || s.id.startsWith(ref))
+  if (byId.length === 1) return byId[0]
   const lower = ref.toLowerCase()
   const byTitle = all.filter((s) => s.title.toLowerCase().includes(lower))
   if (byTitle.length === 1) return byTitle[0]
@@ -230,10 +268,27 @@ async function cmdOpen() {
   const project = matches[0]
   const { tab } = await request('/call', { method: 'POST', body: JSON.stringify({ method: 'open', params: { projectId: project.id }, tab: one(flags.tab) }) })
   process.stdout.write(`Abrindo ${project.name}…`)
+  await waitOpen(tab, project.id)
+}
+
+/** Cria o projeto na conta (nome e briefing, como o botão Novo projeto) e o abre na aba. */
+async function cmdNew() {
+  const name = positional.join(' ').trim()
+  if (!name) fail('Diga o nome do projeto')
+  const { projects } = await call('projects')
+  if (projects.some((p) => p.name.toLowerCase() === name.toLowerCase())) fail(`Já existe um projeto "${name}". Use: open ${name}`)
+  const file = one(flags['context-file'])
+  const context = file ? readFileSync(file, 'utf8') : (one(flags.context) ?? '')
+  const { tab, result } = await request('/call', { method: 'POST', body: JSON.stringify({ method: 'create', params: { name, context }, tab: one(flags.tab), agent: AGENT }) })
+  process.stdout.write(`Projeto ${result.project.name} criado (${result.project.id}). Abrindo…`)
+  await waitOpen(tab, result.project.id)
+}
+
+async function waitOpen(tab, projectId) {
   for (let i = 0; i < 60; i++) {
     await new Promise((r) => setTimeout(r, 1000))
     const { tabs } = await request('/status').catch(() => ({ tabs: [] }))
-    if (tabs.some((t) => t.tabId === tab.tabId && t.projectId === project.id && t.ready)) {
+    if (tabs.some((t) => t.tabId === tab.tabId && t.projectId === projectId && t.ready)) {
       console.log(' pronto.')
       return
     }
@@ -459,6 +514,14 @@ async function cmdPageAdd() {
   console.log(`✔ Página ${name} criada (${result.pages.page}).`)
 }
 
+const devOrigin = () => {
+  try {
+    return new URL(JSON.parse(readFileSync(STATE_FILE, 'utf8')).url).origin
+  } catch {
+    return 'http://localhost'
+  }
+}
+
 async function cmdBuild() {
   const entry = positional[0]
   if (!entry) fail('Diga o arquivo .ts que monta a seção')
@@ -474,8 +537,9 @@ async function cmdBuild() {
       outfile: bundle,
       alias: { '@': path.join(ROOT, 'src') },
       loader: { '.svg': 'text', '.css': 'text', '.png': 'dataurl', '.jpg': 'dataurl', '.webp': 'dataurl' },
-      // Alguns módulos do app leem window.location ao carregar
-      banner: { js: "globalThis.window ??= { location: { origin: 'http://localhost' } }; globalThis.location ??= globalThis.window.location;" },
+      // Alguns módulos do app leem window.location ao carregar: a origem é a do servidor de dev,
+      // para as imagens de public/ abrirem já na aba (o projeto troca a porta ao abrir)
+      banner: { js: `globalThis.window ??= { location: { origin: ${JSON.stringify(devOrigin())} } }; globalThis.location ??= globalThis.window.location;` },
       logLevel: 'error',
     })
     const mod = await import(pathToFileURL(bundle).href)
@@ -543,6 +607,254 @@ async function cmdFocus() {
   if (flags.page && !positional.length) await call('focus', { page: resolvePage(status, one(flags.page)).id })
   else await call('focus', { id: resolveSection(status, positional[0], one(flags.page)).id })
   console.log('✔ Canvas no lugar.')
+}
+
+// ---------- ciclo com o cliente: briefing, aprovação, convite, WordPress ----------
+
+const when = (time) => new Date(time).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+const DECISION = { approved: 'aprovou', changes: 'pediu ajuste' }
+const SHARE_STATE = { none: 'sem link', waiting: 'esperando a resposta do cliente', approved: 'APROVADA', changes: 'AJUSTE PEDIDO' }
+const LOCAL_WARNING = 'aviso: o app está em localhost, então os links só abrem neste computador. Para o cliente abrir, o app precisa estar publicado (VITE_PUBLIC_APP_URL).'
+
+/** Valor de uma opção que precisa de texto (`--slug=` limpa). */
+const textFlag = (name) => {
+  // one() descarta a opção sem valor; aqui ela é erro
+  if ([].concat(flags[name] ?? []).includes(true)) fail(`Diga o valor de --${name} (ou --${name}= para deixar vazio)`)
+  return one(flags[name])
+}
+
+async function cmdBrief() {
+  await readyStatus()
+  const file = one(flags.file)
+  if (file && !existsSync(file)) fail(`Arquivo não encontrado: ${file}`)
+  const context = file ? readFileSync(file, 'utf8') : textFlag('set')
+  const result = await call('brief', context === undefined ? {} : { context })
+  if (flags.json) return console.log(JSON.stringify(result, null, 2))
+  if (context !== undefined) console.log(`✔ Briefing de ${result.name} gravado (${result.context.length} caracteres).\n`)
+  console.log(result.context.trim() || `${result.name} ainda não tem briefing. Grave com: brief --set "<texto>" ou brief --file <arquivo>`)
+}
+
+function printShares(result) {
+  for (const s of result.pages) {
+    if (!s.link) {
+      console.log(`▸ ${s.page}: sem link de aprovação (crie com: approval send --page "${s.page}")`)
+      continue
+    }
+    console.log(`▸ ${s.page}: ${SHARE_STATE[s.state] ?? s.state} · versão ${s.version}, mandada em ${when(s.sharedAt)}`)
+    console.log(`   ${s.link}`)
+    if (s.outdated) console.log('   a página mudou depois dessa versão: o cliente ainda vê a anterior (approval send para mandar a de agora)')
+    for (const r of s.responses) {
+      const current = r.version === s.version
+      console.log(`   ${current ? '•' : '◦'} v${r.version}: ${r.name?.trim() || 'Cliente'} ${DECISION[r.decision] ?? r.decision} em ${when(r.createdAt)}${r.note?.trim() ? ` — "${r.note.trim()}"` : ''}${current ? '' : ' (versão anterior)'}`)
+    }
+  }
+  if (result.local) console.log(`\n${LOCAL_WARNING}`)
+}
+
+async function cmdApproval() {
+  const status = await readyStatus()
+  const action = positional[0]
+  if (action && !['send', 'revoke'].includes(action)) fail(`Ação desconhecida: ${action}. Use approval, approval send ou approval revoke`)
+  const pageRef = one(flags.page)
+  if (action && !pageRef) fail(`Diga a página: approval ${action} --page <nome>`)
+  const page = pageRef ? resolvePage(status, pageRef) : undefined
+
+  if (action) {
+    const result = await call('approval', { action, page: page.id, note: one(flags.label) })
+    if (flags.json) return console.log(JSON.stringify(result, null, 2))
+    const share = result.pages[0]
+    console.log(action === 'send' ? `✔ ${share.page} mandada para aprovação (versão ${share.version}). Link do cliente:\n${share.link}` : `✔ Link de aprovação de ${page.name} desativado.`)
+    if (result.local) console.log(`\n${LOCAL_WARNING}`)
+    return
+  }
+
+  const wait = flags.wait === true ? true : one(flags.wait)
+  if (wait === undefined) {
+    const result = await call('approval', { page: page?.id })
+    if (flags.json) return console.log(JSON.stringify(result, null, 2))
+    return printShares(result)
+  }
+
+  // Espera o cliente responder à versão que está no link
+  if (!page) fail('Diga a página para esperar: approval --page <nome> --wait <minutos>')
+  const minutes = wait === true ? 30 : Number(wait)
+  if (!(minutes > 0)) fail('--wait é em minutos, por exemplo --wait 30')
+  const until = Date.now() + minutes * 60_000
+  let announced = false
+  for (;;) {
+    const result = await call('approval', { page: page.id })
+    const share = result.pages[0]
+    if (!share.link) fail(`${page.name} não tem link de aprovação. Mande com: approval send --page "${page.name}"`)
+    const answer = share.responses.find((r) => r.version === share.version)
+    if (answer) {
+      if (flags.json) return console.log(JSON.stringify(result, null, 2))
+      return printShares(result)
+    }
+    if (Date.now() >= until) {
+      console.error(`O cliente não respondeu à versão ${share.version} de ${page.name} em ${minutes} min. Link: ${share.link}`)
+      quit(2)
+    }
+    if (!announced) {
+      console.log(`Esperando o cliente responder à versão ${share.version} de ${page.name} (até ${minutes} min, conferindo a cada 20 s)…`)
+      announced = true
+    }
+    await new Promise((r) => setTimeout(r, 20_000))
+  }
+}
+
+async function cmdInvite() {
+  await readyStatus()
+  // Sem ação, só lista: criar um convite é sempre pedido com "create"
+  const action = positional[0] ?? 'list'
+  if (!['list', 'create', 'cancel'].includes(action)) fail(`Ação desconhecida: invite ${action}. Use invite, invite create ou invite cancel <id>`)
+  const cancel = positional[1]
+  if (action === 'cancel' && !cancel) fail('Diga o id do convite: invite cancel <id> (veja os ids com: invite)')
+  const label = textFlag('label')
+  const result = await call('invite', { action, label, id: cancel })
+  if (flags.json) return console.log(JSON.stringify(result, null, 2))
+  if (result.created) {
+    console.log(`✔ Convite criado (vale para uma pessoa, até ${when(result.created.expiresAt)}). Quem abrir entra com a própria conta e passa a editar o projeto junto:\n${result.created.url}\n`)
+  }
+  if (action === 'cancel') console.log(`✔ Convite ${cancel} cancelado.\n`)
+  console.log('Pessoas no projeto:')
+  for (const p of result.people) console.log(`   ${p.email} · ${p.role === 'owner' ? 'dono' : 'edita junto'} · desde ${when(p.joinedAt)}`)
+  if (result.invites.length) {
+    console.log('Convites abertos:')
+    for (const i of result.invites) console.log(`   ${i.label} · ${i.expiresAt < Date.now() ? 'vencido' : `vale até ${when(i.expiresAt)}`} · ${i.url} · id ${i.id}`)
+  }
+  if (result.local) console.log(`\n${LOCAL_WARNING}`)
+}
+
+const printConnection = (c) => {
+  if (!c) return console.log('WordPress: não conectado. Conecte com: wp connect <endereço do site>')
+  const can = [c.can.editPages && 'editar páginas', c.can.publishPages && 'publicar', c.can.uploadFiles && 'enviar mídia', c.can.unfilteredHtml && 'HTML sem filtro', c.can.manageOptions && 'configurações'].filter(Boolean)
+  console.log(`WordPress: ${c.site} (${c.siteUrl}) · usuário ${c.user} [${c.roles.join(', ') || 'sem papel'}] · pode: ${can.join(', ') || 'nada'} · conferido em ${when(c.checkedAt)}`)
+  if (c.can.unfilteredHtml === false) console.log('   aviso: sem HTML sem filtro, o WordPress tira os scripts dos widgets HTML ao gravar (o GSAP das seções não roda).')
+}
+
+async function cmdWp() {
+  await readyStatus()
+  const action = positional[0] ?? 'status'
+  if (!['status', 'connect', 'pages', 'import'].includes(action)) fail(`Ação desconhecida: wp ${action}. Use wp, wp connect, wp pages ou wp import`)
+
+  if (action === 'connect') {
+    const site = positional[1]
+    if (!site) fail('Diga o endereço do site: wp connect <site>')
+    const user = textFlag('user')
+    const password = textFlag('password')
+    if (!!user !== !!password) fail('Para gravar a conexão, passe --user e --password juntos')
+    const result = await call('wordpress', { action, site, user, password })
+    if (flags.json) return console.log(JSON.stringify(result, null, 2))
+    if (result.connection) {
+      console.log('✔ Conectado.')
+      return printConnection(result.connection)
+    }
+    console.log(`${result.site} (${result.siteUrl}) aceita conexão. Quem administra o site abre este link logado no WordPress e aprova:\n${result.authorize}\n`)
+    console.log('O WordPress mostra uma senha de aplicação. Com ela e o usuário de quem aprovou, grave a conexão:')
+    console.log(`   wp connect ${site} --user <login> --password "<senha>"`)
+    console.log(`(Também dá para criar a senha à mão no perfil: ${result.profile})`)
+    return
+  }
+
+  if (action === 'pages') {
+    const result = await call('wordpress', { action })
+    if (flags.json) return console.log(JSON.stringify(result, null, 2))
+    if (result.noElementorData) console.log('aviso: o Elementor do site não mostra o conteúdo das páginas pela API (precisa da versão 3.28 ou mais nova).')
+    if (!result.pages.length) return console.log('O site não tem páginas.')
+    for (const p of result.pages) console.log(`   ${p.id} · ${p.title} · ${p.status}${p.elementor ? '' : ' · sem Elementor'}${p.canvasPage ? ` · no canvas: ${p.canvasPage}` : ''} · ${p.link}`)
+    return
+  }
+
+  if (action === 'import') {
+    const ids = positional.slice(1).map(Number)
+    if (!ids.length || ids.some((id) => !Number.isInteger(id) || id <= 0)) fail('Diga os ids das páginas do site: wp import <id>… (veja os ids com: wp pages)')
+    const result = await call('wordpress', { action, ids })
+    if (flags.json) return console.log(JSON.stringify(result, null, 2))
+    for (const p of result.imported) console.log(`✔ ${p.page} (post ${p.postId}): ${p.sections} seções no canvas`)
+    for (const f of result.failed) console.log(`✖ post ${f.postId}: ${f.error}`)
+    if (result.imported.length) console.log(`\nAs seções importadas ficam marcadas [do site]: não recebem a marca do Space. ${result.kit ? 'O Kit do site (cores e fontes globais) veio junto.' : 'O Kit do site não veio: as cores globais podem aparecer diferentes.'}`)
+    if (result.failed.length) quit(1)
+    return
+  }
+
+  const result = await call('wordpress', {})
+  if (flags.json) return console.log(JSON.stringify(result, null, 2))
+  printConnection(result.connection)
+  for (const p of result.pages) {
+    const wp = p.wordpress
+    console.log(`▸ ${p.page}: ${wp ? `${wp.status === 'publish' ? 'publicada' : wp.status} em ${wp.link ?? wp.siteUrl} (post ${wp.postId}), sincronizada em ${when(wp.syncedAt)}` : 'ainda não está no site'}`)
+  }
+}
+
+const DETAIL_FLAGS = { title: 'title', slug: 'slug', 'seo-title': 'seoTitle', description: 'description', keyword: 'focusKeyword' }
+const DETAIL_NAMES = { title: 'Título', slug: 'Endereço', seoTitle: 'Título SEO', description: 'Meta descrição', focusKeyword: 'Palavra-chave' }
+
+async function cmdDetails() {
+  const status = await readyStatus()
+  const page = resolvePage(status, one(flags.page))
+  const fields = {}
+  for (const [flag, key] of Object.entries(DETAIL_FLAGS)) {
+    const value = textFlag(flag)
+    if (value !== undefined) fields[key] = value
+  }
+  const result = await call('details', { page: page.id, fields })
+  if (flags.json) return console.log(JSON.stringify(result, null, 2))
+  if (Object.keys(fields).length) console.log(`✔ Detalhes de ${result.page} gravados.\n`)
+  console.log(`▸ ${result.page}`)
+  for (const [key, name] of Object.entries(DETAIL_NAMES)) console.log(`   ${name}: ${result.details[key] ?? '(padrão do WordPress)'}`)
+  console.log(`   Imagem destacada: ${result.featured ?? 'nenhuma escolhida'}`)
+  if (result.wordpress) console.log(`   No site: ${result.wordpress.link} (post ${result.wordpress.postId})`)
+}
+
+const LAYOUTS = { canvas: 'elementor_canvas', tema: 'elementor_header_footer' }
+
+async function cmdPublish() {
+  const status = await readyStatus()
+  if (!flags.page) fail('Diga a página: publish --page <nome> --yes')
+  const page = resolvePage(status, one(flags.page))
+  const layout = one(flags.layout)
+  if (layout !== undefined && !LAYOUTS[layout]) fail('--layout é canvas (tela cheia do Elementor) ou tema (com o cabeçalho e o rodapé do tema)')
+
+  if (!flags.yes) {
+    const [wp, approval] = await Promise.all([call('wordpress', {}), call('approval', { page: page.id })])
+    if (!wp.connection) fail('O projeto não tem WordPress conectado. Conecte com: wp connect <endereço do site>')
+    const linked = page.wordpress && page.wordpress.siteUrl === wp.connection.siteUrl ? page.wordpress : null
+    const share = approval.pages[0]
+    console.log(`Publicar ${page.name} em ${wp.connection.site} (${wp.connection.siteUrl}), como ${wp.connection.user}:`)
+    console.log(`   ${linked ? `atualiza a página que já está no site, ${linked.link} (post ${linked.postId}), com backup da versão de lá` : 'cria uma página nova no site'}`)
+    console.log(`   situação: ${flags.live ? 'PUBLICADA, visível para todo mundo' : linked ? `fica como está no site (${linked.status})` : 'rascunho (só quem entra no WordPress vê)'}`)
+    console.log(`   layout: ${layout ?? (linked ? 'o que a página já tem no site' : 'canvas')}${flags.overwrite ? ' · passa por cima de mudanças feitas no site' : ''}`)
+    console.log(`   aprovação: ${share.link ? `${SHARE_STATE[share.state] ?? share.state} (versão ${share.version}${share.outdated ? ', e a página mudou depois dela' : ''})` : 'sem link de aprovação'}`)
+    console.error('\nNada foi publicado. Confirme com o usuário (ou veja o cliente aprovar a versão atual) e rode de novo com --yes.')
+    quit(1)
+  }
+
+  console.log(`Publicando ${page.name}…`)
+  const result = await call('publish', { page: page.id, status: flags.live ? 'publish' : undefined, template: layout && LAYOUTS[layout], overwrite: !!flags.overwrite })
+  if (flags.json) return console.log(JSON.stringify(result, null, 2))
+  console.log(`✔ ${result.created ? 'Criada' : 'Atualizada'} em ${result.site}: ${result.status === 'publish' ? 'publicada' : result.status === 'draft' ? 'rascunho' : result.status}`)
+  console.log(`   Página: ${result.link}`)
+  console.log(`   Editar no Elementor: ${result.editUrl}`)
+  console.log(`   Imagens enviadas para a mídia do site: ${result.uploaded}`)
+  if (result.failedImages.length) console.log(`   ${result.failedImages.length} imagens não subiram e seguem pelo endereço de origem:\n${result.failedImages.map((u) => `      ${u}`).join('\n')}`)
+  console.log(`   Cache de CSS do Elementor: ${result.cacheCleared ? 'limpo' : 'não limpou (a página pode aparecer com o estilo antigo até o Elementor regenerar o CSS)'}`)
+  console.log(`   Imagem destacada: ${{ saved: 'gravada', unchanged: 'sem mudança', unsupported: 'o tema não usa em páginas', failed: 'não subiu' }[result.featured] ?? result.featured}`)
+  console.log(`   SEO: ${result.seo === 'saved' ? 'gravado' : result.seo === 'failed' ? `não gravou (${result.seoError})` : 'sem campos de SEO, ou o site não deixa gravar'}`)
+}
+
+async function cmdRestore() {
+  const status = await readyStatus()
+  if (!flags.page) fail('Diga a página: restore --page <nome> --yes')
+  const page = resolvePage(status, one(flags.page))
+  if (!page.wordpress) fail(`${page.name} não está ligada a uma página do WordPress`)
+  if (!flags.yes) {
+    console.log(`Voltar ${page.name} no site (${page.wordpress.link}, post ${page.wordpress.postId}) para o conteúdo que tinha antes da última publicação feita daqui.`)
+    console.error('\nNada mudou. Confirme com o usuário e rode de novo com --yes.')
+    quit(1)
+  }
+  const result = await call('restore', { page: page.id })
+  if (flags.json) return console.log(JSON.stringify(result, null, 2))
+  console.log(`✔ ${result.page} voltou à versão de ${when(result.restoredFrom)} em ${result.site}. Restam ${result.remaining} versões guardadas.${result.cacheCleared ? '' : ' O cache de CSS do Elementor não limpou.'}`)
 }
 
 // ---------- fotos (Edge headless pelo CDP) ----------
@@ -770,6 +1082,7 @@ const COMMANDS = {
   status: cmdStatus,
   projects: cmdProjects,
   open: cmdOpen,
+  new: cmdNew,
   pull: cmdPull,
   push: cmdPush,
   remove: cmdRemove,
@@ -782,6 +1095,13 @@ const COMMANDS = {
   say: cmdSay,
   brand: cmdBrand,
   focus: cmdFocus,
+  brief: cmdBrief,
+  approval: cmdApproval,
+  invite: cmdInvite,
+  wp: cmdWp,
+  details: cmdDetails,
+  publish: cmdPublish,
+  restore: cmdRestore,
   shot: cmdShot,
   video: cmdVideo,
 }
@@ -789,7 +1109,13 @@ const COMMANDS = {
 if (!command || command === 'help' || flags.help) {
   console.log(HELP)
 } else if (!COMMANDS[command]) {
-  fail(`Comando desconhecido: ${command}\n\n${HELP}`)
+  console.error(`✖ Comando desconhecido: ${command}\n\n${HELP}`)
+  process.exitCode = 1
 } else {
-  COMMANDS[command]().catch((error) => fail(error?.message ?? String(error)))
+  COMMANDS[command]().catch((error) => {
+    if (!(error instanceof Exit)) console.error(`✖ ${error?.message ?? String(error)}`)
+    process.exitCode = error instanceof Exit ? error.code : 1
+    // Algo ainda aberto (navegador, socket) não segura o processo
+    setTimeout(() => process.exit(process.exitCode), 100).unref()
+  })
 }

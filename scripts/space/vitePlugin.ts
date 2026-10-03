@@ -45,6 +45,9 @@ interface Pending {
 /** A aba manda sinal de vida a cada 10 s; sem sinal por mais que isso, saiu. */
 const STALE_AFTER = 25_000
 const CALL_TIMEOUT = 30_000
+/** Pedidos que falam com o WordPress ou sobem arquivos: imagens enviadas uma a uma podem levar minutos. */
+const LONG_CALLS = new Set(['publish', 'restore', 'wordpress', 'approval', 'invite', 'create'])
+const LONG_TIMEOUT = 280_000
 const STATE_FILE = '.space/bridge.json'
 
 const isOpen = (client: WebSocketClient) => (client.socket as { readyState?: number }).readyState === 1
@@ -109,10 +112,11 @@ export function spaceBridge(): Plugin {
       const call = (tab: Tab, method: string, params: unknown, agent?: string) =>
         new Promise<unknown>((resolve, reject) => {
           const requestId = randomUUID()
+          const timeout = LONG_CALLS.has(method) ? LONG_TIMEOUT : CALL_TIMEOUT
           const timer = setTimeout(() => {
             pending.delete(requestId)
-            reject(new Error(`O Space não respondeu a "${method}" em ${CALL_TIMEOUT / 1000} s`))
-          }, CALL_TIMEOUT)
+            reject(new Error(`O Space não respondeu a "${method}" em ${timeout / 1000} s`))
+          }, timeout)
           pending.set(requestId, { resolve, reject, timer })
           tab.client.send('space-bridge:call', { requestId, method, params, agent })
         })

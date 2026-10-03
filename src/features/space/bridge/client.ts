@@ -1,4 +1,7 @@
 import { renderElementorDocument } from '@/engine/elementor'
+import { loadApprovals, shareState, useApprovalStore } from '@/features/approval/approvalStore'
+import { htmlHash, isLocalAppUrl, shareUrl, type PageShare } from '@/features/approval/shares'
+import { cancelInvite, createInvite, inviteUrl, listInvites, listPeople } from '@/features/projects/access'
 import { useProjectStore } from '@/features/projects/projectStore'
 import { useProjectSync } from '@/features/projects/useProjectSession'
 import { getActiveBrand, useBrandStore } from '@/features/space/brand/brandStore'
@@ -7,9 +10,16 @@ import { buildLandingPage, parseSectionElements, type SectionElement } from '@/f
 import { findElement } from '@/features/space/navigator/elementorContentEditor'
 import { DEFAULT_PAGE_NAME, nextPagePosition, pageOf, pageSections, SECTION_WIDTH } from '@/features/space/pages/pages'
 import { isFromSite, renderKit } from '@/features/space/renderKit'
-import { getSiteKit } from '@/features/wordpress/siteKitStore'
+import { authorizationUrl, completeConnection, profileUrl } from '@/features/wordpress/connect'
+import { PageConflictError, publishPage, restoreLastBackup, type PageStatus, type PageTemplate } from '@/features/wordpress/publish'
+import { discoverSite, unsupportedReason } from '@/features/wordpress/rest'
+import { detectSeo } from '@/features/wordpress/seo'
+import { fetchSiteKit, fetchSitePage, listSitePages } from '@/features/wordpress/site'
+import { getSiteKit, useSiteKitStore } from '@/features/wordpress/siteKitStore'
+import type { WordPressConnection } from '@/features/wordpress/types'
+import { getActiveWordPress, useWordPressSession } from '@/features/wordpress/useWordPressConnection'
 import { useSpaceStore } from '@/store/spaceStore'
-import type { SectionNodeData, SpaceNode, SpacePage } from '@/types/space'
+import type { PageDetails, SectionNodeData, SpaceNode, SpacePage } from '@/types/space'
 import { DEFAULT_AGENT, useClaudeBridge, type ClaudeStepKind, type TouchKind } from './bridgeStore'
 import { focusSection } from './focus'
 
@@ -149,7 +159,7 @@ function status() {
     pages: pages.map((page) => ({
       id: page.id,
       name: page.name,
-      wordpress: page.wordpress ? { siteUrl: page.wordpress.siteUrl, postId: page.wordpress.postId, link: page.wordpress.link } : undefined,
+      wordpress: page.wordpress ? { siteUrl: page.wordpress.siteUrl, postId: page.wordpress.postId, link: page.wordpress.link, status: page.wordpress.status } : undefined,
       sections: pageSections(page, nodes).map((n, i) => sectionInfo(n, i)),
     })),
     loose: nodes.filter((n) => n.type === 'section' && !placed.has(n.id)).map((n) => sectionInfo(n)),
@@ -500,6 +510,14 @@ function open(params: { projectId: string }) {
   return { navigating: true }
 }
 
+/** Cria um projeto na conta, como o botão Novo projeto, e o abre nesta aba. */
+async function create(params: { name: string; context?: string }) {
+  if (!params.name?.trim()) throw new Error('Diga o nome do projeto')
+  const project = await useProjectStore.getState().create({ name: params.name, context: params.context ?? '' })
+  setTimeout(() => location.assign(`/projetos/${project.id}`), 50)
+  return { project: { id: project.id, name: project.name } }
+}
+
 /**
  * A marca do projeto aberto (o DESIGN.md). Gravar troca o texto inteiro, como
  * a tela da marca, e salva com o projeto: quem abrir o projeto vê a mesma marca.
@@ -518,7 +536,219 @@ function brand(params: { source?: string; enabled?: boolean }) {
   return { name: current?.name ?? null, enabled, source, format: parsed?.format ?? null, warnings: parsed?.warnings ?? [], notes: parsed?.notes ?? [] }
 }
 
-const METHODS: Record<string, (params: never) => unknown> = { status, pull, apply, focus, say, work, plan, render, projects, open, brand }
+/** O briefing do projeto (o campo Contexto): ler, ou trocar o texto inteiro. */
+async function brief(params: { context?: string }) {
+  const id = requireProject()
+  if (params.context !== undefined) await useProjectStore.getState().update(id, { context: params.context })
+  const project = useProjectStore.getState().projects.find((p) => p.id === id)
+  return { name: project?.name, context: project?.context ?? '' }
+}
+
+// ---------- ciclo com o cliente: aprovação, convite, WordPress ----------
+
+/** A página como o player mostra, com as animações: é o que o cliente vê no link. */
+function playerHtml(page: SpacePage) {
+  const { nodes, connections } = useSpaceStore.getState()
+  const brand = getActiveBrand()
+  const sections = pageSections(page, nodes)
+  const built = buildLandingPage(sections, nodes, connections, brand)
+  if (!built.elements.length) throw new Error(`A página ${page.name} não tem seção com JSON válido`)
+  return renderElementorDocument(built.elements, { title: page.name, kit: renderKit(brand, getSiteKit(), sections.some(isFromSite)), motion: 'play' }).document
+}
+
+const shareInfo = async (page: SpacePage, share: PageShare | undefined) => {
+  if (!share) return { pageId: page.id, page: page.name, link: null }
+  const current = await htmlHash(playerHtml(page)).catch(() => null)
+  return {
+    pageId: page.id,
+    page: page.name,
+    link: shareUrl(share.id),
+    version: share.version,
+    sharedAt: share.sharedAt,
+    // A página mudou depois da foto: o cliente ainda vê a versão anterior
+    outdated: !!current && current !== share.htmlHash,
+    state: shareState(share).kind,
+    responses: share.responses,
+  }
+}
+
+/**
+ * Links de aprovação: ler as respostas do cliente, mandar a página de agora
+ * (cria o link ou troca a foto do mesmo link) ou desativar o link.
+ */
+async function approval(params: { action?: 'list' | 'send' | 'revoke'; page?: string; note?: string }) {
+  const id = requireProject()
+  await loadApprovals(id)
+  const { pages } = useSpaceStore.getState()
+  const store = useApprovalStore.getState()
+  const local = isLocalAppUrl()
+  if (params.action === 'send') {
+    const page = findPage(pages, params.page)
+    const project = useProjectStore.getState().projects.find((p) => p.id === id)
+    const share = await store.publish(page.id, { projectName: project?.name ?? 'Projeto', pageName: page.name, html: playerHtml(page) })
+    useClaudeBridge.getState().log('done', params.note?.trim() || `Mandei ${page.name} para o cliente aprovar (versão ${share.version})`, undefined, currentAgent)
+    return { local, pages: [await shareInfo(page, share)] }
+  }
+  if (params.action === 'revoke') {
+    const page = findPage(pages, params.page)
+    await store.revoke(page.id)
+    useClaudeBridge.getState().log('note', params.note?.trim() || `Desativei o link de aprovação de ${page.name}`, undefined, currentAgent)
+    return { local, pages: [await shareInfo(page, undefined)] }
+  }
+  const chosen = params.page ? [findPage(pages, params.page)] : pages
+  return { local, pages: await Promise.all(chosen.map((p) => shareInfo(p, useApprovalStore.getState().shares[p.id]))) }
+}
+
+/** Acesso compartilhado: quem já está no projeto, os convites abertos, e um convite novo (7 dias, uma pessoa). */
+async function invite(params: { action?: 'list' | 'create' | 'cancel'; label?: string; id?: string }) {
+  const id = requireProject()
+  let created: { id: string; url: string; expiresAt: number } | undefined
+  if (params.action === 'create') {
+    const next = await createInvite(id, params.label?.trim() || 'Cliente')
+    created = { id: next.id, url: inviteUrl(next.id), expiresAt: next.expiresAt }
+  }
+  if (params.action === 'cancel') {
+    if (!params.id) throw new Error('Diga o id do convite')
+    await cancelInvite(params.id)
+  }
+  const [people, invites] = await Promise.all([listPeople(id), listInvites(id)])
+  return { local: isLocalAppUrl(), created, people, invites: invites.map((i) => ({ ...i, url: inviteUrl(i.id) })) }
+}
+
+/** A conexão do projeto aberto, lida da conta se o botão do WordPress ainda não abriu a sessão. */
+async function wpConnection(required = true) {
+  const id = requireProject()
+  const session = useWordPressSession.getState()
+  if (session.projectId !== id || !session.connection) await session.open(id)
+  const connection = getActiveWordPress()
+  if (!connection && required) throw new Error('O projeto não tem WordPress conectado. Use: wp connect <endereço do site>')
+  return connection
+}
+
+const pageLinks = () => useSpaceStore.getState().pages.map((p) => ({ pageId: p.id, page: p.name, wordpress: p.wordpress ?? null, details: p.details ?? null }))
+
+/**
+ * WordPress do cliente. `status` mostra a conexão e as páginas ligadas;
+ * `connect` sem senha devolve o link de aprovação no WordPress, e com o
+ * usuário e a senha de aplicação grava a conexão; `pages` lista o site;
+ * `import` traz páginas do site para o canvas, como o diálogo Importar.
+ */
+async function wordpress(params: { action?: 'status' | 'connect' | 'pages' | 'import'; site?: string; user?: string; password?: string; ids?: number[] }) {
+  const id = requireProject()
+  const connectionInfo = (c: WordPressConnection | null) =>
+    c && { site: c.site.name, siteUrl: c.site.siteUrl, user: c.user.name, roles: c.user.roles, can: c.can, connectedAt: c.connectedAt, checkedAt: c.checkedAt }
+
+  if (params.action === 'connect') {
+    if (!params.site?.trim()) throw new Error('Diga o endereço do site')
+    const site = await discoverSite(params.site)
+    const reason = unsupportedReason(site)
+    if (reason) throw new Error(reason)
+    if (!params.user || !params.password) {
+      const project = useProjectStore.getState().projects.find((p) => p.id === id)
+      // Sem retorno: o WordPress mostra a senha na tela, para quem aprovou passar ao agente
+      return { site: site.name, siteUrl: site.siteUrl, authorize: authorizationUrl({ projectId: id, projectName: project?.name ?? 'Projeto', site, mode: 'redirect', returnHere: false }), profile: profileUrl(site) }
+    }
+    await completeConnection(id, site, params.user, params.password)
+    await useWordPressSession.getState().open(id)
+    return { connection: connectionInfo(getActiveWordPress()) }
+  }
+
+  if (params.action === 'pages') {
+    const connection = (await wpConnection())!
+    const { pages, noElementorData } = await listSitePages(connection)
+    const linked = new Map(useSpaceStore.getState().pages.filter((p) => p.wordpress?.siteUrl === connection.site.siteUrl).map((p) => [p.wordpress!.postId, p.name]))
+    return { noElementorData, pages: pages.map((p) => ({ ...p, canvasPage: linked.get(p.id) ?? null })) }
+  }
+
+  if (params.action === 'import') {
+    const connection = (await wpConnection())!
+    if (!params.ids?.length) throw new Error('Diga os ids das páginas do site (veja: wp pages)')
+    // As seções do site apontam para as cores globais dele: o Kit entra junto
+    const kit = await fetchSiteKit(connection).catch(() => null)
+    if (kit) useSiteKitStore.getState().setKit(kit)
+    const seo = await detectSeo(connection).catch(() => undefined)
+    const imported: Array<{ postId: number; pageId: string; page: string; sections: number }> = []
+    const failed: Array<{ postId: number; error: string }> = []
+    for (const postId of params.ids) {
+      try {
+        const page = await fetchSitePage(connection, postId, seo)
+        const { pages, loadSitePage, setPageDetails } = useSpaceStore.getState()
+        const existing = pages.find((p) => p.wordpress?.postId === postId && p.wordpress.siteUrl === connection.site.siteUrl)
+        const pageId = loadSitePage(page.name, page.sections, page.link, existing?.id)
+        setPageDetails(pageId, page.details)
+        imported.push({ postId, pageId, page: page.name, sections: page.sections.length })
+      } catch (error) {
+        failed.push({ postId, error: error instanceof Error ? error.message : String(error) })
+      }
+    }
+    if (imported.length) useClaudeBridge.getState().log('note', `Importei do WordPress: ${imported.map((p) => p.page).join(', ')}`, undefined, currentAgent)
+    return { imported, failed, kit: !!kit }
+  }
+
+  return { connection: connectionInfo(await wpConnection(false)), pages: pageLinks() }
+}
+
+const DETAIL_FIELDS = ['title', 'slug', 'seoTitle', 'description', 'focusKeyword'] as const
+
+/** Título, endereço e SEO que vão junto ao publicar. Campo com texto vazio volta ao padrão do WordPress. */
+function details(params: { page?: string; fields?: Partial<Record<(typeof DETAIL_FIELDS)[number], string>> }) {
+  requireProject()
+  const page = findPage(useSpaceStore.getState().pages, params.page)
+  if (params.fields && Object.keys(params.fields).length) {
+    const next: PageDetails = { ...page.details }
+    for (const key of DETAIL_FIELDS) {
+      const value = params.fields[key]
+      if (value === undefined) continue
+      if (value.trim()) next[key] = value.trim()
+      else delete next[key]
+    }
+    useSpaceStore.getState().setPageDetails(page.id, next)
+  }
+  const current = findPage(useSpaceStore.getState().pages, page.id)
+  const { featured, ...text } = current.details ?? {}
+  return { pageId: current.id, page: current.name, details: text, featured: featured?.kind ?? null, wordpress: current.wordpress ?? null }
+}
+
+/**
+ * Publica a página no WordPress do cliente, como o diálogo Publicar: página
+ * ligada atualiza no mesmo endereço (com backup e conferência de conflito),
+ * página nova vira rascunho, a não ser que `status` diga publicar.
+ */
+async function publish(params: { page?: string; status?: PageStatus; template?: PageTemplate; overwrite?: boolean }) {
+  const projectId = requireProject()
+  const connection = (await wpConnection())!
+  if (!connection.can.editPages) throw new Error(`O usuário ${connection.user.name} não pode editar páginas em ${connection.site.name}`)
+  if (params.status === 'publish' && !connection.can.publishPages) throw new Error(`O usuário ${connection.user.name} não pode publicar páginas: mande como rascunho`)
+  const page = findPage(useSpaceStore.getState().pages, params.page)
+  const steps: string[] = []
+  const bridge = useClaudeBridge.getState()
+  bridge.setWorking([page.id], { agent: currentAgent, text: `Publicando no ${connection.site.name}`, since: Date.now() })
+  try {
+    const result = await publishPage({ connection, projectId, pageId: page.id, status: params.status, template: params.template, overwrite: params.overwrite, onProgress: (step) => steps.push(step) })
+    bridge.log('done', `${result.created ? 'Criei' : 'Atualizei'} ${page.name} em ${connection.site.name} (${result.status === 'publish' ? 'publicada' : 'rascunho'}): ${result.link}`, undefined, currentAgent)
+    return { page: page.name, site: connection.site.name, steps, ...result }
+  } catch (error) {
+    if (error instanceof PageConflictError) throw new Error(`A página foi editada no WordPress em ${error.modifiedGmt} (GMT), depois da última sincronização. Importe de novo (wp import) para trazer a mudança, ou publique com --overwrite para passar por cima (fica um backup).`)
+    throw error
+  } finally {
+    bridge.clearWorking([page.id])
+  }
+}
+
+/** Devolve ao site o conteúdo que a página ligada tinha antes da última publicação feita daqui. */
+async function restore(params: { page?: string }) {
+  const projectId = requireProject()
+  const connection = (await wpConnection())!
+  const page = findPage(useSpaceStore.getState().pages, params.page)
+  const result = await restoreLastBackup(connection, projectId, page.id)
+  useClaudeBridge.getState().log('note', `Voltei ${page.name} no ${connection.site.name} para a versão anterior`, undefined, currentAgent)
+  return { page: page.name, site: connection.site.name, ...result }
+}
+
+const METHODS: Record<string, (params: never) => unknown> = {
+  status, pull, apply, focus, say, work, plan, render, projects, open, create, brand,
+  brief, approval, invite, wordpress, details, publish, restore,
+}
 
 export function startSpaceBridge(hot: Hot) {
   const send = () => hot.send('space-bridge:state', info())

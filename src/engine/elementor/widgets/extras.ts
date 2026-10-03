@@ -112,7 +112,17 @@ const video: WidgetRenderer = ({ s, sel, ctx }) => {
     if (id) embed = `<iframe class="elementor-video" src="https://player.vimeo.com/video/${id}" title="Vimeo" allowfullscreen loading="lazy"></iframe>`;
   } else if (type === 'hosted') {
     const url = s.insert_url === 'yes' ? s.external_url?.url : s.hosted_url?.url;
-    if (url) embed = `<video class="elementor-video" src="${escapeAttr(url)}" controls playsinline></video>`;
+    // Mesmos atributos do widget do Elementor: controles por padrão; autoplay, mudo e repetir quando ligados
+    const attrs = [
+      s.controls !== '' && 'controls',
+      s.autoplay === 'yes' && 'autoplay',
+      s.mute === 'yes' && 'muted',
+      s.loop === 'yes' && 'loop',
+      'playsinline',
+      s.poster?.url && `poster="${escapeAttr(s.poster.url)}"`,
+      s.preload && `preload="${escapeAttr(String(s.preload))}"`,
+    ].filter(Boolean).join(' ');
+    if (url) embed = `<video class="elementor-video" src="${escapeAttr(url)}" ${attrs}></video>`;
   }
 
   let overlay = '';

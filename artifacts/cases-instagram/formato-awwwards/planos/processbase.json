@@ -1,0 +1,23 @@
+{
+  "nome": "processbase",
+  "url": "https://processbase.com.br/",
+  "formato": "4x5",
+  "tela": { "largura": 1440, "altura": 900 },
+  "fundo": { "escurecer": 0.55, "desfoque": 36 },
+  "trocar": { "http://localhost:53471/": "public" },
+  "inicio": 2.4,
+  "passos": [
+    { "ate": 470, "dur": 2.4, "pausa": 0.5, "nota": "o grafo do hero forma o emblema" },
+    { "ate": 1040, "dur": 2.2, "pausa": 0.6, "nota": "o emblema gira até o bloco 3D e acende o pilar 1" },
+    { "ate": 1630, "dur": 1.7, "pausa": 0.5, "nota": "pilar 2" },
+    { "ate": 2220, "dur": 1.5, "pausa": 0.4, "nota": "pilar 3" },
+    { "ate": 2810, "dur": 1.5, "pausa": 0.9, "nota": "pilar 4, logo todo laranja" },
+    { "ate": ".elementor-element-pbd000w", "dur": 2.2, "pausa": 1.1, "nota": "O que muda" },
+    { "ate": ".elementor-element-pbc000x", "dur": 1.6, "pausa": 1.1, "nota": "Como funciona" },
+    { "ate": ".elementor-element-pbo0016", "dur": 1.6, "pausa": 1.1, "nota": "O que fica com você" },
+    { "ate": ".elementor-element-pbx000j", "dur": 1.7, "pausa": 1.3, "nota": "Quem conduz" },
+    { "ate": ".elementor-element-pbf000l", "dur": 1.5, "pausa": 1.0, "nota": "Dúvidas" },
+    { "ate": ".elementor-element-pbk000j", "dur": 1.5, "pausa": 1.0, "nota": "Próximo passo (formulário)" },
+    { "ate": "fim", "dur": 1.3, "pausa": 1.8, "nota": "rodapé" }
+  ]
+}
