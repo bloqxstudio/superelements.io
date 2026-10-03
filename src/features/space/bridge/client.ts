@@ -18,10 +18,13 @@ import { fetchSiteKit, fetchSitePage, listSitePages } from '@/features/wordpress
 import { getSiteKit, useSiteKitStore } from '@/features/wordpress/siteKitStore'
 import type { WordPressConnection } from '@/features/wordpress/types'
 import { getActiveWordPress, useWordPressSession } from '@/features/wordpress/useWordPressConnection'
+import { setBackgroundRelease } from '@/features/projects/background'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { PageDetails, SectionNodeData, SpaceNode, SpacePage } from '@/types/space'
-import { DEFAULT_AGENT, useClaudeBridge, type ClaudeStepKind, type TouchKind } from './bridgeStore'
+import { useAgents, type AgentView, type ViewRequest } from './agentsStore'
+import { DEFAULT_AGENT, useClaudeBridge, type ClaudeStep, type ClaudeStepKind, type TouchKind } from './bridgeStore'
 import { focusSection } from './focus'
+import { WORKER_NAME_PREFIX, WORKER_REFRESH_EVENT, workerPath } from './worker'
 
 /**
  * Lado do navegador da ponte dos agentes, Claude ou Codex (só no `npm run dev`;
@@ -29,6 +32,11 @@ import { focusSection } from './focus'
  * responde aos pedidos do `scripts/space/space.mjs` e aplica as mudanças no
  * canvas como um passo do desfazer. Salvar na conta continua com o projeto
  * aberto, com o login de quem está aqui, como qualquer edição feita à mão.
+ *
+ * Vários agentes, cada um no seu projeto: a tela de uma pessoa também hospeda
+ * os projetos que os agentes abrem em segundo plano (iframes escondidos em
+ * `/agente/:id`, ver `worker.ts`). Cada um desses iframes roda esta mesma ponte
+ * com o papel `worker`, e o servidor manda para ele os pedidos do projeto dele.
  */
 
 type Hot = NonNullable<ImportMeta['hot']>
@@ -37,25 +45,52 @@ const TAB_KEY = 'space-bridge-tab'
 const HEARTBEAT = 10_000
 /** Altura da tela de cada aparelho, a mesma do player: as medidas em vh valem sobre ela. */
 const DEVICE_HEIGHT: Record<string, number> = { desktop: 900, tablet: 1024, mobile: 812 }
+/** Quanto a aba espera o segundo plano salvar antes de fechá-lo mesmo assim. */
+const RELEASE_TIMEOUT = 20_000
 
-// A mesma aba continua com o mesmo id ao recarregar (abrir outro projeto recarrega)
-const tabId = (() => {
+/** Projeto que esta página abre em segundo plano para um agente (vem do nome do iframe). */
+const workerProject = window.name.startsWith(WORKER_NAME_PREFIX) ? window.name.slice(WORKER_NAME_PREFIX.length) : undefined
+const role = workerProject ? 'worker' : 'tab'
+
+// A mesma aba continua com o mesmo id ao recarregar. O sessionStorage é o
+// mesmo para a aba e os iframes dela: o segundo plano usa uma chave própria.
+const storedId = (key: string, create: boolean) => {
   try {
-    const saved = sessionStorage.getItem(TAB_KEY)
-    if (saved) return saved
+    const saved = sessionStorage.getItem(key)
+    if (saved || !create) return saved ?? undefined
     const id = crypto.randomUUID()
-    sessionStorage.setItem(TAB_KEY, id)
+    sessionStorage.setItem(key, id)
     return id
   } catch {
-    return crypto.randomUUID()
+    return create ? crypto.randomUUID() : undefined
   }
-})()
+}
+const tabId = storedId(workerProject ? `${TAB_KEY}:${workerProject}` : TAB_KEY, true)!
+/** Aba que hospeda este segundo plano. */
+const hostId = workerProject ? storedId(TAB_KEY, false) : undefined
 
 let activeAt = Date.now()
-/** Quem fez o pedido em andamento (Claude, Codex…), para o painel e as marcas. */
-let currentAgent = DEFAULT_AGENT
 
-const routeProjectId = () => location.pathname.match(/^\/projetos\/([^/?#]+)/)?.[1]
+/** Quem fez o pedido (Claude, Codex…) e o que ele escreveu no diário durante o pedido. */
+interface CallContext {
+  agent: string
+  steps: ClaudeStep[]
+}
+
+/** Escreve no diário do canvas e guarda o passo para o servidor somar ao diário do agente. */
+const note = (ctx: CallContext, kind: ClaudeStepKind, text: string, sectionIds?: string[]) => {
+  const bridge = useClaudeBridge.getState()
+  bridge.log(kind, text, sectionIds, ctx.agent)
+  const step = useClaudeBridge.getState().steps.at(-1)
+  if (step) ctx.steps.push(step)
+}
+
+/** O pedido nem começou: o servidor pode mandá-lo de novo (para quem abrir o projeto). */
+class NotOpenError extends Error {
+  readonly retry = true
+}
+
+const routeProjectId = () => location.pathname.match(/^\/(?:projetos|agente)\/([^/?#]+)/)?.[1]
 
 /** Projeto desta aba, só depois que o conteúdo da conta entrou no canvas. */
 const openProjectId = () => {
@@ -63,14 +98,26 @@ const openProjectId = () => {
   return id && useProjectSync.getState().openId === id ? id : undefined
 }
 
+/** Segundo plano que não abre: o servidor para de esperar e conta ao agente o porquê. */
+const workerFailure = () => {
+  if (!workerProject) return undefined
+  if (routeProjectId() !== workerProject) return 'O projeto em segundo plano caiu fora do app (sem login nesta aba?). Abra o app e entre na conta.'
+  return window.__spaceWorker?.failed
+}
+
 const info = () => {
-  const projectId = routeProjectId()
+  const projectId = workerProject ?? routeProjectId()
+  const ready = !!openProjectId() && (!workerProject || openProjectId() === workerProject)
   return {
     tabId,
     url: location.pathname,
+    role,
+    host: hostId,
     projectId,
     projectName: projectId ? useProjectStore.getState().projects.find((p) => p.id === projectId)?.name : undefined,
-    ready: !!openProjectId(),
+    ready,
+    failed: workerFailure(),
+    sync: ready ? useProjectSync.getState().status : undefined,
     visible: document.visibilityState === 'visible',
     focused: document.hasFocus(),
     activeAt,
@@ -110,7 +157,10 @@ const elementText = (element: SectionElement) => {
 
 const requireProject = () => {
   const id = openProjectId()
-  if (!id) throw new Error(routeProjectId() ? 'O projeto ainda está abrindo nesta aba; tente de novo em instantes' : 'Nenhum projeto aberto nesta aba. Use "open" ou abra um projeto no Space.')
+  if (!id) {
+    if (workerProject) throw new NotOpenError('O projeto em segundo plano está abrindo ou fechando; tente de novo em instantes')
+    throw routeProjectId() ? new NotOpenError('O projeto ainda está abrindo nesta aba; tente de novo em instantes') : new Error('Nenhum projeto aberto nesta aba. Use "open" ou abra um projeto no Space.')
+  }
   return id
 }
 
@@ -137,6 +187,8 @@ function status() {
   const base = {
     route: location.pathname,
     ready: !!projectId,
+    /** `canvas`: na tela de uma pessoa, que vê o agente trabalhar; `background`: em segundo plano. */
+    where: workerProject ? 'background' : 'canvas',
     project: project ? { id: project.id, name: project.name, role: project.role ?? 'owner', context: project.context } : null,
   }
   if (!projectId) return base
@@ -219,7 +271,7 @@ const checkJson = (json: string, what: string) => {
 }
 
 /** Todas as mudanças de uma vez, num passo só do desfazer; se uma falhar, nenhuma entra. */
-function apply(params: ApplyParams) {
+function apply(params: ApplyParams, ctx: CallContext) {
   requireProject()
   const state = useSpaceStore.getState()
   let { nodes, pages, connections } = state
@@ -339,22 +391,25 @@ function apply(params: ApplyParams) {
   useSpaceStore.getState().commitCanvas({ nodes, pages, connections })
   const ids = Object.keys(touched)
   const bridge = useClaudeBridge.getState()
-  bridge.touch(touched, currentAgent)
+  bridge.touch(touched, ctx.agent)
   bridge.reveal(ids)
   // Página do plano sem esqueleto sobrando: terminou de ser construída
   const { pending, working } = useClaudeBridge.getState()
   const built = pages.filter((p) => working[p.id] && !p.sectionIds.some((id) => pending[id])).map((p) => p.id)
   if (built.length) bridge.clearWorking(built)
-  bridge.log('change', params.label || 'Mudança no canvas', ids, currentAgent)
+  note(ctx, 'change', params.label || 'Mudança no canvas', ids)
   if (params.focus !== false && ids[0]) focus({ id: ids[0] })
   // Hash novo de cada seção mexida: a próxima gravação do Claude confere a partir dele
   const hashes = Object.fromEntries(nodes.filter((n) => touched[n.id]).map((n) => [n.id, hashOf(n.data as SectionNodeData)]))
-  return { created, touched, hashes, pages: Object.fromEntries(pageRefs) }
+  // Páginas mexidas, para a prévia da tela Agentes mostrar a certa
+  const pageIds = [...new Set(ids.map((id) => pageOf(pages, id)?.id).filter((id): id is string => !!id))]
+  return { created, touched, hashes, pages: Object.fromEntries(pageRefs), pageIds }
 }
 
-/** Leva o canvas até a seção (ou o topo da página), sem mudar o zoom. */
+/** Leva o canvas até a seção (ou o topo da página), sem mudar o zoom. Em segundo plano não há canvas. */
 function focus(params: { id?: string; page?: string }) {
   requireProject()
+  if (workerProject) return { skipped: 'O projeto está em segundo plano: não há canvas para levar até a seção' }
   const space = useSpaceStore.getState()
   if (params.page) {
     const page = findPage(space.pages, params.page)
@@ -366,15 +421,14 @@ function focus(params: { id?: string; page?: string }) {
   return { sectionId: node.id }
 }
 
-function say(params: { text: string; kind?: ClaudeStepKind; sections?: string[] }) {
+function say(params: { text: string; kind?: ClaudeStepKind; sections?: string[] }, ctx: CallContext) {
   if (!params.text?.trim()) throw new Error('Mensagem vazia')
   const { nodes } = useSpaceStore.getState()
   const ids = (params.sections ?? []).map((id) => findNode(nodes, id).id)
-  const bridge = useClaudeBridge.getState()
-  bridge.log(params.kind ?? 'note', params.text.trim(), ids.length ? ids : undefined, currentAgent)
+  note(ctx, params.kind ?? 'note', params.text.trim(), ids.length ? ids : undefined)
   // Terminou, ou parou para perguntar: some a varredura de onde ele estava mexendo
-  if (params.kind === 'done' || params.kind === 'question') bridge.clearWorking()
-  return { ok: true }
+  if (params.kind === 'done' || params.kind === 'question') useClaudeBridge.getState().clearWorking()
+  return { ok: true, sectionIds: ids }
 }
 
 /** Id curto no formato do Elementor. */
@@ -424,7 +478,7 @@ function skeletonSection(title: string) {
 }
 
 /** Mostra no canvas onde o agente está mexendo (seções, uma página ou o projeto todo), ou para de mostrar. */
-function work(params: { text?: string; sections?: string[]; page?: string; done?: boolean }) {
+function work(params: { text?: string; sections?: string[]; page?: string; done?: boolean }, ctx: CallContext) {
   requireProject()
   const bridge = useClaudeBridge.getState()
   if (params.done) {
@@ -433,15 +487,14 @@ function work(params: { text?: string; sections?: string[]; page?: string; done?
   }
   const text = params.text?.trim() || 'Trabalhando'
   const { nodes, pages } = useSpaceStore.getState()
-  const ids = [
-    ...(params.sections ?? []).map((id) => findNode(nodes, id).id),
-    ...(params.page ? [findPage(pages, params.page).id] : []),
-  ]
+  const sectionIds = (params.sections ?? []).map((id) => findNode(nodes, id).id)
+  const pageId = params.page ? findPage(pages, params.page).id : sectionIds[0] ? pageOf(pages, sectionIds[0])?.id : undefined
+  const ids = [...sectionIds, ...(params.page && pageId ? [pageId] : [])]
   // O que estava marcado antes deixa de estar: ele mexe num lugar de cada vez
   bridge.clearWorking()
-  bridge.setWorking(ids.length ? ids : ['*'], { agent: currentAgent, text, since: Date.now() })
-  if (ids[0] && params.sections?.length) focusSection(ids[0])
-  return { ok: true }
+  bridge.setWorking(ids.length ? ids : ['*'], { agent: ctx.agent, text, since: Date.now() })
+  if (sectionIds[0] && !workerProject) focusSection(sectionIds[0])
+  return { ok: true, pageId, sectionIds }
 }
 
 /**
@@ -449,7 +502,7 @@ function work(params: { text?: string; sections?: string[]; page?: string; done?
  * página nova (`newPage`) ou numa que já existe. O agente constrói cada uma
  * gravando por cima dela, e quem olha vê a página ficar nítida seção por seção.
  */
-function plan(params: { titles: string[]; page?: string; newPage?: string; after?: string; label?: string }) {
+function plan(params: { titles: string[]; page?: string; newPage?: string; after?: string; label?: string }, ctx: CallContext) {
   requireProject()
   if (!params.titles?.length) throw new Error('Diga as seções do plano')
   const ops: Op[] = []
@@ -461,14 +514,14 @@ function plan(params: { titles: string[]; page?: string; newPage?: string; after
     if (after) after = ref
   })
   const label = params.label ?? `Plano ${params.newPage ? `da página ${params.newPage}` : 'da página'}: ${params.titles.join(', ')}`
-  const result = apply({ label, ops, focus: false })
+  const result = apply({ label, ops, focus: false }, ctx)
   const ids = params.titles.map((_, i) => result.created[`plan:${i}`])
   const pageId = result.pages.plan ?? findPage(useSpaceStore.getState().pages, params.page).id
   const bridge = useClaudeBridge.getState()
   bridge.markPending(ids)
-  bridge.touch({}, currentAgent)
-  bridge.setWorking([pageId], { agent: currentAgent, text: 'Construindo a página', since: Date.now() })
-  useSpaceStore.getState().focusPage(pageId)
+  bridge.touch({}, ctx.agent)
+  bridge.setWorking([pageId], { agent: ctx.agent, text: 'Construindo a página', since: Date.now() })
+  if (!workerProject) useSpaceStore.getState().focusPage(pageId)
   return { pageId, sections: ids.map((id, i) => ({ id, title: params.titles[i], hash: result.hashes[id] })) }
 }
 
@@ -495,6 +548,37 @@ function render(params: { page?: string; sections?: string[]; device?: string; m
   return params.motion === 'play' ? html.replaceAll(' loading="lazy"', '') : html
 }
 
+/** Primeiro elemento da seção: é por ele (`data-id`) que a prévia acha a seção na página. */
+const anchorOf = (node: SpaceNode | undefined) => (node ? parseSectionElements((node.data as SectionNodeData).elementorJson)?.[0]?.id : undefined)
+
+/**
+ * A página para a prévia da tela Agentes: a da seção em que o agente mexe (ou
+ * a pedida), sem animação, com onde ele está e o que ainda é esqueleto.
+ */
+function view(params: { page?: string; section?: string }): AgentView {
+  requireProject()
+  const { nodes, pages } = useSpaceStore.getState()
+  const section = params.section ? nodes.find((n) => n.id === params.section) : undefined
+  const page = (section && pageOf(pages, section.id)) ?? pages.find((p) => p.id === params.page) ?? findPage(pages, undefined)
+  let html = ''
+  try {
+    html = render({ page: page.id, device: 'desktop' })
+  } catch {
+    // Página sem seção válida ainda: a prévia mostra a página vazia
+  }
+  const { pending, working } = useClaudeBridge.getState()
+  const inPage = pageSections(page, nodes)
+  const workingNode = inPage.find((n) => working[n.id])
+  return {
+    html,
+    pageId: page.id,
+    pageName: page.name,
+    anchor: anchorOf(section && page.sectionIds.includes(section.id) ? section : undefined),
+    working: anchorOf(workingNode),
+    pending: inPage.filter((n) => pending[n.id]).map(anchorOf).filter((id): id is string => !!id),
+  }
+}
+
 function projects() {
   const { projects, status: listStatus } = useProjectStore.getState()
   return {
@@ -503,18 +587,25 @@ function projects() {
   }
 }
 
-/** Abre outro projeto nesta aba (recarrega); o Claude espera ele ficar pronto pelo status. */
+/** Troca de tela sem recarregar o app, para os projetos em segundo plano desta aba continuarem abertos. */
+const navigate = (path: string) => {
+  history.pushState(null, '', path)
+  dispatchEvent(new PopStateEvent('popstate'))
+}
+
+/** Mostra outro projeto na tela desta aba; o agente espera ele ficar pronto pelo status. */
 function open(params: { projectId: string }) {
+  if (workerProject) throw new Error('O segundo plano não troca de projeto')
   if (routeProjectId() === params.projectId) return { already: true }
-  setTimeout(() => location.assign(`/projetos/${params.projectId}`), 50)
+  setTimeout(() => navigate(`/projetos/${params.projectId}`), 50)
   return { navigating: true }
 }
 
-/** Cria um projeto na conta, como o botão Novo projeto, e o abre nesta aba. */
-async function create(params: { name: string; context?: string }) {
+/** Cria um projeto na conta, como o botão Novo projeto; `open: false` não troca a tela de quem está aqui. */
+async function create(params: { name: string; context?: string; open?: boolean }) {
   if (!params.name?.trim()) throw new Error('Diga o nome do projeto')
   const project = await useProjectStore.getState().create({ name: params.name, context: params.context ?? '' })
-  setTimeout(() => location.assign(`/projetos/${project.id}`), 50)
+  if (params.open !== false) setTimeout(() => navigate(`/projetos/${project.id}`), 50)
   return { project: { id: project.id, name: project.name } }
 }
 
@@ -576,7 +667,7 @@ const shareInfo = async (page: SpacePage, share: PageShare | undefined) => {
  * Links de aprovação: ler as respostas do cliente, mandar a página de agora
  * (cria o link ou troca a foto do mesmo link) ou desativar o link.
  */
-async function approval(params: { action?: 'list' | 'send' | 'revoke'; page?: string; note?: string }) {
+async function approval(params: { action?: 'list' | 'send' | 'revoke'; page?: string; note?: string }, ctx: CallContext) {
   const id = requireProject()
   await loadApprovals(id)
   const { pages } = useSpaceStore.getState()
@@ -586,13 +677,13 @@ async function approval(params: { action?: 'list' | 'send' | 'revoke'; page?: st
     const page = findPage(pages, params.page)
     const project = useProjectStore.getState().projects.find((p) => p.id === id)
     const share = await store.publish(page.id, { projectName: project?.name ?? 'Projeto', pageName: page.name, html: playerHtml(page) })
-    useClaudeBridge.getState().log('done', params.note?.trim() || `Mandei ${page.name} para o cliente aprovar (versão ${share.version})`, undefined, currentAgent)
+    note(ctx, 'done', params.note?.trim() || `Mandei ${page.name} para o cliente aprovar (versão ${share.version})`)
     return { local, pages: [await shareInfo(page, share)] }
   }
   if (params.action === 'revoke') {
     const page = findPage(pages, params.page)
     await store.revoke(page.id)
-    useClaudeBridge.getState().log('note', params.note?.trim() || `Desativei o link de aprovação de ${page.name}`, undefined, currentAgent)
+    note(ctx, 'note', params.note?.trim() || `Desativei o link de aprovação de ${page.name}`)
     return { local, pages: [await shareInfo(page, undefined)] }
   }
   const chosen = params.page ? [findPage(pages, params.page)] : pages
@@ -633,7 +724,7 @@ const pageLinks = () => useSpaceStore.getState().pages.map((p) => ({ pageId: p.i
  * usuário e a senha de aplicação grava a conexão; `pages` lista o site;
  * `import` traz páginas do site para o canvas, como o diálogo Importar.
  */
-async function wordpress(params: { action?: 'status' | 'connect' | 'pages' | 'import'; site?: string; user?: string; password?: string; ids?: number[] }) {
+async function wordpress(params: { action?: 'status' | 'connect' | 'pages' | 'import'; site?: string; user?: string; password?: string; ids?: number[] }, ctx: CallContext) {
   const id = requireProject()
   const connectionInfo = (c: WordPressConnection | null) =>
     c && { site: c.site.name, siteUrl: c.site.siteUrl, user: c.user.name, roles: c.user.roles, can: c.can, connectedAt: c.connectedAt, checkedAt: c.checkedAt }
@@ -681,7 +772,7 @@ async function wordpress(params: { action?: 'status' | 'connect' | 'pages' | 'im
         failed.push({ postId, error: error instanceof Error ? error.message : String(error) })
       }
     }
-    if (imported.length) useClaudeBridge.getState().log('note', `Importei do WordPress: ${imported.map((p) => p.page).join(', ')}`, undefined, currentAgent)
+    if (imported.length) note(ctx, 'note', `Importei do WordPress: ${imported.map((p) => p.page).join(', ')}`)
     return { imported, failed, kit: !!kit }
   }
 
@@ -714,7 +805,7 @@ function details(params: { page?: string; fields?: Partial<Record<(typeof DETAIL
  * ligada atualiza no mesmo endereço (com backup e conferência de conflito),
  * página nova vira rascunho, a não ser que `status` diga publicar.
  */
-async function publish(params: { page?: string; status?: PageStatus; template?: PageTemplate; overwrite?: boolean }) {
+async function publish(params: { page?: string; status?: PageStatus; template?: PageTemplate; overwrite?: boolean }, ctx: CallContext) {
   const projectId = requireProject()
   const connection = (await wpConnection())!
   if (!connection.can.editPages) throw new Error(`O usuário ${connection.user.name} não pode editar páginas em ${connection.site.name}`)
@@ -722,10 +813,10 @@ async function publish(params: { page?: string; status?: PageStatus; template?: 
   const page = findPage(useSpaceStore.getState().pages, params.page)
   const steps: string[] = []
   const bridge = useClaudeBridge.getState()
-  bridge.setWorking([page.id], { agent: currentAgent, text: `Publicando no ${connection.site.name}`, since: Date.now() })
+  bridge.setWorking([page.id], { agent: ctx.agent, text: `Publicando no ${connection.site.name}`, since: Date.now() })
   try {
     const result = await publishPage({ connection, projectId, pageId: page.id, status: params.status, template: params.template, overwrite: params.overwrite, onProgress: (step) => steps.push(step) })
-    bridge.log('done', `${result.created ? 'Criei' : 'Atualizei'} ${page.name} em ${connection.site.name} (${result.status === 'publish' ? 'publicada' : 'rascunho'}): ${result.link}`, undefined, currentAgent)
+    note(ctx, 'done', `${result.created ? 'Criei' : 'Atualizei'} ${page.name} em ${connection.site.name} (${result.status === 'publish' ? 'publicada' : 'rascunho'}): ${result.link}`)
     return { page: page.name, site: connection.site.name, steps, ...result }
   } catch (error) {
     if (error instanceof PageConflictError) throw new Error(`A página foi editada no WordPress em ${error.modifiedGmt} (GMT), depois da última sincronização. Importe de novo (wp import) para trazer a mudança, ou publique com --overwrite para passar por cima (fica um backup).`)
@@ -736,19 +827,79 @@ async function publish(params: { page?: string; status?: PageStatus; template?: 
 }
 
 /** Devolve ao site o conteúdo que a página ligada tinha antes da última publicação feita daqui. */
-async function restore(params: { page?: string }) {
+async function restore(params: { page?: string }, ctx: CallContext) {
   const projectId = requireProject()
   const connection = (await wpConnection())!
   const page = findPage(useSpaceStore.getState().pages, params.page)
   const result = await restoreLastBackup(connection, projectId, page.id)
-  useClaudeBridge.getState().log('note', `Voltei ${page.name} no ${connection.site.name} para a versão anterior`, undefined, currentAgent)
+  note(ctx, 'note', `Voltei ${page.name} no ${connection.site.name} para a versão anterior`)
   return { page: page.name, site: connection.site.name, ...result }
 }
 
-const METHODS: Record<string, (params: never) => unknown> = {
-  status, pull, apply, focus, say, work, plan, render, projects, open, create, brand,
+const METHODS: Record<string, (params: never, ctx: CallContext) => unknown> = {
+  status, pull, apply, focus, say, work, plan, render, view, projects, open, create, brand,
   brief, approval, invite, wordpress, details, publish, restore,
 }
+
+// ---------- projetos em segundo plano (só na tela de uma pessoa) ----------
+
+const workers = new Map<string, HTMLIFrameElement>()
+const releases = new Map<string, Promise<void>>()
+
+/** Lugar dos iframes do segundo plano: fora do React, sobrevive à troca de tela. */
+const workerBox = () => {
+  let box = document.getElementById('se-agent-workers')
+  if (!box) {
+    box = document.createElement('div')
+    box.id = 'se-agent-workers'
+    box.setAttribute('aria-hidden', 'true')
+    box.style.display = 'none'
+    document.body.appendChild(box)
+  }
+  return box
+}
+
+/** Abre o projeto em segundo plano para um agente (o servidor pede quando ninguém o tem aberto). */
+function spawnWorker(projectId: string) {
+  if (workers.has(projectId) || releases.has(projectId)) return
+  // A pessoa está com ele aberto nesta aba: o servidor manda os pedidos para cá
+  if (routeProjectId() === projectId) return
+  const frame = document.createElement('iframe')
+  frame.name = `${WORKER_NAME_PREFIX}${projectId}`
+  frame.title = 'Projeto aberto em segundo plano para um agente'
+  frame.tabIndex = -1
+  frame.src = workerPath(projectId)
+  workerBox().appendChild(frame)
+  workers.set(projectId, frame)
+}
+
+/** Fecha o segundo plano do projeto depois de ele salvar o que faltava. */
+function releaseWorker(projectId: string) {
+  const running = releases.get(projectId)
+  if (running) return running
+  const frame = workers.get(projectId)
+  if (!frame) return Promise.resolve()
+  workers.delete(projectId)
+  const done = (async () => {
+    try {
+      const handle = frame.contentWindow?.__spaceWorker
+      if (handle) await Promise.race([handle.release(), new Promise((r) => setTimeout(r, RELEASE_TIMEOUT))])
+    } catch (error) {
+      console.warn('[ponte] o segundo plano não fechou direito', error)
+    } finally {
+      frame.remove()
+      releases.delete(projectId)
+    }
+  })()
+  releases.set(projectId, done)
+  return done
+}
+
+// ---------- pedidos da tela Agentes ----------
+
+const views = new Map<string, { resolve: (view: AgentView) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>()
+/** Abrir o projeto em segundo plano e montar a página pode levar um tempo. */
+const VIEW_TIMEOUT = 75_000
 
 export function startSpaceBridge(hot: Hot) {
   const send = () => hot.send('space-bridge:state', info())
@@ -763,24 +914,64 @@ export function startSpaceBridge(hot: Hot) {
   }
 
   const onCall = async ({ requestId, method, params, agent }: { requestId: string; method: string; params: unknown; agent?: string }) => {
+    const ctx: CallContext = { agent: agent?.trim() || DEFAULT_AGENT, steps: [] }
     try {
-      currentAgent = agent?.trim() || DEFAULT_AGENT
       const handler = METHODS[method]
       if (!handler) throw new Error(`Pedido desconhecido: ${method}`)
-      const result = await handler(params as never)
-      hot.send('space-bridge:reply', { requestId, ok: true, result })
+      const result = await handler(params as never, ctx)
+      hot.send('space-bridge:reply', { requestId, ok: true, result, steps: ctx.steps })
     } catch (error) {
-      hot.send('space-bridge:reply', { requestId, ok: false, error: error instanceof Error ? error.message : String(error) })
+      hot.send('space-bridge:reply', {
+        requestId,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        retry: error instanceof NotOpenError,
+        steps: ctx.steps,
+      })
     }
+  }
+
+  const onSpawn = ({ projectId }: { projectId?: string }) => projectId && spawnWorker(projectId)
+  const onRelease = ({ projectId }: { projectId?: string }) => projectId && void releaseWorker(projectId)
+  const onAgents = (data: { at: number; agents: ReturnType<typeof useAgents.getState>['agents'] }) =>
+    useAgents.setState({ connected: true, agents: data.agents ?? [], skew: (data.at ?? Date.now()) - Date.now() })
+  const onViewReply = ({ requestId, ok, result, error }: { requestId: string; ok: boolean; result?: AgentView; error?: string }) => {
+    const request = views.get(requestId)
+    if (!request) return
+    views.delete(requestId)
+    clearTimeout(request.timer)
+    if (ok && result) request.resolve(result)
+    else request.reject(new Error(error || 'A prévia não veio'))
   }
 
   hot.on('space-bridge:call', onCall)
   hot.on('vite:ws:connect', send)
+  if (!workerProject) {
+    hot.on('space-bridge:spawn', onSpawn)
+    hot.on('space-bridge:release', onRelease)
+    hot.on('space-bridge:agents', onAgents)
+    hot.on('space-bridge:view-reply', onViewReply)
+    setBackgroundRelease(releaseWorker)
+    useAgents.setState({
+      requestView: (request: ViewRequest) =>
+        new Promise<AgentView>((resolve, reject) => {
+          const requestId = crypto.randomUUID()
+          const timer = setTimeout(() => {
+            views.delete(requestId)
+            reject(new Error('A prévia demorou demais'))
+          }, VIEW_TIMEOUT)
+          views.set(requestId, { resolve, reject, timer })
+          hot.send('space-bridge:view', { requestId, ...request })
+        }),
+      dismiss: (target) => hot.send('space-bridge:dismiss', target),
+    })
+  }
   const heartbeat = setInterval(send, HEARTBEAT)
-  const unsubscribe = useProjectSync.subscribe((s, prev) => s.openId !== prev.openId && send())
+  const unsubscribe = useProjectSync.subscribe((s, prev) => (s.openId !== prev.openId || s.status !== prev.status) && send())
   window.addEventListener('pointerdown', onActivity, true)
   window.addEventListener('keydown', onActivity, true)
   window.addEventListener('focus', send)
+  window.addEventListener(WORKER_REFRESH_EVENT, send)
   document.addEventListener('visibilitychange', send)
   const bye = () => hot.send('space-bridge:bye', { tabId })
   window.addEventListener('pagehide', bye)
@@ -793,9 +984,15 @@ export function startSpaceBridge(hot: Hot) {
     unsubscribe()
     hot.off('space-bridge:call', onCall)
     hot.off('vite:ws:connect', send)
+    hot.off('space-bridge:spawn', onSpawn)
+    hot.off('space-bridge:release', onRelease)
+    hot.off('space-bridge:agents', onAgents)
+    hot.off('space-bridge:view-reply', onViewReply)
+    if (!workerProject) setBackgroundRelease(null)
     window.removeEventListener('pointerdown', onActivity, true)
     window.removeEventListener('keydown', onActivity, true)
     window.removeEventListener('focus', send)
+    window.removeEventListener(WORKER_REFRESH_EVENT, send)
     document.removeEventListener('visibilitychange', send)
     window.removeEventListener('pagehide', bye)
   }

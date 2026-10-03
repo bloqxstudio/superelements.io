@@ -11,6 +11,8 @@ import Auth from "@/pages/Auth";
 import NotFound from "@/pages/NotFound";
 import Projects from "@/pages/Projects";
 import ProjectSpace from "@/pages/ProjectSpace";
+import Agents from "@/pages/Agents";
+import AgentWorker from "@/pages/AgentWorker";
 import WordPressCallback from "@/pages/WordPressCallback";
 import PageApproval from "@/pages/PageApproval";
 import ProjectInvite from "@/pages/ProjectInvite";
@@ -82,7 +84,11 @@ function App() {
               >
                 <Route index element={<Projects />} />
                 <Route path="projetos/:projectId" element={<ProjectSpace />} />
+                {/* Os agentes trabalhando agora, cada um no seu projeto */}
+                <Route path="agentes" element={<Agents />} />
               </Route>
+              {/* Projeto aberto em segundo plano para um agente (iframe escondido, só no dev) */}
+              <Route path="/agente/:projectId" element={import.meta.hot ? <ProtectedRoute><AgentWorker /></ProtectedRoute> : <Navigate to="/" replace />} />
               <Route path="/space" element={<Navigate to="/" replace />} />
 
               <Route path="*" element={<NotFound />} />

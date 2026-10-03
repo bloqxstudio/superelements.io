@@ -6,6 +6,7 @@ import { useBrandStore } from '@/features/space/brand/brandStore'
 import { useSiteKitStore } from '@/features/wordpress/siteKitStore'
 import { supabase } from '@/integrations/supabase/client'
 import { personName } from './access'
+import { releaseBackground } from './background'
 import { deleteDraft, loadDraft, saveDraft, type ProjectDraft } from './browserDb'
 import { joinLiveProject, type LivePerson, type LiveProject } from './liveProject'
 import { mergeDocs } from './mergeDoc'
@@ -88,6 +89,9 @@ const formatTime = (time: number) =>
 
 /** O salvamento de quem acabou de sair do projeto; abrir de novo espera por ele. */
 const closing = new Map<string, Promise<void>>()
+
+/** Termina quando o projeto que saiu daqui acabou de salvar. */
+export const whenClosed = (projectId: string) => closing.get(projectId)?.catch(() => {}) ?? Promise.resolve()
 
 export type SessionState = 'loading' | 'ready' | 'error' | 'missing'
 
@@ -483,7 +487,8 @@ export const useProjectSession = (projectId: string | undefined) => {
     }
 
     const open = async () => {
-      await closing.get(projectId)?.catch(() => {})
+      // Um agente pode estar com o projeto em segundo plano nesta aba: ele salva e sai antes
+      await Promise.all([whenClosed(projectId), releaseBackground(projectId)])
       if (!active) return
       useProjectSync.setState({ projectId, status: 'saved', savedAt: undefined })
 

@@ -24,11 +24,20 @@ const STATE_FILE = path.join(WORK, 'bridge.json')
 
 const HELP = `Agente no Space (Claude ou Codex) — trabalhar na página do cliente direto no canvas
 
-  status                          projeto aberto, páginas, seções e o que está selecionado
-  projects                        projetos da conta
-  open <nome|id>                  abre o projeto na aba do Space e espera ficar pronto
-  new <nome> [--context "<briefing>" | --context-file <arquivo>]
-                                  cria um projeto na conta e o abre na aba
+Vários agentes ao mesmo tempo: cada sessão (Claude ou Codex) trabalha no seu projeto.
+"open" liga a sessão a um projeto; dali em diante os comandos vão para ele, esteja ele
+aberto na tela de alguém (que vê o agente no canvas) ou em segundo plano. A tela de
+quem acompanha não muda. Acompanhe todos em /agentes no app.
+
+  status                          projeto da sessão, páginas, seções, o que está selecionado e os outros agentes
+  projects                        projetos da conta (e quem está trabalhando em cada um)
+  agents                          agentes trabalhando agora, em todos os projetos
+  open <nome|id> [--show]         liga esta sessão ao projeto e espera ele abrir (em segundo plano,
+                                  se ninguém o tem aberto); --show também o mostra na tela do usuário
+  new <nome> [--context "<briefing>" | --context-file <arquivo>] [--show]
+                                  cria um projeto na conta e liga esta sessão a ele
+  close                           terminou: o projeto em segundo plano salva e fecha agora (sozinho, fecha
+                                  depois de 6 min sem pedido)
   brief [--set "<texto>" | --file <arquivo>]
                                   mostra ou troca o briefing do projeto (o campo Contexto)
   pull [--page <nome>]...         baixa as páginas para .space/<projeto>/<página>/ (uma seção por arquivo)
@@ -73,7 +82,9 @@ Com o cliente e o site (falam com a conta e com o WordPress; cada um é um passo
   restore --page <nome> --yes     volta a página do site para a versão de antes da última publicação daqui
 
   <seção> é o id (ou o começo dele), o número na página ("3", com --page) ou parte do título.
-  Opções gerais: --tab <id> escolhe a aba; --json mostra a resposta crua.`
+  Opções gerais: --project <nome|id> (ou SPACE_PROJECT) usa outro projeto só neste comando;
+  --tab <id> escolhe a aba; --json mostra a resposta crua.
+  A sessão vem de CLAUDE_CODE_SESSION_ID, das variáveis do Codex ou de SPACE_SESSION; o nome no painel, de SPACE_AGENT.`
 
 // ---------- argumentos ----------
 
@@ -142,8 +153,70 @@ const AGENT =
   process.env.SPACE_AGENT?.trim() ||
   (process.env.CLAUDECODE ? 'Claude' : Object.keys(process.env).some((k) => k.startsWith('CODEX_')) ? 'Codex' : 'Agente')
 
+/**
+ * Cada sessão do agente (uma conversa do Claude Code ou do Codex) trabalha no
+ * seu projeto. Sem uma sessão conhecida, vale SPACE_SESSION; senão, todas as
+ * chamadas sem sessão dividem uma só.
+ */
+const SESSION =
+  [process.env.SPACE_SESSION, process.env.CLAUDE_CODE_SESSION_ID, process.env.CODEX_THREAD_ID, process.env.CODEX_SESSION_ID]
+    .map((v) => v?.trim())
+    .find(Boolean) ?? `${AGENT.toLowerCase()}-sem-sessao`
+const SESSION_FILE = path.join(WORK, 'sessoes', `${SESSION.replace(/[^\w.-]/g, '_').slice(0, 100)}.json`)
+
+/** O projeto em que esta sessão trabalha (gravado pelo open, pelo new ou pelo primeiro status). */
+const readBinding = () => {
+  try {
+    return JSON.parse(readFileSync(SESSION_FILE, 'utf8'))
+  } catch {
+    return null
+  }
+}
+const writeBinding = (project) => {
+  mkdirSync(path.dirname(SESSION_FILE), { recursive: true })
+  writeFileSync(SESSION_FILE, `${JSON.stringify({ projectId: project.id, projectName: project.name, agent: AGENT, session: SESSION, at: new Date().toISOString() }, null, 2)}\n`)
+}
+
+/** Projeto deste comando: --project, SPACE_PROJECT ou o da sessão. Sem nenhum, a tela de quem usa o app. */
+let target = null
+
 const call = async (method, params = {}) =>
-  (await request('/call', { method: 'POST', body: JSON.stringify({ method, params, tab: one(flags.tab), agent: AGENT }) })).result
+  (await request('/call', { method: 'POST', body: JSON.stringify({ method, params, tab: one(flags.tab), agent: AGENT, session: SESSION, project: flags.tab ? undefined : target?.id }) })).result
+
+/** Um projeto da conta pelo nome (ou parte dele) ou pelo id. */
+async function findProject(ref) {
+  const { projects } = await call('projects')
+  const lower = String(ref).toLowerCase()
+  const exact = projects.filter((p) => p.id === ref || p.name.toLowerCase() === lower)
+  const matches = exact.length ? exact : projects.filter((p) => p.id.startsWith(ref) || p.name.toLowerCase().includes(lower) || slug(p.name) === slug(ref))
+  if (matches.length !== 1) fail(matches.length ? `Mais de um projeto: ${matches.map((p) => p.name).join(', ')}` : `Projeto não encontrado: ${ref}. Projetos: ${projects.map((p) => p.name).join(', ')}`)
+  return matches[0]
+}
+
+async function resolveTarget() {
+  const ref = one(flags.project) ?? process.env.SPACE_PROJECT?.trim()
+  if (ref) {
+    const project = await findProject(ref)
+    target = { id: project.id, name: project.name, from: 'flag' }
+    return
+  }
+  const binding = readBinding()
+  if (binding?.projectId) target = { id: binding.projectId, name: binding.projectName, from: 'session' }
+}
+
+/** Primeiro comando de uma sessão sem projeto: ela fica no projeto da tela de quem usa o app. */
+function bindFromStatus(status) {
+  if (target || flags.tab || !status.ready || !status.project) return
+  writeBinding(status.project)
+  target = { id: status.project.id, name: status.project.name, from: 'session' }
+  console.error(`ℹ Esta sessão (${AGENT}) ficou no projeto ${status.project.name}: os próximos comandos vão para ele, mesmo que a tela mude. Para trocar: open <projeto>.`)
+}
+
+/** Outros agentes que mexeram no mesmo projeto há pouco: a proteção do push vale entre eles, mas é bom saber. */
+async function othersIn(projectId) {
+  const { agents } = await request('/agents').catch(() => ({ agents: [] }))
+  return agents.filter((a) => a.projectId === projectId && a.session !== SESSION && a.state === 'working' && Date.now() - a.lastAt < 10 * 60_000)
+}
 
 // ---------- utilidades ----------
 
@@ -175,6 +248,7 @@ const CLIENTS = [
   { match: /inpel/i, brand: 'brands/inpel', builder: 'src/features/inpel/elementor.ts', scope: 'Inpel model' },
   { match: /zelo/i, brand: 'public/zelo', builder: 'src/features/zelo/elementor.ts', scope: 'Zelo model' },
   { match: /leo\s*scherer/i, brand: 'brands/leo-scherer', builder: 'src/features/leoscherer', scope: 'Leo Scherer model' },
+  { match: /evermind/i, brand: 'public/brands/evermind', builder: 'src/features/evermind', scope: 'Evermind experiment (BYQ evermind-hero-2)' },
   { match: /super\s*elements/i, brand: 'brands/superelements', builder: 'src/features/superelements', scope: 'Superelements model (our own product page)' },
 ]
 const clientOf = (name = '') => CLIENTS.find((c) => c.match.test(name))
@@ -213,19 +287,44 @@ function resolvePage(status, ref) {
 async function readyStatus() {
   const status = await call('status')
   if (!status.ready) fail(status.project ? `O projeto ${status.project.name} ainda está abrindo; tente de novo.` : 'Nenhum projeto aberto no Space. Peça para abrir um, ou use "open <nome>".')
+  bindFromStatus(status)
   return status
+}
+
+/** Em segundo plano não há canvas aberto, e o Ctrl+Z de quem abrir depois não alcança a mudança. */
+const undoHint = (status) =>
+  status.where === 'background' ? 'Feito em segundo plano: para desfazer, grave de novo a versão anterior (pull, editar, push).' : 'Ctrl+Z no Space desfaz.'
+
+const STATE_LABEL = { working: 'trabalhando', question: 'esperando resposta', done: 'terminou' }
+const agentLine = (a) => {
+  const idle = a.state === 'working' && Date.now() - a.lastAt > 5 * 60_000
+  const where = a.where === 'canvas' ? 'no canvas' : a.where === 'background' ? 'em segundo plano' : 'fechado'
+  return `${a.agent} em ${a.projectName ?? a.projectId.slice(0, 8)} (${idle ? 'parado' : STATE_LABEL[a.state]}, ${where}, ${ago(a.lastAt)})${a.now && !idle ? `: ${a.now}` : ''}`
+}
+const ago = (at) => {
+  const minutes = Math.round((Date.now() - at) / 60_000)
+  return minutes < 1 ? 'agora' : minutes < 60 ? `há ${minutes} min` : `há ${Math.round(minutes / 60)} h`
 }
 
 // ---------- comandos ----------
 
 async function cmdStatus() {
-  const { tabs } = await request('/status')
+  const { tabs, agents = [] } = await request('/status')
   if (!tabs.length) fail('Nenhuma aba do Space conectada. Abra o app no preview do Ship Studio ou no navegador (npm run dev).')
   const status = await call('status')
-  if (flags.json) return console.log(JSON.stringify({ tabs, status }, null, 2))
+  bindFromStatus(status)
+  if (flags.json) return console.log(JSON.stringify({ tabs, agents, session: SESSION, target, status }, null, 2))
 
-  if (tabs.length > 1) console.log(`Abas conectadas: ${tabs.map((t) => `${t.tabId.slice(0, 6)} ${t.url}${t.visible ? '' : ' (em segundo plano)'}`).join(' · ')}`)
-  if (!status.project) return console.log(`Aba em ${status.route}: nenhum projeto aberto. Projetos: node scripts/space/space.mjs projects`)
+  const people = tabs.filter((t) => t.role !== 'worker')
+  const background = tabs.filter((t) => t.role === 'worker')
+  if (people.length > 1) console.log(`Telas abertas: ${people.map((t) => `${t.tabId.slice(0, 6)} ${t.projectName ?? t.url}${t.visible ? '' : ' (aba escondida)'}`).join(' · ')}`)
+  if (background.length) console.log(`Em segundo plano: ${background.map((t) => `${t.projectName ?? t.projectId?.slice(0, 8)}${t.ready ? '' : ' (abrindo)'}`).join(', ')}`)
+  const others = agents.filter((a) => a.session !== SESSION && Date.now() - a.lastAt < 60 * 60_000 && a.state !== 'done')
+  if (others.length) console.log(`Outros agentes: ${others.map(agentLine).join(' · ')}`)
+  if (!status.project) return console.log(`Aba em ${status.route}: nenhum projeto aberto. Escolha um com: open <projeto> (projetos: node scripts/space/space.mjs projects)`)
+  const screen = people.find((t) => t.visible && t.projectId) ?? people.find((t) => t.projectId)
+  console.log(`Sessão: ${AGENT} · ${target ? `trabalha em ${status.project.name}` : 'sem projeto'} · ${status.where === 'background' ? 'em segundo plano (ninguém está com ele aberto na tela)' : 'aberto na tela do usuário (ele vê no canvas)'}`)
+  if (screen && screen.projectId !== status.project.id) console.log(`A tela do usuário está em ${screen.projectName ?? screen.url}. Se o pedido é sobre ela: open "${screen.projectName ?? screen.projectId}".`)
   console.log(`Projeto: ${status.project.name}  (${status.project.id})${status.ready ? '' : '  · ainda abrindo'}`)
   if (!status.ready) return
   const client = clientOf(status.project.name)
@@ -255,23 +354,62 @@ async function cmdProjects() {
   const { projects, status } = await call('projects')
   if (flags.json) return console.log(JSON.stringify(projects, null, 2))
   if (!projects.length) return console.log(status === 'ready' ? 'A conta não tem projetos.' : 'A lista de projetos ainda não carregou nesta aba (abra a tela de Projetos).')
-  for (const p of projects) console.log(`${p.name}  ·  ${p.pages} pág., ${p.sections} seções  ·  ${p.id}${p.role === 'editor' ? '  (compartilhado)' : ''}`)
+  const { agents } = await request('/agents').catch(() => ({ agents: [] }))
+  const busy = (id) => agents.filter((a) => a.projectId === id && a.state !== 'done' && Date.now() - a.lastAt < 10 * 60_000)
+  for (const p of projects) {
+    const here = busy(p.id)
+    const who = here.length ? `  ·  agora: ${here.map((a) => (a.session === SESSION ? `${a.agent} (esta sessão)` : a.agent)).join(', ')}` : ''
+    console.log(`${p.name}  ·  ${p.pages} pág., ${p.sections} seções  ·  ${p.id}${p.role === 'editor' ? '  (compartilhado)' : ''}${who}`)
+  }
+}
+
+async function cmdAgents() {
+  const { agents } = await request('/agents')
+  if (flags.json) return console.log(JSON.stringify(agents, null, 2))
+  const recent = agents.filter((a) => Date.now() - a.lastAt < 3 * 60 * 60_000)
+  if (!recent.length) return console.log('Nenhum agente trabalhou nas últimas 3 horas.')
+  for (const a of recent) {
+    const last = a.steps[a.steps.length - 1]
+    console.log(`${a.session === SESSION ? '▸ ' : '  '}${agentLine(a)}${a.session === SESSION ? '  ← esta sessão' : ''}`)
+    if (last) console.log(`    último: ${last.text}`)
+  }
+}
+
+/**
+ * Liga esta sessão ao projeto e espera ele abrir: na tela de quem já o tem
+ * aberto, ou em segundo plano. A tela do usuário não muda (a não ser com --show).
+ */
+async function bindAndOpen(project, { show = false, created = false } = {}) {
+  writeBinding(project)
+  target = { id: project.id, name: project.name, from: 'session' }
+  for (const other of await othersIn(project.id)) console.log(`Atenção: ${agentLine(other)}. Combine com o usuário quem mexe em quê; o push recusa mudança sobre leitura antiga.`)
+  if (show) {
+    const { tab } = await request('/call', { method: 'POST', body: JSON.stringify({ method: 'open', params: { projectId: project.id }, tab: one(flags.tab), agent: AGENT, session: SESSION }) })
+    process.stdout.write(`${created ? `Projeto ${project.name} criado (${project.id}). ` : ''}Abrindo ${project.name} na tela do usuário…`)
+    await waitOpen(tab, project.id)
+  } else {
+    process.stdout.write(`${created ? `Projeto ${project.name} criado (${project.id}). ` : ''}Abrindo ${project.name}…`)
+    const status = await call('status')
+    console.log(status.where === 'background' ? ' pronto, em segundo plano (a tela do usuário não mudou).' : ' pronto, na tela do usuário (ele acompanha no canvas).')
+  }
+  console.log(`Esta sessão (${AGENT}) trabalha em ${project.name}: os próximos comandos vão para ele. O usuário acompanha em /agentes.`)
+}
+
+/** Terminou: o projeto em segundo plano salva e fecha agora (sozinho, fecharia depois de alguns minutos parado). */
+async function cmdClose() {
+  if (!target) fail('Esta sessão não está em nenhum projeto.')
+  const { released, where } = await request('/release', { method: 'POST', body: JSON.stringify({ project: target.id }) })
+  if (released) console.log(`✔ ${target.name} salvou e fechou em segundo plano. A sessão continua nele: o próximo comando abre de novo.`)
+  else console.log(where === 'canvas' ? `${target.name} está aberto na tela do usuário: fica como está.` : `${target.name} não estava aberto em segundo plano.`)
 }
 
 async function cmdOpen() {
   const ref = positional.join(' ')
   if (!ref) fail('Diga o nome ou o id do projeto')
-  const { projects } = await call('projects')
-  const lower = ref.toLowerCase()
-  const matches = projects.filter((p) => p.id === ref || p.id.startsWith(ref) || p.name.toLowerCase().includes(lower))
-  if (matches.length !== 1) fail(matches.length ? `Mais de um projeto: ${matches.map((p) => p.name).join(', ')}` : `Projeto não encontrado: ${ref}`)
-  const project = matches[0]
-  const { tab } = await request('/call', { method: 'POST', body: JSON.stringify({ method: 'open', params: { projectId: project.id }, tab: one(flags.tab) }) })
-  process.stdout.write(`Abrindo ${project.name}…`)
-  await waitOpen(tab, project.id)
+  await bindAndOpen(await findProject(ref), { show: !!flags.show })
 }
 
-/** Cria o projeto na conta (nome e briefing, como o botão Novo projeto) e o abre na aba. */
+/** Cria o projeto na conta (nome e briefing, como o botão Novo projeto) e liga esta sessão a ele. */
 async function cmdNew() {
   const name = positional.join(' ').trim()
   if (!name) fail('Diga o nome do projeto')
@@ -279,9 +417,8 @@ async function cmdNew() {
   if (projects.some((p) => p.name.toLowerCase() === name.toLowerCase())) fail(`Já existe um projeto "${name}". Use: open ${name}`)
   const file = one(flags['context-file'])
   const context = file ? readFileSync(file, 'utf8') : (one(flags.context) ?? '')
-  const { tab, result } = await request('/call', { method: 'POST', body: JSON.stringify({ method: 'create', params: { name, context }, tab: one(flags.tab), agent: AGENT }) })
-  process.stdout.write(`Projeto ${result.project.name} criado (${result.project.id}). Abrindo…`)
-  await waitOpen(tab, result.project.id)
+  const { project } = await call('create', { name, context, open: false })
+  await bindAndOpen(project, { show: !!flags.show, created: true })
 }
 
 async function waitOpen(tab, projectId) {
@@ -396,6 +533,14 @@ async function cmdPush() {
   const files = sectionFiles(positional)
   if (!files.length) fail('Diga quais arquivos de seção gravar')
   const status = await readyStatus()
+  // Arquivo de outro projeto (.space/<projeto>/…) nunca vai para este: com vários agentes, é o erro mais fácil de cometer
+  const mine = slug(status.project.name)
+  for (const file of files) {
+    const [folder] = path.relative(WORK, file).split(path.sep)
+    if (folder && folder !== '..' && folder !== mine && !path.isAbsolute(folder) && existsSync(path.join(WORK, folder, 'projeto.md'))) {
+      fail(`${rel(file)} é do projeto da pasta "${folder}", mas esta sessão está em ${status.project.name}. Troque com: open <projeto>`)
+    }
+  }
 
   const ops = []
   const expect = {}
@@ -442,7 +587,7 @@ async function cmdPush() {
     writeJson(baseFile, next)
     console.log(`✔ ${item.kind === 'nova' ? 'nova' : 'alterada'}: ${section.title}  (${id.slice(0, 8)})`)
   }
-  console.log(`No canvas: "${label}" — Ctrl+Z no Space desfaz.`)
+  console.log(`No canvas: "${label}" — ${undoHint(status)}`)
 }
 
 async function cmdRemove() {
@@ -451,7 +596,7 @@ async function cmdRemove() {
   const status = await readyStatus()
   const sections = positional.map((ref) => resolveSection(status, ref, one(flags.page)))
   await call('apply', { label, ops: sections.map((s) => ({ op: 'remove', id: s.id })), expect: Object.fromEntries(sections.map((s) => [s.id, s.hash])), force: !!flags.force })
-  console.log(`✔ Saíram: ${sections.map((s) => s.title).join(', ')}. Ctrl+Z no Space desfaz.`)
+  console.log(`✔ Saíram: ${sections.map((s) => s.title).join(', ')}. ${undoHint(status)}`)
 }
 
 async function cmdMove() {
@@ -465,7 +610,7 @@ async function cmdMove() {
     label,
     ops: [{ op: 'move', id: section.id, page: page?.id, index: flags.index !== undefined ? Number(one(flags.index)) - 1 : undefined, after: anchor(one(flags.after)), before: anchor(one(flags.before)) }],
   })
-  console.log(`✔ ${section.title} mudou de lugar. Ctrl+Z no Space desfaz.`)
+  console.log(`✔ ${section.title} mudou de lugar. ${undoHint(status)}`)
 }
 
 async function cmdWork() {
@@ -503,7 +648,7 @@ async function cmdPageRemove() {
   const status = await readyStatus()
   const page = resolvePage(status, positional.join(' '))
   await call('apply', { label, ops: [{ op: 'removePage', page: page.id }] })
-  console.log(`✔ Página ${page.name} saiu do canvas. Ctrl+Z no Space desfaz.`)
+  console.log(`✔ Página ${page.name} saiu do canvas. ${undoHint(status)}`)
 }
 
 async function cmdPageAdd() {
@@ -1032,6 +1177,7 @@ async function cmdVideo() {
   for (const device of devices) {
     const query = new URLSearchParams({ token, device, motion: 'play', page: page.id })
     if (flags.tab) query.set('tab', one(flags.tab))
+    else if (target) query.set('project', target.id)
     const out = path.resolve(devices.length === 1 && one(flags.out) ? one(flags.out) : path.join(dir, `${slug(page.name)}-${device}.mp4`))
     console.log(`Gravando ${page.name} (${device})…`)
     const holdTop = flags.pause !== undefined ? Number(one(flags.pause)) : undefined
@@ -1071,6 +1217,7 @@ async function cmdShot() {
   for (const device of devices) {
     const query = new URLSearchParams({ token, device, ...(page ? { page: page.id } : { sections: sections.map((s) => s.id).join(',') }) })
     if (flags.tab) query.set('tab', one(flags.tab))
+    else if (target) query.set('project', target.id)
     const { files, total } = await capture(`${url}/__space/render?${query}`, device, path.join(dir, `${name}-${device}`))
     console.log(`✔ ${device} (${total}px de altura): ${files.map(rel).join(', ')}`)
   }
@@ -1103,6 +1250,8 @@ const COMMANDS = {
   publish: cmdPublish,
   restore: cmdRestore,
   shot: cmdShot,
+  agents: cmdAgents,
+  close: cmdClose,
   video: cmdVideo,
 }
 
@@ -1112,7 +1261,9 @@ if (!command || command === 'help' || flags.help) {
   console.error(`✖ Comando desconhecido: ${command}\n\n${HELP}`)
   process.exitCode = 1
 } else {
-  COMMANDS[command]().catch((error) => {
+  // Comandos da conta não precisam de projeto; os outros vão para o projeto da sessão
+  const needsProject = !['projects', 'agents', 'open', 'new', 'build'].includes(command)
+  ;(needsProject ? resolveTarget() : Promise.resolve()).then(() => COMMANDS[command]()).catch((error) => {
     if (!(error instanceof Exit)) console.error(`✖ ${error?.message ?? String(error)}`)
     process.exitCode = error instanceof Exit ? error.code : 1
     // Algo ainda aberto (navegador, socket) não segura o processo

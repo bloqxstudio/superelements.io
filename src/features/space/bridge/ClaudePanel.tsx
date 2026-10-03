@@ -1,8 +1,11 @@
-import React, { useEffect, useRef } from 'react'
-import { Check, ChevronDown, ChevronUp, CircleHelp, PencilLine, X } from 'lucide-react'
+import React, { useEffect, useMemo, useRef } from 'react'
+import { ChevronDown, ChevronUp, X } from 'lucide-react'
+import { StepIcon } from '@/features/agents/AgentRunCard'
+import { useProjectSync } from '@/features/projects/useProjectSession'
 import { ISLAND_SURFACE } from '@/features/space/ToolbarIsland'
 import { useSpaceStore } from '@/store/spaceStore'
-import { useClaudeBridge, type ClaudeStep } from './bridgeStore'
+import { agentStatus, RECENT_FOR, useAgents, useProjectAgents, type AgentStep } from './agentsStore'
+import { useClaudeBridge } from './bridgeStore'
 import { focusSection } from './focus'
 
 /** Cor do agente no canvas (Claude ou Codex): o ponto do painel e a marca das seções que ele mexeu. */
@@ -11,34 +14,46 @@ export const CLAUDE_COLOR = '#D97757'
 const PANEL_WIDTH = 300
 /** Depois disso sem mensagem nova, o ponto para de pulsar. */
 const WORKING_FOR = 45_000
+const MAX_STEPS = 40
 
 const time = (at: number) => new Date(at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
-const StepIcon: React.FC<{ step: ClaudeStep }> = ({ step }) => {
-  const className = 'mt-0.5 h-3.5 w-3.5 shrink-0'
-  if (step.kind === 'change') return <PencilLine className={className} style={{ color: CLAUDE_COLOR }} aria-hidden />
-  if (step.kind === 'question') return <CircleHelp className={`${className} text-violet-600`} aria-hidden />
-  if (step.kind === 'done') return <Check className={`${className} text-emerald-600`} aria-hidden />
-  return <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-gray-300" />
-}
+type PanelStep = AgentStep & { agent: string }
 
 /**
  * O que o agente (Claude ou Codex) está fazendo no projeto, no canto do canvas: o que leu, o que
  * vai fazer, o que mudou. Clicar numa mudança leva até as seções dela. Só
  * aparece quando o agente escreve alguma coisa (ponte do `npm run dev`).
+ * O diário vem da ponte, que o guarda por projeto: o que o agente fez em
+ * segundo plano, antes de a pessoa abrir o projeto, também aparece aqui.
  */
 export const ClaudePanel: React.FC<{ rightInset?: number }> = ({ rightInset = 0 }) => {
-  const steps = useClaudeBridge((s) => s.steps)
+  const projectId = useProjectSync((s) => s.openId)
+  const runs = useProjectAgents(projectId)
+  const localSteps = useClaudeBridge((s) => s.steps)
   const collapsed = useClaudeBridge((s) => s.collapsed)
-  const agent = useClaudeBridge((s) => s.agent)
   const { clear, setCollapsed } = useClaudeBridge.getState()
   const listRef = useRef<HTMLOListElement>(null)
+  const shared = useMemo(
+    () =>
+      runs
+        .filter((run) => Date.now() - run.lastAt < RECENT_FOR)
+        .flatMap((run) => run.steps.map((step): PanelStep => ({ ...step, agent: run.agent })))
+        .sort((a, b) => a.at - b.at)
+        .slice(-MAX_STEPS),
+    [runs]
+  )
+  const steps: PanelStep[] = shared.length ? shared : localSteps
   const last = steps[steps.length - 1]
-  // O que ele está fazendo agora (work/plan); sem marca, vale a última mensagem recente
+  const agent = last?.agent ?? runs[0]?.agent ?? 'Claude'
+  // O que ele está fazendo agora (work/plan); sem marca daqui, vale a do diário da ponte
   const marks = useClaudeBridge((s) => s.working)
-  const now = Object.values(marks).sort((a, b) => b.since - a.since)[0]
-  const working = !!now || (!!last && last.kind !== 'done' && last.kind !== 'question' && Date.now() - last.at < WORKING_FOR)
-  const hasChange = steps.some((s) => s.kind === 'change')
+  const mark = Object.values(marks).sort((a, b) => b.since - a.since)[0]
+  const sharedNow = runs.find((run) => run.now && agentStatus(run) === 'working')
+  const now = mark ?? (sharedNow ? { agent: sharedNow.agent, text: sharedNow.now!, since: sharedNow.lastAt } : undefined)
+  const working = !!now || (!!last && last.kind !== 'done' && last.kind !== 'question' && last.kind !== 'error' && Date.now() - last.at < WORKING_FOR)
+  // O Ctrl+Z daqui só alcança o que o agente mudou com o projeto aberto nesta aba
+  const hasChange = localSteps.some((s) => s.kind === 'change')
   // Claude e Codex no mesmo diário: cada linha diz quem foi
   const severalAgents = new Set(steps.map((s) => s.agent)).size > 1
 
@@ -48,7 +63,13 @@ export const ClaudePanel: React.FC<{ rightInset?: number }> = ({ rightInset = 0 
 
   if (!last && !now) return null
 
-  const goTo = (step: ClaudeStep) => {
+  /** Limpa as marcas daqui e o diário do projeto na ponte (ele some também da tela Agentes). */
+  const clearAll = () => {
+    clear()
+    if (projectId) useAgents.getState().dismiss?.({ projectId })
+  }
+
+  const goTo = (step: PanelStep) => {
     const [first] = step.sectionIds ?? []
     if (!first || !focusSection(first)) return
     useSpaceStore.getState().setSelection(step.sectionIds!)
@@ -88,7 +109,7 @@ export const ClaudePanel: React.FC<{ rightInset?: number }> = ({ rightInset = 0 
           className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
           title="Limpar"
           aria-label={`Limpar o diário e as marcas do ${agent}`}
-          onClick={clear}
+          onClick={clearAll}
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -108,7 +129,7 @@ export const ClaudePanel: React.FC<{ rightInset?: number }> = ({ rightInset = 0 
               const body = (
                 <>
                   <StepIcon step={step} />
-                  <span className={`min-w-0 flex-1 text-[12px] leading-snug ${step.kind === 'note' ? 'text-gray-600' : 'text-gray-900'}`}>
+                  <span className={`min-w-0 flex-1 text-[12px] leading-snug ${step.kind === 'note' ? 'text-gray-600' : step.kind === 'error' ? 'text-red-700' : 'text-gray-900'}`}>
                     {severalAgents && <span className="font-medium text-gray-900">{step.agent}: </span>}
                     {step.text}
                   </span>

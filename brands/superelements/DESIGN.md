@@ -41,7 +41,7 @@ Símbolo: quadrado lima (`#D2F525`) com os dois traços em grafite (`#282828`), 
 | Papel | `#FFFFFF` | Cards claros e a faixa do agente |
 | Filete no claro | `#E4E4E7` | Bordas dos cards claros |
 | Texto no claro | `#09090B` / `#52525B` / `#71717A` | Título / corpo / rótulo |
-| Lima | `#D2F525` (hover `#DDFA47`) | Botões, check, índice, palavra de destaque no escuro |
+| Lima | `#D2F525` (no hover do botão sobe o branco) | Botões, check, índice, palavra de destaque no escuro |
 
 - **Lima nunca é texto sobre fundo claro** (não tem contraste). No claro, a lima vira fundo (o índice `01`, o botão) com texto em tinta.
 - **Uma lima por bloco.** Ela não pinta áreas grandes.
@@ -57,7 +57,8 @@ Símbolo: quadrado lima (`#D2F525`) com os dois traços em grafite (`#282828`), 
 | Texto | Space Grotesk | 400 | 20px de apoio, 16px de corpo, 14px pequeno |
 | Rótulo | Space Mono | 400 | 12px, caixa alta, +0,08em: `[ 02 ] Como funciona` |
 | Logo | Space Grotesk | 700 | 18px no cabeçalho; a palavra grande do rodapé até 186px |
-| Interface, botões, índices | Space Mono | 400 e 700 | 11–15px |
+| Botões | Space Grotesk | 600 | 15px, 14px no cabeçalho, −0,01em; nunca mono (pedido do usuário em 2026-10-03) |
+| Interface, índices | Space Mono | 400 e 700 | 11–15px |
 | Telas do produto | Inter | 400 a 600 | 10–18px, como no app |
 
 Títulos com uma frase por linha (`<br>`), na largura da seção. No celular, os `<br>` dos títulos de seção saem e o texto corre.
@@ -76,3 +77,5 @@ As telas são copiadas do app (`src/pages/ProjectSpace.tsx`, `SpaceToolbar`, `Pa
 ## 6. Movimento
 
 GSAP e ScrollTrigger num único widget HTML de comportamento, o primeiro filho do hero (`src/features/superelements/story.ts`). O scroll conduz a publicação: a janela do Space fica presa, a câmera dá zoom no botão Publicar no site, o cursor clica com um anel lima, o diálogo real de publicar abre, as etapas de envio se marcam e a página ganha o selo No site. Tudo reversível. No celular e no tablet, sem pin, a sequência curta toca uma vez. Os blocos sobem um pouco ao entrar; as linhas entre os Navigators se desenham; as mensagens do agente entram uma a uma. Com movimento reduzido, sem script, no editor do Elementor e nas miniaturas do Space, a página aparece pronta.
+
+Botões (pedido do usuário em 2026-10-03): no hover o preenchimento sobe pela borda de baixo e sai por cima, o texto rola junto e a seta dá a volta. O botão lima se enche de branco e o de contorno de lima, os dois com texto em tinta. Sem mouse ou com movimento reduzido, só a cor muda.

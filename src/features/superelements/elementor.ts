@@ -4,8 +4,8 @@ import { SE, SE_EASE, SE_FONTS, SE_LAYOUT as L, seAsset } from './tokens'
 /**
  * Construtor de árvores nativas do Elementor para o Superelements. Todo
  * container declara padding e gap, porque o Elementor põe 10px e 20px quando
- * o JSON não diz nada. Títulos em Space Grotesk, rótulos e interface em Space
- * Mono, lima só no que se clica e nas marcas pequenas. As telas do produto
+ * o JSON não diz nada. Títulos e botões em Space Grotesk, rótulos e interface
+ * em Space Mono, lima só no que se clica e nas marcas pequenas. As telas do produto
  * (o canvas, o diálogo de publicar) também são nativas, em Inter, como o app.
  */
 
@@ -81,6 +81,8 @@ export const T = {
   small: { size: 14, line: 1.55 },
   /** Logo: Space Grotesk 700, nunca mono (pedido do usuário). */
   brand: { size: 18, weight: 700, line: 1, letter: -0.035 },
+  /** Botão: Space Grotesk legível, nunca mono (pedido do usuário). */
+  button: { size: 15, weight: 600, line: 1.2, letter: -0.01 },
   label: { font: 'mono', size: 12, line: 1.4, letter: 0.08, transform: 'uppercase' },
   mono: { font: 'mono', size: 13, line: 1.5 },
   monoSmall: { font: 'mono', size: 11, line: 1.4, letter: 0.04 },
@@ -93,6 +95,29 @@ export const tweak = (spec: TypeSpec, patch: Partial<TypeSpec>): TypeSpec => ({ 
 
 /** Bloco que o GSAP faz subir ao entrar (story.ts). Nada de entrada do Elementor no que o GSAP move. */
 export const RISE = 'se-rise'
+
+const ROLL = 'cubic-bezier(.65,0,.25,1)'
+const HOVER = (rule: string) => `selector .elementor-button:hover${rule},selector .elementor-button:focus-visible${rule}`
+
+/**
+ * Botões: o preenchimento entra por baixo e sai por cima, o rótulo rola junto
+ * (a cópia vem do text-shadow, cortada pelo botão) e a seta dá a volta. O
+ * fundo nativo do hover só troca depois que o preenchimento cobre o botão, e
+ * volta na hora ao sair. Sem movimento ou sem mouse, fica a cor nativa do hover.
+ */
+const BUTTON_CSS = [
+  `selector .elementor-button{--se-fill:${SE.white}}selector .se-btn-ghost .elementor-button,selector .se-btn-ink .elementor-button{--se-fill:${SE.lime}}selector .se-btn-outline .elementor-button{--se-fill:${SE.ink}}`,
+  '@media(hover:hover) and (prefers-reduced-motion:no-preference){',
+  `selector .elementor-button{background-image:linear-gradient(var(--se-fill),var(--se-fill));background-repeat:no-repeat;background-size:100% 0;background-position:50% 0;transition:color 200ms ${SE_EASE},border-color 200ms ${SE_EASE},background-color 0s,background-size 460ms ${ROLL},transform 180ms ${SE_EASE}}`,
+  `${HOVER('')}{background-size:100% 100%;background-position:50% 100%;transition:color 200ms ${SE_EASE} 100ms,border-color 200ms ${SE_EASE} 100ms,background-color 0s linear 460ms,background-size 460ms ${ROLL},transform 180ms ${SE_EASE}}`,
+  // o corte é o próprio botão: a cópia nasce abaixo da borda de baixo (2,4em passa da metade da altura com o padding)
+  'selector .elementor-button{overflow:hidden}',
+  `selector .elementor-button-text{text-shadow:0 2.4em 0 currentColor;transition:transform 460ms ${ROLL}}`,
+  `${HOVER(' .elementor-button-text')}{transform:translateY(-2.4em)}`,
+  `${HOVER(' .elementor-button-icon')}{animation:se-arrow 560ms ${ROLL}}`,
+  '@keyframes se-arrow{40%{transform:translateX(3em);opacity:1}41%{transform:translateX(-.6em);opacity:0}100%{transform:none;opacity:1}}',
+  '}',
+].join('')
 
 /** Link, foco, botão, textura e parágrafos: vale para toda seção do Superelements. */
 const BASE_CSS = [
@@ -115,30 +140,32 @@ const BASE_CSS = [
   // a grade de pontos do canvas do Space é a textura da marca
   'selector .se-dots{background-image:radial-gradient(circle at center,var(--se-dot,rgba(255,255,255,.12)) 1px,transparent 1.2px);background-size:24px 24px;background-position:12px 12px}',
   `@media(prefers-reduced-motion:no-preference){selector .elementor-button,selector a{transition-property:color,background-color,border-color,transform;transition-duration:180ms;transition-timing-function:${SE_EASE}}selector .elementor-button:active{transform:scale(.96)}}`,
+  BUTTON_CSS,
   '@media(prefers-reduced-motion:reduce){selector *{transition:none!important;animation:none!important}}',
   `selector a:focus-visible,selector summary:focus-visible,selector button:focus-visible,selector .elementor-button:focus-visible{outline:2px solid ${SE.lime};outline-offset:3px;box-shadow:0 0 0 5px ${SE.ink}}`,
 ].join('')
 
 export type ButtonVariant = 'primary' | 'ghost' | 'ink' | 'outline'
 
+/** O hover de cada variante é a cor do preenchimento que sobe (`--se-fill` em BUTTON_CSS). */
 const BUTTON_COLORS: Record<ButtonVariant, JsonRecord> = {
-  // texto tinta na lima (15:1); branco não passa
+  // texto tinta na lima (15:1); branco não passa. No hover sobe o branco
   primary: {
     background_color: SE.lime, button_text_color: SE.ink,
-    button_background_hover_color: SE.limeHover, hover_color: SE.ink,
-    ...border(SE.lime), button_hover_border_color: SE.limeHover,
+    button_background_hover_color: SE.white, hover_color: SE.ink,
+    ...border(SE.lime), button_hover_border_color: SE.white,
   },
-  // contorno no escuro
+  // contorno no escuro; no hover sobe a lima
   ghost: {
     background_color: 'rgba(255,255,255,0)', button_text_color: SE.onInk,
-    button_background_hover_color: 'rgba(255,255,255,0.08)', hover_color: SE.white,
-    ...border(SE.lineStrong), button_hover_border_color: 'rgba(255,255,255,0.4)',
+    button_background_hover_color: SE.lime, hover_color: SE.ink,
+    ...border(SE.lineStrong), button_hover_border_color: SE.lime,
   },
-  // cheio em tinta, no claro
+  // cheio em tinta, no claro; no hover sobe a lima
   ink: {
     background_color: SE.ink, button_text_color: SE.white,
-    button_background_hover_color: '#27272A', hover_color: SE.white,
-    ...border(SE.ink), button_hover_border_color: '#27272A',
+    button_background_hover_color: SE.lime, hover_color: SE.ink,
+    ...border(SE.ink), button_hover_border_color: SE.lime,
   },
   // contorno no claro
   outline: {
@@ -199,17 +226,21 @@ export const createBuilder = (prefix: string) => {
   const image = (path: string, alt: string, options: JsonRecord = {}) =>
     widget('image', { image: media(seAsset(path), alt), image_size: 'full', ...options })
 
-  /** Botão de ação; `icon` vai depois do texto (a seta), `iconBefore` antes. */
+  /**
+   * Botão de ação em Space Grotesk 600, nunca mono (pedido do usuário em
+   * 2026-10-03); `icon` vai depois do texto (a seta), `iconBefore` antes.
+   */
   const button = (label: string, url: string, variant: ButtonVariant = 'primary', options: JsonRecord & { icon?: string; iconBefore?: boolean } = {}) => {
     const { icon, iconBefore, ...rest } = options
     return widget('button', {
       text: label, link: link(url), size: 'md',
-      ...typography({ font: 'mono', size: 14, weight: 700, line: 1.2, letter: -0.01 }),
+      ...typography(T.button),
       text_padding: sides(14, 22),
       border_radius: sides(L.radius.button),
       ...BUTTON_COLORS[variant],
       ...(icon ? { selected_icon: fa(icon), icon_align: iconBefore ? 'left' : 'right', icon_indent: px(10) } : {}),
       ...rest,
+      _css_classes: [`se-btn-${variant}`, rest._css_classes].filter(Boolean).join(' '),
     })
   }
 

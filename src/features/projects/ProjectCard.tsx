@@ -9,6 +9,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ISLAND_SURFACE } from '@/features/space/ToolbarIsland'
+import { agentStatus, useProjectAgents } from '@/features/space/bridge/agentsStore'
+import { STATUS } from '@/features/agents/agentStatus'
 import { cn } from '@/lib/utils'
 import { currentAssetUrl } from './localAssets'
 import type { Project, ProjectSummary } from './types'
@@ -92,6 +94,26 @@ const ProjectCover: React.FC<{ name: string; summary: ProjectSummary }> = ({ nam
   )
 }
 
+/** Agente trabalhando no projeto agora (ponte do `npm run dev`): quem e se espera uma resposta. */
+const AgentBadge: React.FC<{ projectId: string }> = ({ projectId }) => {
+  const runs = useProjectAgents(projectId)
+  const active = runs
+    .map((run) => ({ run, status: agentStatus(run) }))
+    .filter(({ status }) => status === 'working' || status === 'question')
+    .sort((a, b) => Number(b.status === 'question') - Number(a.status === 'question') || b.run.lastAt - a.run.lastAt)
+  if (!active.length) return null
+  const { run, status } = active[0]
+  const names = [...new Set(active.map((a) => a.run.agent))].join(' e ')
+  return (
+    <span className="absolute right-3 top-3 flex max-w-[60%] items-center gap-1.5 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-gray-700 shadow-[0_0_0_1px_rgb(0_0_0/0.08)]">
+      <span aria-hidden className={cn('h-1.5 w-1.5 shrink-0 rounded-full motion-safe:animate-pulse', STATUS[status].dot)} />
+      <span className="truncate">
+        {active.length > 1 ? names : run.agent} {status === 'question' ? 'esperando você' : 'trabalhando'}
+      </span>
+    </span>
+  )
+}
+
 interface ProjectCardProps {
   project: Project
   onEdit: () => void
@@ -121,6 +143,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDel
             Compartilhado com você
           </span>
         )}
+        <AgentBadge projectId={project.id} />
       </div>
       <div className="px-4 py-3 pr-12">
         <h2 className="truncate text-sm font-semibold text-gray-900">{project.name}</h2>
