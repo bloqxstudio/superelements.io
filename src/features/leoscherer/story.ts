@@ -12,8 +12,8 @@
  *    de 1025px não há pin: o telefone só sobe um pouco enquanto o hero sai.
  * 2. Blocos marcados com .ls-rise sobem 24px e aparecem uma vez, em lote.
  * 3. Fotos marcadas com .ls-zoom chegam com um zoom curto (1,1 → 1), uma vez.
- * 4. Imagens .ls-drift andam um pouco com o scroll; o LS grande do rodapé
- *    (.ls-mark) sobe devagar.
+ * 4. Imagens .ls-drift andam um pouco com o scroll; o LS em 3D do rodapé
+ *    (.ls-logo3d) gira da posição deitada até a diagonal.
  *
  * As luzes do fundo derivam só com CSS (keyframes atrás de prefers-reduced-motion).
  * Com movimento reduzido, sem GSAP, no editor do Elementor ou numa página que
@@ -126,8 +126,9 @@ export const LS_STORY_SCRIPT = `
           var depth = el.classList.contains('ls-deep') ? 12 : 7;
           gsap.fromTo(el, { yPercent: depth }, { yPercent: -depth, ease: 'none', scrollTrigger: { trigger: el, start: 'top bottom', end: 'bottom top', scrub: true } });
         });
-        var mark = $('.ls-mark');
-        if (mark) gsap.fromTo(mark, { yPercent: 24 }, { yPercent: 0, ease: 'none', scrollTrigger: { trigger: mark, start: 'top bottom', end: 'bottom bottom', scrub: true } });
+        // LS em 3D do rodapé: chega mais deitado e girado e assenta na diagonal do CSS
+        var logo = $('.ls-logo3d'), stage3d = $('.ls-logo-stage');
+        if (logo && stage3d) gsap.fromTo(logo, { rotationX: 68, rotationZ: -40, y: 90 }, { rotationX: 52, rotationZ: -22, y: 0, ease: 'none', scrollTrigger: { trigger: stage3d, start: 'top bottom', end: 'bottom bottom', scrub: true } });
       });
       ST.refresh();
     }

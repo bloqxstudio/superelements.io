@@ -45,7 +45,12 @@ export const LS2_LAYOUT = {
 export const LS2_EASE = 'cubic-bezier(.2,.7,.2,1)'
 
 const ORIGIN = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'http://localhost'
-export const lsImg = (path: string) => (path.startsWith('http') ? path : `${ORIGIN}/brands/leo-scherer/${path.replace(/^\/+/, '')}`)
+/**
+ * Endereço de uma imagem da marca. As páginas usam a versão WebP, gerada ao
+ * lado do original no tamanho em que aparece (`.space/leo-scherer/build/webp.cjs`):
+ * cerca de dez vezes mais leve que os PNG.
+ */
+export const lsImg = (path: string) => (path.startsWith('http') ? path : `${ORIGIN}/brands/leo-scherer/${path.replace(/^\/+/, '').replace(/\.(png|jpe?g)$/i, '.webp')}`)
 
 export const SITE = 'https://leoscherer.com.br'
 export const LS_LINKS = {
