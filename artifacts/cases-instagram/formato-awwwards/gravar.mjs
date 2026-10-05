@@ -158,6 +158,17 @@ async function trocarEnderecos(site) {
   console.log(`  trocando ${trocas.map(([p, d]) => `${p} → ${d}`).join(', ')}`)
 }
 
+/**
+ * O endereço do site. Com "space" no plano ({ projeto, pagina }, os ids), grava a página do
+ * Space como o Player mostra, pela ponte do servidor de dev (precisa do app rodando).
+ */
+function enderecoDoSite() {
+  if (!plano.space) return plano.url
+  const ponte = JSON.parse(readFileSync(path.join(RAIZ, '.space/bridge.json'), 'utf8'))
+  const q = new URLSearchParams({ token: ponte.token, device: 'desktop', motion: 'play', page: plano.space.pagina, project: plano.space.projeto })
+  return `${ponte.url}/__space/render?${q}`
+}
+
 async function abrirSite(site) {
   await site.send('Page.enable')
   await trocarEnderecos(site)
@@ -165,7 +176,7 @@ async function abrirSite(site) {
   await site.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] })
   await site.send('Page.addScriptToEvaluateOnNewDocument', { source: readFileSync(path.join(RAIZ, 'scripts/space/vt.js'), 'utf8') })
   await site.send('Page.addScriptToEvaluateOnNewDocument', { source: SEM_LAZY })
-  await site.send('Page.navigate', { url: plano.url })
+  await site.send('Page.navigate', { url: enderecoDoSite() })
   for (let i = 0; i < 150; i++) {
     if (await site.avaliar('document.readyState === "complete"').catch(() => false)) break
     await espera(200)
@@ -191,7 +202,8 @@ async function montarRoteiro(site) {
   const focoPadrao = plano.fundo?.foco ?? 0.5
   let fde = focoPadrao
   for (const passo of plano.passos) {
-    const para = await resolver(passo.ate)
+    // mais: px somados à parada (para parar dentro de uma seção presa, como os cases do Avence)
+    const para = Math.min(max, (await resolver(passo.ate)) + (passo.mais ?? 0))
     const fpara = passo.foco ?? focoPadrao
     trechos.push({ t0: t, t1: t + passo.dur, de, para, fde, fpara, ease: EASES[passo.ease ?? 'suave'] })
     t += passo.dur + (passo.pausa ?? 0)
@@ -243,7 +255,7 @@ await comNavegador(async ({ site, palco }) => {
   await espera(800)
   await palco.avaliar(`configurar(${JSON.stringify({ ...formato, escurecer: plano.fundo?.escurecer ?? 0.45, desfoque: plano.fundo?.desfoque ?? 26, sombra: 0.55 })})`)
 
-  console.log(`Abrindo ${plano.url} (${viewport.width}×${viewport.height}, ${escalaSite.toFixed(2)}×)…`)
+  console.log(`Abrindo ${plano.space ? `a página do Space ${plano.space.nome ?? plano.space.pagina}` : plano.url} (${viewport.width}×${viewport.height}, ${escalaSite.toFixed(2)}×)…`)
   await abrirSite(site)
   const { trechos, duracao, max } = await montarRoteiro(site)
   const total = Math.round(duracao * FPS)

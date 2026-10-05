@@ -1,0 +1,112 @@
+{
+  "nome": "avence-studio",
+  "space": {
+    "nome": "Avence Studio › Home",
+    "projeto": "a50d2ec6-cdda-48f3-944d-7a1bfa4ed46e",
+    "pagina": "c0460b8a-92d7-4524-a871-2057409613b8"
+  },
+  "formato": "9x16",
+  "tela": {
+    "largura": 1440,
+    "altura": 900
+  },
+  "fundo": {
+    "escurecer": 0.3,
+    "desfoque": 36
+  },
+  "inicio": 4.2,
+  "passos": [
+    {
+      "ate": "#inicio",
+      "mais": 430,
+      "dur": 1.8,
+      "pausa": 1.4,
+      "nota": "a galeria dos cases correndo"
+    },
+    {
+      "ate": "#cases",
+      "dur": 2,
+      "pausa": 1,
+      "nota": "Cases: ProcessBase"
+    },
+    {
+      "ate": "#cases",
+      "mais": 1404,
+      "dur": 3.4,
+      "pausa": 1,
+      "ease": "linear",
+      "nota": "o scroll rola o site da ProcessBase até o fim da história"
+    },
+    {
+      "ate": "#cases",
+      "mais": 2106,
+      "dur": 1.8,
+      "pausa": 1.2,
+      "nota": "Vizor Películas"
+    },
+    {
+      "ate": "#cases",
+      "mais": 3510,
+      "dur": 2.2,
+      "pausa": 1.2,
+      "nota": "Flávia Neto"
+    },
+    {
+      "ate": "#cases",
+      "mais": 4914,
+      "dur": 2.2,
+      "pausa": 1.2,
+      "nota": "Zena Viagens"
+    },
+    {
+      "ate": "#cases",
+      "mais": 6318,
+      "dur": 2.2,
+      "pausa": 1.2,
+      "nota": "Contplan"
+    },
+    {
+      "ate": "#cases",
+      "mais": 7722,
+      "dur": 2.2,
+      "pausa": 1.4,
+      "nota": "PrexParts"
+    },
+    {
+      "ate": "#entregas",
+      "dur": 2.2,
+      "pausa": 1.6,
+      "nota": "O que entregamos"
+    },
+    {
+      "ate": "#como-funciona",
+      "dur": 2,
+      "pausa": 1.6,
+      "nota": "Como funciona"
+    },
+    {
+      "ate": "#previa",
+      "dur": 2,
+      "pausa": 1.4,
+      "nota": "Recebeu uma prévia?"
+    },
+    {
+      "ate": "#perguntas",
+      "dur": 2,
+      "pausa": 1.4,
+      "nota": "Perguntas"
+    },
+    {
+      "ate": "#contato",
+      "dur": 2,
+      "pausa": 1.6,
+      "nota": "Contato"
+    },
+    {
+      "ate": "fim",
+      "dur": 1.8,
+      "pausa": 2.2,
+      "nota": "rodapé"
+    }
+  ]
+}
