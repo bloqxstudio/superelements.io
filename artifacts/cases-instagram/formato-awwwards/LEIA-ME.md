@@ -24,10 +24,10 @@ O vídeo sai em `artifacts/cases-instagram/<nome>-tela-<formato>.mp4`. A gravaç
 
 Copie `planos/processbase.json` e mude:
 
-- `url`: o site publicado;
+- `url`: o site publicado; ou `space` (`{ projeto, pagina }`, os ids do `space status`) para gravar uma página do Space como o Player mostra, pela ponte do servidor de dev (o app precisa estar rodando);
 - `tela`: o tamanho da janela do site (1440 × 900 é o desktop);
 - `inicio`: segundos parados no topo (entrada do hero);
-- `passos`: cada um com `ate` (px, `"fim"` ou um seletor CSS, que para no topo do elemento), `dur` (segundos da rolagem), `pausa` (segundos parado depois) e, se quiser, `ease` (`suave`, o padrão; `forte` ou `linear`);
+- `passos`: cada um com `ate` (px, `"fim"` ou um seletor CSS, que para no topo do elemento), `mais` (px somados à parada, para parar dentro de uma seção presa), `dur` (segundos da rolagem), `pausa` (segundos parado depois) e, se quiser, `ease` (`suave`, o padrão; `forte` ou `linear`);
 - `trocar` (opcional): endereços que o site publicado pede mas que só existem no repo, servidos dos arquivos locais;
 - `fundo.foco` e `foco` num passo (opcional, 0 a 1, padrão 0,5): onde o fundo desfocado corta o quadro do site, na horizontal. Muda junto com a rolagem do passo. Serve para centrar no fundo uma peça que fica de lado no site (o logo da ProcessBase fica em 0,28).
 
@@ -36,6 +36,10 @@ Nas histórias com ScrollTrigger, ponha uma parada em cada momento da história 
 ## Stories (9:16)
 
 `planos/processbase-stories.json` (pedido de 2026-10-04): rolagem suave e não seguida, com uma parada de 1,2 a 2 s em cada seção, 47 s no total (um story vai até 60 s). No trecho do logo o fundo centra nele (`foco` 0,28). Gravar: `node gravar.mjs planos/processbase-stories.json --out ../processbase-tela-9x16.mp4` (uns 4 min).
+
+## Avence Studio
+
+`planos/avence-studio-stories.json` (stories, 2026-10-04): a Home do Avence no Space (projeto e página por id), com a entrada, a galeria, cada case no pin (`#cases` + `mais` em múltiplos de 702 px, um trecho do pin numa janela de 900 px: ProcessBase rolando até o fim da história, depois Vizor, Flávia Neto, Zena, Contplan e PrexParts) e cada seção até o rodapé, 53 s. Fundo com 30% de escurecimento (a página é clara). Gravar: `node gravar.mjs planos/avence-studio-stories.json` → `../avence-studio-tela-9x16.mp4`. Se a ordem ou o número de cases mudar, refaça os `mais` do plano.
 
 ## ProcessBase
 
