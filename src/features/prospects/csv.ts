@@ -23,12 +23,14 @@ const COLUMNS: [string, (lead: Lead) => string | number | undefined][] = [
   ['Tema', (l) => l.scan?.theme],
   ['Feito por', (l) => l.scan?.agency?.name],
   ['Site da agência', (l) => l.scan?.agency?.url],
-  ['Plano sugerido', (l) => l.plan],
+  ['Anúncios', (l) => l.scan?.ads?.join(', ')],
+  ['Vende pelo site', (l) => l.scan?.sales?.join(', ')],
+  ['Serviço sugerido', (l) => l.plan],
   ['Motivos', (l) => l.reasons.join(' · ')],
   ['Nota no Google', (l) => (l.rating ? String(l.rating).replace('.', ',') : '')],
   ['Avaliações', (l) => l.reviews],
   ['Google Maps', (l) => l.mapsUrl],
-  ['Fonte', (l) => (l.source === 'google' ? 'Google Maps' : 'OpenStreetMap')],
+  ['Fonte', (l) => (l.source === 'osm' ? 'OpenStreetMap' : l.source === 'manual' ? 'Site indicado' : 'Google Maps')],
 ]
 
 const cell = (value: string | number | undefined) => {

@@ -5,8 +5,14 @@
  * (`scripts/prospects/engine.ts`, Node) e para a tela (`/prospeccao`).
  */
 
-/** De onde vêm as empresas: o mapa aberto (grátis) ou o Google Maps (chave paga). */
-export type ProspectSource = 'osm' | 'google'
+/**
+ * De onde vêm as empresas: o Google Maps lido como o navegador lê (`maps`, grátis),
+ * o mapa aberto (`osm`, grátis, cobre pouco) ou a API do Google (`google`, chave paga).
+ */
+export type ProspectSource = 'maps' | 'osm' | 'google'
+
+/** `centro`: uma busca funda no centro da cidade (ou em cada bairro); `cidade`: varre a cidade em pontos. */
+export type Coverage = 'centro' | 'cidade'
 
 /** O que o site da empresa é, do melhor encaixe para o Superelements ao pior. */
 export type Platform =
@@ -20,8 +26,8 @@ export type Platform =
 
 export type Temperature = 'quente' | 'morna' | 'fria'
 
-/** Plano do Superelements que faz sentido oferecer (`src/features/superelements/plans.ts`). */
-export type SuggestedPlan = 'Produto' | 'Completo'
+/** O serviço que faz sentido oferecer: vendemos como agência, não os planos do produto. */
+export type SuggestedPlan = 'Redesign' | 'Site novo'
 
 export interface SearchInput {
   /** Cidade, com ou sem UF: "São Paulo, SP". */
@@ -31,12 +37,15 @@ export interface SearchInput {
   /** Ids de `NICHES` ou um nicho escrito à mão ("clínica de fertilidade"). */
   niches: string[]
   source: ProspectSource
+  /** Só no Google Maps grátis; sem bairros. Padrão: `centro`. */
+  coverage?: Coverage
 }
 
 /** A empresa como a fonte entrega, antes de ler o site. */
 export interface Business {
   id: string
-  source: ProspectSource
+  /** `manual`: um site indicado à mão, fora das buscas. */
+  source: ProspectSource | 'manual'
   name: string
   /** Rótulo do nicho pesquisado ("Advogados"). */
   niche: string
@@ -79,6 +88,10 @@ export interface SiteScan {
   agency?: { name: string; url?: string }
   copyrightYear?: number
   viewport: boolean
+  /** Rastros de anúncio pago na página: tag de conversão do Google Ads, pixel da Meta… (sinal de que investe em trazer gente). */
+  ads?: string[]
+  /** Ferramentas de venda no site: agenda online, checkout de programa ou curso, loja. */
+  sales?: string[]
 }
 
 export interface Lead extends Business {
@@ -99,11 +112,15 @@ export interface SearchStats {
   wordpress: number
   elementor: number
   hot: number
+  /** Empresas com rastro de anúncio pago no site. */
+  ads?: number
 }
 
 export interface SearchRecord {
   id: string
   createdAt: string
+  /** Nome de uma lista montada a partir de outra busca ("Advogados com Elementor"). */
+  label?: string
   input: SearchInput
   /** Nome da região como o mapa entendeu ("São Paulo, Região Sudeste, Brasil"). */
   regionLabel?: string
@@ -114,7 +131,7 @@ export interface SearchRecord {
 }
 
 /** Resumo de uma busca salva, para a lista. */
-export type SearchSummary = Pick<SearchRecord, 'id' | 'createdAt' | 'input' | 'regionLabel' | 'stats'>
+export type SearchSummary = Pick<SearchRecord, 'id' | 'createdAt' | 'label' | 'input' | 'regionLabel' | 'stats'>
 
 /** O que a busca conta enquanto roda (uma linha de JSON por evento). */
 export type SearchEvent =

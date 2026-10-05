@@ -3,7 +3,7 @@ import { Plus, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { NICHES, nicheFor } from './niches'
-import type { ProspectSource, SearchInput } from './types'
+import type { Coverage, ProspectSource, SearchInput } from './types'
 import { Chip, SURFACE } from './ui'
 
 const LAST = 'prospeccao:ultima-busca'
@@ -17,9 +17,26 @@ const remembered = (): Partial<SearchInput> => {
 }
 
 const SOURCES: { id: ProspectSource; title: string; text: string }[] = [
-  { id: 'osm', title: 'Mapa aberto', text: 'Grátis. Traz o que a comunidade do OpenStreetMap mapeou: menos empresas.' },
-  { id: 'google', title: 'Google Maps', text: 'Bem mais completo (até 60 por nicho em cada bairro). Usa a chave do Google, que cobra por consulta.' },
+  { id: 'maps', title: 'Google Maps', text: 'Grátis. As empresas do Maps, lidas como o navegador lê. Se o Google pedir uma pausa, a busca guarda o que já achou.' },
+  { id: 'osm', title: 'Mapa aberto', text: 'Grátis. Traz o que a comunidade do OpenStreetMap mapeou: bem menos empresas.' },
+  { id: 'google', title: 'API do Google', text: 'Paga por consulta, com a chave GOOGLE_PLACES_API_KEY do .env.' },
 ]
+
+const COVERAGES: { id: Coverage; title: string; text: string }[] = [
+  { id: 'centro', title: 'Centro da cidade', text: 'Rápido: até uns 300 por nicho, do centro para fora.' },
+  { id: 'cidade', title: 'Cidade inteira', text: 'Varre a cidade em pontos: alguns minutos por nicho.' },
+]
+
+/** Botão de escolha em cartão (fonte, cobertura). */
+const Option: React.FC<{ name: string; title: string; text: string; checked: boolean; onChange: () => void }> = ({ name, title, text, checked, onChange }) => (
+  <label className={cn('flex cursor-pointer gap-3 rounded-lg p-3 ring-1 ring-inset transition-colors', checked ? 'bg-gray-50 ring-gray-900' : 'ring-gray-200 hover:bg-gray-50')}>
+    <input type="radio" name={name} className="mt-0.5 accent-gray-900" checked={checked} onChange={onChange} />
+    <span>
+      <span className="block text-sm font-medium text-gray-900">{title}</span>
+      <span className="mt-0.5 block text-xs text-gray-500">{text}</span>
+    </span>
+  </label>
+)
 
 const FIELD = 'h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
@@ -29,7 +46,11 @@ export const SearchForm: React.FC<{ google: boolean; running: boolean; onSearch:
   const [areas, setAreas] = useState((initial.areas ?? []).join(', '))
   const [niches, setNiches] = useState<string[]>(initial.niches ?? [])
   const [custom, setCustom] = useState('')
-  const [source, setSource] = useState<ProspectSource>(google && initial.source === 'google' ? 'google' : 'osm')
+  // Começa sempre no Google Maps (o mapa aberto cobre pouco); a API só se tiver a chave
+  const [source, setSource] = useState<ProspectSource>(google && initial.source === 'google' ? 'google' : 'maps')
+  const [coverage, setCoverage] = useState<Coverage>(initial.coverage ?? 'centro')
+  const sources = SOURCES.filter((option) => option.id !== 'google' || google)
+  const withAreas = areas.split(/[,;\n]/).some((a) => a.trim())
 
   const toggle = (id: string) => setNiches((list) => (list.includes(id) ? list.filter((n) => n !== id) : [...list, id]))
   const addCustom = () => {
@@ -48,6 +69,7 @@ export const SearchForm: React.FC<{ google: boolean; running: boolean; onSearch:
       areas: areas.split(/[,;\n]/).map((a) => a.trim()).filter(Boolean),
       niches,
       source,
+      coverage: source === 'maps' && !withAreas ? coverage : undefined,
     }
     try {
       localStorage.setItem(LAST, JSON.stringify(input))
@@ -71,7 +93,7 @@ export const SearchForm: React.FC<{ google: boolean; running: boolean; onSearch:
           <input className={cn(FIELD, 'mt-1.5')} value={areas} onChange={(e) => setAreas(e.target.value)} placeholder="Pinheiros, Moema, Itaim Bibi" autoComplete="off" />
         </label>
       </div>
-      <p className="mt-1.5 text-xs text-gray-500">Com bairros, a busca roda bairro por bairro: traz mais empresas no Google Maps e foca a região.</p>
+      <p className="mt-1.5 text-xs text-gray-500">Com bairros, a busca roda bairro por bairro: até uns 300 por nicho em cada um.</p>
 
       <fieldset className="mt-5">
         <legend className="text-sm font-medium text-gray-900">Nichos</legend>
@@ -110,30 +132,23 @@ export const SearchForm: React.FC<{ google: boolean; running: boolean; onSearch:
 
       <fieldset className="mt-5">
         <legend className="text-sm font-medium text-gray-900">Onde procurar</legend>
-        <div className="mt-2 grid gap-2 md:grid-cols-2">
-          {SOURCES.map((option) => {
-            const disabled = option.id === 'google' && !google
-            return (
-              <label
-                key={option.id}
-                className={cn(
-                  'flex cursor-pointer gap-3 rounded-lg p-3 ring-1 ring-inset transition-colors',
-                  source === option.id ? 'bg-gray-50 ring-gray-900' : 'ring-gray-200 hover:bg-gray-50',
-                  disabled && 'cursor-not-allowed opacity-60 hover:bg-transparent'
-                )}
-              >
-                <input type="radio" name="fonte" className="mt-0.5 accent-gray-900" checked={source === option.id} disabled={disabled} onChange={() => setSource(option.id)} />
-                <span>
-                  <span className="block text-sm font-medium text-gray-900">{option.title}</span>
-                  <span className="mt-0.5 block text-xs text-gray-500">
-                    {disabled ? 'Para usar, coloque GOOGLE_PLACES_API_KEY no .env e reinicie o app.' : option.text}
-                  </span>
-                </span>
-              </label>
-            )
-          })}
+        <div className={cn('mt-2 grid gap-2', sources.length > 2 ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
+          {sources.map((option) => (
+            <Option key={option.id} name="fonte" title={option.title} text={option.text} checked={source === option.id} onChange={() => setSource(option.id)} />
+          ))}
         </div>
       </fieldset>
+
+      {source === 'maps' && !withAreas && (
+        <fieldset className="mt-5">
+          <legend className="text-sm font-medium text-gray-900">Cobertura</legend>
+          <div className="mt-2 grid gap-2 md:grid-cols-2">
+            {COVERAGES.map((option) => (
+              <Option key={option.id} name="cobertura" title={option.title} text={option.text} checked={coverage === option.id} onChange={() => setCoverage(option.id)} />
+            ))}
+          </div>
+        </fieldset>
+      )}
 
       <div className="mt-5 flex items-center justify-end gap-3">
         {!niches.length && <p className="text-xs text-gray-500">Escolha pelo menos um nicho.</p>}

@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import { ChevronDown, ExternalLink, Instagram, Mail, MapPin, MessageCircle, Phone } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { STAGE_LABEL, type Stage } from './funnel'
+import { adLibraryLinks, advertises } from './score'
 import type { Lead } from './types'
 import { PlatformBadge, ScorePill, SURFACE } from './ui'
 
@@ -20,7 +22,32 @@ const ContactLine: React.FC<{ icon: React.ElementType; label: string; to?: strin
   </li>
 )
 
-const Contacts: React.FC<{ lead: Lead; all?: boolean }> = ({ lead, all }) => {
+/** Selo de quem tem rastro de anúncio pago no site. */
+export const AdsBadge: React.FC = () => (
+  <span className="inline-flex items-center whitespace-nowrap rounded-md bg-sky-50 px-1.5 py-0.5 text-[11px] font-medium text-sky-800 ring-1 ring-inset ring-sky-600/20" title="O site tem a tag do Google Ads ou um pixel de anúncio">
+    Anuncia
+  </span>
+)
+
+/** Onde conferir se há anúncio no ar agora: a pessoa abre e olha, nada é lido daqui. */
+export const AdLinks: React.FC<{ lead: Lead }> = ({ lead }) => {
+  const links = adLibraryLinks(lead)
+  return (
+    <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+      <span className="text-gray-500">Anúncios no ar:</span>
+      {links.google && (
+        <a href={links.google} target="_blank" rel="noreferrer" className="text-gray-700 underline underline-offset-2 hover:text-gray-900">
+          Google
+        </a>
+      )}
+      <a href={links.meta} target="_blank" rel="noreferrer" className="text-gray-700 underline underline-offset-2 hover:text-gray-900">
+        Instagram e Facebook
+      </a>
+    </p>
+  )
+}
+
+export const Contacts: React.FC<{ lead: Lead; all?: boolean }> =({ lead, all }) => {
   const scan = lead.scan
   const phone = lead.phone || scan?.phones[0]
   const emails = [...new Set([lead.email, ...(scan?.emails ?? [])].filter(Boolean) as string[])]
@@ -56,6 +83,8 @@ const Details: React.FC<{ lead: Lead }> = ({ lead }) => {
           scan.agency.name
         )),
     ],
+    ['Anúncios', scan?.ads?.length ? scan.ads.join(', ') : undefined],
+    ['Vende pelo site', scan?.sales?.length ? scan.sales.join(', ') : undefined],
     ['Resposta do site', scan?.status ? `${scan.status} em ${(scan.ms / 1000).toFixed(1).replace('.', ',')} s` : scan?.error],
     ['Facebook', scan?.facebook && <a href={scan.facebook} target="_blank" rel="noreferrer" className="underline underline-offset-2">{scan.facebook.replace(/^https:\/\/www\./, '')}</a>],
     ['LinkedIn', scan?.linkedin && <a href={scan.linkedin} target="_blank" rel="noreferrer" className="underline underline-offset-2">{scan.linkedin.replace(/^https:\/\/www\./, '')}</a>],
@@ -83,23 +112,50 @@ const Details: React.FC<{ lead: Lead }> = ({ lead }) => {
             Ver no mapa
           </a>
         )}
+        <AdLinks lead={lead} />
       </div>
     </div>
   )
 }
 
-const Row: React.FC<{ lead: Lead }> = ({ lead }) => {
+interface Selection {
+  selected: Set<string>
+  onToggle: (id: string) => void
+  onToggleAll: (ids: string[], on: boolean) => void
+  /** Etapa no funil de quem já está nele. */
+  stages: Map<string, Stage>
+}
+
+const Row: React.FC<{ lead: Lead; selection?: Selection }> = ({ lead, selection }) => {
   const [open, setOpen] = useState(false)
   const scan = lead.scan
   const versions = [scan?.wpVersion && `WP ${scan.wpVersion}`, scan?.elementorVersion && `Elementor ${scan.elementorVersion}`].filter(Boolean).join(' · ')
+  const stage = selection?.stages.get(lead.id)
+  const checked = selection?.selected.has(lead.id) ?? false
   return (
     <>
-      <tr className={cn('border-t border-gray-100 align-top', open && 'bg-gray-50/70')}>
+      <tr className={cn('border-t border-gray-100 align-top', (open || checked) && 'bg-gray-50/70')}>
+        {selection && (
+          <td className="py-3.5 pl-4 pr-0">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-gray-900"
+              checked={checked}
+              onChange={() => selection.onToggle(lead.id)}
+              aria-label={`Marcar ${lead.name}`}
+            />
+          </td>
+        )}
         <td className="py-3 pl-4 pr-2">
           <ScorePill score={lead.score} temperature={lead.temperature} />
         </td>
         <td className="max-w-64 px-3 py-3">
           <p className="font-medium text-gray-900">{lead.name}</p>
+          {stage && (
+            <span className="mt-1 inline-flex rounded-md bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-800 ring-1 ring-inset ring-violet-600/20">
+              Funil · {STAGE_LABEL[stage]}
+            </span>
+          )}
           <p className="mt-0.5 text-xs text-gray-500">
             {[lead.niche, lead.neighborhood || lead.city].filter(Boolean).join(' · ')}
             {lead.units ? ` · ${lead.units} unidades` : ''}
@@ -107,7 +163,10 @@ const Row: React.FC<{ lead: Lead }> = ({ lead }) => {
         </td>
         <td className="max-w-60 px-3 py-3">
           <div className="flex flex-col items-start gap-1">
-            <PlatformBadge platform={scan?.platform ?? 'sem-site'} />
+            <div className="flex flex-wrap gap-1">
+              <PlatformBadge platform={scan?.platform ?? 'sem-site'} />
+              {advertises(lead) && <AdsBadge />}
+            </div>
             {scan?.url && scan.platform !== 'sem-site' && (
               <a href={href(scan.url)} target="_blank" rel="noreferrer" className="inline-flex max-w-full items-center gap-1 text-xs text-gray-700 underline-offset-2 hover:text-gray-900 hover:underline">
                 <span className="truncate">{lead.domain}</span>
@@ -145,7 +204,7 @@ const Row: React.FC<{ lead: Lead }> = ({ lead }) => {
       </tr>
       {open && (
         <tr>
-          <td colSpan={7} className="p-0">
+          <td colSpan={selection ? 8 : 7} className="p-0">
             <Details lead={lead} />
           </td>
         </tr>
@@ -154,25 +213,39 @@ const Row: React.FC<{ lead: Lead }> = ({ lead }) => {
   )
 }
 
-export const LeadTable: React.FC<{ leads: Lead[] }> = ({ leads }) => (
-  <div className={cn(SURFACE, 'overflow-x-auto')}>
-    <table className="w-full min-w-[980px] text-left text-sm">
-      <thead>
-        <tr className="text-xs text-gray-500">
-          <th scope="col" className="py-2.5 pl-4 pr-2 font-medium">Nota</th>
-          <th scope="col" className="px-3 py-2.5 font-medium">Empresa</th>
-          <th scope="col" className="px-3 py-2.5 font-medium">Site</th>
-          <th scope="col" className="px-3 py-2.5 font-medium">Contato</th>
-          <th scope="col" className="px-3 py-2.5 font-medium">Por quê</th>
-          <th scope="col" className="px-3 py-2.5 font-medium">Plano</th>
-          <th scope="col" className="w-10 py-2.5 pr-3"><span className="sr-only">Detalhes</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        {leads.map((lead) => (
-          <Row key={lead.id} lead={lead} />
-        ))}
-      </tbody>
-    </table>
-  </div>
-)
+export const LeadTable: React.FC<{ leads: Lead[]; selection?: Selection }> = ({ leads, selection }) => {
+  const all = leads.length > 0 && leads.every((l) => selection?.selected.has(l.id))
+  return (
+    <div className={cn(SURFACE, 'overflow-x-auto')}>
+      <table className="w-full min-w-[980px] text-left text-sm">
+        <thead>
+          <tr className="text-xs text-gray-500">
+            {selection && (
+              <th scope="col" className="py-2.5 pl-4 pr-0">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-gray-900"
+                  checked={all}
+                  onChange={() => selection.onToggleAll(leads.map((l) => l.id), !all)}
+                  aria-label="Marcar todas as empresas mostradas"
+                />
+              </th>
+            )}
+            <th scope="col" className="py-2.5 pl-4 pr-2 font-medium">Nota</th>
+            <th scope="col" className="px-3 py-2.5 font-medium">Empresa</th>
+            <th scope="col" className="px-3 py-2.5 font-medium">Site</th>
+            <th scope="col" className="px-3 py-2.5 font-medium">Contato</th>
+            <th scope="col" className="px-3 py-2.5 font-medium">Por quê</th>
+            <th scope="col" className="px-3 py-2.5 font-medium">Serviço</th>
+            <th scope="col" className="w-10 py-2.5 pr-3"><span className="sr-only">Detalhes</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {leads.map((lead) => (
+            <Row key={lead.id} lead={lead} selection={selection} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}

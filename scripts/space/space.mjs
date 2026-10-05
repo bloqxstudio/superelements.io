@@ -250,6 +250,19 @@ const CLIENTS = [
   { match: /leo\s*scherer/i, brand: 'brands/leo-scherer', builder: 'src/features/leoscherer', scope: 'Leo Scherer model' },
   { match: /evermind/i, brand: 'public/brands/evermind', builder: 'src/features/evermind', scope: 'Evermind experiment (BYQ evermind-hero-2)' },
   { match: /super\s*elements/i, brand: 'brands/superelements', builder: 'src/features/superelements', scope: 'Superelements model (our own product page)' },
+  // Prospectos de São Leopoldo (RS), 2026-10-03: redesign para vender, ainda não são clientes
+  { match: /baldez/i, brand: 'brands/baldez-moreira', builder: 'src/features/baldezmoreira/elementor.ts', scope: 'Baldez & Moreira model (prospect)' },
+  { match: /fonseca/i, brand: 'brands/fonseca-lorenco', builder: 'src/features/fonsecalorenco/elementor.ts', scope: 'Fonseca & Lorenço model (prospect)' },
+  { match: /macarthy/i, brand: 'brands/macarthy-scherer', builder: 'src/features/macarthyscherer/elementor.ts', scope: 'Macarthy Scherer model (prospect)' },
+  { match: /braggio|cerveira/i, brand: 'brands/cerveira-braggio', builder: 'src/features/cerveirabraggio/elementor.ts', scope: 'Cerveira Braggio model (prospect)' },
+  // O estúdio do usuário, que vende o serviço de sites (2026-10-04)
+  { match: /avence/i, brand: 'brands/avence-studio', builder: 'src/features/avence/elementor.ts', scope: 'Avence Studio model (our studio)' },
+  // Advogados de São Leopoldo que anunciam no Google (2026-10-04)
+  { match: /reche\s*becker|emmanuel\s*becker/i, brand: 'brands/emmanuel-reche-becker', builder: 'src/features/rechebecker/elementor.ts', scope: 'Emmanuel Reche Becker model (prospect)' },
+  { match: /depizzol|cassel\s*martins|\bdacm\b/i, brand: 'brands/dacm-advogados', builder: 'src/features/dacm/elementor.ts', scope: 'DACM Advogados model (prospect)' },
+  { match: /stemmer/i, brand: 'brands/stemmer-advogados', builder: 'src/features/stemmer/elementor.ts', scope: 'Stemmer Advogados model (prospect)' },
+  { match: /bordinh/i, brand: 'brands/ferreira-bordinhao', builder: 'src/features/ferreirabordinhao/elementor.ts', scope: 'Ferreira & Bordinhão model (prospect)' },
+  { match: /katia\s*paix/i, brand: 'brands/katia-paixao', builder: 'src/features/katiapaixao/elementor.ts', scope: 'Katia Paixão model (prospect)' },
 ]
 const clientOf = (name = '') => CLIENTS.find((c) => c.match.test(name))
 

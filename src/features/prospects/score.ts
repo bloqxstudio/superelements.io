@@ -39,7 +39,7 @@ type Scored = Pick<Lead, 'score' | 'temperature' | 'plan' | 'reasons'>
 
 /**
  * Nota de 0 a 100 da oportunidade: a plataforma pesa mais (WordPress com
- * Elementor conecta direto no plano Produto), depois os sinais de que o site
+ * Elementor recebe o site novo no mesmo WordPress), depois os sinais de que o site
  * precisa de cuidado e, por fim, se dá para falar com a empresa.
  */
 export const scoreLead = (lead: Omit<Lead, keyof Scored>, now = new Date()): Scored => {
@@ -49,9 +49,9 @@ export const scoreLead = (lead: Omit<Lead, keyof Scored>, now = new Date()): Sco
   const reasons: string[] = []
 
   if (platform === 'wp-elementor') {
-    reasons.push(`Já usa WordPress + Elementor${scan?.elementorPro ? ' Pro' : ''}: conecta direto`)
+    reasons.push(`Já usa WordPress + Elementor${scan?.elementorPro ? ' Pro' : ''}: o site novo entra no mesmo WordPress`)
   } else if (platform === 'wordpress') {
-    reasons.push(`WordPress${scan?.builder ? ` com ${scan.builder}` : ''}, sem Elementor: as páginas passam a ser montadas em Elementor`)
+    reasons.push(`WordPress${scan?.builder ? ` com ${scan.builder}` : ''}, sem Elementor: o site novo entra no mesmo WordPress, em Elementor`)
   } else if (platform === 'construtor') {
     reasons.push(`Site em ${scan?.builder ?? 'construtor fechado'}: migrar para WordPress`)
   } else if (platform === 'sem-site') {
@@ -95,6 +95,33 @@ export const scoreLead = (lead: Omit<Lead, keyof Scored>, now = new Date()): Sco
     }
   }
 
+  // Quem paga anúncio já investe para trazer gente ao site: é o sinal mais forte de compra
+  const ads = scan?.ads ?? []
+  if (ads.length) {
+    let adPoints = 0
+    for (const ad of ads) {
+      if (ad === 'Google Ads') {
+        adPoints += 15
+        reasons.push('Anuncia no Google: o site tem a tag de conversão do Google Ads')
+      } else if (ad === 'Pixel da Meta') {
+        adPoints += 10
+        reasons.push('Tem o pixel da Meta: anuncia ou já anunciou no Instagram e no Facebook')
+      } else if (ad === 'Tag Manager') {
+        adPoints += 3
+        reasons.push('Usa o Tag Manager, que pode carregar tags de anúncio')
+      } else {
+        adPoints += 5
+        reasons.push(`Tem o ${ad}`)
+      }
+    }
+    score += Math.min(20, adPoints)
+  }
+  const sales = scan?.sales ?? []
+  if (sales.length) {
+    score += 5
+    reasons.push(`Vende pelo site: ${sales.join(', ').replace(/^./, (c) => c.toLowerCase())}`)
+  }
+
   const email = lead.email || scan?.emails[0]
   if (email) {
     score += 10
@@ -110,7 +137,7 @@ export const scoreLead = (lead: Omit<Lead, keyof Scored>, now = new Date()): Sco
 
   score = Math.max(0, Math.min(100, score))
   const temperature: Temperature = score >= 70 ? 'quente' : score >= 45 ? 'morna' : 'fria'
-  const plan: SuggestedPlan = platform === 'wp-elementor' || platform === 'wordpress' ? 'Produto' : 'Completo'
+  const plan: SuggestedPlan = platform === 'wp-elementor' || platform === 'wordpress' ? 'Redesign' : 'Site novo'
   return { score, temperature, plan, reasons }
 }
 
@@ -121,6 +148,16 @@ export const statsOf = (leads: Lead[]): SearchStats => ({
   wordpress: leads.filter((l) => l.scan?.platform === 'wordpress' || l.scan?.platform === 'wp-elementor').length,
   elementor: leads.filter((l) => l.scan?.platform === 'wp-elementor').length,
   hot: leads.filter((l) => l.temperature === 'quente').length,
+  ads: leads.filter((l) => advertises(l)).length,
+})
+
+/** Anuncia de verdade (Google Ads, pixel da Meta, TikTok, LinkedIn); só o Tag Manager não conta. */
+export const advertises = (lead: Lead) => (lead.scan?.ads ?? []).some((ad) => ad !== 'Tag Manager')
+
+/** Links para conferir se há anúncio no ar agora (quem confere é a pessoa, no navegador). */
+export const adLibraryLinks = (lead: Lead) => ({
+  google: lead.domain ? `https://adstransparency.google.com/?region=BR&domain=${encodeURIComponent(lead.domain)}` : undefined,
+  meta: `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=BR&q=${encodeURIComponent(lead.name)}`,
 })
 
 /** Agências que aparecem no crédito do rodapé, com os sites que fizeram: público do plano Agência. */

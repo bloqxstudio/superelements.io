@@ -28,13 +28,19 @@ const MAP_AGENT = 'superelements-prospeccao/1.0 (+https://superelements.io)'
 /** Os sites recebem um navegador comum: muitos recusam robôs sem nome. */
 const BROWSER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36'
 
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']
+/** Servidores públicos do Overpass: ficam lotados (504/429) às vezes, então a busca tenta o seguinte. */
+const OVERPASS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+]
 const SITE_TIMEOUT = 12_000
 const MAX_HTML = 1_500_000
-const CONCURRENCY = 8
-/** Sites lidos por busca; empresas sem site não custam leitura e têm um teto maior. */
-const MAX_SITES = 400
-const MAX_BUSINESSES = 1500
+const CONCURRENCY = 10
+/** Sites lidos por busca (a cidade inteira passa de mil); empresas sem site não custam leitura. */
+const MAX_SITES = 3000
+const MAX_BUSINESSES = 4000
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -49,6 +55,10 @@ interface Area {
   center: { lat: number; lon: number }
   /** sul, norte, oeste, leste */
   bbox: [number, number, number, number]
+  /** Nome curto do lugar no mapa ("São Paulo"), para separar as empresas de cidades vizinhas. */
+  placeName?: string
+  /** Contorno (anéis externos, em [lng, lat]), para a varredura só pôr pontos dentro da cidade. */
+  rings?: number[][][]
 }
 
 interface NominatimHit {
@@ -56,9 +66,42 @@ interface NominatimHit {
   osm_id: number
   lat: string
   lon: string
+  name?: string
   display_name: string
   boundingbox: [string, string, string, string]
+  geojson?: { type: string; coordinates: unknown }
 }
+
+/** Anéis externos de um Polygon ou MultiPolygon do GeoJSON. */
+const outerRings = (geojson: NominatimHit['geojson']): number[][][] | undefined => {
+  if (geojson?.type === 'Polygon') return [(geojson.coordinates as number[][][])[0]]
+  if (geojson?.type === 'MultiPolygon') return (geojson.coordinates as number[][][][]).map((polygon) => polygon[0])
+  return undefined
+}
+
+const insideRing = (ring: number[][], lng: number, lat: number) => {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i]
+    const [xj, yj] = ring[j]
+    if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside
+  }
+  return inside
+}
+
+const insideArea = (area: Area, lat: number, lng: number) => {
+  const [south, north, west, east] = area.bbox
+  if (lat < south || lat > north || lng < west || lng > east) return false
+  return area.rings ? area.rings.some((ring) => insideRing(ring, lng, lat)) : true
+}
+
+/** Sem acento e em minúsculas, para comparar nomes de cidade. */
+const plainName = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
 
 interface OsmElement {
   type: 'node' | 'way' | 'relation'
@@ -94,7 +137,17 @@ const geocode = async (query: string, signal?: AbortSignal): Promise<Area | null
   if (gap < 1100) await wait(1100 - gap)
   lastNominatim = Date.now()
   const url = new URL('https://nominatim.openstreetmap.org/search')
-  url.search = new URLSearchParams({ q: query, format: 'jsonv2', limit: '1', countrycodes: 'br', featureType: 'settlement', 'accept-language': 'pt-BR' }).toString()
+  url.search = new URLSearchParams({
+    q: query,
+    format: 'jsonv2',
+    limit: '1',
+    countrycodes: 'br',
+    featureType: 'settlement',
+    'accept-language': 'pt-BR',
+    // Contorno simplificado (uns 200 m de precisão): basta para pôr os pontos da varredura
+    polygon_geojson: '1',
+    polygon_threshold: '0.002',
+  }).toString()
   const response = await fetch(url, { headers: { 'user-agent': MAP_AGENT }, signal })
   if (!response.ok) throw new Error(`O mapa não respondeu ao procurar "${query}" (${response.status})`)
   const [hit] = (await response.json()) as NominatimHit[]
@@ -106,6 +159,8 @@ const geocode = async (query: string, signal?: AbortSignal): Promise<Area | null
     osmArea: hit.osm_type === 'relation' ? 3_600_000_000 + Number(hit.osm_id) : hit.osm_type === 'way' ? 2_400_000_000 + Number(hit.osm_id) : undefined,
     center: { lat: Number(hit.lat), lon: Number(hit.lon) },
     bbox: [south, north, west, east],
+    placeName: hit.name,
+    rings: outerRings(hit.geojson),
   }
 }
 
@@ -122,8 +177,14 @@ const matchesNiche = (tags: Record<string, string>, niche: Niche) =>
       })
     : (tags.name ?? '').toLowerCase().includes(niche.query.toLowerCase())
 
+/** O mapa aberto guarda vários telefones num campo só ("+55 11 …;+55 11 …"): fica o primeiro, no formato daqui. */
+const firstPhone = (value?: string) => {
+  const first = value?.split(/[;,/]/)[0]?.trim()
+  return first ? formatPhone(first) : undefined
+}
+
 /** OpenStreetMap pelo Overpass: grátis e sem chave, mas só tem o que a comunidade mapeou. */
-const fromOsm = async (areas: Area[], niches: Niche[], signal?: AbortSignal): Promise<Business[]> => {
+const fromOsm = async (areas: Area[], niches: Niche[], onStage?: (text: string) => void, signal?: AbortSignal): Promise<Business[]> => {
   const scopes = areas.map((area) => (area.osmArea ? `area(${area.osmArea})` : null)).filter(Boolean)
   const arounds = areas.filter((area) => !area.osmArea)
   const where = [...(scopes.length ? ['(area.a)'] : []), ...arounds.map((a) => `(around:2500,${a.center.lat},${a.center.lon})`)]
@@ -158,9 +219,13 @@ const fromOsm = async (areas: Area[], niches: Niche[], signal?: AbortSignal): Pr
     } catch (error) {
       if (signal?.aborted) throw error
       lastError = error
+      onStage?.('Servidor do mapa lotado, tentando outro')
     }
   }
-  if (!data) throw new Error(`O mapa aberto não respondeu: ${lastError instanceof Error ? lastError.message : lastError}`)
+  if (!data) {
+    const why = lastError instanceof Error ? lastError.message : String(lastError)
+    throw new Error(`Os servidores do mapa aberto estão lotados agora (${why}). Tente de novo em alguns minutos.`)
+  }
 
   const businesses: Business[] = []
   for (const element of data.elements) {
@@ -181,7 +246,7 @@ const fromOsm = async (areas: Area[], niches: Niche[], signal?: AbortSignal): Pr
       address: [street, neighborhood, city].filter(Boolean).join(' · ') || undefined,
       neighborhood,
       city,
-      phone: tags.phone || tags['contact:phone'] || tags['contact:mobile'] || undefined,
+      phone: firstPhone(tags.phone || tags['contact:phone'] || tags['contact:mobile']),
       email: tags.email || tags['contact:email'] || undefined,
       website:
         tags.website || tags['contact:website'] || tags.url ||
@@ -190,6 +255,182 @@ const fromOsm = async (areas: Area[], niches: Niche[], signal?: AbortSignal): Pr
     })
   }
   return businesses
+}
+
+// Google Maps lido como o navegador lê (grátis). Os termos do Google não permitem
+// esta leitura: vai uma consulta por vez, com pausa, e a busca para ao primeiro
+// bloqueio, guardando o que já achou. Se o Google mudar a página, quebra aqui.
+
+/** Uma busca do Maps entrega no máximo uns 300 lugares (15 páginas de 20). */
+const MAPS_PAGE = 20
+const MAPS_LAST_OFFSET = 280
+/** Consultas ao Maps por busca, somando nichos e pontos. */
+const MAPS_BUDGET = 2500
+/** Pontos da grade antes de subdividir onde o Maps lota. */
+const MAPS_GRID_POINTS = 36
+const MAPS_MAX_DEPTH = 2
+
+const mapsBlocked = (detail: string) => Object.assign(new Error(`O Google Maps pediu uma pausa (${detail})`), { code: 'MAPS_BLOCKED' })
+const isMapsBlocked = (error: unknown) => (error as { code?: string } | null)?.code === 'MAPS_BLOCKED'
+
+/** Pausa entre consultas ao Maps, com variação: ritmo de gente, não de robô. */
+const mapsPause = () => wait(650 + Math.random() * 600)
+
+const dig = (value: unknown, ...path: number[]): unknown => path.reduce<unknown>((v, i) => (Array.isArray(v) ? v[i] : undefined), value)
+const str = (value: unknown) => (typeof value === 'string' && value ? value : undefined)
+const num = (value: unknown) => (typeof value === 'number' ? value : undefined)
+
+/**
+ * A página de busca do Maps traz o endereço interno que carrega os resultados
+ * (com a sessão). Um por nicho: depois só trocam as coordenadas e a página.
+ */
+const mapsTemplate = async (query: string, at: { lat: number; lon: number }, signal?: AbortSignal) => {
+  const url = `https://www.google.com/maps/search/${encodeURIComponent(query)}/@${at.lat},${at.lon},14z?hl=pt-BR&gl=br`
+  const response = await fetch(url, { headers: { 'user-agent': BROWSER_AGENT, 'accept-language': 'pt-BR,pt;q=0.9' }, redirect: 'manual', signal })
+  if (response.status !== 200) throw mapsBlocked(`resposta ${response.status}`)
+  const html = await response.text()
+  const path = /\/search\?tbm=map[^"]*/.exec(html)?.[0].replace(/&amp;/g, '&')
+  if (!path || !/%212d-?[\d.]+%213d-?[\d.]+/.test(path)) throw new Error('O Google Maps mudou a página de busca: a leitura precisa de ajuste em scripts/prospects/engine.ts')
+  return path
+}
+
+/** Os lugares de uma página de resultados (a lista é achada pelo formato, não pela posição). */
+const mapsPage = async (template: string, lat: number, lng: number, offset: number, signal?: AbortSignal): Promise<unknown[][]> => {
+  const path = template.replace(/%212d-?[\d.]+%213d-?[\d.]+/, `%212d${lng.toFixed(6)}%213d${lat.toFixed(6)}`).replace('%217i20', `%217i20%218i${offset}`)
+  const response = await fetch(`https://www.google.com${path}`, {
+    headers: { 'user-agent': BROWSER_AGENT, 'accept-language': 'pt-BR,pt;q=0.9' },
+    redirect: 'manual',
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
+  })
+  const text = await response.text()
+  if (response.status !== 200 || !text.startsWith(")]}'")) throw mapsBlocked(`resposta ${response.status}`)
+  const data = JSON.parse(text.slice(4)) as unknown[]
+  const isPlace = (item: unknown) => typeof dig(item, 1, 11) === 'string' && typeof dig(item, 1, 78) === 'string'
+  const list = data.find((part) => Array.isArray(part) && part.some(isPlace)) as unknown[] | undefined
+  return (list ?? []).filter(isPlace).map((item) => dig(item, 1) as unknown[])
+}
+
+const mapsBusiness = (place: unknown[], niche: Niche): Business => {
+  const placeId = str(place[78])!
+  const reviewsText = str(dig(place, 4, 3, 1))
+  const cityState = str(place[166])
+  return {
+    id: `google:${placeId}`,
+    source: 'maps',
+    name: str(place[11])!,
+    niche: niche.label,
+    category: str(dig(place, 13, 0)),
+    address: str(place[39]),
+    neighborhood: str(place[14]),
+    city: cityState?.split(' - ')[0] ?? str(dig(place, 82, 3)),
+    phone: str(dig(place, 178, 0, 0)),
+    website: str(dig(place, 7, 0)),
+    rating: num(dig(place, 4, 7)),
+    reviews: num(dig(place, 4, 8)) ?? (reviewsText ? Number(reviewsText.replace(/\D/g, '')) || undefined : undefined),
+    mapsUrl: `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+  }
+}
+
+interface MapsPoint {
+  lat: number
+  lng: number
+  /** Distância até os pontos vizinhos, em km. */
+  spacing: number
+  depth: number
+}
+
+const gridPoints = (area: Area, spacing: number): MapsPoint[] => {
+  const [south, north, west, east] = area.bbox
+  const dLat = spacing / 111
+  const points: MapsPoint[] = []
+  for (let lat = south + dLat / 2; lat < north; lat += dLat) {
+    const dLng = spacing / (111 * Math.cos((lat * Math.PI) / 180))
+    for (let lng = west + dLng / 2; lng < east; lng += dLng) if (insideArea(area, lat, lng)) points.push({ lat, lng, spacing, depth: 0 })
+  }
+  return points
+}
+
+/** Grade de até `MAPS_GRID_POINTS` pontos dentro da cidade (o espaçamento cresce até caber). */
+const cityGrid = (area: Area): MapsPoint[] => {
+  let spacing = 2.5
+  let points = gridPoints(area, spacing)
+  while (points.length > MAPS_GRID_POINTS) {
+    spacing *= 1.2
+    points = gridPoints(area, spacing)
+  }
+  return points.length ? points : [{ lat: area.center.lat, lng: area.center.lon, spacing, depth: 0 }]
+}
+
+/**
+ * Google Maps grátis. Em cada ponto, desce as páginas até acabar ou até quase
+ * tudo já ter vindo dos vizinhos; na cidade inteira, o ponto que lota as ~300
+ * vagas com empresas novas se divide em quatro, até dois níveis.
+ */
+const fromMaps = async (
+  areas: Area[],
+  niches: Niche[],
+  wholeCity: boolean,
+  onStage: (text: string) => void,
+  notes: string[],
+  signal?: AbortSignal
+): Promise<Business[]> => {
+  const found = new Map<string, Business>()
+  let requests = 0
+  try {
+    for (const niche of niches) {
+      const queue: MapsPoint[] = wholeCity ? cityGrid(areas[0]) : areas.map((a) => ({ lat: a.center.lat, lng: a.center.lon, spacing: 3, depth: MAPS_MAX_DEPTH }))
+      const template = await mapsTemplate(niche.query, areas[0].center, signal)
+      requests++
+      let done = 0
+      while (queue.length) {
+        const point = queue.shift()!
+        done++
+        let lastFresh = 0
+        let lastSize = 0
+        let offset = 0
+        for (; offset <= MAPS_LAST_OFFSET; offset += MAPS_PAGE) {
+          if (requests >= MAPS_BUDGET) throw Object.assign(new Error('budget'), { code: 'MAPS_BUDGET' })
+          await mapsPause()
+          const places = await mapsPage(template, point.lat, point.lng, offset, signal)
+          requests++
+          let fresh = 0
+          for (const place of places) {
+            const business = mapsBusiness(place, niche)
+            if (!found.has(business.id)) {
+              found.set(business.id, business)
+              fresh++
+            }
+          }
+          lastFresh = fresh
+          lastSize = places.length
+          onStage(`Google Maps · ${niche.label} · ponto ${done} de ${done + queue.length} · ${found.size} empresas`)
+          if (places.length < MAPS_PAGE) break
+          // A partir daqui os vizinhos já trouxeram quase tudo
+          if (offset > 0 && fresh / places.length < 0.2) break
+        }
+        const saturated = offset > MAPS_LAST_OFFSET && lastSize === MAPS_PAGE && lastFresh / lastSize >= 0.5
+        if (wholeCity && saturated && point.depth < MAPS_MAX_DEPTH) {
+          const step = point.spacing / 4
+          for (const [dy, dx] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+            const lat = point.lat + (dy * step) / 111
+            const lng = point.lng + (dx * step) / (111 * Math.cos((point.lat * Math.PI) / 180))
+            if (insideArea(areas[0], lat, lng)) queue.push({ lat, lng, spacing: point.spacing / 2, depth: point.depth + 1 })
+          }
+        }
+      }
+    }
+  } catch (error) {
+    if (signal?.aborted) throw error
+    if (isMapsBlocked(error)) {
+      if (!found.size) throw new Error('O Google Maps bloqueou a leitura agora. Espere alguns minutos e tente de novo, ou use o mapa aberto.')
+      notes.push(`O Google Maps pediu uma pausa depois de ${requests} consultas: a busca seguiu com as ${found.size} empresas que já tinha. Rode de novo mais tarde para completar.`)
+    } else if ((error as { code?: string }).code === 'MAPS_BUDGET') {
+      notes.push(`A busca parou em ${MAPS_BUDGET} consultas ao Google Maps. Para cobrir mais, divida por nicho ou por bairro.`)
+    } else {
+      throw error
+    }
+  }
+  return [...found.values()]
 }
 
 const GOOGLE_FIELDS = [
@@ -543,7 +784,8 @@ export const detect = (page: Page, now = new Date()): Omit<SiteScan, 'ms' | 'sta
     firstMatch(html, /wp-includes\/css\/dist\/block-library\/style(?:\.min)?\.css\?ver=(\d+\.\d+(?:\.\d+)?)(?![\w.])/i) ??
     firstMatch(html, /wp-emoji-release\.min\.js\?ver=(\d+\.\d+(?:\.\d+)?)(?![\w.])/i)
   const elementorVersion = hasElementor
-    ? firstMatch(generator, /Elementor\s+(\d+\.\d+(?:\.\d+)?)/i) ?? firstMatch(html, /\/plugins\/elementor\/assets\/[^"'?]+\?ver=(\d+\.\d+(?:\.\d+)?)(?![\w.])/i)
+    ? // Só css/js do próprio Elementor: as bibliotecas em assets/lib têm a versão delas
+      firstMatch(generator, /Elementor\s+(\d+\.\d+(?:\.\d+)?)/i) ?? firstMatch(html, /\/plugins\/elementor\/assets\/(?:css|js)\/[^"'?]+\?ver=(\d+\.\d+(?:\.\d+)?)(?![\w.])/i)
     : undefined
   const elementorPro = hasElementor && /\/plugins\/elementor-pro\//i.test(html)
   const theme = isWp ? firstMatch(html, /\/wp-content\/themes\/([a-z0-9_-]+)\//i) : undefined
@@ -580,8 +822,46 @@ export const detect = (page: Page, now = new Date()): Omit<SiteScan, 'ms' | 'sta
     agency: agencyOf(html, host),
     copyrightYear: copyrightOf(text.slice(-4000), now),
     viewport: /<meta[^>]+name=["']viewport["']/i.test(html),
+    ads: adsOf(html),
+    sales: salesOf(html),
   }
 }
+
+/**
+ * Rastros de anúncio pago. Quem anuncia já paga para trazer gente ao site:
+ * é quem mais tende a comprar um site melhor. A tag só diz que está
+ * instalada; se o anúncio está no ar, confere-se na biblioteca de anúncios.
+ */
+const AD_TRACES: [RegExp, string][] = [
+  [/\bAW-\d{6,}|googleadservices\.com\/pagead\/conversion|google_conversion_id/, 'Google Ads'],
+  [/connect\.facebook\.net\/[\w_]+\/fbevents\.js|fbq\(\s*['"]init['"]/, 'Pixel da Meta'],
+  [/analytics\.tiktok\.com\/i18n\/pixel|ttq\.load\(/, 'Pixel do TikTok'],
+  [/snap\.licdn\.com\/li\.lms-analytics|_linkedin_partner_id/, 'LinkedIn Ads'],
+]
+
+/** O Tag Manager pode carregar tags de anúncio que não aparecem na página: sinal fraco. */
+const TAG_MANAGER = /googletagmanager\.com\/gtm\.js|\bGTM-[A-Z0-9]{4,}\b/
+
+/** Ferramentas de venda: agenda online (inclusive as de nutrição), checkout de curso ou programa, loja. */
+const SALES_TOOLS: [RegExp, string][] = [
+  [/dietbox\.me|dietbox\.com\.br/i, 'Agenda online (Dietbox)'],
+  [/webdiet\.com\.br/i, 'Agenda online (WebDiet)'],
+  [/nutrium\.(com|io)/i, 'Agenda online (Nutrium)'],
+  [/calendly\.com\//i, 'Agenda online (Calendly)'],
+  [/doctoralia\.com\.br\/[^"']*(widget|agendar)|widgets\.doctoralia/i, 'Agenda online (Doctoralia)'],
+  [/simplybook\.(me|it)|\/plugins\/ameliabooking\/|\/plugins\/bookly/i, 'Agenda online'],
+  [/(pay|go)\.hotmart\.com|hotmart\.com\/product/i, 'Curso ou programa (Hotmart)'],
+  [/pay\.kiwify\.com|kiwify\.app/i, 'Curso ou programa (Kiwify)'],
+  [/sun\.eduzz\.com|eduzz\.com\//i, 'Curso ou programa (Eduzz)'],
+  [/monetizze\.com\.br|payment\.ticto|greenn\.com\.br|braip\.com/i, 'Curso ou programa'],
+  [/\/plugins\/woocommerce\//i, 'Loja (WooCommerce)'],
+]
+
+const adsOf = (html: string) => {
+  const found = AD_TRACES.filter(([test]) => test.test(html)).map(([, label]) => label)
+  return found.length || !TAG_MANAGER.test(html) ? found : ['Tag Manager']
+}
+const salesOf = (html: string) => [...new Set(SALES_TOOLS.filter(([test]) => test.test(html)).map(([, label]) => label))]
 
 const PARKED = /for sale|à venda|a venda|suspended|suspens|em constru|coming soon|index of \/|default page|página padrão|parked|site em manuten|under construction/i
 
@@ -669,6 +949,31 @@ const toLead = (business: Business, scan?: SiteScan, units?: number): Lead => {
   return { ...base, ...scoreLead(base) }
 }
 
+/** Uma empresa de fora das buscas (um site indicado): lê o site e monta a empresa com a nota. */
+export const leadFromSite = async (url: string, meta: { niche: string; name?: string; region?: string }, signal?: AbortSignal): Promise<Lead> => {
+  const scan = await scanSite(url, signal)
+  const host = hostOf(scan.url) || hostOf(url)
+  const title = scan.title
+    ?.replace(/&#8211;|&ndash;/g, '–')
+    .replace(/&#8212;|&mdash;/g, '—')
+    .replace(/&amp;/g, '&')
+    .split(/\s[–—|-]\s/)[0]
+    ?.trim()
+  return toLead(
+    {
+      id: `site:${host}`,
+      source: 'manual',
+      name: meta.name?.trim() || title || host,
+      niche: nicheFor(meta.niche).label,
+      city: meta.region?.split(',')[0]?.trim(),
+      phone: scan.phones[0],
+      email: scan.emails[0],
+      website: url,
+    },
+    scan
+  )
+}
+
 const pool = async <T>(items: T[], size: number, run: (item: T) => Promise<void>, signal?: AbortSignal) => {
   let next = 0
   const worker = async () => {
@@ -706,17 +1011,33 @@ export const runSearch = async (input: SearchInput, options: SearchOptions = {})
   }
   if (!areas.length) areas.push(city)
 
+  const stage = (text: string) => emit({ type: 'stage', text })
   let businesses: Business[]
   if (input.source === 'google') {
-    emit({ type: 'stage', text: 'Consultando o Google Maps' })
-    businesses = await fromGoogle(areas, niches, googleKey!, (text) => emit({ type: 'stage', text }), signal)
+    stage('Consultando a API do Google Maps')
+    businesses = await fromGoogle(areas, niches, googleKey!, stage, signal)
+  } else if (input.source === 'osm') {
+    stage('Consultando o mapa aberto (pode levar até um minuto numa cidade grande)')
+    businesses = await fromOsm(areas, niches, stage, signal)
   } else {
-    emit({ type: 'stage', text: 'Consultando o mapa aberto (pode levar até um minuto numa cidade grande)' })
-    businesses = await fromOsm(areas, niches, signal)
+    const wholeCity = input.coverage === 'cidade' && areas[0] === city
+    stage(wholeCity ? 'Varrendo a cidade no Google Maps' : 'Consultando o Google Maps')
+    businesses = await fromMaps(areas, niches, wholeCity, stage, notes, signal)
+  }
+
+  // O Google traz também quem fica logo depois da divisa: fica só a cidade pedida
+  if (city.placeName && input.source !== 'osm') {
+    const target = plainName(city.placeName)
+    const before = businesses.length
+    businesses = businesses.filter((b) => !b.city || plainName(b.city) === target)
+    if (before > businesses.length) notes.push(`${before - businesses.length} empresas de cidades vizinhas ficaram de fora.`)
   }
 
   // A mesma empresa em dois nichos ou dois bairros conta uma vez
-  const unique = [...new Map(businesses.map((b) => [b.id, b])).values()].filter((b) => !/\.gov\.br/i.test(b.website ?? ''))
+  // Órgãos públicos, universidades e tribunais não compram site
+  const unique = [...new Map(businesses.map((b) => [b.id, b])).values()].filter(
+    (b) => !/\.(gov|edu|jus|mp|leg|mil)\.br(\/|$)/i.test(hostOf(/^https?:/i.test(b.website ?? '') ? b.website! : `https://${b.website}`) + '/')
+  )
 
   // Redes com o mesmo site (várias unidades) leem o site uma vez só
   const byDomain = new Map<string, Business[]>()
@@ -803,15 +1124,16 @@ export const deleteSearch = async (id: string, dir = DEFAULT_DIR) => {
 export const listSearches = async (dir = DEFAULT_DIR): Promise<SearchSummary[]> => {
   let files: string[] = []
   try {
-    files = (await readdir(dir)).filter((f) => f.endsWith('.json'))
+    // O funil mora na mesma pasta e não é uma busca
+    files = (await readdir(dir)).filter((f) => f.endsWith('.json') && !f.startsWith('funil'))
   } catch {
     return []
   }
   const summaries: SearchSummary[] = []
   for (const file of files) {
     try {
-      const { id, createdAt, input, regionLabel, stats } = JSON.parse(await readFile(path.join(dir, file), 'utf8')) as SearchRecord
-      summaries.push({ id, createdAt, input, regionLabel, stats })
+      const { id, createdAt, label, input, regionLabel, stats } = JSON.parse(await readFile(path.join(dir, file), 'utf8')) as SearchRecord
+      if (id && createdAt && input) summaries.push({ id, createdAt, label, input, regionLabel, stats })
     } catch {
       // Arquivo quebrado não derruba a lista
     }

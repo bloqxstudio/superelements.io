@@ -3,12 +3,14 @@ import { useSearchParams } from 'react-router-dom'
 import { CircleAlert, Download, Loader2, Radar, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { byScore, getConfig, getSearch, listSearches, removeSearch, rescore, startSearch } from '@/features/prospects/api'
+import { addToFunnel, byScore, getConfig, getFunnel, getSearch, listSearches, removeSearch, rescore, startSearch } from '@/features/prospects/api'
 import { AgencyList } from '@/features/prospects/AgencyList'
 import { leadsToCsv } from '@/features/prospects/csv'
+import { Funnel } from '@/features/prospects/FunnelBoard'
+import type { Opportunity, Stage } from '@/features/prospects/funnel'
 import { LeadTable } from '@/features/prospects/LeadTable'
 import { nicheFor } from '@/features/prospects/niches'
-import { agenciesOf, PLATFORM_LABEL, statsOf } from '@/features/prospects/score'
+import { advertises, agenciesOf, PLATFORM_LABEL, statsOf } from '@/features/prospects/score'
 import { SearchForm } from '@/features/prospects/SearchForm'
 import type { Lead, Platform, SearchInput, SearchRecord, SearchSummary } from '@/features/prospects/types'
 import { Chip, StatTile, SURFACE } from '@/features/prospects/ui'
@@ -16,6 +18,8 @@ import { cn } from '@/lib/utils'
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 const nicheNames = (ids: string[]) => ids.map((id) => nicheFor(id).label).join(', ')
+const SOURCE_LABEL: Record<string, string> = { maps: 'Google Maps', osm: 'mapa aberto', google: 'API do Google' }
+
 /** Linhas desenhadas por vez: uma cidade grande traz mais de mil empresas. */
 const PAGE = 150
 const when = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -51,10 +55,10 @@ const SavedSearches: React.FC<{
             <li key={item.id} className={cn('group flex items-start gap-1 rounded-lg', item.id === currentId ? 'bg-gray-100' : 'hover:bg-gray-50')}>
               <button type="button" disabled={disabled} onClick={() => onOpen(item.id)} className="min-w-0 flex-1 px-2 py-2 text-left disabled:opacity-50">
                 <span className="block truncate text-sm font-medium text-gray-900">
-                  {item.input.region}
-                  {item.input.areas?.length ? ` · ${item.input.areas.length} bairros` : ''}
+                  {item.label ?? item.input.region}
+                  {!item.label && item.input.areas?.length ? ` · ${item.input.areas.length} bairros` : ''}
                 </span>
-                <span className="block truncate text-xs text-gray-500">{nicheNames(item.input.niches)}</span>
+                <span className="block truncate text-xs text-gray-500">{item.label ? `${item.input.region} · ` : ''}{nicheNames(item.input.niches)}</span>
                 <span className="mt-0.5 block text-[11px] tabular-nums text-gray-400">
                   {when(item.createdAt)} · {item.stats.businesses} empresas · {item.stats.elementor} Elementor
                 </span>
@@ -105,12 +109,35 @@ const Prospects: React.FC = () => {
   const [platform, setPlatform] = useState<Platform | 'todas'>('todas')
   const [niche, setNiche] = useState('todos')
   const [contactOnly, setContactOnly] = useState(false)
+  const [adsOnly, setAdsOnly] = useState(false)
   const [text, setText] = useState('')
   const [limit, setLimit] = useState(PAGE)
+  const [funnel, setFunnel] = useState<Opportunity[]>([])
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const runningRef = useRef<Running | null>(null)
-  // A busca aberta fica no endereço (?busca=): recarregar a página ou mandar o link reabre ela
+  // A busca aberta (?busca=) e a aba (?aba=funil) ficam no endereço: recarregar ou mandar o link reabre igual
   const [params, setParams] = useSearchParams()
   const linked = useRef(params.get('busca'))
+  const [view, setView] = useState<'buscar' | 'funil'>(params.get('aba') === 'funil' ? 'funil' : 'buscar')
+
+  const setParam = useCallback(
+    (key: string, value: string | null) =>
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (value) next.set(key, value)
+          else next.delete(key)
+          return next
+        },
+        { replace: true }
+      ),
+    [setParams]
+  )
+
+  const changeView = (next: 'buscar' | 'funil') => {
+    setView(next)
+    setParam('aba', next === 'funil' ? 'funil' : null)
+  }
 
   const reloadSaved = useCallback(() => {
     listSearches().then(setSaved).catch(() => {})
@@ -122,9 +149,10 @@ const Prospects: React.FC = () => {
       setLimit(PAGE)
       setPlatform('todas')
       setNiche('todos')
-      setParams(next ? { busca: next.id } : {}, { replace: true })
+      setSelected(new Set())
+      setParam('busca', next?.id ?? null)
     },
-    [setParams]
+    [setParam]
   )
 
   useEffect(() => {
@@ -132,10 +160,48 @@ const Prospects: React.FC = () => {
       setConfig(value)
       if (!value) return
       reloadSaved()
+      getFunnel()
+        .then((list) => setFunnel(list.map((o) => ({ ...o, lead: rescore(o.lead) }))))
+        .catch(() => {})
       if (linked.current) getSearch(linked.current).then(show).catch(() => show(null))
     })
     return () => runningRef.current?.controller.abort()
   }, [reloadSaved, show])
+
+  const stages = useMemo(() => new Map(funnel.map((o) => [o.id, o.stage])), [funnel])
+
+  const addSelected = async (stage?: Stage) => {
+    if (!record) return
+    const chosen = record.leads.filter((l) => selected.has(l.id))
+    try {
+      const list = await addToFunnel(chosen, { region: record.input.region, searchId: record.id, stage })
+      setFunnel(list.map((o) => ({ ...o, lead: rescore(o.lead) })))
+      setSelected(new Set())
+      toast.success(`${plural(chosen.length, 'empresa', 'empresas')} ${stage === 'selecionado' ? 'na fila da página' : 'no funil'}`, {
+        description: stage === 'selecionado' ? 'Peça ao Claude para rodar a fila: ele cria um projeto e uma página para cada uma.' : undefined,
+      })
+    } catch (e) {
+      toast.error('Não deu para pôr no funil', { description: e instanceof Error ? e.message : undefined })
+    }
+  }
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const toggleAll = (ids: string[], on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const id of ids) {
+        if (on) next.add(id)
+        else next.delete(id)
+      }
+      return next
+    })
 
   const open = async (id: string) => {
     try {
@@ -161,13 +227,16 @@ const Prospects: React.FC = () => {
     const state: Running = { input, stage: 'Começando', done: 0, total: 0, leads: [], controller }
     runningRef.current = state
     setRunning(state)
-    setRecord(null)
+    show(null)
     setError(null)
-    setPlatform('todas')
-    setNiche('todos')
+    // A cidade inteira manda milhares de empresas: a tela redesenha no máximo a cada 400 ms
+    let timer: ReturnType<typeof setTimeout> | null = null
     const update = (patch: Partial<Running>) => {
       Object.assign(state, patch)
-      setRunning({ ...state })
+      timer ??= setTimeout(() => {
+        timer = null
+        if (runningRef.current === state) setRunning({ ...state, leads: [...state.leads] })
+      }, 400)
     }
     try {
       await startSearch(
@@ -175,7 +244,10 @@ const Prospects: React.FC = () => {
         (event) => {
           if (event.type === 'stage') update({ stage: event.text })
           else if (event.type === 'businesses') update({ businesses: event.count })
-          else if (event.type === 'lead') update({ leads: [...state.leads, rescore(event.lead)], done: event.done, total: event.total })
+          else if (event.type === 'lead') {
+            state.leads.push(rescore(event.lead))
+            update({ done: event.done, total: event.total })
+          }
           else if (event.type === 'error') setError(event.message)
           else if (event.type === 'done') {
             show({ ...event.record, leads: event.record.leads.map(rescore).sort(byScore) })
@@ -189,6 +261,7 @@ const Prospects: React.FC = () => {
     } catch (e) {
       if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e))
     } finally {
+      if (timer) clearTimeout(timer)
       runningRef.current = null
       setRunning(null)
       reloadSaved()
@@ -212,10 +285,11 @@ const Prospects: React.FC = () => {
       if (platform !== 'todas' && (lead.scan?.platform ?? 'sem-site') !== platform) return false
       if (niche !== 'todos' && lead.niche !== niche) return false
       if (contactOnly && !(lead.email || lead.scan?.emails.length || lead.scan?.whatsapp)) return false
+      if (adsOnly && !advertises(lead)) return false
       if (query && ![lead.name, lead.domain, lead.neighborhood, lead.scan?.agency?.name].some((v) => v?.toLowerCase().includes(query))) return false
       return true
     })
-  }, [leads, platform, niche, contactOnly, text])
+  }, [leads, platform, niche, contactOnly, adsOnly, text])
 
   const agencies = useMemo(() => agenciesOf(leads), [leads])
   const stats = statsOf(leads)
@@ -252,6 +326,33 @@ const Prospects: React.FC = () => {
           </div>
         ) : (
           <>
+            <div className="mt-6 flex items-center gap-1 border-b border-gray-200" role="tablist" aria-label="Prospecção">
+              {(
+                [
+                  ['buscar', 'Buscar'],
+                  ['funil', `Funil (${funnel.length})`],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === id}
+                  onClick={() => changeView(id)}
+                  className={cn(
+                    '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                    view === id ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-900'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {view === 'funil' ? (
+              <Funnel items={funnel} onChange={setFunnel} />
+            ) : (
+              <>
             <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
               <SearchForm google={config.google} running={Boolean(running)} onSearch={search} />
               <SavedSearches items={saved} currentId={record?.id} disabled={Boolean(running)} onOpen={open} onDelete={remove} />
@@ -294,11 +395,13 @@ const Prospects: React.FC = () => {
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="text-lg font-semibold tracking-tight text-gray-900">
+                      {record?.label ? `${record.label} · ` : ''}
                       {input.region}
                       {input.areas?.length ? ` · ${input.areas.join(', ')}` : ''}
                     </h2>
                     <p className="text-sm text-gray-500">
-                      {nicheNames(input.niches)} · {input.source === 'google' ? 'Google Maps' : 'mapa aberto'}
+                      {nicheNames(input.niches)} · {SOURCE_LABEL[input.source] ?? 'mapa aberto'}
+                      {input.coverage === 'cidade' && ' · cidade inteira'}
                       {record && ` · ${when(record.createdAt)}`}
                     </p>
                   </div>
@@ -309,12 +412,13 @@ const Prospects: React.FC = () => {
                   )}
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+                <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
                   <StatTile label="Empresas" value={stats.businesses} />
                   <StatTile label="Com site próprio" value={stats.withSite} of={leads.length} />
                   <StatTile label="WordPress" value={stats.wordpress} of={stats.withSite} hint="dos sites" />
                   <StatTile label="WordPress + Elementor" value={stats.elementor} of={stats.withSite} hint="dos sites" />
-                  <StatTile label="Quentes" value={stats.hot} of={leads.length} hint="nota 70 ou mais" />
+                  <StatTile label="Anunciam" value={stats.ads ?? 0} of={stats.withSite} hint="Google Ads ou pixel no site" />
+                  <StatTile label="Quentes" value={stats.hot} hint="nota 70 ou mais" />
                 </div>
 
                 {record?.notes.map((note) => (
@@ -383,11 +487,18 @@ const Prospects: React.FC = () => {
                         <input type="checkbox" checked={contactOnly} onChange={(e) => setContactOnly(e.target.checked)} className="h-4 w-4 accent-gray-900" />
                         Só com e-mail ou WhatsApp
                       </label>
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" checked={adsOnly} onChange={(e) => setAdsOnly(e.target.checked)} className="h-4 w-4 accent-gray-900" />
+                        Só quem anuncia
+                      </label>
                     </div>
                     <div className="mt-4">
                       {filtered.length ? (
                         <>
-                          <LeadTable leads={filtered.slice(0, limit)} />
+                          <LeadTable
+                            leads={filtered.slice(0, limit)}
+                            selection={record ? { selected, onToggle: toggle, onToggleAll: toggleAll, stages } : undefined}
+                          />
                           {filtered.length > limit && (
                             <div className="mt-4 flex justify-center">
                               <Button variant="outline" size="sm" onClick={() => setLimit((n) => n + PAGE)}>
@@ -413,6 +524,25 @@ const Prospects: React.FC = () => {
               <p className="mt-8 rounded-xl border border-dashed border-gray-300 px-6 py-10 text-center text-sm text-gray-500">
                 O mapa não trouxe empresas desse nicho nessa região. Tente outra cidade, outro nicho ou o Google Maps.
               </p>
+            )}
+
+            {record && selected.size > 0 && (
+              <div className="sticky bottom-4 z-30 mt-4 flex justify-center">
+                <div className="flex flex-wrap items-center gap-2 rounded-xl bg-gray-900 px-3 py-2 text-sm text-white shadow-[0_8px_24px_-8px_rgb(0_0_0/0.4)]">
+                  <span className="px-1 tabular-nums">{plural(selected.size, 'marcada', 'marcadas')}</span>
+                  <Button size="sm" variant="secondary" onClick={() => addSelected()} className="h-8">
+                    Pôr no funil
+                  </Button>
+                  <Button size="sm" onClick={() => addSelected('selecionado')} className="h-8">
+                    Pôr na fila da página
+                  </Button>
+                  <button type="button" onClick={() => setSelected(new Set())} className="px-2 text-xs text-gray-300 hover:text-white">
+                    Desmarcar
+                  </button>
+                </div>
+              </div>
+            )}
+              </>
             )}
           </>
         )}

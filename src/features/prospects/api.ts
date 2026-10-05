@@ -1,3 +1,4 @@
+import type { FunnelSettings, Opportunity, OpportunityPatch, Stage } from './funnel.ts'
 import { scoreLead } from './score.ts'
 import type { Lead, SearchEvent, SearchInput, SearchRecord, SearchSummary } from './types.ts'
 
@@ -34,6 +35,27 @@ export const getSearch = async (id: string) => {
 }
 
 export const removeSearch = async (id: string) => json(await fetch(`${BASE}/buscas/${encodeURIComponent(id)}`, { method: 'DELETE' }))
+
+export const getFunnel = async () => json<Opportunity[]>(await fetch(`${BASE}/funil`))
+
+export const addToFunnel = async (leads: Lead[], meta: { region: string; searchId?: string; stage?: Stage }) =>
+  json<Opportunity[]>(
+    await fetch(`${BASE}/funil`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ leads, ...meta }) })
+  )
+
+export const updateOpportunity = async (id: string, patch: OpportunityPatch) =>
+  json<Opportunity>(
+    await fetch(`${BASE}/funil/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) })
+  )
+
+export const removeOpportunity = async (id: string) => json(await fetch(`${BASE}/funil/${encodeURIComponent(id)}`, { method: 'DELETE' }))
+
+export const getFunnelSettings = async () => json<FunnelSettings>(await fetch(`${BASE}/funil-config`))
+
+export const saveFunnelSettings = async (settings: FunnelSettings) =>
+  json<FunnelSettings>(
+    await fetch(`${BASE}/funil-config`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(settings) })
+  )
 
 /** Roda a busca e entrega cada evento assim que chega (uma linha de JSON por evento). */
 export const startSearch = async (input: SearchInput, onEvent: (event: SearchEvent) => void, signal?: AbortSignal) => {

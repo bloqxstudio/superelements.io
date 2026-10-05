@@ -1,7 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadEnv, type Plugin } from 'vite'
-import type { SearchEvent, SearchInput } from '../../src/features/prospects/types.ts'
+import { STAGES, type FunnelSettings, type OpportunityPatch, type Stage } from '../../src/features/prospects/funnel.ts'
+import type { Lead, SearchEvent, SearchInput } from '../../src/features/prospects/types.ts'
 import { deleteSearch, listSearches, readSearch, runSearch, saveSearch } from './engine.ts'
+import { addToFunnel, readFunnel, readSettings, removeOpportunity, updateOpportunity, writeSettings } from './funnelStore.ts'
 
 /**
  * Prospecção no servidor de dev: a tela `/prospeccao` pede a busca aqui,
@@ -14,6 +16,11 @@ import { deleteSearch, listSearches, readSearch, runSearch, saveSearch } from '.
  *   GET    /__prospeccao/buscas/:id   uma busca inteira
  *   DELETE /__prospeccao/buscas/:id
  *   POST   /__prospeccao/buscar       SearchInput → uma linha de JSON por SearchEvent
+ *   GET    /__prospeccao/funil        oportunidades do funil
+ *   POST   /__prospeccao/funil        { leads, region, searchId?, stage? } põe empresas no funil
+ *   PATCH  /__prospeccao/funil/:id    muda etapa, projeto, vídeo, notas e próximo passo
+ *   DELETE /__prospeccao/funil/:id
+ *   GET|PUT /__prospeccao/funil-config  valor padrão do serviço, do plano mensal e meses no valor
  */
 
 const send = (res: ServerResponse, status: number, body: unknown) => {
@@ -27,7 +34,7 @@ const readJson = (req: IncomingMessage) =>
     const chunks: Buffer[] = []
     req.on('data', (chunk: Buffer) => {
       size += chunk.length
-      if (size > 64_000) reject(new Error('Pedido grande demais'))
+      if (size > 4_000_000) reject(new Error('Pedido grande demais'))
       else chunks.push(chunk)
     })
     req.on('end', () => {
@@ -79,6 +86,37 @@ export const prospecting = (): Plugin => {
           }
           if (one && req.method === 'DELETE') {
             await deleteSearch(one[1])
+            return send(res, 200, { ok: true })
+          }
+
+          if (route === '/funil' && req.method === 'GET') return send(res, 200, await readFunnel())
+          if (route === '/funil-config' && req.method === 'GET') return send(res, 200, await readSettings())
+          if (route === '/funil-config' && req.method === 'PUT') {
+            const body = (await readJson(req)) as Record<string, unknown>
+            const ok = (v: unknown, min: number) => typeof v === 'number' && Number.isFinite(v) && v >= min
+            const patch: Partial<FunnelSettings> = {}
+            if (ok(body.price, 0)) patch.price = body.price as number
+            if (ok(body.monthly, 0)) patch.monthly = body.monthly as number
+            if (ok(body.months, 1)) patch.months = Math.round(body.months as number)
+            return send(res, 200, await writeSettings(patch))
+          }
+          if (route === '/funil' && req.method === 'POST') {
+            const body = (await readJson(req)) as { leads?: Lead[]; region?: string; searchId?: string; stage?: Stage }
+            if (!Array.isArray(body.leads) || !body.region) return send(res, 400, { error: 'Faltam as empresas ou a região' })
+            if (body.stage && !STAGES.some((s) => s.id === body.stage)) return send(res, 400, { error: 'Etapa desconhecida' })
+            return send(res, 200, await addToFunnel(body.leads.slice(0, 500), { region: body.region, searchId: body.searchId, stage: body.stage }))
+          }
+          const opportunity = /^\/funil\/(.+)$/.exec(route)
+          if (opportunity && req.method === 'PATCH') {
+            const patch = (await readJson(req)) as OpportunityPatch
+            if (patch.stage && !STAGES.some((s) => s.id === patch.stage)) return send(res, 400, { error: 'Etapa desconhecida' })
+            const allowed = ['stage', 'projectName', 'video', 'notes', 'nextStep', 'nextDate', 'offer', 'brief'] as const
+            const clean = Object.fromEntries(allowed.filter((k) => k in patch).map((k) => [k, patch[k]])) as OpportunityPatch
+            const updated = await updateOpportunity(decodeURIComponent(opportunity[1]), clean)
+            return updated ? send(res, 200, updated) : send(res, 404, { error: 'Oportunidade não encontrada' })
+          }
+          if (opportunity && req.method === 'DELETE') {
+            await removeOpportunity(decodeURIComponent(opportunity[1]))
             return send(res, 200, { ok: true })
           }
 
