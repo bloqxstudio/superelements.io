@@ -28,9 +28,14 @@ Copie `planos/processbase.json` e mude:
 - `tela`: o tamanho da janela do site (1440 × 900 é o desktop);
 - `inicio`: segundos parados no topo (entrada do hero);
 - `passos`: cada um com `ate` (px, `"fim"` ou um seletor CSS, que para no topo do elemento), `dur` (segundos da rolagem), `pausa` (segundos parado depois) e, se quiser, `ease` (`suave`, o padrão; `forte` ou `linear`);
-- `trocar` (opcional): endereços que o site publicado pede mas que só existem no repo, servidos dos arquivos locais.
+- `trocar` (opcional): endereços que o site publicado pede mas que só existem no repo, servidos dos arquivos locais;
+- `fundo.foco` e `foco` num passo (opcional, 0 a 1, padrão 0,5): onde o fundo desfocado corta o quadro do site, na horizontal. Muda junto com a rolagem do passo. Serve para centrar no fundo uma peça que fica de lado no site (o logo da ProcessBase fica em 0,28).
 
 Nas histórias com ScrollTrigger, ponha uma parada em cada momento da história (no fim de cada `start`/`end`). Assim cada etapa toca como uma animação e para antes da próxima.
+
+## Stories (9:16)
+
+`planos/processbase-stories.json` (pedido de 2026-10-04): rolagem suave e não seguida, com uma parada de 1,2 a 2 s em cada seção, 47 s no total (um story vai até 60 s). No trecho do logo o fundo centra nele (`foco` 0,28). Gravar: `node gravar.mjs planos/processbase-stories.json --out ../processbase-tela-9x16.mp4` (uns 4 min).
 
 ## ProcessBase
 

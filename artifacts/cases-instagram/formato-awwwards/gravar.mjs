@@ -187,13 +187,27 @@ async function montarRoteiro(site) {
   const trechos = []
   let t = plano.inicio ?? 2.5
   let de = 0
+  // foco: onde o fundo desfocado corta o quadro do site (0 = esquerda, .5 = centro); muda com a rolagem
+  const focoPadrao = plano.fundo?.foco ?? 0.5
+  let fde = focoPadrao
   for (const passo of plano.passos) {
     const para = await resolver(passo.ate)
-    trechos.push({ t0: t, t1: t + passo.dur, de, para, ease: EASES[passo.ease ?? 'suave'] })
+    const fpara = passo.foco ?? focoPadrao
+    trechos.push({ t0: t, t1: t + passo.dur, de, para, fde, fpara, ease: EASES[passo.ease ?? 'suave'] })
     t += passo.dur + (passo.pausa ?? 0)
     de = para
+    fde = fpara
   }
   return { trechos, duracao: t, max }
+}
+
+function focoEm(t, trechos) {
+  let f = trechos.length ? trechos[0].fde : 0.5
+  for (const s of trechos) {
+    if (t < s.t0) break
+    f = t >= s.t1 ? s.fpara : s.fde + (s.fpara - s.fde) * s.ease((t - s.t0) / (s.t1 - s.t0))
+  }
+  return f
 }
 
 function rolagemEm(t, trechos) {
@@ -247,6 +261,7 @@ await comNavegador(async ({ site, palco }) => {
     if (fotos && i > ultimaFoto) break
     const t = i / FPS
     const y = rolagemEm(t, trechos)
+    const foco = focoEm(t, trechos)
     // Rola, avisa a página, anda o relógio um quadro e espera o navegador desenhar
     await site.avaliar(`scrollTo({ top: ${y.toFixed(2)}, behavior: 'instant' }); dispatchEvent(new Event('scroll')); window.__vt.advance(${(t * 1000).toFixed(2)}); window.__vt.realFrame().then(() => true)`)
     if (fotos && !fotosEm.has(i)) continue
@@ -254,7 +269,7 @@ await comNavegador(async ({ site, palco }) => {
     // O palco compõe este quadro enquanto o site já avança para o próximo
     await composicao
     composicao = (async () => {
-      await palco.avaliar(`desenhar(${JSON.stringify(data)})`)
+      await palco.avaliar(`desenhar(${JSON.stringify(data)}, ${foco.toFixed(4)})`)
       const shot = await palco.send('Page.captureScreenshot', { format: 'jpeg', quality: 95 })
       const buf = Buffer.from(shot.data, 'base64')
       if (video) await video.escrever(buf)

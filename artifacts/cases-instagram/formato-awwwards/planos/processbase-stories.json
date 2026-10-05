@@ -1,0 +1,97 @@
+{
+  "nome": "processbase-stories",
+  "url": "https://processbase.com.br/",
+  "formato": "9x16",
+  "tela": {
+    "largura": 1440,
+    "altura": 900
+  },
+  "fundo": {
+    "escurecer": 0.55,
+    "desfoque": 36,
+    "foco": 0.5
+  },
+  "trocar": {
+    "http://localhost:53471/": "public"
+  },
+  "inicio": 2.4,
+  "passos": [
+    {
+      "ate": 470,
+      "dur": 2.4,
+      "pausa": 1.4,
+      "foco": 0.28,
+      "nota": "o grafo do hero forma o emblema; o fundo desfocado centra no logo"
+    },
+    {
+      "ate": 1040,
+      "dur": 2.4,
+      "pausa": 1.4,
+      "foco": 0.28,
+      "nota": "o emblema gira até o bloco 3D e acende o pilar 1"
+    },
+    {
+      "ate": 1630,
+      "dur": 2,
+      "pausa": 1.2,
+      "foco": 0.28,
+      "nota": "pilar 2"
+    },
+    {
+      "ate": 2220,
+      "dur": 2,
+      "pausa": 1.2,
+      "foco": 0.28,
+      "nota": "pilar 3"
+    },
+    {
+      "ate": 2810,
+      "dur": 2,
+      "pausa": 1.6,
+      "foco": 0.28,
+      "nota": "pilar 4, logo todo laranja"
+    },
+    {
+      "ate": ".elementor-element-pbd000w",
+      "dur": 2.4,
+      "pausa": 1.8,
+      "nota": "O que muda"
+    },
+    {
+      "ate": ".elementor-element-pbc000x",
+      "dur": 2.2,
+      "pausa": 1.8,
+      "nota": "Como funciona"
+    },
+    {
+      "ate": ".elementor-element-pbo0016",
+      "dur": 2.2,
+      "pausa": 1.8,
+      "nota": "O que fica com você"
+    },
+    {
+      "ate": ".elementor-element-pbx000j",
+      "dur": 2.2,
+      "pausa": 1.8,
+      "nota": "Quem conduz"
+    },
+    {
+      "ate": ".elementor-element-pbf000l",
+      "dur": 2,
+      "pausa": 1.6,
+      "nota": "Dúvidas"
+    },
+    {
+      "ate": ".elementor-element-pbk000j",
+      "dur": 2,
+      "pausa": 1.6,
+      "nota": "Próximo passo (formulário)"
+    },
+    {
+      "ate": "fim",
+      "dur": 1.8,
+      "pausa": 2,
+      "nota": "rodapé"
+    }
+  ]
+}

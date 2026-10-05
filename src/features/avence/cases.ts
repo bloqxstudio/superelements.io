@@ -30,8 +30,6 @@ export interface AvCase {
   /** plataforma que o código do site mostra */
   stack: string
   cover: AvShot
-  /** uma segunda tela do site (outro trecho da página), para a segunda fileira da galeria não repetir a capa */
-  screen: AvShot
   page: AvShot
   phone: AvShot
   /** o efeito do site em vídeo, no lugar das fotos da janela e do celular */
@@ -40,7 +38,6 @@ export interface AvCase {
 
 const shots = (slug: string, pageH = 4000) => ({
   cover: { path: `/brands/avence-studio/cases/${slug}-capa.webp`, w: 960, h: 600 },
-  screen: { path: `/brands/avence-studio/cases/${slug}-tela.webp`, w: 960, h: 600 },
   page: { path: `/brands/avence-studio/cases/${slug}-pagina.webp`, w: 1200, h: pageH },
   phone: { path: `/brands/avence-studio/cases/${slug}-celular.webp`, w: 520, h: 6400 },
 })

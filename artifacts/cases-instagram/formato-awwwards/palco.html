@@ -31,7 +31,8 @@
     return true
   }
 
-  window.desenhar = async (base64) => {
+  // foco: o centro horizontal do corte do fundo, em fração da largura do quadro (0,5 = meio)
+  window.desenhar = async (base64, foco = 0.5) => {
     const blob = await (await fetch(`data:image/jpeg;base64,${base64}`)).blob()
     const quadro = await createImageBitmap(blob)
     const { w, h, tela, escurecer, desfoque, sombra } = cfg
@@ -39,7 +40,8 @@
     const proporcao = w / h
     let cw = quadro.width, ch = quadro.width / proporcao
     if (ch > quadro.height) { ch = quadro.height; cw = quadro.height * proporcao }
-    mctx.drawImage(quadro, (quadro.width - cw) / 2, (quadro.height - ch) / 2, cw, ch, 0, 0, miniatura.width, miniatura.height)
+    const cx = Math.max(0, Math.min(quadro.width - cw, foco * quadro.width - cw / 2))
+    mctx.drawImage(quadro, cx, (quadro.height - ch) / 2, cw, ch, 0, 0, miniatura.width, miniatura.height)
     ctx.save()
     ctx.filter = `blur(${desfoque}px)`
     ctx.drawImage(miniatura, -w * 0.1, -h * 0.1, w * 1.2, h * 1.2)
