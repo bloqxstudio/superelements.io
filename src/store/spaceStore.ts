@@ -310,17 +310,29 @@ const HISTORY_LIMIT = 100
 const MERGE_WINDOW = 800
 
 /**
- * Canvas de um passo do desfazer, com o tamanho atual das seções: a altura
- * medida vem do preview, que não mede de novo se nada mudou na tela.
+ * Os nós com o tamanho que têm agora na tela: a altura medida vem do preview,
+ * que não mede de novo se nada mudou nele.
  */
-function restoreSnapshot(snapshot: CanvasSnapshot, current: SpaceNode[]) {
+function withCurrentSizes(nodes: SpaceNode[], current: SpaceNode[]) {
   const sizes = new Map(current.map((n) => [n.id, n]))
-  const nodes = snapshot.nodes.map((n) => {
+  return nodes.map((n) => {
     const now = sizes.get(n.id)
     return now && (now.width !== n.width || now.height !== n.height) ? { ...n, width: now.width, height: now.height } : n
   })
+}
+
+/** Canvas de um passo do desfazer, com o tamanho atual das seções. */
+function restoreSnapshot(snapshot: CanvasSnapshot, current: SpaceNode[]) {
+  const nodes = withCurrentSizes(snapshot.nodes, current)
   return { nodes: layoutPages(snapshot.pages, nodes, snapshot.connections), pages: snapshot.pages, connections: snapshot.connections }
 }
+
+/**
+ * A mudança em curso é só a altura de um nó medida na tela (o preview
+ * carregou, a fonte trocou): o projeto salva, mas não conta como edição.
+ */
+let measuring = false
+export const isMeasuring = () => measuring
 
 const sameCanvas = (a: CanvasSnapshot, b: CanvasSnapshot) => a.nodes === b.nodes && a.pages === b.pages && a.connections === b.connections
 
@@ -446,7 +458,8 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       },
 
       syncCanvas: (canvas) => {
-        const opened = openCanvas(canvas)
+        // As alturas medidas aqui valem mais que as de quem salvou: a seção que mudar mede de novo
+        const opened = openCanvas({ ...canvas, nodes: withCurrentSizes(canvas.nodes ?? [], get().nodes) })
         const { activePageId, renamingPageId, playingPageId } = get()
         const pageIds = new Set(opened.pages.map((p) => p.id))
         const keep = (id: string | null) => (id && pageIds.has(id) ? id : null)
@@ -971,7 +984,8 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       updateNodeSize: (id, width, height) => {
         const { nodes, connections, pages } = get()
         const node = nodes.find((n) => n.id === id)
-        if (!node || (node.width === width && node.height === height)) return
+        // Fração de pixel do layout não move a coluna
+        if (!node || (node.width === width && Math.abs(node.height - height) < 0.5)) return
         let next = nodes.map((n) => (n.id === id ? { ...n, width, height } : n))
 
         // Seção que cresce ou encolhe (o preview terminou de carregar, o JSON abriu)
@@ -990,7 +1004,12 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           if (positions.size) next = moveSections(next, connections, positions)
         }
 
-        set({ nodes: next }, false, 'updateNodeSize')
+        measuring = true
+        try {
+          set({ nodes: next }, false, 'updateNodeSize')
+        } finally {
+          measuring = false
+        }
       },
 
       startConnection: (sourceId, sourceX, sourceY) => {

@@ -173,6 +173,66 @@
   50% { content: '..'; }
   75% { content: '...'; }
 }
+/*
+ * Chat com os agentes no canvas: o cursor "clica" quando o agente grava, o
+ * texto chega com um cursor de digitação e o "Pensando" brilha devagar.
+ */
+.se-cursor-click {
+  animation: se-cursor-click 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes se-cursor-click {
+  from {
+    transform: scale(0.3);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+.se-chat-caret {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.55;
+  animation: se-chat-caret 1s steps(2, start) infinite;
+}
+@keyframes se-chat-caret {
+  to {
+    visibility: hidden;
+  }
+}
+.se-chat-shimmer {
+  color: transparent;
+  background: linear-gradient(90deg, #9ca3af 0%, #9ca3af 35%, #111827 50%, #9ca3af 65%, #9ca3af 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: se-chat-shimmer 1.8s linear infinite;
+}
+@keyframes se-chat-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .se-cursor-click,
+  .se-chat-caret,
+  .se-chat-shimmer {
+    animation: none;
+  }
+  .se-chat-shimmer {
+    color: #6b7280;
+    background: none;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .se-agent-reveal,
   .se-agent-scan::after,

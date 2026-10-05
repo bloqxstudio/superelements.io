@@ -5,15 +5,10 @@ import { Button } from '@/components/ui/button'
 import { reloadProjects, useProject, useProjectList } from '@/features/projects/projectStore'
 import { useProjectSession } from '@/features/projects/useProjectSession'
 import { loadApprovals } from '@/features/approval/approvalStore'
+import { ProjectOpening } from '@/features/projects/ProjectOpening'
 import Space from '@/pages/Space'
 
 const FULL_HEIGHT = { height: 'calc(100vh - 57px)' }
-
-const Spinner: React.FC = () => (
-  <div className="flex items-center justify-center bg-zinc-100" style={FULL_HEIGHT}>
-    <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-gray-700" aria-label="Abrindo projeto" />
-  </div>
-)
 
 const Failure: React.FC<{ title: string; text: string; onRetry: () => void }> = ({ title, text, onRetry }) => (
   <div className="flex items-center justify-center bg-zinc-100 px-4" style={FULL_HEIGHT}>
@@ -53,15 +48,19 @@ const ProjectSpace: React.FC = () => {
       />
     )
   }
-  if (list === 'loading') return <Spinner />
-  if (!project || state === 'missing') return <Navigate to="/" replace />
+  if (list !== 'loading' && (!project || state === 'missing')) return <Navigate to="/" replace />
   if (state === 'error') {
     // Sem o conteúdo, abrir um canvas vazio arriscaria salvar o vazio por cima
     return <Failure title="Não foi possível abrir o projeto" text="O conteúdo dele não veio da conta. Confira a internet e tente de novo." onRetry={retry} />
   }
-  if (state !== 'ready') return <Spinner />
 
-  return <Space key={project.id} />
+  // O canvas monta por baixo da tela de abertura, que sai quando o que aparece na tela carregou
+  return (
+    <div className="relative" style={FULL_HEIGHT}>
+      {project && state === 'ready' && <Space key={project.id} />}
+      <ProjectOpening key={`abertura-${projectId}`} name={project?.name} ready={!!project && state === 'ready'} />
+    </div>
+  )
 }
 
 export default ProjectSpace

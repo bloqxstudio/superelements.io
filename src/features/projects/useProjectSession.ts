@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { create } from 'zustand'
-import { useSpaceStore } from '@/store/spaceStore'
+import { isMeasuring, useSpaceStore } from '@/store/spaceStore'
 import { useBrandStore } from '@/features/space/brand/brandStore'
 import { useSiteKitStore } from '@/features/wordpress/siteKitStore'
 import { supabase } from '@/integrations/supabase/client'
@@ -523,7 +523,9 @@ export const useProjectSession = (projectId: string | undefined) => {
 
       unsubscribers.push(
         useSpaceStore.subscribe((s, prev) => {
-          if (s.nodes !== prev.nodes || s.connections !== prev.connections || s.pages !== prev.pages) onChange(true)
+          if (s.connections !== prev.connections || s.pages !== prev.pages) onChange(true)
+          // Altura medida de uma seção (o preview carregou) sobe sem pressa, como o zoom
+          else if (s.nodes !== prev.nodes) onChange(!isMeasuring())
           else if (s.canvasTransform !== prev.canvasTransform) onChange(false)
         }),
         useBrandStore.subscribe((s, prev) => {

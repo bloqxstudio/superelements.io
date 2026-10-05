@@ -216,7 +216,8 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({ sectionId, scale, 
       {selected && showGap && gapZones(selected).map((zone, i) => <div key={i} style={{ ...at(zone), background: GAP_TINT }} />)}
 
       {selected && (
-        <div style={{ ...at(selected.rect), outline: `${line}px solid ${VIOLET}` }}>
+        // A caixa da camada selecionada: o cursor do agente aponta para ela (chat/AgentCursors)
+        <div data-se-selected-box={sectionId} data-se-element={selected.id} style={{ ...at(selected.rect), outline: `${line}px solid ${VIOLET}` }}>
           <span
             style={{
               position: 'absolute',

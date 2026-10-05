@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react'
+import React, { useRef, useEffect, useLayoutEffect, useCallback, useMemo, useState } from 'react'
 import { X, GripVertical, ChevronUp, ChevronDown, Code2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useSpaceStore } from '@/store/spaceStore'
@@ -21,11 +21,15 @@ import { moveElementTo, selectElement } from '@/features/space/editor/actions'
 import { registerFrame, resolveHit } from '@/features/space/editor/frames'
 import { useInsertDrag } from '@/features/space/editor/insertDrag'
 import { useClaudeBridge } from '@/features/space/bridge/bridgeStore'
+import { useSectionLoading } from '@/features/space/opening'
 import type { SpaceNode, SectionNodeData } from '@/types/space'
 
 interface SectionNodeProps {
   node: SpaceNode
 }
+
+/** Preview que não termina de carregar (CDN fora, script preso) aparece assim mesmo depois disso. */
+const LOAD_TIMEOUT = 6000
 
 export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   // Só o que a seção desenha: assinar a store inteira redesenharia todas a cada passo do zoom
@@ -96,6 +100,36 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   }, [editing, showJson])
 
   const mounted = !!rendered && !showJson
+
+  // Até o preview carregar, a seção guarda a altura salva (o preview a reserva até medir o
+  // conteúdo) com um esqueleto no lugar: abrir o projeto não faz a coluna pular a cada seção
+  const previewRef = useRef<HTMLDivElement>(null)
+  const [previewLoaded, setPreviewLoaded] = useState(false)
+  const [reserve, setReserve] = useState<number | null>(null)
+  const waiting = mounted && !previewLoaded
+  const handleLoaded = useCallback(() => setPreviewLoaded(true), [])
+  useEffect(() => {
+    if (!waiting) return
+    const timer = setTimeout(handleLoaded, LOAD_TIMEOUT)
+    return () => clearTimeout(timer)
+  }, [waiting, handleLoaded])
+  useEffect(() => {
+    if (waiting) return
+    const { markLoaded, forget } = useSectionLoading.getState()
+    markLoaded(node.id)
+    return () => forget(node.id)
+  }, [waiting, node.id])
+  useLayoutEffect(() => {
+    const card = cardRef.current
+    const preview = previewRef.current
+    if (!waiting || !card || !preview) return
+    // O resto do card (cabeçalho, título, avisos) fica como está; o preview ocupa o que sobra da altura salva
+    const space = node.height - preview.offsetTop - (card.clientHeight - (preview.offsetTop + preview.offsetHeight))
+    setReserve(space > 0 ? space : null)
+    // Uma vez, ao começar a carregar: a altura salva é a do último carregamento
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting])
+
   useEffect(() => {
     const frame = frameRef.current
     if (!editing || !mounted || !frame) return
@@ -167,10 +201,10 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   const page = pageOf(pages, node.id)
   const position = page ? page.sectionIds.indexOf(node.id) : -1
 
-  // Track node height for accurate port positioning
+  // Track node height for accurate port positioning; enquanto o preview carrega, vale a altura salva
   useEffect(() => {
     const el = cardRef.current
-    if (!el) return
+    if (!el || waiting) return
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0]
       if (entry) {
@@ -179,7 +213,7 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
     })
     observer.observe(el)
     return () => observer.disconnect()
-  }, [node.id, node.width, updateNodeSize])
+  }, [node.id, node.width, updateNodeSize, waiting])
 
   const inPage = !!page
   const { onMouseDown: handleDragStart, lift, dragging, settling, onSettled } = useSectionDrag(node, cardRef)
@@ -311,22 +345,28 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
             recebe o mouse para editar; nos outros níveis não, para o nó continuar arrastável */}
         {rendered && !showJson && (
           <div
+            ref={previewRef}
             data-section-preview={node.id}
             className={editing ? 'relative' : 'relative pointer-events-none'}
             onMouseDown={(event) => editing && event.stopPropagation()}
           >
+            {waiting && <div aria-hidden className="absolute inset-0 rounded-md bg-gray-100 motion-safe:animate-pulse" />}
             <div className={pending ? 'se-agent-pending' : working ? 'se-agent-working' : revealing ? 'se-agent-reveal' : undefined}>
-              <PreviewFrame
-                html={rendered.document}
-                viewport={previewDevice}
-                showSize={false}
-                interactive={editing}
-                selectedElementId={selectedElementId}
-                hoveredElementId={hoveredElementId}
-                onEditorMessage={handlePreviewEditor}
-                frameRef={frameRef}
-                overlay={editing ? overlay : undefined}
-              />
+              <div className={`transition-opacity duration-300 ease-out motion-reduce:transition-none ${waiting ? 'opacity-0' : 'opacity-100'}`}>
+                <PreviewFrame
+                  html={rendered.document}
+                  viewport={previewDevice}
+                  showSize={false}
+                  interactive={editing}
+                  selectedElementId={selectedElementId}
+                  hoveredElementId={hoveredElementId}
+                  onEditorMessage={handlePreviewEditor}
+                  frameRef={frameRef}
+                  overlay={editing ? overlay : undefined}
+                  onLoaded={handleLoaded}
+                  placeholderHeight={reserve ?? undefined}
+                />
+              </div>
             </div>
             {(pending || working) && (
               <>

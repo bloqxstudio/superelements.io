@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { EDITOR_BRIDGE, EDITOR_MESSAGE_TYPES, type PreviewEditorMessage } from './editorBridge'
 
 export type { PreviewEditorMessage } from './editorBridge'
@@ -14,7 +14,16 @@ export const VIEWPORT_WIDTH: Record<PreviewViewport, number> = {
 // Roda dentro do iframe e avisa a página qual a altura do conteúdo. Mede o
 // body: o scrollHeight do documento nunca fica menor que o próprio iframe, e
 // uma seção mais baixa que a altura inicial ficaria com espaço em branco.
-const HEIGHT_SCRIPT = `<script>(function(){function post(){parent.postMessage({type:'se-preview-height',height:document.body.scrollHeight},'*')}new ResizeObserver(post).observe(document.body);addEventListener('load',post);post()})()</script>`
+// `done` chega quando o documento carregou com as fontes: dali em diante a
+// altura é a final, e o canvas pode mostrar a seção sem ela pular. O iframe
+// roda em outro processo e, antes do primeiro layout (fora da tela ele pode
+// demorar), responde altura 0 com o body sem largura: essa medida não vale,
+// a certa chega depois pelo ResizeObserver. Sem requestAnimationFrame: o
+// navegador o pausa nos iframes fora da tela.
+const HEIGHT_SCRIPT = `<script>(function(){var done=false;function post(){var b=document.body;if(b.offsetWidth)parent.postMessage({type:'se-preview-height',height:b.scrollHeight,done:done},'*')}new ResizeObserver(post).observe(document.body);addEventListener('load',function(){post();Promise.resolve(document.fonts&&document.fonts.ready).then(function(){done=true;post()})});post()})()</script>`
+
+/** Altura do device antes da primeira medida, quando ninguém disse quanto reservar. */
+const DEFAULT_HEIGHT = 600
 
 // Cabe uma landing page inteira; só segura algum conteúdo que cresça junto com o iframe.
 const MAX_HEIGHT = 30000
@@ -44,6 +53,10 @@ interface PreviewFrameProps {
   frameRef?: React.MutableRefObject<HTMLIFrameElement | null>
   /** Desenho por cima do preview, em px do iframe vezes `scale`. */
   overlay?: (scale: number) => React.ReactNode
+  /** Uma vez, quando o primeiro documento terminou de carregar (fontes incluídas) e já tem a altura final. */
+  onLoaded?: () => void
+  /** Altura na tela (já na escala) até o conteúdo ser medido: a do último carregamento, para nada pular. */
+  placeholderHeight?: number
 }
 
 const finite = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
@@ -122,11 +135,14 @@ const PreviewFrameBase: React.FC<PreviewFrameProps> = ({
   onEditorMessage,
   frameRef,
   overlay,
+  onLoaded,
+  placeholderHeight,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const [containerWidth, setContainerWidth] = useState(0)
-  const [height, setHeight] = useState(600)
+  // Altura do conteúdo em px do device; null até o iframe medir
+  const [height, setHeight] = useState<number | null>(null)
   // Documento carregado no iframe; mudanças que dão para aplicar por dentro não trocam o srcDoc
   const [frameHtml, setFrameHtml] = useState(html)
   const ready = useRef(false)
@@ -134,10 +150,14 @@ const PreviewFrameBase: React.FC<PreviewFrameProps> = ({
   state.current = { selectedElementId, hoveredElementId }
   const listener = useRef(onEditorMessage)
   listener.current = onEditorMessage
+  const loaded = useRef(onLoaded)
+  loaded.current = onLoaded
 
-  useEffect(() => {
+  // Medida antes da primeira pintura: sem ela o iframe aparecia um quadro na largura real, sem escala
+  useLayoutEffect(() => {
     const el = containerRef.current
     if (!el) return
+    setContainerWidth(el.clientWidth)
     const observer = new ResizeObserver(() => setContainerWidth(el.clientWidth))
     observer.observe(el)
     return () => observer.disconnect()
@@ -166,6 +186,10 @@ const PreviewFrameBase: React.FC<PreviewFrameProps> = ({
       const type = event.data.type
       if (type === 'se-preview-height') {
         setHeight(Math.min(MAX_HEIGHT, Math.max(80, Math.ceil(finite(event.data.height)))))
+        if (event.data.done === true && loaded.current) {
+          loaded.current()
+          loaded.current = undefined
+        }
       } else if (type === 'se-preview-wheel' || type === 'se-preview-key') {
         redispatchGesture(frame, event.data)
       } else if (type === 'se-ready') {
@@ -213,10 +237,11 @@ const PreviewFrameBase: React.FC<PreviewFrameProps> = ({
   const fluid = viewport === 'fluid'
   const width = fluid ? containerWidth : VIEWPORT_WIDTH[viewport]
   const scale = !fluid && containerWidth ? Math.min(1, containerWidth / width) : 1
+  const frameHeight = height ?? (placeholderHeight ? placeholderHeight / scale : DEFAULT_HEIGHT)
 
   return (
     <div ref={containerRef} className="w-full">
-      <div className="relative mx-auto" style={{ width: width * scale, height: height * scale }}>
+      <div className="relative mx-auto" style={{ width: width * scale, height: frameHeight * scale }}>
         <div className={fluid ? 'h-full overflow-hidden bg-white' : 'h-full overflow-hidden rounded-md border bg-white shadow-sm'}>
           <iframe
             ref={(el) => {
@@ -227,7 +252,7 @@ const PreviewFrameBase: React.FC<PreviewFrameProps> = ({
             sandbox="allow-scripts"
             srcDoc={srcDoc}
             onMouseEnter={postState}
-            style={{ width, height, border: 0, display: 'block', transform: `scale(${scale})`, transformOrigin: '0 0' }}
+            style={{ width, height: frameHeight, border: 0, display: 'block', transform: `scale(${scale})`, transformOrigin: '0 0' }}
           />
         </div>
         {overlay && <div className="pointer-events-none absolute inset-0">{overlay(scale)}</div>}

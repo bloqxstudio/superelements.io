@@ -95,7 +95,7 @@ export const SpaceCanvasBar: React.FC<SpaceCanvasBarProps> = ({ libraryOpen, nav
   if (freeWidth < MIN_FREE_WIDTH) return null
 
   return (
-    <ToolbarIsland aria-label="Canvas" className="absolute bottom-3 z-40 select-none" style={{ left: leftInset || EDGE }}>
+    <ToolbarIsland data-canvas-bar aria-label="Canvas" className="absolute bottom-3 z-40 select-none" style={{ left: leftInset || EDGE }}>
       <Hint label="Desfazer" hint={`${MOD_KEY}Z`} side="top">
         <ToolButton icon={Undo2} label="Desfazer" showLabel={false} onClick={() => undo()} disabled={!canUndo} />
       </Hint>

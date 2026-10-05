@@ -49,8 +49,9 @@ quem acompanha não muda. Acompanhe todos em /agentes no app.
   page-remove <nome> --label "…"  tira uma página (com as seções dela) do canvas
   plan "<seção>" "<seção>"… (--new <nome da página> | --page <nome> [--after <seção>])
                                   põe o plano no canvas: seções em esqueleto borrado, que ficam nítidas ao gravar
-  work "<o que estou fazendo>" [--section <seção>]… [--page <nome>] | work --done
-                                  mostra no canvas onde o agente está mexendo (borrado com varredura)
+  work "<o que estou fazendo>" [--section <seção>]… [--page <nome>] [--element <id da camada>] | work --done
+                                  mostra no canvas onde o agente está mexendo (borrado com varredura) e leva o
+                                  cursor dele até lá (até a camada, se ela estiver selecionada no canvas)
   build <arquivo.ts> [--out <arquivo.json>] [--page <nome>] [--after <seção>]
                                   gera uma seção com os builders do repo (export default: elemento, lista ou {title, elements})
   say "<texto>" [--kind note|question|done] [--section <seção>]
@@ -128,6 +129,8 @@ const fail = (message, code = 1) => {
 // ---------- ponte ----------
 
 function bridge() {
+  // O chat do canvas diz qual servidor de dev chamou o agente (pode haver mais de um rodando)
+  if (process.env.SPACE_BRIDGE_URL && process.env.SPACE_BRIDGE_TOKEN) return { url: process.env.SPACE_BRIDGE_URL, token: process.env.SPACE_BRIDGE_TOKEN }
   if (!existsSync(STATE_FILE)) fail('A ponte não está no ar: o servidor de dev (npm run dev / preview do Ship Studio) precisa estar rodando com o plugin space-bridge.')
   return JSON.parse(readFileSync(STATE_FILE, 'utf8'))
 }
@@ -249,6 +252,7 @@ const CLIENTS = [
   { match: /zelo/i, brand: 'public/zelo', builder: 'src/features/zelo/elementor.ts', scope: 'Zelo model' },
   { match: /leo\s*scherer/i, brand: 'brands/leo-scherer', builder: 'src/features/leoscherer', scope: 'Leo Scherer model' },
   { match: /evermind/i, brand: 'public/brands/evermind', builder: 'src/features/evermind', scope: 'Evermind experiment (BYQ evermind-hero-2)' },
+  { match: /skiper/i, brand: 'src/features/skiper', builder: 'src/features/skiper/elementor.ts', scope: 'Skiper UI experiment (effects lab)' },
   { match: /super\s*elements/i, brand: 'brands/superelements', builder: 'src/features/superelements', scope: 'Superelements model (our own product page)' },
   // Prospectos de São Leopoldo (RS), 2026-10-03: redesign para vender, ainda não são clientes
   { match: /baldez/i, brand: 'brands/baldez-moreira', builder: 'src/features/baldezmoreira/elementor.ts', scope: 'Baldez & Moreira model (prospect)' },
@@ -639,7 +643,7 @@ async function cmdWork() {
     sections = list(flags.section).map((ref) => resolveSection(status, ref, one(flags.page)).id)
     if (!sections.length) page = resolvePage(status, one(flags.page)).id
   }
-  await call('work', { text, sections, page })
+  await call('work', { text, sections, page, element: one(flags.element) })
   console.log(`✔ No canvas: ${text || 'Trabalhando'}`)
 }
 

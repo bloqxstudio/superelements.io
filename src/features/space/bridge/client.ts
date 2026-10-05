@@ -19,6 +19,7 @@ import { getSiteKit, useSiteKitStore } from '@/features/wordpress/siteKitStore'
 import type { WordPressConnection } from '@/features/wordpress/types'
 import { getActiveWordPress, useWordPressSession } from '@/features/wordpress/useWordPressConnection'
 import { setBackgroundRelease } from '@/features/projects/background'
+import { cursorFromCall } from '@/features/space/chat/cursorFromBridge'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { PageDetails, SectionNodeData, SpaceNode, SpacePage } from '@/types/space'
 import { useAgents, type AgentView, type ViewRequest } from './agentsStore'
@@ -74,6 +75,8 @@ let activeAt = Date.now()
 /** Quem fez o pedido (Claude, Codex…) e o que ele escreveu no diário durante o pedido. */
 interface CallContext {
   agent: string
+  /** Sessão do agente na ponte: um cursor por sessão no canvas. */
+  session?: string
   steps: ClaudeStep[]
 }
 
@@ -477,8 +480,11 @@ function skeletonSection(title: string) {
   ]
 }
 
-/** Mostra no canvas onde o agente está mexendo (seções, uma página ou o projeto todo), ou para de mostrar. */
-function work(params: { text?: string; sections?: string[]; page?: string; done?: boolean }, ctx: CallContext) {
+/**
+ * Mostra no canvas onde o agente está mexendo (seções, uma página ou o projeto todo), ou para de mostrar.
+ * `element`: a camada dentro da seção, para o cursor dele apontar (ver `chat/cursorFromBridge.ts`).
+ */
+function work(params: { text?: string; sections?: string[]; page?: string; element?: string; done?: boolean }, ctx: CallContext) {
   requireProject()
   const bridge = useClaudeBridge.getState()
   if (params.done) {
@@ -913,12 +919,14 @@ export function startSpaceBridge(hot: Hot) {
     }
   }
 
-  const onCall = async ({ requestId, method, params, agent }: { requestId: string; method: string; params: unknown; agent?: string }) => {
-    const ctx: CallContext = { agent: agent?.trim() || DEFAULT_AGENT, steps: [] }
+  const onCall = async ({ requestId, method, params, agent, session }: { requestId: string; method: string; params: unknown; agent?: string; session?: string }) => {
+    const ctx: CallContext = { agent: agent?.trim() || DEFAULT_AGENT, session: session?.trim() || undefined, steps: [] }
     try {
       const handler = METHODS[method]
       if (!handler) throw new Error(`Pedido desconhecido: ${method}`)
       const result = await handler(params as never, ctx)
+      // O cursor do agente vai até onde ele mexeu (só na tela de uma pessoa: o segundo plano não tem canvas)
+      if (!workerProject && agent && openProjectId()) cursorFromCall(ctx, method, params, result)
       hot.send('space-bridge:reply', { requestId, ok: true, result, steps: ctx.steps })
     } catch (error) {
       hot.send('space-bridge:reply', {

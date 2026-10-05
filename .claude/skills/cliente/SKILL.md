@@ -74,7 +74,7 @@ Escreva no painel do Claude no canvas (`space say "…"`) ao entrar, antes de ca
 | `push <arquivo\|pasta>… --label "…"` | Gravar as seções alteradas e as novas (só as que mudaram desde a leitura) |
 | `remove`, `move`, `page-add`, `page-remove` | Tirar uma seção, mudar a ordem, criar ou tirar uma página |
 | `plan "<seção>"… --new <página>` | Pôr o plano no canvas em esqueleto borrado (ou `--page <nome> --after <seção>`) |
-| `work "…" --section <seção>` / `work --done` | Mostrar onde o agente está mexendo; `say --kind done` também limpa |
+| `work "…" --section <seção> [--element <id>]` / `work --done` | Mostrar onde o agente está mexendo e levar o cursor dele até lá (até a camada, se ela estiver selecionada); `say --kind done` também limpa |
 | `build <arquivo.ts>` | Gerar a seção com os builders do repo (alias `@` para `src`) |
 | `say "…" [--kind note\|question\|done] [--section <seção>]` | Escrever no painel do Claude no canvas |
 | `focus <seção>` / `focus --page <nome>` | Levar o canvas do usuário até a seção ou a página |

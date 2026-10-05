@@ -16,6 +16,9 @@ import { InsertPanel } from '@/features/space/editor/InsertPanel'
 import { useEditorShortcuts } from '@/features/space/editor/useEditorShortcuts'
 import { useFrameGestureGuard } from '@/features/space/editor/frames'
 import { ClaudePanel } from '@/features/space/bridge/ClaudePanel'
+import { AgentCursors } from '@/features/space/chat/AgentCursors'
+import { useChat } from '@/features/space/chat/chatStore'
+import { SpaceChat } from '@/features/space/chat/SpaceChat'
 import { useSpaceStore } from '@/store/spaceStore'
 
 // Visualizar e Copiar da barra agem sobre a página ativa
@@ -39,6 +42,8 @@ const Space: React.FC = () => {
   const [navigatorOpen, setNavigatorOpen] = useState(false)
   const editLevel = useSpaceStore((s) => s.editLevel)
   const navigatorSelection = useSpaceStore((s) => s.navigatorSelection)
+  // A conversa aberta toma o lugar do painel do agente no canto
+  const chatOpen = useChat((s) => s.connected && s.open)
   useSectionShortcuts()
   useEditorShortcuts()
   useFrameGestureGuard()
@@ -71,8 +76,15 @@ const Space: React.FC = () => {
     setNavigatorOpen(opening)
   }
 
+  const rightPanelOpen = editLevel !== 'structure' || navigatorOpen
+  // Espaço do canvas que os painéis laterais não cobrem
+  const canvasInsets = {
+    left: libraryOpen ? LIBRARY_PANEL_WIDTH + PANEL_GUTTER : 0,
+    right: rightPanelOpen ? Math.max(LEVEL_PANEL_WIDTH, NAVIGATOR_PANEL_WIDTH) + PANEL_GUTTER : 0,
+  }
+
   return (
-    <div className="relative w-full overflow-hidden" style={{ height: 'calc(100vh - 57px)' }}>
+    <div data-space-root className="relative w-full overflow-hidden" style={{ height: 'calc(100vh - 57px)' }}>
       <SpaceToolbar
         libraryOpen={leftPanel === 'library'}
         insertOpen={leftPanel === 'insert'}
@@ -91,7 +103,12 @@ const Space: React.FC = () => {
       {navigatorOpen && editLevel === 'structure' && <ElementorNavigatorPanel onClose={() => setNavigatorOpen(false)} />}
       <SpaceCanvasBar libraryOpen={libraryOpen} navigatorOpen={navigatorOpen} />
       {import.meta.env.DEV && (
-        <ClaudePanel rightInset={editLevel !== 'structure' || navigatorOpen ? Math.max(LEVEL_PANEL_WIDTH, NAVIGATOR_PANEL_WIDTH) + 12 : 0} />
+        <>
+          {/* Chat com os agentes e o cursor deles: o servidor de dev roda o Claude Code ou o Codex nesta máquina */}
+          <AgentCursors insets={canvasInsets} />
+          {!chatOpen && <ClaudePanel rightInset={rightPanelOpen ? Math.max(LEVEL_PANEL_WIDTH, NAVIGATOR_PANEL_WIDTH) + 12 : 0} />}
+          <SpaceChat insets={canvasInsets} />
+        </>
       )}
       <PagePlayer />
       <LibraryDragChip />

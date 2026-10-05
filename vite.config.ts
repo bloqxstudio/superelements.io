@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { spaceBridge } from "./scripts/space/vitePlugin";
+import { spaceChat } from "./scripts/space/chatPlugin";
 import { prospecting } from "./scripts/prospects/vitePlugin";
 
 // Login automático do dev server (ver AuthContext). Sem prefixo VITE_ de propósito:
@@ -49,6 +50,8 @@ export default defineConfig(({ command, mode }) => ({
     componentTagger(),
     // Claude no Space: o scripts/space/space.mjs fala com o canvas aberto (só no dev)
     spaceBridge(),
+    // Chat com os agentes dentro do canvas: roda o Claude Code ou o Codex nesta máquina (só no dev)
+    spaceChat(),
     // Prospecção: busca empresas e lê os sites delas (só no dev, tela /prospeccao)
     prospecting(),
   ].filter(Boolean),

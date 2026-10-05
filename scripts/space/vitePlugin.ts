@@ -146,6 +146,10 @@ const readBody = (req: IncomingMessage) =>
     req.on('error', reject)
   })
 
+/** Endereço e chave da ponte deste servidor (o chat passa para o agente que ele roda). */
+let current: { url: string; token: string } | null = null
+export const bridgeAddress = () => current
+
 export function spaceBridge(): Plugin {
   return {
     name: 'space-bridge',
@@ -241,6 +245,8 @@ export function spaceBridge(): Plugin {
 
       const register = (info: TabInfo, client: WebSocketClient) => {
         if (!info?.tabId) return
+        // Dois servidores de dev no mesmo repo gravam o mesmo arquivo: vale o que tem a tela de uma pessoa
+        if (info.role !== 'worker') claim()
         const before = tabs.get(info.tabId)?.info
         tabs.set(info.tabId, { client, info, seenAt: Date.now() })
         if (info.role === 'worker' && info.projectId && !lastUse.has(info.projectId)) lastUse.set(info.projectId, Date.now())
@@ -305,8 +311,11 @@ export function spaceBridge(): Plugin {
         }
       }
 
-      /** `agent`: quem pediu (Claude, Codex…), para o painel do canvas mostrar o nome certo. */
-      const call = (tab: Tab, method: string, params: unknown, agent?: string) =>
+      /**
+       * `agent`: quem pediu (Claude, Codex…), para o painel do canvas mostrar o nome certo;
+       * `session`: a sessão dele, para o canvas mostrar um cursor por agente.
+       */
+      const call = (tab: Tab, method: string, params: unknown, agent?: string, session?: string) =>
         new Promise<Reply>((resolve, reject) => {
           const requestId = randomUUID()
           const timeout = LONG_CALLS.has(method) ? LONG_TIMEOUT : CALL_TIMEOUT
@@ -315,16 +324,16 @@ export function spaceBridge(): Plugin {
             reject(new BridgeError(504, `O Space não respondeu a "${method}" em ${timeout / 1000} s`))
           }, timeout)
           pending.set(requestId, { tabId: tab.info.tabId, resolve, reject, timer })
-          tab.client.send('space-bridge:call', { requestId, method, params, agent })
+          tab.client.send('space-bridge:call', { requestId, method, params, agent, session })
         })
 
       /** Pedido de um projeto: acha quem atende e, se a aba sumiu antes de fazer, tenta de novo uma vez. */
-      const callProject = async (projectId: string, method: string, params: unknown, agent?: string) => {
+      const callProject = async (projectId: string, method: string, params: unknown, agent?: string, session?: string) => {
         for (let attempt = 0; ; attempt++) {
           const tab = (await executorFor(projectId))!
           lastUse.set(projectId, Date.now())
           try {
-            return { tab, reply: await call(tab, method, params, agent) }
+            return { tab, reply: await call(tab, method, params, agent, session) }
           } catch (error) {
             const again = error instanceof BridgeError && error.retry && (READS.has(method) || error.status !== 503)
             if (!again || attempt > 0) throw error
@@ -462,9 +471,9 @@ export function spaceBridge(): Plugin {
                 tab = pickTab(tabId)
                 if (!tab) return sendJson(res, 409, { error: 'Nenhuma aba do Space conectada. Abra o app no preview ou no navegador.' })
                 if (tab.info.projectId) lastUse.set(tab.info.projectId, Date.now())
-                reply = await call(tab, method, params, agent)
+                reply = await call(tab, method, params, agent, who.session || undefined)
               } else {
-                ;({ tab, reply } = await callProject(String(project), method, params, agent))
+                ;({ tab, reply } = await callProject(String(project), method, params, agent, who.session || undefined))
               }
             } catch (error) {
               const message = error instanceof Error ? error.message : String(error)
@@ -505,12 +514,24 @@ export function spaceBridge(): Plugin {
         }
       })
 
+      let state: { url: string; token: string; pid: number; startedAt: string } | null = null
+      /** Grava o endereço desta ponte em `.space/bridge.json`, se ainda não for ele. */
+      function claim() {
+        if (!state) return
+        try {
+          if (JSON.parse(readFileSync(stateFile, 'utf8')).token === token) return
+        } catch {
+          // Sem arquivo ainda
+        }
+        mkdirSync(path.dirname(stateFile), { recursive: true })
+        writeFileSync(stateFile, JSON.stringify(state, null, 2))
+      }
       server.httpServer?.on('listening', () => {
         const address = server.httpServer?.address() as AddressInfo | null
         if (!address) return
-        mkdirSync(path.dirname(stateFile), { recursive: true })
-        const state = { url: `http://localhost:${address.port}`, token, pid: process.pid, startedAt: new Date().toISOString() }
-        writeFileSync(stateFile, JSON.stringify(state, null, 2))
+        state = { url: `http://localhost:${address.port}`, token, pid: process.pid, startedAt: new Date().toISOString() }
+        current = { url: state.url, token }
+        claim()
       })
       // Ao reiniciar, o servidor novo pode gravar antes de o velho fechar: só apaga o arquivo se ainda for deste
       server.httpServer?.on('close', () => {

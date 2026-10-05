@@ -84,6 +84,7 @@ export const ClaudePanel: React.FC<{ rightInset?: number }> = ({ rightInset = 0 
 
   return (
     <aside
+      data-claude-panel
       aria-label={`${agent} no projeto`}
       aria-live="polite"
       className={`pointer-events-auto absolute bottom-3 z-40 flex flex-col overflow-hidden rounded-xl ${ISLAND_SURFACE}`}
