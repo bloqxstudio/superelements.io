@@ -51,11 +51,11 @@ interface Snapshot {
 }
 
 const collect = (): Snapshot => {
-  const { nodes, connections, pages, canvasTransform } = useSpaceStore.getState()
+  const { nodes, connections, pages, canvasTransform, components } = useSpaceStore.getState()
   const { source, enabled, logoRatios, brand } = useBrandStore.getState()
   const { kit } = useSiteKitStore.getState()
   return {
-    doc: { canvas: { nodes, connections, pages, canvasTransform }, brand: { source, enabled, logoRatios }, site: kit },
+    doc: { canvas: { nodes, connections, pages, canvasTransform, components }, brand: { source, enabled, logoRatios }, site: kit },
     summary: summarize(nodes, brand, pages),
   }
 }
@@ -523,7 +523,7 @@ export const useProjectSession = (projectId: string | undefined) => {
 
       unsubscribers.push(
         useSpaceStore.subscribe((s, prev) => {
-          if (s.connections !== prev.connections || s.pages !== prev.pages) onChange(true)
+          if (s.connections !== prev.connections || s.pages !== prev.pages || s.components !== prev.components) onChange(true)
           // Altura medida de uma seção (o preview carregou) sobe sem pressa, como o zoom
           else if (s.nodes !== prev.nodes) onChange(!isMeasuring())
           else if (s.canvasTransform !== prev.canvasTransform) onChange(false)

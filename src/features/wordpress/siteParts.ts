@@ -1,19 +1,35 @@
-import { sitePages } from '@/features/space/pages/pages'
+import { componentUses } from '@/features/space/components/components'
 import { useSpaceStore } from '@/store/spaceStore'
-import type { PagePartKind, SpacePage } from '@/types/space'
+import type { SpaceComponent, SpaceNode, SpacePage } from '@/types/space'
+import { supabase } from '@/integrations/supabase/client'
 import { adminUrl, credentialsOf } from './connect'
 import { wpRequest, WordPressError } from './rest'
 import type { WordPressConnection } from './types'
+import { useWordPressSession } from './useWordPressConnection'
 
 /**
- * Componentes do site no WordPress, com as APIs que o próprio WordPress e o
- * Elementor Pro já têm (sem plugin): o modelo é um post da Biblioteca do
- * Elementor (`wp/v2/elementor_library`, com `_elementor_data` e o tipo), e
- * a condição de exibição do cabeçalho e do rodapé passa pelo Site Editor do
- * Elementor Pro (`elementor/v1/site-editor`), que grava pelo próprio Theme
- * Builder e refaz o cache dele. Sem o Elementor Pro, o cabeçalho, o rodapé e
- * os componentes vão dentro de cada página, como antes.
+ * Componentes do site no WordPress. O cabeçalho e o rodapé viram modelos do
+ * Theme Builder do Elementor Pro, com a condição de exibição (site inteiro,
+ * menos as páginas que ficam sem); o componente livre vira um container
+ * salvo, usado pelas páginas pelo widget Modelo.
+ *
+ * A lista do Theme Builder vem pela API do próprio Elementor Pro (o Site
+ * Editor). O conteúdo dos modelos não dá para ler do navegador: o Elementor
+ * bloqueia, por segurança, qualquer chamada à `elementor_library` sem um
+ * administrador logado, e a consulta prévia do navegador (CORS) nunca leva
+ * login. Por isso ler e gravar o modelo vai pelo servidor (a função
+ * `space-wordpress-library`, com a conexão do projeto: o modelo vem puro, sem
+ * plugin) ou, sem ela, pelo plugin Superelements Connector (0.2 ou mais novo).
+ * Sem nenhum dos dois, o cabeçalho, o rodapé e os componentes vão dentro de
+ * cada página, como antes.
  */
+
+/**
+ * Que modelo do Elementor o componente vira: cabeçalho e rodapé do Theme
+ * Builder, container salvo (seção, usado pelo widget Modelo) ou Global Widget
+ * (um widget).
+ */
+export type ComponentKind = 'header' | 'footer' | 'section' | 'widget'
 
 /** Modelo da Biblioteca do Elementor do site. */
 export interface SitePart {
@@ -34,12 +50,52 @@ export interface PartsSupport {
   /** `theme`: viram modelos do Elementor (Theme Builder e widget Modelo); `inline`: vão dentro de cada página. */
   mode: 'theme' | 'inline'
   /** Por que vão dentro da página. */
-  reason?: 'no-pro' | 'no-permission'
+  reason?: 'no-pro' | 'no-permission' | 'no-connector' | 'old-connector'
+  /** O site tem o Theme Builder: a lista do cabeçalho e do rodapé vem mesmo sem o plugin. */
+  themeBuilder: boolean
+  /** Versão do Superelements Connector no site, se tiver. */
+  connector: string | null
+  /** A função do servidor responde: lê e grava os modelos sem plugin. */
+  server: boolean
 }
 
-/** Tipo de documento do Elementor de cada componente do Space. */
-const PART_TYPE: Record<PagePartKind, string> = { header: 'header', footer: 'footer', section: 'container' }
-const isTheme = (kind: PagePartKind) => kind === 'header' || kind === 'footer'
+/** Resposta da função do servidor quando o site recusa: a mensagem dele, com o código. */
+interface ServerFailure {
+  error: string
+  code?: string
+  status?: number
+}
+
+/**
+ * Pela função `space-wordpress-library`, com a conexão do projeto aberto.
+ * null quando ela não responde (não publicada, sem conta logada): aí vale o plugin.
+ */
+async function viaServer<T>(body: Record<string, unknown>): Promise<T | null> {
+  const projectId = useWordPressSession.getState().projectId
+  if (!projectId) return null
+  let result: Awaited<ReturnType<typeof supabase.functions.invoke>>
+  try {
+    result = await supabase.functions.invoke('space-wordpress-library', { body: { projectId, ...body } })
+  } catch {
+    return null
+  }
+  const { data, error } = result as { data: unknown; error: unknown }
+  if (error || !data || typeof data !== 'object') return null
+  const failure = data as Partial<ServerFailure>
+  if (typeof failure.error === 'string') throw new WordPressError(failure.error, failure.code, failure.status)
+  return data as T
+}
+
+/** Primeira versão do Connector que lê e grava modelos. */
+const MIN_CONNECTOR = [0, 2, 0]
+
+const atLeast = (version: string, min: number[]) => {
+  const parts = version.split('.').map((n) => Number.parseInt(n, 10) || 0)
+  for (let i = 0; i < min.length; i++) {
+    if ((parts[i] ?? 0) !== min[i]) return (parts[i] ?? 0) > min[i]
+  }
+  return true
+}
 
 /** O que a lista do Site Editor traz de cada modelo do Theme Builder. */
 interface SiteEditorTemplate {
@@ -48,31 +104,11 @@ interface SiteEditorTemplate {
   title: string
   status: string
   editURL?: string
-  isActive?: boolean
-  conditions?: SiteEditorCondition[]
-}
-interface SiteEditorCondition {
-  type: string
-  name: string
-  sub_name?: string
-  sub_id?: string | number
+  conditions?: { type: string; name: string; sub_name?: string; sub_id?: string | number }[]
 }
 
 /** `{ type: 'exclude', name: 'singular', sub_name: 'page', sub_id: 12 }` vira "exclude/singular/page/12", como o Elementor grava. */
-const conditionText = (c: SiteEditorCondition) => [c.type, c.name, c.sub_name ?? '', String(c.sub_id ?? '')].join('/').replace(/\/+$/, '')
-
-/** As condições como o Site Editor recebe: um formulário com type, name, sub_name e sub_id de cada uma. */
-function conditionsForm(conditions: string[]) {
-  const form = new URLSearchParams()
-  conditions.forEach((condition, i) => {
-    const [type = '', name = '', subName = '', subId = ''] = condition.split('/')
-    form.set(`conditions[${i}][type]`, type)
-    form.set(`conditions[${i}][name]`, name)
-    form.set(`conditions[${i}][sub_name]`, subName)
-    form.set(`conditions[${i}][sub_id]`, subId)
-  })
-  return form
-}
+const conditionText = (c: NonNullable<SiteEditorTemplate['conditions']>[number]) => [c.type, c.name, c.sub_name ?? '', String(c.sub_id ?? '')].join('/').replace(/\/+$/, '')
 
 const editUrl = (connection: WordPressConnection, id: number) => `${adminUrl(connection.site)}post.php?post=${id}&action=elementor`
 
@@ -80,95 +116,98 @@ const editUrl = (connection: WordPressConnection, id: number) => `${adminUrl(con
 const SUPPORT_TTL = 60_000
 const supportCache = new Map<string, { at: number; value: Promise<PartsSupport> }>()
 
-/** Se o cabeçalho, o rodapé e os componentes podem virar modelos do Elementor neste site (pede o Elementor Pro). */
+/** Se o cabeçalho, o rodapé e os componentes podem virar modelos do Elementor neste site. */
 export function partsSupport(connection: WordPressConnection, fresh = false): Promise<PartsSupport> {
   const key = connection.site.siteUrl
   const cached = supportCache.get(key)
   if (!fresh && cached && Date.now() - cached.at < SUPPORT_TTL) return cached.value
+  const creds = credentialsOf(connection)
   const value = (async (): Promise<PartsSupport> => {
-    try {
-      await wpRequest<unknown>(credentialsOf(connection), 'elementor/v1/site-editor/templates')
-      return { mode: 'theme' }
-    } catch (error) {
-      // A rota existe, mas o usuário conectado não pode mexer no Theme Builder
-      if (error instanceof WordPressError && (error.status === 401 || error.status === 403)) return { mode: 'inline', reason: 'no-permission' }
-      return { mode: 'inline', reason: 'no-pro' }
-    }
+    const [editor, status, server] = await Promise.all([
+      wpRequest<unknown>(creds, 'elementor/v1/site-editor/templates').then(
+        () => 'ok' as const,
+        (error) => (error instanceof WordPressError && (error.status === 401 || error.status === 403) ? ('forbidden' as const) : ('missing' as const))
+      ),
+      // Sem o plugin (rota inexistente) ou sem resposta: fica sem a versão
+      wpRequest<{ version: string }>(creds, 'superelements/v1/status').catch(() => null),
+      viaServer<{ ok: boolean }>({ action: 'status' }).then((r) => !!r?.ok, () => false),
+    ])
+    const connector = status?.version ?? null
+    const base = { connector, server }
+    if (editor === 'missing') return { mode: 'inline', reason: 'no-pro', themeBuilder: false, ...base }
+    if (editor === 'forbidden') return { mode: 'inline', reason: 'no-permission', themeBuilder: false, ...base }
+    // Pelo servidor não precisa de plugin
+    if (server) return { mode: 'theme', themeBuilder: true, ...base }
+    if (!connector) return { mode: 'inline', reason: 'no-connector', themeBuilder: true, ...base }
+    if (!atLeast(connector, MIN_CONNECTOR)) return { mode: 'inline', reason: 'old-connector', themeBuilder: true, ...base }
+    return { mode: 'theme', themeBuilder: true, ...base }
   })()
   supportCache.set(key, { at: Date.now(), value })
   return value
 }
 
+/** Primeira versão do Connector que grava Global Widgets. */
+const MIN_WIDGET_CONNECTOR = [0, 3, 0]
+
+/**
+ * O Global Widget guarda o tipo do widget num campo que a API do WordPress não
+ * grava (o editor do Elementor lê dele): criar e atualizar um só pelo plugin.
+ */
+export const canSaveWidgets = (support: PartsSupport) => support.mode === 'theme' && !!support.connector && atLeast(support.connector, MIN_WIDGET_CONNECTOR)
+
+export const WIDGET_REASON =
+  'o Global Widget guarda o tipo do widget num campo que a API do WordPress não grava, então pede o plugin Superelements Connector (0.3 ou mais novo) no site'
+
+/** Falta (ou está velho) o plugin: dá para resolver baixando o Connector. */
+export const needsConnector = (support: PartsSupport) => support.reason === 'no-connector' || support.reason === 'old-connector'
+
 /** Por que o cabeçalho, o rodapé e os componentes vão dentro de cada página, numa frase. */
 export function inlineReason(support: PartsSupport) {
   if (support.reason === 'no-permission') return 'o usuário do WordPress conectado não pode mexer no Theme Builder (conecte com um administrador)'
+  if (support.reason === 'no-connector')
+    return 'o Elementor bloqueia, por segurança, a leitura dos modelos de fora do WordPress, e a função do servidor do Space (space-wordpress-library) ainda não está publicada; até lá, só com o plugin Superelements Connector no site'
+  if (support.reason === 'old-connector') return `o plugin Superelements Connector do site é o ${support.connector}, e os modelos pedem o 0.2 ou mais novo`
   return 'o site não tem o Elementor Pro (nem o PRO Elements), que tem o Theme Builder e o widget Modelo'
 }
 
-/** Cabeçalhos ou rodapés do Theme Builder que o site tem, com as condições de cada um. */
-export async function listSiteParts(connection: WordPressConnection, kind: PagePartKind): Promise<SitePart[]> {
-  if (!isTheme(kind)) return []
-  const creds = credentialsOf(connection)
-  const templates = (await wpRequest<SiteEditorTemplate[]>(creds, 'elementor/v1/site-editor/templates')).filter((t) => t.type === PART_TYPE[kind])
-  if (!templates.length) return []
-  // A data de mudança vem do WordPress (a lista do Site Editor só traz a de criação)
-  const dates = await wpRequest<{ id: number; modified_gmt: string }[]>(creds, 'wp/v2/elementor_library', {
-    params: { include: templates.map((t) => t.id).join(','), per_page: '100', context: 'edit', _fields: 'id,modified_gmt', status: 'publish,draft,private' },
-  }).catch((): { id: number; modified_gmt: string }[] => [])
-  const modified = new Map(dates.map((d) => [d.id, d.modified_gmt] as const))
-  return templates.map((t) => ({
-    id: t.id,
-    title: t.title,
-    type: t.type,
-    status: t.status,
-    modified_gmt: modified.get(t.id) ?? '',
-    conditions: (t.conditions ?? []).map(conditionText),
-    edit_url: t.editURL ?? editUrl(connection, t.id),
-  }))
+/** Cabeçalhos ou rodapés do Theme Builder que o site tem, com as condições de cada um (pela API do Elementor Pro, sem plugin). */
+export async function listSiteParts(connection: WordPressConnection, kind: ComponentKind): Promise<SitePart[]> {
+  if (kind !== 'header' && kind !== 'footer') return []
+  const templates = await wpRequest<SiteEditorTemplate[]>(credentialsOf(connection), 'elementor/v1/site-editor/templates')
+  return templates
+    .filter((t) => t.type === kind)
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      type: t.type,
+      status: t.status,
+      modified_gmt: '',
+      conditions: (t.conditions ?? []).map(conditionText),
+      edit_url: t.editURL ?? editUrl(connection, t.id),
+    }))
 }
 
-interface WpLibraryPost {
-  id: number
-  title?: { raw?: string; rendered?: string }
-  status: string
-  modified_gmt: string
-  meta?: { _elementor_template_type?: string; _elementor_data?: string }
-}
-
-/** Um modelo pelo id, com o JSON do Elementor e, no Theme Builder, as condições. */
+/** Um modelo pelo id, com o JSON do Elementor e as condições (pelo servidor; sem ele, pelo Connector). */
 export async function fetchSitePart(connection: WordPressConnection, id: number): Promise<SitePart> {
-  const creds = credentialsOf(connection)
-  let post: WpLibraryPost
+  const fromServer = await viaServer<SitePart>({ action: 'get', id })
+  if (fromServer) return fromServer
   try {
-    post = await wpRequest<WpLibraryPost>(creds, `wp/v2/elementor_library/${id}`, { params: { context: 'edit', _fields: 'id,title,status,modified_gmt,meta' } })
+    return await wpRequest<SitePart>(credentialsOf(connection), `superelements/v1/parts/${id}`)
   } catch (error) {
-    if (error instanceof WordPressError && error.status === 404) {
+    if (error instanceof WordPressError && error.status === 404 && error.code !== 'rest_no_route') {
       throw new WordPressError('O modelo não existe mais no site (foi apagado ou está na lixeira). Desligue o componente do WordPress para criar outro.', 'gone', 404)
     }
+    if (error instanceof WordPressError && error.code === 'rest_no_route') {
+      throw new WordPressError(`Falta o plugin Superelements Connector no site para ler o modelo: ${inlineReason({ mode: 'inline', reason: 'no-connector', themeBuilder: true, connector: null, server: false })}.`, 'no-connector', 404)
+    }
     throw error
-  }
-  if (post.status === 'trash') throw new WordPressError('O modelo está na lixeira do site. Desligue o componente do WordPress para criar outro.', 'gone', 404)
-  const type = post.meta?._elementor_template_type ?? ''
-  const conditions =
-    type === 'header' || type === 'footer'
-      ? await wpRequest<SiteEditorCondition[]>(creds, `elementor/v1/site-editor/templates-conditions/${id}`).then((list) => (Array.isArray(list) ? list.map(conditionText) : []), () => [])
-      : []
-  return {
-    id: post.id,
-    title: post.title?.raw ?? post.title?.rendered ?? '',
-    type,
-    status: post.status,
-    modified_gmt: post.modified_gmt,
-    conditions,
-    edit_url: editUrl(connection, post.id),
-    elementor_data: post.meta?._elementor_data ?? '',
   }
 }
 
 export interface SavePartBody {
   /** Sem id, cria o modelo (publicado). */
   id?: number
-  kind: PagePartKind
+  kind: ComponentKind
   title?: string
   /** JSON do Elementor; sem ele, o conteúdo do modelo fica como está. */
   elements?: string
@@ -178,56 +217,36 @@ export interface SavePartBody {
   release?: number[]
 }
 
-/** Grava a condição pelo Site Editor; um modelo aberto no Elementor por outra pessoa recusa. */
-async function saveConditions(connection: WordPressConnection, id: number, conditions: string[]) {
-  const result = await wpRequest<unknown>(credentialsOf(connection), `elementor/v1/site-editor/templates-conditions/${id}`, { method: 'POST', body: conditionsForm(conditions) })
-  if (result !== true) throw new WordPressError('O Elementor não gravou a condição do modelo (alguém pode estar com ele aberto no editor).')
+/**
+ * Cria (sem id) ou atualiza o modelo de um componente: pelo servidor (API do
+ * WordPress e Site Editor do Elementor); sem ele, pelo Connector.
+ */
+export async function saveSitePart(connection: WordPressConnection, body: SavePartBody): Promise<SitePart> {
+  // Global Widget: só o plugin grava o tipo do widget
+  const fromServer = body.kind === 'widget' ? null : await viaServer<SitePart>({ action: 'save', ...body })
+  if (fromServer) return fromServer
+  return wpRequest<SitePart>(credentialsOf(connection), body.id ? `superelements/v1/parts/${body.id}` : 'superelements/v1/parts', { method: 'POST', body })
 }
 
-/** Cria (sem id) ou atualiza o modelo de um componente: o conteúdo, o nome e, no Theme Builder, a condição. */
-export async function saveSitePart(connection: WordPressConnection, body: SavePartBody): Promise<SitePart> {
-  const creds = credentialsOf(connection)
-  const type = PART_TYPE[body.kind]
-  let id = body.id
-  if (id) {
-    const current = await fetchSitePart(connection, id)
-    if (current.type !== type) throw new WordPressError(`Esse modelo do site não é um ${type} do Elementor.`, 'wrong_type', 409)
-    const fields: Record<string, unknown> = {}
-    if (body.title && body.title !== current.title) fields.title = body.title
-    if (body.elements !== undefined) fields.meta = { _elementor_data: body.elements }
-    if (Object.keys(fields).length) await wpRequest(creds, `wp/v2/elementor_library/${id}`, { method: 'POST', params: { _fields: 'id' }, body: fields })
-  } else {
-    if (body.elements === undefined) throw new WordPressError('Falta o conteúdo do modelo.')
-    const created = await wpRequest<{ id: number }>(creds, 'wp/v2/elementor_library', {
-      method: 'POST',
-      params: { _fields: 'id' },
-      body: { title: body.title || 'Superelements', status: 'publish', meta: { _elementor_edit_mode: 'builder', _elementor_template_type: type, _elementor_data: body.elements } },
-    })
-    id = created.id
-  }
-  if (isTheme(body.kind)) {
-    // Outros modelos do mesmo lugar saem do site (continuam salvos, sem condição)
-    for (const other of body.release ?? []) if (other !== id) await saveConditions(connection, other, [])
-    if (body.conditions) await saveConditions(connection, id, body.conditions)
-  }
-  const saved = await fetchSitePart(connection, id)
-  // A resposta não precisa carregar o JSON de volta
-  delete saved.elementor_data
-  return saved
+/** Páginas que têm um uso do componente (a seção inteira ou uma camada dela). */
+export function pagesUsing(componentId: string, pages: SpacePage[], nodes: SpaceNode[]) {
+  const sections = new Set(componentUses(nodes).filter((u) => u.componentId === componentId).map((u) => u.sectionId))
+  return pages.filter((page) => page.sectionIds.some((id) => sections.has(id)))
 }
 
 /**
- * Condições do Theme Builder para a parte: o site inteiro, menos as páginas
- * que ficam sem ela e já estão no site. As que ainda não foram publicadas
- * entram na condição quando forem (`pending`).
+ * Condições do Theme Builder para o cabeçalho (ou rodapé): o site inteiro,
+ * menos as páginas que já estão no site e não têm o componente. As que ainda
+ * não foram publicadas entram na condição quando forem (`pending`).
  */
-export function partConditions(part: SpacePage, pages: SpacePage[], siteUrl: string) {
-  const excluded = sitePages(pages).filter((p) => part.part?.exclude?.includes(p.id))
-  const linked = excluded.filter((p) => p.wordpress?.siteUrl === siteUrl)
+export function componentConditions(component: SpaceComponent, pages: SpacePage[], nodes: SpaceNode[], siteUrl: string) {
+  const using = new Set(pagesUsing(component.id, pages, nodes).map((p) => p.id))
+  const without = pages.filter((p) => !using.has(p.id))
+  const linked = without.filter((p) => p.wordpress?.siteUrl === siteUrl)
   return {
     conditions: ['include/general', ...linked.map((p) => `exclude/singular/page/${p.wordpress!.postId}`)],
     excluded: linked.map((p) => p.name),
-    pending: excluded.filter((p) => p.wordpress?.siteUrl !== siteUrl).map((p) => p.name),
+    pending: without.filter((p) => p.wordpress?.siteUrl !== siteUrl).map((p) => p.name),
   }
 }
 
@@ -245,7 +264,7 @@ export function contentHash(text: string) {
  * não apaga uma regra feita no Elementor.
  */
 export function mergeConditions(ours: string[], current: string[], pages: SpacePage[], siteUrl: string) {
-  const linked = new Set(sitePages(pages).filter((p) => p.wordpress?.siteUrl === siteUrl).map((p) => p.wordpress!.postId))
+  const linked = new Set(pages.filter((p) => p.wordpress?.siteUrl === siteUrl).map((p) => p.wordpress!.postId))
   const kept = current.filter((condition) => {
     if (condition === 'include/general') return false
     const page = /^(?:include|exclude)\/singular\/page\/(\d+)$/.exec(condition)
@@ -257,27 +276,27 @@ export function mergeConditions(ours: string[], current: string[], pages: SpaceP
 const sameConditions = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join('\n') === [...b].sort().join('\n')
 
 /**
- * Depois de publicar uma página: o cabeçalho e o rodapé que já estão no site
- * passam a deixá-la de fora (ou a mostrar de novo), como no canvas. Só mexe
- * na condição; o conteúdo do modelo fica como está. Devolve os nomes das
- * partes que mudaram.
+ * Depois de publicar uma página: o cabeçalho e o rodapé que já estão no
+ * Theme Builder passam a deixá-la de fora (ou a mostrar), conforme ela tem o
+ * componente no canvas. Só mexe na condição; o conteúdo do modelo fica como
+ * está. Devolve os nomes dos que mudaram.
  */
-export async function syncPartConditions(connection: WordPressConnection): Promise<string[]> {
+export async function syncComponentConditions(connection: WordPressConnection): Promise<string[]> {
   const siteUrl = connection.site.siteUrl
   const changed: string[] = []
-  for (const part of useSpaceStore.getState().pages) {
-    const link = part.wordpress
-    if (!part.part || part.part.kind === 'section' || link?.siteUrl !== siteUrl) continue
-    const pages = useSpaceStore.getState().pages
+  for (const component of useSpaceStore.getState().components) {
+    const link = component.wordpress
+    if (!component.role || link?.siteUrl !== siteUrl) continue
+    const { pages, nodes } = useSpaceStore.getState()
     const current = await fetchSitePart(connection, link.postId)
-    const conditions = mergeConditions(partConditions(part, pages, siteUrl).conditions, current.conditions, pages, siteUrl)
+    const conditions = mergeConditions(componentConditions(component, pages, nodes, siteUrl).conditions, current.conditions, pages, siteUrl)
     if (sameConditions(current.conditions, conditions)) continue
-    const saved = await saveSitePart(connection, { id: link.postId, kind: part.part.kind, conditions })
+    const saved = await saveSitePart(connection, { id: link.postId, kind: component.role, conditions })
     // Se alguém mexeu no modelo pelo Elementor, a data guardada continua a antiga: a próxima publicação do componente avisa
     if (current.modified_gmt === link.modifiedGmt) {
-      useSpaceStore.getState().setPageWordPress(part.id, { ...link, modifiedGmt: saved.modified_gmt, syncedAt: Date.now() })
+      useSpaceStore.getState().setComponentWordPress(component.id, { ...link, modifiedGmt: saved.modified_gmt, syncedAt: Date.now() })
     }
-    changed.push(part.name)
+    changed.push(component.name)
   }
   return changed
 }

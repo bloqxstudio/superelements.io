@@ -4,6 +4,8 @@ import { parseSectionElements, type SectionElement } from '@/features/space/land
 import { layerKind } from '@/features/space/navigator/navigatorLabels'
 import type { EditorDevice, SectionNodeData } from '@/types/space'
 import { MOD_KEY } from '@/features/space/pages/clipboard'
+import { pageOf, plural } from '@/features/space/pages/pages'
+import { elementComponent, identicalSections, newUse } from '@/features/space/components/components'
 import { useBlocks, type SavedBlock } from './blocks'
 import { editTextIn } from './frames'
 import { copyPins, pinKeys, type PinnedSettings } from './pinned'
@@ -160,6 +162,110 @@ export function insertBlock(block: SavedBlock, sectionId = targetSection(), targ
   const id = page?.sectionIds[page.sectionIds.length - 1]
   if (id) selectElement(id, element.id ?? null)
   return element.id ?? null
+}
+
+/**
+ * Um uso novo do componente, ligado aos outros. A seção inteira entra na
+ * página (logo depois da seção selecionada, ou no fim); a camada entra na
+ * seleção, ou numa seção nova. Um componente não entra dentro de um uso dele
+ * mesmo (cresceria a cada mudança).
+ */
+export function insertComponent(
+  componentId: string,
+  options: { pageId?: string; index?: number; sectionId?: string | null; target?: InsertTarget; select?: boolean } = {}
+): string | null {
+  const store = useSpaceStore.getState()
+  const component = store.components.find((c) => c.id === componentId)
+  if (!component) return null
+  const select = options.select !== false
+
+  if (component.level === 'section') {
+    const selected = targetSection()
+    const page =
+      (options.pageId && store.pages.find((p) => p.id === options.pageId)) ||
+      (selected && pageOf(store.pages, selected)) ||
+      store.pages.find((p) => p.id === store.activePageId) ||
+      store.pages[0]
+    if (!page) return null
+    const after = selected ? page.sectionIds.indexOf(selected) : -1
+    const id = store.insertComponentSection(componentId, page.id, options.index ?? (after >= 0 ? after + 1 : page.sectionIds.length))
+    if (id && select) selectElement(id, null)
+    return id
+  }
+
+  const { elements, pinned } = newUse(component, store.nodes)
+  const element = elements[0]
+  if (!element?.id) return null
+  const sectionId = options.sectionId === undefined ? targetSection() : options.sectionId
+  if (!sectionId) {
+    const root = createBlankSection()
+    root[0].elements = [element]
+    const pageId = store.addSections([{ title: component.name, elementorJson: JSON.stringify(root), ...(Object.keys(pinned).length ? { pinned } : {}) }], {
+      pageId: options.pageId,
+      index: options.index,
+    })
+    const page = useSpaceStore.getState().pages.find((p) => p.id === pageId)
+    const created = page?.sectionIds[options.index ?? page.sectionIds.length - 1]
+    if (created && select) selectElement(created, element.id)
+    return element.id
+  }
+  if (sectionData(sectionId)?.component === componentId) {
+    toast.error('O componente não entra dentro dele mesmo.')
+    return null
+  }
+  const selection = useSpaceStore.getState().navigatorSelection
+  const selectedId = selection?.sectionId === sectionId ? selection.elementId : null
+  let inside = false
+  const id = commit(
+    sectionId,
+    (root) => {
+      if (!insertElements(root, [element], options.target ?? insertionTarget(root, selectedId, element))) return false
+      inside = !!locate(root, element.id!)?.ancestors.some((a) => elementComponent(a) === componentId)
+      return inside ? false : element.id
+    },
+    Object.keys(pinned).length ? { pinned: (current: PinnedSettings | undefined) => ({ ...current, ...pinned }) } : {}
+  )
+  if (inside) toast.error('O componente não entra dentro dele mesmo.')
+  if (id && select) selectElement(sectionId, id)
+  return id
+}
+
+/** A seleção vira componente: a camada selecionada, ou a seção. */
+export function componentizeSelection(name?: string) {
+  const store = useSpaceStore.getState()
+  const sel = store.navigatorSelection
+  const sectionId = sel?.sectionId ?? targetSection()
+  if (!sectionId) return null
+  const data = sectionData(sectionId)
+  const already = sel ? elementComponent(locate(parseSectionElements(data?.elementorJson ?? '') ?? [], sel.elementId)?.element) : data?.component
+  const id = store.createComponent(sectionId, sel?.elementId, name)
+  if (!id) {
+    toast.error('Não deu para transformar em componente.')
+    return null
+  }
+  if (!already) {
+    const created = useSpaceStore.getState().components.find((c) => c.id === id)
+    // A mesma seção repetida em outras páginas (o cabeçalho copiado, por exemplo): ligar as cópias numa ação
+    const copies = sel ? [] : identicalSections(useSpaceStore.getState().nodes, sectionId)
+    toast.success(`"${created?.name ?? 'Componente'}" virou componente`, {
+      description: copies.length
+        ? `Há ${plural(copies.length, 'cópia igual', 'cópias iguais')} em outras páginas: ligue para mudarem juntas.`
+        : 'Duplique, copie e cole ou insira pelo painel Inserir: mudar um uso muda todos.',
+      ...(copies.length
+        ? {
+            duration: 12000,
+            action: {
+              label: 'Ligar',
+              onClick: () => {
+                const linked = useSpaceStore.getState().linkCopies(id, copies)
+                if (linked) toast.success(`${plural(linked, 'cópia ligada', 'cópias ligadas')} ao componente`, { description: `${MOD_KEY}Z desfaz.` })
+              },
+            },
+          }
+        : {}),
+    })
+  }
+  return id
 }
 
 // ---------------------------------------------------------------------------

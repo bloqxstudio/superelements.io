@@ -145,13 +145,11 @@ export async function wpRequest<T>(creds: Credentials, route: string, { method =
   // prévia de CORS, que vai sem login, e a recusa bloqueia a chamada
   const url = restUrl(creds.restRoot, route, params)
   const headers: Record<string, string> = { Accept: 'application/json', Authorization: basicAuth(creds.userLogin, creds.password) }
-  // Formulário para as rotas que leem `get_body_params` (o Site Editor do Elementor); JSON para o resto
-  const form = body instanceof URLSearchParams
-  if (body !== undefined) headers['Content-Type'] = form ? 'application/x-www-form-urlencoded;charset=UTF-8' : 'application/json'
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
 
   let result: Awaited<ReturnType<typeof fetchJson>>
   try {
-    result = await fetchJson(url, { method, headers, body: body === undefined ? undefined : form ? body.toString() : JSON.stringify(body) })
+    result = await fetchJson(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
   } catch (error) {
     throw networkError(error, hostOf(creds.restRoot))
   }

@@ -5,7 +5,7 @@ import {
   CircleDot,
   Code2,
   Columns3,
-  Component,
+  Component as ComponentIcon,
   Copy,
   FormInput,
   Heading1,
@@ -25,11 +25,11 @@ import {
 } from 'lucide-react'
 import { useSpaceStore } from '@/store/spaceStore'
 import { parseSectionElements, type SectionElement } from '@/features/space/landingPage'
-import { pageParts, pageSections } from '@/features/space/pages/pages'
-import { PART_COLOR } from '@/features/space/pages/parts'
+import { pageSections } from '@/features/space/pages/pages'
 import { MOD_KEY } from '@/features/space/pages/clipboard'
-import type { PagePartKind, SectionNodeData } from '@/types/space'
+import type { SectionNodeData } from '@/types/space'
 import { PanelBoundary } from '@/features/space/editor/PanelBoundary'
+import { COMPONENT_COLOR, COMPONENT_COLOR_STRONG, elementComponent } from '@/features/space/components/components'
 import { deleteSelectedElement, duplicateSelectedElement, moveElementAcross, selectElement } from '@/features/space/editor/actions'
 import { accepts, containsId, locate, settingsOf } from '@/features/space/editor/tree'
 import { findElement } from './elementorContentEditor'
@@ -39,12 +39,10 @@ import { layerKind, layerName, layerSearchText, type LayerContext } from './navi
 interface NavigatorSection {
   id: string
   title: string
+  /** A seção inteira é um uso de componente (o título é o nome dele). */
+  component?: boolean
   elements: SectionElement[] | null
   labels?: Record<string, string>
-  /** Seção do cabeçalho ou do rodapé do site que a página mostra: mexer nela muda todas as páginas. */
-  part?: PagePartKind
-  /** Instância de um componente livre: sem camadas próprias, o conteúdo é o da folha dele. */
-  instance?: boolean
 }
 
 const WIDGET_ICONS: Record<string, LucideIcon> = {
@@ -123,9 +121,11 @@ const ElementRow: React.FC<ElementRowProps> = ({ element, sectionId, sectionTitl
   const open = query ? true : expanded.has(key)
   const selected = !!element.id && selection?.sectionId === sectionId && selection.elementId === element.id
   const isHovered = !!element.id && hovered?.sectionId === sectionId && hovered.elementId === element.id
-  const Icon = elementIcon(element)
+  const componentId = elementComponent(element)
+  const componentName = useSpaceStore((state) => (componentId ? state.components.find((c) => c.id === componentId)?.name : undefined))
+  const Icon = componentId ? ComponentIcon : elementIcon(element)
   const context = { sectionTitle, depth, index, siblings, parent, customLabels }
-  const name = layerName(element, context)
+  const name = componentName ?? layerName(element, context)
   const dropHere = drag.drop?.rowKey === key ? drag.drop.position : null
 
   // A camada escolhida no canvas aparece na árvore sem precisar rolar
@@ -181,9 +181,11 @@ const ElementRow: React.FC<ElementRowProps> = ({ element, sectionId, sectionTitl
           disabled={!element.id}
           title="Clique para selecionar. Arraste para mudar de lugar."
         >
-          <Icon className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-violet-700' : 'text-gray-400'}`} strokeWidth={1.75} />
-          <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
-          <span className="max-w-20 truncate text-[10px] font-normal text-gray-400 group-hover:hidden">{layerKind(element)}</span>
+          <Icon className={`h-3.5 w-3.5 shrink-0 ${componentId ? '' : selected ? 'text-violet-700' : 'text-gray-400'}`} style={componentId ? { color: COMPONENT_COLOR } : undefined} strokeWidth={1.75} />
+          <span className="min-w-0 flex-1 truncate font-medium" style={componentId ? { color: COMPONENT_COLOR_STRONG } : undefined}>
+            {name}
+          </span>
+          <span className="max-w-20 truncate text-[10px] font-normal text-gray-400 group-hover:hidden">{componentId ? 'componente' : layerKind(element)}</span>
         </button>
         {element.id && (
           <span className="hidden shrink-0 items-center group-hover:flex">
@@ -230,6 +232,7 @@ const ElementRow: React.FC<ElementRowProps> = ({ element, sectionId, sectionTitl
 export const LayersTree: React.FC = () => {
   const pages = useSpaceStore((state) => state.pages)
   const nodes = useSpaceStore((state) => state.nodes)
+  const components = useSpaceStore((state) => state.components)
   const activePageId = useSpaceStore((state) => state.activePageId)
   const selectedIds = useSpaceStore((state) => state.selectedIds)
   const selection = useSpaceStore((state) => state.navigatorSelection)
@@ -242,32 +245,23 @@ export const LayersTree: React.FC = () => {
   const knownTreeKeys = useRef<Set<string>>(new Set())
 
   const page = pages.find((candidate) => candidate.id === activePageId) ?? pages[0]
-  const sections = useMemo<NavigatorSection[]>(() => {
-    if (!page) return []
-    const row = (section: (typeof nodes)[number], part?: PagePartKind): NavigatorSection => {
-      const data = section.data as SectionNodeData
-      if (data.instanceOf) {
-        const component = pages.find((p) => p.id === data.instanceOf)
-        return { id: section.id, title: component?.name ?? data.title, elements: [], part: 'section', instance: true }
-      }
-      return {
-        id: section.id,
-        title: data.title || 'Seção sem nome',
-        elements: parseSectionElements(data.elementorJson),
-        labels: data.navigatorLabels,
-        part,
-      }
-    }
-    // O cabeçalho e o rodapé do site entram na árvore da página, marcados como componente
-    const { header, footer } = pageParts(page, pages)
-    return [
-      ...(header ? pageSections(header, nodes).map((s) => row(s, 'header')) : []),
-      ...pageSections(page, nodes).map((s) => row(s)),
-      ...(footer ? pageSections(footer, nodes).map((s) => row(s, 'footer')) : []),
-    ]
-  }, [page, pages, nodes])
-  // Número da seção na página, sem contar as do cabeçalho
-  const firstOwn = sections.findIndex((s) => s.part !== 'header')
+  const sections = useMemo<NavigatorSection[]>(
+    () =>
+      page
+        ? pageSections(page, nodes).map((section) => {
+            const data = section.data as SectionNodeData
+            const component = data.component ? components.find((c) => c.id === data.component) : undefined
+            return {
+              id: section.id,
+              title: component?.name ?? (data.title || 'Seção sem nome'),
+              component: !!component,
+              elements: parseSectionElements(data.elementorJson),
+              labels: data.navigatorLabels,
+            }
+          })
+        : [],
+    [page, nodes, components]
+  )
 
   useEffect(() => {
     const valid = new Set<string>()
@@ -433,7 +427,7 @@ export const LayersTree: React.FC = () => {
           <PanelBoundary what="as camadas desta página" resetKey={`${page?.id}:${sections.length}`}>
           {visibleSections.length ? (
             <ul role="tree" aria-label={`Camadas de ${page?.name ?? 'página'}`} className="space-y-1">
-              {visibleSections.map((section) => {
+              {visibleSections.map((section, index) => {
                 const sectionKey = `section:${section.id}`
                 const open = normalizedQuery ? true : expanded.has(sectionKey)
                 const selected = selectedIds.includes(section.id) && !selection
@@ -448,9 +442,6 @@ export const LayersTree: React.FC = () => {
                         selected ? 'bg-gray-900 text-white' : 'text-gray-800 hover:bg-gray-100'
                       } ${dropInside ? 'shadow-[inset_0_0_0_2px_rgb(124_58_237)]' : ''}`}
                     >
-                      {section.instance ? (
-                        <span aria-hidden className="ml-1 h-7 w-7 shrink-0" />
-                      ) : (
                       <button
                         type="button"
                         className={`ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-[color,background-color,transform] active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${
@@ -461,32 +452,21 @@ export const LayersTree: React.FC = () => {
                       >
                         <ChevronRight className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-90' : ''}`} />
                       </button>
-                      )}
                       <button
                         type="button"
                         className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
                         onClick={() => selectSection(section.id)}
                       >
-                        {section.part ? (
-                          <Component className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} style={{ color: selected ? undefined : PART_COLOR }} />
+                        {section.component ? (
+                          <ComponentIcon className="h-3.5 w-3.5 shrink-0" style={selected ? undefined : { color: COMPONENT_COLOR }} strokeWidth={1.75} aria-label="Componente" />
                         ) : (
                           <Layers3 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
                         )}
-                        <span className={`min-w-0 flex-1 truncate font-semibold ${section.part && !selected ? 'text-cyan-900' : ''}`}>{section.title}</span>
-                        {section.part ? (
-                          <span
-                            className={`shrink-0 rounded px-1 text-[10px] font-medium ${selected ? 'bg-white/15 text-white' : 'bg-cyan-50 text-cyan-800'}`}
-                            title="Componente do site: o que mudar aqui muda em todas as páginas"
-                          >
-                            Componente
-                          </span>
-                        ) : (
-                          <span className={`text-[10px] tabular-nums ${selected ? 'text-gray-300' : 'text-gray-400'}`}>{sections.indexOf(section) - Math.max(0, firstOwn) + 1}</span>
-                        )}
+                        <span className="min-w-0 flex-1 truncate font-semibold">{section.title}</span>
+                        <span className={`text-[10px] tabular-nums ${selected ? 'text-gray-300' : 'text-gray-400'}`}>{index + 1}</span>
                       </button>
                     </div>
                     {open &&
-                      !section.instance &&
                       (section.elements?.length ? (
                         <ul role="group">
                           {section.elements.map((element, elementIndex) => (

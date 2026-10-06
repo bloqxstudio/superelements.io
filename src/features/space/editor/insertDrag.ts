@@ -8,6 +8,7 @@ import { dropTargetAt } from '@/features/space/pages/pages'
 import { addBlankSection, insertInto } from './actions'
 import { hitTest, sectionAt } from './frames'
 import type { PinnedSettings } from './pinned'
+import type { InsertTarget } from './tree'
 
 /**
  * Arrastar um elemento do painel Inserir até o canvas: sobre uma seção, a ponte
@@ -45,6 +46,8 @@ export interface InsertItem {
   make: () => { element: SectionElement; pinned?: PinnedSettings }
   /** Seção em branco: só entra entre seções. */
   sectionOnly?: boolean
+  /** Quem põe no lugar (um componente cria um uso ligado), em vez da cópia de `make`. */
+  place?: (where: { sectionId: string; target: InsertTarget } | { pageId: string; index: number }) => void
 }
 
 const CLICK_SLOP = 6
@@ -127,6 +130,10 @@ export function startInsertDrag(e: React.PointerEvent<HTMLElement>, item: Insert
     const pageTarget = useSpaceStore.getState().dropTarget
     end()
     if (cancelled) return
+    if (item.place && (drop || pageTarget)) {
+      item.place(drop ? { sectionId: drop.sectionId, target: { parentId: drop.target.parentId, index: drop.target.index } } : { pageId: pageTarget!.pageId, index: pageTarget!.index })
+      return
+    }
     const { element, pinned } = item.make()
     if (drop) insertInto(drop.sectionId, element, { parentId: drop.target.parentId, index: drop.target.index }, pinned)
     else if (pageTarget) {

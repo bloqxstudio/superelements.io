@@ -1,5 +1,7 @@
 import React, { useRef, useState } from 'react'
+import { Component as ComponentIcon } from 'lucide-react'
 import { useSpaceStore } from '@/store/spaceStore'
+import { COMPONENT_COLOR, COMPONENT_COLOR_STRONG } from '@/features/space/components/components'
 import type { SectionElement } from '@/features/space/landingPage'
 import type { BridgeBox, BridgeGeometry, BridgeIndicator, BridgeRect } from '@/features/elementor-preview/editorBridge'
 import { updateElementSettings } from './actions'
@@ -30,11 +32,14 @@ interface EditorOverlayProps {
   element: SectionElement | null
   label: string
   hoverLabel: string
+  /** A camada selecionada (ou a destacada) é um uso de componente: ciano, com o ícone dele. */
+  selectedIsComponent?: boolean
+  hoverIsComponent?: boolean
 }
 
 const snap = (value: number, fine: boolean) => Math.max(0, fine ? Math.round(value / 8) * 8 : Math.round(value))
 
-export const EditorOverlay: React.FC<EditorOverlayProps> = ({ sectionId, scale, geometry, indicator, element, label, hoverLabel }) => {
+export const EditorOverlay: React.FC<EditorOverlayProps> = ({ sectionId, scale, geometry, indicator, element, label, hoverLabel, selectedIsComponent, hoverIsComponent }) => {
   const zoom = useSpaceStore((s) => s.canvasTransform.zoom)
   const [active, setActive] = useState<{ kind: HandleKind; text: string } | null>(null)
   const [focusKind, setFocusKind] = useState<HandleKind | null>(null)
@@ -200,12 +205,24 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({ sectionId, scale, 
   return (
     <div className="absolute inset-0" aria-hidden>
       {hover && (
-        <div style={{ ...at(hover.rect), outline: `${px(1)}px solid rgba(124, 58, 237, 0.7)`, outlineOffset: 0 }}>
+        <div style={{ ...at(hover.rect), outline: `${px(1)}px solid ${hoverIsComponent ? COMPONENT_COLOR : 'rgba(124, 58, 237, 0.7)'}`, outlineOffset: 0 }}>
           {hoverLabel && !selected && (
             <span
-              style={{ position: 'absolute', left: 0, top: -tagHeight - px(2), height: tagHeight, fontSize: tagFont, lineHeight: `${tagHeight}px`, padding: `0 ${px(5)}px`, borderRadius: px(4) }}
-              className="whitespace-nowrap bg-violet-500/90 font-medium text-white"
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: -tagHeight - px(2),
+                height: tagHeight,
+                fontSize: tagFont,
+                lineHeight: `${tagHeight}px`,
+                padding: `0 ${px(5)}px`,
+                borderRadius: px(4),
+                gap: px(4),
+                ...(hoverIsComponent ? { background: COMPONENT_COLOR } : {}),
+              }}
+              className={`inline-flex items-center whitespace-nowrap font-medium text-white ${hoverIsComponent ? '' : 'bg-violet-500/90'}`}
             >
+              {hoverIsComponent && <ComponentIcon style={{ width: tagFont, height: tagFont }} aria-hidden />}
               {hoverLabel}
             </span>
           )}
@@ -217,7 +234,7 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({ sectionId, scale, 
 
       {selected && (
         // A caixa da camada selecionada: o cursor do agente aponta para ela (chat/AgentCursors)
-        <div data-se-selected-box={sectionId} data-se-element={selected.id} style={{ ...at(selected.rect), outline: `${line}px solid ${VIOLET}` }}>
+        <div data-se-selected-box={sectionId} data-se-element={selected.id} style={{ ...at(selected.rect), outline: `${line}px solid ${selectedIsComponent ? COMPONENT_COLOR : VIOLET}` }}>
           <span
             style={{
               position: 'absolute',
@@ -228,11 +245,14 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({ sectionId, scale, 
               lineHeight: `${tagHeight}px`,
               padding: `0 ${px(6)}px`,
               borderRadius: px(4),
+              gap: px(4),
+              ...(selectedIsComponent ? { background: COMPONENT_COLOR_STRONG } : {}),
             }}
-            className="whitespace-nowrap bg-violet-600 font-semibold text-white shadow-sm"
+            className={`inline-flex items-center whitespace-nowrap font-semibold text-white shadow-sm ${selectedIsComponent ? '' : 'bg-violet-600'}`}
           >
+            {selectedIsComponent && <ComponentIcon style={{ width: tagFont, height: tagFont }} aria-label="Componente" />}
             {label}
-            <span className="font-normal text-violet-200"> · {Math.round(selected.rect.w)} × {Math.round(selected.rect.h)}</span>
+            <span className={`font-normal ${selectedIsComponent ? 'text-cyan-100' : 'text-violet-200'}`}> · {Math.round(selected.rect.w)} × {Math.round(selected.rect.h)}</span>
           </span>
         </div>
       )}

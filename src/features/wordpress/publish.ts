@@ -1,17 +1,18 @@
 import { loadPublishBackups, savePublishBackups, type PublishBackup } from '@/features/projects/storage'
 import { getActiveBrand } from '@/features/space/brand/brandStore'
-import { buildLandingPage } from '@/features/space/landingPage'
 import { applyMediaReplacements, collectImageUrls, type MediaReplacement } from '@/features/space/pageImages'
 import { slugify } from '@/features/space/featured/suggest'
-import { PART_NOUN, componentPage, expandInstances, instanceOf, pageContent, pageParts, pageSections } from '@/features/space/pages/pages'
+import { pageSections } from '@/features/space/pages/pages'
+import { componentElements, componentUses, sectionComponent, untagElement, walk } from '@/features/space/components/components'
+import { buildLandingPage, parseSectionElements, type SectionElement } from '@/features/space/landingPage'
 import { useSpaceStore } from '@/store/spaceStore'
 import { logEvent } from '@/features/space/history/activity'
-import type { PageWordPressLink, SectionNodeData, SpaceNode, SpacePage } from '@/types/space'
+import type { PageWordPressLink, SectionNodeData, SpaceComponent, SpaceNode } from '@/types/space'
 import { adminUrl, credentialsOf } from './connect'
 import { isSiteMedia, uploadDataUrl, uploadImage } from './media'
 import { wpRequest, WordPressError } from './rest'
 import { detectSeo, writeSeo, type SeoSupport } from './seo'
-import { contentHash, fetchSitePart, inlineReason, mergeConditions, partConditions, partsSupport, saveSitePart, syncPartConditions, type PartsSupport, type SitePart } from './siteParts'
+import { canSaveWidgets, componentConditions, contentHash, fetchSitePart, inlineReason, mergeConditions, partsSupport, saveSitePart, syncComponentConditions, type ComponentKind, type PartsSupport, type SitePart, WIDGET_REASON } from './siteParts'
 import type { WordPressConnection } from './types'
 
 /**
@@ -102,66 +103,118 @@ export const elementorEditUrl = (connection: WordPressConnection, postId: number
 
 /**
  * Elementos da página como o canvas mostra: marca nas seções da biblioteca,
- * seções do site como vieram. O cabeçalho e o rodapé do site vão dentro da
- * página (`inline`) quando o site não tem o Theme Builder; com ele
- * (`theme`), a página sobe só com as seções dela.
+ * seções do site como vieram. Os componentes vão dentro da página como
+ * cópias (`inline`). Com o Elementor Pro (`theme`), o cabeçalho e o rodapé
+ * do site ficam no Theme Builder (a página sobe sem eles) e os componentes que
+ * viram modelo (`templates`: id do componente → id do modelo no site) entram
+ * como referência: a seção pelo widget Modelo, o widget como Global Widget.
  */
-export function pageElements(pageId: string, parts: PartsSupport['mode'] = 'inline', templates?: Map<string, { postId: number; siteUrl: string }>) {
-  const { pages, nodes, connections } = useSpaceStore.getState()
+export function pageElements(pageId: string, mode: PartsSupport['mode'] = 'inline', templates?: Map<string, number>) {
+  const { pages, nodes, connections, components } = useSpaceStore.getState()
   const page = pages.find((p) => p.id === pageId)
   if (!page) throw new WordPressError('Essa página não está mais no canvas.')
-  if (page.part) throw new WordPressError('O cabeçalho, o rodapé e os componentes publicam pelo menu deles, como modelo do Elementor.')
-  // Com o Theme Builder: sem o cabeçalho e o rodapé, e cada instância vira o widget Modelo do componente publicado
-  const sections =
-    parts === 'theme'
-      ? pageSections(page, nodes).flatMap((section) => {
-          const id = instanceOf(section)
-          const template = id ? templates?.get(id) : undefined
-          if (template) return [templateSection(section, template.postId, template.siteUrl)]
-          return expandInstances([section], pages, nodes)
-        })
-      : pageContent(page, pages, nodes)
+  const roles = new Set(components.filter((c) => c.role).map((c) => c.id))
+  const sections = pageSections(page, nodes)
+    .filter((section) => mode !== 'theme' || !roles.has(sectionComponent(section) ?? ''))
+    .map((section) => (mode === 'theme' && templates?.size ? withTemplates(section, templates) : section))
   const built = buildLandingPage(sections, nodes, connections, getActiveBrand())
   return { page, ...built }
 }
 
 const elementId = () => Math.random().toString(16).slice(2, 9).padEnd(7, '0')
+const ZERO = { unit: 'px', top: '0', right: '0', bottom: '0', left: '0', isLinked: true }
+
+/** Container sem respiro que só segura um widget (no topo da seção o Elementor pede um container). */
+const holder = (child: SectionElement): SectionElement => ({
+  id: elementId(),
+  elType: 'container',
+  isInner: false,
+  settings: { content_width: 'full', padding: ZERO, padding_tablet: ZERO, padding_mobile: ZERO },
+  elements: [child],
+})
+
+/** O uso como referência ao modelo: a seção inteira pelo widget Modelo; um widget como Global Widget. */
+function withTemplates(section: SpaceNode, templates: Map<string, number>): SpaceNode {
+  const data = section.data as SectionNodeData
+  const whole = data.component ? templates.get(data.component) : undefined
+  // Vai como veio: a marca não mexe no que só aponta para o modelo
+  const asIs = (json: string): SpaceNode => ({ ...section, data: { title: data.title, elementorJson: json, origin: { kind: 'wordpress', siteUrl: '', postId: 0 } } })
+  if (whole) return asIs(JSON.stringify([holder({ id: elementId(), elType: 'widget', widgetType: 'template', settings: { template_id: String(whole) }, elements: [] })]))
+  const root = parseSectionElements(data.elementorJson)
+  if (!root) return section
+  let changed = false
+  const swap = (list: SectionElement[]): SectionElement[] =>
+    list.map((element) => {
+      const id = elementComponentId(element)
+      const postId = id ? templates.get(id) : undefined
+      if (postId && element.elType === 'widget') {
+        changed = true
+        return { id: element.id, elType: 'widget', widgetType: 'global', templateID: postId, settings: {}, elements: [] }
+      }
+      return element.elements?.length ? { ...element, elements: swap(element.elements) } : element
+    })
+  const next = swap(root).map((element) => (element.elType === 'widget' ? holder(element) : element))
+  return changed ? { ...section, data: { ...data, elementorJson: JSON.stringify(next) } } : section
+}
+
+const elementComponentId = (element: SectionElement) => {
+  const settings = element.settings
+  const value = settings && !Array.isArray(settings) ? (settings as Record<string, unknown>)._se_component : undefined
+  return typeof value === 'string' ? value : undefined
+}
+
+/** Tira as marcas de uso (no Elementor o conteúdo vai como está). */
+function stripTags(elements: SectionElement[]): SectionElement[] {
+  return elements.map((element) => {
+    const own = untagElement(element)
+    return own.elements?.length ? { ...own, elements: stripTags(own.elements) } : own
+  })
+}
 
 /**
- * A instância no site: um container sem respiro com o widget Modelo do
- * Elementor Pro, que mostra o modelo salvo do componente. Mudou o modelo,
- * muda em todas as páginas que o usam.
+ * Que modelo o componente vira no Elementor Pro: cabeçalho e rodapé (Theme
+ * Builder), seção (container salvo) ou widget (Global Widget). Um container
+ * dentro da seção não tem modelo nativo que guarde o lugar dele: vai dentro
+ * das páginas (null).
  */
-function templateSection(instance: SpaceNode, postId: number, siteUrl: string): SpaceNode {
-  const zero = { unit: 'px', top: '0', right: '0', bottom: '0', left: '0', isLinked: true }
-  const element = {
-    id: elementId(),
-    elType: 'container',
-    isInner: false,
-    settings: { content_width: 'full', padding: zero, padding_tablet: zero, padding_mobile: zero },
-    elements: [{ id: elementId(), elType: 'widget', widgetType: 'template', settings: { template_id: String(postId) }, elements: [] }],
+export function componentKind(component: SpaceComponent): ComponentKind | null {
+  if (component.role) return component.role
+  if (component.level === 'section') return 'section'
+  return componentElements(component)[0]?.elType === 'widget' ? 'widget' : null
+}
+
+/** O componente como vai para o Elementor: montado de um uso dele (com a marca e os ajustes), sem as marcas de uso. */
+export function componentPublishElements(componentId: string) {
+  const { nodes, connections, components } = useSpaceStore.getState()
+  const component = components.find((c) => c.id === componentId)
+  if (!component) throw new WordPressError('Esse componente não está mais no projeto.')
+  const use = componentUses(nodes).find((u) => u.componentId === componentId)
+  const node = use && nodes.find((n) => n.id === use.sectionId)
+  let elements: SectionElement[] = componentElements(component)
+  if (use && node) {
+    const built = buildLandingPage([node], nodes, connections, getActiveBrand()).elements
+    if (!use.elementId) elements = built
+    else {
+      let found: SectionElement | null = null
+      walk(built, (element) => {
+        if (!found && element.id === use.elementId) found = element
+      })
+      if (found) elements = [found]
+    }
   }
-  // Vai como veio: a marca não mexe num container que só aponta para o modelo
-  const data: SectionNodeData = { title: (instance.data as SectionNodeData).title, elementorJson: JSON.stringify([element]), origin: { kind: 'wordpress', siteUrl, postId } }
-  return { ...instance, data }
+  return { component, elements: stripTags(elements) }
 }
 
-/** As seções do componente (cabeçalho, rodapé, componente livre), montadas como no canvas, com os componentes de dentro já no lugar. */
-export function partElements(partId: string) {
-  const { pages, nodes, connections } = useSpaceStore.getState()
-  const part = pages.find((p) => p.id === partId)
-  if (!part?.part) throw new WordPressError('Esse componente não está mais no canvas.')
-  const sections = expandInstances(pageSections(part, nodes), pages, nodes, new Set([part.id]))
-  return { part, ...buildLandingPage(sections, nodes, connections, getActiveBrand()) }
-}
+/** O conteúdo do componente como seria publicado agora, resumido: muda quando ele muda no canvas. */
+export const componentContentHash = (componentId: string) => contentHash(JSON.stringify(componentPublishElements(componentId).elements))
 
-/** O conteúdo do componente como seria publicado agora, resumido: muda quando a folha muda. */
-export const partContentHash = (partId: string) => contentHash(JSON.stringify(partElements(partId).elements))
-
-/** Componentes livres que a página usa direto (as instâncias dela), sem repetir. */
-const pageComponents = (page: SpacePage, pages: SpacePage[], nodes: SpaceNode[]) => {
-  const ids = [...new Set(pageSections(page, nodes).map(instanceOf).filter((id): id is string => !!id))]
-  return ids.map((id) => componentPage(pages, id)).filter((c): c is SpacePage => !!c)
+/** Componentes usados direto na página, sem repetir. */
+function pageComponentIds(pageId: string) {
+  const { pages, nodes } = useSpaceStore.getState()
+  const page = pages.find((p) => p.id === pageId)
+  if (!page) return []
+  const sections = new Set(page.sectionIds)
+  return [...new Set(componentUses(nodes).filter((u) => sections.has(u.sectionId)).map((u) => u.componentId))]
 }
 
 /** Sobe para a mídia do site as imagens que ainda não estão lá e troca os endereços nos elementos. */
@@ -214,39 +267,46 @@ export async function publishPage({ connection, projectId, pageId, status, templ
   const support = await partsSupport(connection)
   const theme = support.mode === 'theme'
 
-  // Componentes livres: cada um precisa estar salvo no Elementor do site; o que ainda não está é criado agora
-  // (criar não muda nenhuma outra página). Atualizar um que mudou é a publicação do próprio componente.
-  const templates = new Map<string, { postId: number; siteUrl: string }>()
+  // Componentes que viram modelo: cada um precisa estar salvo no Elementor do site; o que ainda não está é
+  // criado agora (criar não muda nenhuma outra página). Atualizar um que mudou é a publicação do próprio componente.
+  const templates = new Map<string, number>()
   const components: PublishResult['components'] = { used: [], created: [], outdated: [] }
+  const roleUses: SpaceComponent[] = []
   if (theme) {
-    const { pages: all, nodes: allNodes } = useSpaceStore.getState()
-    const target = all.find((p) => p.id === pageId)
-    for (const component of target ? pageComponents(target, all, allNodes) : []) {
+    for (const componentId of pageComponentIds(pageId)) {
+      const component = useSpaceStore.getState().components.find((c) => c.id === componentId)
+      const kind = component && componentKind(component)
+      if (!component || !kind) continue
+      if (component.role) {
+        roleUses.push(component)
+        continue
+      }
       let linked = component.wordpress?.siteUrl === connection.site.siteUrl ? component.wordpress : undefined
       if (linked) {
         // Modelo apagado no site: o componente é criado de novo
         const gone = await fetchSitePart(connection, linked.postId).then(() => false, (error) => (error instanceof WordPressError && error.code === 'gone' ? true : Promise.reject(error)))
         if (gone) {
-          useSpaceStore.getState().setPageWordPress(component.id, undefined)
+          useSpaceStore.getState().setComponentWordPress(component.id, undefined)
           linked = undefined
         }
       }
+      // Global Widget novo sem o plugin: vai dentro da página
+      if (!linked && kind === 'widget' && !canSaveWidgets(support)) continue
       if (!linked) {
         onProgress?.(`Salvando o componente ${component.name} no Elementor…`)
-        await publishPart({ connection, projectId, partId: component.id, onProgress })
-        linked = useSpaceStore.getState().pages.find((p) => p.id === component.id)?.wordpress
+        await publishComponent({ connection, projectId, componentId: component.id, onProgress })
+        linked = useSpaceStore.getState().components.find((c) => c.id === component.id)?.wordpress
         components.created.push(component.name)
-      } else if (linked.contentHash && linked.contentHash !== partContentHash(component.id)) components.outdated.push(component.name)
-      if (linked) templates.set(component.id, { postId: linked.postId, siteUrl: connection.site.siteUrl })
+      } else if (linked.contentHash && linked.contentHash !== componentContentHash(component.id)) components.outdated.push(component.name)
+      if (linked) templates.set(component.id, linked.postId)
       components.used.push(component.name)
     }
   }
 
   const { page, elements } = pageElements(pageId, support.mode, templates)
-  const shown = Object.values(pageParts(page, useSpaceStore.getState().pages)).filter((p): p is NonNullable<typeof p> => !!p)
-  if (!elements.length) throw new WordPressError(shown.length && theme ? 'A página não tem seção própria para publicar: o cabeçalho e o rodapé vão pelo Theme Builder.' : 'A página não tem seção com JSON válido para publicar.')
+  if (!elements.length) throw new WordPressError(roleUses.length && theme ? 'A página não tem seção própria para publicar: o cabeçalho e o rodapé vão pelo Theme Builder.' : 'A página não tem seção com JSON válido para publicar.')
   // Página com cabeçalho do Theme Builder vai em Elementor Largura Total: a Tela do Elementor não mostra o cabeçalho do tema nem o do Theme Builder
-  if (theme && shown.length) template = 'elementor_header_footer'
+  if (theme && roleUses.length) template = 'elementor_header_footer'
   const link = page.wordpress?.siteUrl === connection.site.siteUrl ? page.wordpress : undefined
   const details = page.details ?? {}
   // Página ligada sem título escolhido fica com o título que tem no site
@@ -368,7 +428,7 @@ export async function publishPage({ connection, projectId, pageId, status, templ
   let synced: string[] = []
   if (theme) {
     onProgress?.('Conferindo o cabeçalho e o rodapé do site…')
-    synced = await syncPartConditions(connection).catch((error) => {
+    synced = await syncComponentConditions(connection).catch((error) => {
       console.warn('[wordpress] condição do cabeçalho não atualizada', error)
       return []
     })
@@ -392,18 +452,18 @@ export async function publishPage({ connection, projectId, pageId, status, templ
     parts: {
       mode: support.mode,
       reason: theme ? undefined : inlineReason(support),
-      shown: shown.map((p) => p.name),
-      unpublished: theme ? shown.filter((p) => p.wordpress?.siteUrl !== connection.site.siteUrl).map((p) => p.name) : [],
+      shown: roleUses.map((c) => c.name),
+      unpublished: roleUses.filter((c) => c.wordpress?.siteUrl !== connection.site.siteUrl).map((c) => c.name),
       synced,
     },
     components,
   }
 }
 
-export interface PartPublishOptions {
+export interface ComponentPublishOptions {
   connection: WordPressConnection
   projectId: string
-  partId: string
+  componentId: string
   /** Atualiza mesmo que o modelo tenha mudado no site. */
   overwrite?: boolean
   /** Modelo que o site já tem e passa a ser este componente (em vez de criar outro). */
@@ -413,38 +473,43 @@ export interface PartPublishOptions {
   onProgress?: (step: string) => void
 }
 
-export interface PartPublishResult {
+export interface ComponentPublishResult {
   postId: number
   title: string
   editUrl: string
   created: boolean
+  kind: ComponentKind
   uploaded: number
   failedImages: string[]
   cacheCleared: boolean
-  /** Páginas do site que ficam sem a parte. */
+  /** Páginas do site que ficam sem o cabeçalho (ou rodapé). */
   excluded: string[]
-  /** Páginas que ficam sem a parte mas ainda não estão no site: entram na condição quando forem publicadas. */
+  /** Páginas sem ele que ainda não estão no site: entram na condição quando forem publicadas. */
   pending: string[]
   released: number
 }
 
 /**
- * Publica o cabeçalho (ou o rodapé) do site como modelo do Theme Builder,
- * no site inteiro menos as páginas que ficam sem ele. O modelo ligado é
- * atualizado no lugar, depois de conferir se ninguém o mudou pelo Elementor
- * e de guardar aqui o conteúdo que ele tinha.
+ * Publica o componente como modelo do Elementor Pro: o cabeçalho e o rodapé
+ * no Theme Builder (no site inteiro, menos as páginas sem ele), a seção como
+ * container salvo e o widget como Global Widget. O modelo ligado é
+ * atualizado no lugar, depois de conferir se ninguém o mudou pelo Elementor e
+ * de guardar aqui o conteúdo que ele tinha. Mudar o modelo muda todas as
+ * páginas do site que o usam.
  */
-export async function publishPart({ connection, projectId, partId, overwrite, target, release, onProgress }: PartPublishOptions): Promise<PartPublishResult> {
+export async function publishComponent({ connection, projectId, componentId, overwrite, target, release, onProgress }: ComponentPublishOptions): Promise<ComponentPublishResult> {
   onProgress?.('Conferindo o site…')
   const support = await partsSupport(connection, true)
-  if (support.mode !== 'theme') throw new WordPressError(`Não dá para publicar o componente: ${inlineReason(support)}. Até lá, ele vai dentro de cada página.`)
-  const { part, elements } = partElements(partId)
-  const kind = part.part!.kind
-  if (!elements.length) throw new WordPressError(`O ${PART_NOUN[kind]} não tem seção com JSON válido para publicar.`)
-  // Antes de subir as imagens (que trocam os endereços): é o mesmo resumo que `partContentHash` calcula depois
+  if (support.mode !== 'theme') throw new WordPressError(`Não dá para publicar o componente como modelo: ${inlineReason(support)}. Até lá, ele vai dentro de cada página.`)
+  const { component, elements } = componentPublishElements(componentId)
+  const kind = componentKind(component)
+  if (!kind) throw new WordPressError(`"${component.name}" é um grupo dentro da seção: o Elementor não tem modelo que guarde o lugar dele, então vai dentro de cada página.`)
+  if (kind === 'widget' && !canSaveWidgets(support)) throw new WordPressError(`Não dá para publicar "${component.name}" como Global Widget: ${WIDGET_REASON}. Até lá, ele vai dentro de cada página.`, 'needs-connector')
+  if (!elements.length) throw new WordPressError(`"${component.name}" não tem conteúdo válido para publicar.`)
+  // Antes de subir as imagens (que trocam os endereços): é o mesmo resumo que `componentContentHash` calcula depois
   const hash = contentHash(JSON.stringify(elements))
   const siteUrl = connection.site.siteUrl
-  const link = part.wordpress?.siteUrl === siteUrl ? part.wordpress : undefined
+  const link = component.wordpress?.siteUrl === siteUrl ? component.wordpress : undefined
   const postId = link?.postId ?? target
 
   let current: SitePart | null = null
@@ -463,16 +528,18 @@ export async function publishPart({ connection, projectId, partId, overwrite, ta
     await savePublishBackups(projectId, current.id, [previous, ...backups].slice(0, MAX_BACKUPS))
   }
 
-  const { conditions: ours, excluded, pending } = partConditions(part, useSpaceStore.getState().pages, siteUrl)
+  const { pages, nodes } = useSpaceStore.getState()
+  const theme = kind === 'header' || kind === 'footer'
+  const ours = theme ? componentConditions(component, pages, nodes, siteUrl) : { conditions: undefined, excluded: [], pending: [] }
   // O que o modelo já tinha e o canvas não mostra continua valendo
-  const conditions = current ? mergeConditions(ours, current.conditions, useSpaceStore.getState().pages, siteUrl) : ours
-  const where = kind === 'section' ? 'na Biblioteca do Elementor' : 'no Theme Builder'
+  const conditions = ours.conditions && current ? mergeConditions(ours.conditions, current.conditions, pages, siteUrl) : ours.conditions
+  const where = theme ? 'no Theme Builder' : 'na Biblioteca do Elementor'
   onProgress?.(postId ? `Atualizando o modelo ${where}…` : `Criando o modelo ${where}…`)
-  const saved = await saveSitePart(connection, { id: postId, kind, title: part.name, elements: JSON.stringify(elements), conditions, release: release?.filter((id) => id !== postId) })
+  const saved = await saveSitePart(connection, { id: postId, kind, title: component.name, elements: JSON.stringify(elements), conditions, release: release?.filter((id) => id !== postId) })
 
   onProgress?.('Limpando o cache de CSS do Elementor…')
   const cacheCleared = await clearElementorCache(connection)
-  useSpaceStore.getState().setPageWordPress(partId, {
+  useSpaceStore.getState().setComponentWordPress(componentId, {
     siteUrl,
     postId: saved.id,
     title: saved.title,
@@ -482,20 +549,37 @@ export async function publishPart({ connection, projectId, partId, overwrite, ta
     syncedAt: Date.now(),
     contentHash: hash,
   })
-  void logEvent(projectId, 'publish.part', part.name, { postId: saved.id, created: !postId, site: siteUrl, conditions })
+  void logEvent(projectId, 'publish.component', component.name, { postId: saved.id, created: !postId, site: siteUrl, kind, conditions })
 
   return {
     postId: saved.id,
     title: saved.title,
     editUrl: saved.edit_url,
     created: !postId,
+    kind,
     uploaded,
     failedImages,
     cacheCleared,
-    excluded,
-    pending,
+    excluded: ours.excluded,
+    pending: ours.pending,
     released: release?.length ?? 0,
   }
+}
+
+/** Devolve ao site o conteúdo que o modelo do componente tinha antes da última publicação daqui. */
+export async function restoreComponentBackup(connection: WordPressConnection, projectId: string, componentId: string) {
+  const component = useSpaceStore.getState().components.find((c) => c.id === componentId)
+  const link = component?.wordpress
+  const kind = component && componentKind(component)
+  if (!component || !link || !kind) throw new WordPressError('Esse componente não está ligado a um modelo do site.')
+  const [last, ...rest] = await loadPublishBackups(projectId, link.postId)
+  if (!last) throw new WordPressError('Não há versão anterior guardada para esse componente.')
+  const restored = await saveSitePart(connection, { id: link.postId, kind, elements: last.elementorData })
+  await savePublishBackups(projectId, link.postId, rest)
+  const cacheCleared = await clearElementorCache(connection)
+  useSpaceStore.getState().setComponentWordPress(componentId, { ...link, modifiedGmt: restored.modified_gmt, syncedAt: Date.now() })
+  void logEvent(projectId, 'publish.restored', component.name, { postId: link.postId, restoredFrom: last.savedAt })
+  return { restoredFrom: last.savedAt, cacheCleared, remaining: rest.length }
 }
 
 /** Versões anteriores guardadas da página ligada, a mais nova primeiro. */
@@ -508,16 +592,6 @@ export async function restoreLastBackup(connection: WordPressConnection, project
   if (!link) throw new WordPressError('Essa página não está ligada ao WordPress.')
   const [last, ...rest] = await loadPublishBackups(projectId, link.postId)
   if (!last) throw new WordPressError('Não há versão anterior guardada para essa página.')
-
-  if (page?.part) {
-    // Componente: o conteúdo do modelo volta; a condição fica a de agora
-    const restored = await saveSitePart(connection, { id: link.postId, kind: page.part.kind, elements: last.elementorData })
-    await savePublishBackups(projectId, link.postId, rest)
-    const cacheCleared = await clearElementorCache(connection)
-    useSpaceStore.getState().setPageWordPress(pageId, { ...link, modifiedGmt: restored.modified_gmt, syncedAt: Date.now() })
-    void logEvent(projectId, 'publish.restored', page.name, { postId: link.postId, restoredFrom: last.savedAt })
-    return { restoredFrom: last.savedAt, cacheCleared, remaining: rest.length }
-  }
 
   const saved = await wpRequest<WpPage>(credentialsOf(connection), `wp/v2/pages/${link.postId}`, {
     method: 'POST',

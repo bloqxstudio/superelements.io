@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { ArrowDown, ArrowUp, CloudUpload, Component, Copy, Globe, Monitor, MousePointerClick, PenLine, Play, Search, Smartphone, Tablet, Trash2, Unlink2, type LucideIcon } from 'lucide-react'
+import { ArrowDown, ArrowUp, CloudUpload, Component as ComponentIcon, Copy, Globe, Monitor, MousePointerClick, Play, Search, Smartphone, Tablet, Trash2, type LucideIcon } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { cn } from '@/lib/utils'
 import { useSpaceStore } from '@/store/spaceStore'
@@ -9,14 +9,16 @@ import { VIEWPORT_WIDTH } from '@/features/elementor-preview/PreviewFrame'
 import { STATUS_LABELS, useWordPressUi } from '@/features/wordpress/uiStore'
 import { useActiveWordPress } from '@/features/wordpress/useWordPressConnection'
 import { BrandButton } from '../brand/BrandButton'
+import { ComponentCard, ComponentsHere } from '../components/ComponentPanel'
+import { selectionComponent } from '../components/selection'
+import { componentizeSelection } from '../editor/actions'
 import { PanelBoundary } from '../editor/PanelBoundary'
 import { PropertiesPanel } from '../editor/PropertiesPanel'
 import { parseSectionElements } from '../landingPage'
 import { sectionMotionLabel } from '../levels/motion'
 import { findElement } from '../navigator/elementorContentEditor'
 import { DEVICE_LABELS } from '../pages/PageFrame'
-import { PAGE_HEADER, PART_NOUN, SECTION_WIDTH, pageFrame, pageOf, pageSlug, partShownIn, plural, sitePages } from '../pages/pages'
-import { PART_COLOR, confirmPartSectionRemoval } from '../pages/parts'
+import { PAGE_HEADER, SECTION_WIDTH, pageFrame, pageOf, pageSlug, plural } from '../pages/pages'
 
 export const DEVICES: { id: EditorDevice; label: string; icon: LucideIcon }[] = [
   { id: 'desktop', label: DEVICE_LABELS.desktop, icon: Monitor },
@@ -95,53 +97,9 @@ const PageStyle: React.FC<{ page: SpacePage }> = ({ page }) => {
   const { renamePage, openPlayer } = useSpaceStore.getState()
   const wordpress = useActiveWordPress()
   const count = page.sectionIds.length
-  const height = Math.round(((pageFrame(page, nodes, pages).height - PAGE_HEADER) * VIEWPORT_WIDTH[device]) / SECTION_WIDTH)
-  const path = sitePages(pages)[0]?.id === page.id ? '/' : `/${page.details?.slug || pageSlug(page.name)}`
+  const height = Math.round(((pageFrame(page, nodes).height - PAGE_HEADER) * VIEWPORT_WIDTH[device]) / SECTION_WIDTH)
+  const path = pages[0]?.id === page.id ? '/' : `/${page.details?.slug || pageSlug(page.name)}`
   const linked = !!page.wordpress && page.wordpress.siteUrl === wordpress?.site.siteUrl
-
-  if (page.part) {
-    const shownIn = partShownIn(page, pages, nodes)
-    return (
-      <>
-        <Group title="Componente">
-          <Row label="Nome">
-            <input key={page.id} defaultValue={page.name} className={field} aria-label="Nome do componente" onBlur={(e) => renamePage(page.id, e.target.value)} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
-          </Row>
-          <Row label="Aparece em">
-            <span className="truncate text-[12px] text-gray-700" title={shownIn.map((p) => p.name).join(', ')}>
-              {shownIn.length ? plural(shownIn.length, 'página', 'páginas') : 'Nenhuma página'}
-            </span>
-          </Row>
-          <ComponentNote kind={page.part.kind === 'section' ? undefined : PART_NOUN[page.part.kind]} />
-        </Group>
-        <Group title="Tela">
-          <DeviceSwitch />
-        </Group>
-        <Group title="Marca">
-          <BrandButton variant="row" />
-        </Group>
-        <Group title="Site">
-          <div className="-mx-1 flex flex-col">
-            <ActionButton icon={Play} label="Ver no player" onClick={() => openPlayer(page.id)} disabled={!count} />
-            {wordpress && (
-              <ActionButton
-                icon={CloudUpload}
-                label={linked ? 'Atualizar no Theme Builder…' : 'Publicar no Theme Builder…'}
-                onClick={() => useWordPressUi.getState().openPublish(page.id)}
-                disabled={!count}
-              />
-            )}
-          </div>
-          {linked && page.wordpress && (
-            <a href={page.wordpress.link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 truncate text-[11px] text-sky-700 hover:underline">
-              <Globe className="h-3 w-3 shrink-0" />
-              {page.wordpress.title} · modelo do Theme Builder
-            </a>
-          )}
-        </Group>
-      </>
-    )
-  }
 
   return (
     <>
@@ -166,6 +124,8 @@ const PageStyle: React.FC<{ page: SpacePage }> = ({ page }) => {
         </Row>
       </Group>
 
+      <ComponentsHere sectionIds={page.sectionIds} title="Componentes nesta página" />
+
       <Group title="Marca">
         <BrandButton variant="row" />
       </Group>
@@ -189,13 +149,6 @@ const PageStyle: React.FC<{ page: SpacePage }> = ({ page }) => {
   )
 }
 
-/** O que distingue um componente de uma seção comum, em uma frase. */
-const ComponentNote: React.FC<{ kind?: string }> = ({ kind }) => (
-  <p className="rounded-lg bg-cyan-50 px-2.5 py-2 text-[11px] leading-relaxed text-cyan-900">
-    Componente: existe uma vez só e aparece {kind ? `em todas as páginas que mostram o ${kind}` : 'em todas as instâncias dele'}. O que mudar aqui muda em todas.
-  </p>
-)
-
 /** Uma seção selecionada (sem camada): nome, lugar na página e as ações dela. */
 const SectionStyle: React.FC<{ sectionId: string }> = ({ sectionId }) => {
   const { node, pages } = useSpaceStore(useShallow((s) => ({ node: s.nodes.find((n) => n.id === sectionId), pages: s.pages })))
@@ -205,58 +158,10 @@ const SectionStyle: React.FC<{ sectionId: string }> = ({ sectionId }) => {
   const page = pageOf(pages, sectionId)
   const index = page ? page.sectionIds.indexOf(sectionId) : -1
   const motion = sectionMotionLabel(data.levels?.motion)
-  const part = page?.part ? page : undefined
-  const shownIn = part ? partShownIn(part, pages, useSpaceStore.getState().nodes) : []
-
-  // Instância de um componente: o conteúdo é o da folha dele
-  const source = data.instanceOf ? pages.find((p) => p.id === data.instanceOf) : undefined
-  if (data.instanceOf) {
-    return (
-      <>
-        <Group title="Componente">
-          <Row label="Instância de">
-            <span className="flex min-w-0 items-center gap-1.5 text-[12px] font-medium text-cyan-900">
-              <Component className="h-3.5 w-3.5 shrink-0" style={{ color: PART_COLOR }} />
-              <span className="truncate">{source?.name ?? 'componente excluído'}</span>
-            </span>
-          </Row>
-          <Row label="Lugar">
-            <span className="truncate text-[12px] text-gray-700">{page ? `${index + 1} de ${page.sectionIds.length} · ${page.name}` : 'Solta no canvas'}</span>
-          </Row>
-          <ComponentNote />
-          <div className="-mx-1 flex flex-col">
-            {source && <ActionButton icon={PenLine} label="Editar componente" onClick={() => useSpaceStore.getState().focusPage(source.id)} />}
-            {source && <ActionButton icon={Unlink2} label="Separar do componente" onClick={() => useSpaceStore.getState().detachInstance(sectionId)} />}
-            {page && <ActionButton icon={ArrowUp} label="Subir" onClick={() => moveSection(sectionId, -1)} disabled={index <= 0} />}
-            {page && <ActionButton icon={ArrowDown} label="Descer" onClick={() => moveSection(sectionId, 1)} disabled={index >= page.sectionIds.length - 1} />}
-            <ActionButton icon={Trash2} label="Tirar desta página" danger onClick={() => removeNode(sectionId)} />
-          </div>
-        </Group>
-      </>
-    )
-  }
 
   return (
     <>
-      {part && (
-        <Group title="Componente">
-          <Row label="Do">
-            <span className="flex min-w-0 items-center gap-1.5 text-[12px] font-medium text-cyan-900">
-              <Component className="h-3.5 w-3.5 shrink-0" style={{ color: PART_COLOR }} />
-              <span className="truncate">{part.name}</span>
-            </span>
-          </Row>
-          <Row label="Aparece em">
-            <span className="truncate text-[12px] text-gray-700" title={shownIn.map((p) => p.name).join(', ')}>
-              {shownIn.length ? plural(shownIn.length, 'página', 'páginas') : 'Nenhuma página'}
-            </span>
-          </Row>
-          <ComponentNote kind={part.part!.kind === 'section' ? undefined : PART_NOUN[part.part!.kind]} />
-          <div className="-mx-1 flex flex-col">
-            <ActionButton icon={PenLine} label="Ir para o componente" onClick={() => useSpaceStore.getState().focusPage(part.id)} />
-          </div>
-        </Group>
-      )}
+      {data.component && <ComponentCard componentId={data.component} sectionId={sectionId} />}
       <Group title="Seção">
         <Row label="Nome">
           <input key={sectionId} defaultValue={data.title} className={field} aria-label="Nome da seção" onBlur={(e) => updateNodeData(sectionId, { title: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
@@ -280,9 +185,13 @@ const SectionStyle: React.FC<{ sectionId: string }> = ({ sectionId }) => {
           {page && <ActionButton icon={ArrowUp} label="Subir" onClick={() => moveSection(sectionId, -1)} disabled={index <= 0} />}
           {page && <ActionButton icon={ArrowDown} label="Descer" onClick={() => moveSection(sectionId, 1)} disabled={index >= page.sectionIds.length - 1} />}
           <ActionButton icon={Copy} label="Duplicar" onClick={() => duplicateSections([sectionId])} />
-          <ActionButton icon={Trash2} label="Remover" danger onClick={() => confirmPartSectionRemoval([sectionId]) && removeNode(sectionId)} />
+          {!data.component && (
+            <ActionButton icon={ComponentIcon} label="Transformar em componente" onClick={() => componentizeSelection()} />
+          )}
+          <ActionButton icon={Trash2} label="Remover" danger onClick={() => removeNode(sectionId)} />
         </div>
       </Group>
+      <ComponentsHere sectionIds={[sectionId]} title="Componentes nesta seção" layersOnly />
       <p className="flex gap-2 px-3 py-3 text-[11px] leading-relaxed text-gray-500">
         <MousePointerClick className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
         Clique num título, texto, botão ou imagem dentro da seção para mudar o conteúdo e o estilo dele. Clique duas vezes para escrever direto no canvas.
@@ -307,9 +216,14 @@ export const StyleTab: React.FC = () => {
   }, [selection, nodes])
 
   if (selection && element) {
+    // A camada é um uso de componente (ou está dentro de um): o componente aparece em cima, no lugar
+    const used = selectionComponent(nodes, selection.sectionId, selection.elementId)
     return (
       <PanelBoundary what="as propriedades desta camada" resetKey={`${selection.sectionId}:${selection.elementId}`}>
-        <PropertiesPanel key={`${selection.sectionId}:${selection.elementId}`} sectionId={selection.sectionId} elementId={selection.elementId} />
+        <div className="flex min-h-0 flex-1 flex-col">
+          {used && <ComponentCard componentId={used.componentId} sectionId={used.sectionId} elementId={used.elementId} inside={used.inside} />}
+          <PropertiesPanel key={`${selection.sectionId}:${selection.elementId}`} sectionId={selection.sectionId} elementId={selection.elementId} />
+        </div>
       </PanelBoundary>
     )
   }

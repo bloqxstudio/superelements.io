@@ -5,17 +5,18 @@ import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { slugify } from '@/features/space/featured/suggest'
-import { componentPage, instanceOf, pageParts, pageSections, plural } from '@/features/space/pages/pages'
-import { PART_COLOR } from '@/features/space/pages/parts'
+import { plural } from '@/features/space/pages/pages'
+import { COMPONENT_COLOR, componentUses } from '@/features/space/components/components'
 import { useSpaceStore } from '@/store/spaceStore'
-import type { SpacePage } from '@/types/space'
+import type { SpaceComponent } from '@/types/space'
 import { cn } from '@/lib/utils'
 import {
   imagesToUpload,
   PageConflictError,
   pageBackups,
   pageElements,
-  partContentHash,
+  componentContentHash,
+  componentKind,
   publishPage,
   restoreLastBackup,
   type PageStatus,
@@ -83,113 +84,91 @@ const hostOf = (url: string) => {
   }
 }
 
+/** Componentes usados direto na página, sem repetir. */
+function pageComponentsOf(pageId: string, sectionIds: string[]) {
+  const { nodes, components } = useSpaceStore.getState()
+  const sections = new Set(sectionIds)
+  const ids = new Set(componentUses(nodes).filter((u) => sections.has(u.sectionId)).map((u) => u.componentId))
+  return components.filter((c) => ids.has(c.id))
+}
+
 /**
- * De onde vêm o cabeçalho e o rodapé da página: do Theme Builder do site (a
- * página vai em Largura Total, sem eles dentro) ou de dentro da página.
+ * Os componentes da página no site: com o Elementor Pro, o cabeçalho e o
+ * rodapé vêm do Theme Builder (a página vai em Largura Total, sem eles
+ * dentro) e os outros viram referência ao modelo deles; sem ele, vão dentro
+ * da página. Avisa o que ainda não está no site e o que mudou depois.
  */
-const PartsNote: React.FC<{ pageId: string; support: PartsSupport | null }> = ({ pageId, support }) => {
-  const pages = useSpaceStore((s) => s.pages)
-  const nodes = useSpaceStore((s) => s.nodes)
+const ComponentsNote: React.FC<{ pageId: string; support: PartsSupport | null }> = ({ pageId, support }) => {
+  const page = useSpaceStore((s) => s.pages.find((p) => p.id === pageId))
+  useSpaceStore((s) => s.nodes)
+  useSpaceStore((s) => s.components)
   const connection = useActiveWordPress()
-  const page = pages.find((p) => p.id === pageId)
   if (!page || !support || !connection) return null
-  const shown = Object.values(pageParts(page, pages)).filter((p): p is NonNullable<typeof p> => !!p)
-  // Componentes livres usados na página
-  const components = [...new Set(pageSections(page, nodes).map(instanceOf).filter((id): id is string => !!id))]
-    .map((id) => componentPage(pages, id))
-    .filter((c): c is NonNullable<typeof c> => !!c)
-  if (!shown.length && !components.length) return null
-  if (!shown.length) return <ComponentsNote pageId={pageId} components={components} support={support} />
-  const names = shown.map((p) => p.name.toLowerCase()).join(' e o ')
-  const many = shown.length > 1
+  const components = pageComponentsOf(pageId, page.sectionIds)
+  if (!components.length) return null
+  const names = (list: SpaceComponent[]) => list.map((c) => c.name).join(', ')
 
   if (support.mode === 'inline') {
     return (
       <div className="grid gap-1 rounded-lg border px-3 py-2.5 text-xs text-gray-700">
         <p className="flex items-center gap-1.5 font-medium text-gray-900">
-          <Component className="h-3.5 w-3.5" style={{ color: PART_COLOR }} aria-hidden /> O {names} {many ? 'vão' : 'vai'} dentro da página
+          <Component className="h-3.5 w-3.5" style={{ color: COMPONENT_COLOR }} aria-hidden /> Componentes vão dentro da página
         </p>
         <p>
-          Como {inlineReason(support)}, cada página leva a própria cópia: mudou o componente, publique as páginas de novo.
+          {names(components)}: como {inlineReason(support)}, cada página leva a própria cópia. Mudou um componente, publique as páginas que o usam.
         </p>
       </div>
     )
   }
 
-  const missing = shown.filter((p) => p.wordpress?.siteUrl !== connection.site.siteUrl)
+  const linked = (c: SpaceComponent) => c.wordpress?.siteUrl === connection.site.siteUrl
+  const roles = components.filter((c) => c.role)
+  const asModel = components.filter((c) => !c.role && componentKind(c))
+  const inline = components.filter((c) => !c.role && !componentKind(c))
+  const outdated = components.filter((c) => {
+    if (!linked(c) || !c.wordpress?.contentHash) return false
+    try {
+      return c.wordpress.contentHash !== componentContentHash(c.id)
+    } catch {
+      return false
+    }
+  })
+  const missingRoles = roles.filter((c) => !linked(c))
+  const open = (c: SpaceComponent) => useWordPressUi.getState().openComponentPublish(c.id, pageId)
+  const link = (c: SpaceComponent, label: string) => (
+    <button
+      key={c.id}
+      type="button"
+      onClick={() => open(c)}
+      className="rounded font-medium underline underline-offset-2 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {label}
+    </button>
+  )
+
   return (
     <div className="grid gap-1.5 rounded-lg border px-3 py-2.5 text-xs text-gray-700">
       <p className="flex items-center gap-1.5 font-medium text-gray-900">
-        <Component className="h-3.5 w-3.5" style={{ color: PART_COLOR }} aria-hidden /> Layout: Elementor Largura Total
+        <Component className="h-3.5 w-3.5" style={{ color: COMPONENT_COLOR }} aria-hidden /> Componentes
+        {roles.length > 0 && <span className="font-normal text-muted-foreground">· página em Elementor Largura Total</span>}
       </p>
-      <p>O {names} {many ? 'vêm' : 'vem'} do Theme Builder do site, {many ? 'os mesmos' : 'o mesmo'} em todas as páginas; a página sobe só com as seções dela.</p>
-      {missing.length > 0 && (
+      {roles.length > 0 && <p>{names(roles)}: vêm do Theme Builder, os mesmos em todas as páginas; a página sobe sem eles.</p>}
+      {asModel.length > 0 && <p>{names(asModel)}: entram como referência ao modelo de cada um (widget Modelo ou Global Widget); o que ainda não está no site é salvo junto.</p>}
+      {inline.length > 0 && <p>{names(inline)}: grupos dentro da seção, vão dentro da página.</p>}
+      {missingRoles.length > 0 && (
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-amber-800">
-          <span>
-            {missing.map((p) => p.name).join(' e ')} ainda não {missing.length === 1 ? 'está' : 'estão'} no Theme Builder: até lá, a página mostra o que o site já tem.
-          </span>
-          {missing.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => useWordPressUi.getState().openPublish(p.id, pageId)}
-              className="rounded font-medium underline underline-offset-2 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Publicar o {p.name.toLowerCase()}…
-            </button>
-          ))}
+          <span>{names(missingRoles)} ainda não {missingRoles.length === 1 ? 'está' : 'estão'} no Theme Builder: até lá, a página mostra o que o site já tem.</span>
+          {missingRoles.map((c) => link(c, `Publicar ${c.name}…`))}
         </p>
       )}
-      {components.length > 0 && <ComponentsNote pageId={pageId} components={components} support={support} bare />}
-    </div>
-  )
-}
-
-/** Os componentes livres da página: com o Elementor Pro, vão como widget Modelo; sem ele, dentro da página. */
-const ComponentsNote: React.FC<{ pageId: string; components: SpacePage[]; support: PartsSupport; bare?: boolean }> = ({ pageId, components, support, bare }) => {
-  const connection = useActiveWordPress()
-  if (!connection) return null
-  const names = components.map((c) => c.name).join(', ')
-  const theme = support.mode === 'theme'
-  const linked = (c: SpacePage) => c.wordpress?.siteUrl === connection.site.siteUrl
-  const unpublished = theme ? components.filter((c) => !linked(c)) : []
-  const outdated = theme
-    ? components.filter((c) => {
-        if (!linked(c) || !c.wordpress?.contentHash) return false
-        try {
-          return c.wordpress.contentHash !== partContentHash(c.id)
-        } catch {
-          return false
-        }
-      })
-    : []
-  const body = (
-    <>
-      <p className={cn('flex items-center gap-1.5', !bare && 'font-medium text-gray-900')}>
-        {!bare && <Component className="h-3.5 w-3.5" style={{ color: PART_COLOR }} aria-hidden />}
-        {theme ? `Componentes (${names}): vão como widget Modelo, apontando para o modelo salvo de cada um.` : `Componentes (${names}): vão dentro da página, porque ${inlineReason(support)}.`}
-      </p>
-      {unpublished.length > 0 && <p>{unpublished.map((c) => c.name).join(', ')} ainda não {unpublished.length === 1 ? 'está salvo' : 'estão salvos'} no Elementor: {unpublished.length === 1 ? 'é salvo' : 'são salvos'} junto com a página.</p>}
       {outdated.length > 0 && (
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-amber-800">
-          <span>
-            {outdated.map((c) => c.name).join(', ')} mudou no canvas depois de publicado: o site mostra a versão anterior até publicar o componente.
-          </span>
-          {outdated.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => useWordPressUi.getState().openPublish(c.id, pageId)}
-              className="rounded font-medium underline underline-offset-2 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Publicar {c.name}…
-            </button>
-          ))}
+          <span>{names(outdated)} mudou no canvas depois de publicado: o site mostra a versão anterior até publicar o componente.</span>
+          {outdated.map((c) => link(c, `Publicar ${c.name}…`))}
         </p>
       )}
-    </>
+    </div>
   )
-  return bare ? <div className="grid gap-1 border-t pt-1.5">{body}</div> : <div className="grid gap-1 rounded-lg border px-3 py-2.5 text-xs text-gray-700">{body}</div>
 }
 
 /** O que vai junto com a página: título, endereço, SEO e imagem destacada, com o botão para editar. */
@@ -297,7 +276,7 @@ export const PublishPanel: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, pageId, connection, nodes, page?.sectionIds, support?.mode])
   // Com o Theme Builder, a página com cabeçalho do site vai em Largura Total: o layout não se escolhe
-  const themeParts = support?.mode === 'theme' && !!page && Object.values(pageParts(page, useSpaceStore.getState().pages)).some(Boolean)
+  const themeParts = support?.mode === 'theme' && !!page && pageComponentsOf(page.id, page.sectionIds).some((c) => !!c.role)
 
   if (!open || !page) return null
 
@@ -549,7 +528,7 @@ export const PublishPanel: React.FC = () => {
             <Choices name="Layout" value={template} onChange={(value) => setTemplate(value)} options={TEMPLATE_OPTIONS} />
           </div>
         )}
-        <PartsNote pageId={page.id} support={support} />
+        <ComponentsNote pageId={page.id} support={support} />
 
         <DetailsSummary pageId={page.id} />
 

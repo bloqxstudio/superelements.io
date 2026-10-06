@@ -4,8 +4,7 @@ import type { Json } from '@/integrations/supabase/types'
 import { useProjectSync } from '@/features/projects/useProjectSession'
 import { keepVersionBefore, loadVersionDoc, type ProjectVersion } from '@/features/projects/storage'
 import { onCanvasRemoval, useSpaceStore, type CanvasRemoval } from '@/store/spaceStore'
-import { nextPartPosition, partPage } from '@/features/space/pages/pages'
-import type { PageDetails, PagePart, SectionNodeData, SpaceNode } from '@/types/space'
+import type { PageDetails, SectionNodeData, SpaceNode } from '@/types/space'
 
 /**
  * Registro de atividades do projeto (tabela `space_project_events`): quem fez
@@ -31,8 +30,6 @@ interface TrashedPage {
   id: string
   name: string
   details?: PageDetails
-  /** Era o cabeçalho ou o rodapé do site (um componente). */
-  part?: PagePart
   sections: SectionNodeData[]
 }
 
@@ -80,7 +77,7 @@ export async function listEvents(projectId: string): Promise<ActivityEvent[] | n
 /** A cópia de uma exclusão, como vai para o registro. */
 export function removalEvent(removal: CanvasRemoval): { action: string; target: string; details: Record<string, unknown> } {
   if (removal.kind === 'page') {
-    const page: TrashedPage = { id: removal.page.id, name: removal.page.name, details: removal.page.details, part: removal.page.part, sections: sectionData(removal.nodes) }
+    const page: TrashedPage = { id: removal.page.id, name: removal.page.name, details: removal.page.details, sections: sectionData(removal.nodes) }
     return { action: 'page.deleted', target: removal.page.name, details: { page } }
   }
   if (removal.kind === 'section') {
@@ -92,7 +89,6 @@ export function removalEvent(removal: CanvasRemoval): { action: string; target: 
     id: p.id,
     name: p.name,
     details: p.details,
-    part: p.part,
     sections: sectionData(p.sectionIds.map((id) => byId.get(id)).filter((n): n is SpaceNode => !!n)),
   }))
   return { action: 'canvas.cleared', target: `${pages.length} ${pages.length === 1 ? 'página' : 'páginas'}`, details: { pages } }
@@ -133,12 +129,6 @@ const restorePages = (pages: TrashedPage[]) => {
     first ??= pageId
     if (page.details) store.setPageDetails(pageId, page.details)
     if (page.sections.length) useSpaceStore.getState().addSections(page.sections, { pageId })
-    // O cabeçalho (ou rodapé) do site volta a ser componente, se o site ainda não tem outro
-    const { pages, nodes } = useSpaceStore.getState()
-    if (page.part && !partPage(pages, page.part.kind)) {
-      const others = pages.filter((p) => p.id !== pageId)
-      useSpaceStore.getState().commitCanvas({ pages: pages.map((p) => (p.id === pageId ? { ...p, ...nextPartPosition(others, nodes), part: page.part } : p)) })
-    }
   }
   if (first) useSpaceStore.getState().focusPage(first)
 }

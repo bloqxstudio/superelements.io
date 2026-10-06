@@ -35,10 +35,12 @@ export interface SectionNodeData {
   /** Settings ajustadas à mão no painel de propriedades, por id do elemento: valem por cima da marca. */
   pinned?: Record<string, string[]>
   /**
-   * Instância de um componente: a seção não tem conteúdo próprio e mostra as
-   * seções da folha do componente (`SpacePage.part.kind === 'section'`), sem
-   * cópia. No site com Elementor Pro, vira o widget Modelo apontando para ele.
+   * A seção inteira é um uso deste componente (`SpaceComponent.id`): mudou
+   * aqui, muda em todos os usos. Uma camada dentro da seção é uso pela setting
+   * `_se_component` (ver `features/space/components`).
    */
+  component?: string
+  /** @deprecated Instância do modelo antigo (folha separada); vira `component` ao abrir o projeto. */
   instanceOf?: string
 }
 
@@ -88,23 +90,39 @@ export interface SpacePage {
   wordpress?: PageWordPressLink
   /** Título, endereço, SEO e imagem destacada que vão junto ao publicar. */
   details?: PageDetails
-  /** Esta folha é uma parte do site (cabeçalho ou rodapé), não uma página: aparece nas outras. */
+  /** @deprecated Folha de componente do modelo antigo; vira componente dentro das páginas ao abrir o projeto. */
   part?: PagePart
 }
 
-/** Cabeçalho e rodapé aparecem sozinhos em todas as páginas; a seção (componente livre) entra onde for posta. */
+/** @deprecated Modelo antigo de componentes (folha separada), só para abrir projetos salvos nele. */
 export type PagePartKind = 'header' | 'footer' | 'section'
 
-/**
- * Parte que se repete no site, como os modelos de cabeçalho e rodapé do Theme
- * Builder do Elementor: as seções existem uma vez só, na folha da parte, e
- * cada página mostra a mesma parte em cima (ou embaixo). Mudou nela, muda em
- * todas.
- */
+/** @deprecated Ver `PagePartKind`. */
 export interface PagePart {
   kind: PagePartKind
-  /** Páginas que ficam sem esta parte (a exceção da condição do Elementor). Sem nenhuma, vale para o site inteiro. */
   exclude?: string[]
+}
+
+/** Papel do componente no site: o cabeçalho e o rodapé vão para o Theme Builder do Elementor Pro. */
+export type ComponentRole = 'header' | 'footer'
+
+/**
+ * Componente do projeto: qualquer parte da página (uma seção inteira, um
+ * container, um botão, um título) usada em vários lugares. Não tem folha
+ * própria: cada uso fica na página, editável ali, e o Space mantém todos
+ * iguais. Aqui fica o conteúdo de agora, de onde sai um uso novo e o modelo
+ * publicado no Elementor (Theme Builder, modelo salvo ou Global Widget).
+ */
+export interface SpaceComponent {
+  id: string
+  name: string
+  /** Seção inteira (os elementos da seção) ou uma camada dentro de uma seção. */
+  level: 'section' | 'element'
+  /** JSON do Elementor de agora: a lista de elementos da seção, ou a camada num array de um. */
+  elementorJson: string
+  role?: ComponentRole
+  /** O modelo do Elementor no site do cliente que este componente atualiza ao publicar. */
+  wordpress?: PageWordPressLink
 }
 
 /** O que a página leva ao site além das seções. Campo vazio fica com o padrão do WordPress ou do plugin de SEO. */

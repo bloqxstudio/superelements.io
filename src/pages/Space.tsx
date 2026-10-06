@@ -8,7 +8,6 @@ import { useSpaceUi } from '@/features/space/spaceUi'
 import { PagePlayer } from '@/features/space/pages/PagePlayer'
 import { useSectionShortcuts } from '@/features/space/pages/useSectionShortcuts'
 import { LibraryDragChip } from '@/features/space/pages/LibraryDragChip'
-import { MakePartDialog } from '@/features/space/pages/MakePartDialog'
 import { WordPressImportDialog } from '@/features/wordpress/WordPressImportDialog'
 import { WordPressPageDialogs } from '@/features/wordpress/WordPressPageDialogs'
 import { useEditorShortcuts } from '@/features/space/editor/useEditorShortcuts'
@@ -63,7 +62,6 @@ const Space: React.FC = () => {
       <LibraryDragChip />
       <WordPressImportDialog />
       <WordPressPageDialogs />
-      <MakePartDialog />
     </div>
   )
 }

@@ -13,7 +13,7 @@ import { sectionLensDocument } from '@/features/space/levels/lens'
 import { sectionMotionLabel } from '@/features/space/levels/motion'
 import { pageOf } from '@/features/space/pages/pages'
 import { SectionMenu } from '@/features/space/pages/SectionMenu'
-import { PART_COLOR, PART_COLOR_STRONG, confirmPartSectionRemoval } from '@/features/space/pages/parts'
+import { COMPONENT_COLOR, COMPONENT_COLOR_STRONG, elementComponent } from '@/features/space/components/components'
 import { useSectionDrag } from '@/features/space/pages/useSectionDrag'
 import { findElement, updateElementContent } from '@/features/space/navigator/elementorContentEditor'
 import { layerKind } from '@/features/space/navigator/navigatorLabels'
@@ -175,12 +175,20 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   }, [node.id, updateNodeData])
 
   const selectedElement = useMemo(() => (selectedElementId ? findElement(elements, selectedElementId) : null), [elements, selectedElementId])
+  const components = useSpaceStore((s) => s.components)
+  // Camada que é uso de componente: o nome do componente no rótulo
+  const componentOf = (id: string | undefined) => {
+    const componentId = id ? elementComponent(findElement(elements, id)) : undefined
+    return componentId ? components.find((c) => c.id === componentId) : undefined
+  }
   const labelOf = (id: string | undefined) => {
     const element = id ? findElement(elements, id) : null
-    return element && id ? data.navigatorLabels?.[id] || layerKind(element) : ''
+    return element && id ? componentOf(id)?.name || data.navigatorLabels?.[id] || layerKind(element) : ''
   }
   const selectedLabel = labelOf(geometry?.selected?.id)
   const hoverLabel = labelOf(geometry?.hover?.id)
+  const selectedIsComponent = !!componentOf(geometry?.selected?.id)
+  const hoverIsComponent = !!componentOf(geometry?.hover?.id)
   const indicator = dragIndicator ?? insertIndicator
 
   const overlay = useCallback(
@@ -193,9 +201,11 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
         element={selectedElement}
         label={selectedLabel}
         hoverLabel={hoverLabel}
+        selectedIsComponent={selectedIsComponent}
+        hoverIsComponent={hoverIsComponent}
       />
     ),
-    [node.id, geometry, indicator, selectedElement, selectedLabel, hoverLabel]
+    [node.id, geometry, indicator, selectedElement, selectedLabel, hoverLabel, selectedIsComponent, hoverIsComponent]
   )
 
   const motionLabel = sectionMotionLabel(data.levels?.motion)
@@ -220,9 +230,9 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   }, [node.id, node.width, updateNodeSize, waiting])
 
   const inPage = !!page
-  // Seção do cabeçalho ou do rodapé do site: aparece em todas as páginas, e tem a cor dos componentes
-  const component = page?.part
-  const remove = () => confirmPartSectionRemoval([node.id]) && removeNode(node.id)
+  // A seção inteira é um uso de componente: tem a cor dos componentes e o nome dele no rótulo
+  const component = useSpaceStore((s) => (data.component ? s.components.find((c) => c.id === data.component) : undefined))
+  const remove = () => removeNode(node.id)
   const { onMouseDown: handleDragStart, lift, dragging, settling, onSettled } = useSectionDrag(node, cardRef)
 
   const handleOutputPortMouseDown = useCallback(
@@ -311,10 +321,10 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
     const shown = selected || hovered || dragging || !!touchedBy || !!working
     const outline = component
       ? selected
-        ? PART_COLOR_STRONG
+        ? COMPONENT_COLOR_STRONG
         : touchedBy || working
           ? '#D97757'
-          : PART_COLOR
+          : COMPONENT_COLOR
       : selected
         ? '#7c3aed'
         : touchedBy || working
@@ -370,7 +380,8 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
           >
             <GripVertical className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
             {component ? <Component className="h-3 w-3 shrink-0" aria-label="Componente" /> : <span className="shrink-0 tabular-nums opacity-70">{position + 1}</span>}
-            <span className="truncate">{data.title || 'Seção sem nome'}</span>
+            <span className="truncate">{component ? component.name : data.title || 'Seção sem nome'}</span>
+            {component && <span className="shrink-0 opacity-80">· componente</span>}
             {touchedBy && <span className="shrink-0 opacity-80">· {agent} {touchedBy === 'created' ? 'criou' : 'mudou'}</span>}
             {motionLabel && <span className="shrink-0 opacity-80">· {motionLabel}</span>}
           </div>

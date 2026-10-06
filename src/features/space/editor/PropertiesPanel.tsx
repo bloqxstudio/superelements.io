@@ -6,6 +6,7 @@ import {
   AlignRight,
   ArrowUpLeft,
   Columns3,
+  Component as ComponentIcon,
   Copy,
   Group as GroupIcon,
   Package,
@@ -21,7 +22,10 @@ import { layerKind, layerName } from '@/features/space/navigator/navigatorLabels
 import { useActiveBrand } from '@/features/space/brand/brandStore'
 import { readImageFile } from '@/features/space/featured/render'
 import type { SectionNodeData } from '@/types/space'
+import { elementComponent } from '@/features/space/components/components'
+import { MOD_KEY } from '@/features/space/pages/clipboard'
 import {
+  componentizeSelection,
   deleteSelectedElement,
   duplicateSelectedElement,
   saveSelectedAsBlock,
@@ -331,6 +335,17 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ sectionId, ele
           {family === 'container' && (
             <button type="button" className={iconButton} onClick={unwrapSelectedElement} disabled={locked} title="Desagrupar (Ctrl+Shift+G)" aria-label="Desagrupar">
               <Ungroup className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {!elementComponent(element) && (
+            <button
+              type="button"
+              className={`${iconButton} hover:text-cyan-700`}
+              onClick={() => componentizeSelection(name)}
+              title={`Transformar em componente (${MOD_KEY}Alt+K): os usos ficam ligados, mudar um muda todos`}
+              aria-label="Transformar em componente"
+            >
+              <ComponentIcon className="h-3.5 w-3.5" />
             </button>
           )}
           <button type="button" className={iconButton} onClick={() => saveSelectedAsBlock(name)} title="Salvar como bloco, para reusar pelo painel Inserir" aria-label="Salvar como bloco">

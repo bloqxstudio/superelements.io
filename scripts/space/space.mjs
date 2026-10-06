@@ -47,12 +47,19 @@ quem acompanha não muda. Acompanhe todos em /agentes no app.
   move <seção> (--after <seção> | --before <seção> | --index <n>) [--page <nome>] --label "..."
   page-add <nome> [--label "..."] cria uma página no canvas
   page-remove <nome> --label "…"  tira uma página (com as seções dela) do canvas
-  part header|footer --from <seção> [--page <nome>]
-                                  transforma a seção no cabeçalho (ou rodapé) do site: um componente, uma cópia só
-                                  que aparece em todas as páginas (as cópias parecidas das outras páginas saem)
-  part header|footer --page <nome> --on|--off
-                                  mostra ou tira o cabeçalho (rodapé) do site naquela página
-  part header|footer --unlink     volta a ser seção comum: cada página fica com a própria cópia
+  component                       componentes do projeto e onde cada um é usado
+  component make --from <seção> [--element <id da camada>] [--name "<nome>"] [--page <nome>]
+                                  a seção (ou uma camada dela: container, botão, título) vira componente; os usos
+                                  ficam ligados: mudar um (no canvas ou no push) muda todos
+  component insert <componente> (--page <nome> [--at <n>] | --into <seção>)
+                                  novo uso: a seção entra na página (posição n, ou o fim); a camada, no fim da seção
+  component role <componente> header|footer|none [--all]
+                                  cabeçalho ou rodapé do site (vira modelo do Theme Builder); --all põe em todas as páginas
+  component place <componente> [--page <nome>]... [--top|--bottom]
+                                  põe a seção do componente no topo (ou no fim) das páginas que ainda não têm
+  component detach --from <seção> [--element <id>]   esse uso vira cópia comum (os outros seguem ligados)
+  component rename <componente> --name "<nome>" | component delete <componente>
+                                  delete: todos os usos viram cópias comuns
   plan "<seção>" "<seção>"… (--new <nome da página> | --page <nome> [--after <seção>])
                                   põe o plano no canvas: seções em esqueleto borrado, que ficam nítidas ao gravar
   work "<o que estou fazendo>" [--section <seção>]… [--page <nome>] [--element <id da camada>] | work --done
@@ -81,8 +88,8 @@ Com o cliente e o site (falam com a conta e com o WordPress; cada um é um passo
   wp                              conexão com o WordPress e as páginas já ligadas ao site
   wp connect <site> [--user <login> --password "<senha de aplicação>"]
                                   sem senha: o link para o WordPress aprovar; com ela: grava a conexão
-  wp pages | wp import <id>...    páginas do site; trazer páginas do site para o canvas (seção que é só o widget Modelo
-                                  vira instância do componente daquele modelo salvo)
+  wp pages | wp import <id>...    páginas do site; trazer páginas do site para o canvas (widget Modelo e Global Widget
+                                  viram o componente daquele modelo, com o conteúdo verdadeiro)
   wp globals | wp import-global <id>...
                                   cabeçalho e rodapé do Theme Builder do site; trazer como componente (ligado ao mesmo modelo)
   details --page <nome> [--title --slug --seo-title --description --keyword]
@@ -91,8 +98,9 @@ Com o cliente e o site (falam com a conta e com o WordPress; cada um é um passo
                                   publica no WordPress (página nova vai como rascunho sem --live); sem --yes só mostra o que faria.
                                   Com o Theme Builder do Elementor Pro, a página que mostra o cabeçalho do site vai em Largura
                                   Total, sem ele dentro (sem o Theme Builder, ele vai dentro da página)
-  publish --page "Cabeçalho do site" [--update-existing] [--overwrite] --yes
-                                  publica o componente como modelo do Theme Builder, no site inteiro menos as páginas sem ele.
+  publish --component <componente> [--update-existing] [--overwrite] --yes
+                                  publica o componente como modelo do Elementor Pro: cabeçalho e rodapé no Theme Builder (no
+                                  site inteiro menos as páginas sem ele), seção como modelo salvo, widget como Global Widget.
                                   Muda o site todo na hora. Se o site já usa um cabeçalho, o nosso entra no lugar (o dele fica
                                   salvo, sem condição); --update-existing troca o conteúdo do dele pelo nosso
   restore --page <nome> --yes     volta a página do site para a versão de antes da última publicação daqui
@@ -368,16 +376,16 @@ async function cmdStatus() {
   for (const page of status.pages) {
     const active = page.id === status.activePageId ? '  ← ativa' : ''
     const wp = page.wordpress ? `  · WordPress: ${page.wordpress.link ?? page.wordpress.siteUrl}` : ''
-    // Componente do site: editar a folha dele muda todas as páginas da lista
-    const part = page.part ? `  ◆ COMPONENTE (${page.part.kind === 'header' ? 'cabeçalho' : 'rodapé'} do site), aparece em: ${page.part.shownIn.join(', ') || 'nenhuma página'}` : ''
-    const parts = page.parts && [page.parts.header && `◆ ${page.parts.header.name} em cima`, page.parts.footer && `◆ ${page.parts.footer.name} embaixo`].filter(Boolean)
-    console.log(`▸ ${page.name}  (${page.sections.length} seções, ${page.id.slice(0, 8)})${active}${wp}${part}${parts?.length ? `  · ${parts.join(', ')}` : ''}`)
+    console.log(`▸ ${page.name}  (${page.sections.length} seções, ${page.id.slice(0, 8)})${active}${wp}`)
     for (const s of page.sections) {
+      // ◆: uso de componente; mudar aqui muda os outros usos
       const marks = [selected.has(s.id) && 'SELECIONADA', s.fromSite && 'do site', !s.valid && 'JSON inválido', s.sourceId].filter(Boolean)
-      console.log(`   ${pad(s.index + 1)}. ${s.title}  ·  ${s.id.slice(0, 8)}${marks.length ? `  [${marks.join(', ')}]` : ''}`)
+      const comp = [s.component && `◆ componente ${s.component.name}`, s.inner?.length && `◆ dentro: ${s.inner.map((i) => `${i.name} (${i.elementId})`).join(', ')}`].filter(Boolean)
+      console.log(`   ${pad(s.index + 1)}. ${s.title}  ·  ${s.id.slice(0, 8)}${marks.length ? `  [${marks.join(', ')}]` : ''}${comp.length ? `  ${comp.join(' · ')}` : ''}`)
     }
   }
   if (status.loose.length) console.log(`▸ Soltas no canvas: ${status.loose.map((s) => `${s.title} (${s.id.slice(0, 8)})`).join(', ')}`)
+  if (status.components?.length) console.log(`◆ Componentes: ${status.components.map((c) => `${c.name}${c.role ? ` (${c.role === 'header' ? 'cabeçalho' : 'rodapé'} do site)` : ''} · ${c.uses.length} usos`).join('; ')}  (veja: component)`)
   const el = status.selection.element
   if (el) {
     const section = status.pages.flatMap((p) => p.sections).find((s) => s.id === el.sectionId)
@@ -488,9 +496,11 @@ async function pullPages(pageRefs) {
     `- Lido em ${new Date().toLocaleString('pt-BR')}`,
     '',
     '## Páginas',
-    ...data.pages.map((p) => `- ${p.name} — ${p.sections.length} seções${p.part ? ` · COMPONENTE: o ${p.part.kind === 'header' ? 'cabeçalho' : 'rodapé'} do site, aparece em ${p.part.shownIn.join(', ') || 'nenhuma página'}` : ''}${p.wordpress ? ` · publica em ${p.wordpress.link ?? p.wordpress.siteUrl}` : ''}`),
-    data.pages.some((p) => p.part) &&
-      '\nCabeçalho e rodapé do site são componentes: existem uma vez só, na folha deles, e aparecem nas páginas. Mude a folha do componente, nunca ponha uma cópia do cabeçalho numa página.',
+    ...data.pages.map((p) => `- ${p.name} — ${p.sections.length} seções${p.wordpress ? ` · publica em ${p.wordpress.link ?? p.wordpress.siteUrl}` : ''}`),
+    data.components?.length && '\n## Componentes\n',
+    ...(data.components ?? []).map((c) => `- ${c.name}${c.role ? ` — ${c.role === 'header' ? 'cabeçalho' : 'rodapé'} do site` : ''} — ${c.level === 'section' ? 'seção inteira' : 'camada'}, ${c.uses.length} usos (${[...new Set(c.uses.map((u) => u.page ?? 'solta'))].join(', ')})`),
+    data.components?.length &&
+      '\nCada uso de componente fica na página e é editável ali; mudar um uso (no canvas ou no push) muda todos. Para outra página, insira o componente (component insert), nunca uma cópia solta.',
     '',
     '## Briefing do projeto',
     '',
@@ -688,25 +698,77 @@ async function cmdPageRemove() {
   console.log(`✔ Página ${page.name} saiu do canvas. ${undoHint(status)}`)
 }
 
-async function cmdPart() {
-  const kind = positional[0]
-  if (kind !== 'header' && kind !== 'footer') fail('Diga header (cabeçalho) ou footer (rodapé): part header --from <seção>')
+const ROLE_NAME = { header: 'cabeçalho', footer: 'rodapé' }
+
+/** Componentes: qualquer seção ou camada vira um; os usos ficam ligados. */
+async function cmdComponent() {
   const status = await readyStatus()
-  const noun = kind === 'header' ? 'cabeçalho' : 'rodapé'
-  if (flags.unlink) {
-    const result = await call('part', { action: 'unlink', kind })
-    return console.log(`✔ O ${noun} voltou a ser seção comum em ${result.pages} páginas. ${undoHint(status)}`)
+  const action = positional[0] ?? 'list'
+  const ref = positional.slice(1).join(' ') || undefined
+  const done = (text) => console.log(`✔ ${text} ${undoHint(status)}`)
+
+  if (action === 'list') {
+    const { components } = await call('component', { action: 'list' })
+    if (flags.json) return console.log(JSON.stringify(components, null, 2))
+    if (!components.length) return console.log('O projeto não tem componentes. Crie com: component make --from <seção> [--element <id da camada>]')
+    for (const c of components) {
+      const where = c.uses.map((u) => `${u.page ?? 'solta'}${u.elementId ? ` › ${u.elementId}` : ''}`).join(', ')
+      console.log(`◆ ${c.name}  ·  ${c.id.slice(0, 8)}  ·  ${c.level === 'section' ? 'seção inteira' : 'camada'}${c.role ? ` · ${ROLE_NAME[c.role]} do site` : ''}${c.wordpress ? ` · no site: post ${c.wordpress.postId}` : ''}`)
+      console.log(`   ${c.uses.length} usos: ${where || 'nenhum (insira com component insert)'}`)
+    }
+    return
   }
-  if (flags.on || flags.off) {
-    const page = resolvePage(status, one(flags.page))
-    const result = await call('part', { action: flags.on ? 'show' : 'hide', kind, page: page.id })
-    return console.log(`✔ ${page.name} ${result.shown ? 'mostra' : 'ficou sem'} o ${noun} do site. Aparece em: ${result.shownIn.join(', ') || 'nenhuma página'}.`)
+
+  if (action === 'make' || action === 'detach') {
+    const section = resolveSection(status, one(flags.from), one(flags.page))
+    const element = one(flags.element)
+    if (action === 'detach') {
+      await call('component', { action: 'detach', section: section.id, element })
+      return done(`${element ? `A camada ${element}` : `"${section.title}"`} se separou do componente; os outros usos seguem ligados.`)
+    }
+    const result = await call('component', { action: 'make', section: section.id, element, name: one(flags.name) })
+    return done(`"${result.name}" virou componente (${result.componentId.slice(0, 8)}, ${result.level === 'section' ? 'seção inteira' : 'camada'}). Use em outros lugares com: component insert "${result.name}" …`)
   }
-  const section = resolveSection(status, one(flags.from), one(flags.page))
-  const result = await call('part', { action: 'make', kind, section: section.id })
-  console.log(`✔ "${section.title}" virou o ${noun} do site (${result.name}, ${result.partId.slice(0, 8)}). Aparece em: ${result.shownIn.join(', ')}.`)
-  for (const r of result.removed) console.log(`   saiu de ${r.page}: "${r.title}"${r.same ? ' (igual)' : ' (era diferente: confira)'}`)
-  console.log(`   Para mudar o ${noun}, mude a folha "${result.name}". ${undoHint(status)}`)
+
+  if (!ref) fail(`Diga o componente: component ${action} <nome ou id>`)
+  switch (action) {
+    case 'rename': {
+      const name = one(flags.name)
+      if (!name) fail('Diga o nome novo: component rename <componente> --name "<nome>"')
+      await call('component', { action: 'rename', component: ref, name })
+      return done(`Agora se chama "${name}".`)
+    }
+    case 'role': {
+      const parts = positional.slice(1)
+      const role = parts.pop()
+      if (!['header', 'footer', 'none'].includes(role)) fail('Diga o papel: component role <componente> header|footer|none')
+      const result = await call('component', { action: 'role', component: parts.join(' '), role })
+      console.log(role === 'none' ? '✔ Deixou de ser cabeçalho/rodapé do site.' : `✔ É o ${ROLE_NAME[role]} do site${result.replaced ? ` (${result.replaced} deixou de ser)` : ''}: páginas novas já vêm com ele, e publicar vai para o Theme Builder.`)
+      if (flags.all && role !== 'none') {
+        const placed = await call('component', { action: 'place', component: result.componentId, where: role === 'footer' ? 'bottom' : 'top' })
+        console.log(`   entrou em ${placed.added} página(s) que ainda não tinham`)
+      }
+      return console.log(`   ${undoHint(status)}`)
+    }
+    case 'place': {
+      const pages = list(flags.page).map((p) => resolvePage(status, p).id)
+      const result = await call('component', { action: 'place', component: ref, pages, where: flags.bottom ? 'bottom' : flags.top ? 'top' : undefined })
+      return done(`Entrou em ${result.added} página(s) (de ${result.pages.join(', ')}).`)
+    }
+    case 'insert': {
+      const into = one(flags.into)
+      const section = into ? resolveSection(status, into, one(flags.page)) : undefined
+      const page = !section ? resolvePage(status, one(flags.page)) : undefined
+      const at = one(flags.at)
+      const result = await call('component', { action: 'insert', component: ref, page: page?.id, section: section?.id, index: at ? Number(at) - 1 : undefined })
+      return done(`Novo uso (${result.id.slice(0, 8)}) ${section ? `em "${section.title}"` : `na página ${page.name}`}.`)
+    }
+    case 'delete': {
+      const result = await call('component', { action: 'delete', component: ref })
+      return done(`Deixou de ser componente: ${result.uses} usos viraram cópias comuns.`)
+    }
+  }
+  fail(`Ação desconhecida: component ${action}. Use component, make, insert, role, place, detach, rename ou delete`)
 }
 
 async function cmdPageAdd() {
@@ -946,7 +1008,7 @@ async function cmdWp() {
     if (!result.available) return console.log(`Sem cabeçalho e rodapé do Theme Builder para trazer: ${result.reason}.`)
     if (!result.globals.length) return console.log('O site não tem cabeçalho nem rodapé do Theme Builder valendo.')
     for (const g of result.globals) {
-      console.log(`   ${g.id} · ${g.kind === 'header' ? 'cabeçalho' : 'rodapé'} · ${g.title} · ${g.conditions.join(', ')}${g.canvas ? ` · no canvas: ${g.canvas}` : g.blocked ? ' · o projeto já tem outro' : ''}`)
+      console.log(`   ${g.id} · ${g.kind === 'header' ? 'cabeçalho' : 'rodapé'} · ${g.title} · ${g.conditions.join(', ')}${g.canvas ? ` · no canvas: ${g.canvas}` : g.replaces ? ` · trazer tira o papel de ${g.replaces}` : ''}`)
     }
     return
   }
@@ -957,8 +1019,8 @@ async function cmdWp() {
     const result = await call('wordpress', { action: 'importGlobals', ids })
     if (flags.json) return console.log(JSON.stringify(result, null, 2))
     for (const g of result.imported) {
-      console.log(`✔ ${g.name} (modelo ${g.id}) é a folha do ${g.kind === 'header' ? 'cabeçalho' : 'rodapé'} do site, ligada ao modelo`)
-      if (g.partial) console.log('   no Elementor ele não vale no site inteiro; no canvas aparece em todas as páginas (tire as que não devem ter)')
+      console.log(`✔ ${g.name} (modelo ${g.id}) é o componente ${g.kind === 'header' ? 'cabeçalho' : 'rodapé'} do site, ligado ao modelo; entrou em ${g.placed} página(s)`)
+      if (g.partial) console.log('   no Elementor ele não vale no site inteiro: confira as páginas que não devem ter')
       if (g.kept.length) console.log(`   condições que o canvas não mostra, mantidas ao publicar: ${g.kept.join(', ')}`)
     }
     return
@@ -1035,28 +1097,30 @@ async function cmdDetails() {
 
 const LAYOUTS = { canvas: 'elementor_canvas', tema: 'elementor_header_footer' }
 
-/** O cabeçalho (ou rodapé) do site no Theme Builder: sem --yes, só mostra o que faria. */
-async function cmdPublishPart(page) {
-  const plan = await call('partPlan', { page: page.id })
-  const noun = plan.kind === 'header' ? 'cabeçalho' : plan.kind === 'footer' ? 'rodapé' : 'componente'
-  if (!plan.themeBuilder) fail(`O ${noun} não vai para o Theme Builder: ${plan.reason}. Ele já vai dentro de cada página publicada.`)
-  const where = `no site inteiro${plan.excluded.length ? `, menos ${plan.excluded.join(', ')}` : ''}${plan.pending.length ? ` (${plan.pending.join(', ')} fica de fora quando for publicada)` : ''}`
+/** O componente como modelo do Elementor Pro: sem --yes, só mostra o que faria. */
+async function cmdPublishComponent() {
+  const plan = await call('componentPlan', { component: one(flags.component) })
+  if (!plan.publishable) fail(`"${plan.component}" não vira modelo do Elementor: ${plan.reason}. Ele já vai dentro de cada página publicada.`)
+  const theme = plan.kind === 'header' || plan.kind === 'footer'
+  const where = theme
+    ? `no site inteiro${plan.excluded.length ? `, menos ${plan.excluded.join(', ')}` : ''}${plan.pending.length ? ` (${plan.pending.join(', ')} fica de fora quando for publicada)` : ''}`
+    : `nas páginas publicadas que usam o modelo (no canvas: ${plan.pages.join(', ') || 'nenhuma'})`
   if (!flags.yes) {
-    console.log(`Publicar ${plan.part} no Theme Builder de ${plan.site} (${plan.siteUrl}):`)
+    console.log(`Publicar ${plan.component} em ${plan.site} (${plan.siteUrl}) como ${plan.kindLabel}:`)
     if (plan.linked) console.log(`   atualiza o modelo ligado, "${plan.linked.title}" (post ${plan.linked.postId}), com backup da versão de lá`)
     else if (plan.existing.length) {
       const names = plan.existing.map((e) => `"${e.title}" (${e.id})`).join(', ')
       console.log(flags['update-existing'] ? `   troca o conteúdo de ${names} pelo nosso (backup da versão de lá)` : `   cria o nosso; ${names} sai do site (fica salvo no WordPress, sem condição)`)
-    } else console.log(`   cria o modelo de ${noun} no Theme Builder, publicado`)
+    } else console.log(`   cria o modelo, publicado`)
     console.log(`   onde aparece: ${where}`)
-    console.log(`   MUDA O ${noun.toUpperCase()} DE TODAS AS PÁGINAS DO SITE NA HORA`)
+    if (theme || plan.linked) console.log(`   MUDA ${theme ? `O ${plan.kind === 'header' ? 'CABEÇALHO' : 'RODAPÉ'} DE TODAS AS PÁGINAS` : 'TODAS AS PÁGINAS QUE USAM O MODELO'} NO SITE NA HORA`)
     console.error('\nNada foi publicado. Confirme com o usuário e rode de novo com --yes.')
     quit(1)
   }
-  console.log(`Publicando ${plan.part}…`)
-  const result = await call('publish', { page: page.id, overwrite: !!flags.overwrite, existing: flags['update-existing'] ? 'update' : 'replace' })
+  console.log(`Publicando ${plan.component}…`)
+  const result = await call('publish', { component: one(flags.component), overwrite: !!flags.overwrite, existing: flags['update-existing'] ? 'update' : 'replace' })
   if (flags.json) return console.log(JSON.stringify(result, null, 2))
-  console.log(`✔ ${result.created ? 'Criado' : 'Atualizado'} no Theme Builder de ${result.site}: "${result.title}" (post ${result.postId}), ${where}`)
+  console.log(`✔ ${result.created ? 'Criado' : 'Atualizado'} em ${result.site}: "${result.title}" (post ${result.postId}), ${where}`)
   console.log(`   Editar no Elementor: ${result.editUrl}`)
   if (result.released) console.log(`   ${result.released} modelo(s) que o site usava saíram do site (continuam salvos, sem condição)`)
   console.log(`   Imagens enviadas para a mídia do site: ${result.uploaded}`)
@@ -1066,9 +1130,9 @@ async function cmdPublishPart(page) {
 
 async function cmdPublish() {
   const status = await readyStatus()
-  if (!flags.page) fail('Diga a página: publish --page <nome> --yes')
+  if (flags.component) return cmdPublishComponent()
+  if (!flags.page) fail('Diga a página: publish --page <nome> --yes (ou --component <componente>)')
   const page = resolvePage(status, one(flags.page))
-  if (page.part) return cmdPublishPart(page)
   const layout = one(flags.layout)
   if (layout !== undefined && !LAYOUTS[layout]) fail('--layout é canvas (tela cheia do Elementor) ou tema (com o cabeçalho e o rodapé do tema)')
 
@@ -1081,7 +1145,7 @@ async function cmdPublish() {
     console.log(`   ${linked ? `atualiza a página que já está no site, ${linked.link} (post ${linked.postId}), com backup da versão de lá` : 'cria uma página nova no site'}`)
     console.log(`   situação: ${flags.live ? 'PUBLICADA, visível para todo mundo' : linked ? `fica como está no site (${linked.status})` : 'rascunho (só quem entra no WordPress vê)'}`)
     console.log(`   layout: ${layout ?? 'canvas'}${layout === 'tema' ? ' (cabeçalho e rodapé do tema)' : ' (Tela do Elementor: sem o cabeçalho, o título e o rodapé do tema)'}${flags.overwrite ? ' · passa por cima de mudanças feitas no site' : ''}`)
-    if (page.parts?.header || page.parts?.footer) console.log(`   cabeçalho e rodapé do site: com o Theme Builder, vêm dele e a página vai em Largura Total; sem ele, vão dentro da página`)
+    if (page.sections.some((s) => s.component || s.inner?.length)) console.log(`   componentes: com o Elementor Pro, o cabeçalho e o rodapé do site vêm do Theme Builder (a página vai em Largura Total) e os outros entram como referência ao modelo deles; sem ele, vão dentro da página`)
     console.log(`   aprovação: ${share.link ? `${SHARE_STATE[share.state] ?? share.state} (versão ${share.version}${share.outdated ? ', e a página mudou depois dela' : ''})` : 'sem link de aprovação'}`)
     console.error('\nNada foi publicado. Confirme com o usuário (ou veja o cliente aprovar a versão atual) e rode de novo com --yes.')
     quit(1)
@@ -1101,9 +1165,11 @@ async function cmdPublish() {
   console.log(`   SEO: ${result.seo === 'saved' ? 'gravado' : result.seo === 'failed' ? `não gravou (${result.seoError})` : 'sem campos de SEO, ou o site não deixa gravar'}`)
   if (result.parts?.shown.length) {
     console.log(`   ${result.parts.shown.join(' e ')}: ${result.parts.mode === 'theme' ? 'do Theme Builder (a página foi em Largura Total, sem eles dentro)' : `dentro da página (${result.parts.reason})`}`)
-    if (result.parts.unpublished.length) console.log(`   ${result.parts.unpublished.join(' e ')} ainda não está no Theme Builder: publique com publish --page "${result.parts.unpublished[0]}"`)
+    if (result.parts.unpublished.length) console.log(`   ${result.parts.unpublished.join(' e ')} ainda não está no Theme Builder: publique com publish --component "${result.parts.unpublished[0]}"`)
     if (result.parts.synced.length) console.log(`   Condição atualizada no Theme Builder: ${result.parts.synced.join(', ')}`)
   }
+  if (result.components?.created.length) console.log(`   Componentes salvos agora na Biblioteca do Elementor: ${result.components.created.join(', ')}`)
+  if (result.components?.outdated.length) console.log(`   ${result.components.outdated.join(', ')} mudou no canvas depois de publicado: o site mostra a versão anterior até publish --component "${result.components.outdated[0]}"`)
   const applied = result.layout?.applied
   if (applied !== undefined) console.log(`   Layout no site: ${applied === 'elementor_canvas' ? 'Tela do Elementor' : applied === 'elementor_header_footer' ? 'Elementor Largura Total' : applied ? applied : 'modelo padrão do tema (com o título dele)'}${result.layout.wanted && applied !== result.layout.wanted ? ` · o site NÃO aceitou ${result.layout.wanted}${result.layout.error ? `: ${result.layout.error}` : ''}` : ''}`)
 }
@@ -1357,7 +1423,7 @@ const COMMANDS = {
   move: cmdMove,
   'page-add': cmdPageAdd,
   'page-remove': cmdPageRemove,
-  part: cmdPart,
+  component: cmdComponent,
   work: cmdWork,
   plan: cmdPlan,
   build: cmdBuild,

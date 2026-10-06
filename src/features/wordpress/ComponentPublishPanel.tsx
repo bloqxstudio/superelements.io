@@ -4,12 +4,13 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { PART_NOUN, partShownIn, plural } from '@/features/space/pages/pages'
-import { PART_COLOR } from '@/features/space/pages/parts'
+import { COMPONENT_COLOR } from '@/features/space/components/components'
+import { plural } from '@/features/space/pages/pages'
 import { cn } from '@/lib/utils'
 import { useSpaceStore } from '@/store/spaceStore'
-import { imagesToUpload, PageConflictError, pageBackups, partElements, publishPart, restoreLastBackup, type PartPublishResult } from './publish'
-import { inlineReason, listSiteParts, partConditions, partsSupport, type PartsSupport, type SitePart } from './siteParts'
+import { componentKind, componentPublishElements, imagesToUpload, PageConflictError, pageBackups, publishComponent, restoreComponentBackup, type ComponentPublishResult } from './publish'
+import { CONNECTOR_ZIP } from './seo'
+import { canSaveWidgets, componentConditions, inlineReason, listSiteParts, needsConnector, pagesUsing, partsSupport, WIDGET_REASON, type PartsSupport, type SitePart } from './siteParts'
 import { useWordPressUi, wpDate } from './uiStore'
 import { useActiveWordPress, useWordPressSession } from './useWordPressConnection'
 
@@ -20,38 +21,31 @@ type Phase =
   | { kind: 'form' }
   | { kind: 'working'; step: string }
   | { kind: 'conflict'; modifiedGmt: string }
-  | { kind: 'done'; result: PartPublishResult }
+  | { kind: 'done'; result: ComponentPublishResult }
   | { kind: 'error'; message: string }
 
-/** Modelos do mesmo lugar que estão valendo no site (com alguma condição). */
-const activeOn = (parts: SitePart[], except?: number) => parts.filter((p) => p.id !== except && p.status === 'publish' && p.conditions.length)
-
-/** Onde o modelo aparece hoje, em palavras. */
-const conditionsText = (conditions: string[]) =>
-  conditions.includes('include/general') ? `no site inteiro${conditions.some((c) => c.startsWith('exclude/')) ? ', com exceções' : ''}` : 'em parte do site'
+const WHAT: Record<string, string> = { header: 'cabeçalho do site', footer: 'rodapé do site', section: 'modelo salvo', widget: 'Global Widget' }
 
 /**
- * Publica o cabeçalho (ou o rodapé) do site como modelo do Theme Builder do
- * Elementor Pro. É o conteúdo do diálogo de publicar quando a folha aberta é
- * de um componente. Se o site já tem um cabeçalho valendo, pergunta se o
- * nosso entra no lugar dele (o dele fica salvo, sem condição) ou se o dele é
- * atualizado com o nosso.
+ * Publica um componente como modelo do Elementor Pro: o cabeçalho e o rodapé
+ * no Theme Builder, a seção como modelo salvo (usado pelo widget Modelo) e o
+ * widget como Global Widget. É o conteúdo do diálogo de publicar quando o
+ * pedido é de um componente. Mudar o modelo muda todas as páginas do site que
+ * o usam.
  */
-export const PartPublishPanel: React.FC = () => {
-  const partId = useWordPressUi((s) => s.publishPageId)
+export const ComponentPublishPanel: React.FC = () => {
+  const componentId = useWordPressUi((s) => s.publishComponentId)
   const returnId = useWordPressUi((s) => s.publishReturnId)
   const back = useWordPressUi((s) => s.back)
   const connection = useActiveWordPress()
   const projectId = useWordPressSession((s) => s.projectId)
-  const part = useSpaceStore((s) => s.pages.find((p) => p.id === partId))
+  const component = useSpaceStore((s) => s.components.find((c) => c.id === componentId))
   const pages = useSpaceStore((s) => s.pages)
   const nodes = useSpaceStore((s) => s.nodes)
   const returnName = useSpaceStore((s) => s.pages.find((p) => p.id === returnId)?.name)
-  const link = part?.wordpress && connection && part.wordpress.siteUrl === connection.site.siteUrl ? part.wordpress : undefined
-  const kind = part?.part?.kind ?? 'header'
-  const noun = PART_NOUN[kind]
-  // Componente livre: modelo salvo na Biblioteca, usado pelas páginas pelo widget Modelo (sem condição)
-  const free = kind === 'section'
+  const link = component?.wordpress && connection && component.wordpress.siteUrl === connection.site.siteUrl ? component.wordpress : undefined
+  const kind = component ? componentKind(component) : null
+  const theme = kind === 'header' || kind === 'footer'
 
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' })
   const [support, setSupport] = useState<PartsSupport | null>(null)
@@ -61,14 +55,14 @@ export const PartPublishPanel: React.FC = () => {
   const [backups, setBackups] = useState(0)
 
   useEffect(() => {
-    if (!partId || !connection) return
+    if (!componentId || !connection) return
     let alive = true
     setPhase({ kind: 'loading' })
     partsSupport(connection, true)
       .then(async (found) => {
         if (!alive) return
         setSupport(found)
-        if (found.mode === 'theme' && !link && kind !== 'section') setExisting(await listSiteParts(connection, kind))
+        if (found.mode === 'theme' && !link && theme && kind) setExisting(await listSiteParts(connection, kind))
         if (alive) setPhase({ kind: 'form' })
       })
       .catch((error) => alive && setPhase({ kind: 'error', message: errorText(error) }))
@@ -76,7 +70,7 @@ export const PartPublishPanel: React.FC = () => {
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partId, connection?.site.siteUrl])
+  }, [componentId, connection?.site.siteUrl])
 
   useEffect(() => {
     useWordPressUi.getState().setBusy(phase.kind === 'working')
@@ -91,19 +85,22 @@ export const PartPublishPanel: React.FC = () => {
   }, [link, projectId, phase.kind])
 
   const summary = useMemo(() => {
-    if (!partId || !connection || !part) return null
+    if (!componentId || !connection || !component) return null
     try {
-      const { elements, sectionCount } = partElements(partId)
-      return { sectionCount, images: imagesToUpload(elements, connection).length, ...partConditions(part, pages, connection.site.siteUrl) }
+      const { elements } = componentPublishElements(componentId)
+      return {
+        count: elements.length,
+        images: imagesToUpload(elements, connection).length,
+        ...(theme ? componentConditions(component, pages, nodes, connection.site.siteUrl) : { excluded: [] as string[], pending: [] as string[] }),
+      }
     } catch {
       return null
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partId, connection, part, pages, nodes])
+  }, [componentId, connection, component, pages, nodes, theme])
 
-  if (!part?.part) return null
-  const shownIn = partShownIn(part, pages, nodes)
-  const active = activeOn(existing)
+  if (!component) return null
+  const usedIn = pagesUsing(component.id, pages, nodes)
+  const active = existing.filter((p) => p.status === 'publish' && p.conditions.length)
 
   const run = async (overwrite = false) => {
     if (!connection || !projectId) return
@@ -111,7 +108,7 @@ export const PartPublishPanel: React.FC = () => {
     try {
       const target = !link && active.length === 1 && choice === 'update' ? active[0].id : undefined
       const release = !link && choice === 'replace' ? active.map((p) => p.id) : undefined
-      const result = await publishPart({ connection, projectId, partId: part.id, overwrite, target, release, onProgress: (step) => setPhase({ kind: 'working', step }) })
+      const result = await publishComponent({ connection, projectId, componentId: component.id, overwrite, target, release, onProgress: (step) => setPhase({ kind: 'working', step }) })
       setPhase({ kind: 'done', result })
     } catch (error) {
       if (error instanceof PageConflictError) setPhase({ kind: 'conflict', modifiedGmt: error.modifiedGmt })
@@ -123,8 +120,8 @@ export const PartPublishPanel: React.FC = () => {
     if (!connection || !projectId) return
     setPhase({ kind: 'working', step: 'Voltando a versão anterior no site…' })
     try {
-      const restored = await restoreLastBackup(connection, projectId, part.id)
-      toast.success(`O ${noun} do site voltou para a versão anterior`, {
+      const restored = await restoreComponentBackup(connection, projectId, component.id)
+      toast.success(`${component.name} voltou para a versão anterior no site`, {
         description: `A de ${new Date(restored.restoredFrom).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}. O canvas continua com as suas mudanças.`,
       })
       setPhase({ kind: 'form' })
@@ -134,49 +131,90 @@ export const PartPublishPanel: React.FC = () => {
   }
 
   const unlink = () => {
-    useSpaceStore.getState().setPageWordPress(part.id, undefined)
-    toast.success(`O ${noun} não está mais ligado ao WordPress`, { description: 'A próxima publicação cria outro modelo no Theme Builder.' })
+    useSpaceStore.getState().setComponentWordPress(component.id, undefined)
+    toast.success(`${component.name} não está mais ligado ao WordPress`, { description: 'A próxima publicação cria outro modelo no site.' })
   }
 
   const closeLabel = returnName ? `Voltar para ${returnName}` : 'Fechar'
+  const what = kind ? WHAT[kind] : 'modelo'
   let body: React.ReactNode
   let footer: React.ReactNode
 
   if (!connection) {
     body = <p className="text-sm text-muted-foreground">Conecte o WordPress do cliente pelo botão WordPress, no alto da tela.</p>
     footer = <Button onClick={back}>{closeLabel}</Button>
+  } else if (!kind) {
+    body = (
+      <p className="flex gap-2 text-sm text-gray-700">
+        <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+        <span>
+          "{component.name}" é um grupo dentro da seção. O Elementor não tem modelo que guarde o lugar e o tamanho dele na página, então ele vai dentro de
+          cada página ao publicar. No Space ele continua ligado: mudou em um, muda em todos.
+        </span>
+      </p>
+    )
+    footer = <Button onClick={back}>{closeLabel}</Button>
   } else if (phase.kind === 'loading' || phase.kind === 'working') {
     body = (
       <p className="flex items-center gap-2 py-6 text-sm text-gray-700" aria-live="polite">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        {phase.kind === 'loading' ? 'Conferindo o Theme Builder do site…' : phase.step}
+        {phase.kind === 'loading' ? 'Conferindo o Elementor do site…' : phase.step}
       </p>
     )
     footer = null
   } else if (support && support.mode !== 'theme') {
     body = (
-      <div className="grid gap-3 text-sm text-gray-700">
-        <p className="flex gap-2">
-          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
-          <span>
-            O {noun} não pode virar modelo do Elementor neste site: {inlineReason(support)}. Ele vai dentro de cada página publicada, e mudar o{' '}
-            {noun} pede publicar as páginas de novo.
-          </span>
-        </p>
-      </div>
+      <p className="flex gap-2 text-sm text-gray-700">
+        <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+        <span>
+          "{component.name}" não pode virar modelo do Elementor neste site: {inlineReason(support)}. Ele vai dentro de cada página publicada, e mudar o
+          componente pede publicar as páginas de novo.
+        </span>
+      </p>
     )
     footer = (
       <>
-        <Button onClick={back}>{closeLabel}</Button>
+        <Button variant="ghost" onClick={back}>
+          {closeLabel}
+        </Button>
+        {needsConnector(support) && (
+          <Button asChild>
+            <a href={CONNECTOR_ZIP} download>
+              Baixar o plugin
+            </a>
+          </Button>
+        )}
+      </>
+    )
+  } else if (support && kind === 'widget' && !canSaveWidgets(support)) {
+    body = (
+      <p className="flex gap-2 text-sm text-gray-700">
+        <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+        <span>
+          "{component.name}" não vira Global Widget neste site: {WIDGET_REASON}. Até lá, ele vai dentro de cada página publicada. No Space ele continua
+          ligado: mudou em um, muda em todos.
+        </span>
+      </p>
+    )
+    footer = (
+      <>
+        <Button variant="ghost" onClick={back}>
+          {closeLabel}
+        </Button>
+        <Button asChild>
+          <a href={CONNECTOR_ZIP} download>
+            Baixar o plugin
+          </a>
+        </Button>
       </>
     )
   } else if (phase.kind === 'conflict') {
     body = (
       <div className="grid gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        <p className="font-medium">O {noun} mudou no site</p>
+        <p className="font-medium">O modelo mudou no site</p>
         <p>
-          Alguém editou o modelo {link?.title} no Elementor em {wpDate(phase.modifiedGmt)}, depois da última publicação daqui. Atualizar agora apaga essas
-          mudanças (a versão de lá fica guardada para desfazer).
+          Alguém editou {link?.title} no Elementor em {wpDate(phase.modifiedGmt)}, depois da última publicação daqui. Atualizar agora apaga essas mudanças
+          (a versão de lá fica guardada para desfazer).
         </p>
       </div>
     )
@@ -196,28 +234,22 @@ export const PartPublishPanel: React.FC = () => {
       <div className="grid gap-3 text-sm text-gray-900">
         <p className="flex gap-2">
           <CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-          {free ? (
-            <span>
-              {result.created ? 'O componente foi salvo' : 'O componente foi atualizado'} na Biblioteca do Elementor como "{result.title}". As páginas do site que o usam já mostram
-              esta versão.
-              {result.uploaded > 0 && ` ${plural(result.uploaded, 'imagem foi', 'imagens foram')} para a biblioteca de mídia.`}
-            </span>
-          ) : (
-            <span>
-              {result.created ? `O ${noun} entrou no Theme Builder` : `O ${noun} foi atualizado no Theme Builder`} como "{result.title}", no site inteiro
-              {result.excluded.length ? `, menos ${result.excluded.join(', ')}` : ''}. Todas as páginas do site já mostram este {noun}.
-              {result.uploaded > 0 && ` ${plural(result.uploaded, 'imagem foi', 'imagens foram')} para a biblioteca de mídia.`}
-            </span>
-          )}
+          <span>
+            "{result.title}" {result.created ? 'foi criado' : 'foi atualizado'} como {WHAT[result.kind]}
+            {theme ? `, no site inteiro${result.excluded.length ? `, menos ${result.excluded.join(', ')}` : ''}` : ''}. As páginas do site que o usam já mostram
+            esta versão.
+            {result.uploaded > 0 && ` ${plural(result.uploaded, 'imagem foi', 'imagens foram')} para a biblioteca de mídia.`}
+          </span>
         </p>
         {result.released > 0 && (
           <p className="text-xs text-muted-foreground">
-            {result.released === 1 ? `O ${noun} que o site usava saiu do site: continua salvo` : `Os ${result.released} modelos que o site usava saíram do site: continuam salvos`} em Modelos › Theme Builder, sem condição.
+            {result.released === 1 ? 'O modelo que o site usava saiu do site: continua salvo' : `Os ${result.released} modelos que o site usava saíram do site: continuam salvos`} em Modelos ›
+            Theme Builder, sem condição.
           </p>
         )}
-        {!free && result.pending.length > 0 && (
+        {theme && result.pending.length > 0 && (
           <p className="text-xs text-muted-foreground">
-            {result.pending.join(', ')} {result.pending.length === 1 ? 'fica' : 'ficam'} sem o {noun}: a exceção entra quando {result.pending.length === 1 ? 'ela for publicada' : 'elas forem publicadas'}.
+            {result.pending.join(', ')} {result.pending.length === 1 ? 'fica' : 'ficam'} sem ele: a exceção entra quando {result.pending.length === 1 ? 'for publicada' : 'forem publicadas'}.
           </p>
         )}
         {result.failedImages.length > 0 && (
@@ -228,8 +260,8 @@ export const PartPublishPanel: React.FC = () => {
         )}
         {!result.cacheCleared && (
           <p className="flex gap-2 text-xs text-amber-700">
-            <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />O WordPress não deixou limpar o cache de CSS do Elementor com este usuário: o
-            site pode aparecer com o estilo antigo até alguém usar Elementor, Ferramentas, Regenerar arquivos.
+            <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />O WordPress não deixou limpar o cache de CSS do Elementor com este usuário: o site
+            pode aparecer com o estilo antigo até alguém usar Elementor, Ferramentas, Regenerar arquivos.
           </p>
         )}
       </div>
@@ -262,31 +294,21 @@ export const PartPublishPanel: React.FC = () => {
               {link.title}
             </a>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Modelo do Theme Builder · publicado daqui em {new Date(link.syncedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+              {WHAT[kind]} · publicado daqui em {new Date(link.syncedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
             </p>
           </div>
         ) : active.length ? (
           <div className="grid gap-2">
-            <Label>O site já tem {active.length === 1 ? `um ${noun}` : `${active.length} modelos de ${noun}`} valendo</Label>
-            <div className="grid gap-2" role="radiogroup" aria-label={`O ${noun} que o site já tem`}>
-              {(
-                [
-                  {
-                    value: 'replace' as const,
-                    label: `Entrar no lugar ${active.length === 1 ? `de "${active[0].title}"` : 'deles'}`,
-                    hint: `Cria o nosso no Theme Builder. ${active.length === 1 ? 'O atual sai do site, mas continua salvo' : 'Os atuais saem do site, mas continuam salvos'} no WordPress, sem condição.`,
-                  },
-                  ...(active.length === 1
-                    ? [
-                        {
-                          value: 'update' as const,
-                          label: `Atualizar "${active[0].title}"`,
-                          hint: `O conteúdo dele vira o nosso, no mesmo modelo (hoje ${conditionsText(active[0].conditions)}). A versão de lá fica guardada para desfazer.`,
-                        },
-                      ]
-                    : []),
-                ] as const
-              ).map((option) => (
+            <Label>O site já tem {active.length === 1 ? `um ${what}` : `${active.length} modelos assim`} valendo</Label>
+            <div className="grid gap-2" role="radiogroup" aria-label={`O ${what} que o site já tem`}>
+              {[
+                {
+                  value: 'replace' as const,
+                  label: `Entrar no lugar ${active.length === 1 ? `de "${active[0].title}"` : 'deles'}`,
+                  hint: `Cria o nosso no Theme Builder. ${active.length === 1 ? 'O atual sai do site, mas continua salvo' : 'Os atuais saem do site, mas continuam salvos'} no WordPress, sem condição.`,
+                },
+                ...(active.length === 1 ? [{ value: 'update' as const, label: `Atualizar "${active[0].title}"`, hint: 'O conteúdo dele vira o nosso, no mesmo modelo. A versão de lá fica guardada para desfazer.' }] : []),
+              ].map((option) => (
                 <label
                   key={option.value}
                   className={cn('flex cursor-pointer gap-2.5 rounded-lg border px-3 py-2.5 transition-colors', choice === option.value ? 'border-gray-900 bg-gray-50' : 'hover:bg-gray-50')}
@@ -301,37 +323,32 @@ export const PartPublishPanel: React.FC = () => {
             </div>
           </div>
         ) : (
-          <p className="text-sm text-gray-700">
-            {free ? 'Salva o componente como modelo na Biblioteca do Elementor do site.' : `Cria o modelo de ${noun} no Theme Builder do site, publicado.`}
-          </p>
+          <p className="text-sm text-gray-700">Cria "{component.name}" no Elementor do site, como {what}.</p>
         )}
 
         {summary && (
           <div className="grid gap-1 rounded-lg bg-gray-50 px-3 py-2.5 text-xs text-gray-700">
-            {free ? (
+            {theme ? (
               <p>
-                <span className="font-medium text-gray-900">Onde aparece:</span> nas páginas do site que usam o componente (pelo widget Modelo).
+                <span className="font-medium text-gray-900">Onde aparece:</span> no site inteiro{summary.excluded.length ? `, menos ${summary.excluded.join(', ')}` : ''}.
+                {summary.pending.length > 0 &&
+                  ` ${summary.pending.join(', ')} ${summary.pending.length === 1 ? 'fica' : 'ficam'} de fora quando ${summary.pending.length === 1 ? 'for publicada' : 'forem publicadas'}.`}
               </p>
             ) : (
               <p>
-                <span className="font-medium text-gray-900">Onde aparece:</span> no site inteiro
-                {summary.excluded.length ? `, menos ${summary.excluded.join(', ')}` : ''}.
-                {summary.pending.length > 0 && ` ${summary.pending.join(', ')} ${summary.pending.length === 1 ? 'fica' : 'ficam'} de fora quando ${summary.pending.length === 1 ? 'for publicada' : 'forem publicadas'}.`}
+                <span className="font-medium text-gray-900">Onde aparece:</span> nas páginas do site que usam o componente ({kind === 'widget' ? 'como Global Widget' : 'pelo widget Modelo'}).
               </p>
             )}
             <p>
-              {plural(summary.sectionCount, 'seção', 'seções')}
-              {summary.images > 0 && ` · ${plural(summary.images, 'imagem nova vai', 'imagens novas vão')} para a mídia do site`}
-              {` · no canvas, em ${plural(shownIn.length, 'página', 'páginas')}`}
+              {summary.images > 0 ? `${plural(summary.images, 'imagem nova vai', 'imagens novas vão')} para a mídia do site · ` : ''}
+              no canvas, em {plural(usedIn.length, 'página', 'páginas')}
             </p>
           </div>
         )}
 
         <p className="flex gap-2 text-xs text-amber-800">
           <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-          {free
-            ? 'Muda na hora todas as páginas do site que já usam este componente.'
-            : `Muda o ${noun} de todas as páginas do site na hora, inclusive as que não foram feitas aqui.`}
+          {theme ? `Muda o ${what} de todas as páginas do site na hora, inclusive as que não foram feitas aqui.` : 'Muda na hora todas as páginas do site que já usam este componente.'}
         </p>
 
         {link && (
@@ -360,8 +377,8 @@ export const PartPublishPanel: React.FC = () => {
         <Button variant="ghost" onClick={back}>
           {returnName ? closeLabel : 'Cancelar'}
         </Button>
-        <Button onClick={() => run()} disabled={!summary?.sectionCount}>
-          {link || (active.length === 1 && choice === 'update') ? `Atualizar o ${noun} no site` : `Publicar o ${noun}`}
+        <Button onClick={() => run()} disabled={!summary?.count}>
+          {link || (active.length === 1 && choice === 'update') ? 'Atualizar no site' : 'Publicar no site'}
         </Button>
       </>
     )
@@ -371,17 +388,13 @@ export const PartPublishPanel: React.FC = () => {
     <>
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md text-white" style={{ background: PART_COLOR }}>
+          <span className="flex h-6 w-6 items-center justify-center rounded-md text-white" style={{ background: COMPONENT_COLOR }}>
             <Component className="h-3.5 w-3.5" />
           </span>
-          {phase.kind === 'done' ? `${part.name} publicado` : `${link ? 'Atualizar' : 'Publicar'} o ${noun} no site`}
+          {phase.kind === 'done' ? `${component.name} publicado` : `${link ? 'Atualizar' : 'Publicar'} "${component.name}" no site`}
         </DialogTitle>
         <DialogDescription>
-          {connection
-            ? free
-              ? `O componente vira um modelo salvo do Elementor em ${connection.site.name}; as páginas o mostram pelo widget Modelo do Elementor Pro, então mudar aqui e publicar muda todas.`
-              : `O ${noun} vira um modelo do Theme Builder do Elementor Pro em ${connection.site.name}: um só, em todas as páginas do site, como no canvas.`
-            : 'Componente do site'}
+          {connection ? `Componente do projeto, como ${what} do Elementor em ${connection.site.name}: um só, em todas as páginas que o usam.` : 'Componente do projeto'}
         </DialogDescription>
       </DialogHeader>
       {body}

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Superelements Connector
  * Description: Deixa a plataforma Superelements gravar o SEO do Yoast em páginas e publicar o cabeçalho, o rodapé e os componentes do site como modelos do Elementor, pela API do WordPress.
- * Version: 0.2.0
+ * Version: 0.3.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: Superelements
@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const SUPERELEMENTS_CONNECTOR_VERSION = '0.2.0';
+const SUPERELEMENTS_CONNECTOR_VERSION = '0.3.0';
 
 add_action(
 	'init',
@@ -64,6 +64,7 @@ function superelements_part_type( $kind ) {
 		'header'  => 'header',
 		'footer'  => 'footer',
 		'section' => 'container',
+		'widget'  => 'widget',
 	);
 	return isset( $types[ $kind ] ) ? $types[ $kind ] : null;
 }
@@ -140,6 +141,9 @@ function superelements_save_part( WP_REST_Request $request ) {
 	if ( $theme && ! $builder ) {
 		return superelements_error( 'superelements_no_theme_builder', 'O site não tem o Theme Builder do Elementor Pro.', 400 );
 	}
+	if ( 'widget' === $kind && ! class_exists( '\ElementorPro\Modules\GlobalWidget\Module' ) ) {
+		return superelements_error( 'superelements_no_global_widget', 'O site não tem o Global Widget do Elementor Pro.', 400 );
+	}
 
 	$elements = null;
 	if ( null !== $request['elements'] ) {
@@ -201,6 +205,10 @@ function superelements_save_part( WP_REST_Request $request ) {
 
 	if ( null !== $elements && false === $document->save( array( 'elements' => $elements ) ) ) {
 		return superelements_error( 'superelements_not_saved', 'O Elementor não gravou o modelo com este usuário.', 403 );
+	}
+	// Global Widget: o editor do Elementor acha o widget pelo tipo guardado neste campo (como faz ao salvar um pelo editor)
+	if ( 'widget' === $kind && null !== $elements && ! empty( $elements[0]['widgetType'] ) ) {
+		update_post_meta( $post_id, '_elementor_template_widget_type', sanitize_key( $elements[0]['widgetType'] ) );
 	}
 
 	if ( $theme ) {

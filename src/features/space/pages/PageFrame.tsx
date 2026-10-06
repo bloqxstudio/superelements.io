@@ -1,12 +1,10 @@
 import React, { useRef, useState } from 'react'
-import { ClipboardPaste, CloudUpload, Component, Copy, Globe, GripVertical, LayoutTemplate, MoreHorizontal, Pencil, Play, Plus, Search, Trash2, Unlink2 } from 'lucide-react'
+import { ClipboardPaste, CloudUpload, Copy, Globe, GripVertical, LayoutTemplate, MoreHorizontal, Pencil, Play, Plus, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
@@ -23,9 +21,7 @@ import { PresenceStack } from '@/features/space/presence/PresenceStack'
 import { usePagePresence } from '@/features/space/presence/presence'
 import { Hint } from '../ToolbarIsland'
 import { MOD_KEY } from './clipboard'
-import { EMPTY_PAGE_BODY, PAGE_GAP, PAGE_HEADER, PAGE_WIDTH, SECTION_WIDTH, instanceOf, nextPagePosition, pageFrame, pageParts, pageSections, partShownIn, plural, sheetLayout, sitePages } from './pages'
-import { PART_COLOR, PART_COLOR_STRONG, PART_LABEL, PART_NOUN } from './parts'
-import { PartInstance } from './PartInstance'
+import { EMPTY_PAGE_BODY, PAGE_GAP, PAGE_HEADER, PAGE_WIDTH, SECTION_WIDTH, nextPagePosition, pageFrame, pageSections, plural } from './pages'
 import { useSpaceUi } from '../spaceUi'
 
 /** Distância em px abaixo da qual soltar o mouse conta como clique, não como arrasto. */
@@ -74,154 +70,7 @@ const NameInput: React.FC<{ page: SpacePage }> = ({ page }) => {
   )
 }
 
-/** Cabeçalho e rodapé do site no menu da página: ligar ou tirar cada um só nela. */
-const PartToggles: React.FC<{ page: SpacePage }> = ({ page }) => {
-  const pages = useSpaceStore((s) => s.pages)
-  const parts = pages.filter((p) => p.part)
-  if (!parts.length) return null
-  const { header, footer } = pageParts(page, pages)
-  return (
-    <>
-      <DropdownMenuSeparator />
-      <DropdownMenuLabel className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Componentes</DropdownMenuLabel>
-      {parts.map((part) => (
-        <DropdownMenuCheckboxItem
-          key={part.id}
-          className="gap-2 rounded-lg text-xs"
-          checked={header?.id === part.id || footer?.id === part.id}
-          onSelect={(e) => e.preventDefault()}
-          onCheckedChange={(shown) => useSpaceStore.getState().setPartShown(part.id, page.id, shown)}
-        >
-          <Component className="h-3.5 w-3.5" style={{ color: PART_COLOR }} />
-          <span className="truncate">{part.name}</span>
-        </DropdownMenuCheckboxItem>
-      ))}
-    </>
-  )
-}
-
-/** Menu "…" da folha de um componente: renomear, onde aparece, voltar a ser seção comum e excluir. */
-const PartMenu: React.FC<{ page: SpacePage }> = ({ page }) => {
-  const pages = useSpaceStore((s) => s.pages)
-  const nodes = useSpaceStore((s) => s.nodes)
-  const activePageId = useSpaceStore((s) => s.activePageId)
-  const { setRenamingPage, removePage, unlinkPagePart, setPartShown, insertInstance } = useSpaceStore.getState()
-  const wordpress = useActiveWordPress()
-  const keepFocus = useRef(false)
-  const kind = page.part!.kind
-  // Componente livre: aparece onde tem instância; cabeçalho e rodapé: em todas as páginas, menos as tiradas
-  const free = kind === 'section'
-  const noun = free ? 'componente' : PART_NOUN[kind]
-  const site = sitePages(pages)
-  const shownIn = partShownIn(page, pages, nodes)
-  const instances = free ? nodes.filter((n) => instanceOf(n) === page.id).length : 0
-  // Onde a instância entra: na página ativa (se não é este componente), senão na primeira do site
-  const target = pages.find((p) => p.id === activePageId && p.id !== page.id) ?? site[0]
-
-  const unlink = () => {
-    const count = unlinkPagePart(page.id)
-    if (count) toast.success(`O ${noun} voltou a ser seção comum`, { description: `Cada uma das ${plural(count, 'página', 'páginas')} ficou com a própria cópia. ${MOD_KEY}Z desfaz.` })
-  }
-  const handleRemove = () => {
-    const where = free
-      ? instances
-        ? ` As ${plural(instances, 'instância', 'instâncias')} saem das páginas.`
-        : ''
-      : shownIn.length
-        ? ` Ele sai de ${plural(shownIn.length, 'página', 'páginas')}.`
-        : ''
-    if (confirm(free ? `Excluir o componente "${page.name}"?${where}` : `Excluir o ${noun} do site?${where}`)) removePage(page.id)
-  }
-  const insert = (pageId: string, name: string) => {
-    if (insertInstance(page.id, pageId)) toast.success(`Instância de ${page.name} no fim de ${name}`, { description: 'Arraste para o lugar certo na página.' })
-    else toast.error('Um componente não entra nele mesmo.')
-  }
-
-  return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Opções do ${noun}`}
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-500 transition-[color,background-color,transform] hover:bg-black/5 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96]"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        sideOffset={6}
-        className="w-60 rounded-xl p-1"
-        onCloseAutoFocus={(e) => {
-          if (keepFocus.current) e.preventDefault()
-          keepFocus.current = false
-        }}
-      >
-        <DropdownMenuItem
-          className="gap-2 rounded-lg text-xs"
-          onSelect={() => {
-            keepFocus.current = true
-            setRenamingPage(page.id)
-          }}
-        >
-          <Pencil className="h-3.5 w-3.5" /> Renomear
-        </DropdownMenuItem>
-        {wordpress && (
-          <DropdownMenuItem className="gap-2 rounded-lg text-xs" disabled={!page.sectionIds.length} onSelect={() => useWordPressUi.getState().openPublish(page.id)}>
-            <CloudUpload className="h-3.5 w-3.5" /> {page.wordpress?.siteUrl === wordpress.site.siteUrl ? `Atualizar o ${noun} no site…` : `Publicar o ${noun} no site…`}
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        {free ? (
-          <>
-            {target && (
-              <DropdownMenuItem className="gap-2 rounded-lg text-xs" onSelect={() => insert(target.id, target.name)}>
-                <Plus className="h-3.5 w-3.5" /> Pôr em {target.name}
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuLabel className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              {shownIn.length ? `Usado em ${plural(instances, 'lugar', 'lugares')}` : 'Ainda não está em nenhuma página'}
-            </DropdownMenuLabel>
-            {shownIn.map((p) => (
-              <DropdownMenuItem key={p.id} className="rounded-lg text-xs" onSelect={() => useSpaceStore.getState().focusPage(p.id)}>
-                <span className="truncate">{p.name}</span>
-              </DropdownMenuItem>
-            ))}
-          </>
-        ) : (
-          <>
-            <DropdownMenuLabel className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Aparece em</DropdownMenuLabel>
-            {site.map((p) => (
-              <DropdownMenuCheckboxItem
-                key={p.id}
-                className="rounded-lg text-xs"
-                checked={shownIn.some((s) => s.id === p.id)}
-                onSelect={(e) => e.preventDefault()}
-                onCheckedChange={(shown) => setPartShown(page.id, p.id, shown)}
-              >
-                <span className="truncate">{p.name}</span>
-              </DropdownMenuCheckboxItem>
-            ))}
-          </>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="gap-2 rounded-lg text-xs"
-          disabled={!shownIn.length}
-          onSelect={unlink}
-          title={free ? 'Cada instância vira uma cópia comum, que passa a mudar sozinha' : `Cada página fica com a própria cópia do ${noun}, que passa a mudar sozinha`}
-        >
-          <Unlink2 className="h-3.5 w-3.5" /> Voltar a ser seção comum
-        </DropdownMenuItem>
-        <DropdownMenuItem className="gap-2 rounded-lg text-xs text-red-600 focus:bg-red-50 focus:text-red-700" onSelect={handleRemove}>
-          <Trash2 className="h-3.5 w-3.5" /> Excluir {free ? 'componente' : noun}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
-/** Menu "…" da página: colar, renomear, duplicar, SEO, publicar, componentes e excluir. */
+/** Menu "…" da página: colar, renomear, duplicar, SEO, publicar e excluir. */
 const PageMenu: React.FC<{ page: SpacePage; count: number; onlyPage: boolean }> = ({ page, count, onlyPage }) => {
   const clipboardCount = useSpaceStore((s) => s.clipboard?.sections.length ?? 0)
   const { setRenamingPage, duplicatePage, removePage, pasteSections } = useSpaceStore.getState()
@@ -288,7 +137,6 @@ const PageMenu: React.FC<{ page: SpacePage; count: number; onlyPage: boolean }> 
             <CloudUpload className="h-3.5 w-3.5" /> {page.wordpress?.siteUrl === wordpress.site.siteUrl ? 'Atualizar no site…' : 'Publicar no site…'}
           </DropdownMenuItem>
         )}
-        <PartToggles page={page} />
         <DropdownMenuSeparator />
         <DropdownMenuItem className="gap-2 rounded-lg text-xs text-red-600 focus:bg-red-50 focus:text-red-700" disabled={onlyPage} onSelect={handleRemove}>
           <Trash2 className="h-3.5 w-3.5" />
@@ -324,10 +172,6 @@ const PageBar: React.FC<PageBarProps> = ({ page, count, realHeight, onlyPage, ac
   // Agente construindo a página pelo plano (ponte do dev)
   const building = useClaudeBridge((s) => s.working[page.id])
   const siteLink = page.wordpress
-  // Folha de componente (cabeçalho, rodapé do site): ciano, com o losango e onde aparece
-  const part = page.part
-  const usage = useSpaceStore((s) => (part ? partShownIn(page, s.pages, s.nodes).length : 0))
-  const menu = part ? <PartMenu page={page} /> : <PageMenu page={page} count={count} onlyPage={onlyPage} />
 
   const width = PAGE_WIDTH * zoom
   const roomy = width >= 430
@@ -345,11 +189,10 @@ const PageBar: React.FC<PageBarProps> = ({ page, count, realHeight, onlyPage, ac
         onDoubleClick={() => setRenamingPage(page.id)}
         title={`${page.name} · clique duas vezes para renomear`}
       >
-        {part && <Component className="h-3 w-3 shrink-0" style={{ color: PART_COLOR }} aria-label="Componente" />}
-        <h2 className={cn('min-w-0 truncate font-medium', part ? 'text-cyan-800' : active ? 'text-violet-700' : 'text-gray-600')}>{page.name}</h2>
+        <h2 className={cn('min-w-0 truncate font-medium', active ? 'text-violet-700' : 'text-gray-600')}>{page.name}</h2>
         {!tiny && <PresenceStack presence={presence} max={1} size={16} ring="#f4f4f5" />}
         <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100" onMouseDown={stop} onDoubleClick={stop}>
-          {menu}
+          <PageMenu page={page} count={count} onlyPage={onlyPage} />
         </div>
       </div>
     )
@@ -359,41 +202,22 @@ const PageBar: React.FC<PageBarProps> = ({ page, count, realHeight, onlyPage, ac
     <div
       className={cn(
         'flex items-center gap-1.5 rounded-lg pl-1 pr-1 text-[12px] transition-[background-color,box-shadow,color] duration-150',
-        part
-          ? active
-            ? 'bg-cyan-50 text-cyan-950 shadow-[0_0_0_1px_rgb(8_145_178/0.6)]'
-            : 'bg-cyan-50/70 text-cyan-950 shadow-[0_0_0_1px_rgb(8_145_178/0.3)] hover:shadow-[0_0_0_1px_rgb(8_145_178/0.5)]'
-          : active
-            ? 'bg-violet-50 text-violet-900 shadow-[0_0_0_1px_rgb(139_92_246/0.45)]'
-            : 'bg-white text-gray-700 shadow-[0_0_0_1px_rgb(0_0_0/0.08)] hover:shadow-[0_0_0_1px_rgb(0_0_0/0.16)]',
+        active ? 'bg-violet-50 text-violet-900 shadow-[0_0_0_1px_rgb(139_92_246/0.45)]' : 'bg-white text-gray-700 shadow-[0_0_0_1px_rgb(0_0_0/0.08)] hover:shadow-[0_0_0_1px_rgb(0_0_0/0.16)]',
         dragging ? 'cursor-grabbing' : 'cursor-grab'
       )}
       style={{ height: BAR_HEIGHT }}
       onMouseDown={renaming ? undefined : onGrab}
       onDoubleClick={() => setRenamingPage(page.id)}
     >
-      {part ? (
-        <Component className="ml-1 h-3.5 w-3.5 shrink-0" style={{ color: PART_COLOR }} aria-hidden />
-      ) : (
-        !narrow && <GripVertical className={cn('h-3.5 w-3.5 shrink-0', active ? 'text-violet-400' : 'text-gray-300')} aria-hidden />
-      )}
+      {!narrow && <GripVertical className={cn('h-3.5 w-3.5 shrink-0', active ? 'text-violet-400' : 'text-gray-300')} aria-hidden />}
       {renaming ? (
         <NameInput page={page} />
       ) : (
-        <h2 className={cn('min-w-0 truncate font-semibold', part ? 'text-cyan-950' : active ? 'text-violet-950' : 'text-gray-900')} title="Clique duas vezes para renomear">
+        <h2 className={cn('min-w-0 truncate font-semibold', active ? 'text-violet-950' : 'text-gray-900')} title="Clique duas vezes para renomear">
           {page.name}
         </h2>
       )}
-      {!renaming && part && (
-        <span
-          className="inline-flex h-5 shrink-0 items-center rounded-full px-1.5 text-[11px] font-medium text-white"
-          style={{ background: PART_COLOR }}
-          title={`Uma cópia só: o que mudar aqui muda em todas as páginas que mostram o ${PART_NOUN[part.kind]}`}
-        >
-          {roomy ? `Componente · em ${plural(usage, 'página', 'páginas')}` : 'Componente'}
-        </span>
-      )}
-      {!renaming && medium && !part && (
+      {!renaming && medium && (
         <span className={cn('shrink-0 truncate tabular-nums', active ? 'text-violet-600' : 'text-gray-400')}>
           {DEVICE_LABELS[device]} {VIEWPORT_WIDTH[device]}
           {roomy && count > 0 && <> × {realHeight.toLocaleString('pt-BR')}</>}
@@ -407,8 +231,8 @@ const PageBar: React.FC<PageBarProps> = ({ page, count, realHeight, onlyPage, ac
       )}
 
       <div className="ml-auto flex shrink-0 items-center gap-1" onMouseDown={stop} onDoubleClick={stop}>
-        {roomy && !part && <ApprovalChip pageId={page.id} />}
-        {roomy && siteLink && !part && (
+        {roomy && <ApprovalChip pageId={page.id} />}
+        {roomy && siteLink && (
           <Hint label={`No WordPress: ${siteLink.title}`} hint={`${STATUS_LABELS[siteLink.status] ?? siteLink.status} · publicar atualiza essa página`}>
             <a
               href={siteLink.link}
@@ -432,14 +256,14 @@ const PageBar: React.FC<PageBarProps> = ({ page, count, realHeight, onlyPage, ac
               aria-label={`Player da página ${page.name}`}
               className={cn(
                 'inline-flex h-6 w-6 items-center justify-center rounded-md transition-[color,background-color,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] disabled:pointer-events-none disabled:opacity-30',
-                part ? 'text-cyan-800 hover:bg-cyan-100' : active ? 'text-violet-700 hover:bg-violet-100' : 'text-gray-500 hover:bg-black/5 hover:text-gray-900'
+                active ? 'text-violet-700 hover:bg-violet-100' : 'text-gray-500 hover:bg-black/5 hover:text-gray-900'
               )}
             >
               <Play className="h-3.5 w-3.5 fill-current" />
             </button>
           </Hint>
         )}
-        {menu}
+        <PageMenu page={page} count={count} onlyPage={onlyPage} />
       </div>
     </div>
   )
@@ -447,7 +271,6 @@ const PageBar: React.FC<PageBarProps> = ({ page, count, realHeight, onlyPage, ac
 
 interface PageFrameProps {
   page: SpacePage
-  pages: SpacePage[]
   nodes: SpaceNode[]
   onlyPage: boolean
 }
@@ -457,7 +280,7 @@ interface PageFrameProps {
  * junto, sempre na coluna); a folha embaixo é a página como no site, com as
  * seções coladas umas nas outras.
  */
-const PageFrame: React.FC<PageFrameProps> = ({ page, pages, nodes, onlyPage }) => {
+const PageFrame: React.FC<PageFrameProps> = ({ page, nodes, onlyPage }) => {
   const active = useSpaceStore((s) => s.activePageId === page.id)
   const zoom = useSpaceStore((s) => s.canvasTransform.zoom)
   const device = useSpaceStore((s) => s.previewDevice)
@@ -467,11 +290,9 @@ const PageFrame: React.FC<PageFrameProps> = ({ page, pages, nodes, onlyPage }) =
   const [dragging, setDragging] = useState(false)
   const bodyDown = useRef({ x: 0, y: 0 })
 
-  const frame = pageFrame(page, nodes, pages)
-  const layout = sheetLayout(page, nodes, pages)
+  const frame = pageFrame(page, nodes)
   const sections = pageSections(page, nodes)
   const count = sections.length
-  const part = page.part
   const sheetHeight = frame.height - PAGE_HEADER
   // A folha tem a largura da página no canvas; a tela do device cabe nela inteira
   const realHeight = Math.round((sheetHeight * VIEWPORT_WIDTH[device]) / SECTION_WIDTH)
@@ -531,41 +352,22 @@ const PageFrame: React.FC<PageFrameProps> = ({ page, pages, nodes, onlyPage }) =
           top: PAGE_HEADER,
           boxShadow: drop
             ? '0 0 0 calc(2px / var(--z, 1)) rgb(139 92 246 / 0.8)'
-            : part
-              ? `0 0 0 calc(${active ? 2 : 1.5}px / var(--z, 1)) ${active ? PART_COLOR_STRONG : PART_COLOR}, 0 2px 12px -4px rgb(0 0 0 / 0.08)`
-              : active
-                ? '0 0 0 calc(1px / var(--z, 1)) rgb(139 92 246 / 0.5), 0 2px 12px -4px rgb(0 0 0 / 0.08)'
-                : '0 0 0 calc(1px / var(--z, 1)) rgb(0 0 0 / 0.08), 0 2px 12px -4px rgb(0 0 0 / 0.08)',
+            : active
+              ? '0 0 0 calc(1px / var(--z, 1)) rgb(139 92 246 / 0.5), 0 2px 12px -4px rgb(0 0 0 / 0.08)'
+              : '0 0 0 calc(1px / var(--z, 1)) rgb(0 0 0 / 0.08), 0 2px 12px -4px rgb(0 0 0 / 0.08)',
         }}
         onMouseDown={(e) => (bodyDown.current = { x: e.clientX, y: e.clientY })}
         onClick={(e) => {
           if (Math.hypot(e.clientX - bodyDown.current.x, e.clientY - bodyDown.current.y) < CLICK_SLOP) setActivePage(page.id)
         }}
       >
-        {!count && part && (
+        {!count && (
           <div
             className={cn(
-              'pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center justify-center gap-1 px-8 text-center transition-colors duration-150',
-              emptyDrop ? 'bg-cyan-50/80' : 'bg-white'
-            )}
-            style={{ height: EMPTY_PAGE_BODY }}
-          >
-            <p className="text-xs font-medium text-gray-700">{emptyDrop ? `Solte para pôr no ${PART_NOUN[part.kind]}` : `${part.kind === 'section' ? page.name : PART_LABEL[part.kind]} vazio`}</p>
-            {!emptyDrop && (
-              <p className="text-[11px] leading-relaxed text-gray-500">
-                {part.kind === 'section' ? 'Arraste uma seção até aqui: ela aparece em todas as instâncias.' : 'Arraste uma seção até aqui: ela aparece em todas as páginas do site.'}
-              </p>
-            )}
-          </div>
-        )}
-        {!count && !part && (
-          <div
-            className={cn(
-              'pointer-events-none absolute inset-x-0 flex flex-col items-center justify-center gap-1 px-8 text-center transition-colors duration-150',
+              'pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 px-8 text-center transition-colors duration-150',
               emptyDrop ? 'bg-violet-50/80' : 'bg-white'
             )}
-            // Abaixo do cabeçalho do site, se a página mostra um
-            style={{ top: layout.bodyTop - page.y - PAGE_HEADER, height: EMPTY_PAGE_BODY }}
+            style={{ height: EMPTY_PAGE_BODY }}
           >
             <p className="text-xs font-medium text-gray-700">{emptyDrop ? 'Solte para pôr na página' : 'Página vazia'}</p>
             {!emptyDrop && (
@@ -601,14 +403,6 @@ const PageFrame: React.FC<PageFrameProps> = ({ page, pages, nodes, onlyPage }) =
           </div>
         )}
       </div>
-
-      {/* Cabeçalho e rodapé do site: o mesmo componente em todas as páginas, não uma cópia */}
-      {layout.header && (
-        <PartInstance page={page} part={layout.header.page} sections={pageSections(layout.header.page, nodes)} top={layout.header.y - page.y} height={layout.header.height} />
-      )}
-      {layout.footer && (
-        <PartInstance page={page} part={layout.footer.page} sections={pageSections(layout.footer.page, nodes)} top={layout.footer.y - page.y} height={layout.footer.height} />
-      )}
 
       {dropLineY !== null && (
         <div
@@ -670,11 +464,10 @@ const LibraryGhost: React.FC = () => {
 export const PagesLayer: React.FC = () => {
   const pages = useSpaceStore((s) => s.pages)
   const nodes = useSpaceStore((s) => s.nodes)
-  const onlyPage = sitePages(pages).length === 1
   return (
     <>
       {pages.map((page) => (
-        <PageFrame key={page.id} page={page} pages={pages} nodes={nodes} onlyPage={onlyPage} />
+        <PageFrame key={page.id} page={page} nodes={nodes} onlyPage={pages.length === 1} />
       ))}
       <NewPageTile pages={pages} nodes={nodes} />
       <LibraryGhost />

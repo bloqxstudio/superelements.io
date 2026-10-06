@@ -3,8 +3,8 @@ import { toast } from 'sonner'
 import { useSpaceStore } from '@/store/spaceStore'
 import { plural } from '@/features/space/pages/pages'
 import { MOD_KEY } from '@/features/space/pages/clipboard'
-import { confirmPartSectionRemoval } from '@/features/space/pages/parts'
 import {
+  componentizeSelection,
   copySelectedElement,
   deleteSelectedElement,
   duplicateSelectedElement,
@@ -63,6 +63,13 @@ export function useEditorShortcuts() {
       const element = store.navigatorSelection
       const textSelected = !!window.getSelection()?.toString()
 
+      // Ctrl+Alt+K, como no Figma: a camada (ou a seção) selecionada vira componente
+      if (mod && e.altKey && e.code === 'KeyK' && (element || store.selectedIds.length === 1)) {
+        handled()
+        componentizeSelection()
+        return
+      }
+
       if (mod && !e.altKey) {
         if (key === 'v' && store.elementClipboard) {
           handled()
@@ -96,8 +103,6 @@ export function useEditorShortcuts() {
           handled()
           // Seções inteiras: o Ctrl+Z traz de volta, e o aviso lembra disso
           const ids = [...store.selectedIds]
-          // Do cabeçalho ou do rodapé do site, somem de todas as páginas: pergunta antes
-          if (!confirmPartSectionRemoval(ids)) return
           ids.forEach((id) => useSpaceStore.getState().removeNode(id))
           toast.success(plural(ids.length, 'seção removida', 'seções removidas'), { description: `${MOD_KEY}Z desfaz.` })
         }

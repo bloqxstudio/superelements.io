@@ -12,7 +12,7 @@ import { isFromSite, renderKit } from '../renderKit'
 import { useActiveBrand } from '../brand/brandStore'
 import { ApprovalPanel } from '@/features/approval/ApprovalPanel'
 import { shareState, useApprovalStore } from '@/features/approval/approvalStore'
-import { pageContent, plural } from './pages'
+import { pageSections, plural } from './pages'
 
 /** Altura da legenda abaixo da tela, fora da conta da escala. */
 const CAPTION_HEIGHT = 24
@@ -91,7 +91,6 @@ export const PagePlayer: React.FC = () => {
   if (playing) lastPage.current = playing
   const page = playing ?? lastPage.current
   const nodes = useSpaceStore((s) => s.nodes)
-  const pages = useSpaceStore((s) => s.pages)
   const connections = useSpaceStore((s) => s.connections)
   const closePlayer = useSpaceStore((s) => s.closePlayer)
   const brand = useActiveBrand()
@@ -106,22 +105,20 @@ export const PagePlayer: React.FC = () => {
   const approval = shareState(useApprovalStore((s) => (page ? s.shares[page.id] : undefined))).kind
   const setApprovalOpen = useApprovalStore((s) => s.setPanelOpen)
 
-  // A página como no site: com o cabeçalho e o rodapé do site
-  const content = useMemo(() => (page ? pageContent(page, pages, nodes) : []), [page, pages, nodes])
   const built = useMemo(
-    () => (page ? buildLandingPage(content, nodes, connections, brand) : null),
-    [page, content, nodes, connections, brand]
+    () => (page ? buildLandingPage(pageSections(page, nodes), nodes, connections, brand) : null),
+    [page, nodes, connections, brand]
   )
   const html = useMemo(
     () =>
       built?.elements.length && page
         ? renderElementorDocument(built.elements, {
             title: page.name,
-            kit: renderKit(brand, siteKit, content.some(isFromSite)),
+            kit: renderKit(brand, siteKit, pageSections(page, nodes).some(isFromSite)),
             motion: 'play',
           }).document
         : null,
-    [built, page, content, brand, siteKit]
+    [built, page, nodes, brand, siteKit]
   )
 
   const count = built?.sectionCount ?? 0

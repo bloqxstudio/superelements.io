@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import {
   Columns3,
+  Component as ComponentIcon,
   Film,
   Heading1,
   Image,
@@ -18,7 +19,10 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { createElement, isContainer, type InsertKind } from '../editor/tree'
-import { addBlankSection, insertBlock, insertKind } from '../editor/actions'
+import { addBlankSection, insertBlock, insertComponent, insertKind } from '../editor/actions'
+import { COMPONENT_COLOR, COMPONENT_COLOR_STRONG, componentElements, componentUses } from '../components/components'
+import { useSpaceStore } from '@/store/spaceStore'
+import type { SpaceComponent } from '@/types/space'
 import { startInsertDrag, type InsertItem } from '../editor/insertDrag'
 import { useBlocks, type SavedBlock } from '../editor/blocks'
 import { INSERT_KEYS } from '../editor/useEditorShortcuts'
@@ -72,6 +76,46 @@ const blockItem = (block: SavedBlock): InsertItem => ({
     return { element: copy, pinned: block.pinned }
   },
 })
+
+/** Um componente do projeto: entra como uso ligado (mudar um muda todos). */
+const componentItem = (component: SpaceComponent): InsertItem => {
+  const first = componentElements(component)[0]
+  return {
+    label: component.name,
+    kind: component.level === 'section' || isContainer(first) ? 'container' : 'widget',
+    sectionOnly: component.level === 'section',
+    make: () => ({ element: structuredClone(first) }),
+    place: (where) =>
+      'sectionId' in where
+        ? insertComponent(component.id, { sectionId: where.sectionId, target: where.target })
+        : insertComponent(component.id, { sectionId: null, pageId: where.pageId, index: where.index }),
+  }
+}
+
+const ComponentRow: React.FC<{ component: SpaceComponent; uses: number }> = ({ component, uses }) => (
+  <li>
+    <button
+      type="button"
+      className="flex w-full cursor-grab items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-left transition-[border-color,background-color,transform] hover:border-cyan-300 hover:bg-cyan-50/50 active:scale-[0.96] active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-600"
+      onPointerDown={(e) => startInsertDrag(e, componentItem(component), () => insertComponent(component.id))}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          insertComponent(component.id)
+        }
+      }}
+      title={component.level === 'section' ? 'Clique para pôr depois da seção selecionada, ou arraste entre as seções' : 'Clique para pôr na camada selecionada, ou arraste até o canvas'}
+    >
+      <ComponentIcon className="h-3.5 w-3.5 shrink-0" style={{ color: COMPONENT_COLOR }} strokeWidth={1.75} aria-hidden />
+      <span className="min-w-0 flex-1 truncate text-xs font-medium" style={{ color: COMPONENT_COLOR_STRONG }}>
+        {component.name}
+      </span>
+      <span className="shrink-0 text-[10px] text-gray-400">
+        {component.role === 'header' ? 'cabeçalho' : component.role === 'footer' ? 'rodapé' : component.level === 'section' ? 'seção' : 'camada'} · {uses}
+      </span>
+    </button>
+  </li>
+)
 
 const tile =
   'group flex cursor-grab select-none flex-col items-start gap-2 rounded-lg border border-gray-200 bg-white p-2.5 text-left transition-[border-color,background-color,transform] hover:border-gray-300 hover:bg-gray-50 active:scale-[0.96] active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500'
@@ -168,6 +212,13 @@ const BlockRow: React.FC<{ block: SavedBlock }> = ({ block }) => {
  */
 export const ElementsLibrary: React.FC = () => {
   const blocks = useBlocks((s) => s.blocks)
+  const components = useSpaceStore((s) => s.components)
+  const nodes = useSpaceStore((s) => s.nodes)
+  const uses = React.useMemo(() => {
+    const count = new Map<string, number>()
+    for (const use of componentUses(nodes)) count.set(use.componentId, (count.get(use.componentId) ?? 0) + 1)
+    return count
+  }, [nodes])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -213,6 +264,19 @@ export const ElementsLibrary: React.FC = () => {
             ))}
           </div>
         </section>
+
+        {components.length > 0 && (
+          <section aria-labelledby="insert-components">
+            <h3 id="insert-components" className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+              Componentes do projeto
+            </h3>
+            <ul className="space-y-1.5">
+              {components.map((component) => (
+                <ComponentRow key={component.id} component={component} uses={uses.get(component.id) ?? 0} />
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section aria-labelledby="insert-blocks">
           <h3 id="insert-blocks" className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
