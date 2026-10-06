@@ -79,7 +79,7 @@ export const ConnectorPrompt: React.FC<{ place?: { left: number; width: number; 
               onClick={copy}
               title="Copiar"
             >
-              <span className="min-w-0 flex-1 truncate">{command}</span>
+              <span className="min-w-0 flex-1 break-all">{command}</span>
               {copied ? <Check className="h-3.5 w-3.5 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0 opacity-60" />}
             </button>
             <p className="text-[11px] leading-snug text-gray-500">
@@ -103,7 +103,7 @@ export const ConnectorPrompt: React.FC<{ place?: { left: number; width: number; 
                 maxLength={16}
                 spellCheck={false}
                 autoComplete="off"
-                className="h-8 w-28 rounded-lg border border-gray-200 px-2 text-center font-mono text-[12px] tracking-widest text-gray-900 placeholder:text-gray-300 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                className="h-8 min-w-0 flex-1 rounded-lg border border-gray-200 px-2 text-center font-mono text-[12px] tracking-widest text-gray-900 placeholder:text-gray-300 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
               />
               <button
                 type="submit"
