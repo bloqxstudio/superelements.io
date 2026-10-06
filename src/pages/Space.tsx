@@ -13,6 +13,7 @@ import { WordPressPageDialogs } from '@/features/wordpress/WordPressPageDialogs'
 import { useEditorShortcuts } from '@/features/space/editor/useEditorShortcuts'
 import { useFrameGestureGuard } from '@/features/space/editor/frames'
 import { AgentCursors } from '@/features/space/chat/AgentCursors'
+import { useShareAgentCursors } from '@/features/space/presence/shareAgentCursors'
 
 const NO_INSETS = { left: 0, right: 0 }
 
@@ -27,6 +28,8 @@ const Space: React.FC = () => {
   useSectionShortcuts()
   useEditorShortcuts()
   useFrameGestureGuard()
+  // O cursor do meu agente aparece para quem mais está no projeto, e o deles para mim
+  useShareAgentCursors()
 
   // Ctrl+\ esconde os dois painéis e deixa só o canvas, como no Framer e no Figma
   useEffect(() => {

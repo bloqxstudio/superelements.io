@@ -38,6 +38,28 @@ export interface LiveCursor {
 /** Cursores de quem mais está no projeto; some quando a pessoa sai do canvas ou do projeto. */
 export const useLiveCursors = create<{ cursors: Record<string, LiveCursor> }>()(() => ({ cursors: {} }))
 
+/**
+ * Recados ao vivo de outros módulos (o cursor do agente de cada pessoa), sem
+ * este arquivo conhecer o formato: quem manda usa `broadcastLive`, quem ouve
+ * se inscreve em `onLive`.
+ */
+type LiveEvent = 'agent-cursor'
+const liveListeners = new Map<LiveEvent, Set<(payload: unknown, from: string) => void>>()
+
+export function onLive(event: LiveEvent, listener: (payload: unknown, from: string) => void) {
+  const set = liveListeners.get(event) ?? new Set()
+  set.add(listener)
+  liveListeners.set(event, set)
+  return () => void set.delete(listener)
+}
+
+/** Manda um recado para quem mais está no projeto; sozinho no projeto, nada sai daqui. */
+export function broadcastLive(event: LiveEvent, payload: Record<string, unknown>) {
+  const me = useLiveProject.getState().me
+  if (!active || !me || !useLiveProject.getState().people.length) return
+  active.channel.send({ type: 'broadcast', event, payload: { ...payload, from: me.userId } }).catch(() => {})
+}
+
 const dropCursor = (userId: string) =>
   useLiveCursors.setState((s) => {
     if (!s.cursors[userId]) return s
@@ -111,6 +133,11 @@ export function joinLiveProject(projectId: string, me: LivePerson, handlers: Liv
         if (cursor.hidden || typeof cursor.x !== 'number' || typeof cursor.y !== 'number') return dropCursor(cursor.userId)
         const next: LiveCursor = { userId: cursor.userId, email: cursor.email ?? '', x: cursor.x, y: cursor.y, pageId: cursor.pageId, at: Date.now() }
         useLiveCursors.setState((s) => ({ cursors: { ...s.cursors, [next.userId]: next } }))
+      })
+      .on('broadcast', { event: 'agent-cursor' }, ({ payload }) => {
+        const from = (payload as { from?: string } | undefined)?.from
+        if (!from || from === me.userId) return
+        for (const listener of liveListeners.get('agent-cursor') ?? []) listener(payload, from)
       })
       .on('broadcast', { event: 'removed' }, ({ payload }) => {
         const userId = (payload as { userId?: string } | undefined)?.userId

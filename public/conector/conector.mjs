@@ -778,9 +778,17 @@ ${text2}` : text2;
           Object.assign(answer, { streaming: false, thinking: false, error });
           broadcast(conversation);
         };
+        const pendingLogin = logins.get(key);
+        if (pendingLogin && !/^\/login\b/i.test(text2)) {
+          pendingLogin.stdin?.write(`${text2}
+`);
+          Object.assign(answer, { streaming: false, thinking: false, parts: [{ type: "text", text: `Mandei para o login do ${info.name}. Espere a confirma\xE7\xE3o aqui.` }] });
+          return broadcast(conversation);
+        }
         if (runs.has(key)) return fail(`O ${info.name} ainda est\xE1 trabalhando no pedido anterior. Espere ou pare antes.`);
         const bin = findBin(payload.agent);
         if (!bin) return fail(`${info.name} n\xE3o foi encontrado nesta m\xE1quina. Instale, ou diga onde est\xE1 em ${payload.agent === "claude" ? "SPACE_CLAUDE_BIN" : "SPACE_CODEX_BIN"}.`);
+        if (/^\/login\b/i.test(text2)) return login(conversation, answer, key, payload.agent, bin);
         const session = chatSession(payload.projectId, payload.agent, conversation.epoch);
         try {
           const sessionsDir = path2.resolve(root, SESSIONS_DIR);
@@ -902,7 +910,61 @@ ${text2}` : text2;
         child.on("error", (error) => done(1, error));
         child.on("close", (code2) => done(code2));
       };
+      const logins = /* @__PURE__ */ new Map();
+      const login = (conversation, answer, key, agent, bin) => {
+        const info = CHAT_AGENTS[agent];
+        if (logins.has(key)) {
+          Object.assign(answer, { streaming: false, thinking: false, parts: [{ type: "text", text: `O login do ${info.name} j\xE1 est\xE1 aberto: termine no navegador.` }] });
+          return broadcast(conversation);
+        }
+        const env = { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" };
+        for (const k of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "CODEX_THREAD_ID", "CODEX_SESSION_ID"]) delete env[k];
+        let child;
+        try {
+          child = launch(bin, agent === "claude" ? ["auth", "login"] : ["login"], { cwd: root, env });
+        } catch (error) {
+          Object.assign(answer, { streaming: false, thinking: false, error: `N\xE3o consegui abrir o login do ${info.name}: ${error instanceof Error ? error.message : String(error)}` });
+          return broadcast(conversation);
+        }
+        logins.set(key, child);
+        const intro = `Abri o login do ${info.name} neste computador: o navegador vai abrir para voc\xEA entrar na conta.`;
+        Object.assign(answer, { thinking: false, parts: [{ type: "text", text: intro }] });
+        broadcast(conversation);
+        let output = "";
+        const show = (chunk) => {
+          output = (output + chunk.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")).slice(-3e3);
+          const said = output.split("\n").map((l) => l.trim()).filter(Boolean).slice(-8).join("\n");
+          answer.parts = [{ type: "text", text: said ? `${intro}
+
+${said}` : intro }];
+          broadcast(conversation);
+        };
+        child.stdout?.setEncoding("utf8");
+        child.stderr?.setEncoding("utf8");
+        child.stdout?.on("data", show);
+        child.stderr?.on("data", show);
+        child.stdin?.on("error", () => {
+        });
+        const timer = setTimeout(() => kill(child), 5 * 6e4);
+        const finish = (code2, spawnError) => {
+          if (logins.get(key) !== child) return;
+          logins.delete(key);
+          clearTimeout(timer);
+          answer.streaming = false;
+          if (!spawnError && code2 === 0) {
+            answer.parts = [{ type: "text", text: `Pronto: o ${info.name} entrou na conta neste computador. Pode mandar o pedido de novo.` }];
+          } else {
+            const tail = output.split("\n").map((l) => l.trim()).filter(Boolean).slice(-4).join("\n");
+            answer.error = spawnError ? `N\xE3o consegui abrir o login: ${spawnError.message}` : `O login n\xE3o terminou${code2 === null ? " (passou de 5 minutos)" : ` (c\xF3digo ${code2})`}.${tail ? ` ${short(tail, 400)}` : ""}`;
+          }
+          broadcast(conversation);
+        };
+        child.on("error", (error) => finish(1, error));
+        child.on("close", (code2) => finish(code2));
+      };
       const stop = (projectId, agent, note) => {
+        const pendingLogin = logins.get(runKey(projectId, agent));
+        if (pendingLogin) kill(pendingLogin);
         const run = runs.get(runKey(projectId, agent));
         if (!run) return;
         run.stopped = true;
@@ -1063,7 +1125,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610061456", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610061513", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -1080,7 +1142,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610061456" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610061513" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);

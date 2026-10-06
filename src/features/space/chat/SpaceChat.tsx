@@ -27,6 +27,7 @@ import { pageOf } from '@/features/space/pages/pages'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { SectionNodeData } from '@/types/space'
 import { ConnectorPrompt } from './ConnectorPrompt'
+import { useConnector } from '@/features/space/connector/connectorStore'
 import { useChat } from './chatStore'
 import { CHAT_AGENTS, CHAT_AGENT_IDS, type ChatAgentId, type ChatContext, type ChatMessage, type ChatPart, type ChatStep } from './protocol'
 
@@ -245,6 +246,7 @@ const AgentMessage: React.FC<{ message: ChatMessage }> = ({ message }) => {
           <p className="se-chat-shimmer text-[12px] font-medium">{groups.length ? 'Trabalhando' : 'Pensando'}</p>
         )}
         {message.error && <p className="rounded-lg bg-red-50 px-2.5 py-1.5 text-[12px] leading-snug text-red-700">{message.error}</p>}
+        {message.error && <AuthHint agent={message.agent} error={message.error} />}
         {message.stopped && !message.error && <p className="text-[12px] text-gray-500">Parado por você.</p>}
         {!message.streaming && !!message.durationMs && (
           <p className="text-[10px] tabular-nums text-gray-400">
@@ -361,9 +363,10 @@ export const SpaceChat: React.FC = () => {
     return (
       <EmptyAgents
         title="Nenhum agente neste computador"
-        text={`Instale o Claude Code ou o Codex e abra o projeto de novo: eles aparecem aqui para mexer no canvas. ${agents
+        text={`Instale o Claude Code ou o Codex e abra o conector de novo: eles aparecem aqui para mexer no canvas. ${agents
           .map((a) => `${CHAT_AGENTS[a.id].name}: ${a.reason ?? 'não encontrado'}`)
           .join(' · ')}`}
+        action={<ConnectorBar />}
       />
     )
   }
@@ -392,6 +395,7 @@ export const SpaceChat: React.FC = () => {
 
   return (
     <div data-space-chat className="flex min-h-0 flex-1 flex-col">
+      <ConnectorBar />
       {(running.length > 0 || messages.length > 0) && (
         <div className="flex h-9 shrink-0 items-center gap-2 border-b border-gray-100 pl-3 pr-1.5">
           <p className="min-w-0 flex-1 truncate text-[11px] text-gray-500">
@@ -581,9 +585,54 @@ const AgentDot: React.FC<{ agent: ChatAgentId; working?: boolean }> = ({ agent, 
   </span>
 )
 
-const EmptyAgents: React.FC<{ title: string; text: string }> = ({ title, text }) => (
-  <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-    <p className="text-[13px] font-medium text-gray-800">{title}</p>
-    <p className="mt-1 text-[11px] leading-relaxed text-gray-500">{text}</p>
+const EmptyAgents: React.FC<{ title: string; text: string; action?: React.ReactNode }> = ({ title, text, action }) => (
+  <div className="flex flex-1 flex-col">
+    {action}
+    <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+      <p className="text-[13px] font-medium text-gray-800">{title}</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-gray-500">{text}</p>
+    </div>
   </div>
 )
+
+/**
+ * Ligado pelo conector (app publicado): de que computador vêm os agentes e
+ * como desligar. Desconectar volta para os passos de ligar, para trocar de
+ * código, de máquina, ou tentar de novo depois de mexer numa permissão.
+ */
+const ConnectorBar: React.FC = () => {
+  const status = useConnector((s) => s.status)
+  const pairing = useConnector((s) => s.pairing)
+  if (status !== 'connected' || !pairing) return null
+  const code = `${pairing.code.slice(0, 3)}-${pairing.code.slice(3)}`
+  return (
+    <div className="flex h-8 shrink-0 items-center gap-2 border-b border-gray-100 pl-3 pr-1.5 text-[11px] text-gray-500">
+      <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+      <span className="min-w-0 flex-1 truncate" title={`Conector deste computador · código ${code}${pairing.port !== 47823 ? ` · porta ${pairing.port}` : ''}`}>
+        Agentes deste computador · <span className="font-mono">{code}</span>
+      </span>
+      <button
+        type="button"
+        className="shrink-0 rounded-md px-1.5 py-1 font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+        onClick={() => useConnector.getState().disconnect()}
+        title="Desliga o conector e volta para os passos de ligar"
+      >
+        Desconectar
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Login vencido ou ausente: `/login` digitado aqui no chat roda o login do
+ * agente na máquina do conector, que abre o navegador para entrar na conta.
+ */
+const AuthHint: React.FC<{ agent: ChatAgentId; error: string }> = ({ agent, error }) => {
+  if (!/authenticat|oauth|log ?in|login|unauthori[sz]ed|\b401\b|api key|credential/i.test(error)) return null
+  return (
+    <p className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[12px] leading-snug text-amber-900">
+      O {CHAT_AGENTS[agent].name} deste computador saiu da conta. Digite <code className="rounded bg-amber-100 px-1 font-mono text-[11px]">/login</code> aqui no
+      chat: o navegador abre para você entrar de novo. Depois mande o pedido outra vez.
+    </p>
+  )
+}

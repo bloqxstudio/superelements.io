@@ -515,9 +515,18 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
           Object.assign(answer, { streaming: false, thinking: false, error })
           broadcast(conversation)
         }
+        // Login em andamento: o que a pessoa escreve vai para ele (o código que a página de login mostra)
+        const pendingLogin = logins.get(key)
+        if (pendingLogin && !/^\/login\b/i.test(text)) {
+          pendingLogin.stdin?.write(`${text}\n`)
+          Object.assign(answer, { streaming: false, thinking: false, parts: [{ type: 'text', text: `Mandei para o login do ${info.name}. Espere a confirmação aqui.` }] })
+          return broadcast(conversation)
+        }
         if (runs.has(key)) return fail(`O ${info.name} ainda está trabalhando no pedido anterior. Espere ou pare antes.`)
         const bin = findBin(payload.agent)
         if (!bin) return fail(`${info.name} não foi encontrado nesta máquina. Instale, ou diga onde está em ${payload.agent === 'claude' ? 'SPACE_CLAUDE_BIN' : 'SPACE_CODEX_BIN'}.`)
+        // "/login" no chat: entra na conta do agente nesta máquina, pelo navegador dela
+        if (/^\/login\b/i.test(text)) return login(conversation, answer, key, payload.agent, bin)
 
         // A sessão da ponte já nasce ligada ao projeto: o agente não precisa de `open`
         const session = chatSession(payload.projectId, payload.agent, conversation.epoch)
@@ -640,7 +649,66 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
         child.on('close', (code) => done(code))
       }
 
+      /**
+       * O login do agente nesta máquina (`claude auth login`, `codex login`): abre o
+       * navegador de quem roda o conector para entrar na conta. O que o comando
+       * imprime (o endereço, se o navegador não abrir sozinho) aparece na conversa.
+       */
+      const logins = new Map<string, ChildProcess>()
+      const login = (conversation: Stored, answer: ChatMessage, key: string, agent: ChatAgentId, bin: string) => {
+        const info = CHAT_AGENTS[agent]
+        if (logins.has(key)) {
+          Object.assign(answer, { streaming: false, thinking: false, parts: [{ type: 'text', text: `O login do ${info.name} já está aberto: termine no navegador.` }] })
+          return broadcast(conversation)
+        }
+        const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }
+        for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT', 'CODEX_THREAD_ID', 'CODEX_SESSION_ID']) delete env[k]
+        let child: ChildProcess
+        try {
+          child = launch(bin, agent === 'claude' ? ['auth', 'login'] : ['login'], { cwd: root, env })
+        } catch (error) {
+          Object.assign(answer, { streaming: false, thinking: false, error: `Não consegui abrir o login do ${info.name}: ${error instanceof Error ? error.message : String(error)}` })
+          return broadcast(conversation)
+        }
+        logins.set(key, child)
+        const intro = `Abri o login do ${info.name} neste computador: o navegador vai abrir para você entrar na conta.`
+        Object.assign(answer, { thinking: false, parts: [{ type: 'text', text: intro }] })
+        broadcast(conversation)
+
+        // O que o comando diz, sem as cores do terminal; um endereço vira link na conversa
+        let output = ''
+        const show = (chunk: string) => {
+          output = (output + chunk.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')).slice(-3000)
+          const said = output.split('\n').map((l) => l.trim()).filter(Boolean).slice(-8).join('\n')
+          answer.parts = [{ type: 'text', text: said ? `${intro}\n\n${said}` : intro }]
+          broadcast(conversation)
+        }
+        child.stdout?.setEncoding('utf8')
+        child.stderr?.setEncoding('utf8')
+        child.stdout?.on('data', show)
+        child.stderr?.on('data', show)
+        child.stdin?.on('error', () => {})
+        const timer = setTimeout(() => kill(child), 5 * 60_000)
+        const finish = (code: number | null, spawnError?: Error) => {
+          if (logins.get(key) !== child) return
+          logins.delete(key)
+          clearTimeout(timer)
+          answer.streaming = false
+          if (!spawnError && code === 0) {
+            answer.parts = [{ type: 'text', text: `Pronto: o ${info.name} entrou na conta neste computador. Pode mandar o pedido de novo.` }]
+          } else {
+            const tail = output.split('\n').map((l) => l.trim()).filter(Boolean).slice(-4).join('\n')
+            answer.error = spawnError ? `Não consegui abrir o login: ${spawnError.message}` : `O login não terminou${code === null ? ' (passou de 5 minutos)' : ` (código ${code})`}.${tail ? ` ${short(tail, 400)}` : ''}`
+          }
+          broadcast(conversation)
+        }
+        child.on('error', (error) => finish(1, error))
+        child.on('close', (code) => finish(code))
+      }
+
       const stop = (projectId: string, agent: ChatAgentId, note?: string) => {
+        const pendingLogin = logins.get(runKey(projectId, agent))
+        if (pendingLogin) kill(pendingLogin)
         const run = runs.get(runKey(projectId, agent))
         if (!run) return
         run.stopped = true

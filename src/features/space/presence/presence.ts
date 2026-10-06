@@ -52,11 +52,14 @@ const personPresence = (person: LivePerson, kind: 'me' | 'person'): Presence => 
 
 const agentPresence = (name: string, doing?: string): Presence => {
   const info = agentInfoByName(name)
+  // O agente de outra pessoa vem com o dono no nome ("Claude Code · Pedro") e é outra bolinha
+  const remote = name.includes(' · ')
   return {
-    key: `agent:${info?.id ?? name}`,
+    key: remote ? `agent:${name}` : `agent:${info?.id ?? name}`,
     kind: 'agent',
-    name: info?.name ?? name,
+    name: remote ? name : info?.name ?? name,
     initial: (info?.name ?? name).charAt(0).toUpperCase(),
+    // A bolinha mostra as iniciais do agente; o dono aparece na dica
     color: info?.color ?? '#7C3AED',
     ink: info?.ink ?? '#FFFFFF',
     doing,
