@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useProject } from '@/features/projects/projectStore'
 import {
   adminUrl,
   authorizationUrl,
@@ -19,7 +18,6 @@ import {
 import { discoverSite, siteCandidates, unsupportedReason, type WordPressSite } from './rest'
 import { SiteIconPanel } from './SiteIconPanel'
 import type { WordPressConnection } from './types'
-import { useWordPressConnection } from './useWordPressConnection'
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
@@ -570,37 +568,5 @@ export const WordPressDialog: React.FC<WordPressDialogProps> = ({ open, onOpenCh
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={connection && editingIcon ? 'max-h-[92vh] max-w-2xl overflow-y-auto' : 'max-w-md'}>{body}</DialogContent>
     </Dialog>
-  )
-}
-
-/** "WordPress" no header do projeto; conectado, mostra o domínio do site. */
-export const ProjectWordPressButton: React.FC<{ projectId: string }> = ({ projectId }) => {
-  const project = useProject(projectId)
-  const { connection, reload } = useWordPressConnection(projectId)
-  const [open, setOpen] = useState(false)
-  if (!project) return null
-
-  return (
-    <>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 gap-1.5 px-2.5 text-gray-600"
-        onClick={() => setOpen(true)}
-        title={connection ? `WordPress: ${connection.site.name}` : 'Conectar o WordPress do cliente'}
-      >
-        <Globe className="h-4 w-4" />
-        <span className="max-w-[160px] truncate">{connection ? hostOf(connection.site.siteUrl) : 'WordPress'}</span>
-        {connection && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-label="(conectado)" />}
-      </Button>
-      <WordPressDialog
-        open={open}
-        onOpenChange={setOpen}
-        projectId={projectId}
-        projectName={project.name}
-        connection={connection}
-        reload={reload}
-      />
-    </>
   )
 }

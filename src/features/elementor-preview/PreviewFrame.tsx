@@ -57,6 +57,11 @@ interface PreviewFrameProps {
   onLoaded?: () => void
   /** Altura na tela (já na escala) até o conteúdo ser medido: a do último carregamento, para nada pular. */
   placeholderHeight?: number
+  /**
+   * Folha de página: sem moldura nem sombra, e a tela do device ocupa a largura
+   * toda (o celular cresce para a largura da página em vez de ficar no meio).
+   */
+  sheet?: boolean
 }
 
 const finite = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
@@ -64,6 +69,13 @@ const shortText = (value: unknown) => (typeof value === 'string' && value.length
 
 /** Reemite no elemento do iframe o gesto que o preview devolveu, para o canvas tratar como se fosse dele. */
 const redispatchGesture = (frame: HTMLIFrameElement, data: Record<string, unknown>) => {
+  if (data.type === 'se-preview-pointer') {
+    // O mouse sobre a seção: o canvas não vê o que passa dentro do iframe
+    const box = frame.getBoundingClientRect()
+    const ratio = frame.offsetWidth ? box.width / frame.offsetWidth : 1
+    frame.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: box.left + finite(data.x) * ratio, clientY: box.top + finite(data.y) * ratio }))
+    return
+  }
   if (data.type === 'se-preview-key') {
     if (data.event !== 'keydown' && data.event !== 'keyup') return
     frame.dispatchEvent(
@@ -137,6 +149,7 @@ const PreviewFrameBase: React.FC<PreviewFrameProps> = ({
   overlay,
   onLoaded,
   placeholderHeight,
+  sheet = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
@@ -190,7 +203,7 @@ const PreviewFrameBase: React.FC<PreviewFrameProps> = ({
           loaded.current()
           loaded.current = undefined
         }
-      } else if (type === 'se-preview-wheel' || type === 'se-preview-key') {
+      } else if (type === 'se-preview-wheel' || type === 'se-preview-key' || type === 'se-preview-pointer') {
         redispatchGesture(frame, event.data)
       } else if (type === 'se-ready') {
         ready.current = true
@@ -236,13 +249,13 @@ const PreviewFrameBase: React.FC<PreviewFrameProps> = ({
 
   const fluid = viewport === 'fluid'
   const width = fluid ? containerWidth : VIEWPORT_WIDTH[viewport]
-  const scale = !fluid && containerWidth ? Math.min(1, containerWidth / width) : 1
+  const scale = !fluid && containerWidth ? (sheet ? containerWidth / width : Math.min(1, containerWidth / width)) : 1
   const frameHeight = height ?? (placeholderHeight ? placeholderHeight / scale : DEFAULT_HEIGHT)
 
   return (
     <div ref={containerRef} className="w-full">
       <div className="relative mx-auto" style={{ width: width * scale, height: frameHeight * scale }}>
-        <div className={fluid ? 'h-full overflow-hidden bg-white' : 'h-full overflow-hidden rounded-md border bg-white shadow-sm'}>
+        <div className={fluid || sheet ? 'h-full overflow-hidden bg-white' : 'h-full overflow-hidden rounded-md border bg-white shadow-sm'}>
           <iframe
             ref={(el) => {
               iframeRef.current = el

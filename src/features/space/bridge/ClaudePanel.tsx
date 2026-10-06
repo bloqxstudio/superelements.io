@@ -27,7 +27,7 @@ type PanelStep = AgentStep & { agent: string }
  * O diário vem da ponte, que o guarda por projeto: o que o agente fez em
  * segundo plano, antes de a pessoa abrir o projeto, também aparece aqui.
  */
-export const ClaudePanel: React.FC<{ rightInset?: number }> = ({ rightInset = 0 }) => {
+export const ClaudePanel: React.FC<{ rightInset?: number; inline?: boolean }> = ({ rightInset = 0, inline = false }) => {
   const projectId = useProjectSync((s) => s.openId)
   const runs = useProjectAgents(projectId)
   const localSteps = useClaudeBridge((s) => s.steps)
@@ -87,8 +87,9 @@ export const ClaudePanel: React.FC<{ rightInset?: number }> = ({ rightInset = 0 
       data-claude-panel
       aria-label={`${agent} no projeto`}
       aria-live="polite"
-      className={`pointer-events-auto absolute bottom-3 z-40 flex flex-col overflow-hidden rounded-xl ${ISLAND_SURFACE}`}
-      style={{ right: 12 + rightInset, width: PANEL_WIDTH }}
+      // Na aba Agente fica em cima da conversa; fora dela, flutua no canto do canvas
+      className={inline ? 'flex max-h-[42%] shrink-0 flex-col overflow-hidden border-b border-gray-100' : `pointer-events-auto absolute bottom-3 z-40 flex flex-col overflow-hidden rounded-xl ${ISLAND_SURFACE}`}
+      style={inline ? undefined : { right: 12 + rightInset, width: PANEL_WIDTH }}
       onWheel={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >

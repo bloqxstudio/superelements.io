@@ -1,17 +1,22 @@
 import type { SpaceNode, SpacePage } from '@/types/space'
 
 /**
- * Geometria das páginas no canvas. O quadro tem um cabeçalho e, abaixo dele,
- * as seções da página empilhadas numa coluna; as posições das seções são
- * sempre derivadas da página (ver `layoutPage` no store).
+ * Geometria das páginas no canvas. Acima de cada página fica a faixa do
+ * rótulo (nome, tela e tamanho) e, abaixo dela, a folha: as seções coladas
+ * umas nas outras, como a página no site. As posições das seções são sempre
+ * derivadas da página (ver `layoutPage` no store).
  */
 
 export const SECTION_WIDTH = 480
+/** Faixa acima da folha onde fica o rótulo da página. */
 export const PAGE_HEADER = 48
-export const PAGE_PAD = 16
+/** A folha não tem respiro: a seção ocupa a largura toda, como no site. */
+export const PAGE_PAD = 0
 export const PAGE_WIDTH = SECTION_WIDTH + PAGE_PAD * 2
-/** Espaço entre as seções de uma página (e entre seções soltas empilhadas). */
+/** Espaço entre seções soltas empilhadas; dentro de uma página elas se encostam. */
 export const SECTION_GAP = 24
+/** Entre as seções de uma página: nenhum, a página se lê de cima a baixo sem emendas. */
+export const PAGE_SECTION_GAP = 0
 /** Altura da área vazia de uma página sem seções. */
 export const EMPTY_PAGE_BODY = 168
 /** Entre duas páginas cabe o texto ou a paleta ligados à esquerda de uma seção. */
@@ -41,7 +46,7 @@ export function pageSlots(page: SpacePage, nodes: SpaceNode[]) {
   const slots = new Map<string, { x: number; y: number }>()
   for (const section of pageSections(page, nodes)) {
     slots.set(section.id, { x, y })
-    y += section.height + SECTION_GAP
+    y += section.height + PAGE_SECTION_GAP
   }
   return slots
 }
@@ -50,9 +55,15 @@ export function pageSlots(page: SpacePage, nodes: SpaceNode[]) {
 export function pageFrame(page: SpacePage, nodes: SpaceNode[]): Rect {
   const sections = pageSections(page, nodes)
   const body = sections.length
-    ? sections.reduce((sum, s) => sum + s.height, 0) + SECTION_GAP * (sections.length - 1)
+    ? sections.reduce((sum, s) => sum + s.height, 0) + PAGE_SECTION_GAP * (sections.length - 1)
     : EMPTY_PAGE_BODY
   return { x: page.x, y: page.y, width: PAGE_WIDTH, height: PAGE_HEADER + PAGE_PAD + body + PAGE_PAD }
+}
+
+/** Página sob um ponto do mundo (a folha ou a faixa do rótulo dela). */
+export function pageAt(pages: SpacePage[], nodes: SpaceNode[], x: number, y: number): SpacePage | null {
+  for (let i = pages.length - 1; i >= 0; i--) if (contains(pageFrame(pages[i], nodes), x, y)) return pages[i]
+  return null
 }
 
 const contains = (r: Rect, x: number, y: number) => x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height

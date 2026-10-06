@@ -25,21 +25,14 @@ import {
 import { useSpaceStore } from '@/store/spaceStore'
 import { parseSectionElements, type SectionElement } from '@/features/space/landingPage'
 import { pageSections } from '@/features/space/pages/pages'
-import { ISLAND_SURFACE } from '@/features/space/ToolbarIsland'
 import { MOD_KEY } from '@/features/space/pages/clipboard'
 import type { SectionNodeData } from '@/types/space'
-import { PropertiesPanel } from '@/features/space/editor/PropertiesPanel'
 import { PanelBoundary } from '@/features/space/editor/PanelBoundary'
 import { deleteSelectedElement, duplicateSelectedElement, moveElementAcross, selectElement } from '@/features/space/editor/actions'
 import { accepts, containsId, locate, settingsOf } from '@/features/space/editor/tree'
 import { findElement } from './elementorContentEditor'
 import { layerKind, layerName, layerSearchText, type LayerContext } from './navigatorLabels'
 
-export const NAVIGATOR_PANEL_WIDTH = 340
-
-interface ElementorNavigatorPanelProps {
-  onClose: () => void
-}
 
 interface NavigatorSection {
   id: string
@@ -223,11 +216,12 @@ const ElementRow: React.FC<ElementRowProps> = ({ element, sectionId, sectionTitl
 }
 
 /**
- * Camadas da página ativa (a árvore nativa de containers e widgets) e, com uma
- * camada escolhida, as propriedades dela embaixo. Passar o mouse numa camada a
- * destaca no canvas; arrastar muda de lugar, inclusive para outra seção.
+ * Camadas da página ativa (a árvore nativa de containers e widgets), na aba
+ * Camadas do painel da esquerda. Passar o mouse numa camada a destaca no
+ * canvas; arrastar muda de lugar, inclusive para outra seção. As propriedades
+ * da camada escolhida ficam na aba Estilo, à direita.
  */
-export const ElementorNavigatorPanel: React.FC<ElementorNavigatorPanelProps> = ({ onClose }) => {
+export const LayersTree: React.FC = () => {
   const pages = useSpaceStore((state) => state.pages)
   const nodes = useSpaceStore((state) => state.nodes)
   const activePageId = useSpaceStore((state) => state.activePageId)
@@ -397,34 +391,8 @@ export const ElementorNavigatorPanel: React.FC<ElementorNavigatorPanelProps> = (
       )
   )
 
-  const selectedSection = selection ? sections.find((section) => section.id === selection.sectionId) : undefined
-  const selectedElement = selection ? findElement(selectedSection?.elements ?? null, selection.elementId) : null
-
   return (
-    <aside
-      data-space-navigator
-      className={`absolute bottom-3 right-3 top-16 z-40 flex flex-col overflow-hidden rounded-xl ${ISLAND_SURFACE}`}
-      style={{ width: NAVIGATOR_PANEL_WIDTH }}
-      onWheel={(event) => event.stopPropagation()}
-    >
-      <header className="flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-3">
-        <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
-            <Layers3 className="h-4 w-4 text-violet-600" />
-            Navigator
-          </p>
-          <p className="mt-0.5 truncate text-[11px] text-gray-500">{page?.name ?? 'Nenhuma página ativa'}</p>
-        </div>
-        <button
-          type="button"
-          className="rounded-md p-1 text-gray-400 transition-[color,background-color,transform] hover:bg-gray-100 hover:text-gray-700 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
-          aria-label="Fechar Navigator"
-          onClick={onClose}
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </header>
-
+    <div data-space-navigator className="flex min-h-0 flex-1 flex-col">
       <div className="border-b border-gray-100 p-2">
         <label className="flex h-8 items-center gap-2 rounded-lg bg-gray-100 px-2.5 text-gray-500 focus-within:bg-white focus-within:shadow-[0_0_0_2px_rgb(124_58_237/0.45)]">
           <Search className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
@@ -444,7 +412,7 @@ export const ElementorNavigatorPanel: React.FC<ElementorNavigatorPanelProps> = (
       </div>
 
       <TreeDragContext.Provider value={dragApi}>
-        <div className="min-h-0 overflow-y-auto p-2" style={selectedElement ? { flex: '0 0 34%' } : { flex: '1 1 auto' }}>
+        <div className="min-h-0 overflow-y-auto p-2" style={{ flex: '1 1 auto' }}>
           <PanelBoundary what="as camadas desta página" resetKey={`${page?.id}:${sections.length}`}>
           {visibleSections.length ? (
             <ul role="tree" aria-label={`Camadas de ${page?.name ?? 'página'}`} className="space-y-1">
@@ -522,17 +490,6 @@ export const ElementorNavigatorPanel: React.FC<ElementorNavigatorPanelProps> = (
         </div>
       </TreeDragContext.Provider>
 
-      {selection && selectedElement ? (
-        <div className="flex min-h-0 flex-1 flex-col border-t border-gray-200">
-          <PanelBoundary what="as propriedades desta camada" resetKey={`${selection.sectionId}:${selection.elementId}`}>
-            <PropertiesPanel key={`${selection.sectionId}:${selection.elementId}`} sectionId={selection.sectionId} elementId={selection.elementId} />
-          </PanelBoundary>
-        </div>
-      ) : (
-        <footer className="border-t border-gray-100 px-3 py-2 text-[10px] leading-relaxed text-gray-400">
-          Clique numa camada aqui ou no canvas para ver as propriedades. Duplo clique no canvas edita o texto.
-        </footer>
-      )}
-    </aside>
+    </div>
   )
 }

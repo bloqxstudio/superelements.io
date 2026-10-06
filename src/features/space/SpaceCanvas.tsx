@@ -5,7 +5,9 @@ import { TextNode } from './nodes/TextNode'
 import { ColorPaletteNode } from './nodes/ColorPaletteNode'
 import { ConnectionLayer } from './ConnectionLayer'
 import { PagesLayer } from './pages/PageFrame'
-import { MAX_ZOOM, MIN_ZOOM } from './SpaceCanvasBar'
+import { MAX_ZOOM, MIN_ZOOM, useCanvasTool } from './canvasView'
+import { PeopleCursors, useBroadcastCursor } from './presence/PeopleCursors'
+import { useSectionHover } from './nodes/sectionHover'
 
 /** Altura de uma linha quando a roda vem em linhas (Firefox). */
 const WHEEL_LINE = 16
@@ -19,6 +21,9 @@ const ownsSpace = (target: EventTarget | null) =>
 const DotPattern: React.FC<{ transform: { x: number; y: number; zoom: number } }> = ({ transform }) => {
   const spacing = 24 * transform.zoom
   const dotSize = Math.max(1, transform.zoom * 1.5)
+  // Afastado, os pontos ficam a poucos px uns dos outros e viram ruído: somem entre 50% e 30%
+  const fade = Math.max(0, Math.min(1, (transform.zoom - 0.3) / 0.2))
+  if (!fade) return null
   const offsetX = transform.x % spacing
   const offsetY = transform.y % spacing
 
@@ -42,7 +47,7 @@ const DotPattern: React.FC<{ transform: { x: number; y: number; zoom: number } }
           height={spacing}
           patternUnits="userSpaceOnUse"
         >
-          <circle cx={spacing / 2} cy={spacing / 2} r={dotSize} fill="#d1d5db" opacity={0.6} />
+          <circle cx={spacing / 2} cy={spacing / 2} r={dotSize} fill="#d1d5db" opacity={0.6 * fade} />
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill="url(#dot-pattern)" />
@@ -57,6 +62,8 @@ export const SpaceCanvas: React.FC = () => {
   const isPanning = useRef(false)
   const lastPos = useRef({ x: 0, y: 0 })
   const viewportRef = useRef<HTMLDivElement>(null)
+  // O meu mouse vai para quem mais estiver no projeto
+  const broadcastCursor = useBroadcastCursor(viewportRef)
 
   // Tamanho visível do canvas, usado para centralizar as seções adicionadas pela biblioteca
   useEffect(() => {
@@ -175,9 +182,12 @@ export const SpaceCanvas: React.FC = () => {
     }
   }, [])
 
+  // A Mão da barrinha de baixo faz o mesmo que segurar o Espaço, até voltar para Selecionar
+  const handTool = useCanvasTool((s) => s.tool === 'hand')
+  const hand = handMode || handTool
   const handleMouseDownCapture = useCallback(
     (e: React.MouseEvent) => {
-      if (e.button !== 1 && !(e.button === 0 && spaceHeld.current)) return
+      if (e.button !== 1 && !(e.button === 0 && (spaceHeld.current || useCanvasTool.getState().tool === 'hand'))) return
       e.preventDefault()
       e.stopPropagation()
       document.body.style.cursor = 'grabbing'
@@ -233,13 +243,22 @@ export const SpaceCanvas: React.FC = () => {
     <div
       ref={viewportRef}
       data-space-canvas
-      className={`canvas-background absolute inset-0 overflow-hidden ${handMode ? '[&_*]:!cursor-grab [&_iframe]:pointer-events-none' : ''}`}
+      className={`canvas-background absolute inset-0 overflow-hidden ${hand ? '[&_*]:!cursor-grab [&_iframe]:pointer-events-none' : ''}`}
       style={{
         cursor: 'grab',
         backgroundColor: '#f4f4f5',
       }}
       onMouseDownCapture={handleMouseDownCapture}
       onMouseDown={handleMouseDown}
+      onPointerMove={(e) => {
+        broadcastCursor.move(e)
+        // Fora de qualquer seção (fundo, barra da página), nenhuma fica acesa
+        if (!(e.target as Element).closest?.('[data-section-id]')) useSectionHover.getState().set(null)
+      }}
+      onPointerLeave={() => {
+        broadcastCursor.leave()
+        useSectionHover.getState().set(null)
+      }}
     >
       {/* Dot grid background */}
       <DotPattern transform={canvasTransform} />
@@ -256,6 +275,8 @@ export const SpaceCanvas: React.FC = () => {
           width: 0,
           height: 0,
           overflow: 'visible',
+          // Contornos e alças das seções dividem por isto para ficar do mesmo tamanho na tela
+          ['--z' as string]: canvasTransform.zoom,
         }}
       >
         {/* Páginas por baixo: as seções delas são nós como os outros, posicionados na coluna */}
@@ -266,6 +287,8 @@ export const SpaceCanvas: React.FC = () => {
           if (node.type === 'color-palette') return <ColorPaletteNode key={node.id} node={node} />
           return null
         })}
+        {/* Onde está o mouse de quem mais tem o projeto aberto */}
+        <PeopleCursors />
       </div>
 
     </div>

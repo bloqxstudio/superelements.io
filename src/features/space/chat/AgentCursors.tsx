@@ -1,8 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import { useSpaceStore } from '@/store/spaceStore'
-import { AgentMark } from './AgentMark'
 import { useAgentCursors, type AgentCursor, type CursorTarget } from './cursorStore'
-import { agentInfoByName } from './protocol'
 
 /**
  * Os cursores dos agentes por cima do canvas. Cada um segue o alvo dele (a
@@ -25,7 +23,7 @@ export interface CanvasInsets {
 }
 
 /** Barra de cima e caixa do chat: o cursor não fica embaixo delas. */
-const TOP_CLEAR = 64
+const TOP_CLEAR = 16
 const BOTTOM_CLEAR = 110
 const EDGE = 16
 
@@ -95,9 +93,10 @@ const Cursor: React.FC<{ cursor: AgentCursor; rootRef: React.RefObject<HTMLDivEl
       last = now
       const view: Box = { x: inset.left + EDGE, y: TOP_CLEAR, w: Math.max(40, bounds.width - inset.left - inset.right - EDGE * 2), h: Math.max(40, bounds.height - TOP_CLEAR - BOTTOM_CLEAR) }
 
-      // Entra pela caixa do chat, embaixo no meio
+      // Entra pelo lado do painel do agente
       if (Number.isNaN(s.x)) {
-        const origin = c.origin ?? { x: view.x + view.w / 2, y: bounds.height - 70 }
+        // Entra pela direita, onde fica a aba Agente
+        const origin = c.origin ?? { x: bounds.width - 24, y: bounds.height * 0.6 }
         s.x = origin.x
         s.y = origin.y
       }
@@ -155,7 +154,6 @@ const Cursor: React.FC<{ cursor: AgentCursor; rootRef: React.RefObject<HTMLDivEl
     return () => cancelAnimationFrame(raf)
   }, [rootRef])
 
-  const info = agentInfoByName(cursor.agent)
   const gone = cursor.mode === 'gone'
   const clicked = cursor.clickAt && Date.now() - cursor.clickAt < 1500
   const busy = cursor.mode !== 'done' && cursor.mode !== 'gone'
@@ -187,10 +185,9 @@ const Cursor: React.FC<{ cursor: AgentCursor; rootRef: React.RefObject<HTMLDivEl
         </svg>
         <div className="absolute left-[15px] top-[21px] flex flex-col items-start gap-1">
           <span
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full py-[3px] pl-[3px] pr-2.5 text-[12px] font-semibold leading-none shadow-[0_2px_8px_-2px_rgb(0_0_0/0.35)]"
+            className="inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-[5px] text-[12px] font-semibold leading-none shadow-[0_2px_8px_-2px_rgb(0_0_0/0.35)]"
             style={{ background: cursor.color, color: cursor.ink }}
           >
-            <AgentMark agent={info?.id} size={17} />
             {cursor.agent}
           </span>
           {cursor.text && busy && (

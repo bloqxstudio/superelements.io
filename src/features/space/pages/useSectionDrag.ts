@@ -8,7 +8,7 @@ import { dropTargetAt, pageOf } from './pages'
 const CLICK_SLOP = 4
 /** Faixa perto da borda do canvas em que o arrasto rola o canvas; em cima, abaixo da barra do Space. */
 const EDGE = 56
-const TOP_BAR = 64
+const TOP_BAR = 0
 const MAX_PAN_SPEED = 16
 
 export interface SectionLift {

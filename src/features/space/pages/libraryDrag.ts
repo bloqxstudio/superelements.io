@@ -16,7 +16,7 @@ import { SECTION_WIDTH, dropTargetAt } from './pages'
 const CLICK_SLOP = 6
 /** Faixa perto da borda da área livre em que o arrasto rola o canvas; em cima, abaixo da barra do Space. */
 const EDGE = 64
-const TOP_BAR = 64
+const TOP_BAR = 0
 const MAX_PAN_SPEED = 14
 /** Altura, a partir do topo da seção, do ponto que fica sob o ponteiro. */
 const GRAB_Y = 16

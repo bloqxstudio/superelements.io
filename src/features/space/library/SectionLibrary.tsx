@@ -9,7 +9,7 @@ import {
   Image,
   Layers,
   LayoutGrid,
-  Library,
+
   ListOrdered,
   Loader2,
   Mail,
@@ -24,7 +24,6 @@ import {
   Shapes,
   Tag,
   Users,
-  X,
   type LucideIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -45,17 +44,15 @@ import { isComplete } from '@/features/section-pack/filters'
 import { loadPackIndex, missingWidgets, type PackComponent, type PackEntry, type PackIndex } from '@/features/section-pack/pack'
 import { usePagedPack } from '@/features/section-pack/usePagedPack'
 import { useSpaceStore } from '@/store/spaceStore'
-import { withFreshIds } from './landingPage'
-import { consumeLibraryDrop, startLibraryDrag } from './pages/libraryDrag'
-import { brandCustomization } from './brand/applyBrand'
-import { usePackBrand } from './brand/usePackBrand'
-import { fillWithProjectCopy, type ProjectCopy } from './copy/projectCopy'
-import { useProjectCopy } from './copy/useProjectCopy'
+import { withFreshIds } from '../landingPage'
+import { consumeLibraryDrop, startLibraryDrag } from '../pages/libraryDrag'
+import { brandCustomization } from '../brand/applyBrand'
+import { usePackBrand } from '../brand/usePackBrand'
+import { fillWithProjectCopy, type ProjectCopy } from '../copy/projectCopy'
+import { useProjectCopy } from '../copy/useProjectCopy'
 import type { ElementorCustomization } from '@/features/elementor-preview/useElementorDocument'
-import type { Brand } from './brand/designMd'
-import { ISLAND_SURFACE } from './ToolbarIsland'
+import type { Brand } from '../brand/designMd'
 
-export const LIBRARY_PANEL_WIDTH = 320
 const PAGE_SIZE = 16
 
 const CATEGORY_ICONS: Record<SectionCategoryKey, LucideIcon> = {
@@ -115,12 +112,8 @@ function libraryCustomization(brand: Brand | null, copy: ProjectCopy | null): El
   }
 }
 
-interface SpaceLibraryPanelProps {
-  onClose: () => void
-}
-
-/** Seções do pack Section Express para montar a landing page no canvas, separadas em caixinhas. */
-export const SpaceLibraryPanel: React.FC<SpaceLibraryPanelProps> = ({ onClose }) => {
+/** Seções do pack Section Express para montar a página no canvas, separadas em caixinhas (tipo Seções da Biblioteca). */
+export const SectionLibrary: React.FC = () => {
   const addSection = useSpaceStore((s) => s.addSection)
   // As miniaturas já mostram a seção como ela vai entrar na página
   const brand = usePackBrand()
@@ -191,7 +184,7 @@ export const SpaceLibraryPanel: React.FC<SpaceLibraryPanelProps> = ({ onClose })
   }
 
   const handleAdd = (entry: PackEntry, component: PackComponent) => {
-    const pageId = addSection(sectionData(entry, component), { leftInset: LIBRARY_PANEL_WIDTH + 24 })
+    const pageId = addSection(sectionData(entry, component))
     const page = useSpaceStore.getState().pages.find((p) => p.id === pageId)
     toast.success(`${entry.title} adicionada à página ${page?.name ?? ''}`.trim())
   }
@@ -201,26 +194,7 @@ export const SpaceLibraryPanel: React.FC<SpaceLibraryPanelProps> = ({ onClose })
   const formats = (Object.keys(FORMAT_LABELS) as SectionFormat[]).filter((f) => formatCounts.has(f))
 
   return (
-    <div
-      data-space-library
-      className={`absolute left-3 top-16 bottom-3 z-40 flex flex-col rounded-xl ${ISLAND_SURFACE}`}
-      style={{ width: LIBRARY_PANEL_WIDTH }}
-    >
-      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
-        <div className="flex items-center gap-1.5">
-          <Library className="h-3.5 w-3.5 text-gray-400" />
-          <span className="text-xs font-semibold text-gray-700">Biblioteca de seções</span>
-          {index && <span className="text-[10px] text-gray-400">{showCategories ? sections.length : filtered.length}</span>}
-        </div>
-        <button
-          onClick={onClose}
-          className="-mr-1 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          aria-label="Fechar a biblioteca"
-          title="Fechar"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col">
 
       {index === undefined && (
         <div className="flex flex-1 items-center justify-center">
@@ -230,7 +204,7 @@ export const SpaceLibraryPanel: React.FC<SpaceLibraryPanelProps> = ({ onClose })
 
       {index === null && (
         <div className="p-4 text-xs text-gray-500 space-y-2">
-          <p>A biblioteca não carregou. Feche e abra de novo para tentar outra vez.</p>
+          <p>A biblioteca não carregou. Troque de aba e volte para tentar outra vez.</p>
           {import.meta.env.DEV && (
             <>
               <p>Para usar o pack neste computador, importe no terminal:</p>
@@ -250,7 +224,7 @@ export const SpaceLibraryPanel: React.FC<SpaceLibraryPanelProps> = ({ onClose })
               <Input
                 value={query}
                 onChange={(e) => changeFilter(() => setQuery(e.target.value))}
-                placeholder={current ? `Buscar em ${current.label}` : 'Buscar: rodapé, preços, c1849…'}
+                placeholder={current ? `Buscar em ${current.label}` : `Buscar em ${sections.length.toLocaleString('pt-BR')} seções`}
                 className="h-8 pl-7 text-xs"
               />
             </div>

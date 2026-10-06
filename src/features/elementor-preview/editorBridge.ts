@@ -229,6 +229,8 @@ function endDrag(){
  try{html.releasePointerCapture(drag.id)}catch(err){}
  post({type:'se-drag',indicator:null})
 }
+// Onde está o mouse, para o canvas mostrar o cursor de quem edita aos outros
+var lastPtr=0;document.addEventListener('pointermove',function(e){var t=Date.now();if(t-lastPtr<40)return;lastPtr=t;post({type:'se-preview-pointer',x:e.clientX,y:e.clientY})},true);
 document.addEventListener('pointermove',function(e){
  if(drag){
   if(!drag.started){

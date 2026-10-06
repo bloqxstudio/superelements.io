@@ -63,6 +63,11 @@ export interface PublishResult {
   seo: 'saved' | 'skipped' | 'failed'
   seoSupport: SeoSupport | null
   seoError?: string
+  /**
+   * O layout pedido e o que a página ficou no site ('' é o modelo padrão do tema,
+   * com o título e o cabeçalho dele). `error`: o site recusou o pedido.
+   */
+  layout: { wanted?: PageTemplate; applied?: string; error?: string }
 }
 
 interface WpPage {
@@ -113,7 +118,7 @@ const linkFrom = (connection: WordPressConnection, page: WpPage, title: string):
   syncedAt: Date.now(),
 })
 
-const SAVED_FIELDS = 'id,link,status,modified_gmt,title,slug,featured_media'
+const SAVED_FIELDS = 'id,link,status,modified_gmt,title,slug,featured_media,template'
 
 export async function publishPage({ connection, projectId, pageId, status, template, overwrite, onProgress }: PublishOptions): Promise<PublishResult> {
   const creds = credentialsOf(connection)
@@ -208,6 +213,20 @@ export async function publishPage({ connection, projectId, pageId, status, templ
     })
   }
 
+  // O WordPress descarta o modelo sem avisar quando não o reconhece na hora de criar a página (ele
+  // valida antes de o Elementor ligar a página): confere o que ficou e pede de novo, agora numa
+  // atualização, que aceita ou devolve o motivo
+  const wantedTemplate = template ?? (link ? undefined : 'elementor_canvas')
+  let layoutError: string | undefined
+  if (wantedTemplate && saved.template !== undefined && saved.template !== wantedTemplate) {
+    onProgress?.(wantedTemplate === 'elementor_canvas' ? 'Aplicando a Tela do Elementor…' : 'Aplicando o layout com o tema…')
+    try {
+      saved = await wpRequest<WpPage>(creds, `wp/v2/pages/${saved.id}`, { method: 'POST', params: { _fields: SAVED_FIELDS }, body: { template: wantedTemplate } })
+    } catch (error) {
+      layoutError = error instanceof Error ? error.message : String(error)
+    }
+  }
+
   // Sem o campo na resposta, o tema do site não usa imagem destacada em páginas
   if (featuredMedia !== undefined) featured = saved.featured_media === featuredMedia ? 'saved' : 'unsupported'
 
@@ -247,6 +266,7 @@ export async function publishPage({ connection, projectId, pageId, status, templ
     seo,
     seoSupport,
     seoError,
+    layout: { wanted: wantedTemplate, applied: final.template, error: layoutError },
   }
 }
 

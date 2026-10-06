@@ -3,8 +3,6 @@ import { Check, ChevronDown, Copy, Download, Loader2 } from 'lucide-react'
 import { ISLAND_SURFACE } from '@/features/space/ToolbarIsland'
 import { useConnector } from '@/features/space/connector/connectorStore'
 import { detectPlatform, downloadLauncher, LAUNCHER_NAME, unixCommand, type Platform } from '@/features/space/connector/launcher'
-import { AgentMark } from './AgentMark'
-import { CHAT_AGENTS } from './protocol'
 
 /**
  * No app publicado, no lugar da caixa do chat enquanto não há conector. Um
@@ -17,9 +15,10 @@ const POLL_EVERY = 2500
 /** Procurando por mais tempo que isso, para e oferece tentar de novo. */
 const POLL_FOR = 15 * 60_000
 
-export const ConnectorPrompt: React.FC<{ place: { left: number; width: number; bottom: number } }> = ({ place }) => {
+/** Sem `place`, fica dentro da aba Agente (aberto); com ele, flutua no canvas. */
+export const ConnectorPrompt: React.FC<{ place?: { left: number; width: number; bottom: number } }> = ({ place }) => {
   const { status, error, pairing, ensureCode, probe, connect, disconnect } = useConnector()
-  const [open, setOpen] = useState(!!pairing)
+  const [open, setOpen] = useState(!!pairing || !place)
   const [platform, setPlatform] = useState<Platform>(detectPlatform)
   const [copied, setCopied] = useState(false)
   const [typing, setTyping] = useState(false)
@@ -57,16 +56,6 @@ export const ConnectorPrompt: React.FC<{ place: { left: number; width: number; b
 
   const stopEvents = (e: React.SyntheticEvent) => e.stopPropagation()
 
-  const marks = (
-    <span className="flex shrink-0 gap-1">
-      {(['claude', 'codex'] as const).map((id) => (
-        <span key={id} className="flex h-[22px] w-[22px] items-center justify-center rounded-full" style={{ background: CHAT_AGENTS[id].color }}>
-          <AgentMark agent={id} size={15} />
-        </span>
-      ))}
-    </span>
-  )
-
   const getIt =
     platform === 'windows' ? (
       <div className="flex items-center gap-2.5">
@@ -96,10 +85,9 @@ export const ConnectorPrompt: React.FC<{ place: { left: number; width: number; b
     )
 
   return (
-    <div className="pointer-events-auto absolute z-40" style={{ left: place.left, width: place.width, bottom: place.bottom }} onMouseDown={stopEvents} onWheel={stopEvents}>
-      <div className={`overflow-hidden rounded-2xl ${ISLAND_SURFACE}`}>
+    <div className={place ? 'pointer-events-auto absolute z-40' : 'p-3'} style={place ? { left: place.left, width: place.width, bottom: place.bottom } : undefined} onMouseDown={stopEvents} onWheel={stopEvents}>
+      <div className={place ? `overflow-hidden rounded-2xl ${ISLAND_SURFACE}` : 'overflow-hidden rounded-xl border border-gray-200'}>
         <button className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {marks}
           <span className="min-w-0 flex-1">
             <span className="block text-[13px] font-semibold text-gray-900">{waiting ? 'Conectando seus agentes' : 'Conectar meus agentes'}</span>
             <span className="block truncate text-[11px] text-gray-500">

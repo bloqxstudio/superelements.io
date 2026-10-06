@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { reloadProjects, useProject, useProjectList } from '@/features/projects/projectStore'
@@ -8,7 +8,8 @@ import { loadApprovals } from '@/features/approval/approvalStore'
 import { ProjectOpening } from '@/features/projects/ProjectOpening'
 import Space from '@/pages/Space'
 
-const FULL_HEIGHT = { height: 'calc(100vh - 57px)' }
+// O Space ocupa a tela inteira: a barra de cima é dele
+const FULL_HEIGHT = { height: '100vh' }
 
 const Failure: React.FC<{ title: string; text: string; onRetry: () => void }> = ({ title, text, onRetry }) => (
   <div className="flex items-center justify-center bg-zinc-100 px-4" style={FULL_HEIGHT}>
@@ -18,9 +19,15 @@ const Failure: React.FC<{ title: string; text: string; onRetry: () => void }> = 
         <div className="min-w-0">
           <h1 className="text-sm font-semibold text-gray-900">{title}</h1>
           <p className="mt-1 text-sm text-gray-600">{text}</p>
-          <Button size="sm" className="mt-4" onClick={onRetry}>
-            Tentar de novo
-          </Button>
+          <div className="mt-4 flex items-center gap-3">
+            <Button size="sm" onClick={onRetry}>
+              Tentar de novo
+            </Button>
+            {/* Sem o header da conta aqui dentro: o caminho de volta fica no próprio aviso */}
+            <Link to="/" className="text-sm text-gray-600 hover:text-gray-900">
+              Voltar aos projetos
+            </Link>
+          </div>
         </div>
       </div>
     </div>

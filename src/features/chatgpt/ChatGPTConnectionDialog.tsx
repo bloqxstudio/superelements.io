@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useProject } from '@/features/projects/projectStore'
 
 const CHATGPT_PLUGINS_URL = 'https://chatgpt.com/plugins'
 const LOCAL_MCP_URL = 'http://127.0.0.1:8787/mcp'
 
 const mcpUrl = () => (import.meta.env.VITE_CHATGPT_MCP_URL as string | undefined)?.trim() || LOCAL_MCP_URL
 const isLocalUrl = (url: string) => /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(url)
+/** A POC do ChatGPT existe só na ProcessBase. */
+export const hasChatGPT = (name: string) => projectKey(name) === 'processbase'
 const projectKey = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase()
 
 const copyValue = async (value: string, input: HTMLInputElement | null) => {
@@ -31,7 +32,7 @@ interface ChatGPTConnectionDialogProps {
   projectName: string
 }
 
-const ChatGPTConnectionDialog: React.FC<ChatGPTConnectionDialogProps> = ({ open, onOpenChange, projectName }) => {
+export const ChatGPTConnectionDialog: React.FC<ChatGPTConnectionDialogProps> = ({ open, onOpenChange, projectName }) => {
   const endpoint = mcpUrl()
   const local = isLocalUrl(endpoint)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -134,29 +135,5 @@ const ChatGPTConnectionDialog: React.FC<ChatGPTConnectionDialogProps> = ({ open,
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-/** A POC é exclusiva da ProcessBase; outros projetos não anunciam uma conexão que ainda não existe. */
-export const ProjectChatGPTButton: React.FC<{ projectId: string }> = ({ projectId }) => {
-  const project = useProject(projectId)
-  const [open, setOpen] = useState(false)
-  if (!project || projectKey(project.name) !== 'processbase') return null
-
-  return (
-    <>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 gap-1.5 px-2.5 text-gray-600 active:scale-[0.96] transition-transform"
-        onClick={() => setOpen(true)}
-        title="Conectar este projeto ao ChatGPT"
-      >
-        <Bot className="h-4 w-4" strokeWidth={2} aria-hidden />
-        <span className="hidden sm:inline">ChatGPT</span>
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-label="(POC)" />
-      </Button>
-      <ChatGPTConnectionDialog open={open} onOpenChange={setOpen} projectName={project.name} />
-    </>
   )
 }

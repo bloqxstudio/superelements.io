@@ -22,6 +22,7 @@ import { registerFrame, resolveHit } from '@/features/space/editor/frames'
 import { useInsertDrag } from '@/features/space/editor/insertDrag'
 import { useClaudeBridge } from '@/features/space/bridge/bridgeStore'
 import { useSectionLoading } from '@/features/space/opening'
+import { useSectionHover } from './sectionHover'
 import type { SpaceNode, SectionNodeData } from '@/types/space'
 
 interface SectionNodeProps {
@@ -42,6 +43,7 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   const selectedElementId = useSpaceStore((s) => (s.navigatorSelection?.sectionId === node.id ? s.navigatorSelection.elementId : undefined))
   const hoveredElementId = useSpaceStore((s) => (s.hoveredElement?.sectionId === node.id ? s.hoveredElement.elementId : undefined))
   const previewDevice = useSpaceStore((s) => s.previewDevice)
+  const hovered = useSectionHover((s) => s.id === node.id)
   // Última mudança do agente (Claude ou Codex) pela ponte do dev: a seção fica marcada até a próxima
   const touchedBy = useClaudeBridge((s) => s.touched[node.id])
   const agent = useClaudeBridge((s) => s.touchedBy)
@@ -241,6 +243,147 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
 
   // Seção de página levada pelo arrasto: o lugar dela na coluna fica marcado até soltar
   const lifted = inPage && !!lift && (lift.dx !== 0 || lift.dy !== 0)
+  // Dentro de uma página a seção é um pedaço da folha, como no site; solta, é um card
+  const sheet = inPage && !showJson
+
+  const preview = rendered && !showJson && (
+    <div
+      ref={previewRef}
+      data-section-preview={node.id}
+      className={editing ? 'relative' : 'relative pointer-events-none'}
+      onMouseDown={(event) => editing && event.stopPropagation()}
+    >
+      {waiting && <div aria-hidden className={sheet ? 'absolute inset-0 bg-gray-100 motion-safe:animate-pulse' : 'absolute inset-0 rounded-md bg-gray-100 motion-safe:animate-pulse'} />}
+      <div className={pending ? 'se-agent-pending' : working ? 'se-agent-working' : revealing ? 'se-agent-reveal' : undefined}>
+        <div className={`transition-opacity duration-300 ease-out motion-reduce:transition-none ${waiting ? 'opacity-0' : 'opacity-100'}`}>
+          <PreviewFrame
+            html={rendered.document}
+            viewport={previewDevice}
+            showSize={false}
+            interactive={editing}
+            selectedElementId={selectedElementId}
+            hoveredElementId={hoveredElementId}
+            onEditorMessage={handlePreviewEditor}
+            frameRef={frameRef}
+            overlay={editing ? overlay : undefined}
+            onLoaded={handleLoaded}
+            placeholderHeight={reserve ?? undefined}
+            sheet={sheet}
+          />
+        </div>
+      </div>
+      {(pending || working) && (
+        <>
+          <div aria-hidden className="se-agent-scan" />
+          <span className="pointer-events-none absolute left-1/2 top-1/2 z-10 inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-medium text-gray-800 shadow-sm">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#D97757] motion-safe:animate-pulse" />
+            {working ? `${working.agent}: ${working.text}` : 'Na fila para construir'}
+            <span aria-hidden className="se-agent-dots" />
+          </span>
+        </>
+      )}
+    </div>
+  )
+
+  const ports = (
+    <>
+      <div
+        className={`absolute z-10 h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-gray-400 shadow-sm transition-[background-color,opacity] hover:bg-blue-400 ${sheet && !hovered && !selected ? 'opacity-0' : ''}`}
+        style={{ left: -6, top: '50%', transform: 'translateY(-50%)' }}
+        onMouseUp={handleInputPortMouseUp}
+        onMouseDown={(e) => e.stopPropagation()}
+      />
+      <div
+        className={`absolute z-10 h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-blue-400 shadow-sm transition-[background-color,opacity] hover:bg-blue-600 ${sheet && !hovered && !selected ? 'opacity-0' : ''}`}
+        style={{ right: -6, top: '50%', transform: 'translateY(-50%)' }}
+        onMouseDown={handleOutputPortMouseDown}
+      />
+    </>
+  )
+
+  if (sheet) {
+    // Contorno e alças no tamanho da tela, qualquer que seja o zoom (--z vem do mundo do canvas)
+    const shown = selected || hovered || dragging || !!touchedBy || !!working
+    const outline = selected ? '#7c3aed' : touchedBy || working ? '#D97757' : '#8b5cf6'
+    return (
+      <>
+        {lifted && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute bg-violet-50/70"
+            style={{ left: node.x, top: node.y, width: node.width, height: node.height, boxShadow: 'inset 0 0 0 calc(1.5px / var(--z, 1)) #c4b5fd' }}
+          />
+        )}
+        <div
+          ref={cardRef}
+          data-section-id={node.id}
+          onTransitionEnd={(e) => e.propertyName === 'transform' && onSettled()}
+          // O movimento de dentro do iframe chega aqui repassado pela ponte do preview
+          onPointerMove={() => useSectionHover.getState().set(node.id)}
+          onPointerLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && useSectionHover.getState().id === node.id && useSectionHover.getState().set(null)}
+          className={`absolute bg-white ${dragging ? 'shadow-2xl' : ''}`}
+          style={{
+            left: node.x,
+            top: node.y,
+            width: node.width,
+            userSelect: 'none',
+            transform: lifted ? `translate(${lift.dx}px, ${lift.dy}px) rotate(0.6deg)` : undefined,
+            transition: settling ? 'transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 150ms' : undefined,
+            zIndex: dragging || settling ? 10 : selected ? 2 : undefined,
+            opacity: dragging ? 0.94 : undefined,
+          }}
+        >
+          {preview}
+          {unsupported.length > 0 && (
+            <p className="bg-amber-50 px-2 py-1 text-[10px] text-amber-700">O preview não desenha: {unsupported.join(', ')}. No Elementor eles aparecem normalmente.</p>
+          )}
+          {data.elementorJson && !hasElements && <p className="bg-red-50 px-2 py-1 text-[10px] font-medium text-red-500">JSON inválido ou sem elementos do Elementor</p>}
+
+          <div
+            aria-hidden
+            className={`pointer-events-none absolute inset-0 z-[5] transition-opacity duration-150 ${shown ? 'opacity-100' : 'opacity-0'}`}
+            style={{ boxShadow: `inset 0 0 0 calc(${selected ? 2 : 1.5}px / var(--z, 1)) ${outline}` }}
+          />
+
+          {/* Alça com o nome: arrastar leva a seção, clicar seleciona */}
+          <div
+            className={`absolute left-0 top-0 z-10 flex origin-top-left items-center gap-1 rounded-br-md py-0.5 pl-1 pr-2 text-[11px] font-medium text-white transition-opacity duration-150 ${dragging ? 'cursor-grabbing' : 'cursor-grab'} ${shown ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+            // Cabe ao lado da barrinha da direita: a largura da seção na tela menos a barrinha
+            style={{ transform: 'scale(calc(1 / var(--z, 1)))', background: outline, maxWidth: 'max(64px, calc(100% * var(--z, 1) - 172px))' }}
+            onMouseDown={handleDragStart}
+            title="Arraste para mudar de lugar; clique para selecionar"
+          >
+            <GripVertical className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+            <span className="shrink-0 tabular-nums opacity-70">{position + 1}</span>
+            <span className="truncate">{data.title || 'Seção sem nome'}</span>
+            {touchedBy && <span className="shrink-0 opacity-80">· {agent} {touchedBy === 'created' ? 'criou' : 'mudou'}</span>}
+            {motionLabel && <span className="shrink-0 opacity-80">· {motionLabel}</span>}
+          </div>
+
+          <div
+            className={`absolute right-0 top-0 z-10 flex origin-top-right items-center gap-0.5 rounded-bl-md bg-white/95 p-0.5 shadow-sm ring-1 ring-black/5 transition-opacity duration-150 ${selected || hovered ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+            style={{ transform: 'scale(calc(1 / var(--z, 1)))' }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <SheetButton label="Subir na página" disabled={position <= 0} onClick={() => moveSection(node.id, -1)}>
+              <ChevronUp className="h-3.5 w-3.5" />
+            </SheetButton>
+            <SheetButton label="Descer na página" disabled={!page || position >= page.sectionIds.length - 1} onClick={() => moveSection(node.id, 1)}>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </SheetButton>
+            <SectionMenu sectionId={node.id} className="flex h-6 w-6 items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900" />
+            <SheetButton label="Ver código da seção" onClick={() => setShowJson(true)}>
+              <Code2 className="h-3.5 w-3.5" />
+            </SheetButton>
+            <SheetButton label="Remover seção" danger onClick={() => removeNode(node.id)}>
+              <X className="h-3.5 w-3.5" />
+            </SheetButton>
+          </div>
+          {ports}
+        </div>
+      </>
+    )
+  }
 
   return (
     <>
@@ -253,6 +396,7 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
     )}
     <div
       ref={cardRef}
+      data-section-id={node.id}
       onMouseDown={handleDragStart}
       onTransitionEnd={(e) => e.propertyName === 'transform' && onSettled()}
       style={{
@@ -276,13 +420,6 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
           {lift.copy ? (lift.loose ? '+ Cópia solta no canvas' : '+ Cópia') : 'Fica solta no canvas'}
         </span>
       )}
-      {/* Input port */}
-      <div
-        className="absolute w-3 h-3 rounded-full bg-gray-400 border-2 border-white shadow-sm cursor-crosshair hover:bg-blue-400 transition-colors z-10"
-        style={{ left: -6, top: '50%', transform: 'translateY(-50%)' }}
-        onMouseUp={handleInputPortMouseUp}
-        onMouseDown={(e) => e.stopPropagation()}
-      />
 
       {/* Header */}
       <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-xl flex items-center justify-between">
@@ -300,7 +437,7 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
             </span>
           )}
           {motionLabel && (
-            <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700" title="Movimento escolhido no nível Movimento">
+            <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700" title="Movimento aplicado nesta seção">
               {motionLabel}
             </span>
           )}
@@ -341,45 +478,8 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
           className="w-full text-xs font-medium text-gray-700 bg-transparent border-0 border-b border-gray-100 pb-1 focus:outline-none focus:border-blue-300 placeholder-gray-300"
         />
 
-        {/* Seção desenhada pelo motor na largura da tela escolhida e reduzida. Na Estrutura o iframe
-            recebe o mouse para editar; nos outros níveis não, para o nó continuar arrastável */}
-        {rendered && !showJson && (
-          <div
-            ref={previewRef}
-            data-section-preview={node.id}
-            className={editing ? 'relative' : 'relative pointer-events-none'}
-            onMouseDown={(event) => editing && event.stopPropagation()}
-          >
-            {waiting && <div aria-hidden className="absolute inset-0 rounded-md bg-gray-100 motion-safe:animate-pulse" />}
-            <div className={pending ? 'se-agent-pending' : working ? 'se-agent-working' : revealing ? 'se-agent-reveal' : undefined}>
-              <div className={`transition-opacity duration-300 ease-out motion-reduce:transition-none ${waiting ? 'opacity-0' : 'opacity-100'}`}>
-                <PreviewFrame
-                  html={rendered.document}
-                  viewport={previewDevice}
-                  showSize={false}
-                  interactive={editing}
-                  selectedElementId={selectedElementId}
-                  hoveredElementId={hoveredElementId}
-                  onEditorMessage={handlePreviewEditor}
-                  frameRef={frameRef}
-                  overlay={editing ? overlay : undefined}
-                  onLoaded={handleLoaded}
-                  placeholderHeight={reserve ?? undefined}
-                />
-              </div>
-            </div>
-            {(pending || working) && (
-              <>
-                <div aria-hidden className="se-agent-scan" />
-                <span className="pointer-events-none absolute left-1/2 top-1/2 z-10 inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-medium text-gray-800 shadow-sm">
-                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#D97757] motion-safe:animate-pulse" />
-                  {working ? `${working.agent}: ${working.text}` : 'Na fila para construir'}
-                  <span aria-hidden className="se-agent-dots" />
-                </span>
-              </>
-            )}
-          </div>
-        )}
+        {/* Seção desenhada pelo motor na largura da tela escolhida e reduzida; o iframe recebe o mouse para editar */}
+        {preview}
 
         {unsupported.length > 0 && (
           <p className="text-[10px] text-amber-600">
@@ -408,13 +508,22 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
         )}
       </div>
 
-      {/* Output port */}
-      <div
-        className="absolute w-3 h-3 rounded-full bg-blue-400 border-2 border-white shadow-sm cursor-crosshair hover:bg-blue-600 transition-colors z-10"
-        style={{ right: -6, top: '50%', transform: 'translateY(-50%)' }}
-        onMouseDown={handleOutputPortMouseDown}
-      />
+      {ports}
     </div>
     </>
   )
 }
+
+/** Botão da barrinha da seção na folha da página. */
+const SheetButton: React.FC<{ label: string; disabled?: boolean; danger?: boolean; onClick: () => void; children: React.ReactNode }> = ({ label, disabled, danger, onClick, children }) => (
+  <button
+    type="button"
+    aria-label={label}
+    title={label}
+    disabled={disabled}
+    onClick={onClick}
+    className={`flex h-6 w-6 items-center justify-center rounded text-gray-500 transition-colors disabled:pointer-events-none disabled:opacity-30 ${danger ? 'hover:bg-red-50 hover:text-red-600' : 'hover:bg-gray-100 hover:text-gray-900'}`}
+  >
+    {children}
+  </button>
+)

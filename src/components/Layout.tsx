@@ -2,16 +2,17 @@ import React from 'react';
 import { Link, Outlet, useMatch } from 'react-router-dom';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Logo } from '@/components/Logo';
-import { ProjectBreadcrumb, ProjectContextButton } from '@/features/projects/ProjectHeader';
-import { ProjectChatGPTButton } from '@/features/chatgpt/ChatGPTConnectionDialog';
-import { ProjectWordPressButton } from '@/features/wordpress/WordPressDialog';
-import { ProjectShareButton } from '@/features/projects/ProjectAccessDialog';
 import { AgentsButton } from '@/features/agents/AgentsButton';
 import { ProspectsButton } from '@/features/prospects/ProspectsButton';
 
-/** Altura do header (56px + 1px de borda): o Space ocupa o resto da tela. */
+/**
+ * Header das telas da conta (56px + 1px de borda). Dentro de um projeto quem
+ * desenha a barra é o próprio Space, no desenho do Framer, e ele ocupa a tela.
+ */
 const Layout: React.FC = () => {
-  const projectId = useMatch('/projetos/:projectId')?.params.projectId;
+  const inProject = !!useMatch('/projetos/:projectId');
+
+  if (inProject) return <Outlet />;
 
   return (
     <div className="min-h-screen bg-background w-full flex flex-col">
@@ -21,15 +22,10 @@ const Layout: React.FC = () => {
             <Link to="/" aria-label="Projetos" className="shrink-0 transition-opacity hover:opacity-80">
               <Logo />
             </Link>
-            {projectId && <ProjectBreadcrumb projectId={projectId} />}
           </nav>
           <div className="flex shrink-0 items-center gap-2">
-            {!projectId && <ProspectsButton />}
+            <ProspectsButton />
             <AgentsButton />
-            {projectId && <ProjectShareButton projectId={projectId} />}
-            {projectId && <ProjectChatGPTButton projectId={projectId} />}
-            {projectId && <ProjectWordPressButton projectId={projectId} />}
-            {projectId && <ProjectContextButton projectId={projectId} />}
             <UserAvatar />
           </div>
         </div>

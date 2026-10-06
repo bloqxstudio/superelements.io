@@ -1,118 +1,59 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
+import { useParams } from 'react-router-dom'
 import { SpaceCanvas } from '@/features/space/SpaceCanvas'
-import { SpaceToolbar } from '@/features/space/SpaceToolbar'
-import { MIN_FREE_WIDTH, SpaceCanvasBar } from '@/features/space/SpaceCanvasBar'
-import { LIBRARY_PANEL_WIDTH, SpaceLibraryPanel } from '@/features/space/SpaceLibraryPanel'
-import { LEVEL_PANEL_WIDTH, LevelPanel } from '@/features/space/levels/LevelPanel'
-import { ElementorNavigatorPanel, NAVIGATOR_PANEL_WIDTH } from '@/features/space/navigator/ElementorNavigatorPanel'
-import { LandingTemplateDialog } from '@/features/space/LandingTemplateDialog'
+import { SpaceTopBar } from '@/features/space/SpaceTopBar'
+import { CanvasDock } from '@/features/space/CanvasDock'
+import { SpaceInspector, SpaceSidebar } from '@/features/space/SpacePanels'
+import { useSpaceUi } from '@/features/space/spaceUi'
 import { PagePlayer } from '@/features/space/pages/PagePlayer'
 import { useSectionShortcuts } from '@/features/space/pages/useSectionShortcuts'
 import { LibraryDragChip } from '@/features/space/pages/LibraryDragChip'
-import { copyLandingToElementor } from '@/features/space/exportLanding'
 import { WordPressImportDialog } from '@/features/wordpress/WordPressImportDialog'
 import { WordPressPageDialogs } from '@/features/wordpress/WordPressPageDialogs'
-import { InsertPanel } from '@/features/space/editor/InsertPanel'
 import { useEditorShortcuts } from '@/features/space/editor/useEditorShortcuts'
 import { useFrameGestureGuard } from '@/features/space/editor/frames'
-import { ClaudePanel } from '@/features/space/bridge/ClaudePanel'
 import { AgentCursors } from '@/features/space/chat/AgentCursors'
-import { useChat } from '@/features/space/chat/chatStore'
-import { SpaceChat } from '@/features/space/chat/SpaceChat'
-import { useSpaceStore } from '@/store/spaceStore'
 
-// Visualizar e Copiar da barra agem sobre a página ativa
-const copyPage = () => copyLandingToElementor()
-const playActivePage = () => {
-  const { activePageId, openPlayer } = useSpaceStore.getState()
-  if (activePageId) openPlayer(activePageId)
-}
+const NO_INSETS = { left: 0, right: 0 }
 
-/** Margem de cada painel lateral somada à largura dele. */
-const PANEL_GUTTER = 24
-
-/** Painel da esquerda: seções prontas da biblioteca ou elementos para criar. Um de cada vez. */
-type LeftPanel = 'library' | 'insert' | null
-
+/**
+ * O projeto aberto, no desenho do Framer: a barra em cima, à esquerda as
+ * páginas, as camadas e a Biblioteca, no meio o canvas com todas as páginas
+ * lado a lado, e à direita o agente e o estilo do que está selecionado.
+ */
 const Space: React.FC = () => {
-  const [leftPanel, setLeftPanel] = useState<LeftPanel>('library')
-  const libraryOpen = leftPanel !== null
-  const togglePanel = (panel: Exclude<LeftPanel, null>) => setLeftPanel((open) => (open === panel ? null : panel))
-  const [templatesOpen, setTemplatesOpen] = useState(false)
-  const [navigatorOpen, setNavigatorOpen] = useState(false)
-  const editLevel = useSpaceStore((s) => s.editLevel)
-  const navigatorSelection = useSpaceStore((s) => s.navigatorSelection)
-  // A conversa aberta toma o lugar do painel do agente no canto
-  const chatOpen = useChat((s) => s.connected && s.open)
+  const { projectId = '' } = useParams()
+  const panels = useSpaceUi((s) => s.panels)
   useSectionShortcuts()
   useEditorShortcuts()
   useFrameGestureGuard()
 
-  // Numa tela estreita a biblioteca e o painel do nível não cabem juntos com o canvas:
-  // abrir um nível fecha a biblioteca, que o botão da barra abre de novo
+  // Ctrl+\ esconde os dois painéis e deixa só o canvas, como no Framer e no Figma
   useEffect(() => {
-    if (editLevel === 'structure') return
-    const { width } = useSpaceStore.getState().viewport
-    if (width - LIBRARY_PANEL_WIDTH - LEVEL_PANEL_WIDTH - PANEL_GUTTER * 2 < MIN_FREE_WIDTH) setLeftPanel(null)
-  }, [editLevel])
-
-  // Navigator pertence a Estrutura. Outros níveis usam o mesmo lado direito para seus controles.
-  useEffect(() => {
-    if (editLevel !== 'structure') setNavigatorOpen(false)
-  }, [editLevel])
-
-  // Clicar num widget dentro do preview abre o inspetor correspondente.
-  useEffect(() => {
-    if (editLevel === 'structure' && navigatorSelection) setNavigatorOpen(true)
-  }, [editLevel, navigatorSelection])
-
-  const toggleNavigator = () => {
-    const opening = !navigatorOpen
-    if (opening) {
-      useSpaceStore.getState().setEditLevel('structure')
-      const { width } = useSpaceStore.getState().viewport
-      if (width - LIBRARY_PANEL_WIDTH - NAVIGATOR_PANEL_WIDTH - PANEL_GUTTER * 2 < MIN_FREE_WIDTH) setLeftPanel(null)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '\\' || !(e.ctrlKey || e.metaKey)) return
+      e.preventDefault()
+      useSpaceUi.getState().togglePanels()
     }
-    setNavigatorOpen(opening)
-  }
-
-  const rightPanelOpen = editLevel !== 'structure' || navigatorOpen
-  // Espaço do canvas que os painéis laterais não cobrem
-  const canvasInsets = {
-    left: libraryOpen ? LIBRARY_PANEL_WIDTH + PANEL_GUTTER : 0,
-    right: rightPanelOpen ? Math.max(LEVEL_PANEL_WIDTH, NAVIGATOR_PANEL_WIDTH) + PANEL_GUTTER : 0,
-  }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   return (
-    <div data-space-root className="relative w-full overflow-hidden" style={{ height: 'calc(100vh - 57px)' }}>
-      <SpaceToolbar
-        libraryOpen={leftPanel === 'library'}
-        insertOpen={leftPanel === 'insert'}
-        navigatorOpen={navigatorOpen}
-        onToggleLibrary={() => togglePanel('library')}
-        onToggleInsert={() => togglePanel('insert')}
-        onToggleNavigator={toggleNavigator}
-        onPreview={playActivePage}
-        onOpenTemplates={() => setTemplatesOpen(true)}
-        onCopy={copyPage}
-      />
-      {leftPanel === 'library' && <SpaceLibraryPanel onClose={() => setLeftPanel(null)} />}
-      {leftPanel === 'insert' && <InsertPanel onClose={() => setLeftPanel(null)} />}
-      <SpaceCanvas />
-      <LevelPanel />
-      {navigatorOpen && editLevel === 'structure' && <ElementorNavigatorPanel onClose={() => setNavigatorOpen(false)} />}
-      <SpaceCanvasBar libraryOpen={libraryOpen} navigatorOpen={navigatorOpen} />
-      {/* Chat com os agentes e o cursor deles: quem roda o Claude Code ou o Codex é o servidor de dev ou o conector */}
-      <AgentCursors insets={canvasInsets} />
-      {!chatOpen && <ClaudePanel rightInset={rightPanelOpen ? Math.max(LEVEL_PANEL_WIDTH, NAVIGATOR_PANEL_WIDTH) + 12 : 0} />}
-      <SpaceChat insets={canvasInsets} />
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-[#f4f4f5]">
+      <SpaceTopBar projectId={projectId} />
+      <div className="flex min-h-0 flex-1">
+        {panels && <SpaceSidebar />}
+        <div data-space-root className="relative min-w-0 flex-1 overflow-hidden">
+          <SpaceCanvas />
+          {/* O cursor dos agentes por cima do canvas; quem roda o Claude Code ou o Codex é o servidor de dev ou o conector */}
+          <AgentCursors insets={NO_INSETS} />
+          <CanvasDock />
+        </div>
+        {panels && <SpaceInspector />}
+      </div>
       <PagePlayer />
       <LibraryDragChip />
-      <LandingTemplateDialog
-        open={templatesOpen}
-        onOpenChange={setTemplatesOpen}
-        onLoaded={(pageId) => useSpaceStore.getState().openPlayer(pageId)}
-      />
       <WordPressImportDialog />
       <WordPressPageDialogs />
     </div>

@@ -14,18 +14,20 @@ import {
   SquarePlus,
   Star,
   Text,
+  Palette,
+  LayoutTemplate,
   Trash2,
-  X,
+  Type,
   type LucideIcon,
 } from 'lucide-react'
-import { ISLAND_SURFACE } from '@/features/space/ToolbarIsland'
-import { createElement, isContainer, type InsertKind } from './tree'
-import { addBlankSection, insertBlock, insertKind } from './actions'
-import { startInsertDrag, type InsertItem } from './insertDrag'
-import { useBlocks, type SavedBlock } from './blocks'
-import { INSERT_KEYS } from './useEditorShortcuts'
-import { LIBRARY_PANEL_WIDTH } from '@/features/space/SpaceLibraryPanel'
-import { createBlankSection } from './tree'
+import { useSpaceStore } from '@/store/spaceStore'
+import type { NodeType } from '@/types/space'
+import { createElement, isContainer, type InsertKind } from '../editor/tree'
+import { addBlankSection, insertBlock, insertKind } from '../editor/actions'
+import { startInsertDrag, type InsertItem } from '../editor/insertDrag'
+import { useBlocks, type SavedBlock } from '../editor/blocks'
+import { INSERT_KEYS } from '../editor/useEditorShortcuts'
+import { createBlankSection } from '../editor/tree'
 
 interface ElementEntry {
   kind: InsertKind
@@ -99,7 +101,7 @@ const Tile: React.FC<{ entry: ElementEntry }> = ({ entry }) => {
         <Icon className="h-4 w-4 text-gray-500 group-hover:text-violet-600" strokeWidth={1.75} />
         {key && <kbd className="rounded border border-gray-200 px-1 font-sans text-[10px] text-gray-400">{key}</kbd>}
       </span>
-      <span className="min-w-0">
+      <span className="w-full min-w-0">
         <span className="block text-[12px] font-medium leading-tight text-gray-800">{entry.label}</span>
         <span className="block truncate text-[10px] text-gray-400">{entry.hint}</span>
       </span>
@@ -163,36 +165,33 @@ const BlockRow: React.FC<{ block: SavedBlock }> = ({ block }) => {
   )
 }
 
+/** Notas soltas no canvas, fora das páginas: ligadas a uma seção, mudam o que ela mostra. */
+const CANVAS_ITEMS: { type: NodeType; label: string; hint: string; icon: LucideIcon }[] = [
+  { type: 'section', label: 'Seção solta', hint: 'Fora das páginas, para colar um JSON', icon: LayoutTemplate },
+  { type: 'text', label: 'Texto', hint: 'Copy para ligar a uma seção', icon: Type },
+  { type: 'color-palette', label: 'Paleta de cores', hint: 'Cores para ligar a uma seção', icon: Palette },
+]
+
+/** Põe a nota no meio da tela, um pouco ao lado da anterior. */
+const addToCanvas = (type: NodeType) => {
+  const { canvasTransform, viewport, nodes, addNode } = useSpaceStore.getState()
+  const worldX = (viewport.width / 2 - canvasTransform.x) / canvasTransform.zoom
+  const worldY = (viewport.height / 2 - canvasTransform.y) / canvasTransform.zoom
+  const offset = (nodes.length % 8) * 30
+  addNode(type, worldX + offset, worldY + offset)
+}
+
 /**
- * Painel Inserir: elementos nativos do Elementor para criar dentro das seções,
- * uma seção em branco e os blocos salvos. Clicar põe na camada selecionada (ou
- * numa seção nova); arrastar mostra no canvas onde o elemento entra.
+ * Elementos da Biblioteca: os nativos do Elementor para criar dentro das
+ * seções, uma seção em branco, os blocos salvos e as notas do canvas. Clicar
+ * põe na camada selecionada (ou numa seção nova); arrastar mostra no canvas
+ * onde o elemento entra.
  */
-export const InsertPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+export const ElementsLibrary: React.FC = () => {
   const blocks = useBlocks((s) => s.blocks)
 
   return (
-    <div
-      data-space-library
-      className={`absolute bottom-3 left-3 top-16 z-40 flex flex-col rounded-xl ${ISLAND_SURFACE}`}
-      style={{ width: LIBRARY_PANEL_WIDTH }}
-      onWheel={(e) => e.stopPropagation()}
-    >
-      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
-        <div className="flex items-center gap-1.5">
-          <SquarePlus className="h-3.5 w-3.5 text-gray-400" />
-          <span className="text-xs font-semibold text-gray-700">Inserir</span>
-        </div>
-        <button
-          onClick={onClose}
-          className="-mr-1 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          aria-label="Fechar o painel Inserir"
-          title="Fechar"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-4 overflow-y-auto p-3">
         <section aria-labelledby="insert-section">
           <h3 id="insert-section" className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
@@ -251,6 +250,25 @@ export const InsertPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               Selecione uma camada e use <strong className="font-medium text-gray-500">Salvar como bloco</strong> nas propriedades para reusar aqui.
             </p>
           )}
+        </section>
+
+        <section aria-labelledby="insert-canvas">
+          <h3 id="insert-canvas" className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+            No canvas
+          </h3>
+          <div className="space-y-1.5">
+            {CANVAS_ITEMS.map(({ type, label, hint, icon: Icon }) => (
+              <button key={type} type="button" className={`${tile} w-full flex-row items-center`} onClick={() => addToCanvas(type)}>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-500">
+                  <Icon className="h-4 w-4" strokeWidth={1.75} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[12px] font-medium text-gray-800">{label}</span>
+                  <span className="block text-[10px] text-gray-400">{hint}</span>
+                </span>
+              </button>
+            ))}
+          </div>
         </section>
       </div>
 

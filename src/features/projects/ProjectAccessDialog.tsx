@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CircleAlert, Copy, Link2, LogOut, UserPlus, Users } from 'lucide-react'
+import { CircleAlert, Copy, Link2, LogOut, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -363,51 +363,5 @@ export const ProjectAccessDialog: React.FC<ProjectAccessDialogProps> = ({ open, 
         )}
       </DialogContent>
     </Dialog>
-  )
-}
-
-/** Quem mais está com o projeto aberto agora, em bolinhas. */
-const OnlinePeople: React.FC<{ people: LivePerson[] }> = ({ people }) => {
-  if (!people.length) return null
-  const shown = people.slice(0, 3)
-  const names = people.map((p) => personName(p.email)).join(', ')
-  return (
-    <span className="flex items-center -space-x-1.5" title={`No projeto agora: ${names}`}>
-      {shown.map((person) => (
-        <Avatar key={person.userId} person={person} size="sm" className="ring-2 ring-white" />
-      ))}
-      {people.length > shown.length && (
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-[10px] font-medium text-gray-700 ring-2 ring-white">
-          +{people.length - shown.length}
-        </span>
-      )}
-      <span className="sr-only">No projeto agora: {names}</span>
-    </span>
-  )
-}
-
-/** "Compartilhar" no header do projeto, com quem mais está nele agora. */
-export const ProjectShareButton: React.FC<{ projectId: string }> = ({ projectId }) => {
-  const project = useProject(projectId)
-  const online = useLiveProject((s) => (s.projectId === projectId ? s.people : NOBODY))
-  const [open, setOpen] = useState(false)
-  if (!project) return null
-  const owner = project.role !== 'editor'
-
-  return (
-    <>
-      <OnlinePeople people={online} />
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 gap-1.5 px-2.5 text-gray-600"
-        onClick={() => setOpen(true)}
-        title={owner ? 'Convidar o cliente para editar junto' : 'Quem tem acesso a este projeto'}
-      >
-        <Users className="h-4 w-4" />
-        <span className="hidden md:inline">{owner ? 'Compartilhar' : 'Pessoas'}</span>
-      </Button>
-      <ProjectAccessDialog open={open} onOpenChange={setOpen} projectId={projectId} />
-    </>
   )
 }

@@ -985,14 +985,15 @@ async function cmdPublish() {
     console.log(`Publicar ${page.name} em ${wp.connection.site} (${wp.connection.siteUrl}), como ${wp.connection.user}:`)
     console.log(`   ${linked ? `atualiza a página que já está no site, ${linked.link} (post ${linked.postId}), com backup da versão de lá` : 'cria uma página nova no site'}`)
     console.log(`   situação: ${flags.live ? 'PUBLICADA, visível para todo mundo' : linked ? `fica como está no site (${linked.status})` : 'rascunho (só quem entra no WordPress vê)'}`)
-    console.log(`   layout: ${layout ?? (linked ? 'o que a página já tem no site' : 'canvas')}${flags.overwrite ? ' · passa por cima de mudanças feitas no site' : ''}`)
+    console.log(`   layout: ${layout ?? 'canvas'}${layout === 'tema' ? ' (cabeçalho e rodapé do tema)' : ' (Tela do Elementor: sem o cabeçalho, o título e o rodapé do tema)'}${flags.overwrite ? ' · passa por cima de mudanças feitas no site' : ''}`)
     console.log(`   aprovação: ${share.link ? `${SHARE_STATE[share.state] ?? share.state} (versão ${share.version}${share.outdated ? ', e a página mudou depois dela' : ''})` : 'sem link de aprovação'}`)
     console.error('\nNada foi publicado. Confirme com o usuário (ou veja o cliente aprovar a versão atual) e rode de novo com --yes.')
     quit(1)
   }
 
   console.log(`Publicando ${page.name}…`)
-  const result = await call('publish', { page: page.id, status: flags.live ? 'publish' : undefined, template: layout && LAYOUTS[layout], overwrite: !!flags.overwrite })
+  // Sem --layout vale a Tela do Elementor também na página que já está no site: o tema não põe o título e o cabeçalho dele por cima
+  const result = await call('publish', { page: page.id, status: flags.live ? 'publish' : undefined, template: LAYOUTS[layout ?? 'canvas'], overwrite: !!flags.overwrite })
   if (flags.json) return console.log(JSON.stringify(result, null, 2))
   console.log(`✔ ${result.created ? 'Criada' : 'Atualizada'} em ${result.site}: ${result.status === 'publish' ? 'publicada' : result.status === 'draft' ? 'rascunho' : result.status}`)
   console.log(`   Página: ${result.link}`)
@@ -1002,6 +1003,8 @@ async function cmdPublish() {
   console.log(`   Cache de CSS do Elementor: ${result.cacheCleared ? 'limpo' : 'não limpou (a página pode aparecer com o estilo antigo até o Elementor regenerar o CSS)'}`)
   console.log(`   Imagem destacada: ${{ saved: 'gravada', unchanged: 'sem mudança', unsupported: 'o tema não usa em páginas', failed: 'não subiu' }[result.featured] ?? result.featured}`)
   console.log(`   SEO: ${result.seo === 'saved' ? 'gravado' : result.seo === 'failed' ? `não gravou (${result.seoError})` : 'sem campos de SEO, ou o site não deixa gravar'}`)
+  const applied = result.layout?.applied
+  if (applied !== undefined) console.log(`   Layout no site: ${applied === 'elementor_canvas' ? 'Tela do Elementor' : applied === 'elementor_header_footer' ? 'com o tema' : applied ? applied : 'modelo padrão do tema (com o título dele)'}${result.layout.wanted && applied !== result.layout.wanted ? ` · o site NÃO aceitou ${result.layout.wanted}${result.layout.error ? `: ${result.layout.error}` : ''}` : ''}`)
 }
 
 async function cmdRestore() {

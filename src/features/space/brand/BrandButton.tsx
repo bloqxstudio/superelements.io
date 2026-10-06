@@ -18,8 +18,11 @@ import { DESIGN_MD_EXAMPLES } from './examples'
 import { SPECIMEN_ELEMENTS, SPECIMEN_WITH_LOGO } from './specimen'
 import { Hint, ToolButton } from '../ToolbarIsland'
 
-/** Botão da barra do Space que abre o DESIGN.md da marca. */
-export const BrandButton: React.FC = () => {
+/**
+ * A marca do projeto (DESIGN.md): na aba Estilo, uma linha com as cores, o nome
+ * e o liga/desliga; clicar abre o guia para colar, importar ou baixar.
+ */
+export const BrandButton: React.FC<{ variant?: 'toolbar' | 'row' }> = ({ variant = 'toolbar' }) => {
   const { source, enabled, brand, logoRatios, setSource, setEnabled, measureLogos } = useBrandStore()
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState(source)
@@ -84,8 +87,38 @@ export const BrandButton: React.FC = () => {
     URL.revokeObjectURL(url)
   }
 
+  const swatch = (size: string) =>
+    brand && brand.colors.length > 0 ? (
+      <span aria-hidden className={`relative grid ${size} shrink-0 grid-cols-2 overflow-hidden rounded-[4px] ${active ? '' : 'opacity-40 grayscale'}`}>
+        {[0, 1, 2, 3].map((i) => (
+          <span key={i} style={{ backgroundColor: brand.colors[i % brand.colors.length].hex }} />
+        ))}
+        {/* Contorno por cima das cores, para as claras não sumirem no branco */}
+        <span className="absolute inset-0 rounded-[4px] shadow-[inset_0_0_0_1px_rgb(0_0_0/0.1)]" />
+      </span>
+    ) : (
+      <span className={`flex ${size} shrink-0 items-center justify-center rounded-[4px] bg-gray-100 text-gray-500`}>
+        <SwatchBook className="h-3.5 w-3.5" />
+      </span>
+    )
+
+  const trigger =
+    variant === 'row' ? (
+      <div className="flex items-center gap-2 rounded-lg border border-gray-200 py-1.5 pl-1.5 pr-2.5 transition-colors hover:border-gray-300">
+        <button type="button" onClick={openDialog} className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          {swatch('h-7 w-7')}
+          <span className="min-w-0">
+            <span className={`block truncate text-[12px] font-medium ${brand ? 'text-gray-900' : 'text-gray-700'}`}>{brand ? brand.name : 'Adicionar a marca'}</span>
+            <span className="block truncate text-[11px] text-gray-500">{active ? 'Aplicada a todas as seções' : brand ? 'Desligada' : 'Colar ou importar o DESIGN.md'}</span>
+          </span>
+        </button>
+        {brand && <Switch checked={enabled} onCheckedChange={setEnabled} aria-label={enabled ? 'Desligar a marca' : 'Ligar a marca'} />}
+      </div>
+    ) : null
+
   return (
     <>
+      {trigger ?? (
       <Hint
         label={brand ? `Marca ${brand.name}` : 'Marca'}
         hint={
@@ -119,6 +152,7 @@ export const BrandButton: React.FC = () => {
           )}
         </ToolButton>
       </Hint>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex max-h-[92vh] w-[95vw] max-w-5xl flex-col gap-4">
