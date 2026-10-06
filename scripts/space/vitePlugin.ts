@@ -529,7 +529,9 @@ export function spaceBridge(): Plugin {
       server.httpServer?.on('listening', () => {
         const address = server.httpServer?.address() as AddressInfo | null
         if (!address) return
-        state = { url: `http://localhost:${address.port}`, token, pid: process.pid, startedAt: new Date().toISOString() }
+        // O conector escuta só no 127.0.0.1: um Node antigo resolveria "localhost" para ::1 e não acharia
+        const host = address.address === '127.0.0.1' ? '127.0.0.1' : 'localhost'
+        state = { url: `http://${host}:${address.port}`, token, pid: process.pid, startedAt: new Date().toISOString() }
         current = { url: state.url, token }
         claim()
       })

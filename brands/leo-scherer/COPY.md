@@ -104,6 +104,12 @@ Pendências do simulador:
 - O iPhone 18 Pro não tem preço no site: vindo da abertura da Home, o simulador pede o valor.
 - **Número de WhatsApp da LS:** o fechamento é pelo WhatsApp (pedido do usuário em 2026-10-03), com o resumo e a parcela escolhida na mensagem. O site atual não tem número (só os botões de compartilhar do Elementor). Até o número chegar (`LS_WHATSAPP` em `src/features/leoscherer/simulator.ts`), o link abre o WhatsApp com a mensagem pronta para a pessoa escolher o contato. Para o Instagram, o "Copiar resumo" (o Instagram não aceita mensagem pronta no link).
 
+## Vitrine em curva (2026-10-05, Página 6)
+
+Textos novos (escritos por nós, a confirmar com o Leonardo): "Vitrine" · "Do Mac ao AirPods. Tudo na mesma vitrine." · "Novos e seminovos do estoque da LS. Arraste para os lados e abra um produto para ver os detalhes." O aviso do dólar é o do rodapé do site.
+
+Cartão aberto: os fatos são do site, por condição. Novo: "Original, novo e com garantia de 1 ano." Seminovo: "Usado, com procedência e garantia." Os dois: "Seu usado entra na troca, a partir do iPhone 7." · "Parcelamento em até 18x." · "Entrega no mesmo dia no Vale dos Sinos e na região metropolitana." Botões: "Comprar pelo Instagram" (o site manda a compra para o Instagram), "Simule as parcelas" e "Ver detalhes" (página do produto). Os oito produtos e preços são os da home e da categoria em 2026-10-02/03 (MacBook Neo 512 GB R$ 7.990, iPhone 17 Pro Max 256 GB R$ 9.990, Apple Watch Series 11 R$ 2.690, AirPods 4ª geração R$ 1.490, MacBook Pro M4 14″ sem preço, iPhone 17 256 GB R$ 6.790, MacBook Neo 256 GB R$ 6.990, iPhone 16 Rosa R$ 4.490); valem as mesmas pendências de produtos e preços acima.
+
 ## Páginas internas de exemplo (2026-10-03)
 
 **Categoria · iPhones novos** (`/categoria-produto/novos-iphone/`, lida em 2026-10-03): 10 produtos, ordenados por preço. iPhone 16e 128 GB R$ 4.590 · 16e 256 GB R$ 5.690 · 16 128 GB R$ 5.890 · 17 256 GB R$ 6.790 · 17 Pro 256 GB R$ 8.990 · 17 Pro Max 256 GB R$ 9.990 · 17 Pro 512 GB, 17 Pro 1 TB, 17 Pro Max 512 GB e 1 TB sem preço ("Consulte o valor"). Texto da abertura: "Novos, todos originais e com garantia de 1 ano. Seu usado entra na troca e você parcela em até 18x." Bloco de encomenda: o site manda "Clique aqui para encomendar o seu" para o Instagram.

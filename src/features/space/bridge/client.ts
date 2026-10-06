@@ -20,6 +20,7 @@ import type { WordPressConnection } from '@/features/wordpress/types'
 import { getActiveWordPress, useWordPressSession } from '@/features/wordpress/useWordPressConnection'
 import { setBackgroundRelease } from '@/features/projects/background'
 import { cursorFromCall } from '@/features/space/chat/cursorFromBridge'
+import type { AgentChannel } from '@/features/space/connector/channel'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { PageDetails, SectionNodeData, SpaceNode, SpacePage } from '@/types/space'
 import { useAgents, type AgentView, type ViewRequest } from './agentsStore'
@@ -40,7 +41,8 @@ import { WORKER_NAME_PREFIX, WORKER_REFRESH_EVENT, workerPath } from './worker'
  * com o papel `worker`, e o servidor manda para ele os pedidos do projeto dele.
  */
 
-type Hot = NonNullable<ImportMeta['hot']>
+/** O websocket do Vite no dev, ou o conector no app publicado (ver `connector/agentLink.ts`). */
+type Hot = AgentChannel
 
 const TAB_KEY = 'space-bridge-tab'
 const HEARTBEAT = 10_000
@@ -1006,7 +1008,3 @@ export function startSpaceBridge(hot: Hot) {
   }
 }
 
-if (import.meta.hot) {
-  const stop = startSpaceBridge(import.meta.hot)
-  import.meta.hot.dispose(stop)
-}

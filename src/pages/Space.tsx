@@ -102,14 +102,10 @@ const Space: React.FC = () => {
       <LevelPanel />
       {navigatorOpen && editLevel === 'structure' && <ElementorNavigatorPanel onClose={() => setNavigatorOpen(false)} />}
       <SpaceCanvasBar libraryOpen={libraryOpen} navigatorOpen={navigatorOpen} />
-      {import.meta.env.DEV && (
-        <>
-          {/* Chat com os agentes e o cursor deles: o servidor de dev roda o Claude Code ou o Codex nesta máquina */}
-          <AgentCursors insets={canvasInsets} />
-          {!chatOpen && <ClaudePanel rightInset={rightPanelOpen ? Math.max(LEVEL_PANEL_WIDTH, NAVIGATOR_PANEL_WIDTH) + 12 : 0} />}
-          <SpaceChat insets={canvasInsets} />
-        </>
-      )}
+      {/* Chat com os agentes e o cursor deles: quem roda o Claude Code ou o Codex é o servidor de dev ou o conector */}
+      <AgentCursors insets={canvasInsets} />
+      {!chatOpen && <ClaudePanel rightInset={rightPanelOpen ? Math.max(LEVEL_PANEL_WIDTH, NAVIGATOR_PANEL_WIDTH) + 12 : 0} />}
+      <SpaceChat insets={canvasInsets} />
       <PagePlayer />
       <LibraryDragChip />
       <LandingTemplateDialog

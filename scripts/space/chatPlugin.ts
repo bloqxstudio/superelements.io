@@ -135,6 +135,19 @@ function kill(child: ChildProcess) {
   else child.kill('SIGTERM')
 }
 
+let checking: Promise<ChatAgentAvailability[]> | null = null
+
+/** Quais agentes estão instalados e respondem (vale para o servidor todo; o conector mostra no terminal). */
+export const checkAgents = () =>
+  (checking ??= Promise.all(
+    CHAT_AGENT_IDS.map(async (id): Promise<ChatAgentAvailability> => {
+      const bin = findBin(id)
+      if (!bin) return { id, available: false, reason: `${CHAT_AGENTS[id].name} não foi encontrado nesta máquina` }
+      const version = await versionOf(bin)
+      return version ? { id, available: true, version } : { id, available: false, reason: `${CHAT_AGENTS[id].name} não respondeu (${bin})` }
+    })
+  ))
+
 // ---------- o pedido ----------
 
 const ordinal = (n: number) => `${n}ª`
@@ -153,14 +166,18 @@ function contextLines(context: ChatContext) {
 }
 
 /** Primeira mensagem de uma conversa: quem ele é, onde está e como trabalhar. */
-function preamble(projectId: string, projectName: string | undefined, agent: ChatAgentId) {
+/** Onde o agente acha as regras do projeto: no repo, a skill e o AGENTS.md; no conector, o AGENTS.md da pasta dele. */
+const REPO_GUIDE =
+  '- Siga a skill do cliente (`.claude/skills/cliente/SKILL.md`) e as regras do projeto na seção dele no `AGENTS.md` (procure pelo nome do projeto; o arquivo é grande, leia só a seção).'
+
+function preamble(projectId: string, projectName: string | undefined, agent: ChatAgentId, guide: string) {
   const name = CHAT_AGENTS[agent].name
   return [
     `Você é o ${name}, trabalhando no projeto "${projectName ?? projectId}" do Space (id ${projectId}) pelo chat que fica dentro do canvas. Quem pediu está olhando o canvas agora: vê o seu cursor e cada mudança na hora.`,
     '',
     'Como trabalhar:',
     '- Tudo passa pela ponte: `node scripts/space/space.mjs <comando>`, rodado da raiz do repositório, sempre nessa forma. Esta sessão já está ligada ao projeto: não use `open`, `new` nem `close`.',
-    '- Siga a skill do cliente (`.claude/skills/cliente/SKILL.md`) e as regras do projeto na seção dele no `AGENTS.md` (procure pelo nome do projeto; o arquivo é grande, leia só a seção).',
+    guide,
     '- Trabalhe só no que está selecionado (abaixo). Não varra o site: leia só a página da seleção (`pull --page <id da página>`) e mude só as seções e camadas citadas, a não ser que o pedido diga outra coisa.',
     '- Mostre onde está: antes de mexer, `node scripts/space/space.mjs work "<o que está fazendo>" --section <id da seção>` (com `--element <id>` quando for uma camada). Grave cada mudança com `push <arquivo> --label "<o que mudou>"`. Ao terminar, `work --done`.',
     '- Fora deste chat: publicar, voltar versão do site, link de aprovação, convite e WordPress (`publish`, `restore`, `approval`, `invite`, `wp`). Se o pedido precisar disso, diga e pare.',
@@ -168,9 +185,9 @@ function preamble(projectId: string, projectName: string | undefined, agent: Cha
   ].join('\n')
 }
 
-function promptFor(payload: ChatSendPayload, first: boolean, projectName: string | undefined) {
+function promptFor(payload: ChatSendPayload, first: boolean, projectName: string | undefined, guide: string) {
   const parts = [
-    first ? preamble(payload.projectId, projectName, payload.agent) : '',
+    first ? preamble(payload.projectId, projectName, payload.agent, guide) : '',
     'Selecionado no canvas agora:',
     ...contextLines(payload.context),
     '',
@@ -273,7 +290,8 @@ function cursorOf(step: Pick<ChatStep, 'kind' | 'text' | 'sectionId' | 'detail'>
 
 // ---------- o plugin ----------
 
-export function spaceChat(): Plugin {
+/** `guide`: a linha do pedido que diz onde estão as regras (o conector troca pela pasta dele). */
+export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plugin {
   return {
     name: 'space-chat',
     apply: 'serve',
@@ -282,8 +300,6 @@ export function spaceChat(): Plugin {
       const chatFile = path.resolve(root, CHAT_FILE)
       const conversations = new Map<string, Stored>()
       const runs = new Map<string, Run>()
-      let agents: ChatAgentAvailability[] | null = null
-      let checking: Promise<ChatAgentAvailability[]> | null = null
 
       try {
         const saved = JSON.parse(readFileSync(chatFile, 'utf8')) as Stored[]
@@ -296,15 +312,6 @@ export function spaceChat(): Plugin {
         // Primeira vez
       }
 
-      const availability = () =>
-        (checking ??= Promise.all(
-          CHAT_AGENT_IDS.map(async (id): Promise<ChatAgentAvailability> => {
-            const bin = findBin(id)
-            if (!bin) return { id, available: false, reason: `${CHAT_AGENTS[id].name} não foi encontrado nesta máquina` }
-            const version = await versionOf(bin)
-            return version ? { id, available: true, version } : { id, available: false, reason: `${CHAT_AGENTS[id].name} não respondeu (${bin})` }
-          })
-        ).then((list) => (agents = list)))
 
       const stored = (projectId: string, projectName?: string) => {
         let item = conversations.get(projectId)
@@ -524,7 +531,7 @@ export function spaceChat(): Plugin {
         }
 
         const resume = conversation.resume[payload.agent]
-        const prompt = promptFor({ ...payload, text, context }, !resume, conversation.projectName)
+        const prompt = promptFor({ ...payload, text, context }, !resume, conversation.projectName, guide)
         const env: NodeJS.ProcessEnv = { ...process.env, SPACE_SESSION: session, SPACE_AGENT: info.name, NO_COLOR: '1', FORCE_COLOR: '0' }
         // A ponte deste servidor (a da aba que pediu), mesmo que outro servidor de dev tenha gravado o .space/bridge.json
         const bridge = bridgeAddress()
@@ -644,7 +651,7 @@ export function spaceChat(): Plugin {
       // ---------- websocket ----------
 
       server.ws.on(CHAT_EVENTS.hello, async (data: { projectId?: string }, client: WebSocketClient) => {
-        const list = agents ?? (await availability())
+        const list = await checkAgents()
         const item = data?.projectId ? conversations.get(data.projectId) : undefined
         client.send(CHAT_EVENTS.state, { projectId: data?.projectId, agents: list, conversation: item ? view(item) : null })
       })

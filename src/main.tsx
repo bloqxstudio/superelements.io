@@ -4,10 +4,9 @@ import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import './index.css'
 
-// Ponte do Claude com o Space aberto (só no servidor de dev; ver scripts/space/)
-if (import.meta.hot) void import('./features/space/bridge/client')
-// Chat com os agentes dentro do canvas (o servidor de dev roda o Claude Code ou o Codex; ver scripts/space/chatPlugin.ts)
-if (import.meta.hot) void import('./features/space/chat/connection')
+// Agentes no canvas (ponte e chat): no dev, pelo servidor do Vite (scripts/space/); publicado, pelo
+// conector na máquina de quem usa (scripts/connector/)
+void import('./features/space/connector/agentLink').then((link) => link.startAgentLink())
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>

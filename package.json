@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "sections:import": "node scripts/import-section-express.mjs",
     "sections:upload": "node scripts/upload-section-pack.mjs",
-    "prospectar": "node scripts/prospects/prospectar.ts"
+    "prospectar": "node scripts/prospects/prospectar.ts",
+    "conector": "node scripts/connector/build.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",

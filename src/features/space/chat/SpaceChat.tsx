@@ -30,6 +30,7 @@ import { ISLAND_SURFACE } from '@/features/space/ToolbarIsland'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { SectionNodeData } from '@/types/space'
 import { AgentMark } from './AgentMark'
+import { ConnectorPrompt } from './ConnectorPrompt'
 import type { CanvasInsets } from './AgentCursors'
 import { useChat } from './chatStore'
 import { CHAT_AGENTS, CHAT_AGENT_IDS, type ChatAgentId, type ChatContext, type ChatMessage, type ChatPart, type ChatStep } from './protocol'
@@ -39,8 +40,8 @@ import { CHAT_AGENTS, CHAT_AGENT_IDS, type ChatAgentId, type ChatContext, type C
  * agente (Claude Code ou Codex) e o que está selecionado no canvas vai junto,
  * para o agente mexer só ali. Acima da caixa, a conversa: o texto do agente
  * chegando aos pedaços e cada ação dele numa linha. O cursor dele aparece no
- * canvas (`AgentCursors`). Só no `npm run dev`: quem roda o agente é o
- * servidor de dev, nesta máquina.
+ * canvas (`AgentCursors`). Quem roda o agente é o servidor de dev, ou, no app
+ * publicado, o conector na máquina de quem usa (`ConnectorPrompt` liga).
  */
 
 const MAX_WIDTH = 620
@@ -378,7 +379,9 @@ export const SpaceChat: React.FC<{ insets: CanvasInsets }> = ({ insets }) => {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`
   }, [draft])
 
-  if (!connected || !projectId) return null
+  if (!projectId) return null
+  // No dev quem roda os agentes é o servidor do Vite; publicado, o conector na máquina de quem usa
+  if (!connected) return import.meta.hot ? null : <ConnectorPrompt place={place} />
 
   const shown = withSelection ? context : { pageId: context.pageId, pageName: context.pageName, sections: [] }
   const label = contextLabel(shown)

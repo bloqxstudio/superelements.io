@@ -18,5 +18,5 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "scripts/space/vitePlugin.ts", "scripts/space/chatPlugin.ts", "scripts/prospects/*.ts"]
+  "include": ["vite.config.ts", "scripts/space/vitePlugin.ts", "scripts/space/chatPlugin.ts", "scripts/connector/*.ts", "scripts/prospects/*.ts"]
 }

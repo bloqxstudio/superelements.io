@@ -1,16 +1,17 @@
 import { useProjectSync } from '@/features/projects/useProjectSession'
 import { useClaudeBridge } from '@/features/space/bridge/bridgeStore'
+import type { AgentChannel } from '@/features/space/connector/channel'
 import { useChat } from './chatStore'
 import { useAgentCursors } from './cursorStore'
 import { CHAT_AGENTS, CHAT_EVENTS, chatSession, type ChatAgentId, type ChatConversation, type ChatCursorHint, type ChatStateEvent } from './protocol'
 
 /**
- * Lado do navegador do chat com os agentes (só no `npm run dev`; o servidor
- * fica em `scripts/space/chatPlugin.ts`). Pede a conversa do projeto aberto,
+ * Lado do navegador do chat com os agentes (o servidor fica em
+ * `scripts/space/chatPlugin.ts`, no dev ou dentro do conector). Pede a conversa do projeto aberto,
  * manda as mensagens e recebe o que o agente faz, aos pedaços.
  */
 
-type Hot = NonNullable<ImportMeta['hot']>
+type Hot = AgentChannel
 
 /** Agente que parou: some a marca de "trabalhando" que ele deixou nas seções. */
 function stopped(projectId: string, agents: ChatAgentId[], epoch: number) {
@@ -84,7 +85,3 @@ export function startSpaceChat(hot: Hot) {
   }
 }
 
-if (import.meta.hot) {
-  const stop = startSpaceChat(import.meta.hot)
-  import.meta.hot.dispose(stop)
-}
