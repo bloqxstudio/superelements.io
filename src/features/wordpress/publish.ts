@@ -3,13 +3,15 @@ import { getActiveBrand } from '@/features/space/brand/brandStore'
 import { buildLandingPage } from '@/features/space/landingPage'
 import { applyMediaReplacements, collectImageUrls, type MediaReplacement } from '@/features/space/pageImages'
 import { slugify } from '@/features/space/featured/suggest'
-import { pageSections } from '@/features/space/pages/pages'
+import { PART_NOUN, componentPage, expandInstances, instanceOf, pageContent, pageParts, pageSections } from '@/features/space/pages/pages'
 import { useSpaceStore } from '@/store/spaceStore'
-import type { PageWordPressLink } from '@/types/space'
+import { logEvent } from '@/features/space/history/activity'
+import type { PageWordPressLink, SectionNodeData, SpaceNode, SpacePage } from '@/types/space'
 import { adminUrl, credentialsOf } from './connect'
 import { isSiteMedia, uploadDataUrl, uploadImage } from './media'
 import { wpRequest, WordPressError } from './rest'
 import { detectSeo, writeSeo, type SeoSupport } from './seo'
+import { contentHash, fetchSitePart, inlineReason, mergeConditions, partConditions, partsSupport, saveSitePart, syncPartConditions, type PartsSupport, type SitePart } from './siteParts'
 import type { WordPressConnection } from './types'
 
 /**
@@ -68,6 +70,18 @@ export interface PublishResult {
    * com o título e o cabeçalho dele). `error`: o site recusou o pedido.
    */
   layout: { wanted?: PageTemplate; applied?: string; error?: string }
+  /**
+   * Cabeçalho e rodapé do site que a página mostra: `theme`, vêm do Theme
+   * Builder (a página sobe sem eles); `inline`, vão dentro da página.
+   * `unpublished`: ainda não estão no Theme Builder do site.
+   */
+  parts: { mode: PartsSupport['mode']; reason?: string; shown: string[]; unpublished: string[]; synced: string[] }
+  /**
+   * Componentes livres da página: com o Theme Builder, vão como widget Modelo
+   * apontando para o modelo salvo de cada um. `created`: criados agora;
+   * `outdated`: mudaram no canvas depois de publicados (o site mostra a versão de antes).
+   */
+  components: { used: string[]; created: string[]; outdated: string[] }
 }
 
 interface WpPage {
@@ -86,13 +100,86 @@ interface WpPage {
 export const elementorEditUrl = (connection: WordPressConnection, postId: number) =>
   `${adminUrl(connection.site)}post.php?post=${postId}&action=elementor`
 
-/** Elementos da página como o canvas mostra: marca nas seções da biblioteca, seções do site como vieram. */
-export function pageElements(pageId: string) {
+/**
+ * Elementos da página como o canvas mostra: marca nas seções da biblioteca,
+ * seções do site como vieram. O cabeçalho e o rodapé do site vão dentro da
+ * página (`inline`) quando o site não tem o Theme Builder; com ele
+ * (`theme`), a página sobe só com as seções dela.
+ */
+export function pageElements(pageId: string, parts: PartsSupport['mode'] = 'inline', templates?: Map<string, { postId: number; siteUrl: string }>) {
   const { pages, nodes, connections } = useSpaceStore.getState()
   const page = pages.find((p) => p.id === pageId)
   if (!page) throw new WordPressError('Essa página não está mais no canvas.')
-  const built = buildLandingPage(pageSections(page, nodes), nodes, connections, getActiveBrand())
+  if (page.part) throw new WordPressError('O cabeçalho, o rodapé e os componentes publicam pelo menu deles, como modelo do Elementor.')
+  // Com o Theme Builder: sem o cabeçalho e o rodapé, e cada instância vira o widget Modelo do componente publicado
+  const sections =
+    parts === 'theme'
+      ? pageSections(page, nodes).flatMap((section) => {
+          const id = instanceOf(section)
+          const template = id ? templates?.get(id) : undefined
+          if (template) return [templateSection(section, template.postId, template.siteUrl)]
+          return expandInstances([section], pages, nodes)
+        })
+      : pageContent(page, pages, nodes)
+  const built = buildLandingPage(sections, nodes, connections, getActiveBrand())
   return { page, ...built }
+}
+
+const elementId = () => Math.random().toString(16).slice(2, 9).padEnd(7, '0')
+
+/**
+ * A instância no site: um container sem respiro com o widget Modelo do
+ * Elementor Pro, que mostra o modelo salvo do componente. Mudou o modelo,
+ * muda em todas as páginas que o usam.
+ */
+function templateSection(instance: SpaceNode, postId: number, siteUrl: string): SpaceNode {
+  const zero = { unit: 'px', top: '0', right: '0', bottom: '0', left: '0', isLinked: true }
+  const element = {
+    id: elementId(),
+    elType: 'container',
+    isInner: false,
+    settings: { content_width: 'full', padding: zero, padding_tablet: zero, padding_mobile: zero },
+    elements: [{ id: elementId(), elType: 'widget', widgetType: 'template', settings: { template_id: String(postId) }, elements: [] }],
+  }
+  // Vai como veio: a marca não mexe num container que só aponta para o modelo
+  const data: SectionNodeData = { title: (instance.data as SectionNodeData).title, elementorJson: JSON.stringify([element]), origin: { kind: 'wordpress', siteUrl, postId } }
+  return { ...instance, data }
+}
+
+/** As seções do componente (cabeçalho, rodapé, componente livre), montadas como no canvas, com os componentes de dentro já no lugar. */
+export function partElements(partId: string) {
+  const { pages, nodes, connections } = useSpaceStore.getState()
+  const part = pages.find((p) => p.id === partId)
+  if (!part?.part) throw new WordPressError('Esse componente não está mais no canvas.')
+  const sections = expandInstances(pageSections(part, nodes), pages, nodes, new Set([part.id]))
+  return { part, ...buildLandingPage(sections, nodes, connections, getActiveBrand()) }
+}
+
+/** O conteúdo do componente como seria publicado agora, resumido: muda quando a folha muda. */
+export const partContentHash = (partId: string) => contentHash(JSON.stringify(partElements(partId).elements))
+
+/** Componentes livres que a página usa direto (as instâncias dela), sem repetir. */
+const pageComponents = (page: SpacePage, pages: SpacePage[], nodes: SpaceNode[]) => {
+  const ids = [...new Set(pageSections(page, nodes).map(instanceOf).filter((id): id is string => !!id))]
+  return ids.map((id) => componentPage(pages, id)).filter((c): c is SpacePage => !!c)
+}
+
+/** Sobe para a mídia do site as imagens que ainda não estão lá e troca os endereços nos elementos. */
+async function uploadImages(elements: unknown[], connection: WordPressConnection, onProgress?: (step: string) => void) {
+  const pending = imagesToUpload(elements, connection)
+  const replacements = new Map<string, MediaReplacement>()
+  const failedImages: string[] = []
+  for (const [index, url] of pending.entries()) {
+    onProgress?.(`Enviando imagens para o site (${index + 1} de ${pending.length})…`)
+    try {
+      replacements.set(url, await uploadImage(connection, url))
+    } catch (error) {
+      console.warn('[wordpress] imagem não enviada', url, error)
+      failedImages.push(url)
+    }
+  }
+  applyMediaReplacements(elements, replacements, (url) => isSiteMedia(url, connection.site.siteUrl))
+  return { uploaded: replacements.size, failedImages }
 }
 
 /** Imagens que precisam subir para a biblioteca de mídia do site. */
@@ -122,8 +209,44 @@ const SAVED_FIELDS = 'id,link,status,modified_gmt,title,slug,featured_media,temp
 
 export async function publishPage({ connection, projectId, pageId, status, template, overwrite, onProgress }: PublishOptions): Promise<PublishResult> {
   const creds = credentialsOf(connection)
-  const { page, elements } = pageElements(pageId)
-  if (!elements.length) throw new WordPressError('A página não tem seção com JSON válido para publicar.')
+  // Com o Theme Builder, o cabeçalho e o rodapé do site ficam nos modelos dele e a página sobe sem eles
+  onProgress?.('Conferindo o site…')
+  const support = await partsSupport(connection)
+  const theme = support.mode === 'theme'
+
+  // Componentes livres: cada um precisa estar salvo no Elementor do site; o que ainda não está é criado agora
+  // (criar não muda nenhuma outra página). Atualizar um que mudou é a publicação do próprio componente.
+  const templates = new Map<string, { postId: number; siteUrl: string }>()
+  const components: PublishResult['components'] = { used: [], created: [], outdated: [] }
+  if (theme) {
+    const { pages: all, nodes: allNodes } = useSpaceStore.getState()
+    const target = all.find((p) => p.id === pageId)
+    for (const component of target ? pageComponents(target, all, allNodes) : []) {
+      let linked = component.wordpress?.siteUrl === connection.site.siteUrl ? component.wordpress : undefined
+      if (linked) {
+        // Modelo apagado no site: o componente é criado de novo
+        const gone = await fetchSitePart(connection, linked.postId).then(() => false, (error) => (error instanceof WordPressError && error.code === 'gone' ? true : Promise.reject(error)))
+        if (gone) {
+          useSpaceStore.getState().setPageWordPress(component.id, undefined)
+          linked = undefined
+        }
+      }
+      if (!linked) {
+        onProgress?.(`Salvando o componente ${component.name} no Elementor…`)
+        await publishPart({ connection, projectId, partId: component.id, onProgress })
+        linked = useSpaceStore.getState().pages.find((p) => p.id === component.id)?.wordpress
+        components.created.push(component.name)
+      } else if (linked.contentHash && linked.contentHash !== partContentHash(component.id)) components.outdated.push(component.name)
+      if (linked) templates.set(component.id, { postId: linked.postId, siteUrl: connection.site.siteUrl })
+      components.used.push(component.name)
+    }
+  }
+
+  const { page, elements } = pageElements(pageId, support.mode, templates)
+  const shown = Object.values(pageParts(page, useSpaceStore.getState().pages)).filter((p): p is NonNullable<typeof p> => !!p)
+  if (!elements.length) throw new WordPressError(shown.length && theme ? 'A página não tem seção própria para publicar: o cabeçalho e o rodapé vão pelo Theme Builder.' : 'A página não tem seção com JSON válido para publicar.')
+  // Página com cabeçalho do Theme Builder vai em Elementor Largura Total: a Tela do Elementor não mostra o cabeçalho do tema nem o do Theme Builder
+  if (theme && shown.length) template = 'elementor_header_footer'
   const link = page.wordpress?.siteUrl === connection.site.siteUrl ? page.wordpress : undefined
   const details = page.details ?? {}
   // Página ligada sem título escolhido fica com o título que tem no site
@@ -145,19 +268,7 @@ export async function publishPage({ connection, projectId, pageId, status, templ
     if (!overwrite && current.modified_gmt !== link.modifiedGmt) throw new PageConflictError(current.modified_gmt)
   }
 
-  const pending = imagesToUpload(elements, connection)
-  const replacements = new Map<string, MediaReplacement>()
-  const failedImages: string[] = []
-  for (const [index, url] of pending.entries()) {
-    onProgress?.(`Enviando imagens para o site (${index + 1} de ${pending.length})…`)
-    try {
-      replacements.set(url, await uploadImage(connection, url))
-    } catch (error) {
-      console.warn('[wordpress] imagem não enviada', url, error)
-      failedImages.push(url)
-    }
-  }
-  applyMediaReplacements(elements, replacements, (url) => isSiteMedia(url, connection.site.siteUrl))
+  const { uploaded, failedImages } = await uploadImages(elements, connection, onProgress)
   const elementorData = JSON.stringify(elements)
 
   // Imagem destacada: a do modelo ou a enviada daqui sobe para a mídia; a da biblioteca vai pelo id
@@ -253,13 +364,24 @@ export async function publishPage({ connection, projectId, pageId, status, templ
   const final = await wpRequest<WpPage>(creds, `wp/v2/pages/${saved.id}`, { params: { context: 'edit', _fields: SAVED_FIELDS } }).catch(() => saved)
   useSpaceStore.getState().setPageWordPress(pageId, linkFrom(connection, final, title || page.name))
 
+  // Ligada ao site, a página entra na condição do cabeçalho e do rodapé que já estão no Theme Builder: fica de fora (ou volta), como no canvas
+  let synced: string[] = []
+  if (theme) {
+    onProgress?.('Conferindo o cabeçalho e o rodapé do site…')
+    synced = await syncPartConditions(connection).catch((error) => {
+      console.warn('[wordpress] condição do cabeçalho não atualizada', error)
+      return []
+    })
+  }
+  void logEvent(projectId, 'publish.page', page.name, { link: final.link, status: final.status, created: !link, site: connection.site.siteUrl })
+
   return {
     postId: final.id,
     link: final.link,
     editUrl: elementorEditUrl(connection, final.id),
     status: final.status,
     created: !link,
-    uploaded: replacements.size,
+    uploaded,
     failedImages,
     cacheCleared,
     featured,
@@ -267,6 +389,112 @@ export async function publishPage({ connection, projectId, pageId, status, templ
     seoSupport,
     seoError,
     layout: { wanted: wantedTemplate, applied: final.template, error: layoutError },
+    parts: {
+      mode: support.mode,
+      reason: theme ? undefined : inlineReason(support),
+      shown: shown.map((p) => p.name),
+      unpublished: theme ? shown.filter((p) => p.wordpress?.siteUrl !== connection.site.siteUrl).map((p) => p.name) : [],
+      synced,
+    },
+    components,
+  }
+}
+
+export interface PartPublishOptions {
+  connection: WordPressConnection
+  projectId: string
+  partId: string
+  /** Atualiza mesmo que o modelo tenha mudado no site. */
+  overwrite?: boolean
+  /** Modelo que o site já tem e passa a ser este componente (em vez de criar outro). */
+  target?: number
+  /** Outros modelos do mesmo lugar que saem do site (ficam salvos no WordPress, sem condição). */
+  release?: number[]
+  onProgress?: (step: string) => void
+}
+
+export interface PartPublishResult {
+  postId: number
+  title: string
+  editUrl: string
+  created: boolean
+  uploaded: number
+  failedImages: string[]
+  cacheCleared: boolean
+  /** Páginas do site que ficam sem a parte. */
+  excluded: string[]
+  /** Páginas que ficam sem a parte mas ainda não estão no site: entram na condição quando forem publicadas. */
+  pending: string[]
+  released: number
+}
+
+/**
+ * Publica o cabeçalho (ou o rodapé) do site como modelo do Theme Builder,
+ * no site inteiro menos as páginas que ficam sem ele. O modelo ligado é
+ * atualizado no lugar, depois de conferir se ninguém o mudou pelo Elementor
+ * e de guardar aqui o conteúdo que ele tinha.
+ */
+export async function publishPart({ connection, projectId, partId, overwrite, target, release, onProgress }: PartPublishOptions): Promise<PartPublishResult> {
+  onProgress?.('Conferindo o site…')
+  const support = await partsSupport(connection, true)
+  if (support.mode !== 'theme') throw new WordPressError(`Não dá para publicar o componente: ${inlineReason(support)}. Até lá, ele vai dentro de cada página.`)
+  const { part, elements } = partElements(partId)
+  const kind = part.part!.kind
+  if (!elements.length) throw new WordPressError(`O ${PART_NOUN[kind]} não tem seção com JSON válido para publicar.`)
+  // Antes de subir as imagens (que trocam os endereços): é o mesmo resumo que `partContentHash` calcula depois
+  const hash = contentHash(JSON.stringify(elements))
+  const siteUrl = connection.site.siteUrl
+  const link = part.wordpress?.siteUrl === siteUrl ? part.wordpress : undefined
+  const postId = link?.postId ?? target
+
+  let current: SitePart | null = null
+  if (postId) {
+    onProgress?.('Conferindo o modelo no site…')
+    current = await fetchSitePart(connection, postId)
+    if (link && !overwrite && current.modified_gmt !== link.modifiedGmt) throw new PageConflictError(current.modified_gmt)
+  }
+
+  const { uploaded, failedImages } = await uploadImages(elements, connection, onProgress)
+
+  if (current) {
+    // Guarda o que o site tinha, para desfazer daqui
+    const backups = await loadPublishBackups(projectId, current.id)
+    const previous: PublishBackup = { elementorData: current.elementor_data ?? '', modifiedGmt: current.modified_gmt, savedAt: Date.now() }
+    await savePublishBackups(projectId, current.id, [previous, ...backups].slice(0, MAX_BACKUPS))
+  }
+
+  const { conditions: ours, excluded, pending } = partConditions(part, useSpaceStore.getState().pages, siteUrl)
+  // O que o modelo já tinha e o canvas não mostra continua valendo
+  const conditions = current ? mergeConditions(ours, current.conditions, useSpaceStore.getState().pages, siteUrl) : ours
+  const where = kind === 'section' ? 'na Biblioteca do Elementor' : 'no Theme Builder'
+  onProgress?.(postId ? `Atualizando o modelo ${where}…` : `Criando o modelo ${where}…`)
+  const saved = await saveSitePart(connection, { id: postId, kind, title: part.name, elements: JSON.stringify(elements), conditions, release: release?.filter((id) => id !== postId) })
+
+  onProgress?.('Limpando o cache de CSS do Elementor…')
+  const cacheCleared = await clearElementorCache(connection)
+  useSpaceStore.getState().setPageWordPress(partId, {
+    siteUrl,
+    postId: saved.id,
+    title: saved.title,
+    link: saved.edit_url,
+    status: saved.status,
+    modifiedGmt: saved.modified_gmt,
+    syncedAt: Date.now(),
+    contentHash: hash,
+  })
+  void logEvent(projectId, 'publish.part', part.name, { postId: saved.id, created: !postId, site: siteUrl, conditions })
+
+  return {
+    postId: saved.id,
+    title: saved.title,
+    editUrl: saved.edit_url,
+    created: !postId,
+    uploaded,
+    failedImages,
+    cacheCleared,
+    excluded,
+    pending,
+    released: release?.length ?? 0,
   }
 }
 
@@ -281,6 +509,16 @@ export async function restoreLastBackup(connection: WordPressConnection, project
   const [last, ...rest] = await loadPublishBackups(projectId, link.postId)
   if (!last) throw new WordPressError('Não há versão anterior guardada para essa página.')
 
+  if (page?.part) {
+    // Componente: o conteúdo do modelo volta; a condição fica a de agora
+    const restored = await saveSitePart(connection, { id: link.postId, kind: page.part.kind, elements: last.elementorData })
+    await savePublishBackups(projectId, link.postId, rest)
+    const cacheCleared = await clearElementorCache(connection)
+    useSpaceStore.getState().setPageWordPress(pageId, { ...link, modifiedGmt: restored.modified_gmt, syncedAt: Date.now() })
+    void logEvent(projectId, 'publish.restored', page.name, { postId: link.postId, restoredFrom: last.savedAt })
+    return { restoredFrom: last.savedAt, cacheCleared, remaining: rest.length }
+  }
+
   const saved = await wpRequest<WpPage>(credentialsOf(connection), `wp/v2/pages/${link.postId}`, {
     method: 'POST',
     params: { _fields: 'id,link,status,modified_gmt,title' },
@@ -289,5 +527,6 @@ export async function restoreLastBackup(connection: WordPressConnection, project
   await savePublishBackups(projectId, link.postId, rest)
   const cacheCleared = await clearElementorCache(connection)
   useSpaceStore.getState().setPageWordPress(pageId, linkFrom(connection, saved, link.title))
+  void logEvent(projectId, 'publish.restored', page?.name ?? link.title, { link: link.link, restoredFrom: last.savedAt })
   return { restoredFrom: last.savedAt, cacheCleared, remaining: rest.length }
 }

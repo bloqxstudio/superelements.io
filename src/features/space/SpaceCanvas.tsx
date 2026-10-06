@@ -1,6 +1,7 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react'
 import { useSpaceStore } from '@/store/spaceStore'
 import { SectionNode } from './nodes/SectionNode'
+import { ComponentInstance } from './pages/ComponentInstance'
 import { TextNode } from './nodes/TextNode'
 import { ColorPaletteNode } from './nodes/ColorPaletteNode'
 import { ConnectionLayer } from './ConnectionLayer'
@@ -8,6 +9,7 @@ import { PagesLayer } from './pages/PageFrame'
 import { MAX_ZOOM, MIN_ZOOM, useCanvasTool } from './canvasView'
 import { PeopleCursors, useBroadcastCursor } from './presence/PeopleCursors'
 import { useSectionHover } from './nodes/sectionHover'
+import type { SectionNodeData } from '@/types/space'
 
 /** Altura de uma linha quando a roda vem em linhas (Firefox). */
 const WHEEL_LINE = 16
@@ -282,6 +284,8 @@ export const SpaceCanvas: React.FC = () => {
         {/* Páginas por baixo: as seções delas são nós como os outros, posicionados na coluna */}
         <PagesLayer />
         {nodes.map((node) => {
+          // Instância de um componente: mostra a folha dele, sem conteúdo próprio
+          if (node.type === 'section' && (node.data as SectionNodeData).instanceOf) return <ComponentInstance key={node.id} node={node} />
           if (node.type === 'section') return <SectionNode key={node.id} node={node} />
           if (node.type === 'text') return <TextNode key={node.id} node={node} />
           if (node.type === 'color-palette') return <ColorPaletteNode key={node.id} node={node} />

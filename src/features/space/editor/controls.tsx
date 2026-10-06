@@ -250,7 +250,7 @@ export const Toggle: React.FC<{ checked: boolean; onChange: (checked: boolean) =
       checked ? 'bg-violet-600' : 'bg-gray-300'
     )}
   >
-    <span className={cn('absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-3.5' : 'translate-x-0.5')} />
+    <span className={cn('absolute left-0 top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-3.5' : 'translate-x-0.5')} />
   </button>
 )
 

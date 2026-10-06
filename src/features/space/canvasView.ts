@@ -50,7 +50,7 @@ export function fitPageWidth(pageId: string) {
   const page = pages.find((p) => p.id === pageId)
   if (!page) return
   setActivePage(page.id)
-  const frame = pageFrame(page, nodes)
+  const frame = pageFrame(page, nodes, pages)
   const z = clampZoom(Math.min(1.6, (viewport.width - FIT_PADDING * 2) / frame.width))
   setCanvasTransform({ zoom: z, x: (viewport.width - frame.width * z) / 2 - frame.x * z, y: FIT_TOP - 40 - frame.y * z })
 }

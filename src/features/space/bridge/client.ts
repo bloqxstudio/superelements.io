@@ -8,10 +8,13 @@ import { getActiveBrand, useBrandStore } from '@/features/space/brand/brandStore
 import { parseDesignMd } from '@/features/space/brand/designMd'
 import { buildLandingPage, parseSectionElements, type SectionElement } from '@/features/space/landingPage'
 import { findElement } from '@/features/space/navigator/elementorContentEditor'
-import { DEFAULT_PAGE_NAME, nextPagePosition, pageOf, pageSections, SECTION_WIDTH } from '@/features/space/pages/pages'
+import { DEFAULT_PAGE_NAME, nextPagePosition, pageContent, pageOf, pageParts, pageSections, partPage, partShownIn, sitePages, PART_LABEL, SECTION_WIDTH } from '@/features/space/pages/pages'
+import { findPartCopies } from '@/features/space/pages/parts'
 import { isFromSite, renderKit } from '@/features/space/renderKit'
 import { authorizationUrl, completeConnection, profileUrl } from '@/features/wordpress/connect'
-import { PageConflictError, publishPage, restoreLastBackup, type PageStatus, type PageTemplate } from '@/features/wordpress/publish'
+import { PageConflictError, publishPage, publishPart, restoreLastBackup, type PageStatus, type PageTemplate } from '@/features/wordpress/publish'
+import { inlineReason, listSiteParts, partConditions, partsSupport } from '@/features/wordpress/siteParts'
+import { importSiteGlobal, listSiteGlobals, resolveTemplateInstances } from '@/features/wordpress/siteImport'
 import { discoverSite, unsupportedReason } from '@/features/wordpress/rest'
 import { detectSeo } from '@/features/wordpress/seo'
 import { fetchSiteKit, fetchSitePage, listSitePages } from '@/features/wordpress/site'
@@ -22,7 +25,7 @@ import { setBackgroundRelease } from '@/features/projects/background'
 import { cursorFromCall } from '@/features/space/chat/cursorFromBridge'
 import type { AgentChannel } from '@/features/space/connector/channel'
 import { useSpaceStore } from '@/store/spaceStore'
-import type { PageDetails, SectionNodeData, SpaceNode, SpacePage } from '@/types/space'
+import type { PageDetails, PagePartKind, SectionNodeData, SpaceNode, SpacePage } from '@/types/space'
 import { useAgents, type AgentView, type ViewRequest } from './agentsStore'
 import { DEFAULT_AGENT, useClaudeBridge, type ClaudeStep, type ClaudeStepKind, type TouchKind } from './bridgeStore'
 import { focusSection } from './focus'
@@ -184,6 +187,11 @@ const findPage = (pages: SpacePage[], ref: string | undefined) => {
   return page
 }
 
+const partRefs = (page: SpacePage, pages: SpacePage[]) => {
+  const { header, footer } = pageParts(page, pages)
+  return { header: header ? { id: header.id, name: header.name } : null, footer: footer ? { id: footer.id, name: footer.name } : null }
+}
+
 function status() {
   const projectId = openProjectId()
   const project = routeProjectId() ? useProjectStore.getState().projects.find((p) => p.id === routeProjectId()) : undefined
@@ -217,6 +225,10 @@ function status() {
       id: page.id,
       name: page.name,
       wordpress: page.wordpress ? { siteUrl: page.wordpress.siteUrl, postId: page.wordpress.postId, link: page.wordpress.link, status: page.wordpress.status } : undefined,
+      // Folha de componente (cabeçalho ou rodapé do site): as seções dela aparecem nas páginas listadas
+      part: page.part ? { kind: page.part.kind, shownIn: partShownIn(page, pages, nodes).map((p) => p.name) } : undefined,
+      // O cabeçalho e o rodapé do site que a página mostra; não estão em `sections` (são da folha do componente)
+      parts: page.part ? undefined : partRefs(page, pages),
       sections: pageSections(page, nodes).map((n, i) => sectionInfo(n, i)),
     })),
     loose: nodes.filter((n) => n.type === 'section' && !placed.has(n.id)).map((n) => sectionInfo(n)),
@@ -380,7 +392,7 @@ function apply(params: ApplyParams, ctx: CallContext) {
       }
       case 'removePage': {
         const page = findPage(pages, op.page)
-        if (pages.length === 1) throw new Error('A última página do canvas não sai')
+        if (!page.part && sitePages(pages).length === 1) throw new Error('A última página do canvas não sai')
         const gone = new Set(page.sectionIds)
         nodes = nodes.filter((n) => !gone.has(n.id))
         connections = connections.filter((c) => !gone.has(c.sourceId) && !gone.has(c.targetId))
@@ -541,7 +553,8 @@ function render(params: { page?: string; sections?: string[]; device?: string; m
   requireProject()
   const { nodes, pages, connections } = useSpaceStore.getState()
   const page = params.sections?.length ? undefined : findPage(pages, params.page)
-  const sections = params.sections?.length ? params.sections.map((id) => findNode(nodes, id)) : pageSections(page!, nodes)
+  // A página como no site: com o cabeçalho e o rodapé do site
+  const sections = params.sections?.length ? params.sections.map((id) => findNode(nodes, id)) : pageContent(page!, pages, nodes)
   const brand = getActiveBrand()
   const built = buildLandingPage(sections, nodes, connections, brand)
   if (!built.elements.length) throw new Error('Nada para mostrar: as seções escolhidas não têm JSON válido')
@@ -575,13 +588,13 @@ function view(params: { page?: string; section?: string }): AgentView {
     // Página sem seção válida ainda: a prévia mostra a página vazia
   }
   const { pending, working } = useClaudeBridge.getState()
-  const inPage = pageSections(page, nodes)
+  const inPage = pageContent(page, pages, nodes)
   const workingNode = inPage.find((n) => working[n.id])
   return {
     html,
     pageId: page.id,
     pageName: page.name,
-    anchor: anchorOf(section && page.sectionIds.includes(section.id) ? section : undefined),
+    anchor: anchorOf(section && inPage.includes(section) ? section : undefined),
     working: anchorOf(workingNode),
     pending: inPage.filter((n) => pending[n.id]).map(anchorOf).filter((id): id is string => !!id),
   }
@@ -647,9 +660,9 @@ async function brief(params: { context?: string }) {
 
 /** A página como o player mostra, com as animações: é o que o cliente vê no link. */
 function playerHtml(page: SpacePage) {
-  const { nodes, connections } = useSpaceStore.getState()
+  const { nodes, connections, pages } = useSpaceStore.getState()
   const brand = getActiveBrand()
-  const sections = pageSections(page, nodes)
+  const sections = pageContent(page, pages, nodes)
   const built = buildLandingPage(sections, nodes, connections, brand)
   if (!built.elements.length) throw new Error(`A página ${page.name} não tem seção com JSON válido`)
   return renderElementorDocument(built.elements, { title: page.name, kit: renderKit(brand, getSiteKit(), sections.some(isFromSite)), motion: 'play' }).document
@@ -732,7 +745,7 @@ const pageLinks = () => useSpaceStore.getState().pages.map((p) => ({ pageId: p.i
  * usuário e a senha de aplicação grava a conexão; `pages` lista o site;
  * `import` traz páginas do site para o canvas, como o diálogo Importar.
  */
-async function wordpress(params: { action?: 'status' | 'connect' | 'pages' | 'import'; site?: string; user?: string; password?: string; ids?: number[] }, ctx: CallContext) {
+async function wordpress(params: { action?: 'status' | 'connect' | 'pages' | 'import' | 'globals' | 'importGlobals'; site?: string; user?: string; password?: string; ids?: number[] }, ctx: CallContext) {
   const id = requireProject()
   const connectionInfo = (c: WordPressConnection | null) =>
     c && { site: c.site.name, siteUrl: c.site.siteUrl, user: c.user.name, roles: c.user.roles, can: c.can, connectedAt: c.connectedAt, checkedAt: c.checkedAt }
@@ -766,22 +779,60 @@ async function wordpress(params: { action?: 'status' | 'connect' | 'pages' | 'im
     const kit = await fetchSiteKit(connection).catch(() => null)
     if (kit) useSiteKitStore.getState().setKit(kit)
     const seo = await detectSeo(connection).catch(() => undefined)
-    const imported: Array<{ postId: number; pageId: string; page: string; sections: number }> = []
+    const imported: Array<{ postId: number; pageId: string; page: string; sections: number; components: string[] }> = []
     const failed: Array<{ postId: number; error: string }> = []
     for (const postId of params.ids) {
       try {
         const page = await fetchSitePage(connection, postId, seo)
+        // Seções que são só o widget Modelo viram instâncias do componente daquele modelo
+        const resolved = await resolveTemplateInstances(connection, page.sections)
         const { pages, loadSitePage, setPageDetails } = useSpaceStore.getState()
         const existing = pages.find((p) => p.wordpress?.postId === postId && p.wordpress.siteUrl === connection.site.siteUrl)
-        const pageId = loadSitePage(page.name, page.sections, page.link, existing?.id)
+        const pageId = loadSitePage(page.name, resolved.sections, page.link, existing?.id)
         setPageDetails(pageId, page.details)
-        imported.push({ postId, pageId, page: page.name, sections: page.sections.length })
+        imported.push({ postId, pageId, page: page.name, sections: page.sections.length, components: resolved.components })
       } catch (error) {
         failed.push({ postId, error: error instanceof Error ? error.message : String(error) })
       }
     }
     if (imported.length) note(ctx, 'note', `Importei do WordPress: ${imported.map((p) => p.page).join(', ')}`)
     return { imported, failed, kit: !!kit }
+  }
+
+  // Cabeçalho e rodapé do Theme Builder que valem no site hoje
+  if (params.action === 'globals') {
+    const connection = (await wpConnection())!
+    const found = await listSiteGlobals(connection)
+    if (!found) return { available: false, reason: inlineReason(await partsSupport(connection)), globals: [] }
+    const pages = useSpaceStore.getState().pages
+    return {
+      available: true,
+      globals: found.map(({ kind, part }) => ({
+        id: part.id,
+        kind,
+        title: part.title,
+        conditions: part.conditions,
+        canvas: pages.find((p) => p.part?.kind === kind && p.wordpress?.siteUrl === connection.site.siteUrl && p.wordpress.postId === part.id)?.name ?? null,
+        blocked: pages.some((p) => p.part?.kind === kind && !(p.wordpress?.siteUrl === connection.site.siteUrl && p.wordpress.postId === part.id)),
+      })),
+    }
+  }
+
+  if (params.action === 'importGlobals') {
+    const connection = (await wpConnection())!
+    if (!params.ids?.length) throw new Error('Diga os ids dos modelos (veja: wp globals)')
+    const found = (await listSiteGlobals(connection)) ?? []
+    const imported = []
+    for (const id of params.ids) {
+      const global = found.find((g) => g.part.id === id)
+      if (!global) throw new Error(`O modelo ${id} não é um cabeçalho ou rodapé valendo no site (veja: wp globals)`)
+      if (useSpaceStore.getState().pages.some((p) => p.part?.kind === global.kind && !(p.wordpress?.siteUrl === connection.site.siteUrl && p.wordpress.postId === id))) {
+        throw new Error(`O projeto já tem outro ${global.kind === 'header' ? 'cabeçalho' : 'rodapé'}: exclua ou volte a seção comum antes de trazer o do site`)
+      }
+      imported.push({ id, kind: global.kind, ...(await importSiteGlobal(connection, id, global.kind)) })
+    }
+    note(ctx, 'note', `Trouxe do Theme Builder: ${imported.map((g) => g.name).join(', ')}`)
+    return { imported }
   }
 
   return { connection: connectionInfo(await wpConnection(false)), pages: pageLinks() }
@@ -813,12 +864,40 @@ function details(params: { page?: string; fields?: Partial<Record<(typeof DETAIL
  * ligada atualiza no mesmo endereço (com backup e conferência de conflito),
  * página nova vira rascunho, a não ser que `status` diga publicar.
  */
-async function publish(params: { page?: string; status?: PageStatus; template?: PageTemplate; overwrite?: boolean }, ctx: CallContext) {
+/**
+ * O cabeçalho (ou rodapé) do site no Theme Builder antes de publicar: se o
+ * site aceita, o modelo ligado, os modelos que o site já usa e onde ele vai
+ * aparecer. Não grava nada.
+ */
+async function partPlan(params: { page?: string }) {
+  requireProject()
+  const connection = (await wpConnection())!
+  const pages = useSpaceStore.getState().pages
+  const part = findPage(pages, params.page)
+  if (!part.part) throw new Error(`${part.name} é uma página, não um componente`)
+  const support = await partsSupport(connection, true)
+  const linked = part.wordpress?.siteUrl === connection.site.siteUrl ? part.wordpress : null
+  const existing = support.mode === 'theme' && !linked ? (await listSiteParts(connection, part.part.kind)).filter((p) => p.status === 'publish' && p.conditions.length) : []
+  return {
+    part: part.name,
+    kind: part.part.kind,
+    site: connection.site.name,
+    siteUrl: connection.site.siteUrl,
+    themeBuilder: support.mode === 'theme',
+    reason: support.mode === 'theme' ? null : inlineReason(support),
+    linked,
+    existing: existing.map((p) => ({ id: p.id, title: p.title, conditions: p.conditions })),
+    ...partConditions(part, pages, connection.site.siteUrl),
+  }
+}
+
+async function publish(params: { page?: string; status?: PageStatus; template?: PageTemplate; overwrite?: boolean; existing?: 'replace' | 'update' }, ctx: CallContext) {
   const projectId = requireProject()
   const connection = (await wpConnection())!
   if (!connection.can.editPages) throw new Error(`O usuário ${connection.user.name} não pode editar páginas em ${connection.site.name}`)
   if (params.status === 'publish' && !connection.can.publishPages) throw new Error(`O usuário ${connection.user.name} não pode publicar páginas: mande como rascunho`)
   const page = findPage(useSpaceStore.getState().pages, params.page)
+  if (page.part) return publishSitePart(page, params, projectId, connection, ctx)
   const steps: string[] = []
   const bridge = useClaudeBridge.getState()
   bridge.setWorking([page.id], { agent: ctx.agent, text: `Publicando no ${connection.site.name}`, since: Date.now() })
@@ -834,6 +913,33 @@ async function publish(params: { page?: string; status?: PageStatus; template?: 
   }
 }
 
+/** O cabeçalho (ou rodapé) do site vira modelo do Theme Builder: no lugar dos que o site usa (`replace`) ou atualizando o único (`update`). */
+async function publishSitePart(part: SpacePage, params: { overwrite?: boolean; existing?: 'replace' | 'update' }, projectId: string, connection: WordPressConnection, ctx: CallContext) {
+  const plan = await partPlan({ page: part.id })
+  if (!plan.themeBuilder) throw new Error(`O ${PART_LABEL[part.part!.kind].toLowerCase()} não vai para o Theme Builder: ${plan.reason}. Ele já vai dentro de cada página publicada.`)
+  let target: number | undefined
+  let release: number[] | undefined
+  if (!plan.linked && plan.existing.length) {
+    if (params.existing === 'update') {
+      if (plan.existing.length !== 1) throw new Error(`O site usa ${plan.existing.length} modelos desse tipo: não dá para escolher qual atualizar. Publique sem --update-existing (o nosso entra no lugar deles).`)
+      target = plan.existing[0].id
+    } else release = plan.existing.map((p) => p.id)
+  }
+  const steps: string[] = []
+  const bridge = useClaudeBridge.getState()
+  bridge.setWorking([part.id], { agent: ctx.agent, text: `Publicando no ${connection.site.name}`, since: Date.now() })
+  try {
+    const result = await publishPart({ connection, projectId, partId: part.id, overwrite: params.overwrite, target, release, onProgress: (step) => steps.push(step) })
+    note(ctx, 'done', `${result.created ? 'Publiquei' : 'Atualizei'} ${part.name} no Theme Builder de ${connection.site.name}`)
+    return { page: part.name, site: connection.site.name, part: true, steps, ...result }
+  } catch (error) {
+    if (error instanceof PageConflictError) throw new Error(`O modelo foi editado no Elementor em ${error.modifiedGmt} (GMT), depois da última publicação daqui. Publique com --overwrite para passar por cima (fica um backup).`)
+    throw error
+  } finally {
+    bridge.clearWorking([part.id])
+  }
+}
+
 /** Devolve ao site o conteúdo que a página ligada tinha antes da última publicação feita daqui. */
 async function restore(params: { page?: string }, ctx: CallContext) {
   const projectId = requireProject()
@@ -844,9 +950,53 @@ async function restore(params: { page?: string }, ctx: CallContext) {
   return { page: page.name, site: connection.site.name, ...result }
 }
 
+/**
+ * Cabeçalho e rodapé do site (componentes, como no Theme Builder do Elementor):
+ * transformar uma seção (as cópias dela nas outras páginas saem), mostrar ou
+ * tirar numa página, ou voltar a seção comum. Cada um é um passo do Ctrl+Z.
+ */
+function part(params: { action: 'make' | 'show' | 'hide' | 'unlink'; kind: PagePartKind; section?: string; page?: string }, ctx: CallContext) {
+  requireProject()
+  if (params.kind !== 'header' && params.kind !== 'footer') throw new Error('Diga header (cabeçalho) ou footer (rodapé)')
+  const store = useSpaceStore.getState()
+  const { pages, nodes } = store
+  const label = PART_LABEL[params.kind]
+  const existing = partPage(pages, params.kind)
+
+  if (params.action === 'make') {
+    if (existing) throw new Error(`O projeto já tem o ${label.toLowerCase()} (${existing.name}). Para pôr uma página nele, tire a cópia dela (remove) e use show.`)
+    const section = findNode(nodes, params.section ?? '')
+    if (pageOf(pages, section.id)?.part) throw new Error('Essa seção já é de um componente')
+    // Como na janela do canvas: as cópias parecidas das outras páginas saem, e a página passa a mostrar o componente
+    const copies = findPartCopies(section.id, params.kind, pages, nodes)
+    const partId = store.makePagePart(section.id, params.kind, { remove: copies.filter((c) => c.copy).map((c) => c.copy!.id) })
+    if (!partId) throw new Error('Não deu para transformar essa seção')
+    note(ctx, 'change', `${(section.data as SectionNodeData).title} virou o ${label.toLowerCase()}`, [section.id])
+    const after = useSpaceStore.getState().pages
+    const created = after.find((p) => p.id === partId)!
+    return {
+      partId,
+      name: created.name,
+      shownIn: partShownIn(created, after).map((p) => p.name),
+      removed: copies.filter((c) => c.copy).map((c) => ({ page: c.page.name, title: (c.copy!.data as SectionNodeData).title, same: c.same })),
+    }
+  }
+  if (!existing) throw new Error(`O projeto não tem ${label.toLowerCase()}`)
+  if (params.action === 'unlink') {
+    const count = store.unlinkPagePart(existing.id)
+    if (!count) throw new Error(`O ${label.toLowerCase()} não aparece em nenhuma página: exclua a folha dele (page-remove) se não serve mais`)
+    note(ctx, 'change', `${label} voltou a ser seção comum em ${count} páginas`)
+    return { pages: count }
+  }
+  const page = findPage(pages, params.page)
+  if (page.part) throw new Error('Diga uma página do site, não a folha de um componente')
+  store.setPartShown(existing.id, page.id, params.action === 'show')
+  return { page: page.name, shown: params.action === 'show', shownIn: partShownIn(existing, useSpaceStore.getState().pages).map((p) => p.name) }
+}
+
 const METHODS: Record<string, (params: never, ctx: CallContext) => unknown> = {
   status, pull, apply, focus, say, work, plan, render, view, projects, open, create, brand,
-  brief, approval, invite, wordpress, details, publish, restore,
+  brief, approval, invite, wordpress, details, publish, restore, part, partPlan,
 }
 
 // ---------- projetos em segundo plano (só na tela de uma pessoa) ----------

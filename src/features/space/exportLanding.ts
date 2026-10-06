@@ -9,13 +9,13 @@ import { applyMediaReplacements, collectImageUrls, dropCustomImageSizes, type Me
 import { getSiteKit } from '@/features/wordpress/siteKitStore'
 import { isFromSite, renderKit } from './renderKit'
 import { getActiveBrand } from './brand/brandStore'
-import { pageSections, pageSlug } from './pages/pages'
+import { pageContent, pageSlug } from './pages/pages'
 
-/** A página indicada, ou a ativa, montada com a marca. */
+/** A página indicada, ou a ativa, montada com a marca, com o cabeçalho e o rodapé do site. */
 const buildPage = (pageId?: string | null) => {
   const { nodes, connections, pages, activePageId } = useSpaceStore.getState()
   const page = pages.find((p) => p.id === (pageId ?? activePageId)) ?? pages[0]
-  const sections = page ? pageSections(page, nodes) : []
+  const sections = page ? pageContent(page, pages, nodes) : []
   return { name: page?.name ?? 'Página', fromSite: sections.some(isFromSite), ...buildLandingPage(sections, nodes, connections, getActiveBrand()) }
 }
 

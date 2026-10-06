@@ -32,6 +32,7 @@ Escreva no painel do Claude no canvas (`space say "…"`) ao entrar, antes de ca
    - **Seção nova:** crie um arquivo na pasta da página, sem `id`, com `title`, `place` (`{ "after": "<seção>" }`, `"before"` ou `"index"`) e `elements`. O melhor ponto de partida é uma seção da própria página: mesmo padrão, mesma marca. Para montar com o builder do cliente, escreva `.space/<projeto>/build/<nome>.ts` com `export default { title, place, elements }` e rode `space build <arquivo.ts>`, que gera o `.json`.
    - **Gravar:** `space push <arquivos> --label "<o que mudou, em português simples>"`. Faça um push por mudança combinada: cada um vira um passo do Ctrl+Z e uma linha no painel, e as seções mexidas ficam marcadas "Claude mudou" ou "Claude criou".
    - **Tirar, mover ou criar página:** `space remove <seção> --label "…"`, `space move <seção> --after <seção> --label "…"`, `space page-add <nome>`.
+   - **Cabeçalho e rodapé do site (componentes):** o `status` marca com ◆ a folha do componente e as páginas que o mostram. Ele existe uma vez só: para mudar o menu ou o rodapé, mude a folha dele (`pull --page "Cabeçalho do site"`), nunca ponha uma cópia numa página. Num site de várias páginas com o mesmo cabeçalho, transforme-o com `space part header --from <seção> --page <página>` (as cópias parecidas das outras páginas saem); `space part header --page <nome> --off` tira de uma página (uma landing de anúncio, por exemplo).
    - **Página que já está no site do cliente:** `space wp pages` lista o site e `space wp import <id>` traz a página para o canvas. As seções chegam marcadas `[do site]`.
 6. **Conferir.** `space shot --section <seção> --device all` (desktop e celular). Leia as fotos e corrija antes de seguir. As fotos saem sem animação, de propósito: o movimento se confere no vídeo (passo 8).
 7. **Iterar com o cliente.**
@@ -73,6 +74,7 @@ Escreva no painel do Claude no canvas (`space say "…"`) ao entrar, antes de ca
 | `pull [--page <nome>]` | Baixar páginas para `.space/<projeto>/` (sem `--page`, todas) |
 | `push <arquivo\|pasta>… --label "…"` | Gravar as seções alteradas e as novas (só as que mudaram desde a leitura) |
 | `remove`, `move`, `page-add`, `page-remove` | Tirar uma seção, mudar a ordem, criar ou tirar uma página |
+| `part header\|footer --from <seção>` / `--page <nome> --on\|--off` / `--unlink` | Transformar a seção no cabeçalho (rodapé) do site, que aparece em todas as páginas; mostrar ou tirar numa página; voltar a seção comum |
 | `plan "<seção>"… --new <página>` | Pôr o plano no canvas em esqueleto borrado (ou `--page <nome> --after <seção>`) |
 | `work "…" --section <seção> [--element <id>]` / `work --done` | Mostrar onde o agente está mexendo e levar o cursor dele até lá (até a camada, se ela estiver selecionada); `say --kind done` também limpa |
 | `build <arquivo.ts>` | Gerar a seção com os builders do repo (alias `@` para `src`) |

@@ -18,17 +18,35 @@ export const googleFontsUrl = (families: string[]) => {
   return `https://fonts.googleapis.com/css?family=${list.map((f) => `${encodeURIComponent(f).replace(/%20/g, '+')}:${weights}`).join('%7C')}&display=swap`;
 };
 
-/** Script mínimo para as setas e os pontos do carrossel (o Elementor usa Swiper). */
+/**
+ * Script mínimo para as setas e os pontos do carrossel (o Elementor usa Swiper).
+ * `data-se-loop` volta ao início depois do último; `data-se-autoplay` (ms) avança
+ * sozinho, parando sob o mouse, com a aba escondida e com movimento reduzido.
+ */
 const CAROUSEL_SCRIPT = `
 document.querySelectorAll('[data-se-carousel]').forEach(function (track) {
   var widget = track.closest('.elementor-widget');
   var group = function () { var g = (track.dataset.seScroll || '1,1,1').split(','); return Number(innerWidth <= 767 ? g[2] : innerWidth <= 1024 ? g[1] : g[0]) || 1; };
-  var slide = function () { var s = track.querySelector('.swiper-slide'); return s ? s.getBoundingClientRect().width + parseFloat(getComputedStyle(track).columnGap || 0) : track.clientWidth; };
+  var slide = function () { var s = track.querySelector('.swiper-slide'); return s ? s.getBoundingClientRect().width + (parseFloat(getComputedStyle(track).columnGap) || 0) : track.clientWidth; };
   var step = function () { return slide() * group(); };
+  var loop = track.hasAttribute('data-se-loop');
+  var go = function (dir) {
+    var end = track.scrollWidth - track.clientWidth;
+    if (loop && dir > 0 && track.scrollLeft >= end - 2) track.scrollTo({ left: 0 });
+    else if (loop && dir < 0 && track.scrollLeft <= 2) track.scrollTo({ left: end });
+    else track.scrollBy({ left: dir * step() });
+  };
   var prev = widget.querySelector('.elementor-swiper-button-prev');
   var next = widget.querySelector('.elementor-swiper-button-next');
-  if (prev) prev.addEventListener('click', function () { track.scrollBy({ left: -step() }); });
-  if (next) next.addEventListener('click', function () { track.scrollBy({ left: step() }); });
+  if (prev) prev.addEventListener('click', function () { go(-1); });
+  if (next) next.addEventListener('click', function () { go(1); });
+  var delay = Number(track.dataset.seAutoplay);
+  if (delay > 0 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    var hold = false;
+    widget.addEventListener('pointerenter', function () { hold = true; });
+    widget.addEventListener('pointerleave', function () { hold = false; });
+    setInterval(function () { if (!hold && !document.hidden) go(1); }, delay);
+  }
   var bullets = widget.querySelectorAll('.swiper-pagination-bullet');
   bullets.forEach(function (b, i) { b.addEventListener('click', function () { track.scrollTo({ left: i * step() }); }); });
   track.addEventListener('scroll', function () {

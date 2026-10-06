@@ -1,7 +1,7 @@
 import { responsive } from '../context';
-import { border, color, dims, escapeAttr, escapeHtml, isEmpty, rv, slider, sliderNumber, typography } from '../css';
+import { border, color, dims, escapeAttr, escapeHtml, isEmpty, rv, slider, sliderNumber, textShadow, typography } from '../css';
 import { hasIcon, renderIcon } from '../icons';
-import { richText, safeTag, type WidgetRenderer } from './shared';
+import { linkAttrs, richText, safeTag, type WidgetRenderer } from './shared';
 
 const formatNumber = (value: unknown, separator: string | false) => {
   const n = Number(value);
@@ -152,6 +152,132 @@ const nestedCarousel: WidgetRenderer = ({ el, s, sel, ctx }) => {
   return `<div class="e-n-carousel"><div class="swiper-wrapper" data-se-carousel data-se-scroll="${scroll}">${slides.join('')}</div>${arrows}</div>${dots}`;
 };
 
+const H_POSITION: Record<string, string> = { left: 'flex-start', center: 'center', right: 'flex-end' };
+const V_POSITION: Record<string, string> = { top: 'flex-start', middle: 'center', bottom: 'flex-end' };
+
+/**
+ * Slides (Pro): um slide por vez, cada um com fundo (cor, imagem, camada por
+ * cima), título, descrição e botão. O Elementor usa Swiper; aqui é o mesmo
+ * carrossel com scroll-snap do aninhado. A transição "fade" também desliza, e
+ * a troca automática só roda com `motion: 'play'` (a miniatura fica parada).
+ */
+const slides: WidgetRenderer = ({ el, s, sel, ctx, classes }) => {
+  ctx.flags.carousel = true;
+  const list: Record<string, any>[] = Array.isArray(s.slides) ? s.slides.filter((item: unknown) => item && typeof item === 'object') : [];
+  const navigation = s.navigation ?? 'both';
+  const arrowsOn = (navigation === 'both' || navigation === 'arrows') && list.length > 1;
+  const dotsOn = (navigation === 'both' || navigation === 'dots') && list.length > 1;
+  const dotsOutside = s.dots_position === 'outside';
+
+  classes.push(
+    `elementor--h-position-${escapeAttr(s.slides_horizontal_position || 'center')}`,
+    `elementor--v-position-${escapeAttr(s.slides_vertical_position || 'middle')}`,
+    `elementor-arrows-position-${s.arrows_position === 'outside' ? 'outside' : 'inside'}`,
+    `elementor-pagination-position-${dotsOutside ? 'outside' : 'inside'}`,
+  );
+
+  responsive(ctx, `${sel} .swiper-slide`, (d) => slider(rv(s, 'slides_height', d)) && `height:${slider(rv(s, 'slides_height', d))}`);
+  responsive(ctx, `${sel} .swiper-slide-contents`, (d) => slider(rv(s, 'content_max_width', d), '%') && `max-width:${slider(rv(s, 'content_max_width', d), '%')}`);
+  responsive(ctx, `${sel} .swiper-slide-inner`, (d) => [
+    dims(rv(s, 'slides_padding', d)) && `padding:${dims(rv(s, 'slides_padding', d))}`,
+    rv(s, 'slides_text_align', d) && `text-align:${rv(s, 'slides_text_align', d)}`,
+  ]);
+  ctx.sheet.add(`${sel} .swiper-slide-contents`, textShadow(s, 'text_shadow'));
+
+  // Título, descrição e botão: espaço abaixo, cor e tipografia
+  const heading = `${sel} .swiper-slide-inner .elementor-slide-heading`;
+  const description = `${sel} .swiper-slide-inner .elementor-slide-description`;
+  const button = `${sel} .swiper-slide-inner .elementor-slide-button`;
+  responsive(ctx, `${heading}:not(:last-child)`, (d) => slider(rv(s, 'heading_spacing', d)) && `margin-bottom:${slider(rv(s, 'heading_spacing', d))}`);
+  responsive(ctx, `${description}:not(:last-child)`, (d) => slider(rv(s, 'description_spacing', d)) && `margin-bottom:${slider(rv(s, 'description_spacing', d))}`);
+  ctx.sheet.add(heading, color(s, 'heading_color') && `color:${color(s, 'heading_color')}`);
+  ctx.sheet.add(description, color(s, 'description_color') && `color:${color(s, 'description_color')}`);
+  responsive(ctx, heading, (d) => typography(s, 'heading_typography', d, ctx.fonts));
+  responsive(ctx, description, (d) => typography(s, 'description_typography', d, ctx.fonts));
+  responsive(ctx, button, (d) => typography(s, 'button_typography', d, ctx.fonts));
+  const radius = slider(s.button_border_radius) || dims(s.button_border_radius);
+  ctx.sheet.add(button, [
+    slider(s.button_border_width) && `border-width:${slider(s.button_border_width)}`,
+    radius && `border-radius:${radius}`,
+    color(s, 'button_text_color') && `color:${color(s, 'button_text_color')};border-color:${color(s, 'button_text_color')}`,
+    color(s, 'button_background_color') && `background-color:${color(s, 'button_background_color')}`,
+    color(s, 'button_border_color') && `border-color:${color(s, 'button_border_color')}`,
+  ]);
+  ctx.sheet.add(`${button}:hover`, [
+    color(s, 'button_hover_text_color') && `color:${color(s, 'button_hover_text_color')}`,
+    color(s, 'button_hover_background_color') && `background-color:${color(s, 'button_hover_background_color')}`,
+    color(s, 'button_hover_border_color') && `border-color:${color(s, 'button_hover_border_color')}`,
+  ]);
+
+  // Setas e pontos
+  ctx.sheet.add(`${sel} .elementor-swiper-button`, [
+    slider(s.arrows_size) && `font-size:${slider(s.arrows_size)}`,
+    color(s, 'arrows_color') && `color:${color(s, 'arrows_color')};fill:${color(s, 'arrows_color')}`,
+  ]);
+  const dotSize = slider(s.dots_size);
+  ctx.sheet.add(`${sel} .swiper-pagination-bullet`, [
+    dotSize && `width:${dotSize};height:${dotSize}`,
+    color(s, 'dots_color') && `background:${color(s, 'dots_color')}`,
+  ]);
+
+  const headingTag = safeTag(s.title_tag, 'div');
+  const descriptionTag = safeTag(s.description_tag, 'div');
+  const size = escapeAttr(s.button_size || 'sm');
+
+  const items = list.map((slide, i) => {
+    const id = String(slide._id || `${el.id}${i}`).replace(/[^\w-]/g, '');
+    const item = `${sel} .elementor-repeater-item-${id}`;
+    const image = slide.background_image?.url;
+    ctx.sheet.add(`${item} .swiper-slide-bg`, [
+      color(slide, 'background_color') && `background-color:${color(slide, 'background_color')}`,
+      image && `background-image:url("${String(image).replace(/"/g, '%22')}")`,
+      slide.background_size && `background-size:${slide.background_size}`,
+    ]);
+    const overlay = slide.background_overlay === 'yes';
+    if (overlay) {
+      ctx.sheet.add(`${item} .elementor-background-overlay`, [
+        color(slide, 'background_overlay_color') && `background-color:${color(slide, 'background_overlay_color')}`,
+        slide.background_overlay_blend_mode && `mix-blend-mode:${slide.background_overlay_blend_mode}`,
+      ]);
+    }
+    if (slide.custom_style === 'yes') {
+      ctx.sheet.add(`${item} .swiper-slide-inner`, [
+        H_POSITION[slide.horizontal_position] && `justify-content:${H_POSITION[slide.horizontal_position]}`,
+        V_POSITION[slide.vertical_position] && `align-items:${V_POSITION[slide.vertical_position]}`,
+        slide.text_align && `text-align:${slide.text_align}`,
+      ]);
+      const content = color(slide, 'content_color');
+      if (content) {
+        ctx.sheet.add(`${item} .swiper-slide-inner .elementor-slide-heading, ${item} .swiper-slide-inner .elementor-slide-description`, `color:${content}`);
+        ctx.sheet.add(`${item} .swiper-slide-inner .elementor-slide-button`, `color:${content};border-color:${content}`);
+      }
+      ctx.sheet.add(`${item} .swiper-slide-contents`, textShadow(slide, 'repeater_text_shadow'));
+    }
+
+    // O link vale para o slide inteiro ou só para o botão (link_click)
+    const href = slide.link?.url ? linkAttrs(slide.link) : '';
+    const onButton = href && slide.link_click === 'button';
+    const innerTag = href && !onButton ? 'a' : 'div';
+    const buttonTag = onButton ? 'a' : 'div';
+    const parts = [
+      !isEmpty(slide.heading) && `<${headingTag} class="elementor-slide-heading">${richText(slide.heading)}</${headingTag}>`,
+      !isEmpty(slide.description) && `<${descriptionTag} class="elementor-slide-description">${richText(slide.description)}</${descriptionTag}>`,
+      !isEmpty(slide.button_text) && `<${buttonTag}${onButton ? href : ''} class="elementor-button elementor-slide-button elementor-size-${size}">${escapeHtml(slide.button_text)}</${buttonTag}>`,
+    ].filter(Boolean);
+    return `<div class="elementor-repeater-item-${id} swiper-slide" role="group" aria-roledescription="slide" aria-label="${i + 1} / ${list.length}"><div class="swiper-slide-bg" role="img"></div>${overlay ? '<div class="elementor-background-overlay"></div>' : ''}<${innerTag} class="swiper-slide-inner"${innerTag === 'a' ? href : ''}><div class="swiper-slide-contents">${parts.join('')}</div></${innerTag}></div>`;
+  });
+
+  const autoplay = ctx.motion === 'play' && s.autoplay !== '' && list.length > 1 ? ` data-se-autoplay="${escapeAttr(sliderNumber(s.autoplay_speed) ?? 5000)}"` : '';
+  const loop = s.infinite !== '' ? ' data-se-loop' : '';
+  const dots = dotsOn
+    ? `<div class="swiper-pagination">${list.map((_, i) => `<span class="swiper-pagination-bullet${i === 0 ? ' swiper-pagination-bullet-active' : ''}" data-index="${i}"></span>`).join('')}</div>`
+    : '';
+  const arrows = arrowsOn
+    ? `<div class="elementor-swiper-button elementor-swiper-button-prev" role="button" tabindex="0" aria-label="Slide anterior">${CHEVRON('left')}</div><div class="elementor-swiper-button elementor-swiper-button-next" role="button" tabindex="0" aria-label="Próximo slide">${CHEVRON('right')}</div>`
+    : '';
+  return `<div class="elementor-swiper"><div class="elementor-slides-wrapper elementor-main-swiper swiper" dir="ltr"><div class="swiper-wrapper elementor-slides" data-se-carousel data-se-scroll="1,1,1"${loop}${autoplay}>${items.join('')}</div>${dotsOutside ? '' : dots}</div>${arrows}</div>${dotsOutside ? dots : ''}`;
+};
+
 const TEXT_FIELDS = new Set(['text', 'email', 'tel', 'url', 'number', 'password', 'date', 'time', 'search']);
 
 /** Formulário (Pro). Renderiza os campos; o envio não faz nada fora do WordPress. */
@@ -281,6 +407,7 @@ const searchForm: WidgetRenderer = ({ el, s, sel, ctx }) => {
 export const proWidgets: Record<string, WidgetRenderer> = {
   counter,
   'nested-carousel': nestedCarousel,
+  slides,
   form,
   'search-form': searchForm,
 };

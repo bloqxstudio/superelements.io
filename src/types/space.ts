@@ -34,6 +34,12 @@ export interface SectionNodeData {
   origin?: SectionOrigin
   /** Settings ajustadas à mão no painel de propriedades, por id do elemento: valem por cima da marca. */
   pinned?: Record<string, string[]>
+  /**
+   * Instância de um componente: a seção não tem conteúdo próprio e mostra as
+   * seções da folha do componente (`SpacePage.part.kind === 'section'`), sem
+   * cópia. No site com Elementor Pro, vira o widget Modelo apontando para ele.
+   */
+  instanceOf?: string
 }
 
 /** Elemento aberto no Navigator. Vive só na sessão e não entra no JSON do projeto. */
@@ -82,6 +88,23 @@ export interface SpacePage {
   wordpress?: PageWordPressLink
   /** Título, endereço, SEO e imagem destacada que vão junto ao publicar. */
   details?: PageDetails
+  /** Esta folha é uma parte do site (cabeçalho ou rodapé), não uma página: aparece nas outras. */
+  part?: PagePart
+}
+
+/** Cabeçalho e rodapé aparecem sozinhos em todas as páginas; a seção (componente livre) entra onde for posta. */
+export type PagePartKind = 'header' | 'footer' | 'section'
+
+/**
+ * Parte que se repete no site, como os modelos de cabeçalho e rodapé do Theme
+ * Builder do Elementor: as seções existem uma vez só, na folha da parte, e
+ * cada página mostra a mesma parte em cima (ou embaixo). Mudou nela, muda em
+ * todas.
+ */
+export interface PagePart {
+  kind: PagePartKind
+  /** Páginas que ficam sem esta parte (a exceção da condição do Elementor). Sem nenhuma, vale para o site inteiro. */
+  exclude?: string[]
 }
 
 /** O que a página leva ao site além das seções. Campo vazio fica com o padrão do WordPress ou do plugin de SEO. */
@@ -128,6 +151,8 @@ export interface PageWordPressLink {
   /** `modified_gmt` do WordPress na última importação ou publicação, para saber se alguém mexeu depois. */
   modifiedGmt: string
   syncedAt: number
+  /** Componente: resumo do conteúdo publicado, para saber se a folha mudou depois. */
+  contentHash?: string
 }
 
 /** Onde uma seção arrastada entraria: página e posição na coluna (contada sem a própria seção). */

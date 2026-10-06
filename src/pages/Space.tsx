@@ -8,12 +8,14 @@ import { useSpaceUi } from '@/features/space/spaceUi'
 import { PagePlayer } from '@/features/space/pages/PagePlayer'
 import { useSectionShortcuts } from '@/features/space/pages/useSectionShortcuts'
 import { LibraryDragChip } from '@/features/space/pages/LibraryDragChip'
+import { MakePartDialog } from '@/features/space/pages/MakePartDialog'
 import { WordPressImportDialog } from '@/features/wordpress/WordPressImportDialog'
 import { WordPressPageDialogs } from '@/features/wordpress/WordPressPageDialogs'
 import { useEditorShortcuts } from '@/features/space/editor/useEditorShortcuts'
 import { useFrameGestureGuard } from '@/features/space/editor/frames'
 import { AgentCursors } from '@/features/space/chat/AgentCursors'
 import { useShareAgentCursors } from '@/features/space/presence/shareAgentCursors'
+import { useActivityLog } from '@/features/space/history/activity'
 
 const NO_INSETS = { left: 0, right: 0 }
 
@@ -30,6 +32,8 @@ const Space: React.FC = () => {
   useFrameGestureGuard()
   // O cursor do meu agente aparece para quem mais está no projeto, e o deles para mim
   useShareAgentCursors()
+  // Exclusões vão para o histórico, com a cópia para a lixeira
+  useActivityLog()
 
   // Ctrl+\ esconde os dois painéis e deixa só o canvas, como no Framer e no Figma
   useEffect(() => {
@@ -59,6 +63,7 @@ const Space: React.FC = () => {
       <LibraryDragChip />
       <WordPressImportDialog />
       <WordPressPageDialogs />
+      <MakePartDialog />
     </div>
   )
 }

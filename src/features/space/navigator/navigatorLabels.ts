@@ -1,4 +1,5 @@
 import type { SectionElement } from '@/features/space/landingPage'
+import { widgetName } from '@/engine/elementor'
 
 export interface LayerContext {
   sectionTitle: string
@@ -178,7 +179,7 @@ const containerLabel = (element: SectionElement, context: LayerContext) => {
 }
 
 export const layerKind = (element: SectionElement) => {
-  if (element.widgetType) return WIDGET_LABELS[element.widgetType] ?? element.widgetType.replace(/[-_]+/g, ' ')
+  if (element.widgetType) return WIDGET_LABELS[element.widgetType] ?? widgetName(element.widgetType)
   if (element.elType === 'column') return 'Coluna'
   if (element.elType === 'section') return 'Seção interna'
   return 'Container'
@@ -189,7 +190,7 @@ export const layerName = (element: SectionElement, context: LayerContext) => {
   if (custom) return custom
   if (!element.widgetType) return containerLabel(element, context)
   const content = contentOf(element)
-  return content || WIDGET_LABELS[element.widgetType] || element.widgetType.replace(/[-_]+/g, ' ')
+  return content || WIDGET_LABELS[element.widgetType] || widgetName(element.widgetType)
 }
 
 export const layerSearchText = (element: SectionElement, context: LayerContext) =>

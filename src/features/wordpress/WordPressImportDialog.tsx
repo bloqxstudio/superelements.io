@@ -9,6 +9,9 @@ import { useSpaceStore } from '@/store/spaceStore'
 import { cn } from '@/lib/utils'
 import { designMdFromSite } from './brand'
 import { ELEMENTOR_REST_VERSION, fetchSiteKit, fetchSiteLogo, fetchSitePage, listSitePages, type SiteLogo, type SitePageList } from './site'
+import { importSiteGlobal, listSiteGlobals, resolveTemplateInstances, type GlobalKind } from './siteImport'
+import type { SitePart } from './siteParts'
+import { PART_LABEL } from '@/features/space/pages/pages'
 import { useSiteKitStore, type SiteKit } from './siteKitStore'
 import { detectSeo } from './seo'
 import { STATUS_LABELS, useWordPressUi, wpDate } from './uiStore'
@@ -119,6 +122,9 @@ export const WordPressImportDialog: React.FC = () => {
   const [load, setLoad] = useState<Load>({ status: 'loading' })
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [progress, setProgress] = useState<string | null>(null)
+  // Cabeçalho e rodapé do Theme Builder (null: o site não tem, ou falta o Connector 0.2)
+  const [globals, setGlobals] = useState<{ kind: GlobalKind; part: SitePart }[] | null>(null)
+  const [selectedGlobals, setSelectedGlobals] = useState<Set<number>>(new Set())
 
   const refresh = useCallback(async () => {
     if (!connection) return
@@ -133,6 +139,16 @@ export const WordPressImportDialog: React.FC = () => {
         fetchSiteLogo(connection).catch(() => null),
       ])
       setLoad({ status: 'ready', list, kit: kit.kit, kitError: kit.error, logo })
+      const found = await listSiteGlobals(connection).catch(() => null)
+      setGlobals(found)
+      // Vem marcado o mais recente de cada tipo, se o projeto ainda não tem um
+      const parts = useSpaceStore.getState().pages
+      const wanted = new Set<number>()
+      for (const kind of ['header', 'footer'] as const) {
+        const first = found?.find((g) => g.kind === kind)
+        if (first && !parts.some((p) => p.part?.kind === kind)) wanted.add(first.part.id)
+      }
+      setSelectedGlobals(wanted)
     } catch (error) {
       setLoad({ status: 'error', message: errorText(error) })
     }
@@ -141,6 +157,8 @@ export const WordPressImportDialog: React.FC = () => {
   useEffect(() => {
     if (!open) return
     setSelected(new Set())
+    setSelectedGlobals(new Set())
+    setGlobals(null)
     setProgress(null)
     refresh()
   }, [open, refresh])
@@ -163,6 +181,8 @@ export const WordPressImportDialog: React.FC = () => {
   const importSelected = async () => {
     if (!connection || load.status !== 'ready') return
     const ids = [...selected]
+    const components = new Set<string>()
+    const notes: string[] = []
     // As seções do site apontam para as cores globais dele: o Kit entra junto
     if (load.kit) useSiteKitStore.getState().setKit(load.kit)
 
@@ -173,23 +193,50 @@ export const WordPressImportDialog: React.FC = () => {
       setProgress(`Importando ${index + 1} de ${ids.length}…`)
       try {
         const page = await fetchSitePage(connection, id, seo)
+        // Seções que são só o widget Modelo viram instâncias do componente daquele modelo
+        const resolved = await resolveTemplateInstances(connection, page.sections)
+        resolved.components.forEach((name) => components.add(name))
         const { pages, loadSitePage, setPageDetails } = useSpaceStore.getState()
         const existing = pages.find((p) => p.wordpress?.postId === id && p.wordpress.siteUrl === connection.site.siteUrl)
-        setPageDetails(loadSitePage(page.name, page.sections, page.link, existing?.id), page.details)
+        setPageDetails(loadSitePage(page.name, resolved.sections, page.link, existing?.id), page.details)
         imported++
       } catch (error) {
         const title = load.list.pages.find((p) => p.id === id)?.title ?? `Página ${id}`
         failed.push(`${title}: ${errorText(error)}`)
       }
     }
+    // Depois das páginas: as que o cabeçalho deixa de fora já estão ligadas e viram exceções no canvas
+    const globalIds = [...selectedGlobals]
+    for (const [index, gid] of globalIds.entries()) {
+      const global = globals?.find((g) => g.part.id === gid)
+      if (!global) continue
+      setProgress(`Trazendo ${PART_LABEL[global.kind].toLowerCase()} (${index + 1} de ${globalIds.length})…`)
+      try {
+        const result = await importSiteGlobal(connection, gid, global.kind)
+        imported++
+        if (result.partial) notes.push(`${result.name} não vale no site inteiro no Elementor; no canvas aparece em todas as páginas`)
+        if (result.kept.length) notes.push(`${result.name} tem condições que o canvas não mostra (${result.kept.join(', ')}); publicar daqui mantém`)
+      } catch (error) {
+        failed.push(`${global.part.title}: ${errorText(error)}`)
+      }
+    }
     setProgress(null)
 
-    if (imported) toast.success(`${plural(imported, 'página importada', 'páginas importadas')} do WordPress`)
+    if (components.size) notes.unshift(`Componentes trazidos dos modelos salvos: ${[...components].join(', ')}`)
+    if (imported) toast.success(`${plural(imported, 'item importado', 'itens importados')} do WordPress`, notes.length ? { description: notes.join('. ') } : undefined)
     if (failed.length) toast.error(`${plural(failed.length, 'página não veio', 'páginas não vieram')}`, { description: failed.join('\n') })
     if (!failed.length) close()
   }
 
   const relinked = [...selected].filter((id) => linked.has(id)).length
+  const total = selected.size + selectedGlobals.size
+  const toggleGlobal = (id: number) =>
+    setSelectedGlobals((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   let body: React.ReactNode
   if (!connection) {
@@ -269,7 +316,40 @@ export const WordPressImportDialog: React.FC = () => {
               site.
             </p>
           )}
+          <p className="text-xs text-muted-foreground">Seções que são só o widget Modelo do Elementor viram componentes no canvas, ligados ao mesmo modelo.</p>
         </section>
+
+        {globals && globals.length > 0 && (
+          <section className="grid gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Cabeçalho e rodapé do site (Theme Builder)</h3>
+            <ul className="divide-y rounded-lg border">
+              {globals.map(({ kind, part }) => {
+                const current = canvasPages.find((p) => p.part?.kind === kind)
+                const same = current?.wordpress?.siteUrl === connection.site.siteUrl && current.wordpress.postId === part.id
+                // O projeto já tem outro cabeçalho: trazer este criaria dois
+                const blocked = !!current && !same
+                return (
+                  <li key={part.id}>
+                    <label className={cn('flex items-center gap-3 px-4 py-2.5 text-sm transition-colors', blocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-50')}>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 shrink-0 accent-cyan-700"
+                        checked={selectedGlobals.has(part.id)}
+                        disabled={blocked || !!progress}
+                        onChange={() => toggleGlobal(part.id)}
+                      />
+                      <span className="min-w-0 flex-1 truncate font-medium text-gray-900">{part.title}</span>
+                      <Chip tone={same ? 'violet' : undefined}>{same ? 'No canvas' : PART_LABEL[kind]}</Chip>
+                      {blocked && <Chip tone="muted">O projeto já tem um</Chip>}
+                      <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:inline">{wpDate(part.modified_gmt)}</span>
+                    </label>
+                  </li>
+                )
+              })}
+            </ul>
+            <p className="text-xs text-muted-foreground">Entra como componente: uma folha só, mostrada em todas as páginas. Publicar daqui atualiza o mesmo modelo.</p>
+          </section>
+        )}
       </div>
     )
   }
@@ -289,9 +369,9 @@ export const WordPressImportDialog: React.FC = () => {
           <Button type="button" variant="ghost" onClick={close} disabled={!!progress}>
             Fechar
           </Button>
-          <Button type="button" onClick={importSelected} disabled={!selected.size || !!progress || load.status !== 'ready'}>
+          <Button type="button" onClick={importSelected} disabled={!total || !!progress || load.status !== 'ready'}>
             {progress && <Loader2 className="animate-spin" aria-hidden />}
-            {progress ?? (selected.size ? `Importar ${plural(selected.size, 'página', 'páginas')}` : 'Importar')}
+            {progress ?? (total ? `Importar ${selectedGlobals.size ? plural(total, 'item', 'itens') : plural(total, 'página', 'páginas')}` : 'Importar')}
           </Button>
         </DialogFooter>
       </DialogContent>

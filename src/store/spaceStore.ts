@@ -9,11 +9,21 @@ import {
   SECTION_GAP,
   SECTION_WIDTH,
   canvasSections,
+  PART_GAP,
+  PART_LABEL,
+  componentPage,
+  instanceOf,
+  sectionsHeight,
   nextPageName,
   nextPagePosition,
+  nextPartPosition,
   pageFrame,
   pageOf,
+  pageParts,
   pageSlots,
+  partPage,
+  partShownIn,
+  sitePages,
 } from '@/features/space/pages/pages'
 import { instantiateSnapshot, snapshotSections, type SectionSnapshot } from '@/features/space/pages/clipboard'
 import { findElement } from '@/features/space/navigator/elementorContentEditor'
@@ -28,6 +38,7 @@ import type {
   CanvasTransform,
   PendingConnection,
   NodeType,
+  PagePartKind,
   SectionNodeData,
   TextNodeData,
   ColorPaletteNodeData,
@@ -156,10 +167,40 @@ interface SpaceActions {
   /** Cópia da página, com as seções e os textos/paletas ligados a elas, à direita das outras. */
   duplicatePage: (id: string) => void
   /**
+   * Transforma a seção em parte do site (cabeçalho ou rodapé): ela sai da
+   * página para uma folha própria e aparece em todas as páginas. As cópias
+   * que estavam nas outras páginas saem (`remove`, vão para a lixeira); as
+   * páginas de `exclude` ficam sem a parte. Devolve o id da folha.
+   */
+  makePagePart: (sectionId: string, kind: PagePartKind, plan?: { remove?: string[]; exclude?: string[] }) => string | null
+  /** A parte volta a ser seção comum: cada página que a mostrava ganha uma cópia, e a folha sai. Devolve quantas páginas. */
+  unlinkPagePart: (partId: string) => number
+  /** Mostra (ou tira) a parte do site nesta página. */
+  setPartShown: (partId: string, pageId: string, shown: boolean) => void
+  /** Tira a seção da página e deixa a página mostrar a parte do site no lugar dela. */
+  replaceWithPart: (sectionId: string, partId: string) => void
+  /**
+   * Transforma a seção num componente livre: ela sai da página para uma folha
+   * própria e, no lugar dela, fica uma instância. As cópias de outras páginas
+   * (`replace`) viram instâncias também (as cópias vão para a lixeira).
+   * Devolve o id da folha.
+   */
+  makeComponent: (sectionId: string, replace?: string[]) => string | null
+  /** Põe uma instância do componente na página (na posição, ou no fim); devolve o id dela. */
+  insertInstance: (componentId: string, pageId: string, index?: number) => string | null
+  /** A instância vira cópias comuns das seções do componente, no mesmo lugar; devolve quantas. */
+  detachInstance: (nodeId: string) => number
+  /**
    * Página vinda do WordPress: uma nova, ou `replacePageId` com as seções
    * trocadas pela versão do site. Devolve o id da página.
    */
   loadSitePage: (name: string, sections: SectionNodeData[], link: PageWordPressLink, replacePageId?: string) => string
+  /**
+   * Cabeçalho, rodapé ou componente vindo de um modelo do Elementor do site: a
+   * folha ligada a esse modelo tem as seções trocadas pela versão do site;
+   * sem ela, entra uma folha nova. Devolve o id da folha.
+   */
+  loadSitePart: (kind: PagePartKind, name: string, sections: SectionNodeData[], link: PageWordPressLink, exclude?: string[]) => string
   /** Liga a página do canvas a uma página do WordPress (ou desliga, sem link). */
   setPageWordPress: (pageId: string, link: PageWordPressLink | undefined) => void
   /** Título, endereço, SEO e imagem destacada da página. */
@@ -259,12 +300,19 @@ function moveSections(nodes: SpaceNode[], connections: SpaceConnection[], positi
   })
 }
 
-/** Põe as seções da página nos lugares da coluna dela. */
-const layoutPage = (page: SpacePage, nodes: SpaceNode[], connections: SpaceConnection[]) =>
-  moveSections(nodes, connections, pageSlots(page, nodes))
+/**
+ * Põe as seções da página nos lugares da coluna dela, abaixo do cabeçalho do
+ * site. `pages` é o conjunto já com a página como ficou. Mexer numa parte do
+ * site (cabeçalho, rodapé) muda a altura de todas as páginas que a mostram.
+ */
+const layoutPage = (page: SpacePage, nodes: SpaceNode[], connections: SpaceConnection[], pages: SpacePage[]): SpaceNode[] =>
+  page.part ? layoutPages(pages, nodes, connections) : moveSections(nodes, connections, pageSlots(page, nodes, pages))
 
 const layoutPages = (pages: SpacePage[], nodes: SpaceNode[], connections: SpaceConnection[]) =>
-  pages.reduce((acc, page) => layoutPage(page, acc, connections), nodes)
+  pages.reduce((acc, page) => moveSections(acc, connections, pageSlots(page, acc, pages)), nodes)
+
+/** A primeira página do site (a Home), sem contar as folhas de cabeçalho e rodapé. */
+const firstSitePage = (pages: SpacePage[]) => pages.find((p) => !p.part) ?? pages[0]
 
 /** As seções e os textos e paletas que só alimentavam elas, que saem junto. */
 function withFeeders(sectionIds: string[], nodes: SpaceNode[], connections: SpaceConnection[]) {
@@ -293,7 +341,7 @@ function insertSnapshot(canvas: CanvasParts, snapshot: SectionSnapshot, pageId: 
   const connections = [...canvas.connections, ...fresh.connections]
   const page = pages.find((p) => p.id === pageId)
   const nodes = [...canvas.nodes, ...fresh.sections, ...fresh.feeders]
-  return { pages, connections, nodes: page ? layoutPage(page, nodes, connections) : nodes, ids }
+  return { pages, connections, nodes: page ? layoutPage(page, nodes, connections, pages) : nodes, ids }
 }
 
 /** Ids na ordem de leitura do canvas (página por página), para copiar e colar na mesma ordem. */
@@ -328,6 +376,23 @@ function restoreSnapshot(snapshot: CanvasSnapshot, current: SpaceNode[]) {
 }
 
 /**
+ * Algo saiu do canvas por uma ação de quem usa (excluir a página, a seção,
+ * limpar o canvas), com a cópia do que saiu: o registro de atividades guarda
+ * para a lixeira. Desfazer e sincronizar com outra pessoa não avisam.
+ */
+export type CanvasRemoval =
+  | { kind: 'page'; page: SpacePage; nodes: SpaceNode[] }
+  | { kind: 'section'; node: SpaceNode; pageId?: string; pageName?: string; index: number }
+  | { kind: 'canvas'; pages: SpacePage[]; nodes: SpaceNode[] }
+
+const removalListeners = new Set<(removal: CanvasRemoval) => void>()
+export const onCanvasRemoval = (listener: (removal: CanvasRemoval) => void) => {
+  removalListeners.add(listener)
+  return () => void removalListeners.delete(listener)
+}
+const emitRemoval = (removal: CanvasRemoval) => removalListeners.forEach((listener) => listener(removal))
+
+/**
  * A mudança em curso é só a altura de um nó medida na tela (o preview
  * carregou, a fonte trocou): o projeto salva, mas não conta como edição.
  */
@@ -335,6 +400,68 @@ let measuring = false
 export const isMeasuring = () => measuring
 
 const sameCanvas = (a: CanvasSnapshot, b: CanvasSnapshot) => a.nodes === b.nodes && a.pages === b.pages && a.connections === b.connections
+
+/**
+ * Página que fica ativa ao escolher a seção: a dela; numa parte do site
+ * (cabeçalho, rodapé) mostrada pela página ativa, a ativa continua, para as
+ * camadas não trocarem de página.
+ */
+function ownerPageId(pages: SpacePage[], sectionId: string, activePageId: string | null) {
+  const page = pageOf(pages, sectionId)
+  const active = page?.part && pages.find((p) => p.id === activePageId)
+  if (active) {
+    const { header, footer } = pageParts(active, pages)
+    if (header?.id === page.id || footer?.id === page.id) return active.id
+  }
+  return page?.id ?? activePageId
+}
+
+/** Instância nova do componente, no lugar de uma seção da página. */
+const newInstance = (component: SpacePage, title: string, page: SpacePage, height: number): SpaceNode => ({
+  id: crypto.randomUUID(),
+  type: 'section',
+  x: page.x,
+  y: page.y,
+  width: SECTION_WIDTH,
+  height: height || NODE_DIMENSIONS.section.height,
+  data: { title, elementorJson: '', instanceOf: component.id },
+})
+
+/** O componente mostra (direto ou por outro componente) uma instância de `target`: pôr `target` nele faria um ciclo. */
+function componentReaches(componentId: string, target: string, pages: SpacePage[], nodes: SpaceNode[], seen = new Set<string>()): boolean {
+  if (componentId === target) return true
+  if (seen.has(componentId)) return false
+  seen.add(componentId)
+  const component = componentPage(pages, componentId)
+  if (!component) return false
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  return component.sectionIds.some((id) => {
+    const inner = instanceOf(byId.get(id))
+    return !!inner && componentReaches(inner, target, pages, nodes, seen)
+  })
+}
+
+/** Troca cada instância do componente pelas seções dele (cópias comuns), no mesmo lugar. */
+function detachAll(canvas: CanvasParts, componentId: string): { canvas: CanvasParts; count: number } {
+  const component = componentPage(canvas.pages, componentId)
+  if (!component) return { canvas, count: 0 }
+  const snapshot = snapshotSections(component.sectionIds, canvas.nodes, canvas.connections)
+  let count = 0
+  for (;;) {
+    const instance = canvas.nodes.find((n) => instanceOf(n) === componentId && pageOf(canvas.pages, n.id))
+    if (!instance) break
+    const page = pageOf(canvas.pages, instance.id)!
+    const index = page.sectionIds.indexOf(instance.id)
+    const without = {
+      pages: canvas.pages.map((p) => (p.id === page.id ? { ...p, sectionIds: p.sectionIds.filter((id) => id !== instance.id) } : p)),
+      nodes: canvas.nodes.filter((n) => n.id !== instance.id),
+      connections: canvas.connections.filter((c) => c.sourceId !== instance.id && c.targetId !== instance.id),
+    }
+    canvas = insertSnapshot(without, snapshot, page.id, index)
+    count++
+  }
+  return { canvas, count }
+}
 
 /** Distância de uma cópia de seção solta até a original. */
 const LOOSE_COPY_OFFSET = 40
@@ -358,6 +485,10 @@ function openCanvas(canvas?: SpaceCanvas) {
     }
     return { ...page, sectionIds: ids }
   })
+  if (!sitePages(pages).length && pages.length) {
+    // Só sobrou a folha do cabeçalho ou do rodapé: o site ganha uma Home vazia
+    pages = [newPage(DEFAULT_PAGE_NAME, nextPagePosition(pages, nodes)), ...pages]
+  }
   if (!pages.length) {
     const sections = orderedSections(nodes)
     const first = sections[0]
@@ -439,7 +570,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
             ...opened,
             canvasTransform: canvas?.canvasTransform ?? { x: 0, y: 0, zoom: 1 },
             pendingConnection: null,
-            activePageId: opened.pages[0].id,
+            activePageId: firstSitePage(opened.pages).id,
             renamingPageId: null,
             playingPageId: null,
             dropTarget: null,
@@ -468,7 +599,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           {
             ...opened,
             ...validSelection(opened.nodes),
-            activePageId: keep(activePageId) ?? opened.pages[0].id,
+            activePageId: keep(activePageId) ?? firstSitePage(opened.pages).id,
             renamingPageId: keep(renamingPageId),
             playingPageId: keep(playingPageId),
             pendingConnection: null,
@@ -489,7 +620,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
             connections,
             nodes: layoutPages(pages, nodes, connections),
             ...validSelection(nodes),
-            activePageId: pages.some((p) => p.id === state.activePageId) ? state.activePageId : pages[0]?.id ?? null,
+            activePageId: pages.some((p) => p.id === state.activePageId) ? state.activePageId : firstSitePage(pages)?.id ?? null,
           }),
           false,
           'commitCanvas'
@@ -513,7 +644,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         sectionIds.splice(options.index ?? sectionIds.length, 0, ...created.map((n) => n.id))
         const target = { ...page, sectionIds }
         const nextPages = pages.map((p) => (p.id === target.id ? target : p))
-        const nextNodes = layoutPage(target, [...nodes, ...created], connections)
+        const nextNodes = layoutPage(target, [...nodes, ...created], connections, nextPages)
         const first = created[0] && nextNodes.find((n) => n.id === created[0].id)
 
         track()
@@ -625,9 +756,10 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         if (j < 0 || j >= order.length) return
         ;[order[i], order[j]] = [order[j], order[i]]
         const next = { ...page, sectionIds: order }
+        const nextPages = pages.map((p) => (p.id === page.id ? next : p))
         track()
         set(
-          { pages: pages.map((p) => (p.id === page.id ? next : p)), nodes: layoutPage(next, nodes, connections) },
+          { pages: nextPages, nodes: layoutPage(next, nodes, connections, nextPages) },
           false,
           'moveSection'
         )
@@ -652,14 +784,14 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         let nextNodes = nodes
         const source = nextPages.find((p) => p.id === from?.id)
         const target = nextPages.find((p) => p.id === pageId)
-        if (source) nextNodes = layoutPage(source, nextNodes, connections)
-        if (target) nextNodes = layoutPage(target, nextNodes, connections)
+        if (source) nextNodes = layoutPage(source, nextNodes, connections, nextPages)
+        if (target) nextNodes = layoutPage(target, nextNodes, connections, nextPages)
         else if (at) {
           // Solta onde o arrasto a deixou; textos e paletas ligados vão junto
           nextNodes = moveSections(nextNodes, connections, new Map([[sectionId, at]]))
         } else if (source) {
           // Solta pelo menu: logo abaixo da página de onde saiu, alinhada com a coluna
-          const frame = pageFrame(source, nextNodes)
+          const frame = pageFrame(source, nextNodes, nextPages)
           const spot = { x: source.x + PAGE_PAD, y: frame.y + frame.height + DETACH_GAP }
           nextNodes = moveSections(nextNodes, connections, new Map([[sectionId, spot]]))
         }
@@ -718,19 +850,27 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       removePage: (id) => {
         const { pages, nodes, connections, activePageId, selectedIds, playingPageId, navigatorSelection } = get()
         const page = pages.find((p) => p.id === id)
-        if (!page || pages.length <= 1) return
+        // A última página do site não sai; a folha do cabeçalho ou do rodapé sai sempre
+        if (!page || (!page.part && sitePages(pages).length <= 1)) return
 
         const removed = withFeeders(page.sectionIds, nodes, connections)
-        const rest = pages.filter((p) => p.id !== id)
+        // As instâncias do componente livre saem das páginas junto com ele
+        if (page.part?.kind === 'section') for (const n of nodes) if (instanceOf(n) === id) removed.add(n.id)
+        const rest = pages
+          .filter((p) => p.id !== id)
+          .map((p) => (p.part?.exclude?.includes(id) ? { ...p, part: { ...p.part, exclude: p.part.exclude.filter((e) => e !== id) } } : p))
+          .map((p) => (p.sectionIds.some((s) => removed.has(s)) ? { ...p, sectionIds: p.sectionIds.filter((s) => !removed.has(s)) } : p))
+        emitRemoval({ kind: 'page', page, nodes: page.sectionIds.map((s) => nodes.find((n) => n.id === s)).filter((n): n is SpaceNode => !!n) })
         track()
         set(
           {
             pages: rest,
-            nodes: nodes.filter((n) => !removed.has(n.id)),
+            // Sem o cabeçalho (ou o rodapé), as páginas sobem
+            nodes: page.part ? layoutPages(rest, nodes.filter((n) => !removed.has(n.id)), connections) : nodes.filter((n) => !removed.has(n.id)),
             connections: connections.filter((c) => !removed.has(c.sourceId) && !removed.has(c.targetId)),
             selectedIds: selectedIds.filter((s) => !removed.has(s)),
             navigatorSelection: navigatorSelection && removed.has(navigatorSelection.sectionId) ? null : navigatorSelection,
-            activePageId: activePageId === id ? rest[0].id : activePageId,
+            activePageId: activePageId === id ? firstSitePage(rest).id : activePageId,
             playingPageId: playingPageId === id ? null : playingPageId,
           },
           false,
@@ -741,7 +881,8 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       duplicatePage: (id) => {
         const { pages, nodes, connections } = get()
         const page = pages.find((p) => p.id === id)
-        if (!page) return
+        // O site tem um cabeçalho e um rodapé só
+        if (!page || page.part) return
 
         // Seções com os textos e paletas ligados a elas, numa página nova à direita
         const copy = newPage(`${page.name} (cópia)`, nextPagePosition(pages, nodes))
@@ -760,6 +901,214 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         )
       },
 
+      makePagePart: (sectionId, kind, plan = {}) => {
+        const { pages, nodes, connections, selectedIds, navigatorSelection } = get()
+        const section = nodes.find((n) => n.id === sectionId && n.type === 'section')
+        const from = pageOf(pages, sectionId)
+        if (!section || from?.part || partPage(pages, kind)) return null
+
+        // As cópias das outras páginas saem, com os textos e paletas que só alimentavam elas
+        const copies = (plan.remove ?? []).filter((id) => id !== sectionId && !pageOf(pages, id)?.part && nodes.some((n) => n.id === id))
+        const removed = withFeeders(copies, nodes, connections)
+        for (const id of copies) {
+          const node = nodes.find((n) => n.id === id)!
+          const page = pageOf(pages, id)
+          emitRemoval({ kind: 'section', node, pageId: page?.id, pageName: page?.name, index: page ? page.sectionIds.indexOf(id) : -1 })
+        }
+
+        const exclude = (plan.exclude ?? []).filter((id) => pages.some((p) => p.id === id && !p.part))
+        const part: SpacePage = {
+          ...newPage(PART_LABEL[kind], nextPartPosition(pages, nodes)),
+          sectionIds: [sectionId],
+          part: { kind, ...(exclude.length ? { exclude } : {}) },
+        }
+        const gone = new Set([sectionId, ...copies])
+        const nextPages = [
+          ...pages.map((p) => (p.sectionIds.some((id) => gone.has(id)) ? { ...p, sectionIds: p.sectionIds.filter((id) => !gone.has(id)) } : p)),
+          part,
+        ]
+        const nextConnections = connections.filter((c) => !removed.has(c.sourceId) && !removed.has(c.targetId))
+        track()
+        set(
+          {
+            pages: nextPages,
+            connections: nextConnections,
+            nodes: layoutPages(nextPages, nodes.filter((n) => !removed.has(n.id)), nextConnections),
+            selectedIds: selectedIds.filter((id) => !removed.has(id)),
+            navigatorSelection: navigatorSelection && removed.has(navigatorSelection.sectionId) ? null : navigatorSelection,
+          },
+          false,
+          'makePagePart'
+        )
+        return part.id
+      },
+
+      unlinkPagePart: (partId) => {
+        const { pages, nodes, connections, selectedIds, navigatorSelection, activePageId, playingPageId } = get()
+        const part = pages.find((p) => p.id === partId)
+        if (!part?.part) return 0
+        const shownIn = partShownIn(part, pages, nodes)
+        if (!shownIn.length) return 0
+
+        let canvas: CanvasParts = { pages, nodes, connections }
+        if (part.part.kind === 'section') {
+          // Cada instância vira cópia comum, no lugar dela
+          canvas = detachAll(canvas, partId).canvas
+        } else {
+          // Cada página que mostrava a parte ganha a própria cópia, no mesmo lugar
+          const snapshot = snapshotSections(part.sectionIds, nodes, connections)
+          for (const page of shownIn) {
+            const current = canvas.pages.find((p) => p.id === page.id)!
+            canvas = insertSnapshot(canvas, snapshot, page.id, part.part.kind === 'header' ? 0 : current.sectionIds.length)
+          }
+        }
+        const removed = withFeeders(part.sectionIds, canvas.nodes, canvas.connections)
+        const rest = canvas.pages.filter((p) => p.id !== partId)
+        const nextConnections = canvas.connections.filter((c) => !removed.has(c.sourceId) && !removed.has(c.targetId))
+        track()
+        set(
+          {
+            pages: rest,
+            connections: nextConnections,
+            nodes: layoutPages(rest, canvas.nodes.filter((n) => !removed.has(n.id)), nextConnections),
+            selectedIds: selectedIds.filter((id) => !removed.has(id)),
+            navigatorSelection: navigatorSelection && removed.has(navigatorSelection.sectionId) ? null : navigatorSelection,
+            activePageId: activePageId === partId ? firstSitePage(rest).id : activePageId,
+            playingPageId: playingPageId === partId ? null : playingPageId,
+          },
+          false,
+          'unlinkPagePart'
+        )
+        return shownIn.length
+      },
+
+      setPartShown: (partId, pageId, shown) => {
+        const { pages, nodes, connections } = get()
+        const part = pages.find((p) => p.id === partId)
+        if (!part?.part || !pages.some((p) => p.id === pageId && !p.part)) return
+        const exclude = new Set(part.part.exclude ?? [])
+        if (shown === !exclude.has(pageId)) return
+        if (shown) exclude.delete(pageId)
+        else exclude.add(pageId)
+        const next: SpacePage = { ...part, part: { kind: part.part.kind, ...(exclude.size ? { exclude: [...exclude] } : {}) } }
+        const nextPages = pages.map((p) => (p.id === partId ? next : p))
+        track()
+        set({ pages: nextPages, nodes: layoutPages(nextPages, nodes, connections) }, false, 'setPartShown')
+      },
+
+      replaceWithPart: (sectionId, partId) => {
+        const { pages, nodes, connections, selectedIds, navigatorSelection } = get()
+        const part = pages.find((p) => p.id === partId)
+        const page = pageOf(pages, sectionId)
+        const node = nodes.find((n) => n.id === sectionId)
+        if (!part?.part || !page || page.part || !node) return
+        const removed = withFeeders([sectionId], nodes, connections)
+        emitRemoval({ kind: 'section', node, pageId: page.id, pageName: page.name, index: page.sectionIds.indexOf(sectionId) })
+        const kind = part.part.kind
+        const exclude = (part.part.exclude ?? []).filter((id) => id !== page.id)
+        const nextPages = pages.map((p) => {
+          if (p.id === page.id) return { ...p, sectionIds: p.sectionIds.filter((id) => id !== sectionId) }
+          if (p.id === partId) return { ...p, part: { kind, ...(exclude.length ? { exclude } : {}) } }
+          return p
+        })
+        const nextConnections = connections.filter((c) => !removed.has(c.sourceId) && !removed.has(c.targetId))
+        track()
+        set(
+          {
+            pages: nextPages,
+            connections: nextConnections,
+            nodes: layoutPages(nextPages, nodes.filter((n) => !removed.has(n.id)), nextConnections),
+            selectedIds: selectedIds.filter((id) => !removed.has(id)),
+            navigatorSelection: navigatorSelection && removed.has(navigatorSelection.sectionId) ? null : navigatorSelection,
+          },
+          false,
+          'replaceWithPart'
+        )
+      },
+
+      makeComponent: (sectionId, replace = []) => {
+        const { pages, nodes, connections, navigatorSelection } = get()
+        const section = nodes.find((n) => n.id === sectionId && n.type === 'section')
+        const from = pageOf(pages, sectionId)
+        // Do cabeçalho e do rodapé não sai componente: eles já são um
+        if (!section || !from || instanceOf(section) || from.part?.kind === 'header' || from.part?.kind === 'footer') return null
+        const title = (section.data as SectionNodeData).title || 'Componente'
+        const component: SpacePage = { ...newPage(title, nextPartPosition(pages, nodes)), sectionIds: [sectionId], part: { kind: 'section' } }
+
+        // No lugar da seção e de cada cópia, uma instância
+        const copies = replace.filter((id) => id !== sectionId && nodes.some((n) => n.id === id && n.type === 'section' && !instanceOf(n)) && !!pageOf(pages, id))
+        const swap = new Map<string, SpaceNode>()
+        for (const id of [sectionId, ...copies]) swap.set(id, newInstance(component, title, pageOf(pages, id)!, section.height))
+        const removed = withFeeders(copies, nodes, connections)
+        for (const id of copies) {
+          const node = nodes.find((n) => n.id === id)!
+          const page = pageOf(pages, id)!
+          emitRemoval({ kind: 'section', node, pageId: page.id, pageName: page.name, index: page.sectionIds.indexOf(id) })
+        }
+        const nextPages = [
+          ...pages.map((p) => (p.sectionIds.some((id) => swap.has(id)) ? { ...p, sectionIds: p.sectionIds.map((id) => swap.get(id)?.id ?? id) } : p)),
+          component,
+        ]
+        const nextConnections = connections.filter((c) => !removed.has(c.sourceId) && !removed.has(c.targetId))
+        const nextNodes = [...nodes.filter((n) => !removed.has(n.id)), ...swap.values()]
+        track()
+        set(
+          {
+            pages: nextPages,
+            connections: nextConnections,
+            nodes: layoutPages(nextPages, nextNodes, nextConnections),
+            selectedIds: [swap.get(sectionId)!.id],
+            navigatorSelection: navigatorSelection && (removed.has(navigatorSelection.sectionId) || navigatorSelection.sectionId === sectionId) ? null : navigatorSelection,
+          },
+          false,
+          'makeComponent'
+        )
+        return component.id
+      },
+
+      insertInstance: (componentId, pageId, index) => {
+        const { pages, nodes, connections } = get()
+        const component = componentPage(pages, componentId)
+        const page = pages.find((p) => p.id === pageId)
+        if (!component || !page) return null
+        // Um componente não entra nele mesmo, nem em quem ele mostra
+        if (page.part?.kind === 'section' && componentReaches(componentId, page.id, pages, nodes)) return null
+        const node = newInstance(component, component.name, page, sectionsHeight(component, nodes))
+        const sectionIds = [...page.sectionIds]
+        sectionIds.splice(index ?? sectionIds.length, 0, node.id)
+        const nextPages = pages.map((p) => (p.id === pageId ? { ...p, sectionIds } : p))
+        track()
+        set({ pages: nextPages, nodes: layoutPages(nextPages, [...nodes, node], connections), selectedIds: [node.id], activePageId: pageId }, false, 'insertInstance')
+        return node.id
+      },
+
+      detachInstance: (nodeId) => {
+        const { pages, nodes, connections, selectedIds } = get()
+        const node = nodes.find((n) => n.id === nodeId)
+        const page = pageOf(pages, nodeId)
+        const component = componentPage(pages, instanceOf(node))
+        if (!node || !page || !component) return 0
+        const index = page.sectionIds.indexOf(nodeId)
+        const without: CanvasParts = {
+          pages: pages.map((p) => (p.id === page.id ? { ...p, sectionIds: p.sectionIds.filter((id) => id !== nodeId) } : p)),
+          nodes: nodes.filter((n) => n.id !== nodeId),
+          connections: connections.filter((c) => c.sourceId !== nodeId && c.targetId !== nodeId),
+        }
+        const result = insertSnapshot(without, snapshotSections(component.sectionIds, nodes, connections), page.id, index)
+        track()
+        set(
+          {
+            pages: result.pages,
+            connections: result.connections,
+            nodes: layoutPages(result.pages, result.nodes, result.connections),
+            selectedIds: selectedIds.includes(nodeId) ? result.ids : selectedIds,
+          },
+          false,
+          'detachInstance'
+        )
+        return result.ids.length
+      },
+
       loadSitePage: (name, sections, link, replacePageId) => {
         const { pages, nodes, connections, selectedIds, navigatorSelection } = get()
         const existing = replacePageId ? pages.find((p) => p.id === replacePageId) : undefined
@@ -772,12 +1121,13 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const page: SpacePage = { ...base, sectionIds: created.map((n) => n.id), wordpress: link }
         const nextConnections = connections.filter((c) => !removed.has(c.sourceId) && !removed.has(c.targetId))
         const kept = nodes.filter((n) => !removed.has(n.id))
+        const nextPages = existing ? pages.map((p) => (p.id === page.id ? page : p)) : [...pages, page]
 
         track()
         set(
           {
-            pages: existing ? pages.map((p) => (p.id === page.id ? page : p)) : [...pages, page],
-            nodes: layoutPage(page, [...kept, ...created], nextConnections),
+            pages: nextPages,
+            nodes: layoutPage(page, [...kept, ...created], nextConnections, nextPages),
             connections: nextConnections,
             selectedIds: selectedIds.filter((id) => !removed.has(id)),
             navigatorSelection: navigatorSelection && removed.has(navigatorSelection.sectionId) ? null : navigatorSelection,
@@ -788,6 +1138,37 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           'loadSitePage'
         )
         return page.id
+      },
+
+      loadSitePart: (kind, name, sections, link, exclude) => {
+        const { pages, nodes, connections, selectedIds, navigatorSelection } = get()
+        const existing = pages.find((p) => p.part?.kind === kind && p.wordpress?.siteUrl === link.siteUrl && p.wordpress.postId === link.postId)
+        // Na folha que já estava ligada, a versão do site entra no lugar das seções dela
+        const removed = existing ? withFeeders(existing.sectionIds, nodes, connections) : new Set<string>()
+        const base: SpacePage = existing ?? { ...newPage(name, nextPartPosition(pages, nodes)), part: { kind } }
+        const { width, height } = NODE_DIMENSIONS.section
+        const created: SpaceNode[] = sections.map((data) => ({ id: crypto.randomUUID(), type: 'section', x: base.x, y: base.y, width, height, data }))
+        const part: SpacePage = {
+          ...base,
+          sectionIds: created.map((n) => n.id),
+          wordpress: link,
+          part: { kind, ...(exclude?.length ? { exclude } : existing?.part?.exclude?.length ? { exclude: existing.part.exclude } : {}) },
+        }
+        const nextPages = existing ? pages.map((p) => (p.id === part.id ? part : p)) : [...pages, part]
+        const nextConnections = connections.filter((c) => !removed.has(c.sourceId) && !removed.has(c.targetId))
+        track()
+        set(
+          {
+            pages: nextPages,
+            connections: nextConnections,
+            nodes: layoutPages(nextPages, [...nodes.filter((n) => !removed.has(n.id)), ...created], nextConnections),
+            selectedIds: selectedIds.filter((id) => !removed.has(id)),
+            navigatorSelection: navigatorSelection && removed.has(navigatorSelection.sectionId) ? null : navigatorSelection,
+          },
+          false,
+          'loadSitePart'
+        )
+        return part.id
       },
 
       setPageWordPress: (pageId, link) => {
@@ -808,8 +1189,10 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const page = pages.find((p) => p.id === id)
         if (!page || (page.x === x && page.y === y)) return
         const moved = { ...page, x, y }
+        const nextPages = pages.map((p) => (p.id === id ? moved : p))
         track(`movePage:${id}`)
-        set({ pages: pages.map((p) => (p.id === id ? moved : p)), nodes: layoutPage(moved, nodes, connections) }, false, 'movePage')
+        // Só a folha anda: mover o cabeçalho do site não mexe nas páginas que o mostram
+        set({ pages: nextPages, nodes: moveSections(nodes, connections, pageSlots(moved, nodes, nextPages)) }, false, 'movePage')
       },
 
       setActivePage: (id) => {
@@ -824,14 +1207,22 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
 
       arrangePages: () => {
         const { pages, nodes, connections } = get()
-        if (!pages.length) return
-        const order = [...pages].sort((a, b) => a.x - b.x)
+        const order = [...sitePages(pages)].sort((a, b) => a.x - b.x)
+        if (!order.length) return
         let x = order[0].x
         const y = Math.min(...pages.map((p) => p.y))
         const placed = new Map<string, SpacePage>()
         for (const page of order) {
           placed.set(page.id, { ...page, x, y })
           x += PAGE_WIDTH + PAGE_GAP
+        }
+        // Cabeçalho e rodapé numa coluna à esquerda das páginas, o cabeçalho em cima
+        let partY = y
+        const parts = pages.filter((p) => p.part).sort((a, b) => (a.part!.kind === b.part!.kind ? a.y - b.y : a.part!.kind === 'header' ? -1 : 1))
+        for (const part of parts) {
+          const moved = { ...part, x: order[0].x - PAGE_WIDTH - PAGE_GAP, y: partY }
+          placed.set(part.id, moved)
+          partY += pageFrame(moved, nodes, pages).height + PART_GAP
         }
         const nextPages = pages.map((p) => placed.get(p.id) ?? p)
         track()
@@ -939,7 +1330,9 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         let nextNodes = nodes.filter((n) => n.id !== id)
         // A página fecha o buraco que a seção deixou
         const shrunk = page && nextPages.find((p) => p.id === page.id)
-        if (shrunk) nextNodes = layoutPage(shrunk, nextNodes, nextConnections)
+        if (shrunk) nextNodes = layoutPage(shrunk, nextNodes, nextConnections, nextPages)
+        const removedNode = nodes.find((n) => n.id === id)
+        if (removedNode?.type === 'section') emitRemoval({ kind: 'section', node: removedNode, pageId: page?.id, pageName: page?.name, index: page ? page.sectionIds.indexOf(id) : -1 })
         track()
         set(
           {
@@ -992,7 +1385,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         // empurra as seções logo abaixo dela, como numa página
         const page = node.type === 'section' ? pageOf(pages, id) : undefined
         const dh = height - node.height
-        if (page) next = layoutPage(page, next, connections)
+        if (page) next = layoutPage(page, next, connections, pages)
         else if (node.type === 'section' && dh !== 0) {
           // Soltas: só as soltas da mesma coluna; as de página seguem a página delas
           const bottom = node.y + node.height
@@ -1119,7 +1512,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         set(
           (state) => {
             // Clicar numa seção de página torna a página ativa
-            const activePageId = pageOf(state.pages, id)?.id ?? state.activePageId
+            const activePageId = ownerPageId(state.pages, id, state.activePageId)
             const selected = state.selectedIds.includes(id)
             if (!additive) return { activePageId, navigatorSelection: null, selectedIds: selected && state.selectedIds.length === 1 ? [] : [id] }
             return { activePageId, navigatorSelection: null, selectedIds: selected ? state.selectedIds.filter((s) => s !== id) : [...state.selectedIds, id] }
@@ -1149,7 +1542,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           (state) => ({
             navigatorSelection: selection,
             selectedIds: selection ? [selection.sectionId] : state.selectedIds,
-            activePageId: selection ? pageOf(state.pages, selection.sectionId)?.id ?? state.activePageId : state.activePageId,
+            activePageId: selection ? ownerPageId(state.pages, selection.sectionId, state.activePageId) : state.activePageId,
           }),
           false,
           'selectNavigatorElement'
@@ -1188,8 +1581,10 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       },
 
       clearCanvas: () => {
-        const first = get().pages[0]
+        const first = firstSitePage(get().pages)
         const home = newPage(DEFAULT_PAGE_NAME, first ? { x: first.x, y: first.y } : nextPagePosition([], []))
+        const { pages, nodes } = get()
+        if (nodes.some((n) => n.type === 'section')) emitRemoval({ kind: 'canvas', pages, nodes: nodes.filter((n) => n.type === 'section') })
         track()
         set(
           {

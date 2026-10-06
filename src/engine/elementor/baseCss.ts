@@ -318,8 +318,45 @@ ${[10, 11, 12, 14, 16, 20, 25, 30, 33, 40, 50, 60, 66, 70, 75, 80, 83, 90, 100]
 .elementor-widget-image-box .elementor-image-box-content{flex-grow:1;width:100%}
 .elementor-widget-image-box .elementor-image-box-description{margin:0}
 
-/* Widget sem renderizador */
-.se-unsupported{padding:16px;border:1px dashed #b8bec8;border-radius:4px;background:repeating-linear-gradient(45deg,#f6f7f9,#f6f7f9 8px,#fff 8px,#fff 16px);color:#5b6270;font:13px/1.4 system-ui,sans-serif;text-align:center}
+/* Slides (Pro). O Elementor usa Swiper; aqui é scroll-snap com o script do carrossel */
+.elementor-widget-slides .elementor-swiper{position:relative}
+.elementor-widget-slides.elementor-arrows-position-outside .elementor-slides-wrapper{width:calc(100% - 60px);margin-inline:auto}
+.elementor-widget-slides .elementor-slides-wrapper{overflow:hidden}
+.elementor-widget-slides .swiper-wrapper{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;scrollbar-width:none}
+.elementor-widget-slides .swiper-wrapper::-webkit-scrollbar{display:none}
+.elementor-widget-slides .swiper-slide{position:relative;flex:0 0 100%;height:400px;overflow:hidden;scroll-snap-align:start;scroll-snap-stop:always}
+.elementor-slides .swiper-slide-bg{position:absolute;inset:0;background-size:cover;background-position:50%;background-repeat:no-repeat}
+.elementor-slides .elementor-background-overlay{position:absolute;inset:0}
+.elementor-slides .swiper-slide-inner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;margin:auto;padding:50px;color:#fff;text-align:center;text-decoration:none}
+.elementor-slides .swiper-slide-contents{position:relative;max-width:66%}
+.elementor-slides .elementor-slide-heading{font-size:35px;font-weight:700;line-height:1}
+.elementor-slides .elementor-slide-description{font-size:17px;line-height:1.4}
+.elementor-slides .elementor-slide-heading:not(:last-child),.elementor-slides .elementor-slide-description:not(:last-child){margin-bottom:30px}
+.elementor-slides .elementor-slide-button,.elementor-slides .elementor-slide-button:hover{display:inline-block;border:2px solid #fff;background:transparent;color:#fff;text-decoration:none}
+.elementor--h-position-left .swiper-slide-inner{justify-content:flex-start}
+.elementor--h-position-right .swiper-slide-inner{justify-content:flex-end}
+.elementor--v-position-top .swiper-slide-inner{align-items:flex-start}
+.elementor--v-position-bottom .swiper-slide-inner{align-items:flex-end}
+.elementor-widget-slides.elementor-arrows-position-outside .elementor-swiper-button-prev{left:0}
+.elementor-widget-slides.elementor-arrows-position-outside .elementor-swiper-button-next{right:0}
+.elementor-widget-slides .swiper-pagination{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:12px;z-index:2}
+.elementor-widget-slides.elementor-pagination-position-outside .swiper-pagination{position:static;margin-top:10px}
+.elementor-widget-slides .swiper-pagination-bullet{background:#fff;opacity:.5}
+.elementor-widget-slides.elementor-pagination-position-outside .swiper-pagination-bullet{background:#000;opacity:.2}
+.elementor-widget-slides .swiper-pagination-bullet-active,.elementor-widget-slides .swiper-pagination-bullet:hover{opacity:1}
+
+/* Widget sem renderizador: cartão com o nome, o resumo e, nas grades, o esqueleto dos cards */
+.se-unsupported{display:flex;flex-direction:column;gap:6px;padding:16px;border:1px dashed #b8bec8;border-radius:6px;background:#f6f7f9;color:#5b6270;font:13px/1.4 system-ui,sans-serif;text-align:start}
+.se-unsupported__head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px}
+.se-unsupported__head strong{color:#1f2430;font-size:14px;font-weight:600}
+.se-unsupported__head code{padding:1px 6px;border-radius:4px;background:#e7e9ee;color:#5b6270;font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+.se-unsupported__details{color:#3f4552}
+.se-unsupported__grid{display:grid;grid-template-columns:repeat(var(--se-cols,3),minmax(0,1fr));gap:12px;margin:6px 0 2px}
+.se-unsupported__cell{display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:4px;background:#fff;box-shadow:inset 0 0 0 1px #e3e6eb}
+.se-unsupported__cell i{display:block;aspect-ratio:4/3;border-radius:3px;background:#e7e9ee}
+.se-unsupported__cell b{display:block;height:8px;border-radius:4px;background:#e7e9ee}
+.se-unsupported__cell b:last-child{width:60%}
+.se-unsupported__note{margin:0;color:#7a808c;font-size:12px}
 `;
 
 /**

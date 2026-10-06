@@ -1,18 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { CircleAlert, CircleCheck, ExternalLink, Loader2 } from 'lucide-react'
+import { CircleAlert, CircleCheck, Component, ExternalLink, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { slugify } from '@/features/space/featured/suggest'
-import { plural } from '@/features/space/pages/pages'
+import { componentPage, instanceOf, pageParts, pageSections, plural } from '@/features/space/pages/pages'
+import { PART_COLOR } from '@/features/space/pages/parts'
 import { useSpaceStore } from '@/store/spaceStore'
+import type { SpacePage } from '@/types/space'
 import { cn } from '@/lib/utils'
 import {
   imagesToUpload,
   PageConflictError,
   pageBackups,
   pageElements,
+  partContentHash,
   publishPage,
   restoreLastBackup,
   type PageStatus,
@@ -20,6 +23,7 @@ import {
   type PublishResult,
 } from './publish'
 import { detectSeo, SEO_PLUGIN_NAMES } from './seo'
+import { inlineReason, partsSupport, type PartsSupport } from './siteParts'
 import { fetchSitePage } from './site'
 import { STATUS_LABELS, useWordPressUi, wpDate } from './uiStore'
 import { useActiveWordPress, useWordPressSession } from './useWordPressConnection'
@@ -79,6 +83,115 @@ const hostOf = (url: string) => {
   }
 }
 
+/**
+ * De onde vêm o cabeçalho e o rodapé da página: do Theme Builder do site (a
+ * página vai em Largura Total, sem eles dentro) ou de dentro da página.
+ */
+const PartsNote: React.FC<{ pageId: string; support: PartsSupport | null }> = ({ pageId, support }) => {
+  const pages = useSpaceStore((s) => s.pages)
+  const nodes = useSpaceStore((s) => s.nodes)
+  const connection = useActiveWordPress()
+  const page = pages.find((p) => p.id === pageId)
+  if (!page || !support || !connection) return null
+  const shown = Object.values(pageParts(page, pages)).filter((p): p is NonNullable<typeof p> => !!p)
+  // Componentes livres usados na página
+  const components = [...new Set(pageSections(page, nodes).map(instanceOf).filter((id): id is string => !!id))]
+    .map((id) => componentPage(pages, id))
+    .filter((c): c is NonNullable<typeof c> => !!c)
+  if (!shown.length && !components.length) return null
+  if (!shown.length) return <ComponentsNote pageId={pageId} components={components} support={support} />
+  const names = shown.map((p) => p.name.toLowerCase()).join(' e o ')
+  const many = shown.length > 1
+
+  if (support.mode === 'inline') {
+    return (
+      <div className="grid gap-1 rounded-lg border px-3 py-2.5 text-xs text-gray-700">
+        <p className="flex items-center gap-1.5 font-medium text-gray-900">
+          <Component className="h-3.5 w-3.5" style={{ color: PART_COLOR }} aria-hidden /> O {names} {many ? 'vão' : 'vai'} dentro da página
+        </p>
+        <p>
+          Como {inlineReason(support)}, cada página leva a própria cópia: mudou o componente, publique as páginas de novo.
+        </p>
+      </div>
+    )
+  }
+
+  const missing = shown.filter((p) => p.wordpress?.siteUrl !== connection.site.siteUrl)
+  return (
+    <div className="grid gap-1.5 rounded-lg border px-3 py-2.5 text-xs text-gray-700">
+      <p className="flex items-center gap-1.5 font-medium text-gray-900">
+        <Component className="h-3.5 w-3.5" style={{ color: PART_COLOR }} aria-hidden /> Layout: Elementor Largura Total
+      </p>
+      <p>O {names} {many ? 'vêm' : 'vem'} do Theme Builder do site, {many ? 'os mesmos' : 'o mesmo'} em todas as páginas; a página sobe só com as seções dela.</p>
+      {missing.length > 0 && (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-amber-800">
+          <span>
+            {missing.map((p) => p.name).join(' e ')} ainda não {missing.length === 1 ? 'está' : 'estão'} no Theme Builder: até lá, a página mostra o que o site já tem.
+          </span>
+          {missing.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => useWordPressUi.getState().openPublish(p.id, pageId)}
+              className="rounded font-medium underline underline-offset-2 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Publicar o {p.name.toLowerCase()}…
+            </button>
+          ))}
+        </p>
+      )}
+      {components.length > 0 && <ComponentsNote pageId={pageId} components={components} support={support} bare />}
+    </div>
+  )
+}
+
+/** Os componentes livres da página: com o Elementor Pro, vão como widget Modelo; sem ele, dentro da página. */
+const ComponentsNote: React.FC<{ pageId: string; components: SpacePage[]; support: PartsSupport; bare?: boolean }> = ({ pageId, components, support, bare }) => {
+  const connection = useActiveWordPress()
+  if (!connection) return null
+  const names = components.map((c) => c.name).join(', ')
+  const theme = support.mode === 'theme'
+  const linked = (c: SpacePage) => c.wordpress?.siteUrl === connection.site.siteUrl
+  const unpublished = theme ? components.filter((c) => !linked(c)) : []
+  const outdated = theme
+    ? components.filter((c) => {
+        if (!linked(c) || !c.wordpress?.contentHash) return false
+        try {
+          return c.wordpress.contentHash !== partContentHash(c.id)
+        } catch {
+          return false
+        }
+      })
+    : []
+  const body = (
+    <>
+      <p className={cn('flex items-center gap-1.5', !bare && 'font-medium text-gray-900')}>
+        {!bare && <Component className="h-3.5 w-3.5" style={{ color: PART_COLOR }} aria-hidden />}
+        {theme ? `Componentes (${names}): vão como widget Modelo, apontando para o modelo salvo de cada um.` : `Componentes (${names}): vão dentro da página, porque ${inlineReason(support)}.`}
+      </p>
+      {unpublished.length > 0 && <p>{unpublished.map((c) => c.name).join(', ')} ainda não {unpublished.length === 1 ? 'está salvo' : 'estão salvos'} no Elementor: {unpublished.length === 1 ? 'é salvo' : 'são salvos'} junto com a página.</p>}
+      {outdated.length > 0 && (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-amber-800">
+          <span>
+            {outdated.map((c) => c.name).join(', ')} mudou no canvas depois de publicado: o site mostra a versão anterior até publicar o componente.
+          </span>
+          {outdated.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => useWordPressUi.getState().openPublish(c.id, pageId)}
+              className="rounded font-medium underline underline-offset-2 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Publicar {c.name}…
+            </button>
+          ))}
+        </p>
+      )}
+    </>
+  )
+  return bare ? <div className="grid gap-1 border-t pt-1.5">{body}</div> : <div className="grid gap-1 rounded-lg border px-3 py-2.5 text-xs text-gray-700">{body}</div>
+}
+
 /** O que vai junto com a página: título, endereço, SEO e imagem destacada, com o botão para editar. */
 const DetailsSummary: React.FC<{ pageId: string }> = ({ pageId }) => {
   const page = useSpaceStore((s) => s.pages.find((p) => p.id === pageId))
@@ -135,6 +248,8 @@ export const PublishPanel: React.FC = () => {
   const [publishDraft, setPublishDraft] = useState(false)
   const [template, setTemplate] = useState<PageTemplate>('elementor_canvas')
   const [backups, setBackups] = useState<{ count: number; last?: number }>({ count: 0 })
+  // Se o cabeçalho e o rodapé do site vão pelo Theme Builder ou dentro da página
+  const [support, setSupport] = useState<PartsSupport | null>(null)
 
   const open = !!pageId && !!page
   useEffect(() => {
@@ -144,6 +259,18 @@ export const PublishPanel: React.FC = () => {
     setPublishDraft(false)
     setTemplate('elementor_canvas')
   }, [pageId])
+
+  useEffect(() => {
+    if (!pageId || !connection) return setSupport(null)
+    let alive = true
+    partsSupport(connection)
+      .then((found) => alive && setSupport(found))
+      .catch(() => alive && setSupport(null))
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageId, connection?.site.siteUrl])
 
   // Enquanto grava, o diálogo não fecha
   useEffect(() => {
@@ -162,13 +289,15 @@ export const PublishPanel: React.FC = () => {
   const summary = useMemo(() => {
     if (!open || !connection || !pageId) return null
     try {
-      const { elements, sectionCount } = pageElements(pageId)
+      const { elements, sectionCount } = pageElements(pageId, support?.mode)
       return { sectionCount, images: imagesToUpload(elements, connection).length, html: hasHtmlWidget(elements as Element[]) }
     } catch {
       return null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, pageId, connection, nodes, page?.sectionIds])
+  }, [open, pageId, connection, nodes, page?.sectionIds, support?.mode])
+  // Com o Theme Builder, a página com cabeçalho do site vai em Largura Total: o layout não se escolhe
+  const themeParts = support?.mode === 'theme' && !!page && Object.values(pageParts(page, useSpaceStore.getState().pages)).some(Boolean)
 
   if (!open || !page) return null
 
@@ -298,11 +427,33 @@ export const PublishPanel: React.FC = () => {
             origem.
           </p>
         )}
+        {result.components.created.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {result.components.created.join(', ')} {result.components.created.length === 1 ? 'foi salvo' : 'foram salvos'} na Biblioteca do Elementor e a página usa pelo widget Modelo.
+          </p>
+        )}
+        {result.components.outdated.length > 0 && (
+          <p className="flex gap-2 text-xs text-amber-700">
+            <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            {result.components.outdated.join(', ')} mudou no canvas depois de publicado: o site mostra a versão anterior até publicar o componente.
+          </p>
+        )}
+        {result.parts.synced.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            A condição do {result.parts.synced.join(' e do ').toLowerCase()} no Theme Builder foi atualizada para esta página, como no canvas.
+          </p>
+        )}
+        {result.parts.unpublished.length > 0 && (
+          <p className="flex gap-2 text-xs text-amber-700">
+            <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            {result.parts.unpublished.join(' e ')} ainda não {result.parts.unpublished.length === 1 ? 'está' : 'estão'} no Theme Builder: a página mostra o que o site já tem até {result.parts.unpublished.length === 1 ? 'ele ser publicado' : 'eles serem publicados'}.
+          </p>
+        )}
         {result.layout.wanted && result.layout.applied !== undefined && result.layout.applied !== result.layout.wanted ? (
           <p className="flex gap-2 text-xs text-amber-700">
             <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
             <span>
-              O site não aceitou o layout {result.layout.wanted === 'elementor_canvas' ? 'Tela do Elementor' : 'com o tema'}: a página ficou com{' '}
+              O site não aceitou o layout {result.layout.wanted === 'elementor_canvas' ? 'Tela do Elementor' : 'Elementor Largura Total'}: a página ficou com{' '}
               {result.layout.applied ? `o modelo "${result.layout.applied}"` : 'o modelo padrão do tema, que mostra o título e o cabeçalho dele'}
               {result.layout.error ? ` (${result.layout.error})` : ''}. Confira se o Elementor está ativo no site, ou escolha em Elementor › Configurações da
               página › Layout.
@@ -392,10 +543,13 @@ export const PublishPanel: React.FC = () => {
         )}
 
         {/* Também na página ligada: a página do Space traz o próprio cabeçalho, e o layout do site pode ser o do tema */}
-        <div className="grid gap-2">
-          <Label>Layout</Label>
-          <Choices name="Layout" value={template} onChange={(value) => setTemplate(value)} options={TEMPLATE_OPTIONS} />
-        </div>
+        {!themeParts && (
+          <div className="grid gap-2">
+            <Label>Layout</Label>
+            <Choices name="Layout" value={template} onChange={(value) => setTemplate(value)} options={TEMPLATE_OPTIONS} />
+          </div>
+        )}
+        <PartsNote pageId={page.id} support={support} />
 
         <DetailsSummary pageId={page.id} />
 
@@ -446,7 +600,7 @@ export const PublishPanel: React.FC = () => {
         <Button type="button" variant="ghost" onClick={close}>
           Cancelar
         </Button>
-        <Button type="button" onClick={() => run()} disabled={blocked || !summary?.sectionCount}>
+        <Button type="button" onClick={() => run()} disabled={blocked || !summary?.sectionCount || !support}>
           {link ? 'Atualizar no site' : status === 'publish' ? 'Publicar página' : 'Criar rascunho'}
         </Button>
       </>

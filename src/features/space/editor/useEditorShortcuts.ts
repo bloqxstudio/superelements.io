@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useSpaceStore } from '@/store/spaceStore'
 import { plural } from '@/features/space/pages/pages'
 import { MOD_KEY } from '@/features/space/pages/clipboard'
+import { confirmPartSectionRemoval } from '@/features/space/pages/parts'
 import {
   copySelectedElement,
   deleteSelectedElement,
@@ -95,6 +96,8 @@ export function useEditorShortcuts() {
           handled()
           // Seções inteiras: o Ctrl+Z traz de volta, e o aviso lembra disso
           const ids = [...store.selectedIds]
+          // Do cabeçalho ou do rodapé do site, somem de todas as páginas: pergunta antes
+          if (!confirmPartSectionRemoval(ids)) return
           ids.forEach((id) => useSpaceStore.getState().removeNode(id))
           toast.success(plural(ids.length, 'seção removida', 'seções removidas'), { description: `${MOD_KEY}Z desfaz.` })
         }

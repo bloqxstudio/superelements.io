@@ -5,6 +5,7 @@ import {
   CircleDot,
   Code2,
   Columns3,
+  Component,
   Copy,
   FormInput,
   Heading1,
@@ -24,9 +25,10 @@ import {
 } from 'lucide-react'
 import { useSpaceStore } from '@/store/spaceStore'
 import { parseSectionElements, type SectionElement } from '@/features/space/landingPage'
-import { pageSections } from '@/features/space/pages/pages'
+import { pageParts, pageSections } from '@/features/space/pages/pages'
+import { PART_COLOR } from '@/features/space/pages/parts'
 import { MOD_KEY } from '@/features/space/pages/clipboard'
-import type { SectionNodeData } from '@/types/space'
+import type { PagePartKind, SectionNodeData } from '@/types/space'
 import { PanelBoundary } from '@/features/space/editor/PanelBoundary'
 import { deleteSelectedElement, duplicateSelectedElement, moveElementAcross, selectElement } from '@/features/space/editor/actions'
 import { accepts, containsId, locate, settingsOf } from '@/features/space/editor/tree'
@@ -39,6 +41,10 @@ interface NavigatorSection {
   title: string
   elements: SectionElement[] | null
   labels?: Record<string, string>
+  /** Seção do cabeçalho ou do rodapé do site que a página mostra: mexer nela muda todas as páginas. */
+  part?: PagePartKind
+  /** Instância de um componente livre: sem camadas próprias, o conteúdo é o da folha dele. */
+  instance?: boolean
 }
 
 const WIDGET_ICONS: Record<string, LucideIcon> = {
@@ -236,21 +242,32 @@ export const LayersTree: React.FC = () => {
   const knownTreeKeys = useRef<Set<string>>(new Set())
 
   const page = pages.find((candidate) => candidate.id === activePageId) ?? pages[0]
-  const sections = useMemo<NavigatorSection[]>(
-    () =>
-      page
-        ? pageSections(page, nodes).map((section) => {
-            const data = section.data as SectionNodeData
-            return {
-              id: section.id,
-              title: data.title || 'Seção sem nome',
-              elements: parseSectionElements(data.elementorJson),
-              labels: data.navigatorLabels,
-            }
-          })
-        : [],
-    [page, nodes]
-  )
+  const sections = useMemo<NavigatorSection[]>(() => {
+    if (!page) return []
+    const row = (section: (typeof nodes)[number], part?: PagePartKind): NavigatorSection => {
+      const data = section.data as SectionNodeData
+      if (data.instanceOf) {
+        const component = pages.find((p) => p.id === data.instanceOf)
+        return { id: section.id, title: component?.name ?? data.title, elements: [], part: 'section', instance: true }
+      }
+      return {
+        id: section.id,
+        title: data.title || 'Seção sem nome',
+        elements: parseSectionElements(data.elementorJson),
+        labels: data.navigatorLabels,
+        part,
+      }
+    }
+    // O cabeçalho e o rodapé do site entram na árvore da página, marcados como componente
+    const { header, footer } = pageParts(page, pages)
+    return [
+      ...(header ? pageSections(header, nodes).map((s) => row(s, 'header')) : []),
+      ...pageSections(page, nodes).map((s) => row(s)),
+      ...(footer ? pageSections(footer, nodes).map((s) => row(s, 'footer')) : []),
+    ]
+  }, [page, pages, nodes])
+  // Número da seção na página, sem contar as do cabeçalho
+  const firstOwn = sections.findIndex((s) => s.part !== 'header')
 
   useEffect(() => {
     const valid = new Set<string>()
@@ -416,7 +433,7 @@ export const LayersTree: React.FC = () => {
           <PanelBoundary what="as camadas desta página" resetKey={`${page?.id}:${sections.length}`}>
           {visibleSections.length ? (
             <ul role="tree" aria-label={`Camadas de ${page?.name ?? 'página'}`} className="space-y-1">
-              {visibleSections.map((section, index) => {
+              {visibleSections.map((section) => {
                 const sectionKey = `section:${section.id}`
                 const open = normalizedQuery ? true : expanded.has(sectionKey)
                 const selected = selectedIds.includes(section.id) && !selection
@@ -431,6 +448,9 @@ export const LayersTree: React.FC = () => {
                         selected ? 'bg-gray-900 text-white' : 'text-gray-800 hover:bg-gray-100'
                       } ${dropInside ? 'shadow-[inset_0_0_0_2px_rgb(124_58_237)]' : ''}`}
                     >
+                      {section.instance ? (
+                        <span aria-hidden className="ml-1 h-7 w-7 shrink-0" />
+                      ) : (
                       <button
                         type="button"
                         className={`ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-[color,background-color,transform] active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${
@@ -441,17 +461,32 @@ export const LayersTree: React.FC = () => {
                       >
                         <ChevronRight className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-90' : ''}`} />
                       </button>
+                      )}
                       <button
                         type="button"
                         className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
                         onClick={() => selectSection(section.id)}
                       >
-                        <Layers3 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-                        <span className="min-w-0 flex-1 truncate font-semibold">{section.title}</span>
-                        <span className={`text-[10px] tabular-nums ${selected ? 'text-gray-300' : 'text-gray-400'}`}>{index + 1}</span>
+                        {section.part ? (
+                          <Component className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} style={{ color: selected ? undefined : PART_COLOR }} />
+                        ) : (
+                          <Layers3 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                        )}
+                        <span className={`min-w-0 flex-1 truncate font-semibold ${section.part && !selected ? 'text-cyan-900' : ''}`}>{section.title}</span>
+                        {section.part ? (
+                          <span
+                            className={`shrink-0 rounded px-1 text-[10px] font-medium ${selected ? 'bg-white/15 text-white' : 'bg-cyan-50 text-cyan-800'}`}
+                            title="Componente do site: o que mudar aqui muda em todas as páginas"
+                          >
+                            Componente
+                          </span>
+                        ) : (
+                          <span className={`text-[10px] tabular-nums ${selected ? 'text-gray-300' : 'text-gray-400'}`}>{sections.indexOf(section) - Math.max(0, firstOwn) + 1}</span>
+                        )}
                       </button>
                     </div>
                     {open &&
+                      !section.instance &&
                       (section.elements?.length ? (
                         <ul role="group">
                           {section.elements.map((element, elementIndex) => (

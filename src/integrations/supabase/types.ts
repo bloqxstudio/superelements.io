@@ -1471,6 +1471,89 @@ export type Database = {
           },
         ]
       }
+      space_project_events: {
+        Row: {
+          action: string
+          actor_email: string
+          actor_id: string | null
+          created_at: string
+          details: Json
+          id: string
+          owner_id: string | null
+          project_id: string
+          project_name: string
+          target: string
+        }
+        Insert: {
+          action: string
+          actor_email?: string
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          owner_id?: string | null
+          project_id: string
+          project_name?: string
+          target?: string
+        }
+        Update: {
+          action?: string
+          actor_email?: string
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          owner_id?: string | null
+          project_id?: string
+          project_name?: string
+          target?: string
+        }
+        Relationships: []
+      }
+      space_project_versions: {
+        Row: {
+          doc_path: string
+          id: string
+          project_id: string
+          reason: string
+          revision: number
+          saved_at: string
+          saved_by: string | null
+          saved_by_email: string
+          summary: Json
+        }
+        Insert: {
+          doc_path: string
+          id?: string
+          project_id: string
+          reason?: string
+          revision: number
+          saved_at?: string
+          saved_by?: string | null
+          saved_by_email?: string
+          summary?: Json
+        }
+        Update: {
+          doc_path?: string
+          id?: string
+          project_id?: string
+          reason?: string
+          revision?: number
+          saved_at?: string
+          saved_by?: string | null
+          saved_by_email?: string
+          summary?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "space_project_versions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "space_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       space_project_members: {
         Row: {
           created_at: string
@@ -1867,6 +1950,10 @@ export type Database = {
           p_note: string
           p_version: number
         }
+        Returns: string
+      }
+      space_log_event: {
+        Args: { p_project: string; p_action: string; p_target?: string; p_details?: Json }
         Returns: string
       }
       space_project_people: {

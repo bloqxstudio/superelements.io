@@ -14,8 +14,15 @@ export interface ProjectSummary {
   logo?: string
 }
 
-/** Dono criou o projeto; editor entrou por convite e faz tudo menos excluir e convidar. */
-export type ProjectRole = 'owner' | 'editor'
+/**
+ * Dono criou o projeto; editor entrou por convite e faz tudo menos excluir e
+ * convidar. Admin é a conta da plataforma acompanhando o projeto de outra
+ * pessoa: vê e edita, mas não publica, não convida e não exclui.
+ */
+export type ProjectRole = 'owner' | 'editor' | 'admin'
+
+/** Só o dono convida e exclui (sem papel: projeto antigo, criado pela própria conta). */
+export const isProjectOwner = (project: { role?: ProjectRole } | undefined) => !!project && project.role !== 'editor' && project.role !== 'admin'
 
 /** Um projeto por cliente: nome, contexto e o resumo do que está no canvas. */
 export interface Project {

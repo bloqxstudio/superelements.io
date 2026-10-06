@@ -7,6 +7,7 @@ import {
   deviceMedia,
   dims,
   escapeAttr,
+  escapeHtml,
   gaps,
   inherited,
   isEmpty,
@@ -20,6 +21,7 @@ import {
 import { motionAttrs } from './motion';
 import { normalizeElementorInput } from './normalize';
 import type { ElementorElement, RenderOptions, RenderResult } from './types';
+import { widgetSummary } from './widgetInfo';
 import { basicWidgets } from './widgets/basic';
 import { extraWidgets } from './widgets/extras';
 import { iconWidgets } from './widgets/icons';
@@ -150,7 +152,7 @@ const renderWidget = (el: ElementorElement, ctx: RenderContext): string => {
     inner = renderer({ el, s, sel, ctx, classes: extra });
   } else {
     ctx.unsupported[type] = (ctx.unsupported[type] || 0) + 1;
-    inner = ctx.showUnsupported ? `<div class="se-unsupported">Widget não suportado: <strong>${escapeAttr(type)}</strong></div>` : '';
+    inner = ctx.showUnsupported ? unsupportedCard(type, s, sel, ctx) : '';
   }
 
   widgetAdvanced(el, ctx, sel, classes);
@@ -160,6 +162,26 @@ const renderWidget = (el: ElementorElement, ctx: RenderContext): string => {
 
   const id = s._element_id ? ` id="${escapeAttr(s._element_id)}"` : '';
   return `<div class="${escapeAttr(classes.join(' '))}" data-id="${escapeAttr(el.id)}" data-element_type="widget" data-widget_type="${escapeAttr(type)}.default"${id}${anim}><div class="elementor-widget-container">${inner}</div></div>`;
+};
+
+/**
+ * Cartão no lugar do widget que o motor não desenha: o nome, o resumo das
+ * settings e, nas grades que vêm do banco do WordPress (listagens, posts,
+ * produtos), um esqueleto com as colunas e a quantidade de cards, para a
+ * página ocupar o espaço certo.
+ */
+const unsupportedCard = (type: string, s: Record<string, any>, sel: string, ctx: RenderContext) => {
+  const summary = widgetSummary(type, s);
+  let skeleton = '';
+  if (summary.grid) {
+    const [desktop, tablet, mobile] = summary.grid.columns;
+    responsive(ctx, `${sel} .se-unsupported__grid`, (d) => `--se-cols:${Math.max(1, d === 'desktop' ? desktop : d === 'tablet' ? tablet : mobile)}`);
+    const cells = Math.min(summary.grid.items, Math.max(1, desktop) * 2, 12);
+    skeleton = `<div class="se-unsupported__grid" aria-hidden="true">${'<span class="se-unsupported__cell"><i></i><b></b><b></b></span>'.repeat(cells)}</div>`;
+  }
+  const details = summary.details.length ? `<span class="se-unsupported__details">${escapeHtml(summary.details.join(' · '))}</span>` : '';
+  const note = summary.dynamic ? 'O conteúdo vem do WordPress e aparece no site publicado.' : 'O Space ainda não desenha este widget; no site ele aparece normalmente.';
+  return `<div class="se-unsupported${summary.grid ? ' se-unsupported--grid' : ''}" data-se-widget="${escapeAttr(type)}"><div class="se-unsupported__head"><strong>${escapeHtml(summary.name)}</strong><code>${escapeHtml(type)}</code></div>${details}${skeleton}<p class="se-unsupported__note">${note}</p></div>`;
 };
 
 const widgetAdvanced = (el: ElementorElement, ctx: RenderContext, sel: string, classes: string[]) => {

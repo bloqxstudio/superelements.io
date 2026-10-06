@@ -107,6 +107,40 @@ export function parseElementorData(raw: string | undefined): Element[] {
   }
 }
 
+/**
+ * Seções do canvas a partir do JSON do Elementor de uma página ou modelo do
+ * site: uma por bloco de topo, com os ids intactos (o CSS do Elementor usa
+ * eles e a atualização devolve ao site).
+ */
+export function sectionsFromElementor(raw: string | undefined, siteUrl: string, postId: number): SectionNodeData[] {
+  return parseElementorData(raw).map((element, index) => ({
+    title: firstHeading(element) ?? `Seção ${index + 1}`,
+    elementorJson: JSON.stringify([element]),
+    origin: { kind: 'wordpress', siteUrl, postId },
+  }))
+}
+
+/** O modelo salvo que a seção mostra, quando ela é só o widget Modelo do Elementor Pro (num container, ou numa seção com coluna). */
+export function templateIdOf(section: SectionNodeData): number | null {
+  let elements: Element[]
+  try {
+    elements = parseElementorData(section.elementorJson)
+  } catch {
+    return null
+  }
+  const widgets: Element[] = []
+  const walk = (list: Element[]) => {
+    for (const element of list) {
+      if (element.elType === 'widget') widgets.push(element)
+      else walk((element.elements ?? []).filter(isElement))
+    }
+  }
+  walk(elements)
+  if (widgets.length !== 1 || widgets[0].widgetType !== 'template' || !isElement(widgets[0].settings)) return null
+  const id = Number(widgets[0].settings.template_id)
+  return Number.isInteger(id) && id > 0 ? id : null
+}
+
 export interface ImportedPage {
   name: string
   sections: SectionNodeData[]
@@ -132,15 +166,9 @@ export async function fetchSitePage(connection: WordPressConnection, id: number,
   ])
   const { siteUrl } = connection.site
   const title = titleOf(page)
-  const elements = parseElementorData(page.meta?._elementor_data)
   return {
     name: title,
-    sections: elements.map((element, index) => ({
-      title: firstHeading(element) ?? `Seção ${index + 1}`,
-      // Os ids ficam: são eles que o CSS do Elementor usa e que a atualização devolve ao site
-      elementorJson: JSON.stringify([element]),
-      origin: { kind: 'wordpress', siteUrl, postId: page.id },
-    })),
+    sections: sectionsFromElementor(page.meta?._elementor_data, siteUrl, page.id),
     link: { siteUrl, postId: page.id, title, link: page.link, status: page.status, modifiedGmt: page.modified_gmt, syncedAt: Date.now() },
     details: {
       title,

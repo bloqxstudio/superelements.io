@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Bot, Check, ChevronDown, Cloud, CloudDownload, CloudOff, CloudUpload, Copy, Globe, LayoutGrid, NotebookText, Play, Plus, Redo2, Trash2, TriangleAlert, Undo2, Users, AlignHorizontalSpaceAround } from 'lucide-react'
+import { Bot, Check, ChevronDown, Cloud, CloudDownload, CloudOff, CloudUpload, Copy, Globe, History, LayoutGrid, NotebookText, Play, Plus, Redo2, Trash2, TriangleAlert, Undo2, Users, AlignHorizontalSpaceAround } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +27,7 @@ import { MOD_KEY } from './pages/clipboard'
 import { PresenceStack } from './presence/PresenceStack'
 import { useProjectPresence } from './presence/presence'
 import { Hint } from './ToolbarIsland'
+import { HistoryDialog } from './history/HistoryDialog'
 import { useSpaceUi } from './spaceUi'
 
 const SYNC: Record<SyncStatus, { icon: typeof Cloud; label: string; className: string }> = {
@@ -65,7 +66,7 @@ const ProjectMenu: React.FC<{ projectId: string }> = ({ projectId }) => {
   const bridge = useAgents((s) => s.connected)
   const pageCount = useSpaceStore((s) => s.pages.length)
   const navigate = useNavigate()
-  const [dialog, setDialog] = useState<'context' | 'wordpress' | 'chatgpt' | null>(null)
+  const [dialog, setDialog] = useState<'context' | 'wordpress' | 'chatgpt' | 'history' | null>(null)
   if (!project) return null
 
   const clear = () => {
@@ -117,6 +118,9 @@ const ProjectMenu: React.FC<{ projectId: string }> = ({ projectId }) => {
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
+          <DropdownMenuItem className="gap-2 rounded-lg text-xs" onSelect={() => setDialog('history')}>
+            <History className="h-3.5 w-3.5" /> Histórico e lixeira…
+          </DropdownMenuItem>
           <DropdownMenuItem className="gap-2 rounded-lg text-xs" disabled={pageCount < 2} onSelect={() => useSpaceStore.getState().arrangePages()}>
             <AlignHorizontalSpaceAround className="h-3.5 w-3.5" /> Organizar as páginas lado a lado
           </DropdownMenuItem>
@@ -135,6 +139,7 @@ const ProjectMenu: React.FC<{ projectId: string }> = ({ projectId }) => {
         connection={connection}
         reload={reload}
       />
+      <HistoryDialog projectId={projectId} open={dialog === 'history'} onOpenChange={(open) => !open && setDialog(null)} />
       {hasChatGPT(project.name) && <ChatGPTConnectionDialog open={dialog === 'chatgpt'} onOpenChange={(open) => !open && setDialog(null)} projectName={project.name} />}
     </>
   )

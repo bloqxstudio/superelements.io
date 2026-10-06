@@ -1,5 +1,5 @@
 import React from 'react'
-import { ClipboardCopy, Copy, CopyPlus, FileText, FolderInput, MoreHorizontal, Sparkles, Unlink } from 'lucide-react'
+import { ClipboardCopy, Component, Copy, CopyPlus, FileText, FolderInput, MoreHorizontal, Sparkles, Unlink } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -15,10 +15,11 @@ import {
 import { useSpaceStore } from '@/store/spaceStore'
 import { isPackSection } from '@/features/section-pack/categories'
 import { writeSectionWithAi } from '@/features/space/copy/writeWithAi'
-import type { SectionNodeData } from '@/types/space'
+import type { PagePartKind, SectionNodeData } from '@/types/space'
 import { copySelection } from './actions'
 import { MOD_KEY } from './clipboard'
-import { pageOf, plural } from './pages'
+import { instanceOf, pageOf, partPage, plural } from './pages'
+import { PART_COLOR, PART_LABEL, PART_NOUN, findComponentCopies, useMakePartDialog } from './parts'
 
 const item = 'gap-2 rounded-lg text-xs'
 const icon = 'h-3.5 w-3.5 text-gray-400'
@@ -61,6 +62,31 @@ export const SectionMenu: React.FC<SectionMenuProps> = ({ sectionId, className }
   const otherPages = pages.filter((p) => p.id !== page?.id)
   const { duplicateSections, copySectionsTo, moveSectionToPage } = useSpaceStore.getState()
   const what = selectedCount > 1 ? ` (${selectedCount})` : ''
+  // Seção de uma página do site pode virar o cabeçalho ou o rodapé do site (ou dar lugar ao que já existe)
+  const instance = useSpaceStore((s) => !!instanceOf(s.nodes.find((n) => n.id === sectionId)))
+  const canBecomePart = !!page && !page.part && !instance
+  // Qualquer seção de página (menos as do cabeçalho e do rodapé) pode virar um componente livre
+  const canBecomeComponent = !!page && page.part?.kind !== 'header' && page.part?.kind !== 'footer' && !instance
+
+  const toComponent = () => {
+    const { pages: all, nodes } = useSpaceStore.getState()
+    // Com cópias iguais em outras páginas, a janela pergunta quais viram instância; sem elas, vira na hora
+    if (findComponentCopies(sectionId, all, nodes).length) return useMakePartDialog.getState().open(sectionId, 'section')
+    const id = useSpaceStore.getState().makeComponent(sectionId)
+    if (id) {
+      toast.success(`"${section?.title || 'Seção'}" virou componente`, {
+        description: `No lugar dela ficou uma instância. Copie (${MOD_KEY}C) e cole em outras páginas; o que mudar na folha dele muda em todas.`,
+        action: { label: 'Ver componente', onClick: () => useSpaceStore.getState().focusPage(id) },
+      })
+    }
+  }
+
+  const toPart = (kind: PagePartKind) => {
+    const existing = partPage(pages, kind)
+    if (!existing) return useMakePartDialog.getState().open(sectionId, kind)
+    useSpaceStore.getState().replaceWithPart(sectionId, existing.id)
+    toast.success(`A página passou a mostrar o ${PART_NOUN[kind]} do site`, { description: `A seção foi para a lixeira. ${MOD_KEY}Z desfaz.` })
+  }
 
   const copyTo = (pageId: string, name: string) => {
     const count = copySectionsTo(targetIds(sectionId), pageId)
@@ -72,7 +98,8 @@ export const SectionMenu: React.FC<SectionMenuProps> = ({ sectionId, className }
   }
 
   return (
-    <DropdownMenu>
+    // Não modal: "Transformar em componente" abre uma janela, e o menu modal deixaria o canvas sem clique
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <button className={className} title="Mais ações" aria-label="Mais ações da seção">
           <MoreHorizontal className="h-3.5 w-3.5" />
@@ -132,8 +159,41 @@ export const SectionMenu: React.FC<SectionMenuProps> = ({ sectionId, className }
         {page && (
           // Só esta: várias soltas de uma vez cairiam umas sobre as outras abaixo da página
           <DropdownMenuItem className={item} onSelect={() => moveSectionToPage(sectionId, null)}>
-            <Unlink className={icon} /> Tirar da página
+            <Unlink className={icon} /> {page.part ? `Tirar do ${PART_NOUN[page.part.kind]}` : 'Tirar da página'}
           </DropdownMenuItem>
+        )}
+        {canBecomeComponent && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className={item}>
+                <Component className="h-3.5 w-3.5" style={{ color: PART_COLOR }} /> Componente
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-64 rounded-xl p-1">
+                <DropdownMenuItem className={item} onSelect={toComponent} title="Uma cópia só: põe a instância onde quiser, e o que mudar na folha dele muda em todas">
+                  <Component className="h-3.5 w-3.5" style={{ color: PART_COLOR }} />
+                  Transformar em componente
+                </DropdownMenuItem>
+                {canBecomePart && <DropdownMenuSeparator />}
+                {canBecomePart &&
+                  (['header', 'footer'] as const).map((kind) => (
+                    <DropdownMenuItem
+                      key={kind}
+                      className={item}
+                      onSelect={() => toPart(kind)}
+                      title={
+                        partPage(pages, kind)
+                          ? `Tira esta seção e mostra o ${PART_NOUN[kind]} do site no lugar dela`
+                          : `Aparece sozinho em todas as páginas: o que mudar nele muda em todas`
+                      }
+                    >
+                      <Component className="h-3.5 w-3.5" style={{ color: PART_COLOR }} />
+                      {partPage(pages, kind) ? `Trocar pelo ${PART_NOUN[kind]} do site` : `Transformar em ${PART_LABEL[kind].toLowerCase()}`}
+                    </DropdownMenuItem>
+                  ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

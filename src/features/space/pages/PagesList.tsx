@@ -1,25 +1,39 @@
 import React, { useRef, useState } from 'react'
-import { FileText, Globe, Home, LayoutTemplate, Plus } from 'lucide-react'
+import { Component, FileText, Globe, Home, LayoutTemplate, Plus } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { SpacePage } from '@/types/space'
 import { PresenceStack } from '@/features/space/presence/PresenceStack'
 import { usePagePresence } from '@/features/space/presence/presence'
-import { pageSlug } from './pages'
+import { pageSlug, partShownIn, plural, sitePages } from './pages'
+import { PART_COLOR } from './parts'
 import { useSpaceUi } from '../spaceUi'
+
+/** Instância do componente no fim da página aberta (ou da primeira do site, se a aberta é o próprio componente). */
+function insertHere(component: SpacePage) {
+  const { pages, activePageId, insertInstance } = useSpaceStore.getState()
+  const target = pages.find((p) => p.id === activePageId && p.id !== component.id && p.part?.kind !== 'header' && p.part?.kind !== 'footer') ?? pages.find((p) => !p.part)
+  if (!target) return
+  if (insertInstance(component.id, target.id)) toast.success(`${component.name} no fim de ${target.name}`, { description: 'Arraste para o lugar certo na página.' })
+  else toast.error('Um componente não entra nele mesmo.')
+}
 
 /** Endereço da página no site: o slug dos detalhes, ou o que o WordPress criaria pelo nome. */
 const pathOf = (page: SpacePage, index: number) => (index === 0 ? '/' : `/${page.details?.slug || pageSlug(page.name)}`)
 
 const PageRow: React.FC<{ page: SpacePage; index: number; active: boolean }> = ({ page, index, active }) => {
+  // Componente do site (cabeçalho, rodapé): no lugar do endereço, em quantas páginas aparece
+  const usage = useSpaceStore((s) => (page.part ? partShownIn(page, s.pages, s.nodes).length : 0))
   // Renomear aqui é só desta linha: a barra da página no canvas tem o próprio campo
   const [renaming, setRenaming] = useState(false)
   const { focusPage, renamePage } = useSpaceStore.getState()
   const presence = usePagePresence(page.id)
   const [value, setValue] = useState(page.name)
   const done = useRef(false)
-  const Icon = index === 0 ? Home : FileText
+  const Icon = page.part ? Component : index === 0 ? Home : FileText
+  const where = page.part ? `em ${plural(usage, 'página', 'páginas')}` : pathOf(page, index)
 
   const finish = (commit: boolean) => {
     if (done.current) return
@@ -56,9 +70,9 @@ const PageRow: React.FC<{ page: SpacePage; index: number; active: boolean }> = (
           'group flex h-8 cursor-default items-center gap-2 rounded-lg px-2 text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500',
           active ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
         )}
-        title={`${pathOf(page, index)} · clique duas vezes para renomear`}
+        title={`${page.part ? `Componente, aparece ${where}` : where} · clique duas vezes para renomear`}
       >
-        <Icon className={cn('h-3.5 w-3.5 shrink-0', active ? 'text-gray-900' : 'text-gray-400')} strokeWidth={1.75} />
+        <Icon className={cn('h-3.5 w-3.5 shrink-0', active ? 'text-gray-900' : 'text-gray-400')} strokeWidth={1.75} style={page.part ? { color: PART_COLOR } : undefined} />
         {renaming ? (
           <input
             autoFocus
@@ -77,14 +91,28 @@ const PageRow: React.FC<{ page: SpacePage; index: number; active: boolean }> = (
           />
         ) : (
           <>
-            <span className={cn('min-w-0 truncate', active && 'font-medium')}>{page.name}</span>
-            <span className="min-w-0 shrink truncate text-[11px] text-gray-400">{pathOf(page, index)}</span>
+            <span className={cn('min-w-0 truncate', active && 'font-medium', page.part && 'text-cyan-900')}>{page.name}</span>
+            <span className={cn('min-w-0 shrink truncate text-[11px]', page.part ? 'text-cyan-700/80' : 'text-gray-400')}>{where}</span>
           </>
         )}
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           <PresenceStack presence={presence} max={2} size={16} ring={active ? '#f3f4f6' : '#ffffff'} />
           {page.wordpress && <Globe className="h-3 w-3 text-sky-500" aria-label="Ligada a uma página do site" />}
-          <span className="text-[10px] tabular-nums text-gray-400">{page.sectionIds.length || ''}</span>
+          {!page.part && <span className="text-[10px] tabular-nums text-gray-400">{page.sectionIds.length || ''}</span>}
+          {page.part?.kind === 'section' && (
+            <button
+              type="button"
+              aria-label={`Pôr ${page.name} na página aberta`}
+              title="Pôr uma instância na página aberta (no fim; arraste para o lugar)"
+              onClick={(e) => {
+                e.stopPropagation()
+                insertHere(page)
+              }}
+              className="flex h-5 w-5 items-center justify-center rounded text-cyan-700 opacity-0 transition-[opacity,background-color] hover:bg-cyan-50 focus-visible:opacity-100 group-hover:opacity-100"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          )}
         </span>
       </div>
     </li>
@@ -96,6 +124,8 @@ export const PagesList: React.FC = () => {
   const pages = useSpaceStore((s) => s.pages)
   const activePageId = useSpaceStore((s) => s.activePageId)
   const addPage = useSpaceStore((s) => s.addPage)
+  const site = sitePages(pages)
+  const parts = pages.filter((p) => p.part)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -124,9 +154,19 @@ export const PagesList: React.FC = () => {
         </DropdownMenu>
       </div>
       <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
-        {pages.map((page, index) => (
+        {site.map((page, index) => (
           <PageRow key={page.id} page={page} index={index} active={page.id === activePageId} />
         ))}
+        {parts.length > 0 && (
+          <>
+            <li aria-hidden className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+              Componentes
+            </li>
+            {parts.map((page, index) => (
+              <PageRow key={page.id} page={page} index={index} active={page.id === activePageId} />
+            ))}
+          </>
+        )}
       </ul>
     </div>
   )

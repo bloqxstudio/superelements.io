@@ -14,14 +14,9 @@ import {
   SquarePlus,
   Star,
   Text,
-  Palette,
-  LayoutTemplate,
   Trash2,
-  Type,
   type LucideIcon,
 } from 'lucide-react'
-import { useSpaceStore } from '@/store/spaceStore'
-import type { NodeType } from '@/types/space'
 import { createElement, isContainer, type InsertKind } from '../editor/tree'
 import { addBlankSection, insertBlock, insertKind } from '../editor/actions'
 import { startInsertDrag, type InsertItem } from '../editor/insertDrag'
@@ -165,25 +160,9 @@ const BlockRow: React.FC<{ block: SavedBlock }> = ({ block }) => {
   )
 }
 
-/** Notas soltas no canvas, fora das páginas: ligadas a uma seção, mudam o que ela mostra. */
-const CANVAS_ITEMS: { type: NodeType; label: string; hint: string; icon: LucideIcon }[] = [
-  { type: 'section', label: 'Seção solta', hint: 'Fora das páginas, para colar um JSON', icon: LayoutTemplate },
-  { type: 'text', label: 'Texto', hint: 'Copy para ligar a uma seção', icon: Type },
-  { type: 'color-palette', label: 'Paleta de cores', hint: 'Cores para ligar a uma seção', icon: Palette },
-]
-
-/** Põe a nota no meio da tela, um pouco ao lado da anterior. */
-const addToCanvas = (type: NodeType) => {
-  const { canvasTransform, viewport, nodes, addNode } = useSpaceStore.getState()
-  const worldX = (viewport.width / 2 - canvasTransform.x) / canvasTransform.zoom
-  const worldY = (viewport.height / 2 - canvasTransform.y) / canvasTransform.zoom
-  const offset = (nodes.length % 8) * 30
-  addNode(type, worldX + offset, worldY + offset)
-}
-
 /**
  * Elementos da Biblioteca: os nativos do Elementor para criar dentro das
- * seções, uma seção em branco, os blocos salvos e as notas do canvas. Clicar
+ * seções, uma seção em branco e os blocos salvos. Clicar
  * põe na camada selecionada (ou numa seção nova); arrastar mostra no canvas
  * onde o elemento entra.
  */
@@ -252,24 +231,6 @@ export const ElementsLibrary: React.FC = () => {
           )}
         </section>
 
-        <section aria-labelledby="insert-canvas">
-          <h3 id="insert-canvas" className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-            No canvas
-          </h3>
-          <div className="space-y-1.5">
-            {CANVAS_ITEMS.map(({ type, label, hint, icon: Icon }) => (
-              <button key={type} type="button" className={`${tile} w-full flex-row items-center`} onClick={() => addToCanvas(type)}>
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-500">
-                  <Icon className="h-4 w-4" strokeWidth={1.75} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[12px] font-medium text-gray-800">{label}</span>
-                  <span className="block text-[10px] text-gray-400">{hint}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
       </div>
 
       <p className="border-t border-gray-100 px-3 py-2 text-[10px] leading-relaxed text-gray-400">

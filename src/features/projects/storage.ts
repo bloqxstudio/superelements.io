@@ -97,11 +97,12 @@ interface ProjectRow {
   updated_at: string
 }
 
-const toProject = (row: ProjectRow, userId: string): Project => {
+const toProject = (row: ProjectRow, userId: string, memberOf?: Set<string>): Project => {
   owners.set(row.id, row.owner_id)
   return {
     id: row.id,
-    role: row.owner_id === userId ? 'owner' : 'editor',
+    // Nem dono nem convidado: a conta admin vendo o projeto de outra pessoa
+    role: row.owner_id === userId ? 'owner' : !memberOf || memberOf.has(row.id) ? 'editor' : 'admin',
     name: row.name,
     context: row.context,
     createdAt: Date.parse(row.created_at),
@@ -110,13 +111,24 @@ const toProject = (row: ProjectRow, userId: string): Project => {
   }
 }
 
-/** Os projetos da conta e os compartilhados com ela. */
+/**
+ * Os projetos da conta e os compartilhados com ela; para a conta admin, também
+ * os das outras contas (papel 'admin'), que ficam na tela Admin.
+ */
 export async function listProjects(): Promise<Project[]> {
   const userId = await currentUserId()
-  const { data, error } = await supabase.from('space_projects').select(LIST_COLUMNS).order('updated_at', { ascending: false })
-  if (error) throw error
-  return data.map((row) => toProject(row, userId))
+  const [projects, memberships] = await Promise.all([
+    supabase.from('space_projects').select(LIST_COLUMNS).order('updated_at', { ascending: false }),
+    supabase.from('space_project_members').select('project_id').eq('user_id', userId),
+  ])
+  if (projects.error) throw projects.error
+  // Sem a lista dos convites, todo projeto alheio conta como compartilhado (o que valia antes)
+  const memberOf = memberships.error ? undefined : new Set(memberships.data.map((m) => m.project_id))
+  return projects.data.map((row) => toProject(row, userId, memberOf))
 }
+
+/** Dono de cada projeto, para a tela Admin. */
+export const projectOwnerId = (id: string) => owners.get(id)
 
 export async function insertProject(project: Project) {
   owners.set(project.id, await currentUserId())
@@ -186,6 +198,103 @@ export async function loadProjectDoc(id: string): Promise<CloudDoc | undefined> 
   }
 }
 
+// Versões guardadas (histórico de alterações)
+
+/** Editando, uma versão nova fica guardada a cada tanto tempo. */
+const VERSION_EVERY = 15 * 60_000
+/** Versões mantidas por projeto; as mais antigas o dono descarta ao salvar. */
+const KEEP_VERSIONS = 60
+
+export type VersionReason = 'auto' | 'delete' | 'restore'
+
+export interface ProjectVersion {
+  id: string
+  revision: number
+  path: string
+  savedBy: string | null
+  savedByEmail: string
+  savedAt: number
+  /** Vazio na versão de antes de uma exclusão ou restauração. */
+  summary: Partial<ProjectSummary>
+  reason: VersionReason
+}
+
+/** Quando a última versão do projeto foi guardada (lida uma vez da conta). */
+const lastVersionAt = new Map<string, number>()
+/** Antes do próximo salvamento, guardar o estado anterior: houve uma exclusão ou uma restauração. */
+const pendingVersion = new Map<string, VersionReason>()
+/** A migração do histórico ainda não foi aplicada: o salvamento segue como antes. */
+let versionsOff = false
+
+const missingTable = (error: { code?: string; message?: string } | null) => !!error && (error.code === '42P01' || error.code === 'PGRST205' || /does not exist|could not find the table/i.test(error.message ?? ''))
+
+/** Pede para guardar, no próximo salvamento, a versão de antes da mudança. */
+export const keepVersionBefore = (projectId: string, reason: Exclude<VersionReason, 'auto'>) => pendingVersion.set(projectId, reason)
+
+async function latestVersionAt(id: string) {
+  const known = lastVersionAt.get(id)
+  if (known !== undefined) return known
+  const { data, error } = await supabase.from('space_project_versions').select('saved_at').eq('project_id', id).order('saved_at', { ascending: false }).limit(1)
+  if (missingTable(error)) versionsOff = true
+  const at = data?.[0] ? Date.parse(data[0].saved_at) : 0
+  lastVersionAt.set(id, at)
+  return at
+}
+
+/** `summary` só quando ele é o desta revisão (a de antes de uma exclusão fica sem as contagens). */
+async function recordVersion(id: string, revision: number, path: string, summary: ProjectSummary | null, reason: VersionReason) {
+  const { error } = await supabase.from('space_project_versions').insert({ project_id: id, revision, doc_path: path, summary: (summary ?? {}) as unknown as Json, reason })
+  if (error) {
+    if (missingTable(error)) versionsOff = true
+    else console.warn('[projetos] versão não guardada', error)
+    return false
+  }
+  lastVersionAt.set(id, Date.now())
+  void pruneVersions(id)
+  return true
+}
+
+/** O dono descarta as versões além das mais novas (para os outros a conta recusa, e tudo bem). */
+async function pruneVersions(id: string) {
+  const { data } = await supabase.from('space_project_versions').select('id, doc_path').eq('project_id', id).order('saved_at', { ascending: false }).range(KEEP_VERSIONS, KEEP_VERSIONS + 49)
+  if (!data?.length) return
+  const { data: gone, error } = await supabase.from('space_project_versions').delete().in('id', data.map((v) => v.id)).select('doc_path')
+  if (!error && gone?.length) void bucket().remove(gone.map((v) => v.doc_path))
+}
+
+/** Apaga o arquivo de uma revisão que ficou para trás, a não ser que ele seja uma versão guardada. */
+async function removeUnlessVersion(path: string) {
+  if (!versionsOff) {
+    const { data, error } = await supabase.from('space_project_versions').select('id').eq('doc_path', path).limit(1)
+    if (missingTable(error)) versionsOff = true
+    else if (error || data?.length) return
+  }
+  await bucket().remove([path])
+}
+
+export async function listVersions(id: string): Promise<ProjectVersion[] | null> {
+  const { data, error } = await supabase
+    .from('space_project_versions')
+    .select('id, revision, doc_path, saved_by, saved_by_email, saved_at, summary, reason')
+    .eq('project_id', id)
+    .order('saved_at', { ascending: false })
+  if (missingTable(error)) return null
+  if (error) throw error
+  return data.map((v) => ({
+    id: v.id,
+    revision: v.revision,
+    path: v.doc_path,
+    savedBy: v.saved_by,
+    savedByEmail: v.saved_by_email,
+    savedAt: Date.parse(v.saved_at),
+    summary: v.summary as unknown as Partial<ProjectSummary>,
+    reason: v.reason as VersionReason,
+  }))
+}
+
+/** O conteúdo de uma versão guardada. */
+export const loadVersionDoc = (path: string) => downloadJson<ProjectDoc>(path)
+
 export type SaveResult = { saved: DocHead } | { conflict: true }
 
 interface SaveOptions {
@@ -223,7 +332,15 @@ export async function saveProjectDoc(id: string, doc: ProjectDoc, { base, previo
     if (error) throw error
     return { conflict: true }
   }
-  if (previousPath && previousPath !== path) void bucket().remove([previousPath])
+  // Histórico: antes de uma exclusão ou restauração fica o estado anterior; editando, uma versão a cada tanto
+  let keptPrevious = false
+  if (!versionsOff) {
+    const before = pendingVersion.get(id)
+    pendingVersion.delete(id)
+    if (before && previousPath && previousPath !== path) keptPrevious = await recordVersion(id, base, previousPath, null, before)
+    else if (edited && Date.now() - (await latestVersionAt(id)) >= VERSION_EVERY && !versionsOff) await recordVersion(id, base + 1, path, summary, 'auto')
+  }
+  if (previousPath && previousPath !== path && !keptPrevious) void removeUnlessVersion(previousPath).catch(() => {})
   return { saved: { revision: base + 1, path } }
 }
 

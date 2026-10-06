@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useLayoutEffect, useCallback, useMemo, useState } from 'react'
-import { X, GripVertical, ChevronUp, ChevronDown, Code2 } from 'lucide-react'
+import { X, GripVertical, ChevronUp, ChevronDown, Code2, Component } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useSpaceStore } from '@/store/spaceStore'
+import { widgetName } from '@/engine/elementor'
 import { PreviewFrame, type PreviewEditorMessage } from '@/features/elementor-preview/PreviewFrame'
 import { parseSectionElements } from '@/features/space/landingPage'
 import { useActiveBrand } from '@/features/space/brand/brandStore'
@@ -12,6 +13,7 @@ import { sectionLensDocument } from '@/features/space/levels/lens'
 import { sectionMotionLabel } from '@/features/space/levels/motion'
 import { pageOf } from '@/features/space/pages/pages'
 import { SectionMenu } from '@/features/space/pages/SectionMenu'
+import { PART_COLOR, PART_COLOR_STRONG, confirmPartSectionRemoval } from '@/features/space/pages/parts'
 import { useSectionDrag } from '@/features/space/pages/useSectionDrag'
 import { findElement, updateElementContent } from '@/features/space/navigator/elementorContentEditor'
 import { layerKind } from '@/features/space/navigator/navigatorLabels'
@@ -218,6 +220,9 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   }, [node.id, node.width, updateNodeSize, waiting])
 
   const inPage = !!page
+  // Seção do cabeçalho ou do rodapé do site: aparece em todas as páginas, e tem a cor dos componentes
+  const component = page?.part
+  const remove = () => confirmPartSectionRemoval([node.id]) && removeNode(node.id)
   const { onMouseDown: handleDragStart, lift, dragging, settling, onSettled } = useSectionDrag(node, cardRef)
 
   const handleOutputPortMouseDown = useCallback(
@@ -304,7 +309,17 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
   if (sheet) {
     // Contorno e alças no tamanho da tela, qualquer que seja o zoom (--z vem do mundo do canvas)
     const shown = selected || hovered || dragging || !!touchedBy || !!working
-    const outline = selected ? '#7c3aed' : touchedBy || working ? '#D97757' : '#8b5cf6'
+    const outline = component
+      ? selected
+        ? PART_COLOR_STRONG
+        : touchedBy || working
+          ? '#D97757'
+          : PART_COLOR
+      : selected
+        ? '#7c3aed'
+        : touchedBy || working
+          ? '#D97757'
+          : '#8b5cf6'
     return (
       <>
         {lifted && (
@@ -335,7 +350,7 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
         >
           {preview}
           {unsupported.length > 0 && (
-            <p className="bg-amber-50 px-2 py-1 text-[10px] text-amber-700">O preview não desenha: {unsupported.join(', ')}. No Elementor eles aparecem normalmente.</p>
+            <p className="bg-amber-50 px-2 py-1 text-[10px] text-amber-700">O Space não desenha: {unsupported.map(widgetName).join(', ')}. No site eles aparecem normalmente.</p>
           )}
           {data.elementorJson && !hasElements && <p className="bg-red-50 px-2 py-1 text-[10px] font-medium text-red-500">JSON inválido ou sem elementos do Elementor</p>}
 
@@ -354,7 +369,7 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
             title="Arraste para mudar de lugar; clique para selecionar"
           >
             <GripVertical className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
-            <span className="shrink-0 tabular-nums opacity-70">{position + 1}</span>
+            {component ? <Component className="h-3 w-3 shrink-0" aria-label="Componente" /> : <span className="shrink-0 tabular-nums opacity-70">{position + 1}</span>}
             <span className="truncate">{data.title || 'Seção sem nome'}</span>
             {touchedBy && <span className="shrink-0 opacity-80">· {agent} {touchedBy === 'created' ? 'criou' : 'mudou'}</span>}
             {motionLabel && <span className="shrink-0 opacity-80">· {motionLabel}</span>}
@@ -375,7 +390,7 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
             <SheetButton label="Ver código da seção" onClick={() => setShowJson(true)}>
               <Code2 className="h-3.5 w-3.5" />
             </SheetButton>
-            <SheetButton label="Remover seção" danger onClick={() => removeNode(node.id)}>
+            <SheetButton label="Remover seção" danger onClick={remove}>
               <X className="h-3.5 w-3.5" />
             </SheetButton>
           </div>
@@ -461,7 +476,7 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
           >
             <Code2 className="h-3.5 w-3.5" />
           </button>
-          <button onClick={() => removeNode(node.id)} className="text-gray-300 hover:text-red-400 transition-colors" title="Remover seção">
+          <button onClick={remove} className="text-gray-300 hover:text-red-400 transition-colors" title="Remover seção">
             <X className="h-3 w-3" />
           </button>
         </div>
@@ -483,7 +498,7 @@ export const SectionNode: React.FC<SectionNodeProps> = ({ node }) => {
 
         {unsupported.length > 0 && (
           <p className="text-[10px] text-amber-600">
-            O preview não desenha: {unsupported.join(', ')}. No Elementor eles aparecem normalmente.
+            O Space não desenha: {unsupported.map(widgetName).join(', ')}. No site eles aparecem normalmente.
           </p>
         )}
 

@@ -31,6 +31,7 @@ import {
   wrapSelectedElement,
 } from './actions'
 import { AlignGrid, ColorInput, Group, NumberInput, Row, Segmented, Select, SidesInput, TextArea, TextInput, Toggle, type Option } from './controls'
+import { GenericContent, SettingsJson } from './GenericContent'
 import {
   deviceKey,
   familyOf,
@@ -80,6 +81,9 @@ const SHADOWS: Record<Exclude<Shadow, 'none'>, Record<string, unknown>> = {
   medium: { horizontal: 0, vertical: 8, blur: 24, spread: -6, color: 'rgba(0,0,0,0.16)' },
   strong: { horizontal: 0, vertical: 20, blur: 48, spread: -12, color: 'rgba(0,0,0,0.28)' },
 }
+
+// Widgets com campos de conteúdo próprios no painel; os outros usam o editor genérico (GenericContent)
+const OWN_CONTENT = new Set(['heading', 'text-editor', 'button', 'image', 'icon', 'video', 'html', 'divider', 'spacer'])
 
 const FLEX_ALIGN = ['flex-start', 'center', 'flex-end']
 const alignIndex = (value: unknown) =>
@@ -442,9 +446,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ sectionId, ele
                 />
               </Row>
             )}
-            {!['heading', 'text-editor', 'button', 'image', 'icon', 'video', 'html', 'divider', 'spacer'].includes(type) && (
-              <p className="text-[10.5px] leading-relaxed text-gray-400">O conteúdo deste widget se ajusta no Elementor; aqui ficam tamanho, espaço e aparência.</p>
-            )}
+            {!OWN_CONTENT.has(type) && <GenericContent key={elementId} type={type} settings={settingsOf(element)} onChange={setContent} />}
           </Group>
         )}
 
@@ -922,6 +924,17 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ sectionId, ele
             onChange={(v) => set({ custom_css: v || undefined })}
           />
         </Group>
+
+        {family === 'widget' && (
+          <Group title="Configurações (JSON)" defaultOpen={false}>
+            <SettingsJson
+              key={elementId}
+              settings={settingsOf(element)}
+              onApply={(patch) => updateElementSettings(sectionId, elementId, patch, { device: 'desktop', merge: `json:${elementId}:${Date.now()}` })}
+            />
+            <p className="text-[10px] leading-relaxed text-gray-400">Tudo o que o widget guarda, inclusive o que o painel não mostra. Vai para o WordPress como está aqui.</p>
+          </Group>
+        )}
 
         {branded && (
           <p className="px-3 py-2.5 text-[10px] leading-relaxed text-gray-400">

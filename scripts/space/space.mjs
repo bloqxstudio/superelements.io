@@ -47,6 +47,12 @@ quem acompanha não muda. Acompanhe todos em /agentes no app.
   move <seção> (--after <seção> | --before <seção> | --index <n>) [--page <nome>] --label "..."
   page-add <nome> [--label "..."] cria uma página no canvas
   page-remove <nome> --label "…"  tira uma página (com as seções dela) do canvas
+  part header|footer --from <seção> [--page <nome>]
+                                  transforma a seção no cabeçalho (ou rodapé) do site: um componente, uma cópia só
+                                  que aparece em todas as páginas (as cópias parecidas das outras páginas saem)
+  part header|footer --page <nome> --on|--off
+                                  mostra ou tira o cabeçalho (rodapé) do site naquela página
+  part header|footer --unlink     volta a ser seção comum: cada página fica com a própria cópia
   plan "<seção>" "<seção>"… (--new <nome da página> | --page <nome> [--after <seção>])
                                   põe o plano no canvas: seções em esqueleto borrado, que ficam nítidas ao gravar
   work "<o que estou fazendo>" [--section <seção>]… [--page <nome>] [--element <id da camada>] | work --done
@@ -75,11 +81,20 @@ Com o cliente e o site (falam com a conta e com o WordPress; cada um é um passo
   wp                              conexão com o WordPress e as páginas já ligadas ao site
   wp connect <site> [--user <login> --password "<senha de aplicação>"]
                                   sem senha: o link para o WordPress aprovar; com ela: grava a conexão
-  wp pages | wp import <id>...    páginas do site; trazer páginas do site para o canvas
+  wp pages | wp import <id>...    páginas do site; trazer páginas do site para o canvas (seção que é só o widget Modelo
+                                  vira instância do componente daquele modelo salvo)
+  wp globals | wp import-global <id>...
+                                  cabeçalho e rodapé do Theme Builder do site; trazer como componente (ligado ao mesmo modelo)
   details --page <nome> [--title --slug --seo-title --description --keyword]
                                   título, endereço e SEO que vão junto ao publicar (--slug= limpa)
   publish --page <nome> [--live] [--layout canvas|tema] [--overwrite] --yes
-                                  publica no WordPress (página nova vai como rascunho sem --live); sem --yes só mostra o que faria
+                                  publica no WordPress (página nova vai como rascunho sem --live); sem --yes só mostra o que faria.
+                                  Com o Theme Builder do Elementor Pro, a página que mostra o cabeçalho do site vai em Largura
+                                  Total, sem ele dentro (sem o Theme Builder, ele vai dentro da página)
+  publish --page "Cabeçalho do site" [--update-existing] [--overwrite] --yes
+                                  publica o componente como modelo do Theme Builder, no site inteiro menos as páginas sem ele.
+                                  Muda o site todo na hora. Se o site já usa um cabeçalho, o nosso entra no lugar (o dele fica
+                                  salvo, sem condição); --update-existing troca o conteúdo do dele pelo nosso
   restore --page <nome> --yes     volta a página do site para a versão de antes da última publicação daqui
 
   <seção> é o id (ou o começo dele), o número na página ("3", com --page) ou parte do título.
@@ -353,7 +368,10 @@ async function cmdStatus() {
   for (const page of status.pages) {
     const active = page.id === status.activePageId ? '  ← ativa' : ''
     const wp = page.wordpress ? `  · WordPress: ${page.wordpress.link ?? page.wordpress.siteUrl}` : ''
-    console.log(`▸ ${page.name}  (${page.sections.length} seções, ${page.id.slice(0, 8)})${active}${wp}`)
+    // Componente do site: editar a folha dele muda todas as páginas da lista
+    const part = page.part ? `  ◆ COMPONENTE (${page.part.kind === 'header' ? 'cabeçalho' : 'rodapé'} do site), aparece em: ${page.part.shownIn.join(', ') || 'nenhuma página'}` : ''
+    const parts = page.parts && [page.parts.header && `◆ ${page.parts.header.name} em cima`, page.parts.footer && `◆ ${page.parts.footer.name} embaixo`].filter(Boolean)
+    console.log(`▸ ${page.name}  (${page.sections.length} seções, ${page.id.slice(0, 8)})${active}${wp}${part}${parts?.length ? `  · ${parts.join(', ')}` : ''}`)
     for (const s of page.sections) {
       const marks = [selected.has(s.id) && 'SELECIONADA', s.fromSite && 'do site', !s.valid && 'JSON inválido', s.sourceId].filter(Boolean)
       console.log(`   ${pad(s.index + 1)}. ${s.title}  ·  ${s.id.slice(0, 8)}${marks.length ? `  [${marks.join(', ')}]` : ''}`)
@@ -470,7 +488,9 @@ async function pullPages(pageRefs) {
     `- Lido em ${new Date().toLocaleString('pt-BR')}`,
     '',
     '## Páginas',
-    ...data.pages.map((p) => `- ${p.name} — ${p.sections.length} seções${p.wordpress ? ` · publica em ${p.wordpress.link ?? p.wordpress.siteUrl}` : ''}`),
+    ...data.pages.map((p) => `- ${p.name} — ${p.sections.length} seções${p.part ? ` · COMPONENTE: o ${p.part.kind === 'header' ? 'cabeçalho' : 'rodapé'} do site, aparece em ${p.part.shownIn.join(', ') || 'nenhuma página'}` : ''}${p.wordpress ? ` · publica em ${p.wordpress.link ?? p.wordpress.siteUrl}` : ''}`),
+    data.pages.some((p) => p.part) &&
+      '\nCabeçalho e rodapé do site são componentes: existem uma vez só, na folha deles, e aparecem nas páginas. Mude a folha do componente, nunca ponha uma cópia do cabeçalho numa página.',
     '',
     '## Briefing do projeto',
     '',
@@ -666,6 +686,27 @@ async function cmdPageRemove() {
   const page = resolvePage(status, positional.join(' '))
   await call('apply', { label, ops: [{ op: 'removePage', page: page.id }] })
   console.log(`✔ Página ${page.name} saiu do canvas. ${undoHint(status)}`)
+}
+
+async function cmdPart() {
+  const kind = positional[0]
+  if (kind !== 'header' && kind !== 'footer') fail('Diga header (cabeçalho) ou footer (rodapé): part header --from <seção>')
+  const status = await readyStatus()
+  const noun = kind === 'header' ? 'cabeçalho' : 'rodapé'
+  if (flags.unlink) {
+    const result = await call('part', { action: 'unlink', kind })
+    return console.log(`✔ O ${noun} voltou a ser seção comum em ${result.pages} páginas. ${undoHint(status)}`)
+  }
+  if (flags.on || flags.off) {
+    const page = resolvePage(status, one(flags.page))
+    const result = await call('part', { action: flags.on ? 'show' : 'hide', kind, page: page.id })
+    return console.log(`✔ ${page.name} ${result.shown ? 'mostra' : 'ficou sem'} o ${noun} do site. Aparece em: ${result.shownIn.join(', ') || 'nenhuma página'}.`)
+  }
+  const section = resolveSection(status, one(flags.from), one(flags.page))
+  const result = await call('part', { action: 'make', kind, section: section.id })
+  console.log(`✔ "${section.title}" virou o ${noun} do site (${result.name}, ${result.partId.slice(0, 8)}). Aparece em: ${result.shownIn.join(', ')}.`)
+  for (const r of result.removed) console.log(`   saiu de ${r.page}: "${r.title}"${r.same ? ' (igual)' : ' (era diferente: confira)'}`)
+  console.log(`   Para mudar o ${noun}, mude a folha "${result.name}". ${undoHint(status)}`)
 }
 
 async function cmdPageAdd() {
@@ -897,7 +938,31 @@ const printConnection = (c) => {
 async function cmdWp() {
   await readyStatus()
   const action = positional[0] ?? 'status'
-  if (!['status', 'connect', 'pages', 'import'].includes(action)) fail(`Ação desconhecida: wp ${action}. Use wp, wp connect, wp pages ou wp import`)
+  if (!['status', 'connect', 'pages', 'import', 'globals', 'import-global'].includes(action)) fail(`Ação desconhecida: wp ${action}. Use wp, wp connect, wp pages, wp import, wp globals ou wp import-global`)
+
+  if (action === 'globals') {
+    const result = await call('wordpress', { action: 'globals' })
+    if (flags.json) return console.log(JSON.stringify(result, null, 2))
+    if (!result.available) return console.log(`Sem cabeçalho e rodapé do Theme Builder para trazer: ${result.reason}.`)
+    if (!result.globals.length) return console.log('O site não tem cabeçalho nem rodapé do Theme Builder valendo.')
+    for (const g of result.globals) {
+      console.log(`   ${g.id} · ${g.kind === 'header' ? 'cabeçalho' : 'rodapé'} · ${g.title} · ${g.conditions.join(', ')}${g.canvas ? ` · no canvas: ${g.canvas}` : g.blocked ? ' · o projeto já tem outro' : ''}`)
+    }
+    return
+  }
+
+  if (action === 'import-global') {
+    const ids = positional.slice(1).map(Number)
+    if (!ids.length || ids.some((id) => !Number.isInteger(id) || id <= 0)) fail('Diga os ids dos modelos: wp import-global <id>… (veja os ids com: wp globals)')
+    const result = await call('wordpress', { action: 'importGlobals', ids })
+    if (flags.json) return console.log(JSON.stringify(result, null, 2))
+    for (const g of result.imported) {
+      console.log(`✔ ${g.name} (modelo ${g.id}) é a folha do ${g.kind === 'header' ? 'cabeçalho' : 'rodapé'} do site, ligada ao modelo`)
+      if (g.partial) console.log('   no Elementor ele não vale no site inteiro; no canvas aparece em todas as páginas (tire as que não devem ter)')
+      if (g.kept.length) console.log(`   condições que o canvas não mostra, mantidas ao publicar: ${g.kept.join(', ')}`)
+    }
+    return
+  }
 
   if (action === 'connect') {
     const site = positional[1]
@@ -932,7 +997,7 @@ async function cmdWp() {
     if (!ids.length || ids.some((id) => !Number.isInteger(id) || id <= 0)) fail('Diga os ids das páginas do site: wp import <id>… (veja os ids com: wp pages)')
     const result = await call('wordpress', { action, ids })
     if (flags.json) return console.log(JSON.stringify(result, null, 2))
-    for (const p of result.imported) console.log(`✔ ${p.page} (post ${p.postId}): ${p.sections} seções no canvas`)
+    for (const p of result.imported) console.log(`✔ ${p.page} (post ${p.postId}): ${p.sections} seções no canvas${p.components?.length ? ` · componentes trazidos dos modelos salvos: ${p.components.join(', ')}` : ''}`)
     for (const f of result.failed) console.log(`✖ post ${f.postId}: ${f.error}`)
     if (result.imported.length) console.log(`\nAs seções importadas ficam marcadas [do site]: não recebem a marca do Space. ${result.kit ? 'O Kit do site (cores e fontes globais) veio junto.' : 'O Kit do site não veio: as cores globais podem aparecer diferentes.'}`)
     if (result.failed.length) quit(1)
@@ -970,10 +1035,40 @@ async function cmdDetails() {
 
 const LAYOUTS = { canvas: 'elementor_canvas', tema: 'elementor_header_footer' }
 
+/** O cabeçalho (ou rodapé) do site no Theme Builder: sem --yes, só mostra o que faria. */
+async function cmdPublishPart(page) {
+  const plan = await call('partPlan', { page: page.id })
+  const noun = plan.kind === 'header' ? 'cabeçalho' : plan.kind === 'footer' ? 'rodapé' : 'componente'
+  if (!plan.themeBuilder) fail(`O ${noun} não vai para o Theme Builder: ${plan.reason}. Ele já vai dentro de cada página publicada.`)
+  const where = `no site inteiro${plan.excluded.length ? `, menos ${plan.excluded.join(', ')}` : ''}${plan.pending.length ? ` (${plan.pending.join(', ')} fica de fora quando for publicada)` : ''}`
+  if (!flags.yes) {
+    console.log(`Publicar ${plan.part} no Theme Builder de ${plan.site} (${plan.siteUrl}):`)
+    if (plan.linked) console.log(`   atualiza o modelo ligado, "${plan.linked.title}" (post ${plan.linked.postId}), com backup da versão de lá`)
+    else if (plan.existing.length) {
+      const names = plan.existing.map((e) => `"${e.title}" (${e.id})`).join(', ')
+      console.log(flags['update-existing'] ? `   troca o conteúdo de ${names} pelo nosso (backup da versão de lá)` : `   cria o nosso; ${names} sai do site (fica salvo no WordPress, sem condição)`)
+    } else console.log(`   cria o modelo de ${noun} no Theme Builder, publicado`)
+    console.log(`   onde aparece: ${where}`)
+    console.log(`   MUDA O ${noun.toUpperCase()} DE TODAS AS PÁGINAS DO SITE NA HORA`)
+    console.error('\nNada foi publicado. Confirme com o usuário e rode de novo com --yes.')
+    quit(1)
+  }
+  console.log(`Publicando ${plan.part}…`)
+  const result = await call('publish', { page: page.id, overwrite: !!flags.overwrite, existing: flags['update-existing'] ? 'update' : 'replace' })
+  if (flags.json) return console.log(JSON.stringify(result, null, 2))
+  console.log(`✔ ${result.created ? 'Criado' : 'Atualizado'} no Theme Builder de ${result.site}: "${result.title}" (post ${result.postId}), ${where}`)
+  console.log(`   Editar no Elementor: ${result.editUrl}`)
+  if (result.released) console.log(`   ${result.released} modelo(s) que o site usava saíram do site (continuam salvos, sem condição)`)
+  console.log(`   Imagens enviadas para a mídia do site: ${result.uploaded}`)
+  if (result.failedImages.length) console.log(`   ${result.failedImages.length} imagens não subiram e seguem pelo endereço de origem`)
+  console.log(`   Cache de CSS do Elementor: ${result.cacheCleared ? 'limpo' : 'não limpou'}`)
+}
+
 async function cmdPublish() {
   const status = await readyStatus()
   if (!flags.page) fail('Diga a página: publish --page <nome> --yes')
   const page = resolvePage(status, one(flags.page))
+  if (page.part) return cmdPublishPart(page)
   const layout = one(flags.layout)
   if (layout !== undefined && !LAYOUTS[layout]) fail('--layout é canvas (tela cheia do Elementor) ou tema (com o cabeçalho e o rodapé do tema)')
 
@@ -986,6 +1081,7 @@ async function cmdPublish() {
     console.log(`   ${linked ? `atualiza a página que já está no site, ${linked.link} (post ${linked.postId}), com backup da versão de lá` : 'cria uma página nova no site'}`)
     console.log(`   situação: ${flags.live ? 'PUBLICADA, visível para todo mundo' : linked ? `fica como está no site (${linked.status})` : 'rascunho (só quem entra no WordPress vê)'}`)
     console.log(`   layout: ${layout ?? 'canvas'}${layout === 'tema' ? ' (cabeçalho e rodapé do tema)' : ' (Tela do Elementor: sem o cabeçalho, o título e o rodapé do tema)'}${flags.overwrite ? ' · passa por cima de mudanças feitas no site' : ''}`)
+    if (page.parts?.header || page.parts?.footer) console.log(`   cabeçalho e rodapé do site: com o Theme Builder, vêm dele e a página vai em Largura Total; sem ele, vão dentro da página`)
     console.log(`   aprovação: ${share.link ? `${SHARE_STATE[share.state] ?? share.state} (versão ${share.version}${share.outdated ? ', e a página mudou depois dela' : ''})` : 'sem link de aprovação'}`)
     console.error('\nNada foi publicado. Confirme com o usuário (ou veja o cliente aprovar a versão atual) e rode de novo com --yes.')
     quit(1)
@@ -1003,8 +1099,13 @@ async function cmdPublish() {
   console.log(`   Cache de CSS do Elementor: ${result.cacheCleared ? 'limpo' : 'não limpou (a página pode aparecer com o estilo antigo até o Elementor regenerar o CSS)'}`)
   console.log(`   Imagem destacada: ${{ saved: 'gravada', unchanged: 'sem mudança', unsupported: 'o tema não usa em páginas', failed: 'não subiu' }[result.featured] ?? result.featured}`)
   console.log(`   SEO: ${result.seo === 'saved' ? 'gravado' : result.seo === 'failed' ? `não gravou (${result.seoError})` : 'sem campos de SEO, ou o site não deixa gravar'}`)
+  if (result.parts?.shown.length) {
+    console.log(`   ${result.parts.shown.join(' e ')}: ${result.parts.mode === 'theme' ? 'do Theme Builder (a página foi em Largura Total, sem eles dentro)' : `dentro da página (${result.parts.reason})`}`)
+    if (result.parts.unpublished.length) console.log(`   ${result.parts.unpublished.join(' e ')} ainda não está no Theme Builder: publique com publish --page "${result.parts.unpublished[0]}"`)
+    if (result.parts.synced.length) console.log(`   Condição atualizada no Theme Builder: ${result.parts.synced.join(', ')}`)
+  }
   const applied = result.layout?.applied
-  if (applied !== undefined) console.log(`   Layout no site: ${applied === 'elementor_canvas' ? 'Tela do Elementor' : applied === 'elementor_header_footer' ? 'com o tema' : applied ? applied : 'modelo padrão do tema (com o título dele)'}${result.layout.wanted && applied !== result.layout.wanted ? ` · o site NÃO aceitou ${result.layout.wanted}${result.layout.error ? `: ${result.layout.error}` : ''}` : ''}`)
+  if (applied !== undefined) console.log(`   Layout no site: ${applied === 'elementor_canvas' ? 'Tela do Elementor' : applied === 'elementor_header_footer' ? 'Elementor Largura Total' : applied ? applied : 'modelo padrão do tema (com o título dele)'}${result.layout.wanted && applied !== result.layout.wanted ? ` · o site NÃO aceitou ${result.layout.wanted}${result.layout.error ? `: ${result.layout.error}` : ''}` : ''}`)
 }
 
 async function cmdRestore() {
@@ -1256,6 +1357,7 @@ const COMMANDS = {
   move: cmdMove,
   'page-add': cmdPageAdd,
   'page-remove': cmdPageRemove,
+  part: cmdPart,
   work: cmdWork,
   plan: cmdPlan,
   build: cmdBuild,
