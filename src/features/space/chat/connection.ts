@@ -34,6 +34,7 @@ export function startSpaceChat(hot: Hot) {
     const { conversations } = useChat.getState()
     const patch: Partial<ReturnType<typeof useChat.getState>> = { connected: true }
     if (event.agents) patch.agents = event.agents
+    if (event.usage) patch.planUsage = event.usage
     const id = event.projectId
     if (id) {
       const before = conversations[id]
@@ -42,7 +43,7 @@ export function startSpaceChat(hot: Hot) {
       else if (event.message && before) {
         const i = before.messages.findIndex((m) => m.id === event.message!.id)
         const messages = i < 0 ? [...before.messages, event.message] : before.messages.map((m, j) => (j === i ? event.message! : m))
-        next = { ...before, messages, running: event.running ?? before.running, epoch: event.epoch ?? before.epoch }
+        next = { ...before, messages, running: event.running ?? before.running, epoch: event.epoch ?? before.epoch, history: before.history }
       }
       if (next !== before) {
         patch.conversations = { ...conversations }
@@ -73,6 +74,8 @@ export function startSpaceChat(hot: Hot) {
     send: (payload) => hot.send(CHAT_EVENTS.send, payload),
     stop: (projectId, agent) => hot.send(CHAT_EVENTS.stop, { projectId, agent }),
     reset: (projectId) => hot.send(CHAT_EVENTS.reset, { projectId }),
+    openConversation: (projectId, epoch) => hot.send(CHAT_EVENTS.open, { projectId, epoch }),
+    forgetConversation: (projectId, epoch) => hot.send(CHAT_EVENTS.forget, { projectId, epoch }),
   })
   hello()
 
@@ -81,7 +84,7 @@ export function startSpaceChat(hot: Hot) {
     hot.off(CHAT_EVENTS.cursor, onCursor)
     hot.off('vite:ws:connect', hello)
     unsubscribe()
-    useChat.setState({ connected: false, send: undefined, stop: undefined, reset: undefined })
+    useChat.setState({ connected: false, send: undefined, stop: undefined, reset: undefined, openConversation: undefined, forgetConversation: undefined })
   }
 }
 

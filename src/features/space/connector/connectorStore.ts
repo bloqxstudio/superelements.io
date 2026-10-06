@@ -63,20 +63,39 @@ const save = (pairing: Pairing | undefined) => {
 }
 
 /**
+ * Um conector aberto responde ao ping na hora. Mais que isso, o navegador está
+ * segurando o pedido: em geral esperando a pessoa responder se o site pode
+ * falar com este computador.
+ */
+const PING_TIMEOUT = 5000
+
+type FindError = 'closed' | 'other' | 'locked' | 'blocked' | 'asking' | 'aborted'
+
+/**
  * Onde o conector com este código está ouvindo. Nada na porta: não há
  * conector aberto. Outro código numa porta: outro conector, e o deste código
- * pode estar na seguinte.
+ * pode estar na seguinte. `signal`: uma tentativa mais nova cancela esta.
  */
-async function find(code: string, from: number): Promise<{ port: number } | { error: 'closed' | 'other' | 'locked' | 'blocked' }> {
+async function find(code: string, from: number, signal: AbortSignal): Promise<{ port: number } | { error: FindError }> {
   let other = false
   for (let port = from; port < from + PORT_TRIES; port++) {
+    const timeout = new AbortController()
+    const stop = () => timeout.abort()
+    const timer = setTimeout(stop, PING_TIMEOUT)
+    signal.addEventListener('abort', stop)
     let response: Response
     try {
-      response = await fetch(`http://127.0.0.1:${port}/ping?code=${code}`)
+      response = await fetch(`http://127.0.0.1:${port}/ping?code=${code}`, { signal: timeout.signal })
     } catch {
+      if (signal.aborted) return { error: 'aborted' }
       // Site publicado falando com o próprio computador: o Chrome e o Edge pedem licença ("loopback")
-      if (await loopbackDenied()) return { error: 'blocked' }
+      const permission = await loopbackPermission()
+      if (permission === 'denied') return { error: 'blocked' }
+      if (permission === 'prompt') return { error: 'asking' }
       break
+    } finally {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', stop)
     }
     if (response.ok) return { port }
     if (response.status === 429) return { error: 'locked' }
@@ -85,17 +104,17 @@ async function find(code: string, from: number): Promise<{ port: number } | { er
   return { error: other ? 'other' : 'closed' }
 }
 
-/** A pessoa negou a licença do navegador para o site falar com este computador. */
-async function loopbackDenied() {
+/** A licença do navegador para o site falar com este computador: negada, ainda perguntando, ou sem pergunta. */
+async function loopbackPermission(): Promise<PermissionState | undefined> {
   for (const name of ['loopback-network', 'local-network-access']) {
     try {
       const state = await navigator.permissions.query({ name } as unknown as PermissionDescriptor)
-      if (state.state === 'denied') return true
+      if (state.state !== 'granted') return state.state
     } catch {
       // Navegador sem essa licença: nada a perguntar
     }
   }
-  return false
+  return undefined
 }
 
 const MESSAGES = {
@@ -103,6 +122,8 @@ const MESSAGES = {
   closed: 'Não achei o conector neste computador. Ele está aberto?',
   other: 'O conector aberto mostra outro código. Confira o código na janela do terminal e cole de novo.',
   locked: 'Muitas tentativas com código errado. Espere uns minutos.',
+  asking: 'O navegador está perguntando se este site pode acessar apps e serviços neste dispositivo. Clique em Permitir no aviso perto do endereço (ou no cadeado) e depois em Conectar de novo.',
+  aborted: '',
 }
 
 let stops: Array<() => void> = []
@@ -112,16 +133,27 @@ const stopAll = () => {
 }
 
 export const useConnector = create<ConnectorState>()((set, get) => {
-  let opening = false
+  // Cada tentativa cancela a anterior: a religação automática ao abrir o app,
+  // presa esperando uma licença do navegador, não segura o "Conectar"
+  let attempt = 0
+  let current: AbortController | null = null
+  // O código com que o canal está ligado agora (o guardado muda antes, ao colar outro)
+  let linked: Pairing | null = null
 
   /** `quiet`: procura de fundo; sem conector aberto ainda, não é erro. */
   const open = async (pairing: Pairing, quiet: boolean) => {
-    if (opening || get().status === 'connected') return get().status === 'connected'
-    opening = true
+    if (get().status === 'connected' && (quiet || (linked?.code === pairing.code && linked.port === pairing.port))) return true
+    current?.abort()
+    const mine = ++attempt
+    const controller = new AbortController()
+    current = controller
     if (!quiet) set({ status: 'checking', error: undefined })
     try {
-      const found = await find(pairing.code, pairing.port)
+      const found = await find(pairing.code, pairing.port, controller.signal)
+      // Uma tentativa mais nova assumiu
+      if (mine !== attempt) return false
       if ('error' in found) {
+        if (found.error === 'aborted') return false
         set({ status: 'failed', error: quiet && found.error === 'closed' ? undefined : MESSAGES[found.error] })
         return false
       }
@@ -136,10 +168,11 @@ export const useConnector = create<ConnectorState>()((set, get) => {
       })
       const [{ startSpaceBridge }, { startSpaceChat }] = await Promise.all([import('@/features/space/bridge/client'), import('@/features/space/chat/connection')])
       stops = [startSpaceBridge(channel), startSpaceChat(channel), () => channel.close()]
+      linked = live
       set({ pairing: live, error: undefined })
       return true
     } finally {
-      opening = false
+      if (current === controller) current = null
     }
   }
 

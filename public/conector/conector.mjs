@@ -14,11 +14,16 @@ var CHAT_AGENTS = {
   codex: { id: "codex", name: "Codex", color: "#0A0A0A", ink: "#FFFFFF" }
 };
 var CHAT_AGENT_IDS = Object.keys(CHAT_AGENTS);
+var totalTokens = (t) => t ? t.input + t.output + (t.cacheRead ?? 0) + (t.cacheWrite ?? 0) : 0;
 var CHAT_EVENTS = {
   hello: "space-chat:hello",
   send: "space-chat:send",
   stop: "space-chat:stop",
   reset: "space-chat:reset",
+  /** Volta para uma conversa do histórico (a atual vai para o histórico). */
+  open: "space-chat:open",
+  /** Apaga uma conversa do histórico. */
+  forget: "space-chat:forget",
   state: "space-chat:state",
   cursor: "space-chat:cursor"
 };
@@ -413,9 +418,33 @@ function spaceBridge() {
 var CHAT_FILE = ".space/chat.json";
 var SESSIONS_DIR = ".space/sessoes";
 var KEEP_MESSAGES = 80;
+var KEEP_HISTORY = 30;
 var MAX_TEXT = 8e3;
 var RUN_TIMEOUT = 20 * 6e4;
 var OUTSIDE = ["publish", "restore", "approval", "invite", "wp", "new", "open", "close"];
+function tokensOf(usage, agent) {
+  if (!usage || typeof usage !== "object") return void 0;
+  const n = (value) => typeof value === "number" && Number.isFinite(value) ? value : 0;
+  if (agent === "claude") {
+    return { input: n(usage.input_tokens), output: n(usage.output_tokens), cacheRead: n(usage.cache_read_input_tokens), cacheWrite: n(usage.cache_creation_input_tokens) };
+  }
+  const cached = n(usage.cached_input_tokens);
+  return { input: Math.max(0, n(usage.input_tokens) - cached), output: n(usage.output_tokens) + n(usage.reasoning_output_tokens), cacheRead: cached };
+}
+function summaryOf(conversation) {
+  const asks = conversation.messages.filter((m) => m.role === "user");
+  const first = asks[0]?.text?.replace(/\s+/g, " ").trim() ?? "";
+  const cost = conversation.messages.reduce((sum, m) => sum + (m.costUsd ?? 0), 0);
+  return {
+    epoch: conversation.epoch,
+    title: first ? short(first, 80) : "Conversa sem pedido",
+    startedAt: conversation.messages[0]?.at ?? conversation.epoch,
+    updatedAt: conversation.updatedAt,
+    requests: asks.length,
+    tokens: conversation.messages.reduce((sum, m) => sum + totalTokens(m.tokens), 0),
+    ...cost ? { costUsd: cost } : {}
+  };
+}
 var runKey = (projectId, agent) => `${projectId}:${agent}`;
 var clip = (value, max) => typeof value === "string" ? value.trim().slice(0, max) : "";
 var short = (value, max = 90) => value.length > max ? `${value.slice(0, max - 1).trimEnd()}\u2026` : value;
@@ -615,8 +644,14 @@ function spaceChat({ guide = REPO_GUIDE } = {}) {
         messages: item2.messages,
         running: running(item2.projectId),
         updatedAt: item2.updatedAt,
-        epoch: item2.epoch
+        epoch: item2.epoch,
+        history: (item2.history ?? []).map(summaryOf)
       });
+      const archive = (item2) => {
+        if (!item2.messages.length) return;
+        const kept = { epoch: item2.epoch, messages: item2.messages, resume: item2.resume, updatedAt: item2.updatedAt };
+        item2.history = [kept, ...(item2.history ?? []).filter((a) => a.epoch !== item2.epoch)].slice(0, KEEP_HISTORY);
+      };
       let saveTimer;
       const save = () => {
         clearTimeout(saveTimer);
@@ -717,6 +752,7 @@ ${text2}` : text2;
             run.finished = true;
             run.message.durationMs = event.duration_ms;
             run.message.costUsd = event.total_cost_usd;
+            run.message.tokens = tokensOf(event.usage, "claude");
             if (event.session_id) item(run).resume.claude = event.session_id;
             if (event.is_error || event.subtype && event.subtype !== "success") run.message.error = clip(event.result, 600) || `O ${CHAT_AGENTS.claude.name} parou (${event.subtype})`;
             return;
@@ -753,6 +789,7 @@ ${text2}` : text2;
             return;
           case "turn.completed":
             run.finished = true;
+            run.message.tokens = tokensOf(event.usage, "codex");
             return;
           case "turn.failed":
             run.finished = true;
@@ -984,7 +1021,23 @@ ${said}` : intro }];
         const item2 = data?.projectId ? conversations.get(data.projectId) : void 0;
         if (!item2) return;
         for (const id of CHAT_AGENT_IDS) stop(item2.projectId, id);
+        archive(item2);
         Object.assign(item2, { messages: [], resume: {}, epoch: Date.now() });
+        broadcast(item2);
+      });
+      server.ws.on(CHAT_EVENTS.open, (data) => {
+        const item2 = data?.projectId ? conversations.get(data.projectId) : void 0;
+        const chosen = item2?.history?.find((a) => a.epoch === data.epoch);
+        if (!item2 || !chosen || running(item2.projectId).length) return;
+        archive(item2);
+        item2.history = (item2.history ?? []).filter((a) => a.epoch !== chosen.epoch);
+        Object.assign(item2, { messages: chosen.messages, resume: chosen.resume, epoch: chosen.epoch });
+        broadcast(item2);
+      });
+      server.ws.on(CHAT_EVENTS.forget, (data) => {
+        const item2 = data?.projectId ? conversations.get(data.projectId) : void 0;
+        if (!item2?.history) return;
+        item2.history = item2.history.filter((a) => a.epoch !== data.epoch);
         broadcast(item2);
       });
       server.httpServer?.on("close", () => {
@@ -1125,7 +1178,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610061513", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610061547", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -1142,7 +1195,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610061513" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610061547" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);

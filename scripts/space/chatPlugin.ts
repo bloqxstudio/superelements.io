@@ -14,12 +14,17 @@ import {
   type ChatContext,
   type ChatConversation,
   type ChatCursorHint,
+  type ChatHistoryItem,
   type ChatMessage,
   type ChatPart,
+  type ChatPlanUsage,
+  type ChatUsageWindow,
   type ChatSendPayload,
   type ChatStep,
   type ChatStepKind,
+  type ChatTokens,
   type CursorMode,
+  totalTokens,
 } from '../../src/features/space/chat/protocol'
 import { bridgeAddress } from './vitePlugin'
 
@@ -42,6 +47,8 @@ const CHAT_FILE = '.space/chat.json'
 const SESSIONS_DIR = '.space/sessoes'
 /** Mensagens guardadas por projeto. */
 const KEEP_MESSAGES = 80
+/** Conversas anteriores guardadas por projeto (cada uma com as suas mensagens). */
+const KEEP_HISTORY = 30
 const MAX_TEXT = 8000
 /** Uma resposta parada há tanto tempo sem sinal do agente é encerrada. */
 const RUN_TIMEOUT = 20 * 60_000
@@ -58,6 +65,108 @@ interface Stored {
   /** Id da conversa do próprio agente (Claude: session_id; Codex: thread_id), para continuar. */
   resume: Partial<Record<ChatAgentId, string>>
   updatedAt: number
+  /** Conversas anteriores, a mais recente primeiro: "Nova conversa" guarda a atual aqui. */
+  history?: Archived[]
+}
+
+/** Uma conversa guardada: dá para voltar a ela e continuar (a sessão do agente segue pelo `resume`). */
+interface Archived {
+  epoch: number
+  messages: ChatMessage[]
+  resume: Partial<Record<ChatAgentId, string>>
+  updatedAt: number
+}
+
+/** Tokens do fim da resposta: o Claude manda o `usage` do pedido inteiro; o Codex, o do turno. */
+function tokensOf(usage: AgentEvent | undefined, agent: ChatAgentId): ChatTokens | undefined {
+  if (!usage || typeof usage !== 'object') return undefined
+  const n = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
+  if (agent === 'claude') {
+    return { input: n(usage.input_tokens), output: n(usage.output_tokens), cacheRead: n(usage.cache_read_input_tokens), cacheWrite: n(usage.cache_creation_input_tokens) }
+  }
+  // No Codex o cache vem dentro da entrada
+  const cached = n(usage.cached_input_tokens)
+  return { input: Math.max(0, n(usage.input_tokens) - cached), output: n(usage.output_tokens) + n(usage.reasoning_output_tokens), cacheRead: cached }
+}
+
+/** Uma janela do limite do plano: o Claude manda 0 a 1 e o fim em segundos; o Codex, porcentagem. */
+function windowOf(raw: AgentEvent | undefined): ChatUsageWindow | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const used = typeof raw.utilization === 'number' ? raw.utilization : typeof raw.used_percent === 'number' ? raw.used_percent / 100 : undefined
+  if (used === undefined) return undefined
+  const resetsAt =
+    typeof raw.resetsAt === 'number' ? raw.resetsAt * 1000
+    : typeof raw.resets_at === 'number' ? raw.resets_at * 1000
+    : typeof raw.resets_in_seconds === 'number' ? Date.now() + raw.resets_in_seconds * 1000
+    : undefined
+  return { used: Math.max(0, Math.min(1, used)), resetsAt }
+}
+
+/** O uso do plano que o agente informou: a sessão de 5 horas e a semana. */
+function planUsageOf(agent: ChatAgentId, event: AgentEvent): ChatPlanUsage | undefined {
+  if (agent === 'claude') {
+    const info = event.rate_limit_info ?? {}
+    const windows = info.unifiedWindows ?? {}
+    const session = windowOf(windows.five_hour) ?? (info.rateLimitType === 'five_hour' ? windowOf({ utilization: info.utilization, resetsAt: info.resetsAt }) : undefined)
+    const week = windowOf(windows.seven_day)
+    return session || week ? { session, week, status: info.status, at: Date.now() } : undefined
+  }
+  const limits = event.rate_limits ?? event.info?.rate_limits
+  if (!limits) return undefined
+  const session = windowOf(limits.primary)
+  const week = windowOf(limits.secondary)
+  return session || week ? { session, week, at: Date.now() } : undefined
+}
+
+const percent = (used: number) => `${Math.round(used * 100)}%`
+const whenResets = (at: number | undefined) => {
+  if (!at) return ''
+  const date = new Date(at)
+  const today = new Date().toDateString() === date.toDateString()
+  return today
+    ? ` · renova às ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+    : ` · renova em ${date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+}
+const tokensText = (n: number) => (n < 1000 ? `${n} tokens` : n < 1_000_000 ? `${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: n < 10_000 ? 1 : 0 })} mil tokens` : `${(n / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi de tokens`)
+
+/** A resposta do /usage: o plano da conta desta máquina e o gasto desta conversa. */
+function usageText(agent: ChatAgentId, usage: ChatPlanUsage | undefined, messages: ChatMessage[]) {
+  const name = CHAT_AGENTS[agent].name
+  const lines: string[] = []
+  if (usage?.session || usage?.week) {
+    lines.push(`**Uso do plano do ${name} nesta máquina**`)
+    if (usage.session) lines.push(`- Sessão (5 horas): ${percent(usage.session.used)} usado${whenResets(usage.session.resetsAt)}`)
+    if (usage.week) lines.push(`- Semana: ${percent(usage.week.used)} usado${whenResets(usage.week.resetsAt)}`)
+    if (usage.status && usage.status !== 'allowed') lines.push(`- Aviso do ${name}: ${usage.status}`)
+  } else {
+    lines.push(
+      agent === 'claude'
+        ? `O ${name} não informou o uso do plano agora. Tente de novo em instantes.`
+        : `O ${name} ainda não informou o uso do plano por aqui. No terminal, rode \`codex\` e digite /status.`
+    )
+  }
+  const answers = messages.filter((m) => m.role === 'agent')
+  const tokens = answers.reduce((sum, m) => sum + totalTokens(m.tokens), 0)
+  const cost = answers.reduce((sum, m) => sum + (m.costUsd ?? 0), 0)
+  const asks = messages.filter((m) => m.role === 'user' && !/^\/(usage|login)\b/i.test(m.text ?? '')).length
+  lines.push('', `**Esta conversa:** ${asks} ${asks === 1 ? 'pedido' : 'pedidos'}${tokens ? ` · ${tokensText(tokens)}` : ''}${cost ? ` · US$ ${cost.toFixed(2).replace('.', ',')}` : ''}`)
+  return lines.join('\n')
+}
+
+/** O resumo de uma conversa para a lista do histórico. */
+function summaryOf(conversation: { epoch: number; messages: ChatMessage[]; updatedAt: number }): ChatHistoryItem {
+  const asks = conversation.messages.filter((m) => m.role === 'user')
+  const first = asks[0]?.text?.replace(/\s+/g, ' ').trim() ?? ''
+  const cost = conversation.messages.reduce((sum, m) => sum + (m.costUsd ?? 0), 0)
+  return {
+    epoch: conversation.epoch,
+    title: first ? short(first, 80) : 'Conversa sem pedido',
+    startedAt: conversation.messages[0]?.at ?? conversation.epoch,
+    updatedAt: conversation.updatedAt,
+    requests: asks.length,
+    tokens: conversation.messages.reduce((sum, m) => sum + totalTokens(m.tokens), 0),
+    ...(cost ? { costUsd: cost } : {}),
+  }
 }
 
 interface Run {
@@ -300,6 +409,9 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
       const chatFile = path.resolve(root, CHAT_FILE)
       const conversations = new Map<string, Stored>()
       const runs = new Map<string, Run>()
+      // O uso do plano de cada agente nesta máquina (o que o /usage mostra), o último que ele informou
+      const planUsage: Partial<Record<ChatAgentId, ChatPlanUsage>> = {}
+      const sendUsage = () => server.ws.send(CHAT_EVENTS.state, { usage: planUsage })
 
       try {
         const saved = JSON.parse(readFileSync(chatFile, 'utf8')) as Stored[]
@@ -332,7 +444,15 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
         running: running(item.projectId),
         updatedAt: item.updatedAt,
         epoch: item.epoch,
+        history: (item.history ?? []).map(summaryOf),
       })
+
+      /** Guarda a conversa atual no histórico (vazia não entra). */
+      const archive = (item: Stored) => {
+        if (!item.messages.length) return
+        const kept: Archived = { epoch: item.epoch, messages: item.messages, resume: item.resume, updatedAt: item.updatedAt }
+        item.history = [kept, ...(item.history ?? []).filter((a) => a.epoch !== item.epoch)].slice(0, KEEP_HISTORY)
+      }
 
       let saveTimer: ReturnType<typeof setTimeout> | undefined
       const save = () => {
@@ -412,6 +532,14 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
           case 'system':
             if (event.subtype === 'init' && event.session_id) item(run).resume.claude = event.session_id
             return
+          case 'rate_limit_event': {
+            const usage = planUsageOf('claude', event)
+            if (usage) {
+              planUsage.claude = usage
+              sendUsage()
+            }
+            return
+          }
           case 'stream_event': {
             const e = event.event ?? {}
             if (e.type === 'message_start') run.message.thinking = true
@@ -447,6 +575,7 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
             run.finished = true
             run.message.durationMs = event.duration_ms
             run.message.costUsd = event.total_cost_usd
+            run.message.tokens = tokensOf(event.usage, 'claude')
             if (event.session_id) item(run).resume.claude = event.session_id
             if (event.is_error || (event.subtype && event.subtype !== 'success')) run.message.error = clip(event.result, 600) || `O ${CHAT_AGENTS.claude.name} parou (${event.subtype})`
             return
@@ -456,6 +585,11 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
       // Codex: exec --json
       const onCodex = (run: Run, event: AgentEvent) => {
         const it = event.item ?? {}
+        const limits = planUsageOf('codex', event)
+        if (limits) {
+          planUsage.codex = limits
+          sendUsage()
+        }
         switch (event.type) {
           case 'thread.started':
             if (event.thread_id) item(run).resume.codex = event.thread_id
@@ -485,6 +619,7 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
             return
           case 'turn.completed':
             run.finished = true
+            run.message.tokens = tokensOf(event.usage, 'codex')
             return
           case 'turn.failed':
             run.finished = true
@@ -525,6 +660,8 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
         if (runs.has(key)) return fail(`O ${info.name} ainda está trabalhando no pedido anterior. Espere ou pare antes.`)
         const bin = findBin(payload.agent)
         if (!bin) return fail(`${info.name} não foi encontrado nesta máquina. Instale, ou diga onde está em ${payload.agent === 'claude' ? 'SPACE_CLAUDE_BIN' : 'SPACE_CODEX_BIN'}.`)
+        // "/usage" no chat: quanto do plano a conta do agente nesta máquina já gastou
+        if (/^\/usage\b/i.test(text)) return showUsage(conversation, answer, payload.agent, bin)
         // "/login" no chat: entra na conta do agente nesta máquina, pelo navegador dela
         if (/^\/login\b/i.test(text)) return login(conversation, answer, key, payload.agent, bin)
 
@@ -655,6 +792,63 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
        * imprime (o endereço, se o navegador não abrir sozinho) aparece na conversa.
        */
       const logins = new Map<string, ChildProcess>()
+
+      /**
+       * O /usage: o uso do plano que o agente informou por último. Velho ou
+       * nenhum, o Claude é chamado com o pedido mais barato possível (o Haiku
+       * responde "ok"), só para o uso vir junto na resposta.
+       */
+      const USAGE_FRESH = 10 * 60_000
+      const showUsage = (conversation: Stored, answer: ChatMessage, agent: ChatAgentId, bin: string) => {
+        const reply = () => {
+          Object.assign(answer, { streaming: false, thinking: false, parts: [{ type: 'text', text: usageText(agent, planUsage[agent], conversation.messages) }] })
+          broadcast(conversation)
+        }
+        const known = planUsage[agent]
+        if (agent !== 'claude' || (known && Date.now() - known.at < USAGE_FRESH)) return reply()
+        const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }
+        for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT']) delete env[k]
+        let child: ChildProcess
+        try {
+          child = launch(bin, ['-p', '--output-format', 'stream-json', '--verbose', '--model', 'haiku', '--strict-mcp-config', '--max-turns', '1'], { cwd: root, env })
+        } catch {
+          return reply()
+        }
+        answer.thinking = true
+        broadcast(conversation)
+        let buffer = ''
+        child.stdout?.setEncoding('utf8')
+        child.stdout?.on('data', (chunk: string) => {
+          buffer += chunk
+          let nl: number
+          while ((nl = buffer.indexOf('\n')) >= 0) {
+            const line = buffer.slice(0, nl).trim()
+            buffer = buffer.slice(nl + 1)
+            if (!line.includes('rate_limit_event')) continue
+            try {
+              const usage = planUsageOf('claude', JSON.parse(line))
+              if (usage) {
+                planUsage.claude = usage
+                sendUsage()
+              }
+            } catch {
+              // Linha que não é evento
+            }
+          }
+        })
+        child.stdin?.on('error', () => {})
+        child.stdin?.end('Responda só: ok')
+        const timer = setTimeout(() => kill(child), 60_000)
+        let replied = false
+        const finish = () => {
+          if (replied) return
+          replied = true
+          clearTimeout(timer)
+          reply()
+        }
+        child.on('error', finish)
+        child.on('close', finish)
+      }
       const login = (conversation: Stored, answer: ChatMessage, key: string, agent: ChatAgentId, bin: string) => {
         const info = CHAT_AGENTS[agent]
         if (logins.has(key)) {
@@ -721,7 +915,7 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
       server.ws.on(CHAT_EVENTS.hello, async (data: { projectId?: string }, client: WebSocketClient) => {
         const list = await checkAgents()
         const item = data?.projectId ? conversations.get(data.projectId) : undefined
-        client.send(CHAT_EVENTS.state, { projectId: data?.projectId, agents: list, conversation: item ? view(item) : null })
+        client.send(CHAT_EVENTS.state, { projectId: data?.projectId, agents: list, conversation: item ? view(item) : null, usage: planUsage })
       })
       server.ws.on(CHAT_EVENTS.send, (payload: ChatSendPayload) => void start(payload))
       server.ws.on(CHAT_EVENTS.stop, (data: { projectId?: string; agent?: ChatAgentId }) => {
@@ -731,8 +925,26 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
         const item = data?.projectId ? conversations.get(data.projectId) : undefined
         if (!item) return
         for (const id of CHAT_AGENT_IDS) stop(item.projectId, id)
-        // Conversa nova: outra sessão na ponte e no agente
+        // Conversa nova: a atual vai para o histórico; outra sessão na ponte e no agente
+        archive(item)
         Object.assign(item, { messages: [], resume: {}, epoch: Date.now() })
+        broadcast(item)
+      })
+      server.ws.on(CHAT_EVENTS.open, (data: { projectId?: string; epoch?: number }) => {
+        const item = data?.projectId ? conversations.get(data.projectId) : undefined
+        const chosen = item?.history?.find((a) => a.epoch === data.epoch)
+        // Com um agente trabalhando, a conversa não troca no meio da resposta
+        if (!item || !chosen || running(item.projectId).length) return
+        archive(item)
+        item.history = (item.history ?? []).filter((a) => a.epoch !== chosen.epoch)
+        // Volta com a mesma sessão da ponte e do agente: continua de onde parou
+        Object.assign(item, { messages: chosen.messages, resume: chosen.resume, epoch: chosen.epoch })
+        broadcast(item)
+      })
+      server.ws.on(CHAT_EVENTS.forget, (data: { projectId?: string; epoch?: number }) => {
+        const item = data?.projectId ? conversations.get(data.projectId) : undefined
+        if (!item?.history) return
+        item.history = item.history.filter((a) => a.epoch !== data.epoch)
         broadcast(item)
       })
 

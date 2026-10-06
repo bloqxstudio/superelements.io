@@ -10,11 +10,13 @@ import {
   MousePointer2,
   PenLine,
   RectangleHorizontal,
-  RotateCcw,
+  History,
+  Plus,
   Search,
   Sparkles,
   Square,
   Terminal,
+  Trash2,
   X,
 } from 'lucide-react'
 import { useProjectStore } from '@/features/projects/projectStore'
@@ -29,7 +31,7 @@ import type { SectionNodeData } from '@/types/space'
 import { ConnectorPrompt } from './ConnectorPrompt'
 import { useConnector } from '@/features/space/connector/connectorStore'
 import { useChat } from './chatStore'
-import { CHAT_AGENTS, CHAT_AGENT_IDS, type ChatAgentId, type ChatContext, type ChatMessage, type ChatPart, type ChatStep } from './protocol'
+import { CHAT_AGENTS, CHAT_AGENT_IDS, totalTokens, type ChatAgentId, type ChatContext, type ChatHistoryItem, type ChatMessage, type ChatPart, type ChatStep, type ChatTokens, type ChatUsageWindow } from './protocol'
 
 /**
  * O chat do projeto, na aba Agente do painel da direita: a pessoa escreve, escolhe o
@@ -248,12 +250,7 @@ const AgentMessage: React.FC<{ message: ChatMessage }> = ({ message }) => {
         {message.error && <p className="rounded-lg bg-red-50 px-2.5 py-1.5 text-[12px] leading-snug text-red-700">{message.error}</p>}
         {message.error && <AuthHint agent={message.agent} error={message.error} />}
         {message.stopped && !message.error && <p className="text-[12px] text-gray-500">Parado por você.</p>}
-        {!message.streaming && !!message.durationMs && (
-          <p className="text-[10px] tabular-nums text-gray-400">
-            {seconds(message.durationMs)}
-            {message.costUsd ? ` · ${money(message.costUsd)}` : ''}
-          </p>
-        )}
+        {!message.streaming && !!message.durationMs && <UsageLine message={message} />}
       </div>
     </div>
   )
@@ -302,7 +299,8 @@ export const SpaceChat: React.FC = () => {
   const context = useSelectionContext()
   const [draft, setDraft] = useState('')
   const [withSelection, setWithSelection] = useState(true)
-  const [confirmReset, setConfirmReset] = useState(false)
+  // A lista das conversas anteriores no lugar da conversa
+  const [showHistory, setShowHistory] = useState(false)
   const input = useRef<HTMLTextAreaElement>(null)
   const list = useRef<HTMLDivElement>(null)
 
@@ -331,12 +329,6 @@ export const SpaceChat: React.FC = () => {
     const el = list.current
     if (el && pinned.current) el.scrollTop = el.scrollHeight
   }, [tail])
-
-  useEffect(() => {
-    if (!confirmReset) return
-    const timer = setTimeout(() => setConfirmReset(false), 3000)
-    return () => clearTimeout(timer)
-  }, [confirmReset])
 
   // Autoaltura da caixa de texto
   useEffect(() => {
@@ -382,45 +374,47 @@ export const SpaceChat: React.FC = () => {
     const { send } = useChat.getState()
     if (!clean || busy || !send || status?.available === false) return
     send({ projectId, projectName, agent, text: clean, context: shown })
-    setDraft('')
+    // O /usage da barrinha não apaga o que a pessoa estava escrevendo
+    if (text === draft) setDraft('')
     pinned.current = true
   }
 
   const stop = () => useChat.getState().stop?.(projectId, agent)
-  const reset = () => {
-    if (!confirmReset) return setConfirmReset(true)
+  // A atual vai para o histórico: nada se perde, então não pergunta
+  const startNew = () => {
     useChat.getState().reset?.(projectId)
-    setConfirmReset(false)
+    setShowHistory(false)
+    pinned.current = true
+  }
+  const openOld = (epoch: number) => {
+    useChat.getState().openConversation?.(projectId, epoch)
+    setShowHistory(false)
+    pinned.current = true
   }
 
   return (
     <div data-space-chat className="flex min-h-0 flex-1 flex-col">
       <ConnectorBar />
-      {(running.length > 0 || messages.length > 0) && (
-        <div className="flex h-9 shrink-0 items-center gap-2 border-b border-gray-100 pl-3 pr-1.5">
-          <p className="min-w-0 flex-1 truncate text-[11px] text-gray-500">
-            {running.length > 0 ? (
-              <>
-                {running.map((id) => CHAT_AGENTS[id].name).join(' e ')} trabalhando
-                <span aria-hidden className="se-agent-dots" />
-              </>
-            ) : (
-              `${messages.filter((m) => m.role === 'user').length} pedidos nesta conversa`
-            )}
-          </p>
-          {messages.length > 0 && (
-            <button
-              className={`inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-medium transition-colors ${confirmReset ? 'bg-red-50 text-red-600' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
-              onClick={reset}
-              title="Começa outra conversa: os agentes esquecem esta"
-            >
-              <RotateCcw className="h-3 w-3" />
-              {confirmReset ? 'Apagar a conversa?' : 'Nova conversa'}
-            </button>
-          )}
-        </div>
-      )}
+      <ConversationBar
+        messages={messages}
+        running={running}
+        historyCount={conversation?.history?.length ?? 0}
+        showHistory={showHistory}
+        onHistory={() => setShowHistory((open) => !open)}
+        onNew={startNew}
+      />
+      <PlanUsageBar agent={agent} onShow={() => send('/usage')} disabled={busy} />
 
+      {showHistory ? (
+        <HistoryList
+          items={conversation?.history ?? []}
+          current={messages.length ? summaryOf(messages) : null}
+          locked={running.length > 0}
+          onOpen={openOld}
+          onForget={(epoch) => useChat.getState().forgetConversation?.(projectId, epoch)}
+          onCurrent={() => setShowHistory(false)}
+        />
+      ) : (
       <div
         ref={list}
         className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3"
@@ -441,6 +435,10 @@ export const SpaceChat: React.FC = () => {
               )}
               . Selecione uma seção ou uma camada no canvas: o agente trabalha só ali, e você vê o cursor dele.
             </p>
+            <p className="text-[11px] leading-relaxed text-gray-400">
+              Digite <code className="rounded bg-gray-100 px-1 font-mono text-gray-600">/usage</code> para ver quanto do plano já usou, ou{' '}
+              <code className="rounded bg-gray-100 px-1 font-mono text-gray-600">/login</code> se o agente sair da conta.
+            </p>
             <div className="flex flex-wrap gap-1.5">
               {suggestionsFor(shown).map((text) => (
                 <button
@@ -460,6 +458,7 @@ export const SpaceChat: React.FC = () => {
           messages.map((message) => (message.role === 'user' ? <UserMessage key={message.id} message={message} /> : <AgentMessage key={message.id} message={message} />))
         )}
       </div>
+      )}
 
       <form
         className="m-2 shrink-0 rounded-xl border border-gray-200 bg-white transition-[border-color,box-shadow] focus-within:border-gray-300 focus-within:shadow-[0_4px_16px_-6px_rgb(0_0_0/0.16)]"
@@ -573,6 +572,236 @@ export const SpaceChat: React.FC = () => {
           )}
         </div>
       </form>
+    </div>
+  )
+}
+
+// ---------- tokens e histórico ----------
+
+/** "850 tokens", "18,4 mil tokens", "1,2 mi de tokens". */
+const tokensLabel = (n: number) =>
+  n < 1000
+    ? `${n} tokens`
+    : n < 1_000_000
+      ? `${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: n < 10_000 ? 1 : 0 })} mil tokens`
+      : `${(n / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi de tokens`
+
+const tokensDetail = (t: ChatTokens) =>
+  [
+    `Entrada: ${t.input.toLocaleString('pt-BR')}`,
+    `Saída: ${t.output.toLocaleString('pt-BR')}`,
+    ...(t.cacheRead ? [`Lidos do cache: ${t.cacheRead.toLocaleString('pt-BR')}`] : []),
+    ...(t.cacheWrite ? [`Gravados no cache: ${t.cacheWrite.toLocaleString('pt-BR')}`] : []),
+  ].join(' · ')
+
+/** Tempo, tokens e custo de uma resposta, embaixo dela. */
+const UsageLine: React.FC<{ message: ChatMessage }> = ({ message }) => {
+  const tokens = totalTokens(message.tokens)
+  return (
+    <p className="text-[10px] tabular-nums text-gray-400" title={message.tokens ? tokensDetail(message.tokens) : undefined}>
+      {seconds(message.durationMs ?? 0)}
+      {tokens > 0 && ` · ${tokensLabel(tokens)}`}
+      {message.costUsd ? ` · ${money(message.costUsd)}` : ''}
+    </p>
+  )
+}
+
+/** Soma da conversa: pedidos, tokens (com o detalhe) e custo. */
+function summaryOf(messages: ChatMessage[]) {
+  const sum = (pick: (t: ChatTokens) => number) => messages.reduce((n, m) => n + (m.tokens ? pick(m.tokens) : 0), 0)
+  const tokens: ChatTokens = { input: sum((t) => t.input), output: sum((t) => t.output), cacheRead: sum((t) => t.cacheRead ?? 0), cacheWrite: sum((t) => t.cacheWrite ?? 0) }
+  const first = messages.find((m) => m.role === 'user')?.text?.replace(/\s+/g, ' ').trim()
+  return {
+    title: first || 'Conversa nova',
+    requests: messages.filter((m) => m.role === 'user').length,
+    tokens,
+    total: totalTokens(tokens),
+    costUsd: messages.reduce((n, m) => n + (m.costUsd ?? 0), 0),
+    startedAt: messages[0]?.at,
+  }
+}
+
+const day = (at: number) => {
+  const date = new Date(at)
+  const today = new Date()
+  return date.toDateString() === today.toDateString()
+    ? `hoje, ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+    : date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+/** Quando a janela do plano renova: "15:30" hoje, ou "13/10, 09:00". */
+const resetLabel = (at: number | undefined) => {
+  if (!at) return ''
+  const date = new Date(at)
+  return new Date().toDateString() === date.toDateString()
+    ? `renova às ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+    : `renova em ${date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+}
+
+/**
+ * Quanto do plano a conta do agente nesta máquina já usou, como o /usage do
+ * Claude Code: a sessão de 5 horas e a semana. Vem com cada resposta; clicar
+ * pede o /usage com o detalhe.
+ */
+const PlanUsageBar: React.FC<{ agent: ChatAgentId; onShow: () => void; disabled?: boolean }> = ({ agent, onShow, disabled }) => {
+  const usage = useChat((s) => s.planUsage[agent])
+  if (!usage || (!usage.session && !usage.week)) return null
+  const meter = (label: string, window: ChatUsageWindow | undefined) => {
+    if (!window) return null
+    const pct = Math.round(window.used * 100)
+    const tone = window.used >= 0.9 ? 'bg-red-500' : window.used >= 0.7 ? 'bg-amber-500' : 'bg-gray-800'
+    return (
+      <span className="flex min-w-0 flex-1 items-center gap-1.5" title={`${label}: ${pct}% usado${window.resetsAt ? ` · ${resetLabel(window.resetsAt)}` : ''}`}>
+        <span className="shrink-0 text-gray-500">{label}</span>
+        <span className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-100">
+          <span className={`block h-full rounded-full ${tone}`} style={{ width: `${Math.max(2, pct)}%` }} />
+        </span>
+        <span className="shrink-0 tabular-nums text-gray-700">{pct}%</span>
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={onShow}
+      disabled={disabled}
+      title={`Uso do plano do ${CHAT_AGENTS[agent].name} nesta máquina · clique para ver o detalhe (/usage)`}
+      className="flex h-8 w-full shrink-0 items-center gap-3 border-b border-gray-100 px-3 text-left text-[10px] transition-colors hover:bg-gray-50 disabled:pointer-events-none"
+    >
+      {meter('Sessão', usage.session)}
+      {meter('Semana', usage.week)}
+    </button>
+  )
+}
+
+interface ConversationBarProps {
+  messages: ChatMessage[]
+  running: ChatAgentId[]
+  historyCount: number
+  showHistory: boolean
+  onHistory: () => void
+  onNew: () => void
+}
+
+/** Em cima da conversa: o histórico, o que esta conversa é, o gasto dela e começar outra. */
+const ConversationBar: React.FC<ConversationBarProps> = ({ messages, running, historyCount, showHistory, onHistory, onNew }) => {
+  const summary = summaryOf(messages)
+  return (
+    <div className="flex h-10 shrink-0 items-center gap-1 border-b border-gray-100 pl-1.5 pr-1.5">
+      <button
+        type="button"
+        onClick={onHistory}
+        aria-pressed={showHistory}
+        title={showHistory ? 'Voltar para a conversa' : 'Conversas anteriores deste projeto'}
+        className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-lg px-1.5 text-[11px] font-medium transition-colors ${showHistory ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+      >
+        <History className="h-3.5 w-3.5" />
+        {historyCount > 0 && <span className="tabular-nums">{historyCount}</span>}
+      </button>
+      <div className="min-w-0 flex-1 px-1">
+        <p className="truncate text-[12px] font-medium text-gray-900">{showHistory ? 'Conversas' : summary.title}</p>
+        <p className="truncate text-[10px] tabular-nums text-gray-400" title={summary.total ? tokensDetail(summary.tokens) : undefined}>
+          {running.length > 0 ? (
+            <>
+              {running.map((id) => CHAT_AGENTS[id].name).join(' e ')} trabalhando
+              <span aria-hidden className="se-agent-dots" />
+            </>
+          ) : summary.requests ? (
+            [
+              `${summary.requests} ${summary.requests === 1 ? 'pedido' : 'pedidos'}`,
+              summary.total ? tokensLabel(summary.total) : '',
+              summary.costUsd ? money(summary.costUsd) : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')
+          ) : (
+            'Sem pedidos ainda'
+          )}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onNew}
+        disabled={!messages.length}
+        title="Começa outra conversa; esta fica no histórico"
+        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:pointer-events-none disabled:opacity-40"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Nova
+      </button>
+    </div>
+  )
+}
+
+interface HistoryListProps {
+  items: ChatHistoryItem[]
+  current: ReturnType<typeof summaryOf> | null
+  /** Agente trabalhando: não troca de conversa no meio da resposta. */
+  locked: boolean
+  onOpen: (epoch: number) => void
+  onForget: (epoch: number) => void
+  onCurrent: () => void
+}
+
+/** As conversas do projeto, a atual primeiro; abrir uma continua de onde ela parou. */
+const HistoryList: React.FC<HistoryListProps> = ({ items, current, locked, onOpen, onForget, onCurrent }) => {
+  const [confirm, setConfirm] = useState<number | null>(null)
+  useEffect(() => {
+    if (confirm === null) return
+    const timer = setTimeout(() => setConfirm(null), 3000)
+    return () => clearTimeout(timer)
+  }, [confirm])
+
+  const meta = (requests: number, total: number, cost?: number) =>
+    [`${requests} ${requests === 1 ? 'pedido' : 'pedidos'}`, total ? tokensLabel(total) : '', cost ? money(cost) : ''].filter(Boolean).join(' · ')
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      {current && (
+        <button type="button" onClick={onCurrent} className="mb-1 w-full rounded-lg bg-gray-100 px-2.5 py-2 text-left transition-colors hover:bg-gray-200/70">
+          <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            Atual
+          </span>
+          <span className="mt-0.5 block truncate text-[12px] font-medium text-gray-900">{current.title}</span>
+          <span className="block truncate text-[10px] tabular-nums text-gray-500">{meta(current.requests, current.total, current.costUsd)}</span>
+        </button>
+      )}
+      {items.length ? (
+        <ul className="space-y-0.5">
+          {items.map((item) => (
+            <li key={item.epoch} className="group flex items-center gap-1 rounded-lg pr-1 transition-colors hover:bg-gray-50">
+              <button
+                type="button"
+                disabled={locked}
+                onClick={() => onOpen(item.epoch)}
+                title={locked ? 'Espere o agente terminar para trocar de conversa' : 'Abrir e continuar esta conversa'}
+                className="min-w-0 flex-1 px-2.5 py-2 text-left disabled:cursor-not-allowed"
+              >
+                <span className="block truncate text-[12px] text-gray-800">{item.title}</span>
+                <span className="block truncate text-[10px] tabular-nums text-gray-400">
+                  {day(item.updatedAt)} · {meta(item.requests, item.tokens, item.costUsd)}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => (confirm === item.epoch ? (onForget(item.epoch), setConfirm(null)) : setConfirm(item.epoch))}
+                aria-label={confirm === item.epoch ? 'Confirmar: apagar esta conversa' : 'Apagar esta conversa'}
+                title={confirm === item.epoch ? 'Clique de novo para apagar' : 'Apagar'}
+                className={`shrink-0 rounded-md p-1.5 transition-[color,background-color,opacity] ${
+                  confirm === item.epoch ? 'bg-red-50 text-red-600 opacity-100' : 'text-gray-400 opacity-0 hover:bg-gray-100 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100'
+                }`}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="px-3 py-8 text-center text-[11px] leading-relaxed text-gray-400">
+          Ainda não há conversas anteriores. Ao começar uma nova, esta fica guardada aqui para você voltar e continuar.
+        </p>
+      )}
     </div>
   )
 }

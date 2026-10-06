@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ChatAgentAvailability, ChatAgentId, ChatConversation, ChatSendPayload } from './protocol'
+import type { ChatAgentAvailability, ChatAgentId, ChatConversation, ChatPlanUsage, ChatSendPayload } from './protocol'
 
 /**
  * O chat de cada projeto, como o servidor de dev manda (ver `connection.ts`).
@@ -22,6 +22,8 @@ interface ChatState {
   connected: boolean
   agents: ChatAgentAvailability[]
   conversations: Record<string, ChatConversation>
+  /** Quanto do plano a conta de cada agente já gastou, como o agente informou por último. */
+  planUsage: Partial<Record<ChatAgentId, ChatPlanUsage>>
   /** Para quem vai a próxima mensagem. */
   agent: ChatAgentId
   /** Conversa aberta acima da caixa de mensagem. */
@@ -31,12 +33,17 @@ interface ChatState {
   send?: (payload: ChatSendPayload) => void
   stop?: (projectId: string, agent: ChatAgentId) => void
   reset?: (projectId: string) => void
+  /** Volta para uma conversa do histórico; a atual vai para o histórico. */
+  openConversation?: (projectId: string, epoch: number) => void
+  /** Apaga uma conversa do histórico. */
+  forgetConversation?: (projectId: string, epoch: number) => void
 }
 
 export const useChat = create<ChatState>()((set) => ({
   connected: false,
   agents: [],
   conversations: {},
+  planUsage: {},
   agent: savedAgent(),
   open: false,
   setAgent: (agent) => {

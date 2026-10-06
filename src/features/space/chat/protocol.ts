@@ -73,6 +73,32 @@ export interface ChatMessage {
   stopped?: boolean
   durationMs?: number
   costUsd?: number
+  /** Tokens que a resposta gastou, como o agente informa no fim. */
+  tokens?: ChatTokens
+}
+
+/** Tokens de uma resposta: entrada nova, saída e o que veio do cache (lido ou gravado). */
+export interface ChatTokens {
+  input: number
+  output: number
+  cacheRead?: number
+  cacheWrite?: number
+}
+
+/** Tudo o que a resposta processou: entrada, cache e saída. */
+export const totalTokens = (t: ChatTokens | undefined) => (t ? t.input + t.output + (t.cacheRead ?? 0) + (t.cacheWrite ?? 0) : 0)
+
+/** Uma conversa guardada do projeto, para a lista do histórico. */
+export interface ChatHistoryItem {
+  epoch: number
+  /** O primeiro pedido, encurtado. */
+  title: string
+  startedAt: number
+  updatedAt: number
+  /** Pedidos da pessoa na conversa. */
+  requests: number
+  tokens: number
+  costUsd?: number
 }
 
 export interface ChatConversation {
@@ -84,6 +110,8 @@ export interface ChatConversation {
   updatedAt: number
   /** Conversa atual: compõe a sessão da ponte de cada agente (`chatSession`). */
   epoch: number
+  /** As conversas anteriores do projeto, a mais recente primeiro (sem as mensagens). */
+  history?: ChatHistoryItem[]
 }
 
 /** O que o servidor manda às abas: a conversa inteira, ou só a mensagem que mudou. */
@@ -94,6 +122,28 @@ export interface ChatStateEvent {
   message?: ChatMessage
   running?: ChatAgentId[]
   epoch?: number
+  /** Quanto do plano a conta do agente nesta máquina já gastou (o que o /usage mostra). */
+  usage?: Partial<Record<ChatAgentId, ChatPlanUsage>>
+}
+
+/** Uma janela de limite do plano: quanto já foi usado (0 a 1) e quando renova (ms). */
+export interface ChatUsageWindow {
+  used: number
+  resetsAt?: number
+}
+
+/**
+ * O uso do plano da conta do agente, como o Claude Code informa a cada pedido
+ * (`rate_limit_event`): a sessão de 5 horas e a semana. É da conta da
+ * máquina que roda o agente, não do projeto.
+ */
+export interface ChatPlanUsage {
+  session?: ChatUsageWindow
+  week?: ChatUsageWindow
+  /** 'allowed', ou o aviso de que está perto ou no limite. */
+  status?: string
+  /** Quando o agente informou (ms). */
+  at: number
 }
 
 /** O agente está instalado nesta máquina? */
@@ -125,6 +175,10 @@ export const CHAT_EVENTS = {
   send: 'space-chat:send',
   stop: 'space-chat:stop',
   reset: 'space-chat:reset',
+  /** Volta para uma conversa do histórico (a atual vai para o histórico). */
+  open: 'space-chat:open',
+  /** Apaga uma conversa do histórico. */
+  forget: 'space-chat:forget',
   state: 'space-chat:state',
   cursor: 'space-chat:cursor',
 } as const
