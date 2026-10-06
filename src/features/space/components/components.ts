@@ -1,6 +1,7 @@
 import { parseSectionElements, type SectionElement } from '@/features/space/landingPage'
 import { newElementId } from '@/features/space/editor/tree'
-import type { ComponentRole, SectionNodeData, SpaceComponent, SpaceNode } from '@/types/space'
+import { isContentSetting } from '@/features/space/editor/contentFields'
+import type { ComponentRole, ComponentTexts, SectionNodeData, SpaceComponent, SpaceNode } from '@/types/space'
 
 /**
  * Componentes do projeto: qualquer parte da página (uma seção inteira, um
@@ -117,6 +118,119 @@ export function componentUses(nodes: SpaceNode[]): ComponentUse[] {
   return uses
 }
 
+// ---------------------------------------------------------------------------
+// Textos de cada uso
+//
+// Por padrão (`own`) o componente liga o estilo e a estrutura: textos, links,
+// imagens e listas são de cada uso. Com `shared`, tudo é igual em todos. Um
+// componente dentro de outro segue a escolha dele mesmo (um botão com texto
+// próprio dentro de um hero com texto igual).
+
+export const textsOf = (component: Pick<SpaceComponent, 'texts'> | undefined) => component?.texts ?? 'own'
+
+export type ModeOf = (componentId: string) => ComponentTexts
+
+export const modeLookup = (components: SpaceComponent[]): ModeOf => {
+  const modes = new Map(components.map((c) => [c.id, textsOf(c)]))
+  return (id) => modes.get(id) ?? 'own'
+}
+
+const contentKeysOf = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+  [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((key) => isContentSetting(key, a[key]) || isContentSetting(key, b[key]))
+
+const settingsOfElement = (element: SectionElement | undefined) => (isRecord(element?.settings) ? (element!.settings as Record<string, unknown>) : {})
+
+/** Os elementos sem o conteúdo onde ele é de cada uso: o que precisa ser igual em todos os usos. */
+function scrubContent(elements: SectionElement[], mode: ComponentTexts, modeOf: ModeOf): SectionElement[] {
+  return elements.map((element) => {
+    const tag = elementComponent(element)
+    const here = tag ? modeOf(tag) : mode
+    const settings = settingsOfElement(element)
+    const kept = here === 'own' ? Object.fromEntries(Object.entries(settings).filter(([key, value]) => !isContentSetting(key, value))) : settings
+    return { ...element, settings: kept, elements: scrubContent(element.elements ?? [], here, modeOf) }
+  })
+}
+
+/** O que liga os usos, para comparar: sem ids e sem o conteúdo de cada uso. */
+export const syncKey = (elements: SectionElement[], mode: ComponentTexts, modeOf: ModeOf) => contentKey(scrubContent(elements, mode, modeOf))
+
+/**
+ * O conteúdo novo (`next`, da origem) com os textos, links e imagens que o uso
+ * já tinha (`prev`) onde eles são de cada uso. O par é o elemento no mesmo
+ * lugar e do mesmo tipo; o que a origem tem de novo entra com o conteúdo dela.
+ */
+export function keepOwnContent(next: SectionElement[], prev: SectionElement[], mode: ComponentTexts, modeOf: ModeOf): SectionElement[] {
+  return next.map((element, index) => {
+    const before = prev[index]
+    const match = before && before.elType === element.elType && before.widgetType === element.widgetType ? before : undefined
+    const tag = elementComponent(element)
+    const here = tag ? modeOf(tag) : mode
+    let own = element
+    if (match && here === 'own') {
+      const mine = settingsOfElement(match)
+      const settings = { ...settingsOfElement(element) }
+      for (const key of contentKeysOf(settings, mine)) if (key in mine) settings[key] = mine[key]
+      own = { ...element, settings }
+    }
+    return own.elements?.length ? { ...own, elements: keepOwnContent(own.elements, match?.elements ?? [], here, modeOf) } : own
+  })
+}
+
+/** Os elementos de um uso: a seção inteira, ou a camada num array de um. */
+function usageElements(use: ComponentUse, nodes: SpaceNode[]): SectionElement[] | null {
+  const node = nodes.find((n) => n.id === use.sectionId)
+  const root = node?.type === 'section' ? parseSectionElements((node.data as SectionNodeData).elementorJson) : null
+  if (!root) return null
+  if (!use.elementId) return root
+  let found: SectionElement | null = null
+  walk(root, (element) => {
+    if (!found && element.id === use.elementId) found = element
+  })
+  return found ? [found] : null
+}
+
+export const usageKey = (use: Pick<ComponentUse, 'sectionId' | 'elementId'>) => `${use.sectionId}:${use.elementId ?? ''}`
+
+/**
+ * O que vai para o modelo do Elementor, que tem um conteúdo só: a versão mais
+ * usada do componente (no empate, a primeira). Os usos com textos próprios
+ * vão dentro das páginas deles.
+ */
+export function templateUses(componentId: string, nodes: SpaceNode[]) {
+  const uses = componentUses(nodes).filter((u) => u.componentId === componentId)
+  const keyed = uses.map((use) => ({ use, key: contentKey(usageElements(use, nodes) ?? []) }))
+  const count = new Map<string, number>()
+  for (const { key } of keyed) count.set(key, (count.get(key) ?? 0) + 1)
+  let best: (typeof keyed)[number] | undefined
+  for (const entry of keyed) if (!best || (count.get(entry.key) ?? 0) > (count.get(best.key) ?? 0)) best = entry
+  const matching = keyed.filter((entry) => entry.key === best?.key).map((entry) => entry.use)
+  return { canonical: best?.use, matching, own: keyed.filter((entry) => entry.key !== best?.key).map((entry) => entry.use) }
+}
+
+/** Os usos que podem ser o modelo do site (iguais à versão publicada), por componente. */
+export function templateMatches(nodes: SpaceNode[], componentIds: Iterable<string>) {
+  const keys = new Set<string>()
+  for (const id of componentIds) for (const use of templateUses(id, nodes).matching) keys.add(usageKey(use))
+  return keys
+}
+
+/**
+ * A página pode usar o cabeçalho e o rodapé do Theme Builder: tem cada um
+ * igual ao modelo. Com texto próprio num deles, a página leva os dois dentro
+ * dela (o tema mostraria o próprio cabeçalho no lugar do que falta).
+ */
+export function themePage(sectionIds: string[], nodes: SpaceNode[], components: SpaceComponent[]) {
+  const roles = components.filter((c) => c.role && c.level === 'section')
+  const inPage = new Set(sectionIds)
+  const uses = componentUses(nodes).filter((u) => inPage.has(u.sectionId) && !u.elementId && roles.some((c) => c.id === u.componentId))
+  if (!uses.length) return { roles: [] as SpaceComponent[], eligible: true }
+  const matches = templateMatches(nodes, new Set(uses.map((u) => u.componentId)))
+  return {
+    roles: roles.filter((c) => uses.some((u) => u.componentId === c.id)),
+    eligible: uses.every((u) => matches.has(usageKey(u))),
+  }
+}
+
 /**
  * De onde sai um uso novo: um uso que já está no canvas (com os ajustes à mão
  * dele) ou, sem nenhum, o registro.
@@ -167,18 +281,20 @@ function keepTags(next: SectionElement[], prev: SectionElement[]): SectionElemen
 
 /**
  * Todos os usos do componente com o conteúdo do registro (cada um com os seus
- * ids): quando o registro muda de fora, como ao trazer de novo o modelo do site.
+ * ids): quando o registro muda de fora, como ao trazer de novo o modelo do site
+ * ou ao passar a ter os textos iguais. Com textos de cada uso, só o estilo vai.
  */
-export function refreshUses(nodes: SpaceNode[], component: SpaceComponent): SpaceNode[] {
+export function refreshUses(nodes: SpaceNode[], component: SpaceComponent, modeOf: ModeOf = () => 'own'): SpaceNode[] {
   const source = componentElements(component)
   if (!source.length) return nodes
+  const mode = textsOf(component)
   return nodes.map((node) => {
     if (node.type !== 'section') return node
     const data = node.data as SectionNodeData
     const root = parseSectionElements(data.elementorJson)
     if (!root) return node
     if (data.component === component.id) {
-      const next = keepTags(remapIds(source, root).elements, root)
+      const next = keepOwnContent(keepTags(remapIds(source, root).elements, root), root, mode, modeOf)
       if (contentKey(next) === contentKey(root)) return node
       return { ...node, data: { ...data, elementorJson: JSON.stringify(next) } }
     }
@@ -186,7 +302,7 @@ export function refreshUses(nodes: SpaceNode[], component: SpaceComponent): Spac
     const replace = (list: SectionElement[]): SectionElement[] =>
       list.map((element) => {
         if (elementComponent(element) === component.id) {
-          const next = keepTags(remapIds(source, [element]).elements, [element])[0]
+          const next = keepOwnContent(keepTags(remapIds(source, [element]).elements, [element]), [element], mode, modeOf)[0]
           if (contentKey([next]) === contentKey([element])) return element
           changed = true
           return next
@@ -198,15 +314,23 @@ export function refreshUses(nodes: SpaceNode[], component: SpaceComponent): Spac
   })
 }
 
-/** Seções comuns com o mesmo conteúdo da seção (cópias dela em outras páginas), para ligar ao componente. */
-export function identicalSections(nodes: SpaceNode[], sectionId: string): string[] {
+/**
+ * Seções comuns com o mesmo desenho da seção (cópias dela em outras páginas),
+ * para ligar ao componente. Com textos de cada uso, os textos podem ser outros.
+ */
+export function identicalSections(nodes: SpaceNode[], sectionId: string, mode: ComponentTexts = 'own', modeOf: ModeOf = () => 'own'): string[] {
   const source = nodes.find((n) => n.id === sectionId && n.type === 'section')
   if (!source) return []
-  const key = contentKey(parseSectionElements((source.data as SectionNodeData).elementorJson) ?? [])
+  const key = syncKey(parseSectionElements((source.data as SectionNodeData).elementorJson) ?? [], mode, modeOf)
   return nodes
     .filter((n) => n.type === 'section' && n.id !== sectionId && !(n.data as SectionNodeData).component)
-    .filter((n) => contentKey(parseSectionElements((n.data as SectionNodeData).elementorJson) ?? []) === key)
+    .filter((n) => syncKey(parseSectionElements((n.data as SectionNodeData).elementorJson) ?? [], mode, modeOf) === key)
     .map((n) => n.id)
+}
+
+/** O registro passa a ter o conteúdo do uso escolhido (para textos iguais a partir dele). */
+export function elementsOfUse(nodes: SpaceNode[], sectionId: string, elementId?: string) {
+  return usageElements({ componentId: '', sectionId, elementId }, nodes)
 }
 
 /** Uma seção nova que é uso do componente (de seção inteira). */
@@ -237,14 +361,18 @@ interface Change {
 
 /**
  * Depois de uma mudança nas seções: o uso de componente que ficou diferente
- * do registro passa o conteúdo dele para o registro e para todos os outros
- * usos. Devolve null quando nada precisa mudar.
+ * do registro (no estilo; nos textos também, quando eles são iguais em todos)
+ * passa a mudança para o registro e para todos os outros usos, e cada uso
+ * guarda os textos que são dele. Devolve null quando nada precisa mudar.
  */
 export function syncComponents(prev: SpaceNode[], next: SpaceNode[], components: SpaceComponent[]): { nodes: SpaceNode[]; components: SpaceComponent[] } | null {
   if (!components.length) return null
   const before = new Map(prev.map((n) => [n.id, n]))
   const byId = new Map(components.map((c) => [c.id, c]))
+  const modeOf = modeLookup(components)
   const changes = new Map<string, Change>()
+  const differs = (elements: SectionElement[], component: SpaceComponent) =>
+    syncKey(elements, textsOf(component), modeOf) !== syncKey(componentElements(component), textsOf(component), modeOf)
 
   for (const node of next) {
     if (node.type !== 'section' || before.get(node.id)?.data === node.data) continue
@@ -252,14 +380,14 @@ export function syncComponents(prev: SpaceNode[], next: SpaceNode[], components:
     const elements = parseSectionElements(data.elementorJson)
     if (!elements) continue
     const section = data.component ? byId.get(data.component) : undefined
-    if (section && !changes.has(section.id) && contentKey(elements) !== contentKey(componentElements(section))) {
+    if (section && !changes.has(section.id) && differs(elements, section)) {
       changes.set(section.id, { componentId: section.id, elements, pinned: data.pinned ?? {}, sectionId: node.id })
     }
     walk(elements, (element) => {
       const id = elementComponent(element)
       const component = id ? byId.get(id) : undefined
       if (!component || changes.has(component.id) || !element.id) return
-      if (contentKey([element]) === contentKey(componentElements(component))) return
+      if (!differs([element], component)) return
       const pinned: Record<string, string[]> = {}
       walk([element], (inner) => {
         if (inner.id && data.pinned?.[inner.id]?.length) pinned[inner.id] = data.pinned[inner.id]
@@ -269,9 +397,10 @@ export function syncComponents(prev: SpaceNode[], next: SpaceNode[], components:
   }
   if (!changes.size) return null
 
+  // O registro fica com a mudança e com os textos dele, onde os textos são de cada uso
   const nextComponents = components.map((c) => {
     const change = changes.get(c.id)
-    return change ? { ...c, elementorJson: JSON.stringify(change.elements) } : c
+    return change ? { ...c, elementorJson: JSON.stringify(keepOwnContent(change.elements, componentElements(c), textsOf(c), modeOf)) } : c
   })
 
   let touched = false
@@ -287,7 +416,7 @@ export function syncComponents(prev: SpaceNode[], next: SpaceNode[], components:
     const whole = data.component ? changes.get(data.component) : undefined
     if (whole && !(whole.sectionId === node.id && !whole.elementId)) {
       const mapped = remapIds(whole.elements, elements)
-      elements = mapped.elements
+      elements = keepOwnContent(mapped.elements, elements, modeOf(whole.componentId), modeOf)
       pinned = mapPins(whole.pinned, mapped.ids)
       changed = true
     }
@@ -304,7 +433,7 @@ export function syncComponents(prev: SpaceNode[], next: SpaceNode[], components:
           walk([element], (inner) => inner.id && own.add(inner.id))
           pinned = { ...Object.fromEntries(Object.entries(pinned ?? {}).filter(([key]) => !own.has(key))), ...mapPins(change.pinned, mapped.ids) }
           changed = true
-          return mapped.elements[0]
+          return keepOwnContent(mapped.elements, [element], modeOf(change.componentId), modeOf)[0]
         }
         return element.elements?.length ? { ...element, elements: replace(element.elements) } : element
       })

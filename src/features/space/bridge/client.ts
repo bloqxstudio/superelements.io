@@ -9,7 +9,7 @@ import { parseDesignMd } from '@/features/space/brand/designMd'
 import { buildLandingPage, parseSectionElements, type SectionElement } from '@/features/space/landingPage'
 import { findElement } from '@/features/space/navigator/elementorContentEditor'
 import { DEFAULT_PAGE_NAME, nextPagePosition, pageContent, pageOf, pageSections, SECTION_WIDTH } from '@/features/space/pages/pages'
-import { componentUses, elementComponent, siteFrameSections, walk } from '@/features/space/components/components'
+import { componentUses, elementComponent, siteFrameSections, textsOf, walk } from '@/features/space/components/components'
 import { insertComponent } from '@/features/space/editor/actions'
 import { isFromSite, renderKit } from '@/features/space/renderKit'
 import { authorizationUrl, completeConnection, profileUrl } from '@/features/wordpress/connect'
@@ -26,7 +26,7 @@ import { setBackgroundRelease } from '@/features/projects/background'
 import { cursorFromCall } from '@/features/space/chat/cursorFromBridge'
 import type { AgentChannel } from '@/features/space/connector/channel'
 import { useSpaceStore } from '@/store/spaceStore'
-import type { ComponentRole, PageDetails, SectionNodeData, SpaceComponent, SpaceNode, SpacePage } from '@/types/space'
+import type { ComponentRole, ComponentTexts, PageDetails, SectionNodeData, SpaceComponent, SpaceNode, SpacePage } from '@/types/space'
 import { useAgents, type AgentView, type ViewRequest } from './agentsStore'
 import { DEFAULT_AGENT, useClaudeBridge, type ClaudeStep, type ClaudeStepKind, type TouchKind } from './bridgeStore'
 import { focusSection } from './focus'
@@ -208,6 +208,8 @@ function componentsInfo() {
     name: c.name,
     level: c.level,
     role: c.role,
+    // own: só o estilo muda junto, cada uso tem os seus textos; shared: tudo igual em todos
+    texts: textsOf(c),
     wordpress: c.wordpress ? { siteUrl: c.wordpress.siteUrl, postId: c.wordpress.postId, link: c.wordpress.link } : undefined,
     uses: uses
       .filter((u) => u.componentId === c.id)
@@ -1013,7 +1015,8 @@ async function restore(params: { page?: string }, ctx: CallContext) {
  */
 function component(
   params: {
-    action?: 'list' | 'make' | 'detach' | 'rename' | 'role' | 'place' | 'insert' | 'delete'
+    action?: 'list' | 'make' | 'detach' | 'rename' | 'role' | 'texts' | 'place' | 'insert' | 'delete'
+    texts?: ComponentTexts
     component?: string
     section?: string
     element?: string
@@ -1054,6 +1057,14 @@ function component(
       if (!params.name?.trim()) throw new Error('Diga o nome novo')
       store.renameComponent(target.id, params.name)
       return { componentId: target.id, name: params.name.trim() }
+    }
+    case 'texts': {
+      if (params.texts !== 'shared' && params.texts !== 'own') throw new Error('Diga shared (textos iguais em todos) ou own (cada uso com os seus)')
+      // Ao passar a iguais, os textos do uso dado (--from) vão para os outros; sem ele, os do registro
+      const from = params.section ? { sectionId: findNode(store.nodes, params.section).id, elementId: params.element } : undefined
+      store.setComponentTexts(target.id, params.texts, from)
+      note(ctx, 'change', `${target.name}: ${params.texts === 'shared' ? 'textos iguais em todos os usos' : 'cada uso com os seus textos'}`)
+      return { componentId: target.id, texts: params.texts }
     }
     case 'role': {
       if (target.level !== 'section') throw new Error('Só uma seção inteira é cabeçalho ou rodapé do site')

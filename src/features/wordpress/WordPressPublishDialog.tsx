@@ -6,7 +6,7 @@ import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/co
 import { Label } from '@/components/ui/label'
 import { slugify } from '@/features/space/featured/suggest'
 import { plural } from '@/features/space/pages/pages'
-import { COMPONENT_COLOR, componentUses } from '@/features/space/components/components'
+import { COMPONENT_COLOR, componentUses, templateUses, themePage } from '@/features/space/components/components'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { SpaceComponent } from '@/types/space'
 import { cn } from '@/lib/utils'
@@ -125,6 +125,11 @@ const ComponentsNote: React.FC<{ pageId: string; support: PartsSupport | null }>
   const roles = components.filter((c) => c.role)
   const asModel = components.filter((c) => !c.role && componentKind(c))
   const inline = components.filter((c) => !c.role && !componentKind(c))
+  // Uso com textos próprios nesta página: o modelo do Elementor tem um texto só, então ele vai dentro dela
+  const { nodes, components: all } = useSpaceStore.getState()
+  const inPage = new Set(page.sectionIds)
+  const ownTexts = components.filter((c) => componentKind(c) && templateUses(c.id, nodes).own.some((u) => inPage.has(u.sectionId)))
+  const frameInline = !themePage(page.sectionIds, nodes, all).eligible
   const outdated = components.filter((c) => {
     if (!linked(c) || !c.wordpress?.contentHash) return false
     try {
@@ -155,6 +160,12 @@ const ComponentsNote: React.FC<{ pageId: string; support: PartsSupport | null }>
       {roles.length > 0 && <p>{names(roles)}: vêm do Theme Builder, os mesmos em todas as páginas; a página sobe sem eles.</p>}
       {asModel.length > 0 && <p>{names(asModel)}: entram como referência ao modelo de cada um (widget Modelo ou Global Widget); o que ainda não está no site é salvo junto.</p>}
       {inline.length > 0 && <p>{names(inline)}: grupos dentro da seção, vão dentro da página.</p>}
+      {ownTexts.length > 0 && (
+        <p>
+          {names(ownTexts)}: com textos próprios nesta página, {ownTexts.length === 1 ? 'vai' : 'vão'} dentro dela (o modelo do Elementor leva a versão mais usada).
+          {frameInline && ' O cabeçalho e o rodapé vão dentro da página, e ela fica de fora dos modelos do Theme Builder.'}
+        </p>
+      )}
       {missingRoles.length > 0 && (
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-amber-800">
           <span>{names(missingRoles)} ainda não {missingRoles.length === 1 ? 'está' : 'estão'} no Theme Builder: até lá, a página mostra o que o site já tem.</span>
@@ -276,7 +287,13 @@ export const PublishPanel: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, pageId, connection, nodes, page?.sectionIds, support?.mode])
   // Com o Theme Builder, a página com cabeçalho do site vai em Largura Total: o layout não se escolhe
-  const themeParts = support?.mode === 'theme' && !!page && pageComponentsOf(page.id, page.sectionIds).some((c) => !!c.role)
+  // Largura Total só quando a página usa o cabeçalho e o rodapé do Theme Builder (sem textos próprios neles)
+  const themeParts = (() => {
+    if (support?.mode !== 'theme' || !page) return false
+    const { nodes, components } = useSpaceStore.getState()
+    const frame = themePage(page.sectionIds, nodes, components)
+    return frame.eligible && frame.roles.length > 0
+  })()
 
   if (!open || !page) return null
 

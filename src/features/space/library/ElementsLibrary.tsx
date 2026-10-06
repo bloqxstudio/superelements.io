@@ -92,30 +92,70 @@ const componentItem = (component: SpaceComponent): InsertItem => {
   }
 }
 
-const ComponentRow: React.FC<{ component: SpaceComponent; uses: number }> = ({ component, uses }) => (
-  <li>
-    <button
-      type="button"
-      className="flex w-full cursor-grab items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-left transition-[border-color,background-color,transform] hover:border-cyan-300 hover:bg-cyan-50/50 active:scale-[0.96] active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-600"
-      onPointerDown={(e) => startInsertDrag(e, componentItem(component), () => insertComponent(component.id))}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          insertComponent(component.id)
-        }
-      }}
-      title={component.level === 'section' ? 'Clique para pôr depois da seção selecionada, ou arraste entre as seções' : 'Clique para pôr na camada selecionada, ou arraste até o canvas'}
-    >
-      <ComponentIcon className="h-3.5 w-3.5 shrink-0" style={{ color: COMPONENT_COLOR }} strokeWidth={1.75} aria-hidden />
-      <span className="min-w-0 flex-1 truncate text-xs font-medium" style={{ color: COMPONENT_COLOR_STRONG }}>
-        {component.name}
-      </span>
-      <span className="shrink-0 text-[10px] text-gray-400">
-        {component.role === 'header' ? 'cabeçalho' : component.role === 'footer' ? 'rodapé' : component.level === 'section' ? 'seção' : 'camada'} · {uses}
-      </span>
-    </button>
-  </li>
-)
+const ComponentRow: React.FC<{ component: SpaceComponent; uses: number }> = ({ component, uses }) => {
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(component.name)
+  return (
+    <li className="group flex items-center gap-1 rounded-lg border border-gray-200 bg-white pr-1 transition-[border-color,background-color] hover:border-cyan-300 hover:bg-cyan-50/50">
+      {editing ? (
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          onBlur={() => {
+            useSpaceStore.getState().renameComponent(component.id, name)
+            setEditing(false)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur()
+            if (e.key === 'Escape') {
+              setName(component.name)
+              setEditing(false)
+            }
+          }}
+          className="min-w-0 flex-1 rounded-md px-2.5 py-2 text-xs outline-none focus:shadow-[0_0_0_2px_rgb(8_145_178/0.4)]"
+          aria-label="Nome do componente"
+        />
+      ) : (
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-transform active:scale-[0.96] active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-600"
+          onPointerDown={(e) => startInsertDrag(e, componentItem(component), () => insertComponent(component.id))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              insertComponent(component.id)
+            }
+          }}
+          title={component.level === 'section' ? 'Clique para pôr depois da seção selecionada, ou arraste entre as seções' : 'Clique para pôr na camada selecionada, ou arraste até o canvas'}
+        >
+          <ComponentIcon className="h-3.5 w-3.5 shrink-0" style={{ color: COMPONENT_COLOR }} strokeWidth={1.75} aria-hidden />
+          <span className="min-w-0 flex-1 truncate text-xs font-medium" style={{ color: COMPONENT_COLOR_STRONG }}>
+            {component.name}
+          </span>
+          <span className="shrink-0 text-[10px] text-gray-400 group-hover:hidden">
+            {component.role === 'header' ? 'cabeçalho' : component.role === 'footer' ? 'rodapé' : component.level === 'section' ? 'seção' : 'camada'} · {uses}
+          </span>
+        </button>
+      )}
+      {!editing && (
+        <button
+          type="button"
+          onClick={() => {
+            setName(component.name)
+            setEditing(true)
+          }}
+          className="hidden rounded-md p-1 text-gray-400 transition-colors hover:text-gray-700 focus-visible:block group-hover:block"
+          aria-label={`Renomear ${component.name}`}
+          title="Renomear"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+      )}
+    </li>
+  )
+}
 
 const tile =
   'group flex cursor-grab select-none flex-col items-start gap-2 rounded-lg border border-gray-200 bg-white p-2.5 text-left transition-[border-color,background-color,transform] hover:border-gray-300 hover:bg-gray-50 active:scale-[0.96] active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500'

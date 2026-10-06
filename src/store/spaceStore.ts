@@ -17,7 +17,7 @@ import {
   pageSlots,
 } from '@/features/space/pages/pages'
 import { instantiateSnapshot, snapshotSections, type SectionSnapshot } from '@/features/space/pages/clipboard'
-import { componentElements, componentSectionData, contentKey, elementComponent, freshCopy, refreshUses, remapIds, siteFrameSections, suggestName, syncComponents, tagElement, untagElement, walk } from '@/features/space/components/components'
+import { componentElements, componentSectionData, contentKey, elementComponent, elementsOfUse, freshCopy, keepOwnContent, modeLookup, refreshUses, remapIds, syncKey, textsOf, siteFrameSections, suggestName, syncComponents, tagElement, untagElement, walk } from '@/features/space/components/components'
 import { editSection, locate } from '@/features/space/editor/tree'
 import { findElement } from '@/features/space/navigator/elementorContentEditor'
 import { orderedSections, parseSectionElements, type SectionElement } from '@/features/space/landingPage'
@@ -32,6 +32,7 @@ import type {
   PendingConnection,
   NodeType,
   ComponentRole,
+  ComponentTexts,
   SpaceComponent,
   SectionNodeData,
   TextNodeData,
@@ -186,6 +187,11 @@ interface SpaceActions {
   /** Um uso do componente de seção, na página (na posição, ou no fim); devolve o id da seção. */
   insertComponentSection: (componentId: string, pageId: string, index?: number) => string | null
   renameComponent: (id: string, name: string) => void
+  /**
+   * Textos, links e imagens iguais em todos os usos (`shared`) ou de cada uso
+   * (`own`). Ao passar a iguais, os do uso dado (a seleção) vão para os outros.
+   */
+  setComponentTexts: (id: string, texts: ComponentTexts, from?: { sectionId: string; elementId?: string }) => void
   /** Cabeçalho ou rodapé do site (vai para o Theme Builder ao publicar), ou nenhum. */
   setComponentRole: (id: string, role: ComponentRole | undefined) => void
   /** Tira o componente do projeto: os usos viram seções e camadas comuns. */
@@ -995,12 +1001,14 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const { nodes, components } = get()
         const component = components.find((c) => c.id === componentId && c.level === 'section')
         if (!component) return 0
-        const key = contentKey(componentElements(component))
+        // O mesmo desenho; com textos de cada uso, os textos podem ser outros
+        const modeOf = modeLookup(components)
+        const key = syncKey(componentElements(component), textsOf(component), modeOf)
         const ids = new Set(
           sectionIds.filter((id) => {
             const node = nodes.find((n) => n.id === id && n.type === 'section')
             const data = node?.data as SectionNodeData | undefined
-            return !!data && !data.component && contentKey(parseSectionElements(data.elementorJson) ?? []) === key
+            return !!data && !data.component && syncKey(parseSectionElements(data.elementorJson) ?? [], textsOf(component), modeOf) === key
           })
         )
         if (!ids.size) return 0
@@ -1022,10 +1030,11 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           if (!wanted.has(page.id)) return page
           const own = page.sectionIds.map((id) => nodes.find((n) => n.id === id)).find((n) => n && (n.data as SectionNodeData).component === componentId)
           if (own) {
-            // Já tem: fica com o conteúdo de agora do componente, com os ids dele
+            // Já tem: fica com o desenho de agora do componente, com os ids e (se forem dele) os textos dela
             const data = own.data as SectionNodeData
-            const mapped = remapIds(source, parseSectionElements(data.elementorJson) ?? undefined)
-            refreshed.set(own.id, { ...own, data: { ...data, elementorJson: JSON.stringify(mapped.elements) } })
+            const current = parseSectionElements(data.elementorJson) ?? []
+            const mapped = keepOwnContent(remapIds(source, current).elements, current, textsOf(component), modeLookup(components))
+            refreshed.set(own.id, { ...own, data: { ...data, elementorJson: JSON.stringify(mapped) } })
             return page
           }
           const node: SpaceNode = { id: crypto.randomUUID(), type: 'section', x: page.x, y: page.y, ...NODE_DIMENSIONS.section, data: componentSectionData(component, nodes) }
@@ -1052,6 +1061,23 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         if (!trimmed || get().components.find((c) => c.id === id)?.name === trimmed) return
         track(`renameComponent:${id}`)
         set((state) => ({ components: state.components.map((c) => (c.id === id ? { ...c, name: trimmed } : c)) }), false, 'renameComponent')
+      },
+
+      setComponentTexts: (id, texts, from) => {
+        const { components, nodes } = get()
+        const component = components.find((c) => c.id === id)
+        if (!component || textsOf(component) === texts) return
+        const updated: SpaceComponent = { ...component, texts }
+        // Textos iguais a partir do uso escolhido: o registro fica com ele, e os outros usos recebem
+        const source = texts === 'shared' && from ? elementsOfUse(nodes, from.sectionId, from.elementId) : null
+        if (source) updated.elementorJson = JSON.stringify(source)
+        const nextComponents = components.map((c) => (c.id === id ? updated : c))
+        track()
+        set(
+          { components: nextComponents, ...(texts === 'shared' ? { nodes: refreshUses(nodes, updated, modeLookup(nextComponents)) } : {}) },
+          false,
+          'setComponentTexts'
+        )
       },
 
       setComponentRole: (id, role) => {
@@ -1116,7 +1142,8 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         if (existing) {
           // A versão do site entra no registro e em todos os usos que já estão no canvas
           const updated = { ...existing, ...incoming, elementorJson, id }
-          set({ components: components.map((c) => (c.id === id ? updated : c)), nodes: refreshUses(nodes, updated) }, false, 'loadSiteComponent')
+          const nextComponents = components.map((c) => (c.id === id ? updated : c))
+          set({ components: nextComponents, nodes: refreshUses(nodes, updated, modeLookup(nextComponents)) }, false, 'loadSiteComponent')
           return id
         }
         set({ components: [...components, { ...incoming, elementorJson, id }] }, false, 'loadSiteComponent')

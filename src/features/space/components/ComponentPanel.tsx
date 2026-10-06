@@ -1,22 +1,24 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { CloudUpload, Component as ComponentIcon, Globe, PanelBottom, PanelTop, Unlink, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { cn } from '@/lib/utils'
 import { useSpaceStore } from '@/store/spaceStore'
-import type { ComponentRole, SectionNodeData, SpaceComponent } from '@/types/space'
+import type { ComponentRole, ComponentTexts, SectionNodeData, SpaceComponent } from '@/types/space'
 import { MOD_KEY } from '@/features/space/pages/clipboard'
 import { pageOf, plural } from '@/features/space/pages/pages'
 import { componentKind } from '@/features/wordpress/publish'
 import { useWordPressUi } from '@/features/wordpress/uiStore'
 import { useActiveWordPress } from '@/features/wordpress/useWordPressConnection'
-import { COMPONENT_COLOR, COMPONENT_COLOR_STRONG, componentUses, type ComponentUse } from './components'
+import { COMPONENT_COLOR, COMPONENT_COLOR_STRONG, componentUses, textsOf, type ComponentUse } from './components'
+import { useComponentNaming } from './naming'
 import { goToUse } from './selection'
 
 /**
  * O componente no lugar em que ele está, na aba Estilo: não há área separada
  * de componentes. Clicar num uso mostra o nome, onde mais ele aparece (clicar
- * leva até lá), o papel no site e as ações. Mudar o uso no canvas muda todos.
+ * leva até lá), se os textos são iguais em todos ou de cada uso, o papel no
+ * site e as ações. O estilo muda junto em todos os usos.
  */
 
 const ROLE_LABEL: Record<ComponentRole, string> = { header: 'Cabeçalho do site', footer: 'Rodapé do site' }
@@ -40,7 +42,20 @@ export const ComponentCard: React.FC<ComponentCardProps> = ({ componentId, secti
   const { nodes, pages } = useSpaceStore(useShallow((s) => ({ nodes: s.nodes, pages: s.pages })))
   const connection = useActiveWordPress()
   const uses = useMemo(() => componentUses(nodes).filter((u) => u.componentId === componentId), [nodes, componentId])
+  // Recém-criado: o nome já vem selecionado, para digitar por cima
+  const naming = useComponentNaming((s) => s.id === componentId)
+  const nameRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (!naming) return
+    const input = nameRef.current
+    if (input) {
+      input.focus()
+      input.select()
+    }
+    useComponentNaming.getState().set(null)
+  }, [naming])
   if (!component) return null
+  const texts = textsOf(component)
 
   const store = useSpaceStore.getState()
   const here = { sectionId, elementId }
@@ -76,6 +91,13 @@ export const ComponentCard: React.FC<ComponentCardProps> = ({ componentId, secti
     toast.success('Este uso virou cópia comum', { description: `Os outros seguem ligados. ${MOD_KEY}Z desfaz.` })
   }
 
+  const setTexts = (next: ComponentTexts) => {
+    store.setComponentTexts(component.id, next, { sectionId, elementId })
+    if (next === 'shared' && others.length) {
+      toast.success('Textos iguais em todos os usos', { description: `Os textos deste foram para ${others.length === 1 ? 'o outro' : `os outros ${others.length}`}. ${MOD_KEY}Z desfaz.` })
+    }
+  }
+
   const dissolve = () => {
     store.deleteComponent(component.id)
     toast.success(`${component.name} deixou de ser componente`, { description: `${plural(uses.length, 'uso virou cópia comum', 'usos viraram cópias comuns')}. ${MOD_KEY}Z desfaz.` })
@@ -86,9 +108,11 @@ export const ComponentCard: React.FC<ComponentCardProps> = ({ componentId, secti
       <div className="flex items-center gap-2">
         <ComponentIcon className="h-3.5 w-3.5 shrink-0" style={{ color: COMPONENT_COLOR }} aria-hidden />
         <input
+          ref={nameRef}
           key={component.id + component.name}
           defaultValue={component.name}
           aria-label="Nome do componente"
+          placeholder="Nome do componente"
           onBlur={(e) => store.renameComponent(component.id, e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
           className="h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 text-xs font-semibold outline-none transition-colors hover:border-cyan-200 focus:border-cyan-500 focus:bg-white"
@@ -101,10 +125,39 @@ export const ComponentCard: React.FC<ComponentCardProps> = ({ componentId, secti
 
       <p className="text-[11px] leading-snug text-cyan-950/80">
         {inside && 'Você está dentro do componente. '}
-        {others.length
-          ? `Mudar aqui muda ${others.length === 1 ? 'o outro uso' : `os outros ${others.length} usos`}.`
-          : 'Por enquanto só está aqui. Duplique, copie e cole ou insira pelo painel Inserir para usar em outros lugares.'}
+        {!others.length
+          ? 'Por enquanto só está aqui. Duplique, copie e cole ou insira pelo painel Inserir para usar em outros lugares.'
+          : texts === 'shared'
+            ? `Mudar aqui muda ${others.length === 1 ? 'o outro uso' : `os outros ${others.length} usos`}, textos também.`
+            : `O estilo muda junto ${others.length === 1 ? 'no outro uso' : `nos outros ${others.length} usos`}; os textos são de cada um.`}
       </p>
+
+      <div className="flex items-center gap-2">
+        <span className="w-12 shrink-0 text-[11px] text-cyan-950/70">Textos</span>
+        <div role="radiogroup" aria-label="Textos do componente" className="grid flex-1 grid-cols-2 gap-0.5 rounded-md bg-white p-0.5 ring-1 ring-inset ring-cyan-200">
+          {(
+            [
+              ['own', 'Cada um o seu', 'Cada uso tem os próprios textos, links e imagens; só o estilo muda junto'],
+              ['shared', 'Iguais em todos', 'Textos, links e imagens iguais em todos os usos; os deste uso vão para os outros'],
+            ] as const
+          ).map(([value, label, title]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={texts === value}
+              title={title}
+              onClick={() => setTexts(value)}
+              className={cn(
+                'h-6 rounded text-[11px] font-medium transition-[background-color,color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-600',
+                texts === value ? 'bg-cyan-700 text-white' : 'text-gray-600 hover:text-gray-900'
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {others.length > 0 && (
         <ul className="flex flex-wrap gap-1" aria-label="Outros usos">

@@ -105,6 +105,8 @@ export interface PagePart {
 
 /** Papel do componente no site: o cabeçalho e o rodapé vão para o Theme Builder do Elementor Pro. */
 export type ComponentRole = 'header' | 'footer'
+/** Textos, links e imagens: iguais em todos os usos (`shared`) ou de cada uso (`own`, o padrão; só o estilo muda junto). */
+export type ComponentTexts = 'shared' | 'own'
 
 /**
  * Componente do projeto: qualquer parte da página (uma seção inteira, um
@@ -121,6 +123,8 @@ export interface SpaceComponent {
   /** JSON do Elementor de agora: a lista de elementos da seção, ou a camada num array de um. */
   elementorJson: string
   role?: ComponentRole
+  /** Sem valor: cada uso tem os seus textos (`own`). */
+  texts?: ComponentTexts
   /** O modelo do Elementor no site do cliente que este componente atualiza ao publicar. */
   wordpress?: PageWordPressLink
 }

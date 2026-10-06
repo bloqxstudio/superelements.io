@@ -50,7 +50,10 @@ quem acompanha não muda. Acompanhe todos em /agentes no app.
   component                       componentes do projeto e onde cada um é usado
   component make --from <seção> [--element <id da camada>] [--name "<nome>"] [--page <nome>]
                                   a seção (ou uma camada dela: container, botão, título) vira componente; os usos
-                                  ficam ligados: mudar um (no canvas ou no push) muda todos
+                                  ficam ligados: o estilo muda junto em todos (no canvas ou no push)
+  component texts <componente> own|shared [--from <seção> --element <id>]
+                                  own (padrão): textos, links e imagens de cada uso; shared: iguais em todos,
+                                  a partir do uso dado em --from
   component insert <componente> (--page <nome> [--at <n>] | --into <seção>)
                                   novo uso: a seção entra na página (posição n, ou o fim); a camada, no fim da seção
   component role <componente> header|footer|none [--all]
@@ -498,9 +501,9 @@ async function pullPages(pageRefs) {
     '## Páginas',
     ...data.pages.map((p) => `- ${p.name} — ${p.sections.length} seções${p.wordpress ? ` · publica em ${p.wordpress.link ?? p.wordpress.siteUrl}` : ''}`),
     data.components?.length && '\n## Componentes\n',
-    ...(data.components ?? []).map((c) => `- ${c.name}${c.role ? ` — ${c.role === 'header' ? 'cabeçalho' : 'rodapé'} do site` : ''} — ${c.level === 'section' ? 'seção inteira' : 'camada'}, ${c.uses.length} usos (${[...new Set(c.uses.map((u) => u.page ?? 'solta'))].join(', ')})`),
+    ...(data.components ?? []).map((c) => `- ${c.name}${c.role ? ` — ${c.role === 'header' ? 'cabeçalho' : 'rodapé'} do site` : ''} — ${c.level === 'section' ? 'seção inteira' : 'camada'}, ${c.texts === 'shared' ? 'textos iguais' : 'textos de cada uso'}, ${c.uses.length} usos (${[...new Set(c.uses.map((u) => u.page ?? 'solta'))].join(', ')})`),
     data.components?.length &&
-      '\nCada uso de componente fica na página e é editável ali; mudar um uso (no canvas ou no push) muda todos. Para outra página, insira o componente (component insert), nunca uma cópia solta.',
+      '\nCada uso de componente fica na página e é editável ali. O estilo e a estrutura mudam juntos em todos os usos; os textos, links e imagens são de cada uso, a não ser no componente com textos iguais (shared). Para outra página, insira o componente (component insert), nunca uma cópia solta.',
     '',
     '## Briefing do projeto',
     '',
@@ -713,7 +716,7 @@ async function cmdComponent() {
     if (!components.length) return console.log('O projeto não tem componentes. Crie com: component make --from <seção> [--element <id da camada>]')
     for (const c of components) {
       const where = c.uses.map((u) => `${u.page ?? 'solta'}${u.elementId ? ` › ${u.elementId}` : ''}`).join(', ')
-      console.log(`◆ ${c.name}  ·  ${c.id.slice(0, 8)}  ·  ${c.level === 'section' ? 'seção inteira' : 'camada'}${c.role ? ` · ${ROLE_NAME[c.role]} do site` : ''}${c.wordpress ? ` · no site: post ${c.wordpress.postId}` : ''}`)
+      console.log(`◆ ${c.name}  ·  ${c.id.slice(0, 8)}  ·  ${c.level === 'section' ? 'seção inteira' : 'camada'} · ${c.texts === 'shared' ? 'textos iguais' : 'textos de cada uso'}${c.role ? ` · ${ROLE_NAME[c.role]} do site` : ''}${c.wordpress ? ` · no site: post ${c.wordpress.postId}` : ''}`)
       console.log(`   ${c.uses.length} usos: ${where || 'nenhum (insira com component insert)'}`)
     }
     return
@@ -727,7 +730,7 @@ async function cmdComponent() {
       return done(`${element ? `A camada ${element}` : `"${section.title}"`} se separou do componente; os outros usos seguem ligados.`)
     }
     const result = await call('component', { action: 'make', section: section.id, element, name: one(flags.name) })
-    return done(`"${result.name}" virou componente (${result.componentId.slice(0, 8)}, ${result.level === 'section' ? 'seção inteira' : 'camada'}). Use em outros lugares com: component insert "${result.name}" …`)
+    return done(`"${result.name}" virou componente (${result.componentId.slice(0, 8)}, ${result.level === 'section' ? 'seção inteira' : 'camada'}; o estilo muda junto, os textos são de cada uso). Use em outros lugares com: component insert "${result.name}" …`)
   }
 
   if (!ref) fail(`Diga o componente: component ${action} <nome ou id>`)
@@ -737,6 +740,14 @@ async function cmdComponent() {
       if (!name) fail('Diga o nome novo: component rename <componente> --name "<nome>"')
       await call('component', { action: 'rename', component: ref, name })
       return done(`Agora se chama "${name}".`)
+    }
+    case 'texts': {
+      const parts = positional.slice(1)
+      const texts = parts.pop()
+      if (!['own', 'shared'].includes(texts)) fail('Diga own (cada uso com os seus textos) ou shared (iguais em todos): component texts <componente> own|shared [--from <seção> --element <id>]')
+      const from = flags.from ? resolveSection(status, one(flags.from), one(flags.page)) : undefined
+      await call('component', { action: 'texts', component: parts.join(' '), texts, section: from?.id, element: one(flags.element) })
+      return done(texts === 'shared' ? `Textos iguais em todos os usos${from ? `, a partir de "${from.title}"` : ''}.` : 'Cada uso fica com os seus textos; só o estilo muda junto.')
     }
     case 'role': {
       const parts = positional.slice(1)
@@ -768,7 +779,7 @@ async function cmdComponent() {
       return done(`Deixou de ser componente: ${result.uses} usos viraram cópias comuns.`)
     }
   }
-  fail(`Ação desconhecida: component ${action}. Use component, make, insert, role, place, detach, rename ou delete`)
+  fail(`Ação desconhecida: component ${action}. Use component, make, insert, texts, role, place, detach, rename ou delete`)
 }
 
 async function cmdPageAdd() {

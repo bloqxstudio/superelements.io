@@ -1,4 +1,4 @@
-import { componentUses } from '@/features/space/components/components'
+import { componentUses, templateMatches, themePage, usageKey } from '@/features/space/components/components'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { SpaceComponent, SpaceNode, SpacePage } from '@/types/space'
 import { supabase } from '@/integrations/supabase/client'
@@ -236,11 +236,19 @@ export function pagesUsing(componentId: string, pages: SpacePage[], nodes: Space
 
 /**
  * Condições do Theme Builder para o cabeçalho (ou rodapé): o site inteiro,
- * menos as páginas que já estão no site e não têm o componente. As que ainda
- * não foram publicadas entram na condição quando forem (`pending`).
+ * menos as páginas que já estão no site e não o mostram pelo modelo (sem o
+ * componente, ou com texto próprio no cabeçalho ou no rodapé, que vão dentro
+ * delas). As que ainda não foram publicadas entram na condição quando forem
+ * (`pending`).
  */
 export function componentConditions(component: SpaceComponent, pages: SpacePage[], nodes: SpaceNode[], siteUrl: string) {
-  const using = new Set(pagesUsing(component.id, pages, nodes).map((p) => p.id))
+  const components = useSpaceStore.getState().components
+  const matches = templateMatches(nodes, [component.id])
+  const using = new Set(
+    pagesUsing(component.id, pages, nodes)
+      .filter((page) => themePage(page.sectionIds, nodes, components).eligible && page.sectionIds.some((id) => matches.has(usageKey({ sectionId: id }))))
+      .map((p) => p.id)
+  )
   const without = pages.filter((p) => !using.has(p.id))
   const linked = without.filter((p) => p.wordpress?.siteUrl === siteUrl)
   return {

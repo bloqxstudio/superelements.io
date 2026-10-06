@@ -146,6 +146,9 @@ function kindOf(key: string, value: unknown): ContentFieldKind | null {
   return LONG.test(key) || value.length > 80 || /\n|<\w/.test(value) ? 'longtext' : 'text'
 }
 
+/** A chave é conteúdo (texto, link, imagem, lista), e não estilo ou comportamento. */
+export const isContentSetting = (key: string, value: unknown) => key === '__dynamic__' || kindOf(key, value) !== null
+
 /** Campos de conteúdo das settings, na ordem em que aparecem no JSON. */
 export function contentFields(settings: Settings, depth = 0): ContentField[] {
   const dynamic = isRecord(settings.__dynamic__) ? settings.__dynamic__ : {}

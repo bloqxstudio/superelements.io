@@ -6,6 +6,8 @@ import type { EditorDevice, SectionNodeData } from '@/types/space'
 import { MOD_KEY } from '@/features/space/pages/clipboard'
 import { pageOf, plural } from '@/features/space/pages/pages'
 import { elementComponent, identicalSections, newUse } from '@/features/space/components/components'
+import { useComponentNaming } from '@/features/space/components/naming'
+import { useSpaceUi } from '@/features/space/spaceUi'
 import { useBlocks, type SavedBlock } from './blocks'
 import { editTextIn } from './frames'
 import { copyPins, pinKeys, type PinnedSettings } from './pinned'
@@ -245,12 +247,17 @@ export function componentizeSelection(name?: string) {
   }
   if (!already) {
     const created = useSpaceStore.getState().components.find((c) => c.id === id)
-    // A mesma seção repetida em outras páginas (o cabeçalho copiado, por exemplo): ligar as cópias numa ação
+    // O painel do componente abre com o nome selecionado, para dar o nome na hora
+    if (!name) {
+      useSpaceUi.getState().setRight('style')
+      useComponentNaming.getState().set(id)
+    }
+    // A mesma seção repetida em outras páginas (o cabeçalho copiado, por exemplo), mesmo com outros textos: ligar numa ação
     const copies = sel ? [] : identicalSections(useSpaceStore.getState().nodes, sectionId)
     toast.success(`"${created?.name ?? 'Componente'}" virou componente`, {
       description: copies.length
-        ? `Há ${plural(copies.length, 'cópia igual', 'cópias iguais')} em outras páginas: ligue para mudarem juntas.`
-        : 'Duplique, copie e cole ou insira pelo painel Inserir: mudar um uso muda todos.',
+        ? `Há ${plural(copies.length, 'seção com o mesmo desenho', 'seções com o mesmo desenho')} em outras páginas: ligue para o estilo mudar junto (os textos de cada uma ficam).`
+        : 'Dê um nome no painel. Duplique, copie e cole ou insira pelo painel Inserir: o estilo muda junto em todos.',
       ...(copies.length
         ? {
             duration: 12000,

@@ -3,7 +3,7 @@ import { getActiveBrand } from '@/features/space/brand/brandStore'
 import { applyMediaReplacements, collectImageUrls, type MediaReplacement } from '@/features/space/pageImages'
 import { slugify } from '@/features/space/featured/suggest'
 import { pageSections } from '@/features/space/pages/pages'
-import { componentElements, componentUses, sectionComponent, untagElement, walk } from '@/features/space/components/components'
+import { componentElements, componentUses, sectionComponent, templateMatches, templateUses, themePage, untagElement, usageKey, walk } from '@/features/space/components/components'
 import { buildLandingPage, parseSectionElements, type SectionElement } from '@/features/space/landingPage'
 import { useSpaceStore } from '@/store/spaceStore'
 import { logEvent } from '@/features/space/history/activity'
@@ -113,10 +113,14 @@ export function pageElements(pageId: string, mode: PartsSupport['mode'] = 'inlin
   const { pages, nodes, connections, components } = useSpaceStore.getState()
   const page = pages.find((p) => p.id === pageId)
   if (!page) throw new WordPressError('Essa página não está mais no canvas.')
+  // Cabeçalho e rodapé saem só se a página usa os do Theme Builder (iguais ao modelo); com texto próprio, vão dentro dela
+  const theme = mode === 'theme' && themePage(page.sectionIds, nodes, components).eligible
   const roles = new Set(components.filter((c) => c.role).map((c) => c.id))
+  // Só o uso igual à versão do modelo vira referência a ele; o de texto próprio vai como está
+  const matches = templates?.size ? templateMatches(nodes, templates.keys()) : new Set<string>()
   const sections = pageSections(page, nodes)
-    .filter((section) => mode !== 'theme' || !roles.has(sectionComponent(section) ?? ''))
-    .map((section) => (mode === 'theme' && templates?.size ? withTemplates(section, templates) : section))
+    .filter((section) => !theme || !roles.has(sectionComponent(section) ?? ''))
+    .map((section) => (mode === 'theme' && templates?.size ? withTemplates(section, templates, matches) : section))
   const built = buildLandingPage(sections, nodes, connections, getActiveBrand())
   return { page, ...built }
 }
@@ -134,9 +138,9 @@ const holder = (child: SectionElement): SectionElement => ({
 })
 
 /** O uso como referência ao modelo: a seção inteira pelo widget Modelo; um widget como Global Widget. */
-function withTemplates(section: SpaceNode, templates: Map<string, number>): SpaceNode {
+function withTemplates(section: SpaceNode, templates: Map<string, number>, matches: Set<string>): SpaceNode {
   const data = section.data as SectionNodeData
-  const whole = data.component ? templates.get(data.component) : undefined
+  const whole = data.component && matches.has(usageKey({ sectionId: section.id })) ? templates.get(data.component) : undefined
   // Vai como veio: a marca não mexe no que só aponta para o modelo
   const asIs = (json: string): SpaceNode => ({ ...section, data: { title: data.title, elementorJson: json, origin: { kind: 'wordpress', siteUrl: '', postId: 0 } } })
   if (whole) return asIs(JSON.stringify([holder({ id: elementId(), elType: 'widget', widgetType: 'template', settings: { template_id: String(whole) }, elements: [] })]))
@@ -146,7 +150,7 @@ function withTemplates(section: SpaceNode, templates: Map<string, number>): Spac
   const swap = (list: SectionElement[]): SectionElement[] =>
     list.map((element) => {
       const id = elementComponentId(element)
-      const postId = id ? templates.get(id) : undefined
+      const postId = id && element.id && matches.has(usageKey({ sectionId: section.id, elementId: element.id })) ? templates.get(id) : undefined
       if (postId && element.elType === 'widget') {
         changed = true
         return { id: element.id, elType: 'widget', widgetType: 'global', templateID: postId, settings: {}, elements: [] }
@@ -188,7 +192,8 @@ export function componentPublishElements(componentId: string) {
   const { nodes, connections, components } = useSpaceStore.getState()
   const component = components.find((c) => c.id === componentId)
   if (!component) throw new WordPressError('Esse componente não está mais no projeto.')
-  const use = componentUses(nodes).find((u) => u.componentId === componentId)
+  // Com textos de cada uso, o modelo leva a versão mais usada
+  const use = templateUses(componentId, nodes).canonical
   const node = use && nodes.find((n) => n.id === use.sectionId)
   let elements: SectionElement[] = componentElements(component)
   if (use && node) {
@@ -273,14 +278,18 @@ export async function publishPage({ connection, projectId, pageId, status, templ
   const components: PublishResult['components'] = { used: [], created: [], outdated: [] }
   const roleUses: SpaceComponent[] = []
   if (theme) {
+    const state = useSpaceStore.getState()
+    const page = state.pages.find((p) => p.id === pageId)
+    const frame = page ? themePage(page.sectionIds, state.nodes, state.components) : { roles: [], eligible: true }
+    // Cabeçalho ou rodapé com texto próprio nesta página: os dois vão dentro dela, e ela fica de fora dos modelos
+    if (frame.eligible) roleUses.push(...frame.roles)
+    const inPage = new Set(page?.sectionIds ?? [])
     for (const componentId of pageComponentIds(pageId)) {
       const component = useSpaceStore.getState().components.find((c) => c.id === componentId)
       const kind = component && componentKind(component)
-      if (!component || !kind) continue
-      if (component.role) {
-        roleUses.push(component)
-        continue
-      }
+      if (!component || !kind || component.role) continue
+      // Nenhum uso desta página é igual à versão do modelo: todos vão dentro dela
+      if (!templateUses(component.id, state.nodes).matching.some((u) => inPage.has(u.sectionId))) continue
       let linked = component.wordpress?.siteUrl === connection.site.siteUrl ? component.wordpress : undefined
       if (linked) {
         // Modelo apagado no site: o componente é criado de novo
