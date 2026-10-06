@@ -310,8 +310,8 @@ function spaceBridge() {
       server.httpServer?.on("close", () => clearInterval(sweep));
       server.middlewares.use("/__space", async (req, res) => {
         const url = new URL(req.url ?? "/", "http://localhost");
-        const given = req.headers["x-space-token"] ?? url.searchParams.get("token");
-        if (given !== token) return sendJson(res, 403, { error: "Chave da ponte errada ou ausente (veja .space/bridge.json)" });
+        const given2 = req.headers["x-space-token"] ?? url.searchParams.get("token");
+        if (given2 !== token) return sendJson(res, 403, { error: "Chave da ponte errada ou ausente (veja .space/bridge.json)" });
         try {
           if (req.method === "GET" && url.pathname === "/status") {
             return sendJson(res, 200, { tabs: liveTabs().map((t) => t.info), agents: payload().agents });
@@ -980,23 +980,25 @@ write("scripts/space/space.mjs", "#!/usr/bin/env node\n/**\n * Claude ou Codex n
 write("AGENTS.md", AGENTS_MD);
 write("CLAUDE.md", "@AGENTS.md\n");
 var stateFile = path3.join(folder, ".space", "conector.json");
-var code = "";
-try {
-  code = JSON.parse(readFileSync3(stateFile, "utf8")).code ?? "";
-} catch {
+var VALID = /^[A-Z2-9]{6}$/;
+var given = (arg("codigo") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+var code = VALID.test(given) ? given : "";
+if (!code) {
+  try {
+    code = JSON.parse(readFileSync3(stateFile, "utf8")).code ?? "";
+  } catch {
+  }
 }
-if (!/^[A-Z2-9]{6}$/.test(code)) {
-  code = Array.from({ length: 6 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join("");
-  write(".space/conector.json", `${JSON.stringify({ code, createdAt: (/* @__PURE__ */ new Date()).toISOString() }, null, 2)}
+if (!VALID.test(code)) code = Array.from({ length: 6 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join("");
+write(".space/conector.json", `${JSON.stringify({ code, savedAt: (/* @__PURE__ */ new Date()).toISOString() }, null, 2)}
 `);
-}
 var wrong = 0;
 var lockedUntil = 0;
 var normalize = (value) => (value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
-function checkCode(given) {
+function checkCode(given2) {
   if (Date.now() < lockedUntil) return "locked";
-  if (normalize(given) === code) return "ok";
-  if (!given) return "wrong";
+  if (normalize(given2) === code) return "ok";
+  if (!given2) return "wrong";
   if (++wrong >= MAX_WRONG) {
     wrong = 0;
     lockedUntil = Date.now() + LOCK_FOR;
@@ -1061,7 +1063,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610060032", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610060102", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -1077,7 +1079,8 @@ async function handle(req, res) {
 `)
     };
     clients.set(client.id, client);
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610060032" })}
+    if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610060102" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);
@@ -1085,6 +1088,7 @@ async function handle(req, res) {
       client.open = false;
       clearInterval(keepAlive);
       clients.delete(client.id);
+      if (!clients.size) console.log("  \xB7 O navegador saiu (aba fechada ou recarregando).");
     });
     return;
   }
@@ -1121,7 +1125,7 @@ async function ready(port) {
       "  Superelements \xB7 conector dos agentes",
       "",
       `  C\xF3digo:  ${pairing.slice(0, 3)}-${pairing.slice(3)}`,
-      "  Cole no chat do canvas, no navegador. Ele fica guardado: da pr\xF3xima vez, \xE9 s\xF3 abrir o conector.",
+      given ? "  A aba do Superelements que baixou este arquivo liga sozinha em alguns segundos." : "  Cole no chat do canvas, no navegador. Ele fica guardado: da pr\xF3xima vez, \xE9 s\xF3 abrir o conector.",
       "",
       "  Agentes nesta m\xE1quina:",
       ...lines,

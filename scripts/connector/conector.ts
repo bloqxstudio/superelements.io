@@ -82,18 +82,24 @@ write('AGENTS.md', AGENTS_MD)
 // O Claude Code lê o CLAUDE.md; o Codex, o AGENTS.md
 write('CLAUDE.md', '@AGENTS.md\n')
 
-/** O código continua o mesmo entre uma abertura e outra: o navegador guarda e reconecta sozinho. */
+/**
+ * O código de pareamento. O arquivo baixado pelo app traz o código que a aba
+ * criou (`--codigo`): a aba fica esperando e liga sozinha. Sem ele, vale o da
+ * última vez, ou um novo para colar no chat.
+ */
 const stateFile = path.join(folder, '.space', 'conector.json')
-let code = ''
-try {
-  code = JSON.parse(readFileSync(stateFile, 'utf8')).code ?? ''
-} catch {
-  // Primeira vez
+const VALID = /^[A-Z2-9]{6}$/
+const given = (arg('codigo') ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+let code = VALID.test(given) ? given : ''
+if (!code) {
+  try {
+    code = JSON.parse(readFileSync(stateFile, 'utf8')).code ?? ''
+  } catch {
+    // Primeira vez
+  }
 }
-if (!/^[A-Z2-9]{6}$/.test(code)) {
-  code = Array.from({ length: 6 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('')
-  write('.space/conector.json', `${JSON.stringify({ code, createdAt: new Date().toISOString() }, null, 2)}\n`)
-}
+if (!VALID.test(code)) code = Array.from({ length: 6 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('')
+write('.space/conector.json', `${JSON.stringify({ code, savedAt: new Date().toISOString() }, null, 2)}\n`)
 
 let wrong = 0
 let lockedUntil = 0
@@ -206,12 +212,14 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       send: (event, data) => client.open && res.write(`data: ${JSON.stringify({ event, data })}\n\n`),
     }
     clients.set(client.id, client)
+    if (clients.size === 1) console.log('  ✔ Navegador conectado. Pode usar o chat no canvas.')
     res.write(`data: ${JSON.stringify({ type: 'connected', client: client.id, version: __CONECTOR_VERSION__ })}\n\n`)
     const keepAlive = setInterval(() => res.write(': ping\n\n'), 15_000)
     req.on('close', () => {
       client.open = false
       clearInterval(keepAlive)
       clients.delete(client.id)
+      if (!clients.size) console.log('  · O navegador saiu (aba fechada ou recarregando).')
     })
     return
   }
@@ -256,7 +264,9 @@ async function ready(port: number) {
       '  Superelements · conector dos agentes',
       '',
       `  Código:  ${pairing.slice(0, 3)}-${pairing.slice(3)}`,
-      '  Cole no chat do canvas, no navegador. Ele fica guardado: da próxima vez, é só abrir o conector.',
+      given
+        ? '  A aba do Superelements que baixou este arquivo liga sozinha em alguns segundos.'
+        : '  Cole no chat do canvas, no navegador. Ele fica guardado: da próxima vez, é só abrir o conector.',
       '',
       '  Agentes nesta máquina:',
       ...lines,
