@@ -3,11 +3,10 @@ import { useChat } from '@/features/space/chat/chatStore'
 import { connectorChannel, type ChannelStatus } from './channel'
 
 /**
- * O conector na máquina de quem usa o app publicado. O código de pareamento
- * nasce aqui (`ensureCode`) e vai dentro do arquivo que o botão baixa; a aba
- * procura o conector (`probe`) até ele abrir com esse código, e liga sozinha.
- * O código fica guardado neste navegador: da próxima vez, basta abrir o
- * conector. Colar um código do terminal (`connect`) continua valendo.
+ * O conector na máquina de quem usa o app publicado. A pessoa roda o
+ * `conector.mjs` com o Node, ele mostra um código no terminal e ela cola aqui
+ * (`connect`). O código fica guardado neste navegador e no conector: da
+ * próxima vez, basta abrir o conector e a aba liga sozinha (`resume`).
  */
 
 export const CONNECTOR_PORT = 47823
@@ -17,7 +16,6 @@ const PORT_TRIES = 5
 export const CONNECTOR_FILE = '/conector/conector.mjs'
 
 const STORE_KEY = 'space-conector'
-const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
 
 type Status = 'off' | 'checking' | ChannelStatus
 
@@ -30,8 +28,6 @@ interface ConnectorState {
   status: Status
   error?: string
   pairing?: Pairing
-  /** O código desta aba, criado na primeira vez que alguém baixa o conector. */
-  ensureCode: () => string
   /** Procura o conector com o código guardado, sem mostrar erro enquanto ele não abre. */
   probe: () => Promise<boolean>
   /** Liga com o código que o conector mostrou no terminal ("CGP-YZ9", ou "CGP-YZ9:47824" em outra porta). */
@@ -64,11 +60,6 @@ const save = (pairing: Pairing | undefined) => {
   } catch {
     // Sem armazenamento: vale até fechar a aba
   }
-}
-
-const newCode = () => {
-  const random = crypto.getRandomValues(new Uint32Array(6))
-  return Array.from(random, (n) => ALPHABET[n % ALPHABET.length]).join('')
 }
 
 /**
@@ -110,7 +101,7 @@ async function loopbackDenied() {
 const MESSAGES = {
   blocked: 'O navegador está bloqueando o acesso a este computador. Clique no cadeado ao lado do endereço e permita "Apps e serviços neste dispositivo".',
   closed: 'Não achei o conector neste computador. Ele está aberto?',
-  other: 'Tem um conector aberto com outro código. Feche aquela janela e abra o arquivo que você baixou aqui.',
+  other: 'O conector aberto mostra outro código. Confira o código na janela do terminal e cole de novo.',
   locked: 'Muitas tentativas com código errado. Espere uns minutos.',
 }
 
@@ -139,7 +130,7 @@ export const useConnector = create<ConnectorState>()((set, get) => {
       stopAll()
       const base = `http://127.0.0.1:${live.port}`
       const channel = connectorChannel(base, live.code, (status) => {
-        set({ status, error: status === 'failed' ? 'O conector recusou a ligação. Baixe e abra de novo.' : undefined })
+        set({ status, error: status === 'failed' ? 'O conector recusou a ligação. Feche a janela dele, rode de novo e cole o código novo.' : undefined })
         // Sem conector, o chat volta para a tela de ligar
         if (status !== 'connected') useChat.setState({ connected: false })
       })
@@ -155,14 +146,6 @@ export const useConnector = create<ConnectorState>()((set, get) => {
   return {
     status: 'off',
     pairing: saved(),
-    ensureCode: () => {
-      const current = get().pairing
-      if (current) return current.code
-      const pairing = { code: newCode(), port: CONNECTOR_PORT }
-      save(pairing)
-      set({ pairing, error: undefined })
-      return pairing.code
-    },
     probe: async () => {
       const pairing = get().pairing
       return pairing ? open(pairing, true) : false
