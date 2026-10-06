@@ -431,8 +431,58 @@ function tokensOf(usage, agent) {
   const cached = n(usage.cached_input_tokens);
   return { input: Math.max(0, n(usage.input_tokens) - cached), output: n(usage.output_tokens) + n(usage.reasoning_output_tokens), cacheRead: cached };
 }
+function windowOf(raw) {
+  if (!raw || typeof raw !== "object") return void 0;
+  const used = typeof raw.utilization === "number" ? raw.utilization : typeof raw.used_percent === "number" ? raw.used_percent / 100 : void 0;
+  if (used === void 0) return void 0;
+  const resetsAt = typeof raw.resetsAt === "number" ? raw.resetsAt * 1e3 : typeof raw.resets_at === "number" ? raw.resets_at * 1e3 : typeof raw.resets_in_seconds === "number" ? Date.now() + raw.resets_in_seconds * 1e3 : void 0;
+  return { used: Math.max(0, Math.min(1, used)), resetsAt };
+}
+function planUsageOf(agent, event) {
+  if (agent === "claude") {
+    const info = event.rate_limit_info ?? {};
+    const windows = info.unifiedWindows ?? {};
+    const session2 = windowOf(windows.five_hour) ?? (info.rateLimitType === "five_hour" ? windowOf({ utilization: info.utilization, resetsAt: info.resetsAt }) : void 0);
+    const week2 = windowOf(windows.seven_day);
+    return session2 || week2 ? { session: session2, week: week2, status: info.status, at: Date.now() } : void 0;
+  }
+  const limits = event.rate_limits ?? event.info?.rate_limits;
+  if (!limits) return void 0;
+  const session = windowOf(limits.primary);
+  const week = windowOf(limits.secondary);
+  return session || week ? { session, week, at: Date.now() } : void 0;
+}
+var percent = (used) => `${Math.round(used * 100)}%`;
+var whenResets = (at) => {
+  if (!at) return "";
+  const date = new Date(at);
+  const today = (/* @__PURE__ */ new Date()).toDateString() === date.toDateString();
+  return today ? ` \xB7 renova \xE0s ${date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ` \xB7 renova em ${date.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`;
+};
+var tokensText = (n) => n < 1e3 ? `${n} tokens` : n < 1e6 ? `${(n / 1e3).toLocaleString("pt-BR", { maximumFractionDigits: n < 1e4 ? 1 : 0 })} mil tokens` : `${(n / 1e6).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi de tokens`;
+function usageText(agent, usage, messages) {
+  const name = CHAT_AGENTS[agent].name;
+  const lines = [];
+  if (usage?.session || usage?.week) {
+    lines.push(`**Uso do plano do ${name} nesta m\xE1quina**`);
+    if (usage.session) lines.push(`\u2022 Sess\xE3o (5 horas): ${percent(usage.session.used)} usado${whenResets(usage.session.resetsAt)}`);
+    if (usage.week) lines.push(`\u2022 Semana: ${percent(usage.week.used)} usado${whenResets(usage.week.resetsAt)}`);
+    if (usage.status && usage.status !== "allowed") lines.push(`\u2022 Aviso do ${name}: ${usage.status}`);
+  } else {
+    lines.push(
+      agent === "claude" ? `O ${name} n\xE3o informou o uso do plano agora. Tente de novo em instantes.` : `O ${name} ainda n\xE3o informou o uso do plano por aqui. No terminal, rode \`codex\` e digite /status.`
+    );
+  }
+  const answers = messages.filter((m) => m.role === "agent");
+  const tokens = answers.reduce((sum, m) => sum + totalTokens(m.tokens), 0);
+  const cost = answers.reduce((sum, m) => sum + (m.costUsd ?? 0), 0);
+  const asks = messages.filter((m) => m.role === "user" && !COMMAND.test(m.text ?? "")).length;
+  lines.push("", `**Esta conversa:** ${asks} ${asks === 1 ? "pedido" : "pedidos"}${tokens ? ` \xB7 ${tokensText(tokens)}` : ""}${cost ? ` \xB7 US$ ${cost.toFixed(2).replace(".", ",")}` : ""}`);
+  return lines.join("\n");
+}
+var COMMAND = /^\/(usage|login)\b/i;
 function summaryOf(conversation) {
-  const asks = conversation.messages.filter((m) => m.role === "user");
+  const asks = conversation.messages.filter((m) => m.role === "user" && !COMMAND.test(m.text ?? ""));
   const first = asks[0]?.text?.replace(/\s+/g, " ").trim() ?? "";
   const cost = conversation.messages.reduce((sum, m) => sum + (m.costUsd ?? 0), 0);
   return {
@@ -620,6 +670,8 @@ function spaceChat({ guide = REPO_GUIDE } = {}) {
       const chatFile = path2.resolve(root, CHAT_FILE);
       const conversations = /* @__PURE__ */ new Map();
       const runs = /* @__PURE__ */ new Map();
+      const planUsage = {};
+      const sendUsage = () => server.ws.send(CHAT_EVENTS.state, { usage: planUsage });
       try {
         const saved = JSON.parse(readFileSync2(chatFile, "utf8"));
         for (const item2 of saved) {
@@ -718,6 +770,14 @@ ${text2}` : text2;
           case "system":
             if (event.subtype === "init" && event.session_id) item(run).resume.claude = event.session_id;
             return;
+          case "rate_limit_event": {
+            const usage = planUsageOf("claude", event);
+            if (usage) {
+              planUsage.claude = usage;
+              sendUsage();
+            }
+            return;
+          }
           case "stream_event": {
             const e = event.event ?? {};
             if (e.type === "message_start") run.message.thinking = true;
@@ -760,6 +820,11 @@ ${text2}` : text2;
       };
       const onCodex = (run, event) => {
         const it = event.item ?? {};
+        const limits = planUsageOf("codex", event);
+        if (limits) {
+          planUsage.codex = limits;
+          sendUsage();
+        }
         switch (event.type) {
           case "thread.started":
             if (event.thread_id) item(run).resume.codex = event.thread_id;
@@ -825,6 +890,7 @@ ${text2}` : text2;
         if (runs.has(key)) return fail(`O ${info.name} ainda est\xE1 trabalhando no pedido anterior. Espere ou pare antes.`);
         const bin = findBin(payload.agent);
         if (!bin) return fail(`${info.name} n\xE3o foi encontrado nesta m\xE1quina. Instale, ou diga onde est\xE1 em ${payload.agent === "claude" ? "SPACE_CLAUDE_BIN" : "SPACE_CODEX_BIN"}.`);
+        if (/^\/usage\b/i.test(text2)) return showUsage(conversation, answer, payload.agent, bin);
         if (/^\/login\b/i.test(text2)) return login(conversation, answer, key, payload.agent, bin);
         const session = chatSession(payload.projectId, payload.agent, conversation.epoch);
         try {
@@ -948,6 +1014,57 @@ ${text2}` : text2;
         child.on("close", (code2) => done(code2));
       };
       const logins = /* @__PURE__ */ new Map();
+      const USAGE_FRESH = 10 * 6e4;
+      const showUsage = (conversation, answer, agent, bin) => {
+        const reply = () => {
+          Object.assign(answer, { streaming: false, thinking: false, parts: [{ type: "text", text: usageText(agent, planUsage[agent], conversation.messages) }] });
+          broadcast(conversation);
+        };
+        const known = planUsage[agent];
+        if (agent !== "claude" || known && Date.now() - known.at < USAGE_FRESH) return reply();
+        const env = { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" };
+        for (const k of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT"]) delete env[k];
+        let child;
+        try {
+          child = launch(bin, ["-p", "--output-format", "stream-json", "--verbose", "--model", "haiku", "--strict-mcp-config", "--max-turns", "1"], { cwd: root, env });
+        } catch {
+          return reply();
+        }
+        answer.thinking = true;
+        broadcast(conversation);
+        let buffer = "";
+        child.stdout?.setEncoding("utf8");
+        child.stdout?.on("data", (chunk) => {
+          buffer += chunk;
+          let nl;
+          while ((nl = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, nl).trim();
+            buffer = buffer.slice(nl + 1);
+            if (!line.includes("rate_limit_event")) continue;
+            try {
+              const usage = planUsageOf("claude", JSON.parse(line));
+              if (usage) {
+                planUsage.claude = usage;
+                sendUsage();
+              }
+            } catch {
+            }
+          }
+        });
+        child.stdin?.on("error", () => {
+        });
+        child.stdin?.end("Responda s\xF3: ok");
+        const timer = setTimeout(() => kill(child), 6e4);
+        let replied = false;
+        const finish = () => {
+          if (replied) return;
+          replied = true;
+          clearTimeout(timer);
+          reply();
+        };
+        child.on("error", finish);
+        child.on("close", finish);
+      };
       const login = (conversation, answer, key, agent, bin) => {
         const info = CHAT_AGENTS[agent];
         if (logins.has(key)) {
@@ -1011,7 +1128,7 @@ ${said}` : intro }];
       server.ws.on(CHAT_EVENTS.hello, async (data, client) => {
         const list = await checkAgents();
         const item2 = data?.projectId ? conversations.get(data.projectId) : void 0;
-        client.send(CHAT_EVENTS.state, { projectId: data?.projectId, agents: list, conversation: item2 ? view(item2) : null });
+        client.send(CHAT_EVENTS.state, { projectId: data?.projectId, agents: list, conversation: item2 ? view(item2) : null, usage: planUsage });
       });
       server.ws.on(CHAT_EVENTS.send, (payload) => void start(payload));
       server.ws.on(CHAT_EVENTS.stop, (data) => {
@@ -1178,7 +1295,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610061547", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610061630", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -1195,7 +1312,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610061547" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610061630" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);

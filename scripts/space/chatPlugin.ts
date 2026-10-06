@@ -135,9 +135,9 @@ function usageText(agent: ChatAgentId, usage: ChatPlanUsage | undefined, message
   const lines: string[] = []
   if (usage?.session || usage?.week) {
     lines.push(`**Uso do plano do ${name} nesta máquina**`)
-    if (usage.session) lines.push(`- Sessão (5 horas): ${percent(usage.session.used)} usado${whenResets(usage.session.resetsAt)}`)
-    if (usage.week) lines.push(`- Semana: ${percent(usage.week.used)} usado${whenResets(usage.week.resetsAt)}`)
-    if (usage.status && usage.status !== 'allowed') lines.push(`- Aviso do ${name}: ${usage.status}`)
+    if (usage.session) lines.push(`• Sessão (5 horas): ${percent(usage.session.used)} usado${whenResets(usage.session.resetsAt)}`)
+    if (usage.week) lines.push(`• Semana: ${percent(usage.week.used)} usado${whenResets(usage.week.resetsAt)}`)
+    if (usage.status && usage.status !== 'allowed') lines.push(`• Aviso do ${name}: ${usage.status}`)
   } else {
     lines.push(
       agent === 'claude'
@@ -148,14 +148,18 @@ function usageText(agent: ChatAgentId, usage: ChatPlanUsage | undefined, message
   const answers = messages.filter((m) => m.role === 'agent')
   const tokens = answers.reduce((sum, m) => sum + totalTokens(m.tokens), 0)
   const cost = answers.reduce((sum, m) => sum + (m.costUsd ?? 0), 0)
-  const asks = messages.filter((m) => m.role === 'user' && !/^\/(usage|login)\b/i.test(m.text ?? '')).length
+  const asks = messages.filter((m) => m.role === 'user' && !COMMAND.test(m.text ?? '')).length
   lines.push('', `**Esta conversa:** ${asks} ${asks === 1 ? 'pedido' : 'pedidos'}${tokens ? ` · ${tokensText(tokens)}` : ''}${cost ? ` · US$ ${cost.toFixed(2).replace('.', ',')}` : ''}`)
   return lines.join('\n')
 }
 
+/** Mensagem que é um comando do chat (/usage, /login), não um pedido ao agente. */
+const COMMAND = /^\/(usage|login)\b/i
+
 /** O resumo de uma conversa para a lista do histórico. */
 function summaryOf(conversation: { epoch: number; messages: ChatMessage[]; updatedAt: number }): ChatHistoryItem {
-  const asks = conversation.messages.filter((m) => m.role === 'user')
+  // /usage e /login são comandos, não pedidos: não viram título nem contam
+  const asks = conversation.messages.filter((m) => m.role === 'user' && !COMMAND.test(m.text ?? ''))
   const first = asks[0]?.text?.replace(/\s+/g, ' ').trim() ?? ''
   const cost = conversation.messages.reduce((sum, m) => sum + (m.costUsd ?? 0), 0)
   return {

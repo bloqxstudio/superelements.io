@@ -198,6 +198,8 @@ export const useConnector = create<ConnectorState>()((set, get) => {
       if (pairing && get().status === 'off') void open(pairing, true)
     },
     disconnect: () => {
+      current?.abort()
+      linked = null
       stopAll()
       save(undefined)
       useChat.setState({ connected: false })

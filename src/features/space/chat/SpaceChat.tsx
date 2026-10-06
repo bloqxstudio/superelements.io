@@ -610,10 +610,12 @@ const UsageLine: React.FC<{ message: ChatMessage }> = ({ message }) => {
 function summaryOf(messages: ChatMessage[]) {
   const sum = (pick: (t: ChatTokens) => number) => messages.reduce((n, m) => n + (m.tokens ? pick(m.tokens) : 0), 0)
   const tokens: ChatTokens = { input: sum((t) => t.input), output: sum((t) => t.output), cacheRead: sum((t) => t.cacheRead ?? 0), cacheWrite: sum((t) => t.cacheWrite ?? 0) }
-  const first = messages.find((m) => m.role === 'user')?.text?.replace(/\s+/g, ' ').trim()
+  // /usage e /login são comandos, não pedidos: não viram título nem contam
+  const asks = messages.filter((m) => m.role === 'user' && !/^\/(usage|login)\b/i.test(m.text ?? ''))
+  const first = asks[0]?.text?.replace(/\s+/g, ' ').trim()
   return {
     title: first || 'Conversa nova',
-    requests: messages.filter((m) => m.role === 'user').length,
+    requests: asks.length,
     tokens,
     total: totalTokens(tokens),
     costUsd: messages.reduce((n, m) => n + (m.costUsd ?? 0), 0),
