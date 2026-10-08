@@ -46,6 +46,7 @@ Pasta do conector do Superelements (ele reescreve este arquivo ao abrir). Aqui o
 - \`work "<o que está fazendo>" --section <id> [--element <id>]\`: mostra no canvas onde você está. \`work --done\` ao terminar.
 - Mudar: edite \`elements\` no arquivo (textos e settings), mantendo os ids dos elementos, e grave com \`push <arquivo> --label "<o que mudou>"\`. Cada push é um passo do Ctrl+Z de quem está no canvas.
 - Seção nova: um arquivo sem \`id\`, com \`title\`, \`place\` (\`{ "after": "<id da seção>" }\`) e \`elements\`. Parta de uma seção da mesma página, para manter o padrão.
+- Imagens anexadas no chat ficam em \`.space/anexos/\`. Para pôr uma na página, use o caminho dela no \`url\` da imagem: o \`push\` troca o caminho pela imagem.
 - \`shot --section <id>\`: foto da seção, para conferir antes de entregar.
 
 ## Regras

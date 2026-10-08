@@ -1510,6 +1510,45 @@ export type Database = {
         }
         Relationships: []
       }
+      space_skills: {
+        Row: {
+          created_at: string
+          hint: string
+          id: string
+          instructions: string
+          name: string
+          needs_image: boolean
+          owner_id: string
+          scope: string
+          starters: string[]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          hint?: string
+          id?: string
+          instructions: string
+          name: string
+          needs_image?: boolean
+          owner_id?: string
+          scope?: string
+          starters?: string[]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          hint?: string
+          id?: string
+          instructions?: string
+          name?: string
+          needs_image?: boolean
+          owner_id?: string
+          scope?: string
+          starters?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       space_project_versions: {
         Row: {
           doc_path: string

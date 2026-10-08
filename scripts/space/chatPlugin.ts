@@ -8,6 +8,7 @@ import {
   CHAT_AGENTS,
   CHAT_AGENT_IDS,
   CHAT_EVENTS,
+  CHAT_IMAGE_LIMIT,
   chatSession,
   type ChatAgentAvailability,
   type ChatAgentId,
@@ -15,6 +16,8 @@ import {
   type ChatConversation,
   type ChatCursorHint,
   type ChatHistoryItem,
+  type ChatImage,
+  type ChatImageUpload,
   type ChatMessage,
   type ChatPart,
   type ChatPlanUsage,
@@ -26,6 +29,7 @@ import {
   type CursorMode,
   totalTokens,
 } from '../../src/features/space/chat/protocol'
+import { MAX_SKILL_TEXT, skillById } from '../../src/features/space/chat/skills'
 import { bridgeAddress } from './vitePlugin'
 
 /**
@@ -55,6 +59,14 @@ const RUN_TIMEOUT = 20 * 60_000
 
 /** Comandos da ponte que mexem fora do canvas: o agente do chat não roda. */
 const OUTSIDE = ['publish', 'restore', 'approval', 'invite', 'wp', 'new', 'open', 'close']
+
+/** Imagens anexadas no chat: ficam na pasta do agente, onde ele abre com o Read (e o `push` acha). */
+const ATTACH_DIR = '.space/anexos'
+const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' }
+const DATA_URL = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/
+const MAX_IMAGE_BYTES = 12 * 1024 * 1024
+/** A miniatura vai em toda conversa que as abas recebem: maior que isto, fica de fora. */
+const MAX_PREVIEW = 400_000
 
 interface Stored {
   projectId: string
@@ -164,7 +176,7 @@ function summaryOf(conversation: { epoch: number; messages: ChatMessage[]; updat
   const cost = conversation.messages.reduce((sum, m) => sum + (m.costUsd ?? 0), 0)
   return {
     epoch: conversation.epoch,
-    title: first ? short(first, 80) : 'Conversa sem pedido',
+    title: first ? short(first, 80) : asks[0]?.images?.length ? 'Imagem anexada' : 'Conversa sem pedido',
     startedAt: conversation.messages[0]?.at ?? conversation.epoch,
     updatedAt: conversation.updatedAt,
     requests: asks.length,
@@ -199,6 +211,43 @@ type AgentEvent = Record<string, any>
 const runKey = (projectId: string, agent: ChatAgentId) => `${projectId}:${agent}`
 const clip = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
 const short = (value: string, max = 90) => (value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value)
+
+// ---------- as imagens do pedido ----------
+
+const fileSlug = (name: string) =>
+  name
+    .replace(/\.[^.]+$/, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40) || 'imagem'
+
+/**
+ * Grava as imagens do pedido em `.space/anexos/<projeto>/`, na pasta em que o
+ * agente roda: o Claude Code abre com o Read, o Codex recebe com `--image`, e
+ * o `push` troca o caminho pela imagem quando ela vai para a página.
+ */
+function saveImages(root: string, projectId: string, uploads: ChatImageUpload[] | undefined): ChatImage[] {
+  if (!Array.isArray(uploads) || !uploads.length) return []
+  if (uploads.length > CHAT_IMAGE_LIMIT) throw new Error(`Mande até ${CHAT_IMAGE_LIMIT} imagens por mensagem.`)
+  const dir = `${ATTACH_DIR}/${projectId.replace(/[^\w-]/g, '').slice(0, 8) || 'projeto'}`
+  mkdirSync(path.resolve(root, dir), { recursive: true })
+  const stamp = Date.now().toString(36)
+  const size = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : 0)
+  return uploads.map((upload, i) => {
+    const match = typeof upload?.data === 'string' ? DATA_URL.exec(upload.data) : null
+    if (!match) throw new Error('Uma das imagens não chegou inteira. Anexe de novo.')
+    const bytes = Buffer.from(match[2], 'base64')
+    const name = clip(upload.name, 120) || `imagem-${i + 1}`
+    if (bytes.length > MAX_IMAGE_BYTES) throw new Error(`"${short(name, 60)}" é grande demais (até ${MAX_IMAGE_BYTES / 1048576} MB).`)
+    const file = `${dir}/${stamp}-${i + 1}-${fileSlug(name)}.${IMAGE_EXT[match[1]]}`
+    writeFileSync(path.resolve(root, file), bytes)
+    const preview = typeof upload.preview === 'string' && upload.preview.startsWith('data:image/') && upload.preview.length <= MAX_PREVIEW ? upload.preview : ''
+    return { name, preview, width: size(upload.width), height: size(upload.height), file }
+  })
+}
 
 // ---------- os agentes instalados ----------
 
@@ -298,13 +347,59 @@ function preamble(projectId: string, projectName: string | undefined, agent: Cha
   ].join('\n')
 }
 
-function promptFor(payload: ChatSendPayload, first: boolean, projectName: string | undefined, guide: string) {
+/** A skill do pedido, pronta: `key` muda quando ela muda (outra skill, ou a cadastrada editada). */
+interface PromptSkill {
+  id: string
+  name: string
+  instructions: string
+  version?: string
+  key: string
+}
+
+/** A padrão vem do código pelo id; a cadastrada na conta traz as instruções no pedido. */
+function resolveSkill(ref: ChatSendPayload['skill'] | string | undefined): PromptSkill | undefined {
+  if (!ref) return undefined
+  const id = typeof ref === 'string' ? ref : clip(ref.id, 64)
+  const builtin = skillById(id)
+  if (builtin) return { id, name: builtin.name, instructions: builtin.instructions, key: id }
+  if (typeof ref === 'string') return undefined
+  const name = clip(ref.name, 60)
+  const instructions = clip(ref.instructions, MAX_SKILL_TEXT)
+  const version = clip(ref.version, 40) || undefined
+  return id && name && instructions ? { id, name, instructions, version, key: `${id}@${version ?? ''}` } : undefined
+}
+
+/** A chave da skill guardada numa mensagem, para saber se o agente já recebeu esta versão. */
+const storedSkillKey = (skill: ChatMessage['skill']) =>
+  !skill ? undefined : typeof skill === 'string' ? skill : skillById(skill.id) ? skill.id : `${skill.id}@${skill.version ?? ''}`
+
+/** A skill do pedido: as instruções inteiras quando ela entra; depois, só o lembrete (o agente continua a conversa). */
+function skillLines(skill: PromptSkill | undefined, full: boolean) {
+  if (!skill) return []
+  if (!full) return ['', `Skill ${skill.name}: continue seguindo as instruções dela, dadas antes nesta conversa.`, '']
+  return ['', `Skill escolhida: ${skill.name}. Siga estas instruções neste pedido (os comandos são da ponte: \`node scripts/space/space.mjs <comando>\`):`, skill.instructions, '']
+}
+
+function imageLines(images: ChatImage[], agent: ChatAgentId) {
+  if (!images.length) return []
+  return [
+    '',
+    images.length === 1 ? 'Imagem anexada a este pedido:' : `Imagens anexadas a este pedido (${images.length}):`,
+    ...images.map((img) => `- \`${img.file}\` (${img.name}${img.width ? `, ${img.width}×${img.height}` : ''})`),
+    agent === 'claude' ? 'Abra cada uma com a ferramenta Read antes de responder: é o que a pessoa quer que você veja.' : 'Elas vão junto com este pedido: olhe cada uma antes de responder.',
+    'Para usar uma delas na página, ponha o caminho no `url` da imagem (`"image": { "url": "<caminho>", "id": "" }`, ou o `url` de `background_image`): o `push` troca o caminho pela imagem.',
+  ]
+}
+
+function promptFor(payload: ChatSendPayload, first: boolean, projectName: string | undefined, guide: string, extra: { images: ChatImage[]; skill?: PromptSkill; skillFull: boolean }) {
   const parts = [
     first ? preamble(payload.projectId, projectName, payload.agent, guide) : '',
+    ...skillLines(extra.skill, extra.skillFull),
     'Selecionado no canvas agora:',
     ...contextLines(payload.context),
+    ...imageLines(extra.images, payload.agent),
     '',
-    `Pedido: ${payload.text}`,
+    `Pedido: ${payload.text || 'veja a imagem anexada. Se não estiver claro o que fazer com ela, pergunte antes de mudar.'}`,
   ]
   return parts.filter((p, i) => p || i > 0).join('\n').trim()
 }
@@ -372,6 +467,8 @@ function stepFromTool(root: string, name: string, input: Record<string, unknown>
   const detail = typeof file === 'string' ? path.relative(root, path.resolve(root, file)).replaceAll('\\', '/') : undefined
   switch (name) {
     case 'Read':
+      if (typeof file === 'string' && /\.space[\\/]anexos[\\/]/.test(file)) return { kind: 'read', text: 'Olhando a imagem anexada', detail }
+      if (typeof file === 'string' && /[\\/]fotos[\\/][^\\/]+\.(png|jpe?g)$/i.test(file)) return { kind: 'read', text: 'Conferindo a foto da página', detail }
       return { kind: 'read', text: section ? `Lendo a seção "${section.title}"` : `Lendo ${baseName(file)}`, detail, sectionId: section?.id }
     case 'Edit':
     case 'MultiEdit':
@@ -639,13 +736,37 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
 
       const start = async (payload: ChatSendPayload) => {
         const text = clip(payload.text, MAX_TEXT)
-        if (!payload.projectId || !text || !CHAT_AGENTS[payload.agent]) return
+        const withImages = Array.isArray(payload.images) && payload.images.length > 0
+        if (!payload.projectId || (!text && !withImages) || !CHAT_AGENTS[payload.agent]) return
         const conversation = stored(payload.projectId, payload.projectName)
         const key = runKey(payload.projectId, payload.agent)
         const info = CHAT_AGENTS[payload.agent]
         const context: ChatContext = { ...payload.context, sections: payload.context?.sections ?? [] }
+        const skill = COMMAND.test(text) ? undefined : resolveSkill(payload.skill)
+        // A skill que este agente recebeu por último nesta conversa: a mesma (e na mesma versão) vai só como lembrete
+        const lastSkill = storedSkillKey([...conversation.messages].reverse().find((m) => m.role === 'user' && m.agent === payload.agent && !COMMAND.test(m.text ?? ''))?.skill)
 
-        conversation.messages.push({ id: randomUUID(), at: Date.now(), role: 'user', agent: payload.agent, text, context })
+        // Imagem que não chega inteira não impede a mensagem de aparecer: a resposta diz o que houve
+        let images: ChatImage[] = []
+        let imageError: string | undefined
+        if (withImages && !COMMAND.test(text)) {
+          try {
+            images = saveImages(root, payload.projectId, payload.images)
+          } catch (error) {
+            imageError = error instanceof Error ? error.message : String(error)
+          }
+        }
+
+        conversation.messages.push({
+          id: randomUUID(),
+          at: Date.now(),
+          role: 'user',
+          agent: payload.agent,
+          text,
+          context,
+          ...(images.length ? { images } : {}),
+          ...(skill ? { skill: { id: skill.id, name: skill.name, ...(skill.version ? { version: skill.version } : {}) } } : {}),
+        })
         const answer: ChatMessage = { id: randomUUID(), at: Date.now(), role: 'agent', agent: payload.agent, parts: [], streaming: true, thinking: true }
         conversation.messages.push(answer)
         if (conversation.messages.length > KEEP_MESSAGES) conversation.messages = conversation.messages.slice(-KEEP_MESSAGES)
@@ -654,6 +775,7 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
           Object.assign(answer, { streaming: false, thinking: false, error })
           broadcast(conversation)
         }
+        if (imageError) return fail(imageError)
         // Login em andamento: o que a pessoa escreve vai para ele (o código que a página de login mostra)
         const pendingLogin = logins.get(key)
         if (pendingLogin && !/^\/login\b/i.test(text)) {
@@ -681,7 +803,11 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
         }
 
         const resume = conversation.resume[payload.agent]
-        const prompt = promptFor({ ...payload, text, context }, !resume, conversation.projectName, guide)
+        const prompt = promptFor({ ...payload, text, context }, !resume, conversation.projectName, guide, {
+          images,
+          skill,
+          skillFull: !!skill && (!resume || lastSkill !== skill.key),
+        })
         const env: NodeJS.ProcessEnv = { ...process.env, SPACE_SESSION: session, SPACE_AGENT: info.name, NO_COLOR: '1', FORCE_COLOR: '0' }
         // A ponte deste servidor (a da aba que pediu), mesmo que outro servidor de dev tenha gravado o .space/bridge.json
         const bridge = bridgeAddress()
@@ -690,6 +816,8 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
         for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT', 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'SPACE_PROJECT']) delete env[k]
 
         const space = 'node scripts/space/space.mjs'
+        // O Codex recebe as imagens com o pedido (depois do "-", para o --image não engolir o "-")
+        const imageArgs = images.map((img) => `--image=${path.resolve(root, img.file ?? '')}`)
         const args =
           payload.agent === 'claude'
             ? [
@@ -707,6 +835,7 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
                 // A ponte é um servidor no localhost: o sandbox precisa deixar a rede aberta
                 'exec', '--json', '-s', 'workspace-write', '-c', 'sandbox_workspace_write.network_access=true', '--skip-git-repo-check',
                 ...(resume ? ['resume', resume, '-'] : ['-']),
+                ...imageArgs,
               ]
 
         let child: ChildProcess

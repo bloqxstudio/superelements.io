@@ -67,6 +67,22 @@ Scope: `src/features/superelements/**`, `brands/superelements/**`, `public/brand
 - Motion (`src/features/superelements/story.ts`, one behavior-only HTML widget, first child of the hero): the scroll drives a publish. The window arrives tilted and settles, pins, the camera zooms into "Publicar no site" with a spotlight, the large cursor (38px, the user asked for it bigger) arcs in, the button lights up and the click releases two lime rings; the real publish dialog grows out of the button, runs its steps with a progress bar, and the page frame flashes lime and gets "No site". A mono ruler under the window lights the four steps. Reversible; no pin below 1025px, where a short sequence plays once. Containers here have no CSS `transform` transition (Elementor's 0.4s made the window slide at the pin end, the bug the user reported): keep `transition-property` without transform in `BASE_CSS`.
 - Brand in the Space stays saved but **off**: applying it recolors and refonts the product screens (804 changes in 11 sections on 2026-10-02). Build the pages in the brand instead.
 - The engine's hosted video now honors Elementor's autoplay, mute, loop and controls (the 3D symbol in the final CTA).
+- Page "Modelo · jota.ai" (2026-10-08): the user asked to recreate https://jota.ai/ "exatamente como ele está", animations included, in this project, as the model for a later product page. It has its own visual language, not the dark/lime rules above. The layout, sizes, colors (`#F5F5F5`, `#222`, yellow `#FFE84C`, graphite footer `#242D32`), corners, breakpoints (1200/900/760/560) and motion follow jota.ai's CSS. Geist replaces their commercial Aeonik. The content is Superelements' own (`src/features/superelements/modelo/content.ts`). The user asked for Jota's real content; that was declined, because their text, logo, photos and videos belong to them. Builders are in `src/features/superelements/modelo/` (`elementor.ts`, `icons.ts` as CSS masks, the `se` mask draws our symbol without an image). Motion lives in `motion.ts`, a behavior-only widget that is the first child of the header:
+  - the sticky blurred header halves past 24px of scroll;
+  - the hero panel's yellow liquid is WebGL at half resolution;
+  - the chips rotate every 5 s;
+  - the portrait opens into the full scene with four product cards (280vh, pinned);
+  - each feature conversation plays when 25% visible and resets after 2.5 s away;
+  - the carousels have arrows, and the FAQ + turns into −;
+  - the "Modo agência" switch keeps its state in localStorage, or `?modo=agencia`.
+  
+  CSS alone is the composition, and `html.sx-live` arms the rest. Builds are in `.space/superelements/build/modelo/`: `ship.sh NN "label"` builds, merges and pushes one section, and `page.ts` + `cdp.mjs` check the page in Edge. The page is not linked from the site menu.
+- Page "Modelo · clinipago" (2026-10-08, same request, for the Framer landing https://clinipago.com.br/lp/tp). The layout and motion follow it; the content is Superelements' own (`src/features/superelements/clini/`, classes `sc-`).
+  - Design: Inter, a 1200px column, titles at −0.04em, lime `#DDFF92` on what you click, `#122100` on the dark cards, a `#121417` hero.
+  - Photos come from the section library. The original's testimonial marquee became a marquee of library sections: there are no real testimonials.
+  - Motion (`clini/motion.ts`, first child of the header): the hero title lights word by word, the photo fades in and the floating card grows. The header turns to light glass after the hero; the glass sits on `::before`, because `backdrop-filter` on the header would trap the fixed bar inside it. The bottom bar is fixed and rises after the hero.
+  - The tabs work by click and arrow keys, and the steps advance on their own. The agent rail fills with the scroll. `.sc-reveal` titles darken word by word, the orbit turns, and the photo marquee pauses under the mouse.
+  - Builds are in `.space/superelements/build/clini/` (`ship.sh`, `page.ts`).
 
 ### Menuzito model
 

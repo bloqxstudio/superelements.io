@@ -6,6 +6,7 @@
  * constantes, com import relativo.
  */
 
+
 export type ChatAgentId = 'claude' | 'codex'
 
 export interface ChatAgentInfo {
@@ -54,6 +55,44 @@ export interface ChatStep {
 
 export type ChatPart = { type: 'text'; text: string } | { type: 'step'; step: ChatStep }
 
+/**
+ * A skill de um pedido. A padrão vai só pelo id; a cadastrada na conta leva as
+ * instruções, porque quem roda o agente (o servidor de dev ou o conector) não
+ * lê a conta. A mensagem guarda o id, o nome e a versão, sem as instruções.
+ */
+export interface ChatSkillRef {
+  id: string
+  name: string
+  instructions?: string
+  /** Quando a skill cadastrada mudou: outra versão volta a mandar as instruções inteiras. */
+  version?: string
+}
+
+/** Imagens por mensagem, e o maior lado delas (o navegador reduz antes de mandar). */
+export const CHAT_IMAGE_LIMIT = 4
+export const CHAT_IMAGE_MAX_SIDE = 1600
+
+/** Imagem que a pessoa anexou: o navegador manda reduzida, com uma miniatura para a conversa. */
+export interface ChatImageUpload {
+  name: string
+  /** data URL da imagem (PNG se tiver transparência, senão JPEG). */
+  data: string
+  /** data URL pequena (JPEG), para mostrar na conversa. */
+  preview: string
+  width: number
+  height: number
+}
+
+/** Imagem guardada na mensagem: a miniatura e onde o arquivo ficou para o agente. */
+export interface ChatImage {
+  name: string
+  preview: string
+  width: number
+  height: number
+  /** Caminho do arquivo a partir da pasta do agente (`.space/anexos/…`). */
+  file?: string
+}
+
 export interface ChatMessage {
   id: string
   at: number
@@ -62,6 +101,10 @@ export interface ChatMessage {
   /** Mensagem da pessoa. */
   text?: string
   context?: ChatContext
+  /** Imagens que a pessoa anexou. */
+  images?: ChatImage[]
+  /** Skill escolhida para o pedido (Web designer, SEO, uma cadastrada…). Mensagens antigas guardam só o id da padrão. */
+  skill?: ChatSkillRef | string
   /** Resposta do agente: texto e ações, na ordem em que aconteceram. */
   parts?: ChatPart[]
   /** Ainda chegando. */
@@ -189,6 +232,8 @@ export interface ChatSendPayload {
   agent: ChatAgentId
   text: string
   context: ChatContext
+  images?: ChatImageUpload[]
+  skill?: ChatSkillRef
 }
 
 /** Sessão da ponte (SPACE_SESSION) de um agente no chat de um projeto. */

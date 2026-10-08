@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ChatAgentAvailability, ChatAgentId, ChatConversation, ChatPlanUsage, ChatSendPayload } from './protocol'
 
+
 /**
  * O chat de cada projeto, como o servidor de dev manda (ver `connection.ts`).
  * A conversa vive no servidor, em `.space/chat.json`; aqui fica a cópia que a
@@ -28,7 +29,10 @@ interface ChatState {
   agent: ChatAgentId
   /** Conversa aberta acima da caixa de mensagem. */
   open: boolean
+  /** Skill escolhida na caixa (o id): vai com cada pedido até a pessoa tirar. */
+  skill: string | null
   setAgent: (agent: ChatAgentId) => void
+  setSkill: (skill: string | null) => void
   setOpen: (open: boolean) => void
   send?: (payload: ChatSendPayload) => void
   stop?: (projectId: string, agent: ChatAgentId) => void
@@ -46,6 +50,7 @@ export const useChat = create<ChatState>()((set) => ({
   planUsage: {},
   agent: savedAgent(),
   open: false,
+  skill: null,
   setAgent: (agent) => {
     try {
       localStorage.setItem(AGENT_KEY, agent)
@@ -55,4 +60,5 @@ export const useChat = create<ChatState>()((set) => ({
     set({ agent })
   },
   setOpen: (open) => set({ open }),
+  setSkill: (skill) => set({ skill }),
 }))

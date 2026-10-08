@@ -42,7 +42,8 @@ quem acompanha não muda. Acompanhe todos em /agentes no app.
                                   mostra ou troca o briefing do projeto (o campo Contexto)
   pull [--page <nome>]...         baixa as páginas para .space/<projeto>/<página>/ (uma seção por arquivo)
   push <arquivo|pasta>... --label "<o que mudou>" [--force] [--no-focus]
-                                  grava no canvas as seções alteradas e as novas (um passo do Ctrl+Z)
+                                  grava no canvas as seções alteradas e as novas (um passo do Ctrl+Z); um "url" de imagem com o
+                                  caminho de um arquivo em .space/ (a imagem anexada no chat, em .space/anexos/) vai como a imagem
   remove <seção>... --label "..." tira seções da página
   move <seção> (--after <seção> | --before <seção> | --index <n>) [--page <nome>] --label "..."
   page-add <nome> [--label "..."] cria uma página no canvas
@@ -570,10 +571,48 @@ const baseFor = (file) => {
   return existsSync(baseFile) ? { baseFile, base: readJson(baseFile) } : { baseFile, base: null }
 }
 
+const IMAGE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }
+const MAX_LOCAL_IMAGE = 8 * 1024 * 1024
+
+/**
+ * Imagem do computador numa seção: um `url` com o caminho de um arquivo em
+ * `.space/` (a imagem anexada no chat fica em `.space/anexos/`) vai para o
+ * canvas como a própria imagem, em data URL, como a que se envia pelo painel
+ * do Space; ao publicar, ela sobe para a mídia do WordPress. O arquivo da
+ * seção continua com o caminho.
+ */
+function inlineLocalImages(list, file) {
+  const used = []
+  const walk = (node) => {
+    if (Array.isArray(node)) return node.forEach(walk)
+    if (!node || typeof node !== 'object') return
+    for (const [key, value] of Object.entries(node)) {
+      if (key !== 'url' || typeof value !== 'string') {
+        walk(value)
+        continue
+      }
+      const type = IMAGE_TYPES[path.extname(value).toLowerCase()]
+      if (!type || /^(data:|https?:|\/\/)/i.test(value)) continue
+      const full = path.resolve(ROOT, value.replace(/^file:\/\/\/?/i, ''))
+      if (!full.startsWith(WORK + path.sep)) continue
+      if (!existsSync(full)) fail(`${rel(file)}: a imagem ${value} não existe`)
+      const size = statSync(full).size
+      if (size > MAX_LOCAL_IMAGE) fail(`${rel(file)}: ${value} tem ${(size / 1048576).toFixed(1)} MB; use uma imagem de até 8 MB`)
+      node[key] = `data:${type};base64,${readFileSync(full).toString('base64')}`
+      used.push(rel(full))
+    }
+  }
+  walk(list)
+  return used
+}
+
 const elementorJsonOf = (section, file) => {
   const elements = typeof section.elements === 'string' ? JSON.parse(section.elements) : section.elements
-  const list = Array.isArray(elements) ? elements : elements?.content ?? elements?.elements ?? [elements]
+  // Cópia: as imagens do computador entram no que vai para o canvas, não no arquivo
+  const list = structuredClone(Array.isArray(elements) ? elements : elements?.content ?? elements?.elements ?? [elements])
   if (!Array.isArray(list) || !list.length || typeof list[0] !== 'object') fail(`${rel(file)}: "elements" precisa ser a lista de elementos do Elementor`)
+  const images = [...new Set(inlineLocalImages(list, file))]
+  if (images.length) console.log(`  ${rel(file)}: ${images.length === 1 ? 'imagem do computador' : `${images.length} imagens do computador`} (${images.join(', ')})`)
   return JSON.stringify(list)
 }
 

@@ -6,7 +6,12 @@ import {
   Crosshair,
   Eye,
   FileText,
+  ExternalLink,
+  Gauge,
+  ImagePlus,
+  Images,
   Loader2,
+  LogIn,
   MousePointer2,
   PenLine,
   RectangleHorizontal,
@@ -17,6 +22,7 @@ import {
   Square,
   Terminal,
   Trash2,
+  Wand2,
   X,
 } from 'lucide-react'
 import { useProjectStore } from '@/features/projects/projectStore'
@@ -30,8 +36,27 @@ import { useSpaceStore } from '@/store/spaceStore'
 import type { SectionNodeData } from '@/types/space'
 import { ConnectorPrompt } from './ConnectorPrompt'
 import { useConnector } from '@/features/space/connector/connectorStore'
+import { isChatImage, readChatImage } from './attachments'
 import { useChat } from './chatStore'
-import { CHAT_AGENTS, CHAT_AGENT_IDS, totalTokens, type ChatAgentId, type ChatContext, type ChatHistoryItem, type ChatMessage, type ChatPart, type ChatStep, type ChatTokens, type ChatUsageWindow } from './protocol'
+import {
+  CHAT_AGENTS,
+  CHAT_AGENT_IDS,
+  CHAT_IMAGE_LIMIT,
+  totalTokens,
+  type ChatAgentId,
+  type ChatContext,
+  type ChatHistoryItem,
+  type ChatImageUpload,
+  type ChatMessage,
+  type ChatSkillRef,
+  type ChatPart,
+  type ChatStep,
+  type ChatTokens,
+  type ChatUsageWindow,
+} from './protocol'
+import { skillById, type ChatSkill } from './skills'
+import { skillIcon } from '@/features/skills/skillIcon'
+import { useSkillList, useSkills, watchSkills } from '@/features/skills/skillsStore'
 
 /**
  * O chat do projeto, na aba Agente do painel da direita: a pessoa escreve, escolhe o
@@ -259,10 +284,22 @@ const AgentMessage: React.FC<{ message: ChatMessage }> = ({ message }) => {
 const UserMessage: React.FC<{ message: ChatMessage }> = ({ message }) => {
   const label = message.context ? contextLabel(message.context) : null
   const Icon = label?.icon
+  // Mensagem antiga guarda só o id da padrão
+  const skill = typeof message.skill === 'string' ? skillById(message.skill) : message.skill
+  const SkillIcon = skill ? skillIcon({ id: skill.id, source: skillById(skill.id) ? 'builtin' : 'personal' }) : null
+  const images = message.images ?? []
+  // Todas numa linha: uma grande, ou até quatro lado a lado
+  const tile = ['', '', 'h-28 w-28', 'h-[84px] w-[84px]', 'h-[62px] w-[62px]'][Math.min(images.length, 4)]
   return (
     <div className="flex flex-col items-end gap-1 pl-6">
       {label && Icon && (
         <span className="inline-flex max-w-full items-center gap-1 text-[11px] text-gray-500">
+          {skill && SkillIcon && (
+            <span className="mr-0.5 inline-flex shrink-0 items-center gap-1 rounded-md bg-gray-900 px-1.5 py-px text-[10.5px] font-medium text-white">
+              <SkillIcon className="h-2.5 w-2.5" />
+              {skill.name}
+            </span>
+          )}
           <Icon className="h-3 w-3 shrink-0" />
           <span className="truncate">
             {label.text}
@@ -271,9 +308,80 @@ const UserMessage: React.FC<{ message: ChatMessage }> = ({ message }) => {
           <span className="shrink-0 text-gray-400">→ {CHAT_AGENTS[message.agent].name}</span>
         </span>
       )}
-      <div className="max-w-full whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-gray-100 px-3 py-2 text-[13px] leading-relaxed text-gray-900">{message.text}</div>
+      {images.length > 0 && (
+        <div className="flex max-w-full justify-end gap-1.5">
+          {images.map((image, i) =>
+            image.preview ? (
+              <img
+                key={i}
+                src={image.preview}
+                alt={image.name}
+                title={`${image.name}${image.width ? ` · ${image.width}×${image.height}` : ''}`}
+                className={`rounded-xl border border-gray-200 bg-gray-100 object-cover ${images.length === 1 ? 'max-h-44 max-w-full' : tile}`}
+              />
+            ) : (
+              <span key={i} title={image.name} className={`flex items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-400 ${tile || 'h-28 w-28'}`}>
+                <Images className="h-5 w-5" />
+              </span>
+            )
+          )}
+        </div>
+      )}
+      {message.text && (
+        <div className="max-w-full whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-gray-100 px-3 py-2 text-[13px] leading-relaxed text-gray-900">{message.text}</div>
+      )}
     </div>
   )
+}
+
+/** Os comandos do chat, no mesmo menu do "/" que as skills. */
+const COMMANDS = [
+  { id: 'usage', name: '/usage', hint: 'Quanto do plano do agente já foi usado', icon: Gauge },
+  { id: 'login', name: '/login', hint: 'Entrar de novo na conta do agente', icon: LogIn },
+] as const
+
+type MenuItem = { type: 'skill'; skill: ChatSkill } | { type: 'command'; command: (typeof COMMANDS)[number] }
+
+/** Os grupos do menu, na ordem da lista. */
+const MENU_GROUP: Record<ChatSkill['source'] | 'command', string> = {
+  personal: 'Suas skills',
+  global: 'Da equipe',
+  builtin: 'Padrão',
+  command: 'Comandos',
+}
+
+/** Quantas cabem no grid da conversa vazia; o resto fica no menu. */
+const GRID_SKILLS = 8
+
+/** A skill que vai no pedido: a padrão pelo id; a cadastrada com as instruções e a versão. */
+const skillRef = (skill: ChatSkill): ChatSkillRef =>
+  skill.source === 'builtin'
+    ? { id: skill.id, name: skill.name }
+    : { id: skill.id, name: skill.name, instructions: skill.instructions, version: String(skill.updatedAt ?? '') }
+
+/** A tela Skills numa aba nova: o canvas continua aberto. */
+const ManageSkillsLink: React.FC<{ className?: string }> = ({ className }) => (
+  <a
+    href="/skills"
+    target="_blank"
+    rel="noreferrer"
+    className={`inline-flex items-center gap-1 font-medium text-gray-500 transition-colors hover:text-gray-900 ${className ?? ''}`}
+  >
+    Gerenciar skills
+    <ExternalLink className="h-3 w-3" />
+  </a>
+)
+
+const fold = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+/** O que o "/" mostra: skills e comandos que começam (ou têm uma palavra que começa) com o que foi digitado. */
+const menuItems = (query: string, skills: ChatSkill[]): MenuItem[] => {
+  const q = fold(query)
+  const hit = (...names: string[]) => !q || names.some((n) => fold(n).split(/[\s/-]+/).some((word) => word.startsWith(q)) || fold(n).startsWith(q))
+  return [
+    ...skills.filter((s) => hit(s.name, ...(s.source === 'builtin' ? [s.id] : []))).map((skill): MenuItem => ({ type: 'skill', skill })),
+    ...COMMANDS.filter((c) => hit(c.id)).map((command): MenuItem => ({ type: 'command', command })),
+  ]
 }
 
 const suggestionsFor = (context: ChatContext) => {
@@ -283,6 +391,20 @@ const suggestionsFor = (context: ChatContext) => {
 }
 
 // ---------- o chat ----------
+
+/** Imagem na caixa, antes de mandar: a prévia local aparece na hora, enquanto a aba reduz a imagem. */
+interface Attachment {
+  id: string
+  name: string
+  url: string
+  state: 'reading' | 'ready'
+  upload?: ChatImageUpload
+}
+
+const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files')
+
+/** Atrás da prévia na caixa: um logo branco recortado continua visível. */
+const CHECKER: React.CSSProperties = { background: 'repeating-conic-gradient(#d1d5db 0% 25%, #f3f4f6 0% 50%) 0 0 / 8px 8px' }
 
 /**
  * A aba Agente do painel da direita, como no Framer: a conversa ocupa o
@@ -303,6 +425,93 @@ export const SpaceChat: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false)
   const input = useRef<HTMLTextAreaElement>(null)
   const list = useRef<HTMLDivElement>(null)
+  const form = useRef<HTMLFormElement>(null)
+  const skillId = useChat((s) => s.skill)
+  const setSkill = useChat((s) => s.setSkill)
+  // As padrão, as globais da equipe e as suas (tela Skills)
+  const skills = useSkillList()
+  const skillsStatus = useSkills((s) => s.status)
+  const skill = skills.find((s) => s.id === skillId)
+  useEffect(() => watchSkills(), [])
+  // A skill escolhida foi apagada (aqui ou em outra aba): sai da caixa
+  useEffect(() => {
+    if (skillId && !skill && (skillsStatus === 'ready' || skillsStatus === 'missing')) setSkill(null)
+  }, [skillId, skill, skillsStatus, setSkill])
+
+  // Imagens da próxima mensagem (botão, Ctrl+V ou arrastar)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const attachmentsRef = useRef(attachments)
+  attachmentsRef.current = attachments
+  const [note, setNote] = useState<string | null>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
+  const dragDepth = useRef(0)
+
+  // Skills e comandos: o menu abre pelo botão ou pelo "/" no começo da caixa
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuIndex, setMenuIndex] = useState(0)
+  const slash = /^\/(\S*)$/.exec(draft)
+  const menuQuery = slash?.[1] ?? ''
+  const showMenu = menuOpen || !!slash
+  const items = useMemo(() => (showMenu ? menuItems(menuQuery, skills) : []), [showMenu, menuQuery, skills])
+  useEffect(() => setMenuIndex(0), [menuQuery, showMenu])
+
+  // Clique fora fecha o menu aberto pelo botão
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (!form.current?.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [menuOpen])
+
+  // O aviso (arquivo que não é imagem, imagem demais) some sozinho
+  useEffect(() => {
+    if (!note) return
+    const timer = setTimeout(() => setNote(null), 5000)
+    return () => clearTimeout(timer)
+  }, [note])
+
+  // As prévias locais saem da memória quando a aba fecha
+  useEffect(() => () => attachmentsRef.current.forEach((a) => URL.revokeObjectURL(a.url)), [])
+
+  const addFiles = (files: File[]) => {
+    if (!files.length) return
+    const images = files.filter(isChatImage)
+    const taken = images.slice(0, Math.max(0, CHAT_IMAGE_LIMIT - attachmentsRef.current.length))
+    const notes = [
+      images.length < files.length ? 'Só imagens: PNG, JPG, WebP ou GIF.' : '',
+      taken.length < images.length ? `Até ${CHAT_IMAGE_LIMIT} imagens por mensagem.` : '',
+    ].filter(Boolean)
+    setNote(notes.length ? notes.join(' ') : null)
+    for (const file of taken) {
+      const item: Attachment = { id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file), state: 'reading' }
+      attachmentsRef.current = [...attachmentsRef.current, item]
+      setAttachments(attachmentsRef.current)
+      readChatImage(file).then(
+        (upload) => setAttachments((list) => list.map((a) => (a.id === item.id ? { ...a, state: 'ready', upload, name: upload.name } : a))),
+        (error) => {
+          URL.revokeObjectURL(item.url)
+          setAttachments((list) => list.filter((a) => a.id !== item.id))
+          setNote(error instanceof Error ? error.message : 'O navegador não conseguiu abrir essa imagem.')
+        }
+      )
+    }
+    input.current?.focus()
+  }
+
+  const removeAttachment = (id: string) =>
+    setAttachments((list) => {
+      const gone = list.find((a) => a.id === id)
+      if (gone) URL.revokeObjectURL(gone.url)
+      return list.filter((a) => a.id !== id)
+    })
+
+  const clearAttachments = () => {
+    attachmentsRef.current.forEach((a) => URL.revokeObjectURL(a.url))
+    setAttachments([])
+  }
 
   // Seleção nova volta a ir junto
   const selectionKey = `${context.sections.map((s) => s.id).join(',')}|${context.element?.elementId ?? ''}`
@@ -369,14 +578,31 @@ export const SpaceChat: React.FC = () => {
   const hasSelection = context.sections.length > 0 || !!context.element
   const names = available.map((id) => CHAT_AGENTS[id].name)
 
+  const ready = attachments.filter((a) => a.state === 'ready' && a.upload)
+  const reading = attachments.some((a) => a.state === 'reading')
+  const SkillIcon = skill ? skillIcon(skill) : null
+
   const send = (text = draft) => {
     const clean = text.trim()
+    // /usage e /login são comandos: as imagens e a skill ficam para o próximo pedido
+    const command = /^\/(usage|login)\b/i.test(clean)
+    const images = command ? [] : ready.map((a) => a.upload!)
     const { send } = useChat.getState()
-    if (!clean || busy || !send || status?.available === false) return
-    send({ projectId, projectName, agent, text: clean, context: shown })
+    if ((!clean && !images.length) || busy || !send || status?.available === false || (!command && reading)) return
+    send({ projectId, projectName, agent, text: clean, context: shown, ...(images.length ? { images } : {}), ...(skill && !command ? { skill: skillRef(skill) } : {}) })
     // O /usage da barrinha não apaga o que a pessoa estava escrevendo
     if (text === draft) setDraft('')
+    if (images.length) clearAttachments()
     pinned.current = true
+  }
+
+  /** Item do menu: a skill fica na caixa até a pessoa tirar; o comando vai na hora. */
+  const pick = (item: MenuItem) => {
+    setMenuOpen(false)
+    if (slash) setDraft('')
+    if (item.type === 'command') return send(item.command.name)
+    setSkill(item.skill.id)
+    input.current?.focus()
   }
 
   const stop = () => useChat.getState().stop?.(projectId, agent)
@@ -393,7 +619,40 @@ export const SpaceChat: React.FC = () => {
   }
 
   return (
-    <div data-space-chat className="flex min-h-0 flex-1 flex-col">
+    <div
+      data-space-chat
+      className="relative flex min-h-0 flex-1 flex-col"
+      onDragEnter={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        dragDepth.current += 1
+        setDragging(true)
+      }}
+      onDragOver={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'copy'
+      }}
+      onDragLeave={(e) => {
+        if (!hasFiles(e)) return
+        dragDepth.current = Math.max(0, dragDepth.current - 1)
+        if (!dragDepth.current) setDragging(false)
+      }}
+      onDrop={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        dragDepth.current = 0
+        setDragging(false)
+        addFiles(Array.from(e.dataTransfer.files))
+      }}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-2 z-30 flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-violet-300 bg-violet-50/95 text-center text-violet-900">
+          <ImagePlus className="h-6 w-6" />
+          <p className="text-[13px] font-medium">Solte para mandar ao agente</p>
+          <p className="text-[11px] text-violet-700">PNG, JPG, WebP ou GIF · até {CHAT_IMAGE_LIMIT} por mensagem</p>
+        </div>
+      )}
       <ConnectorBar />
       <ConversationBar
         messages={messages}
@@ -433,14 +692,55 @@ export const SpaceChat: React.FC = () => {
                   ou ao <strong className="font-semibold text-gray-900">{names[1]}</strong>
                 </>
               )}
-              . Selecione uma seção ou uma camada no canvas: o agente trabalha só ali, e você vê o cursor dele.
+              . Selecione uma seção ou uma camada no canvas: o agente trabalha só ali, e você vê o cursor dele. Mande também uma imagem de
+              referência: pelo botão, com Ctrl+V ou arrastando para cá.
             </p>
+            {skill && SkillIcon ? (
+              <div className="rounded-lg bg-gray-50 px-2.5 py-2">
+                <p className="flex items-center gap-1.5 text-[12px] font-medium text-gray-900">
+                  <SkillIcon className="h-3.5 w-3.5 text-gray-500" />
+                  {skill.name}
+                </p>
+                <p className="mt-0.5 text-[11px] leading-snug text-gray-500">
+                  {skill.hint && `${skill.hint.replace(/[.!…]+$/, '')}. `}
+                  {skill.needsImage ? 'Anexe ou cole a imagem junto com o pedido.' : ''}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <p className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                  Skills
+                  <ManageSkillsLink className="text-[11px] normal-case tracking-normal" />
+                </p>
+                <div className="grid grid-cols-2 gap-1">
+                  {skills.slice(0, GRID_SKILLS).map((s) => {
+                    const Icon = skillIcon(s)
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        title={s.hint}
+                        className="flex min-w-0 items-center gap-1.5 rounded-lg border border-gray-200 px-2 py-1.5 text-left text-[12px] text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 active:scale-[0.98]"
+                        onClick={() => {
+                          setSkill(s.id)
+                          input.current?.focus()
+                        }}
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+                        <span className="truncate">{s.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             <p className="text-[11px] leading-relaxed text-gray-400">
-              Digite <code className="rounded bg-gray-100 px-1 font-mono text-gray-600">/usage</code> para ver quanto do plano já usou, ou{' '}
-              <code className="rounded bg-gray-100 px-1 font-mono text-gray-600">/login</code> se o agente sair da conta.
+              Digite <code className="rounded bg-gray-100 px-1 font-mono text-gray-600">/</code> para escolher uma skill.{' '}
+              <code className="rounded bg-gray-100 px-1 font-mono text-gray-600">/usage</code> mostra quanto do plano já usou, e{' '}
+              <code className="rounded bg-gray-100 px-1 font-mono text-gray-600">/login</code> entra de novo na conta do agente.
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {suggestionsFor(shown).map((text) => (
+              {(skill?.starters.length ? skill.starters : suggestionsFor(shown)).map((text) => (
                 <button
                   key={text}
                   className="rounded-full border border-gray-200 px-2.5 py-1 text-left text-[12px] text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
@@ -461,13 +761,31 @@ export const SpaceChat: React.FC = () => {
       )}
 
       <form
-        className="m-2 shrink-0 rounded-xl border border-gray-200 bg-white transition-[border-color,box-shadow] focus-within:border-gray-300 focus-within:shadow-[0_4px_16px_-6px_rgb(0_0_0/0.16)]"
+        ref={form}
+        className="relative m-2 shrink-0 rounded-xl border border-gray-200 bg-white transition-[border-color,box-shadow] focus-within:border-gray-300 focus-within:shadow-[0_4px_16px_-6px_rgb(0_0_0/0.16)]"
         onSubmit={(e) => {
           e.preventDefault()
           send()
         }}
       >
+        {showMenu && (
+          <SkillMenu items={items} query={menuQuery} active={menuIndex} chosen={skillId} onActive={setMenuIndex} onPick={pick} />
+        )}
         <div className="flex items-center gap-1.5 px-2 pt-2">
+          {skill && SkillIcon && (
+            <span title={skill.hint} className="inline-flex h-[26px] shrink-0 items-center gap-1 rounded-lg bg-gray-900 pl-2 pr-1 text-[11px] font-medium text-white">
+              <SkillIcon className="h-3 w-3" />
+              {skill.name}
+              <button
+                type="button"
+                aria-label={`Tirar a skill ${skill.name}`}
+                className="rounded p-px opacity-70 transition-opacity hover:bg-white/15 hover:opacity-100"
+                onClick={() => setSkill(null)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
           <button
             type="button"
             className={`inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors ${
@@ -502,15 +820,82 @@ export const SpaceChat: React.FC = () => {
             )}
           </button>
         </div>
+        {(attachments.length > 0 || note) && (
+          <div className="px-2 pt-2">
+            {attachments.length > 0 && (
+              <ul className="flex flex-wrap gap-1.5" aria-label="Imagens que vão com a mensagem">
+                {attachments.map((a) => (
+                  <li key={a.id} title={a.name} className="relative h-14 w-14 overflow-hidden rounded-lg border border-gray-200" style={CHECKER}>
+                    <img src={a.url} alt={a.name} className="h-full w-full object-cover" />
+                    {a.state === 'reading' && (
+                      <span className="absolute inset-0 flex items-center justify-center bg-white/60">
+                        <Loader2 className="h-4 w-4 animate-spin text-gray-600" />
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={`Tirar ${a.name}`}
+                      className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900/75 text-white transition-colors hover:bg-gray-900"
+                      onClick={() => removeAttachment(a.id)}
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {note && (
+              <p role="status" className="mt-1.5 text-[11px] leading-snug text-amber-700">
+                {note}
+              </p>
+            )}
+          </div>
+        )}
         <textarea
           ref={input}
           rows={2}
           value={draft}
           aria-label={`Mensagem para o ${info.name}`}
-          placeholder={busy ? `${info.name} está trabalhando…` : hasSelection ? 'O que mudar aqui?' : `Peça ao ${info.name}…`}
+          placeholder={
+            busy
+              ? `${info.name} está trabalhando…`
+              : attachments.length
+                ? `O que fazer com ${attachments.length > 1 ? 'as imagens' : 'a imagem'}?`
+                : skill?.needsImage
+                  ? 'Anexe ou cole a imagem e diga o que levar dela…'
+                  : hasSelection
+                    ? 'O que mudar aqui?'
+                    : `Peça ao ${info.name}…`
+          }
           className="block max-h-40 w-full resize-none bg-transparent px-3 pb-1 pt-2 text-[13px] leading-relaxed text-gray-900 placeholder:text-gray-400 focus:outline-none"
           onChange={(e) => setDraft(e.target.value)}
+          onPaste={(e) => {
+            const files = Array.from(e.clipboardData.files)
+            if (!files.some(isChatImage)) return
+            // Imagem copiada: vai como anexo; texto junto (de uma página, de um documento) continua colando
+            if (!e.clipboardData.getData('text/plain')) e.preventDefault()
+            addFiles(files.filter(isChatImage))
+          }}
           onKeyDown={(e) => {
+            if (showMenu && items.length) {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault()
+                const step = e.key === 'ArrowDown' ? 1 : -1
+                setMenuIndex((i) => (i + step + items.length) % items.length)
+                return
+              }
+              if ((e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) || e.key === 'Tab') {
+                e.preventDefault()
+                pick(items[menuIndex] ?? items[0])
+                return
+              }
+            }
+            if (e.key === 'Escape' && showMenu) {
+              e.preventDefault()
+              setMenuOpen(false)
+              if (slash) setDraft('')
+              return
+            }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
               send()
@@ -549,6 +934,40 @@ export const SpaceChat: React.FC = () => {
             </span>
           )}
           <div className="flex-1" />
+          <button
+            type="button"
+            disabled={attachments.length >= CHAT_IMAGE_LIMIT}
+            aria-label="Anexar imagem"
+            title={attachments.length >= CHAT_IMAGE_LIMIT ? `Até ${CHAT_IMAGE_LIMIT} imagens por mensagem` : 'Anexar imagem (ou cole com Ctrl+V, ou arraste para cá)'}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:pointer-events-none disabled:opacity-40"
+            onClick={() => fileInput.current?.click()}
+          >
+            <ImagePlus className="h-4 w-4" />
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              addFiles(Array.from(e.target.files ?? []))
+              e.target.value = ''
+            }}
+          />
+          <button
+            type="button"
+            aria-label="Skills e comandos"
+            aria-expanded={showMenu}
+            title="Skills e comandos (ou digite / na caixa)"
+            className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-gray-100 hover:text-gray-900 ${showMenu ? 'bg-gray-100 text-gray-900' : 'text-gray-500'}`}
+            onClick={() => {
+              setMenuOpen((open) => !open)
+              input.current?.focus()
+            }}
+          >
+            <Wand2 className="h-4 w-4" />
+          </button>
           {busy ? (
             <button
               type="button"
@@ -562,10 +981,11 @@ export const SpaceChat: React.FC = () => {
           ) : (
             <button
               type="submit"
-              disabled={!draft.trim() || status?.available === false}
+              disabled={(!draft.trim() && !ready.length) || reading || status?.available === false}
               className="flex h-7 w-7 items-center justify-center rounded-full text-white transition-[transform,background-color] active:scale-[0.94] disabled:bg-gray-200 disabled:text-gray-400"
-              style={draft.trim() ? { background: info.color } : undefined}
+              style={(draft.trim() || ready.length) && !reading ? { background: info.color } : undefined}
               aria-label={`Enviar para o ${info.name}`}
+              title={reading ? 'Preparando a imagem…' : undefined}
             >
               <ArrowUp className="h-4 w-4" />
             </button>
@@ -614,7 +1034,7 @@ function summaryOf(messages: ChatMessage[]) {
   const asks = messages.filter((m) => m.role === 'user' && !/^\/(usage|login)\b/i.test(m.text ?? ''))
   const first = asks[0]?.text?.replace(/\s+/g, ' ').trim()
   return {
-    title: first || 'Conversa nova',
+    title: first || (asks[0]?.images?.length ? 'Imagem anexada' : 'Conversa nova'),
     requests: asks.length,
     tokens,
     total: totalTokens(tokens),
@@ -804,6 +1224,75 @@ const HistoryList: React.FC<HistoryListProps> = ({ items, current, locked, onOpe
           Ainda não há conversas anteriores. Ao começar uma nova, esta fica guardada aqui para você voltar e continuar.
         </p>
       )}
+    </div>
+  )
+}
+
+interface SkillMenuProps {
+  items: MenuItem[]
+  query: string
+  active: number
+  chosen: string | null
+  onActive: (index: number) => void
+  onPick: (item: MenuItem) => void
+}
+
+/** Acima da caixa: as skills (ficam ligadas até tirar) e os comandos do chat. Setas, Enter e Esc pelo teclado. */
+const SkillMenu: React.FC<SkillMenuProps> = ({ items, query, active, chosen, onActive, onPick }) => {
+  const listRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [active])
+  return (
+    <div
+      ref={listRef}
+      role="listbox"
+      aria-label="Skills e comandos"
+      className="absolute inset-x-0 bottom-full z-20 mb-1.5 max-h-[340px] overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.28)]"
+    >
+      {items.length === 0 ? (
+        <p className="px-2.5 py-2 text-[12px] text-gray-500">Nenhuma skill ou comando com “{query}”.</p>
+      ) : (
+        items.map((item, i) => {
+          const group = (it: MenuItem) => (it.type === 'skill' ? it.skill.source : 'command')
+          const header = i === 0 || group(items[i - 1]) !== group(item) ? MENU_GROUP[group(item)] : null
+          const Icon = item.type === 'skill' ? skillIcon(item.skill) : item.command.icon
+          const name = item.type === 'skill' ? item.skill.name : item.command.name
+          const hint = item.type === 'skill' ? item.skill.hint : item.command.hint
+          const on = item.type === 'skill' && item.skill.id === chosen
+          return (
+            <div key={item.type === 'skill' ? item.skill.id : item.command.id}>
+              {header && <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">{header}</p>}
+              <button
+                type="button"
+                role="option"
+                aria-selected={i === active}
+                data-index={i}
+                className={`flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${i === active ? 'bg-gray-100' : ''}`}
+                onMouseEnter={() => onActive(i)}
+                // A caixa de texto continua com o foco (as setas seguem valendo)
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => onPick(item)}
+              >
+                <span className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700">
+                  <Icon className="h-3.5 w-3.5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={`flex items-center gap-1 text-[12px] font-medium text-gray-900 ${item.type === 'command' ? 'font-mono' : ''}`}>
+                    {name}
+                    {on && <Check className="h-3 w-3 text-emerald-600" aria-label="escolhida" />}
+                  </span>
+                  <span className="block text-[11px] leading-snug text-gray-500">{hint}</span>
+                </span>
+              </button>
+            </div>
+          )
+        })
+      )}
+      <div className="mt-1 flex items-center justify-between border-t border-gray-100 px-2 pb-0.5 pt-1.5 text-[11px] text-gray-400">
+        <span>Crie as suas ou importe um SKILL.md</span>
+        <ManageSkillsLink />
+      </div>
     </div>
   )
 }

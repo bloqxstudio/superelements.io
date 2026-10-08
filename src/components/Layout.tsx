@@ -4,6 +4,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { Logo } from '@/components/Logo';
 import { AgentsButton } from '@/features/agents/AgentsButton';
 import { ProspectsButton } from '@/features/prospects/ProspectsButton';
+import { SkillsButton } from '@/features/skills/SkillsButton';
 
 /**
  * Header das telas da conta (56px + 1px de borda). Dentro de um projeto quem
@@ -25,6 +26,7 @@ const Layout: React.FC = () => {
           </nav>
           <div className="flex shrink-0 items-center gap-2">
             <ProspectsButton />
+            <SkillsButton />
             <AgentsButton />
             <UserAvatar />
           </div>
