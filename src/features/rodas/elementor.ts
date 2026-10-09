@@ -1,7 +1,7 @@
 import { px, gap, sides, media, link } from '../superelements/elementor'
 import { RO, RO_LIGHT, RO_FONT, RO_MONO, RO_EASE as E, RO_MARGIN } from './tokens'
 import { RO_CASES, RO_NAV, RO_HUD, RO_TEXT } from './content'
-import { RO_MOTION_SCRIPT } from './motion'
+import { roMotionScript } from './motion'
 
 /**
  * Experimento "Rodas" em árvore nativa do Elementor: o cabeçalho com a faixa
@@ -194,6 +194,22 @@ const GLOBAL_CSS = [
   '.ro-cmd-item.is-on .ro-cmd-arrow{opacity:1}',
   `.ro-cmd-hint{margin-left:auto;padding-left:12px;color:var(--ro-muted);font:400 12px/1.2 ${MONO};white-space:nowrap}`,
   `.ro-cmd-empty{padding:18px 10px;color:var(--ro-muted);font:400 14px/1.3 ${FONT}}`,
+  // setas de quem está na página agora: ponta da seta no ponto, nome numa etiqueta da cor da pessoa
+  '.ro-cursors{position:fixed;inset:0;z-index:1000;overflow:hidden;pointer-events:none}',
+  'html.ro-presence-off .ro-cursors{display:none}',
+  '.ro-cur{position:absolute;left:0;top:0;opacity:0;will-change:transform;transition:transform .1s linear,opacity .25s ease-out}',
+  '.ro-cur.is-on{opacity:1}',
+  '.ro-cur svg{display:block;margin:-2px 0 0 -2px}',
+  `.ro-cur span{position:absolute;left:13px;top:15px;padding:2px 5px;border-radius:2px;color:#1e1e1e;font:500 10px/1.25 ${MONO};letter-spacing:-.02em;white-space:nowrap}`,
+  // avisos de quem entrou ou saiu, embaixo à esquerda
+  '.ro-toasts{position:fixed;left:var(--ro-margin);bottom:var(--ro-margin);z-index:1000;display:flex;flex-direction:column;gap:8px;width:min(320px,calc(100vw - 32px));pointer-events:none}',
+  `.ro-toast{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--ro-line);border-radius:6px;background-color:var(--ro-surface);background-image:var(--ro-dots);box-shadow:0 12px 30px -18px rgba(0,0,0,.55);color:var(--ro-ink);opacity:0;transform:translateY(12px);transition:opacity .35s ease-out,transform .5s ${E}}`,
+  '.ro-toast.is-in{opacity:1;transform:none}',
+  '.ro-toast i{flex:none;width:6px;height:6px;margin-top:6px;border-radius:50%;background:currentColor;animation:ro-pulse 2s ease-out infinite}',
+  '@keyframes ro-pulse{50%{opacity:.35}}',
+  `.ro-toast b{display:block;font:600 13px/1.3 ${FONT};letter-spacing:-.02em}`,
+  `.ro-toast span{display:block;margin-top:2px;color:var(--ro-muted);font:400 12px/1.3 ${MONO}}`,
+  '@media (prefers-reduced-motion:reduce){.ro-cur,.ro-toast{transition:none}.ro-toast i{animation:none}}',
 ].join('')
 
 // ---------- construtor ----------
@@ -240,12 +256,13 @@ const createBuilder = (prefix: string) => {
 // 1. Cabeçalho: faixa de leitura, assinatura, menu em pílula, ⌘K e o tema
 // =====================================================================
 
-export const buildHeader = () => {
+/** `live`: endereço e chave pública do Supabase para a presença ao vivo (sem ela, nada de setas nem avisos). */
+export const buildHeader = (options: { live?: { url: string; key: string } } = {}) => {
   const b = createBuilder('roh')
   const hud = b.row(RO_HUD.map((h) => b.row([
     b.heading(h.key, T.hud, RO.hudKey, { _css_classes: 'ro-hud-k' }),
     b.heading(h.value, T.hud, RO.hudValue, { _css_classes: `ro-hud-v${'live' in h ? ` ro-hud-${h.live}` : ''}` }),
-  ], 0, { css_classes: 'ro-hud-chip' })), 8, { css_classes: 'ro-hud', flex_wrap: 'wrap' })
+  ], 0, { css_classes: `ro-hud-chip${'chip' in h ? ` ${h.chip}` : ''}` })), 8, { css_classes: 'ro-hud', flex_wrap: 'wrap' })
 
   const logo = b.row([
     b.heading(RO_TEXT.wordmark, T.logo, RO.ink, { link: link('#cases', false), _css_classes: 'ro-ink ro-stretch ro-logo-word' }),
@@ -272,7 +289,7 @@ export const buildHeader = () => {
   })), 6, { css_classes: 'ro-drawer' })
 
   return b.root([
-    b.behavior(`<script>${RO_MOTION_SCRIPT}</script>`),
+    b.behavior(`<script>${roMotionScript(options.live)}</script>`),
     b.heading(RO_TEXT.h1, T.nav, RO.ink, { header_size: 'h1', _css_classes: 'ro-sr' }),
     hud,
     b.container({ css_classes: 'ro-bar', flex_direction: 'row', flex_align_items: 'center', flex_justify_content: 'space-between' }, [
@@ -296,6 +313,10 @@ export const buildHeader = () => {
       'selector .ro-hud-chip .elementor-heading-title{white-space:nowrap}',
       'selector .ro-hud-k .elementor-heading-title{color:var(--ro-hud-k)!important}',
       'selector .ro-hud-v .elementor-heading-title{color:var(--ro-hud-v)!important;font-variant-numeric:tabular-nums}',
+      // PRESENÇA só com o canal ao vivo; é um botão (liga e desliga a própria seta)
+      'selector .ro-chip-presence{display:none!important}',
+      'html.ro-live selector .ro-chip-presence{display:flex!important}',
+      'selector .ro-chip-presence{pointer-events:auto;cursor:pointer;transition:scale .2s ease-out!important}selector .ro-chip-presence:active{scale:.96}',
       // a barra: três colunas, o menu no centro exato
       'selector .ro-bar{display:grid!important;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:clamp(16px,2vw,30px)!important;align-items:center}',
       'selector .ro-logo{position:relative;width:auto!important;justify-self:start;cursor:pointer}',
@@ -373,7 +394,7 @@ export const buildStage = () => {
       'selector .ro-case{position:absolute!important;inset:0;pointer-events:none}',
       'selector .ro-case:not(.ro-case-1) .ro-info{visibility:hidden}',
       // o case do meio: coluna de 26rem centrada, linhas com recorte para o tambor
-      'selector .ro-info{position:absolute!important;left:50%;top:53%;width:min(416px,33vw)!important;transform:translate(-50%,-50%);text-align:center;z-index:3;align-items:center}',
+      'selector .ro-info{position:absolute!important;left:calc(50% + var(--ro-open,0) * 22vw);top:53%;width:min(416px,33vw)!important;transform:translate(-50%,-50%);text-align:center;z-index:3;align-items:center}',
       'selector .ro-line{position:relative;width:100%!important;overflow:hidden;margin:-2px 0;padding:2px 0!important}',
       'selector .ro-l-title{margin-top:8px}selector .ro-l-chips{margin-top:12px}selector .ro-l-cta{margin-top:22px}',
       'selector .ro-eyebrow .elementor-heading-title{font-variant-numeric:tabular-nums;font-size:clamp(12px,calc(8px + .3vw),12.8px)}',
@@ -412,7 +433,7 @@ export const buildStage = () => {
       'selector .ro-gl.is-grabbing{cursor:grabbing}',
       // celular: rodas em cima e embaixo, o texto um pouco abaixo do meio
       '@media (max-width:767px){',
-      'selector .ro-info{top:calc(50% + 12svh);width:min(416px,86vw)!important}',
+      'selector .ro-info{left:50%;top:calc(50% + 12svh + var(--ro-open,0) * 9svh);width:min(416px,86vw)!important}',
       'selector .ro-card{width:min(88vw,460px)!important}',
       'selector .ro-case-1 .ro-card{left:50%;top:calc(var(--ro-headh) + 40px);transform:translateX(-50%)}',
       'selector .ro-case-2 .ro-card{left:auto;right:-74vw;top:calc(var(--ro-headh) + 70px);transform:rotate(-14deg)}',

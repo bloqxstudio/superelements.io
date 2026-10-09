@@ -49,6 +49,8 @@ export const RO_NAV = [
 export const RO_HUD = [
   { key: 'SL::', value: '--:--', live: 'time' },
   { key: 'FPS::', value: '--', live: 'fps' },
+  /** só aparece com o canal ao vivo conectado (html.ro-live) */
+  { key: 'PRESENÇA::', value: 'ON', live: 'presence', chip: 'ro-chip-presence' },
   { key: 'CASES::', value: String(AV_CASES.length).padStart(2, '0') },
   { key: 'IG::', value: AV_CONTACT.instagramLabel.toUpperCase() },
 ] as const

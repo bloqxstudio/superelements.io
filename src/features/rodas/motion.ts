@@ -30,8 +30,9 @@
  * Sem o script fica a composição do CSS: o primeiro case no meio, a capa
  * inclinada, as vizinhas cortadas nos cantos, os dados parados e a lista.
  */
-export const RO_MOTION_SCRIPT = `
+export const roMotionScript = (live?: { url: string; key: string }) => `
 (function () {
+  var LIVE = ${JSON.stringify(live ?? null)};
   var root = document.documentElement;
   if (root.getAttribute('data-ro')) return;
   root.setAttribute('data-ro', '1');
@@ -205,8 +206,159 @@ export const RO_MOTION_SCRIPT = `
       else if (e.key === 'Escape') { closeCmd(); drawer(false); }
     });
 
-    /* daqui em diante, só com as rodas */
     var scrolls = root.scrollHeight - window.innerHeight > 80;
+    /* 7. presença ao vivo: a seta e o nome de quem está na página agora, num canal público do Supabase (sem login).
+       Ninguém é inventado: sozinho na página, não aparece seta nenhuma e o contador diz 1. */
+    function presence() {
+      if (!LIVE || !LIVE.url || !LIVE.key) return;
+      var ADJ = ['calma', 'veloz', 'atenta', 'serena', 'curiosa', 'leve', 'sábia', 'alegre', 'gentil', 'astuta', 'discreta', 'ligeira'];
+      var ANI = ['lontra', 'garça', 'raposa', 'coruja', 'baleia', 'abelha', 'lebre', 'orca', 'onça', 'arara', 'gaivota', 'tartaruga'];
+      var COL = ['#c9b8f2', '#f5a670', '#f2cd5c', '#f2a9c4', '#acdcc4', '#a6caf0'];
+      function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+      var me = null;
+      try { me = JSON.parse(sessionStorage.getItem('ro-me') || 'null'); } catch (e) {}
+      if (!me || !me.id) {
+        me = { id: Math.random().toString(36).slice(2, 10), name: pick(ANI) + ' ' + pick(ADJ), color: pick(COL) };
+        try { sessionStorage.setItem('ro-me', JSON.stringify(me)); } catch (e) {}
+      }
+      var on = true;
+      try { on = localStorage.getItem('ro-presence') !== 'off'; } catch (e) {}
+      var chip = $('.ro-chip-presence'), chipV = $('.ro-hud-presence .elementor-heading-title');
+      function label() {
+        if (chipV) chipV.textContent = on ? 'ON' : 'OFF';
+        if (chip) chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+        root.classList.toggle('ro-presence-off', !on);
+      }
+      label();
+      var layer = document.createElement('div');
+      layer.className = 'ro-cursors'; layer.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(layer);
+      var tray = document.createElement('div');
+      tray.className = 'ro-toasts'; tray.setAttribute('role', 'status'); tray.setAttribute('aria-live', 'polite');
+      document.body.appendChild(tray);
+      var ARROW = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2.4 1.6l11 5.3-4.7 1.6-1.7 4.9z" fill="currentColor" fill-opacity=".2" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
+      var cursors = {};
+      function cursorOf(p) {
+        var c = cursors[p.id];
+        if (!c) {
+          var el = document.createElement('div');
+          el.className = 'ro-cur';
+          el.innerHTML = ARROW + '<span></span>';
+          layer.appendChild(el);
+          c = cursors[p.id] = { el: el, at: 0 };
+        }
+        var color = /^#[0-9a-f]{6}$/i.test(p.color || '') ? p.color : '#c9b8f2';
+        c.el.style.color = color;
+        var tag = c.el.querySelector('span');
+        tag.textContent = String(p.name || '').slice(0, 24);
+        tag.style.background = color;
+        return c;
+      }
+      function drop(id) {
+        var c = cursors[id];
+        if (!c) return;
+        delete cursors[id];
+        c.el.classList.remove('is-on');
+        setTimeout(function () { c.el.remove(); }, 300);
+      }
+      setInterval(function () { var now = Date.now(); Object.keys(cursors).forEach(function (id) { if (now - cursors[id].at > 9000) drop(id); }); }, 2000);
+
+      /* avisos embaixo à esquerda: quem entrou ou saiu, juntando o que chega em 1,5 s */
+      var folded = null;
+      function toast(delta, n) {
+        var now = performance.now();
+        if (folded && now - folded.born < 1500 && folded.el.isConnected) folded.delta += delta;
+        else {
+          var el = document.createElement('div');
+          el.className = 'ro-toast';
+          el.innerHTML = '<i></i><div><b></b><span></span></div>';
+          tray.appendChild(el);
+          requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('is-in'); }); });
+          folded = { el: el, born: now, delta: delta };
+        }
+        var f = folded, k = Math.abs(f.delta);
+        if (!k) { f.el.remove(); folded = null; return; }
+        f.el.querySelector('b').textContent = f.delta > 0 ? (k === 1 ? 'Alguém entrou' : k + ' pessoas entraram') : (k === 1 ? 'Alguém saiu' : k + ' pessoas saíram');
+        f.el.querySelector('span').textContent = n + ' online';
+        clearTimeout(f.timer);
+        f.timer = setTimeout(function () {
+          f.el.classList.remove('is-in');
+          setTimeout(function () { f.el.remove(); }, 450);
+          if (folded === f) folded = null;
+        }, 4200);
+      }
+
+      import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm').then(function (mod) {
+        var client = mod.createClient(LIVE.url, LIVE.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+        var ch = client.channel('rodas:' + location.host + location.pathname, { config: { presence: { key: me.id }, broadcast: { self: false } } });
+        var ready = false, baseline = false, pending = 0;
+        ch.on('presence', { event: 'sync' }, function () {
+          var keys = Object.keys(ch.presenceState()).filter(function (k) { return k !== me.id; });
+          var n = keys.length + 1;
+          if (baseline && pending) toast(pending, n);
+          pending = 0; baseline = true;
+        });
+        ch.on('presence', { event: 'join' }, function (e) {
+          if (e.key === me.id || (e.currentPresences && e.currentPresences.length)) return;
+          if (baseline) pending++;
+        });
+        ch.on('presence', { event: 'leave' }, function (e) {
+          if (e.key === me.id || (e.currentPresences && e.currentPresences.length)) return;
+          drop(e.key);
+          if (baseline) pending--;
+        });
+        ch.on('broadcast', { event: 'cursor' }, function (msg) {
+          var p = (msg && msg.payload) || {};
+          if (!p.id || p.id === me.id) return;
+          if (p.hidden || !on || typeof p.x !== 'number' || typeof p.y !== 'number') return drop(p.id);
+          var c = cursorOf(p);
+          c.at = Date.now();
+          c.el.style.transform = 'translate3d(' + Math.round(clamp(p.x, 0, 1) * innerWidth) + 'px,' + Math.round(clamp(p.y, 0, 1) * innerHeight) + 'px,0)';
+          if (!c.el.classList.contains('is-on')) requestAnimationFrame(function () { c.el.classList.add('is-on'); });
+        });
+        ch.subscribe(function (status) {
+          if (status === 'SUBSCRIBED') {
+            ready = true;
+            root.classList.add('ro-live');
+            if (on) ch.track({ name: me.name, color: me.color });
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            ready = false;
+            root.classList.remove('ro-live');
+          }
+        });
+        /* a própria seta vai a no máximo 10 vezes por segundo; quem recebe anima entre um ponto e outro */
+        var last = 0, later = null;
+        function send(p) { if (ready) ch.send({ type: 'broadcast', event: 'cursor', payload: p }); }
+        document.addEventListener('pointermove', function (e) {
+          if (!on || e.pointerType !== 'mouse') return;
+          var p = { id: me.id, name: me.name, color: me.color, x: Math.round(e.clientX / innerWidth * 1e4) / 1e4, y: Math.round(e.clientY / innerHeight * 1e4) / 1e4 };
+          var now = performance.now();
+          if (now - last >= 100) { last = now; later = null; send(p); } else later = p;
+        }, { passive: true });
+        setInterval(function () { if (later && performance.now() - last >= 100) { last = performance.now(); send(later); later = null; } }, 50);
+        document.documentElement.addEventListener('mouseleave', function () { if (on) send({ id: me.id, hidden: true }); });
+        document.addEventListener('visibilitychange', function () { if (document.hidden && on) send({ id: me.id, hidden: true }); });
+        /* fechar a aba sai do canal na hora (sem isso, o servidor só percebe pelo tempo do batimento) */
+        window.addEventListener('pagehide', function () { try { send({ id: me.id, hidden: true }); ch.untrack(); client.removeChannel(ch); } catch (e) {} });
+        if (chip) {
+          chip.setAttribute('role', 'button');
+          chip.setAttribute('tabindex', '0');
+          chip.setAttribute('aria-label', 'Presença ao vivo: mostrar e compartilhar o cursor');
+          var flip = function () {
+            on = !on;
+            try { localStorage.setItem('ro-presence', on ? 'on' : 'off'); } catch (e) {}
+            label();
+            if (on) ch.track({ name: me.name, color: me.color });
+            else { send({ id: me.id, hidden: true }); ch.untrack(); Object.keys(cursors).forEach(drop); }
+          };
+          chip.addEventListener('click', flip);
+          chip.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
+        }
+      }).catch(function () {});
+    }
+    if (scrolls) presence();
+
+    /* daqui em diante, só com as rodas */
     if (!stage || !cases.length || reduce || !scrolls) { if (veil) { veil.remove(); veil = null; } return; }
     var gl = document.createElement('canvas').getContext('webgl2');
     if (!gl) { if (veil) { veil.remove(); veil = null; } return; }
@@ -325,49 +477,109 @@ export const RO_MOTION_SCRIPT = `
 
       /* 5a. capas: plano dividido, curva de fita no vértice, cor separada no fragmento */
       var CARD_V = [
-        'uniform vec2 uSize; uniform float uArc; uniform float uBend; uniform float uTime; uniform float uSeed; uniform float uFocus;',
-        'varying vec2 vUv; varying float vBow;',
+        'uniform vec2 uSize; uniform float uFrame; uniform float uArc; uniform float uBend; uniform float uTime; uniform float uSeed; uniform float uFocus; uniform float uFish;',
+        'varying vec2 vPos; varying float vBow;',
         'void main(){',
-        '  vUv = uv;',
-        '  vec3 p = vec3(position.xy * uSize, 0.0);',
-        '  float bow = sin(uv.x * 3.14159265);',
-        '  p.z += uArc * uSize.x * bow;',
-        '  float s = (uv.x - 0.5) * 2.0;',
-        '  p.y -= uBend * uSize.y * s * s;',
-        '  p.z += uBend * uSize.y * 0.35 * s;',
-        '  p.z += sin(uv.y * 2.4 + uTime * 0.9 + uSeed) * 1.6 * uFocus;',
+        '  vec2 full = uSize + 2.0 * uFrame;',
+        '  vec2 p = position.xy * full;',
+        '  vPos = p;',
+        '  vec2 q = p / (uSize * 0.5);',
+        '  float bx = max(1.0 - q.y * q.y, 0.0), by = max(1.0 - q.x * q.x, 0.0);',
+        '  vec3 o = vec3(p, 0.0);',
+        '  o.x += sign(p.x) * uFish * uSize.x * 0.035 * bx * min(abs(q.x), 1.2);',
+        '  o.y += sign(p.y) * uFish * uSize.y * 0.075 * by * min(abs(q.y), 1.2);',
+        '  o.z += uFish * uSize.x * 0.05 * bx * by;',
+        '  float bow = sin((position.x + 0.5) * 3.14159265);',
+        '  o.z += uArc * uSize.x * bow;',
+        '  float s = position.x * 2.0;',
+        '  o.y -= uBend * uSize.y * s * s;',
+        '  o.z += uBend * uSize.y * 0.35 * s;',
+        '  o.z += sin((position.y + 0.5) * 2.4 + uTime * 0.9 + uSeed) * 1.6 * uFocus;',
         '  vBow = bow;',
-        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);',
+        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(o.xy / full, o.z, 1.0);',
         '}'
       ].join('\\n');
       var CARD_F = [
-        'uniform sampler2D uTex; uniform vec2 uTexSize; uniform vec2 uSize; uniform float uRadius; uniform float uChroma; uniform vec2 uDir;',
+        'uniform sampler2D uTex; uniform vec2 uTexSize; uniform vec2 uSize; uniform float uFrame; uniform float uRadius; uniform float uChroma; uniform vec2 uDir;',
         'uniform float uDim; uniform vec3 uPaper; uniform float uReveal; uniform float uTime; uniform float uGrain; uniform float uLoaded;',
-        'varying vec2 vUv; varying float vBow;',
+        'uniform float uRing; uniform float uFish; uniform float uStatic; uniform float uScan; uniform float uLight;',
+        'varying vec2 vPos; varying float vBow;',
         'float box(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }',
         'float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }',
         'vec2 fit(vec2 uv){ float a = uSize.x / uSize.y, t = uTexSize.x / uTexSize.y; vec2 s = a > t ? vec2(1.0, t / a) : vec2(a / t, 1.0); return vec2((uv.x - 0.5) * s.x + 0.5, 1.0 - (1.0 - uv.y) * s.y); }',
         'void main(){',
-        '  vec2 p = (vUv - 0.5) * uSize;',
-        '  float d = box(p, uSize * 0.5, uRadius);',
+        '  float r = uRadius * (1.0 + uFish * 2.4);',
+        '  float d = box(vPos, uSize * 0.5, r);',
         '  float aa = max(fwidth(d), 0.5);',
-        '  float mask = 1.0 - smoothstep(-aa, aa, d);',
-        '  mask *= smoothstep(vUv.y - 0.2, vUv.y + 0.02, uReveal * 1.25 - 0.05);',
-        '  if (mask < 0.002) discard;',
-        '  vec2 uv = fit(vUv);',
-        '  vec2 o = uDir * uChroma;',
-        '  vec3 c = vec3(texture2D(uTex, uv + o).r, texture2D(uTex, uv).g, texture2D(uTex, uv - o * 1.4).b);',
-        '  c = mix(vec3(0.16), c, uLoaded);',
-        '  float n = rnd(floor(vUv * uSize * 0.75) + floor(uTime * 12.0) * vec2(7.13, 3.71)) - 0.5;',
-        '  c += n * (uGrain + uChroma * 9.0);',
-        '  c *= 0.92 + 0.08 * vBow;',
-        '  float rim = 1.0 - smoothstep(0.0, 1.25, -d);',
-        '  c = mix(c, vec3(1.0), rim * 0.14);',
-        '  c = mix(c, uPaper, uDim);',
-        '  gl_FragColor = vec4(c, mask);',
+        '  float band = uFrame * uRing;',
+        '  float outer = box(vPos, uSize * 0.5 + band, r + band);',
+        '  float glass = 1.0 - smoothstep(-aa, aa, d);',
+        '  float rim = uRing > 0.01 ? (1.0 - smoothstep(-aa, aa, outer)) * (1.0 - glass) : 0.0;',
+        '  vec2 uvRaw = vPos / uSize + 0.5;',
+        '  float rv = smoothstep(uvRaw.y - 0.2, uvRaw.y + 0.02, uReveal * 1.25 - 0.05);',
+        '  if (max(glass, rim) * rv < 0.002) discard;',
+        '  vec3 c;',
+        '  if (glass > 0.001) {',
+        '    vec2 uv = fit(uvRaw);',
+        '    uv.y += uStatic * 0.06 * sin(uTime * 41.0);',
+        '    vec2 o = uDir * uChroma + vec2(uStatic * 0.012, 0.0);',
+        '    c = vec3(texture2D(uTex, uv + o).r, texture2D(uTex, uv).g, texture2D(uTex, uv - o * 1.4).b);',
+        '    c = mix(vec3(0.16), c, uLoaded);',
+        '    float n = rnd(floor(vPos * 0.75) + floor(uTime * 12.0) * vec2(7.13, 3.71)) - 0.5;',
+        '    c += n * (uGrain + uChroma * 9.0);',
+        '    float snow = rnd(floor(vPos / 2.0) + fract(uTime * 61.0) * 97.0);',
+        '    float roll = fract(uvRaw.y * 0.6 + uTime * 0.7);',
+        '    float bar = smoothstep(0.0, 0.06, roll) * (1.0 - smoothstep(0.06, 0.18, roll));',
+        '    vec3 tv = vec3(snow) * (0.78 + 0.22 * sin(vPos.y * 1.7)) + bar * 0.18;',
+        '    c = mix(c, tv, clamp(uStatic, 0.0, 1.0));',
+        '    c *= 1.0 - uScan * (0.5 - 0.5 * sin(vPos.y * 2.2));',
+        '    c *= 1.0 - uFish * 0.28 * smoothstep(0.7, 1.35, length(vPos / (uSize * 0.5)));',
+        '    c *= 0.92 + 0.08 * vBow;',
+        '    float lip = 1.0 - smoothstep(0.0, 1.25, -d);',
+        '    c = mix(c, vec3(1.0), lip * 0.14 * (1.0 - uRing));',
+        '    c = mix(c, uPaper, uDim);',
+        '  } else {',
+        '    float k = clamp(d / max(band, 0.001), 0.0, 1.0);',
+        '    vec3 gap = mix(vec3(0.05), vec3(0.55), uLight);',
+        '    vec3 body = mix(vec3(0.24), vec3(0.78), uLight);',
+        '    c = mix(gap, body, smoothstep(0.16, 0.38, k));',
+        '    c += smoothstep(0.38, 0.6, k) * (1.0 - smoothstep(0.6, 0.86, k)) * 0.05;',
+        '    vec2 nrm = normalize(vPos / (uSize * 0.5 + band));',
+        '    vec2 light = normalize(vec2(0.72, -0.62) + 0.35 * vec2(cos(uTime * 0.45), sin(uTime * 0.45)));',
+        '    float shine = pow(max(dot(nrm, light), 0.0), 6.0);',
+        '    float edge = smoothstep(0.74, 0.97, k);',
+        '    c += edge * (0.18 + 0.95 * shine);',
+        '    rim *= smoothstep(0.0, 0.25, uRing);',
+        '  }',
+        '  gl_FragColor = vec4(c, max(glass, rim) * rv);',
         '}'
       ].join('\\n');
-      var cardGeo = new THREE.PlaneGeometry(1, 1, 48, 20);
+      /* ruído pontilhado de TV que atravessa a lateral ao abrir e fechar um case (pontos de 5px em matriz ordenada) */
+      var DITHER = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+        transparent: true, depthTest: false, depthWrite: false,
+        uniforms: { uRes: { value: new THREE.Vector2(1, 1) }, uT: { value: 0 }, uTime: { value: 0 }, uInk: { value: new THREE.Color(0xf7f7f7) }, uPx: { value: 5 }, uSide: { value: 1 } },
+        vertexShader: 'void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }',
+        fragmentShader: [
+          'uniform vec2 uRes; uniform float uT; uniform float uTime; uniform vec3 uInk; uniform float uPx; uniform float uSide;',
+          'float b2(vec2 a){ a = floor(a); return fract(a.x / 2.0 + a.y * a.y * 0.75); }',
+          'float b4(vec2 a){ return b2(0.5 * a) * 0.25 + b2(a); }',
+          'float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }',
+          'void main(){',
+          '  vec2 cell = floor(gl_FragCoord.xy / uPx);',
+          '  float x = cell.x * uPx / uRes.x;',
+          '  x = uSide > 0.0 ? x : 1.0 - x;',
+          '  float reach = sin(uT * 3.14159265) * 0.4;',
+          '  float a = smoothstep(1.0 - reach, 1.0 - reach + 0.24, x);',
+          '  a *= 0.45 + 0.55 * rnd(cell + floor(uTime * 24.0) * vec2(3.1, 7.7));',
+          '  if (a <= b4(cell)) discard;',
+          '  gl_FragColor = vec4(uInk, 0.42);',
+          '}'
+        ].join('\\n')
+      }));
+      DITHER.frustumCulled = false; DITHER.renderOrder = 1000; DITHER.visible = false;
+      scene.add(DITHER);
+      var sweep = { t: 1 };
+      var cardGeo = new THREE.PlaneGeometry(1, 1, 64, 32);
       var loader = new THREE.TextureLoader();
       var cardMats = cases.map(function (c, i) {
         var mat = new THREE.ShaderMaterial({
@@ -376,7 +588,8 @@ export const RO_MOTION_SCRIPT = `
             uTex: { value: null }, uTexSize: { value: new THREE.Vector2(16, 10) }, uSize: { value: new THREE.Vector2(400, 250) },
             uRadius: { value: 8 }, uArc: { value: 0.022 }, uBend: { value: 0 }, uTime: { value: 0 }, uSeed: { value: i * 1.7 },
             uFocus: { value: 0 }, uChroma: { value: 0 }, uDir: { value: new THREE.Vector2(0, 1) }, uDim: { value: 0 },
-            uPaper: { value: paperCol }, uReveal: { value: 0 }, uGrain: { value: 0.035 }, uLoaded: { value: 0 }
+            uPaper: { value: paperCol }, uReveal: { value: 0 }, uGrain: { value: 0.035 }, uLoaded: { value: 0 },
+            uFrame: { value: 16 }, uRing: { value: 0 }, uFish: { value: 0 }, uStatic: { value: 0 }, uScan: { value: 0 }, uLight: { value: 0 }
           }
         });
         var src = c.img ? (c.img.currentSrc || c.img.src) : '';
@@ -474,6 +687,8 @@ export const RO_MOTION_SCRIPT = `
         dieMat.color.set(lightTheme ? 0xefeeec : 0x151515);
         dieMat.roughness = lightTheme ? 0.5 : 0.42;
         dies.forEach(function (d) { d.face.material.uniforms.uLight.value = lightTheme ? 1 : 0; });
+        cardMats.forEach(function (mt) { mt.uniforms.uLight.value = lightTheme ? 1 : 0; });
+        DITHER.material.uniforms.uInk.value.set(lightTheme ? 0x1e1e1e : 0xf7f7f7);
       }
       themeColors();
       window.addEventListener('ro:theme', themeColors);
@@ -504,6 +719,12 @@ export const RO_MOTION_SCRIPT = `
           L = { stack: true, cw: cwm, ch: chm, R1: R1m, c1: [0, y1 - R1m], a1: Math.PI / 2, s1: -1, p1: p1m, d: dm, R2: R2m, c2: [0, y2 - R2m], a2: Math.PI / 2, s2: 1, p2: p1m * R1m / R2m, card0: -Math.PI / 2, die0: -Math.PI / 2 };
         }
         L.step = L.R1 * L.p1;
+        L.frame = clamp(L.cw * 0.028, 10, 22);
+        L.openS = L.stack ? Math.min((W * 0.96) / L.cw, 1.18) : Math.min((W * 0.6) / L.cw, (H * 0.74) / L.ch);
+        L.openX = L.stack ? 0 : -W * 0.5 + W * 0.335;
+        var pr = renderer.getPixelRatio();
+        DITHER.material.uniforms.uRes.value.set(W * pr, H * pr);
+        DITHER.material.uniforms.uPx.value = Math.max(3, Math.round(4 * pr));
       }
       size();
       var ro = new ResizeObserver(function () { size(); });
@@ -511,6 +732,30 @@ export const RO_MOTION_SCRIPT = `
 
       /* estado das rodas */
       var N = cases.length, pos = 0, target = 0, vel = 0, sv = 0, drag = null, reveal = 0, spin = 0, lastT = performance.now(), time = 0;
+      var hover = 0, hovering = false, openT = 0, openV = 0, statik = 0, openCss = -1, wheelLock = 0;
+      var mouse = { x: 0, y: 0, in: false, moved: false };
+      /* abrir o case: a tela cresce e curva, o texto e os dados vão para a direita, a faixa pontilhada passa */
+      function setOpen(v) {
+        v = v ? 1 : 0;
+        if (v === openT) return;
+        openT = v;
+        sweep.t = 0;
+        DITHER.material.uniforms.uSide.value = v ? 1 : -1;
+        if (!reduce) statik = Math.max(statik, v ? 0.85 : 0.45);
+        stage.classList.toggle('is-open', !!v);
+        live.textContent = cases[current].name + (v ? ', aberto' : '');
+      }
+      /* o texto do meio embaralha no lugar quando o mouse entra na capa */
+      function scramble(i) {
+        if (reduce || running.length) return;
+        parts(cases[i].info).forEach(function (group, line) {
+          group.forEach(function (el, j) {
+            el.animate([{ transform: 'none' }, { transform: 'translateY(-118%)', offset: 0.42 }, { transform: 'translateY(118%)', offset: 0.4201 }, { transform: 'none' }],
+              { duration: 560, delay: line * 40 + j * 12, easing: 'cubic-bezier(.65,0,.35,1)' });
+          });
+        });
+      }
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(0); });
       function wrap(i) { return ((i % N) + N) % N; }
       var current = 0;
       showInfo(0, 1, true);
@@ -533,6 +778,8 @@ export const RO_MOTION_SCRIPT = `
       var wt = 0;
       stage.addEventListener('wheel', function (e) {
         e.preventDefault();
+        if (openT) { setOpen(0); wheelLock = performance.now() + 450; return; }
+        if (performance.now() < wheelLock) return;
         var unit = e.deltaMode === 1 ? 32 : e.deltaMode === 2 ? H : 1;
         var dlt = (Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * unit;
         if (anchor === null) anchor = Math.round(target);
@@ -547,7 +794,7 @@ export const RO_MOTION_SCRIPT = `
         var r = canvas.getBoundingClientRect();
         ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
         ray.setFromCamera(ndc, camera);
-        var hits = ray.intersectObjects(cards.concat(dies.map(function (d) { return d.g; })), true);
+        var hits = ray.intersectObjects(cards.filter(function (c) { return c.visible; }).concat(dies.filter(function (d) { return d.g.visible; }).map(function (d) { return d.g; })), true);
         if (!hits.length) return null;
         var o = hits[0].object;
         while (o && o.userData.slot === undefined) o = o.parent;
@@ -560,10 +807,11 @@ export const RO_MOTION_SCRIPT = `
         canvas.classList.add('is-grabbing');
       });
       canvas.addEventListener('pointermove', function (e) {
+        mouse.x = e.clientX; mouse.y = e.clientY; mouse.in = e.pointerType === 'mouse'; mouse.moved = true;
         if (!drag) return;
         var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
         var along = L.stack ? -dx : -dy;
-        if (Math.abs(dx) + Math.abs(dy) > 6) drag.moved = true;
+        if (!drag.moved && Math.abs(dx) + Math.abs(dy) > 6) { drag.moved = true; setOpen(0); }
         target = pos = drag.p + along / L.step;
         var now = performance.now();
         drag.hist.push([now, along]);
@@ -577,9 +825,9 @@ export const RO_MOTION_SCRIPT = `
           var slot = hit(e.clientX, e.clientY);
           if (slot !== null && slot !== undefined) {
             var idx = Math.round(pos) + slot;
-            if (slot === 0) { var c = cases[wrap(idx)]; if (c.url) window.open(c.url, '_blank', 'noopener'); }
-            else target = idx;
-          } else target = Math.round(pos);
+            if (slot === 0) setOpen(!openT);
+            else { setOpen(0); target = idx; }
+          } else { setOpen(0); target = Math.round(pos); }
           return;
         }
         var h = d.hist, a = h[0], b = h[h.length - 1], dt = Math.max(16, b[0] - a[0]);
@@ -587,12 +835,13 @@ export const RO_MOTION_SCRIPT = `
         var fling = Math.abs(v) > 0.35 ? clamp(v * 140 / L.step, -3, 3) : 0;
         target = Math.round(pos + fling);
       }
+      canvas.addEventListener('pointerleave', function () { mouse.in = false; mouse.moved = true; });
       canvas.addEventListener('pointerup', release);
       canvas.addEventListener('pointercancel', release);
       stage.addEventListener('keydown', function (e) {
-        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); target = Math.round(target) + 1; }
-        else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); target = Math.round(target) - 1; }
-        else if (e.key === 'Enter' && e.target === stage) { var c = cases[current]; if (c.url) window.open(c.url, '_blank', 'noopener'); }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); setOpen(0); target = Math.round(target) + 1; }
+        else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); setOpen(0); target = Math.round(target) - 1; }
+        else if (e.key === 'Enter' && e.target === stage) setOpen(!openT);
       });
 
       /* posição de cada peça */
@@ -610,17 +859,26 @@ export const RO_MOTION_SCRIPT = `
           card.userData.slot = idx - Math.round(pos);
           card.material = cardMats[ci];
           var mat = cardMats[ci];
-          var a1 = L.a1 + L.s1 * off * L.p1;
+          var a1 = L.a1 + L.s1 * off * L.p1 * (1 + 0.28 * openV);
           var x = L.c1[0] + Math.cos(a1) * L.R1, y = L.c1[1] + Math.sin(a1) * L.R1;
-          card.position.set(x, y, -Math.abs(off) * 40);
+          var oo = openV * focus, sc = 1 + (L.openS - 1) * oo;
+          if (!L.stack) x += (L.openX - x) * oo;
+          else y -= L.ch * (sc - 1) * 0.5;
+          card.position.set(x, y, -Math.abs(off) * 40 + oo * 20);
           card.rotation.set(0, 0, 0);
           card.rotateZ(L.a1 + L.card0 - (a1 - L.a1) * 0.4);
           card.renderOrder = Math.round(100 - Math.abs(off) * 10);
-          if (!L.stack) { card.rotateY(0.24 * (1 - Math.min(1, Math.abs(off)) * 0.5)); card.rotateX(-0.05); }
-          else card.rotateX(0.12);
-          card.scale.set(1, 1, 1);
+          if (!L.stack) { card.rotateY(0.24 * (1 - Math.min(1, Math.abs(off)) * 0.5) * (1 - oo * 0.7)); card.rotateX(-0.05 * (1 - oo)); }
+          else card.rotateX(0.12 * (1 - oo));
+          var cw = L.cw * sc, ch = L.ch * sc;
+          card.scale.set(cw + 2 * L.frame, ch + 2 * L.frame, 1);
           var u = mat.uniforms;
-          u.uSize.value.set(L.cw, L.ch);
+          u.uSize.value.set(cw, ch);
+          u.uFrame.value = L.frame;
+          u.uRing.value = hover * (1 - openV) * focus;
+          u.uFish.value = Math.max(hover * 0.8 * (1 - openV), openV) * focus;
+          u.uStatic.value = reduce ? 0 : statik * focus;
+          u.uScan.value = openV * 0.07 * focus;
           u.uRadius.value = Math.max(6, L.cw * 0.016);
           u.uFocus.value = focus;
           u.uDim.value = (1 - focus) * (lightTheme ? 0.16 : 0.22);
@@ -638,7 +896,7 @@ export const RO_MOTION_SCRIPT = `
             if (glyphs[ci]) { die.face.material.uniforms.uGlyph.value = glyphs[ci][0]; die.face.material.uniforms.uHeight.value = glyphs[ci][1]; }
           }
           var a2 = L.a2 + L.s2 * off * L.p2;
-          var dx = L.c2[0] + Math.cos(a2) * L.R2, dy = L.c2[1] + Math.sin(a2) * L.R2;
+          var dx = L.c2[0] + Math.cos(a2) * L.R2 + (L.stack ? 0 : W * 0.2 * openV), dy = L.c2[1] + Math.sin(a2) * L.R2 - (L.stack ? H * 0.06 * openV : 0);
           var rv = clamp(reveal * 1.5 - Math.abs(off) * 0.2, 0, 1);
           die.g.position.set(dx, dy, -Math.abs(off) * 30 + Math.sin(time * 0.8 + ci) * 4 * focus);
           die.g.scale.setScalar(L.d * (0.6 + 0.4 * rv));
@@ -670,8 +928,25 @@ export const RO_MOTION_SCRIPT = `
           var dir = Math.round(pos) > (loop.lastRound === undefined ? 0 : loop.lastRound) ? 1 : -1;
           current = c; showInfo(c, dir, false);
           live.textContent = cases[c].name;
+          if (!reduce && reveal > 0.99) statik = Math.max(statik, 0.5);
         }
         loop.lastRound = Math.round(pos);
+        if (mouse.moved || (mouse.in && Math.abs(sv) > 0.02)) {
+          mouse.moved = false;
+          var over = fine && mouse.in && !drag && reveal > 0.99 ? hit(mouse.x, mouse.y) : null;
+          var now2 = over === 0 && !openT;
+          if (now2 && !hovering) scramble(current);
+          hovering = now2;
+          canvas.style.cursor = over === 0 ? 'pointer' : over !== null && over !== undefined ? 'pointer' : '';
+        }
+        hover += ((hovering && !drag ? 1 : 0) - hover) * (1 - Math.exp(-dt * 9));
+        openV += (openT - openV) * (1 - Math.exp(-dt * 6.5));
+        statik *= Math.exp(-dt * 5.5);
+        if (sweep.t < 1) sweep.t = Math.min(1, sweep.t + dt / 0.9);
+        DITHER.visible = sweep.t < 1 && !reduce;
+        DITHER.material.uniforms.uT.value = sweep.t;
+        DITHER.material.uniforms.uTime.value = time;
+        if (Math.abs(openV - openCss) > 0.002) { openCss = openV; stage.style.setProperty('--ro-open', openV.toFixed(3)); }
         if (!visible) return;
         place(time, dt);
         renderer.render(scene, camera);
