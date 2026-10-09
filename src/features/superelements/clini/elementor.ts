@@ -573,11 +573,11 @@ export const buildLibrary = () => {
 // 8. Perguntas: título à esquerda, o cartão das perguntas à direita
 // =====================================================================
 
-export const buildFaq = () => {
-  const b = builder('scg')
-  const F = SC_FAQ
+/** `faq`, `prefix` e `itemPrefix` deixam outra página usar o mesmo desenho com outras perguntas e ids próprios. */
+export const buildFaq = (F: typeof SC_FAQ = SC_FAQ, prefix = 'scg', itemPrefix = 'scq') => {
+  const b = builder(prefix)
   const accordion = b.widget('nested-accordion', {
-    items: F.items.map(([q], i) => ({ item_title: q, _id: `scq${i + 1}` })),
+    items: F.items.map(([q], i) => ({ item_title: q, _id: `${itemPrefix}${i + 1}` })),
     default_state: 'expanded', max_items_expended: 'one',
     n_accordion_animation_duration: { unit: 'ms', size: 300, sizes: [] },
     ...typeSpec(t({ size: 15, line: 20, weight: 500 }), 'title_typography'),
