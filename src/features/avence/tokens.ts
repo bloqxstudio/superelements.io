@@ -49,8 +49,8 @@ export const AV = {
 
 /**
  * Inter Tight em tudo (títulos 500 bem justos, texto 400, rótulos e botões em caixa alta).
- * A Instrument Serif, em itálico azul, é só dos destaques (uma palavra por título), da
- * assinatura e dos números grandes: entra pelo CSS e o widget de comportamento a carrega.
+ * A Instrument Serif, em itálico azul, é só dos destaques (uma palavra por título), do
+ * rodapé editorial e dos números grandes: entra pelo CSS e o widget de comportamento a carrega.
  */
 export const AV_FONTS = { title: 'Inter Tight', text: 'Inter Tight' } as const
 export const AV_SERIF_CSS = 'https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap'
@@ -89,6 +89,7 @@ export const AV_LOGO = {
   before: '/brands/avence-studio/logo/avence-marca-anterior.png',
   /** largura ÷ altura de cada arquivo */
   ratio: 1,
+  wordmarkRatio: 5.39,
   lockupRatio: 5.39,
   stackedRatio: 800 / 389,
 } as const
