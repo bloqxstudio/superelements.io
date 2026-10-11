@@ -97,7 +97,7 @@ Com o cliente e o site (falam com a conta e com o WordPress; cada um é um passo
   wp globals | wp import-global <id>...
                                   cabeçalho e rodapé do Theme Builder do site; trazer como componente (ligado ao mesmo modelo)
   details --page <nome> [--title --slug --seo-title --description --keyword]
-                                  título, endereço e SEO que vão junto ao publicar (--slug= limpa)
+                                  título e endereço da página; SEO vale no site todo, com o título da página dinâmico
   publish --page <nome> [--live] [--layout canvas|tema] [--overwrite] --yes
                                   publica no WordPress (página nova vai como rascunho sem --live); sem --yes só mostra o que faria.
                                   Com o Theme Builder do Elementor Pro, a página que mostra o cabeçalho do site vai em Largura
@@ -1127,7 +1127,7 @@ async function cmdWp() {
 }
 
 const DETAIL_FLAGS = { title: 'title', slug: 'slug', 'seo-title': 'seoTitle', description: 'description', keyword: 'focusKeyword' }
-const DETAIL_NAMES = { title: 'Título', slug: 'Endereço', seoTitle: 'Título SEO', description: 'Meta descrição', focusKeyword: 'Palavra-chave' }
+const DETAIL_NAMES = { title: 'Título', slug: 'Endereço', seoTitle: 'Título SEO desta página', description: 'Meta descrição do site', focusKeyword: 'Palavra-chave do site' }
 
 async function cmdDetails() {
   const status = await readyStatus()

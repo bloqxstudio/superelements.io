@@ -315,7 +315,7 @@ export const buildHeader = (options: { live?: { url: string; key: string } } = {
       'selector .ro-hud-v .elementor-heading-title{color:var(--ro-hud-v)!important;font-variant-numeric:tabular-nums}',
       // PRESENÇA só com o canal ao vivo; é um botão (liga e desliga a própria seta)
       'selector .ro-chip-presence{display:none!important}',
-      'html.ro-live selector .ro-chip-presence{display:flex!important}',
+      'html.ro-live selector .ro-chip-presence{display:none!important}',
       'selector .ro-chip-presence{pointer-events:auto;cursor:pointer;transition:scale .2s ease-out!important}selector .ro-chip-presence:active{scale:.96}',
       // a barra: três colunas, o menu no centro exato
       'selector .ro-bar{display:grid!important;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:clamp(16px,2vw,30px)!important;align-items:center}',

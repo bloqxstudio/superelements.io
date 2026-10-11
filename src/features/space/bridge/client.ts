@@ -17,7 +17,7 @@ import { componentKind, PageConflictError, publishComponent, publishPage, restor
 import { componentConditions, inlineReason, listSiteParts, pagesUsing, partsSupport } from '@/features/wordpress/siteParts'
 import { importSiteGlobal, listSiteGlobals, markSynced, resolveTemplates } from '@/features/wordpress/siteImport'
 import { discoverSite, unsupportedReason } from '@/features/wordpress/rest'
-import { detectSeo } from '@/features/wordpress/seo'
+import { detectSeo, pageSeoFields } from '@/features/wordpress/seo'
 import { fetchSiteKit, fetchSitePage, listSitePages } from '@/features/wordpress/site'
 import { getSiteKit, useSiteKitStore } from '@/features/wordpress/siteKitStore'
 import type { WordPressConnection } from '@/features/wordpress/types'
@@ -26,7 +26,7 @@ import { setBackgroundRelease } from '@/features/projects/background'
 import { cursorFromCall } from '@/features/space/chat/cursorFromBridge'
 import type { AgentChannel } from '@/features/space/connector/channel'
 import { useSpaceStore } from '@/store/spaceStore'
-import type { ComponentRole, ComponentTexts, PageDetails, SectionNodeData, SpaceComponent, SpaceNode, SpacePage } from '@/types/space'
+import type { ComponentRole, ComponentTexts, PageDetails, SectionNodeData, SiteSeo, SpaceComponent, SpaceNode, SpacePage } from '@/types/space'
 import { useAgents, type AgentView, type ViewRequest } from './agentsStore'
 import { DEFAULT_AGENT, useClaudeBridge, type ClaudeStep, type ClaudeStepKind, type TouchKind } from './bridgeStore'
 import { focusSection } from './focus'
@@ -870,22 +870,46 @@ async function wordpress(params: { action?: 'status' | 'connect' | 'pages' | 'im
 
 const DETAIL_FIELDS = ['title', 'slug', 'seoTitle', 'description', 'focusKeyword'] as const
 
-/** Título, endereço e SEO que vão junto ao publicar. Campo com texto vazio volta ao padrão do WordPress. */
+/** Título e endereço da página; descrição, palavra-chave e final do título SEO são do site inteiro. */
 function details(params: { page?: string; fields?: Partial<Record<(typeof DETAIL_FIELDS)[number], string>> }) {
   requireProject()
-  const page = findPage(useSpaceStore.getState().pages, params.page)
+  const store = useSpaceStore.getState()
+  const page = findPage(store.pages, params.page)
   if (params.fields && Object.keys(params.fields).length) {
     const next: PageDetails = { ...page.details }
-    for (const key of DETAIL_FIELDS) {
-      const value = params.fields[key]
+    for (const key of ['title', 'slug'] as const) {
+      const value = params.fields?.[key]
       if (value === undefined) continue
       if (value.trim()) next[key] = value.trim()
       else delete next[key]
     }
-    useSpaceStore.getState().setPageDetails(page.id, next)
+    const nextSeo: SiteSeo = store.siteSeo ?? {
+      description: page.details?.description,
+      focusKeyword: page.details?.focusKeyword,
+    }
+    const seoTitle = params.fields.seoTitle
+    if (seoTitle !== undefined) {
+      const pageTitle = next.title?.trim() || page.name
+      nextSeo.titleSuffix = seoTitle.trim().startsWith(pageTitle)
+        ? seoTitle.trim().slice(pageTitle.length).replace(/^[\s|\-–—:]+/, '').trim() || undefined
+        : seoTitle.trim() || undefined
+    }
+    for (const [field, key] of [
+      ['description', 'description'],
+      ['focusKeyword', 'focusKeyword'],
+    ] as const) {
+      const value = params.fields[field]
+      if (value === undefined) continue
+      nextSeo[key] = value?.trim() || undefined
+    }
+    delete next.seoTitle
+    delete next.description
+    delete next.focusKeyword
+    store.commitCanvas({ pages: store.pages.map((item) => (item.id === page.id ? { ...item, details: next } : item)), siteSeo: nextSeo })
   }
   const current = findPage(useSpaceStore.getState().pages, page.id)
-  const { featured, ...text } = current.details ?? {}
+  const featured = current.details?.featured
+  const text: PageDetails = { title: current.details?.title, slug: current.details?.slug, ...pageSeoFields(current, useSpaceStore.getState().siteSeo) }
   return { pageId: current.id, page: current.name, details: text, featured: featured?.kind ?? null, wordpress: current.wordpress ?? null }
 }
 
@@ -1264,4 +1288,3 @@ export function startSpaceBridge(hot: Hot) {
     window.removeEventListener('pagehide', bye)
   }
 }
-

@@ -23,7 +23,7 @@ import {
   type PageTemplate,
   type PublishResult,
 } from './publish'
-import { detectSeo, SEO_PLUGIN_NAMES } from './seo'
+import { detectSeo, pageSeoFields, SEO_PLUGIN_NAMES } from './seo'
 import { inlineReason, partsSupport, type PartsSupport } from './siteParts'
 import { fetchSitePage } from './site'
 import { STATUS_LABELS, useWordPressUi, wpDate } from './uiStore'
@@ -70,6 +70,8 @@ function Choices<T extends string>({ name, value, options, onChange }: { name: s
     </div>
   )
 }
+
+type TemplateChoice = PageTemplate | 'keep'
 
 const TEMPLATE_OPTIONS: Choice<PageTemplate>[] = [
   { value: 'elementor_canvas', label: 'Tela cheia', hint: 'Tela do Elementor: só as seções da página, sem o cabeçalho e o rodapé do tema' },
@@ -185,6 +187,7 @@ const ComponentsNote: React.FC<{ pageId: string; support: PartsSupport | null }>
 /** O que vai junto com a página: título, endereço, SEO e imagem destacada, com o botão para editar. */
 const DetailsSummary: React.FC<{ pageId: string }> = ({ pageId }) => {
   const page = useSpaceStore((s) => s.pages.find((p) => p.id === pageId))
+  const siteSeo = useSpaceStore((s) => s.siteSeo)
   const connection = useActiveWordPress()
   if (!page) return null
   const details = page.details ?? {}
@@ -192,7 +195,8 @@ const DetailsSummary: React.FC<{ pageId: string }> = ({ pageId }) => {
   const src = featured?.kind === 'template' || featured?.kind === 'upload' ? featured.image : featured?.kind === 'media' ? featured.url : undefined
   const title = details.title?.trim() || page.wordpress?.title || page.name
   const slug = details.slug?.trim() || slugify(title)
-  const seo = details.seoTitle?.trim() || details.description?.trim()
+  const effectiveSeo = pageSeoFields(page, siteSeo)
+  const seo = effectiveSeo.seoTitle?.trim() || effectiveSeo.description?.trim()
 
   return (
     <div className="flex gap-3 rounded-lg border p-3">
@@ -204,7 +208,7 @@ const DetailsSummary: React.FC<{ pageId: string }> = ({ pageId }) => {
         <p className="truncate text-xs text-muted-foreground">
           {connection ? hostOf(connection.site.siteUrl) : ''}/{slug}
         </p>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">{seo ? `SEO: ${details.seoTitle?.trim() || details.description?.trim()}` : 'Sem título e descrição de SEO'}</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{seo ? `SEO: ${effectiveSeo.seoTitle?.trim() || effectiveSeo.description?.trim()}` : 'Sem título e descrição de SEO'}</p>
       </div>
       <Button type="button" variant="outline" size="sm" className="h-8 shrink-0 self-center text-xs" onClick={() => useWordPressUi.getState().openDetails(pageId)}>
         Editar detalhes
@@ -236,7 +240,7 @@ export const PublishPanel: React.FC = () => {
   const [phase, setPhase] = useState<Phase>({ kind: 'form' })
   const [status, setStatus] = useState<PageStatus>('draft')
   const [publishDraft, setPublishDraft] = useState(false)
-  const [template, setTemplate] = useState<PageTemplate>('elementor_canvas')
+  const [template, setTemplate] = useState<TemplateChoice>('elementor_canvas')
   const [backups, setBackups] = useState<{ count: number; last?: number }>({ count: 0 })
   // Se o cabeçalho e o rodapé do site vão pelo Theme Builder ou dentro da página
   const [support, setSupport] = useState<PartsSupport | null>(null)
@@ -247,8 +251,9 @@ export const PublishPanel: React.FC = () => {
     setPhase({ kind: 'form' })
     setStatus('draft')
     setPublishDraft(false)
-    setTemplate('elementor_canvas')
-  }, [pageId])
+    // Atualizar não deve trocar silenciosamente o layout que já está no site.
+    setTemplate(link ? 'keep' : 'elementor_canvas')
+  }, [pageId, link])
 
   useEffect(() => {
     if (!pageId || !connection) return setSupport(null)
@@ -306,7 +311,7 @@ export const PublishPanel: React.FC = () => {
         projectId,
         pageId: page.id,
         status: link ? (publishDraft ? 'publish' : undefined) : status,
-        template,
+        template: template === 'keep' ? undefined : template,
         overwrite,
         onProgress: (step) => setPhase({ kind: 'working', step }),
       })
@@ -421,6 +426,12 @@ export const PublishPanel: React.FC = () => {
             <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
             {plural(result.failedImages.length, 'imagem não subiu e continua', 'imagens não subiram e continuam')} apontando para o endereço de
             origem.
+          </p>
+        )}
+        {result.backup && !result.backup.saved && (
+          <p className="flex gap-2 text-xs text-amber-700">
+            <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />A página foi atualizada, mas a versão anterior não ficou guardada para
+            desfazer. {result.backup.error}
           </p>
         )}
         {result.components.created.length > 0 && (
@@ -542,7 +553,12 @@ export const PublishPanel: React.FC = () => {
         {!themeParts && (
           <div className="grid gap-2">
             <Label>Layout</Label>
-            <Choices name="Layout" value={template} onChange={(value) => setTemplate(value)} options={TEMPLATE_OPTIONS} />
+            <Choices
+              name="Layout"
+              value={template}
+              onChange={(value) => setTemplate(value)}
+              options={link ? [{ value: 'keep', label: 'Manter como está', hint: 'Preserva o layout atual da página no WordPress' }, ...TEMPLATE_OPTIONS] : TEMPLATE_OPTIONS}
+            />
           </div>
         )}
         <ComponentsNote pageId={page.id} support={support} />

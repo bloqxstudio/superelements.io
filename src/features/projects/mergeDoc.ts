@@ -1,4 +1,4 @@
-import type { SpaceConnection, SpaceNode, SpacePage } from '@/types/space'
+import type { SpaceComponent, SpaceConnection, SpaceNode, SpacePage } from '@/types/space'
 import { withoutAppOrigin } from './localAssets'
 import type { ProjectDoc } from './types'
 
@@ -128,12 +128,16 @@ export function mergeDocs(base: ProjectDoc, mine: ProjectDoc, theirs: ProjectDoc
   if (pages === CLASH) return null
   const connections = mergeById<SpaceConnection>(base.canvas.connections, mine.canvas.connections, theirs.canvas.connections)
   if (connections === CLASH) return null
+  const components = mergeById<SpaceComponent>(base.canvas.components ?? [], mine.canvas.components ?? [], theirs.canvas.components ?? [])
+  if (components === CLASH) return null
 
   const brandOf = (doc: ProjectDoc) => ({ source: doc.brand.source, enabled: doc.brand.enabled })
   const brand = mergeWhole(brandOf(base), brandOf(mine), brandOf(theirs))
   if (brand === CLASH) return null
   const site = mergeWhole(base.site ?? null, mine.site ?? null, theirs.site ?? null)
   if (site === CLASH) return null
+  const siteSeo = mergeWhole(base.canvas.siteSeo ?? null, mine.canvas.siteSeo ?? null, theirs.canvas.siteSeo ?? null)
+  if (siteSeo === CLASH) return null
 
   const ids = new Set(nodes.map((n) => n.id))
   return {
@@ -142,7 +146,9 @@ export function mergeDocs(base: ProjectDoc, mine: ProjectDoc, theirs: ProjectDoc
       pages,
       // Conexão para uma peça que o outro lado apagou sai junto
       connections: connections.filter((c) => ids.has(c.sourceId) && ids.has(c.targetId)),
+      components,
       canvasTransform: mine.canvas.canvasTransform,
+      siteSeo: siteSeo ?? undefined,
     },
     brand: { ...brand, logoRatios: { ...theirs.brand.logoRatios, ...mine.brand.logoRatios } },
     site,

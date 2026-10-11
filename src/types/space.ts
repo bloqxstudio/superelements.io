@@ -142,6 +142,18 @@ export interface PageDetails {
   featured?: FeaturedImage
 }
 
+/**
+ * SEO compartilhado pelo site. O começo do título vem sempre da página;
+ * estes campos são os mesmos em todas elas.
+ */
+export interface SiteSeo {
+  /** Texto depois do título da página: `Contato | Nome do site`. */
+  titleSuffix?: string
+  /** Meta descrição compartilhada por todas as páginas. */
+  description?: string
+  focusKeyword?: string
+}
+
 /** Campos do modelo de imagem destacada, para abrir de novo e editar. */
 export interface FeaturedFields {
   title: string

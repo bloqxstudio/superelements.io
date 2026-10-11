@@ -1,7 +1,7 @@
 ---
 name: Avence Studio
 description: O nosso estúdio de sites, em São Leopoldo (RS). Identidade evoluída em 2026-10-04 para um portfólio de estúdio com foco em velocidade, a partir da marca antiga (o nome em minúsculas, a tinta, as duas setas que se encontram) e longe do Superelements.
-source: marca antiga do site atual (avencestudio.com, faviconv3.svg) e pedidos do usuário de 2026-10-04 ("Podemos evoluir a identidade", "use uma fonte serifada para os destaques"); fatos e pendências em brands/avence-studio/COPY.md
+source: marca antiga do site atual (avencestudio.com, faviconv3.svg) e pedidos do usuário de 2026-10-04 ("Podemos evoluir a identidade", "use uma fonte serifada para os destaques"); em 2026-10-11 o usuário definiu como oficial o logo que já estava em `Rodas (cópia)` e manteve azul apenas como destaque; fatos e pendências em brands/avence-studio/COPY.md
 colors:
   primary: "#111111"
   on-primary: "#F3F1EC"
@@ -26,10 +26,10 @@ fonts:
 radius:
   button: 0px
 logo:
-  on-light: /brands/avence-studio/logo/avence-studio-logo-preto.png
-  on-dark: /brands/avence-studio/logo/avence-studio-logo-claro.png
-  symbol: /brands/avence-studio/logo/avence-simbolo.png
-  symbol-on-dark: /brands/avence-studio/logo/avence-simbolo-claro.png
+  on-light: /brands/avence-studio/logo/avence-wordmark-preto.png
+  on-dark: /brands/avence-studio/logo/avence-wordmark-claro.png
+  symbol: /brands/avence-studio/social/avence-logo-social-1000.png
+  symbol-on-dark: /brands/avence-studio/social/avence-logo-social-1000.png
   alt: Avence Studio
 ---
 
@@ -41,11 +41,13 @@ O front matter guarda só o que o Space aplica sozinho em toda seção: cores, a
 
 ## 1. A evolução (decisão de 2026-10-04)
 
+Em 2026-10-11 o usuário corrigiu a direção: o azul continua apenas como cor de destaque, nunca como fundo de uma seção; a Instrument Serif em itálico continua nos destaques editoriais; e o logo oficial é o que já estava no cabeçalho de `Rodas (cópia)`. A página `Identidade` e os arquivos de marca devem ser atualizados a partir dele.
+
 A marca antiga era a palavra "avence studio" em Space Grotesk verde-limão sobre `#111111`, com o favicon das duas setas que se encontram. Duas coisas dela batiam com o Superelements (a Space Grotesk e o verde-limão), e as setas pareciam o ícone de "reduzir tela" de um aplicativo.
 
 - **Fica** o fio: o nome em minúsculas, a tinta `#111111` e o encontro. O ponto azul depois de "avence" é o lugar onde as duas setas da marca antiga se encontravam; no movimento do site, as duas marcas de corte ainda chegam de lados opostos até os cases.
 - **O "a" com a barriga em quadrado azul** foi testado na mesma tarde e recusado pelo usuário ("a evolução do logo também não é boa, podemos manter como estava antes"): o logo continua sendo a palavra com o ponto.
-- **Muda** o logo. Testamos as setas refinadas com um ponto no meio, o "v" de avence apontando para um ponto e uma ponta de seta segurando um quadrado; o usuário pediu mais. Ficou **a palavra**: "avence" na Instrument Serif, com o ponto azul, e "studio" pequeno em caixa alta. Um estúdio que vende acabamento assina com a letra, como um ateliê; o ponto final diz "pronto", e é o detalhe que se repete na página (rótulos, marcadores, contador). O símbolo, para favicon e avatar, é o "a" com o ponto.
+- **Muda** o logo. Depois das explorações anteriores, em 2026-10-11 o usuário escolheu exatamente o wordmark que já estava em `Rodas (cópia)`: **"avence" em Geist Medium**, bem justo (`−0,06em`), seguido de um pequeno quadrado. O quadrado usa o azul como ponto de destaque; não cria uma área azul ao redor da marca. A versão quadrada para redes mantém o wordmark inteiro sobre tinta.
 - **Muda** a letra. Sai a Space Grotesk (é a do Superelements). Entra a **Inter Tight** em tudo, com os títulos justos, e a **Instrument Serif** em itálico azul só nos destaques (uma palavra por título), como o usuário pediu: "use uma fonte serifada para os destaques".
 - **Muda** a cor. Sai o verde-limão (também do Superelements) e entra o **azul do ponto** `#2B3CF0`, sobre papel claro. Nada do desenho do Superelements: nenhuma fonte mono, nenhuma grade de pontos, nenhuma tela de aplicativo.
 
@@ -81,7 +83,7 @@ Um azul só. O verde do WhatsApp fica no botão flutuante.
 
 ## 4. Tipografia
 
-**Inter Tight** (Google Fonts) em tudo e **Instrument Serif** (Google Fonts, itálico) nos destaques.
+**Inter Tight** (Google Fonts) no site, **Instrument Serif** (Google Fonts, itálico) nos destaques e **Geist Medium** somente no wordmark oficial.
 
 | Uso | Tamanho | Fonte |
 |---|---|---|

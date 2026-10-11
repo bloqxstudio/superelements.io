@@ -1,4 +1,4 @@
-import type { PageDetails } from '@/types/space'
+import type { PageDetails, SiteSeo, SpacePage } from '@/types/space'
 import { credentialsOf } from './connect'
 import { INDEX_FIELDS, wpRequest, WordPressError } from './rest'
 import type { WordPressConnection } from './types'
@@ -46,7 +46,22 @@ export async function detectSeo(connection: WordPressConnection): Promise<SeoSup
   return { plugin: null, writable: false, keyword: false, missing: 'plugin' }
 }
 
-type SeoFields = Pick<PageDetails, 'seoTitle' | 'description' | 'focusKeyword'>
+export type SeoFields = Pick<PageDetails, 'seoTitle' | 'description' | 'focusKeyword'>
+
+/** SEO efetivo: projetos antigos mantêm o SEO por página; ao salvar o SEO do site, só o título da página varia. */
+export function pageSeoFields(page: Pick<SpacePage, 'name' | 'details'>, siteSeo?: SiteSeo): SeoFields {
+  if (!siteSeo) {
+    const { seoTitle, description, focusKeyword } = page.details ?? {}
+    return { seoTitle, description, focusKeyword }
+  }
+  const pageTitle = page.details?.title?.trim() || page.name
+  const suffix = siteSeo.titleSuffix?.trim()
+  return {
+    seoTitle: suffix ? `${pageTitle} | ${suffix}` : pageTitle,
+    description: siteSeo.description,
+    focusKeyword: siteSeo.focusKeyword,
+  }
+}
 
 const YOAST = { seoTitle: '_yoast_wpseo_title', description: '_yoast_wpseo_metadesc', focusKeyword: '_yoast_wpseo_focuskw' } as const
 const SEOPRESS = { seoTitle: '_seopress_titles_title', description: '_seopress_titles_desc' } as const

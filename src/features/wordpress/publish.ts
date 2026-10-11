@@ -11,7 +11,7 @@ import type { PageWordPressLink, SectionNodeData, SpaceComponent, SpaceNode } fr
 import { adminUrl, credentialsOf } from './connect'
 import { isSiteMedia, uploadDataUrl, uploadImage } from './media'
 import { wpRequest, WordPressError } from './rest'
-import { detectSeo, writeSeo, type SeoSupport } from './seo'
+import { detectSeo, pageSeoFields, writeSeo, type SeoSupport } from './seo'
 import { canSaveWidgets, componentConditions, contentHash, fetchSitePart, inlineReason, mergeConditions, partsSupport, saveSitePart, syncComponentConditions, type ComponentKind, type PartsSupport, type SitePart, WIDGET_REASON } from './siteParts'
 import type { WordPressConnection } from './types'
 
@@ -83,6 +83,8 @@ export interface PublishResult {
    * `outdated`: mudaram no canvas depois de publicados (o site mostra a versão de antes).
    */
   components: { used: string[]; created: string[]; outdated: string[] }
+  /** A versão anterior foi guardada para desfazer. `null` ao criar uma página. */
+  backup: { saved: boolean; error?: string } | null
 }
 
 interface WpPage {
@@ -265,6 +267,32 @@ const linkFrom = (connection: WordPressConnection, page: WpPage, title: string):
 
 const SAVED_FIELDS = 'id,link,status,modified_gmt,title,slug,featured_media,template'
 
+const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+/**
+ * Lê as versões anteriores sem transformar uma indisponibilidade do armazenamento
+ * do Space em indisponibilidade do site do cliente. A publicação ainda informa que
+ * ficou sem desfazer, em vez de dizer que nada foi atualizado.
+ */
+async function prepareBackup(projectId: string, postId: number, previous: PublishBackup) {
+  try {
+    const backups = await loadPublishBackups(projectId, postId)
+    return { next: [previous, ...backups].slice(0, MAX_BACKUPS) }
+  } catch (error) {
+    return { next: null, error: errorMessage(error) }
+  }
+}
+
+async function commitBackup(projectId: string, postId: number, prepared: Awaited<ReturnType<typeof prepareBackup>>) {
+  if (!prepared.next) return { saved: false, error: prepared.error }
+  try {
+    await savePublishBackups(projectId, postId, prepared.next)
+    return { saved: true }
+  } catch (error) {
+    return { saved: false, error: errorMessage(error) }
+  }
+}
+
 export async function publishPage({ connection, projectId, pageId, status, template, overwrite, onProgress }: PublishOptions): Promise<PublishResult> {
   const creds = credentialsOf(connection)
   // Com o Theme Builder, o cabeçalho e o rodapé do site ficam nos modelos dele e a página sobe sem eles
@@ -334,7 +362,9 @@ export async function publishPage({ connection, projectId, pageId, status, templ
       }
       throw error
     }
-    if (!overwrite && current.modified_gmt !== link.modifiedGmt) throw new PageConflictError(current.modified_gmt)
+    // Projetos ligados antes de `modifiedGmt` existir não têm uma base válida
+    // para comparar. Depois desta atualização o vínculo fica completo.
+    if (!overwrite && link.modifiedGmt && current.modified_gmt !== link.modifiedGmt) throw new PageConflictError(current.modified_gmt)
   }
 
   const { uploaded, failedImages } = await uploadImages(elements, connection, onProgress)
@@ -359,19 +389,25 @@ export async function publishPage({ connection, projectId, pageId, status, templ
   const slug = details.slug?.trim()
 
   let saved: WpPage
+  let preparedBackup: Awaited<ReturnType<typeof prepareBackup>> | null = null
   if (link && current) {
-    // Guarda o que o site tinha, para desfazer daqui
-    const backups = await loadPublishBackups(projectId, link.postId)
+    // Mantém na memória o que o site tinha; a versão só entra no histórico
+    // depois de o WordPress aceitar a atualização, evitando um desfazer fantasma.
     const previous: PublishBackup = {
       elementorData: current.meta?._elementor_data ?? '',
       modifiedGmt: current.modified_gmt,
       savedAt: Date.now(),
       template: current.template,
     }
-    await savePublishBackups(projectId, link.postId, [previous, ...backups].slice(0, MAX_BACKUPS))
+    preparedBackup = await prepareBackup(projectId, link.postId, previous)
 
     onProgress?.('Gravando a página no WordPress…')
-    const body: Record<string, unknown> = { ...pageFields, meta: { _elementor_data: elementorData } }
+    const body: Record<string, unknown> = {
+      ...pageFields,
+      // Também torna editável pelo Elementor uma página ligada/importada que
+      // ainda não tinha sido criada pelo Space.
+      meta: { _elementor_edit_mode: 'builder', _elementor_template_type: 'wp-page', _elementor_data: elementorData },
+    }
     if (title && title !== current.title?.raw) body.title = title
     if (slug && slug !== current.slug) body.slug = slug
     if (status && status !== current.status) body.status = status
@@ -393,6 +429,8 @@ export async function publishPage({ connection, projectId, pageId, status, templ
     })
   }
 
+  const backup = link && preparedBackup ? await commitBackup(projectId, link.postId, preparedBackup) : null
+
   // O WordPress descarta o modelo sem avisar quando não o reconhece na hora de criar a página (ele
   // valida antes de o Elementor ligar a página): confere o que ficou e pede de novo, agora numa
   // atualização, que aceita ou devolve o motivo
@@ -413,12 +451,13 @@ export async function publishPage({ connection, projectId, pageId, status, templ
   let seo: PublishResult['seo'] = 'skipped'
   let seoSupport: SeoSupport | null = null
   let seoError: string | undefined
-  if (details.seoTitle !== undefined || details.description !== undefined || details.focusKeyword !== undefined) {
+  const seoFields = pageSeoFields(page, useSpaceStore.getState().siteSeo)
+  if (seoFields.seoTitle !== undefined || seoFields.description !== undefined || seoFields.focusKeyword !== undefined) {
     seoSupport = await detectSeo(connection).catch(() => null)
     if (seoSupport?.writable) {
       onProgress?.('Gravando o SEO da página…')
       try {
-        await writeSeo(connection, seoSupport, saved.id, details)
+        await writeSeo(connection, seoSupport, saved.id, seoFields)
         seo = 'saved'
       } catch (error) {
         seo = 'failed'
@@ -466,6 +505,7 @@ export async function publishPage({ connection, projectId, pageId, status, templ
       synced,
     },
     components,
+    backup,
   }
 }
 
@@ -496,6 +536,8 @@ export interface ComponentPublishResult {
   /** Páginas sem ele que ainda não estão no site: entram na condição quando forem publicadas. */
   pending: string[]
   released: number
+  /** A versão anterior foi guardada para desfazer. `null` ao criar um modelo. */
+  backup: { saved: boolean; error?: string } | null
 }
 
 /**
@@ -525,16 +567,15 @@ export async function publishComponent({ connection, projectId, componentId, ove
   if (postId) {
     onProgress?.('Conferindo o modelo no site…')
     current = await fetchSitePart(connection, postId)
-    if (link && !overwrite && current.modified_gmt !== link.modifiedGmt) throw new PageConflictError(current.modified_gmt)
+    if (link && !overwrite && link.modifiedGmt && current.modified_gmt !== link.modifiedGmt) throw new PageConflictError(current.modified_gmt)
   }
 
   const { uploaded, failedImages } = await uploadImages(elements, connection, onProgress)
 
+  let preparedBackup: Awaited<ReturnType<typeof prepareBackup>> | null = null
   if (current) {
-    // Guarda o que o site tinha, para desfazer daqui
-    const backups = await loadPublishBackups(projectId, current.id)
     const previous: PublishBackup = { elementorData: current.elementor_data ?? '', modifiedGmt: current.modified_gmt, savedAt: Date.now() }
-    await savePublishBackups(projectId, current.id, [previous, ...backups].slice(0, MAX_BACKUPS))
+    preparedBackup = await prepareBackup(projectId, current.id, previous)
   }
 
   const { pages, nodes } = useSpaceStore.getState()
@@ -545,6 +586,7 @@ export async function publishComponent({ connection, projectId, componentId, ove
   const where = theme ? 'no Theme Builder' : 'na Biblioteca do Elementor'
   onProgress?.(postId ? `Atualizando o modelo ${where}…` : `Criando o modelo ${where}…`)
   const saved = await saveSitePart(connection, { id: postId, kind, title: component.name, elements: JSON.stringify(elements), conditions, release: release?.filter((id) => id !== postId) })
+  const backup = current && preparedBackup ? await commitBackup(projectId, current.id, preparedBackup) : null
 
   onProgress?.('Limpando o cache de CSS do Elementor…')
   const cacheCleared = await clearElementorCache(connection)
@@ -572,6 +614,7 @@ export async function publishComponent({ connection, projectId, componentId, ove
     excluded: ours.excluded,
     pending: ours.pending,
     released: release?.length ?? 0,
+    backup,
   }
 }
 

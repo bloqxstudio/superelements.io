@@ -13,9 +13,9 @@ import { clip, DESCRIPTION_LIMIT, pageTexts, SEO_TITLE_LIMIT, slugify, suggestSe
 import { collectImageUrls } from '@/features/space/pageImages'
 import { useSpaceStore } from '@/store/spaceStore'
 import { cn } from '@/lib/utils'
-import type { FeaturedFields, FeaturedImage, PageDetails } from '@/types/space'
+import type { FeaturedFields, FeaturedImage, PageDetails, SiteSeo } from '@/types/space'
 import { pageElements } from './publish'
-import { CONNECTOR_ZIP, detectSeo, SEO_PLUGIN_NAMES, type SeoSupport } from './seo'
+import { CONNECTOR_ZIP, detectSeo, pageSeoFields, SEO_PLUGIN_NAMES, type SeoSupport } from './seo'
 import { listSiteImages, type SiteImage } from './site'
 import { useWordPressUi } from './uiStore'
 import { useActiveWordPress } from './useWordPressConnection'
@@ -50,6 +50,18 @@ const slugDraft = (value: string) =>
 
 const featuredSrc =(featured?: FeaturedImage) =>
   featured?.kind === 'template' || featured?.kind === 'upload' ? featured.image : featured?.kind === 'media' ? featured.url : undefined
+
+/** Aproveita o SEO individual antigo como ponto de partida da configuração única. */
+const initialSiteSeo = (pageName: string, details: PageDetails | undefined, siteName?: string): SiteSeo => {
+  const pageTitle = details?.title?.trim() || pageName
+  const oldTitle = details?.seoTitle?.trim()
+  const afterPage = oldTitle?.startsWith(pageTitle) ? oldTitle.slice(pageTitle.length).replace(/^[\s|\-–—:]+/, '').trim() : ''
+  return {
+    titleSuffix: afterPage || siteName,
+    description: details?.description,
+    focusKeyword: details?.focusKeyword,
+  }
+}
 
 /** Aviso sobre o plugin de SEO do site: qual grava, ou o que falta para gravar. */
 const SeoNotice: React.FC<{ seo: SeoSupport | null | 'loading'; connected: boolean }> = ({ seo, connected }) => {
@@ -100,6 +112,7 @@ export const DetailsPanel: React.FC = () => {
   const connection = useActiveWordPress()
   const brand = useBrandStore((s) => s.brand)
   const [draft, setDraft] = useState<PageDetails>({})
+  const [seoDraft, setSeoDraft] = useState<SiteSeo>({})
   const [seo, setSeo] = useState<SeoSupport | null | 'loading'>(null)
   const editing = useWordPressUi((s) => s.editingFeatured)
   const setEditing = useWordPressUi((s) => s.setEditingFeatured)
@@ -112,9 +125,12 @@ export const DetailsPanel: React.FC = () => {
   const open = !!pageId && !!page
   useEffect(() => {
     if (!pageId) return
-    setDraft({ ...useSpaceStore.getState().pages.find((p) => p.id === pageId)?.details })
+    const current = useSpaceStore.getState()
+    const openedPage = current.pages.find((p) => p.id === pageId)
+    setDraft({ ...openedPage?.details })
+    setSeoDraft({ ...(current.siteSeo ?? initialSiteSeo(openedPage?.name ?? '', openedPage?.details, connection?.site.name)) })
     setLibrary({ status: 'closed', items: [] })
-  }, [pageId])
+  }, [pageId, connection?.site.name])
 
   useEffect(() => {
     if (!pageId || !connection) return setSeo(null)
@@ -139,6 +155,7 @@ export const DetailsPanel: React.FC = () => {
   if (!open || !page) return null
 
   const set = (patch: Partial<PageDetails>) => setDraft((d) => ({ ...d, ...patch }))
+  const setSeoField = (patch: Partial<SiteSeo>) => setSeoDraft((current) => ({ ...current, ...patch }))
   const title = draft.title ?? ''
   const shownTitle = title.trim() || page.name
   const siteName = connection?.site.name
@@ -148,7 +165,10 @@ export const DetailsPanel: React.FC = () => {
 
   const suggest = () => {
     const suggestion = suggestSeo(content ?? [], shownTitle, siteName)
-    set({ seoTitle: suggestion.seoTitle, description: suggestion.description || draft.description })
+    const suggestedSuffix = suggestion.seoTitle.startsWith(shownTitle)
+      ? suggestion.seoTitle.slice(shownTitle.length).replace(/^[\s|\-–—:]+/, '').trim()
+      : siteName
+    setSeoField({ titleSuffix: suggestedSuffix, description: suggestion.description || seoDraft.description })
     if (!suggestion.description) toast.info('A página não tem um parágrafo para virar descrição: escreva uma.')
   }
 
@@ -158,7 +178,7 @@ export const DetailsPanel: React.FC = () => {
     return {
       template: photos.length ? 'foto' : 'cor',
       fields: {
-        title: draft.seoTitle?.split(' | ')[0]?.trim() || heading || shownTitle,
+        title: heading || shownTitle,
         photo: photos[0],
         color: featuredPalette(brand).background,
         logo: !!brand?.logo,
@@ -187,14 +207,23 @@ export const DetailsPanel: React.FC = () => {
 
   const save = () => {
     const slug = draft.slug?.replace(/^-+|-+$/g, '')
-    useSpaceStore.getState().setPageDetails(page.id, { ...draft, slug: slug || undefined })
-    toast.success(`Detalhes de ${page.name} guardados`, { description: connection ? 'Vão para o site na próxima publicação.' : undefined })
+    const pageDetails: PageDetails = { title: draft.title, slug: slug || undefined, featured: draft.featured }
+    const store = useSpaceStore.getState()
+    const nextSeo: SiteSeo = {
+      titleSuffix: seoDraft.titleSuffix?.trim() || undefined,
+      description: seoDraft.description?.trim() || undefined,
+      focusKeyword: seoDraft.focusKeyword?.trim() || undefined,
+    }
+    store.commitCanvas({ pages: store.pages.map((item) => (item.id === page.id ? { ...item, details: pageDetails } : item)), siteSeo: nextSeo })
+    toast.success(`Detalhes de ${page.name} e SEO do site guardados`, {
+      description: connection ? 'Vão para o site na próxima publicação de cada página.' : undefined,
+    })
     closeDetails()
   }
 
   const src = featuredSrc(draft.featured)
-  const description = draft.description ?? ''
-  const seoTitle = draft.seoTitle ?? ''
+  const description = seoDraft.description ?? ''
+  const seoTitle = pageSeoFields({ name: page.name, details: draft }, seoDraft).seoTitle ?? shownTitle
 
   if (editing) {
     return (
@@ -216,7 +245,7 @@ export const DetailsPanel: React.FC = () => {
       <DialogHeader>
         <DialogTitle>Detalhes da página</DialogTitle>
         <DialogDescription>
-          {page.name}: o título, o endereço, o que aparece no Google e a imagem destacada. Vão para o site junto com a página.
+          {page.name}: título, endereço e imagem são desta página. O SEO é o mesmo no site inteiro, mudando automaticamente o título da página.
         </DialogDescription>
       </DialogHeader>
 
@@ -244,31 +273,41 @@ export const DetailsPanel: React.FC = () => {
 
           <div className="grid gap-4 border-t pt-5">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-gray-900">SEO</h3>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">SEO do site</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">Vale para todas as páginas; somente o título da página muda.</p>
+              </div>
               <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={suggest} disabled={!content}>
-                Sugerir pelo conteúdo
+                Sugerir por esta página
               </Button>
             </div>
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="details-seo-title">Título no Google</Label>
+                <Label htmlFor="details-seo-title">Final do título no Google</Label>
                 <Counter value={seoTitle} limit={SEO_TITLE_LIMIT} />
               </div>
-              <Input id="details-seo-title" value={seoTitle} onChange={(e) => set({ seoTitle: e.target.value })} placeholder={siteName ? `${shownTitle} | ${siteName}` : shownTitle} autoComplete="off" />
+              <Input
+                id="details-seo-title"
+                value={seoDraft.titleSuffix ?? ''}
+                onChange={(e) => setSeoField({ titleSuffix: e.target.value })}
+                placeholder={siteName ?? 'Nome do site'}
+                autoComplete="off"
+              />
+              <p className="text-xs text-muted-foreground">Resultado nesta página: {seoTitle}</p>
             </div>
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="details-description">Descrição</Label>
                 <Counter value={description} limit={DESCRIPTION_LIMIT} />
               </div>
-              <Textarea id="details-description" value={description} onChange={(e) => set({ description: e.target.value })} rows={3} className="resize-y text-sm" />
+              <Textarea id="details-description" value={description} onChange={(e) => setSeoField({ description: e.target.value })} rows={3} className="resize-y text-sm" />
             </div>
             {showKeyword && (
               <div className="grid gap-2">
                 <Label htmlFor="details-keyword">
                   Palavra-chave <span className="font-normal text-muted-foreground">(opcional)</span>
                 </Label>
-                <Input id="details-keyword" value={draft.focusKeyword ?? ''} onChange={(e) => set({ focusKeyword: e.target.value })} autoComplete="off" />
+                <Input id="details-keyword" value={seoDraft.focusKeyword ?? ''} onChange={(e) => setSeoField({ focusKeyword: e.target.value })} autoComplete="off" />
               </div>
             )}
 

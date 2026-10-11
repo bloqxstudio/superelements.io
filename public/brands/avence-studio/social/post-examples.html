@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Avence Studio · Posts de exemplo</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600&display=swap">
+  <style>
+    :root{--blue:#2b3cf0;--blue-light:#8f9bff;--ink:#111;--night:#101326;--paper:#f3f1ec;--line:rgba(143,155,255,.22)}
+    *{box-sizing:border-box}html,body{margin:0;background:#090a10;color:var(--paper);font-family:"Inter Tight",Arial,sans-serif}body{display:grid;gap:48px;justify-content:center;padding:48px}
+    .post{position:relative;width:1080px;height:1080px;overflow:hidden;isolation:isolate;background:var(--night)}
+    .post::after{content:"";position:absolute;inset:-80px;z-index:-1;pointer-events:none;opacity:.12;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='2' seed='9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");animation:grain .8s steps(8) infinite}
+    @keyframes grain{0%{translate:0 0}25%{translate:-24px 18px}50%{translate:20px -14px}75%{translate:-12px -20px}}
+    .brand{position:absolute;left:64px;top:58px;display:flex;align-items:baseline;color:inherit;font:italic 48px/1 "Instrument Serif",Georgia,serif;letter-spacing:-.03em}
+    .brand i{width:8px;height:8px;margin-left:4px;background:var(--blue);display:block}.brand small{margin-left:22px;font:600 12px/1 "Inter Tight",Arial,sans-serif;letter-spacing:.26em;text-transform:uppercase}
+    .meta{position:absolute;right:64px;top:64px;font:600 12px/1 "Inter Tight",Arial,sans-serif;letter-spacing:.15em;text-transform:uppercase;color:var(--blue-light)}
+    .serif{font-family:"Instrument Serif",Georgia,serif;font-style:italic;font-weight:400}
+    .wheel{position:absolute;border:1px solid var(--line);border-radius:50%;animation:spin 18s linear infinite}.wheel::before,.wheel::after{content:"";position:absolute;border:1px solid var(--line);border-radius:50%;inset:13%}.wheel::after{inset:29%}
+    @keyframes spin{to{rotate:360deg}}
+    .card{position:absolute;width:280px;height:176px;border:1px solid rgba(243,241,236,.16);background:linear-gradient(135deg,#1b2046,#111426);box-shadow:0 24px 70px -36px rgba(43,60,240,.85);animation:float 5s ease-in-out infinite}
+    .card::before{content:"";position:absolute;inset:18px;background:linear-gradient(90deg,var(--blue) 0 32%,transparent 32%),linear-gradient(rgba(243,241,236,.16) 1px,transparent 1px);background-size:100% 8px,100% 22px;opacity:.8}
+    @keyframes float{50%{translate:0 -14px;rotate:1.5deg}}
+    .p1{background:radial-gradient(circle at 82% 18%,rgba(43,60,240,.36),transparent 36%),var(--night)}.p1 .wheel.a{width:720px;height:720px;left:-340px;top:230px}.p1 .wheel.b{width:520px;height:520px;right:-220px;top:130px;animation-direction:reverse}.p1 .card.a{left:92px;bottom:120px;rotate:-12deg}.p1 .card.b{right:82px;top:210px;rotate:10deg;animation-delay:-1.8s}
+    .p1 h1{position:absolute;left:210px;right:210px;top:350px;margin:0;text-align:center;font-size:104px;line-height:.92;font-weight:500;letter-spacing:-.065em}.p1 h1 em{display:block;color:var(--blue-light);font-size:1.08em}.p1 p{position:absolute;left:350px;right:350px;top:590px;margin:0;text-align:center;font-size:20px;line-height:1.45;color:rgba(243,241,236,.68)}
+    .p2{background:var(--blue);color:#fff}.p2::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 1px 1px,rgba(255,255,255,.24) 1px,transparent 1.5px);background-size:16px 16px;mask-image:linear-gradient(135deg,transparent 8%,#000 44%,transparent 92%);opacity:.5}.p2 .brand i{background:#111}.p2 .meta{color:rgba(255,255,255,.72)}.p2 .wheel{border-color:rgba(255,255,255,.28)}.p2 .wheel.a{width:760px;height:760px;right:-300px;bottom:-310px}.p2 .card{background:#111;border-color:rgba(255,255,255,.3)}.p2 .card.a{right:76px;bottom:150px;rotate:8deg}.p2 h1{position:absolute;left:64px;top:270px;width:780px;margin:0;font-size:116px;line-height:.88;font-weight:500;letter-spacing:-.07em}.p2 h1 em{display:block;color:#111;font-size:1.1em}.p2 p{position:absolute;left:70px;bottom:80px;margin:0;font-size:17px;letter-spacing:.08em;text-transform:uppercase}
+    .p3{background:var(--paper);color:var(--ink)}.p3::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 49.92%,rgba(43,60,240,.18) 50%,transparent 50.08%),linear-gradient(transparent 49.92%,rgba(43,60,240,.12) 50%,transparent 50.08%);background-size:180px 180px}.p3 .brand i{background:var(--blue)}.p3 .meta{color:var(--blue)}.p3 .wheel{border-color:rgba(43,60,240,.24)}.p3 .wheel.a{width:640px;height:640px;left:-280px;bottom:-250px}.p3 .wheel.b{width:400px;height:400px;right:-170px;top:150px;animation-direction:reverse}.p3 h1{position:absolute;left:64px;top:270px;width:840px;margin:0;font-size:112px;line-height:.9;font-weight:500;letter-spacing:-.07em}.p3 h1 em{color:var(--blue);font-size:1.1em}.p3 .rule{position:absolute;left:66px;right:66px;bottom:190px;height:1px;background:rgba(17,17,17,.2)}.p3 p{position:absolute;left:66px;bottom:88px;width:560px;margin:0;font-size:25px;line-height:1.3}.p3 .dot{position:absolute;right:70px;bottom:72px;width:82px;height:82px;background:var(--blue);animation:pulse 2.6s ease-in-out infinite}@keyframes pulse{50%{scale:.72;rotate:45deg}}
+    @media(prefers-reduced-motion:reduce){*{animation:none!important}}
+  </style>
+</head>
+<body>
+  <article class="post p1" data-post="1"><div class="brand">avence<i></i><small>studio</small></div><div class="meta">Nova identidade · 01</div><div class="wheel a"></div><div class="wheel b"></div><div class="card a"></div><div class="card b"></div><h1>Sites com <em class="serif">acabamento</em> de estúdio.</h1><p>Identidade, texto e movimento trabalhando juntos.</p></article>
+  <article class="post p2" data-post="2"><div class="brand">avence<i></i><small>studio</small></div><div class="meta">Processo · 02</div><div class="wheel a"></div><div class="card a"></div><h1>Do primeiro contato ao site <em class="serif">no ar.</em></h1><p>São Leopoldo · RS — @avencestudio</p></article>
+  <article class="post p3" data-post="3"><div class="brand">avence<i></i><small>studio</small></div><div class="meta">Manifesto · 03</div><div class="wheel a"></div><div class="wheel b"></div><h1>Uma marca que assina com a <em class="serif">letra.</em></h1><div class="rule"></div><p>Azul para marcar o que importa. Serif para dar voz ao acabamento.</p><div class="dot"></div></article>
+  <script>const n=new URLSearchParams(location.search).get('post');if(n){document.body.style.padding='0';document.body.style.gap='0';document.querySelectorAll('.post').forEach(p=>p.hidden=p.dataset.post!==n)}</script>
+</body>
+</html>

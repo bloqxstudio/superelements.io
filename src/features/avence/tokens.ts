@@ -3,10 +3,10 @@
  * 2026-10-04. O fio com a marca antiga: a tinta `#111111`, o nome em minúsculas
  * e as duas setas que se encontram (agora abertas, com o ponto azul no meio).
  * O que mudou: a Space Grotesk saiu (é a fonte do Superelements) e entraram a
- * Inter Tight em tudo e a Instrument Serif nos destaques; o verde-limão saiu
+ * Inter Tight no site, a Instrument Serif nos destaques e a Geist apenas no
+ * wordmark oficial trazido de `Rodas (cópia)` em 2026-10-11; o verde-limão saiu
  * (também é do Superelements) e entrou o azul do ponto, sobre papel claro. O
- * logo é a palavra avence com o ponto azul, onde as duas setas antigas se
- * encontravam; na entrada do site, o ponto cresce e vira a janela dos cases.
+ * logo é a palavra `avence` em Geist Medium com tracking justo e o ponto azul.
  *
  * Toda cor usada nos settings das seções está aqui e no front matter da marca
  * (hex em minúsculas, como a marca escreve): assim a marca aplicada por cima
@@ -74,6 +74,9 @@ export const avAsset = (path: string) => `${window.location.origin}${path.starts
  * O nome do arquivo diz a cor da tinta.
  */
 export const AV_LOGO = {
+  wordmarkDark: '/brands/avence-studio/logo/avence-wordmark-preto.png',
+  wordmarkLight: '/brands/avence-studio/logo/avence-wordmark-claro.png',
+  social: '/brands/avence-studio/social/avence-logo-social-1000.png',
   symbol: '/brands/avence-studio/logo/avence-simbolo.png',
   symbolLight: '/brands/avence-studio/logo/avence-simbolo-claro.png',
   lockupDark: '/brands/avence-studio/logo/avence-studio-logo-preto.png',
@@ -86,7 +89,7 @@ export const AV_LOGO = {
   before: '/brands/avence-studio/logo/avence-marca-anterior.png',
   /** largura ÷ altura de cada arquivo */
   ratio: 1,
-  lockupRatio: 1200 / 272,
+  lockupRatio: 5.39,
   stackedRatio: 800 / 389,
 } as const
 
