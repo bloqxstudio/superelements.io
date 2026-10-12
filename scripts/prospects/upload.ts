@@ -32,20 +32,33 @@ for (const name of names.filter((name) => name.endsWith('.json') && !name.starts
 }
 
 const bucket = supabase.storage.from('space-projects')
+const cloudName = (name: string) => `${user.id}/prospeccao/${name}`
 const put = async (name: string, value: unknown) => {
-  const { error } = await bucket.upload(`${user.id}/prospeccao/${name}`, new Blob([JSON.stringify(value)], { type: 'application/json' }), {
+  const { error } = await bucket.upload(cloudName(name), new Blob([JSON.stringify(value)], { type: 'application/json' }), {
     contentType: 'application/json',
     upsert: true,
   })
   if (error) throw error
 }
+const get = async <T,>(name: string, fallback: T): Promise<T> => {
+  const { data, error } = await bucket.download(cloudName(name))
+  if (error) return fallback
+  return JSON.parse(await data.text()) as T
+}
 
 await Promise.all(records.map((record) => put(`searches/${record.id}.json`, record)))
 
 const opportunities = JSON.parse(await readFile(path.join(DEFAULT_DIR, 'funil.json'), 'utf8').catch(() => '[]')) as Opportunity[]
-await put('funnel.json', opportunities)
+const cloudOpportunities = await get<Opportunity[]>('funnel.json', [])
+const merged = new Map(cloudOpportunities.map((opportunity) => [opportunity.id, opportunity]))
+for (const opportunity of opportunities) {
+  const current = merged.get(opportunity.id)
+  if (!current || opportunity.updatedAt >= current.updatedAt) merged.set(opportunity.id, opportunity)
+}
+await put('funnel.json', [...merged.values()])
 
 const settings = JSON.parse(await readFile(path.join(DEFAULT_DIR, 'funil-config.json'), 'utf8').catch(() => '{}')) as Partial<FunnelSettings>
-await put('settings.json', settings)
+const cloudSettings = await get<Partial<FunnelSettings> | null>('settings.json', null)
+if (!cloudSettings) await put('settings.json', settings)
 
-console.log(`Prospecção enviada: ${records.length} buscas e ${opportunities.length} oportunidades.`)
+console.log(`Prospecção enviada: ${records.length} buscas e ${merged.size} oportunidades.`)
