@@ -12,6 +12,7 @@
     "sections:import": "node scripts/import-section-express.mjs",
     "sections:upload": "node scripts/upload-section-pack.mjs",
     "prospectar": "node scripts/prospects/prospectar.ts",
+    "prospectar:subir": "node scripts/prospects/upload.ts",
     "conector": "node scripts/connector/build.mjs"
   },
   "dependencies": {

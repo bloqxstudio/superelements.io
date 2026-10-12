@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { CircleAlert, Download, Loader2, Radar, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { addToFunnel, byScore, getConfig, getFunnel, getSearch, listSearches, removeSearch, rescore, startSearch } from '@/features/prospects/api'
+import { addToFunnel, byScore, getConfig, getFunnel, getSearch, listSearches, removeSearch, rescore, startSearch, type ProspectConfig } from '@/features/prospects/api'
 import { AgencyList } from '@/features/prospects/AgencyList'
 import { leadsToCsv } from '@/features/prospects/csv'
 import { Funnel } from '@/features/prospects/FunnelBoard'
@@ -40,15 +40,16 @@ const SavedSearches: React.FC<{
   items: SearchSummary[]
   currentId?: string
   disabled: boolean
+  remote: boolean
   onOpen: (id: string) => void
   onDelete: (id: string) => void
-}> = ({ items, currentId, disabled, onOpen, onDelete }) => {
+}> = ({ items, currentId, disabled, remote, onOpen, onDelete }) => {
   const [confirm, setConfirm] = useState<string | null>(null)
   return (
     <aside className={cn(SURFACE, 'flex max-h-[520px] flex-col p-4')}>
       <h2 className="text-sm font-semibold text-gray-900">Buscas salvas</h2>
       {!items.length ? (
-        <p className="mt-2 text-sm text-gray-500">As buscas ficam guardadas neste computador para você reabrir e baixar a planilha.</p>
+        <p className="mt-2 text-sm text-gray-500">{remote ? 'Ainda não há buscas salvas nesta conta.' : 'As buscas ficam guardadas neste computador para você reabrir e baixar a planilha.'}</p>
       ) : (
         <ul className="-mx-2 mt-2 space-y-0.5 overflow-y-auto">
           {items.map((item) => (
@@ -97,10 +98,11 @@ const SavedSearches: React.FC<{
 /**
  * Prospecção: empresas de uma cidade e de um nicho, com o que o site delas
  * usa e a nota de oportunidade para o Superelements. O motor roda no
- * servidor de dev (`scripts/prospects`), que abre os sites; a tela só pede e mostra.
+ * servidor de dev (`scripts/prospects`), que abre os sites. Histórico e funil
+ * também abrem no app publicado, persistidos por conta no Supabase.
  */
 const Prospects: React.FC = () => {
-  const [config, setConfig] = useState<{ google: boolean } | null | undefined>(undefined)
+  const [config, setConfig] = useState<ProspectConfig | null | undefined>(undefined)
   const [saved, setSaved] = useState<SearchSummary[]>([])
   const [record, setRecord] = useState<SearchRecord | null>(null)
   const [running, setRunning] = useState<Running | null>(null)
@@ -354,8 +356,18 @@ const Prospects: React.FC = () => {
             ) : (
               <>
             <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-              <SearchForm google={config.google} running={Boolean(running)} onSearch={search} />
-              <SavedSearches items={saved} currentId={record?.id} disabled={Boolean(running)} onOpen={open} onDelete={remove} />
+              {config.canSearch ? (
+                <SearchForm google={config.google} running={Boolean(running)} onSearch={search} />
+              ) : (
+                <div className={cn(SURFACE, 'flex min-h-48 flex-col justify-center p-6')}>
+                  <Radar className="h-5 w-5 text-gray-400" aria-hidden />
+                  <h2 className="mt-3 text-sm font-semibold text-gray-900">Histórico e funil estão online</h2>
+                  <p className="mt-1 max-w-xl text-sm leading-6 text-gray-500">
+                    Para iniciar uma varredura nova, abra o app local. Ela visita mapas e centenas de sites; quando terminar, envie os resultados com <code className="rounded bg-gray-100 px-1 py-0.5 text-xs text-gray-700">npm run prospectar:subir</code>.
+                  </p>
+                </div>
+              )}
+              <SavedSearches items={saved} currentId={record?.id} disabled={Boolean(running)} remote={config.remote} onOpen={open} onDelete={remove} />
             </div>
 
             {running && (

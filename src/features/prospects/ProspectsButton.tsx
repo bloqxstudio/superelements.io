@@ -2,10 +2,12 @@ import React from 'react'
 import { NavLink } from 'react-router-dom'
 import { Radar } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/contexts/AuthContext'
 
-/** Atalho para a Prospecção no header. Só no app de dev: é ele que abre os sites das empresas. */
+/** A prospecção guarda contatos comerciais e fica restrita aos admins. */
 export const ProspectsButton: React.FC = () => {
-  if (!import.meta.hot) return null
+  const { profile } = useAuth()
+  if (profile?.role !== 'admin') return null
   return (
     <NavLink
       to="/prospeccao"

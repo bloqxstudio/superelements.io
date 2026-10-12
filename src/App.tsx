@@ -90,8 +90,8 @@ function App() {
                 <Route path="agentes" element={<Agents />} />
                 {/* As skills do chat dos agentes: padrão, da equipe e as suas */}
                 <Route path="skills" element={<Skills />} />
-                {/* Empresas por cidade e nicho, com o que o site delas usa (o motor roda no dev) */}
-                <Route path="prospeccao" element={<Prospects />} />
+                {/* Histórico e funil na nuvem; a varredura pesada continua no app local. */}
+                <Route path="prospeccao" element={<ProtectedRoute requireRole={['admin']}><Prospects /></ProtectedRoute>} />
               </Route>
               {/* Projeto aberto em segundo plano para um agente (iframe escondido, só no dev) */}
               <Route path="/agente/:projectId" element={import.meta.hot ? <ProtectedRoute><AgentWorker /></ProtectedRoute> : <Navigate to="/" replace />} />
