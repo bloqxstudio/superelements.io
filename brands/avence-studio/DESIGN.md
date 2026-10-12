@@ -53,15 +53,14 @@ A marca antiga era a palavra "avence studio" em Space Grotesk verde-limão sobre
 
 ## 2. Logo
 
-Arquivos em `public/brands/avence-studio/logo/` (gerados por `.space/avence-studio/build/gen-identidade.cjs`; as letras estão em contornos, sem fonte embutida):
+Arquivos oficiais em `public/brands/avence-studio/` (gerados por `.space/avence-studio/build/gen-rodas-logo.cjs`; as letras dos SVGs estão em contornos):
 
-- `avence-studio-logo-preto.svg` / `.png`: assinatura horizontal para fundo claro ("avence" e "STUDIO" em tinta, ponto azul). `avence-studio-logo-claro.svg` / `.png`: para fundo escuro (papel, ponto azul claro).
-- `avence-studio-empilhada-preto.svg` / `.png` e `avence-studio-empilhada-claro.svg` / `.png`: "STUDIO" embaixo de "avence", para espaços estreitos e perfis.
-- `avence-simbolo.svg` / `.png` e `avence-simbolo-claro.svg` / `.png`: o "a" com o ponto.
-- `avence-icone.svg` / `.png` (o quadrado de tinta do favicon antigo, "a" em papel, ponto azul claro: favicon) e `avence-icone-azul.svg` / `.png` (fundo azul, ponto em tinta: avatar das redes).
-- `avence-marca-anterior.png`: a marca antiga, só para o antes e depois.
+- `logo/avence-wordmark-preto.svg` / `.png`: wordmark para fundo claro. `logo/avence-wordmark-claro.svg` / `.png`: wordmark para fundo escuro.
+- `social/avence-logo-social-1000.svg` / `.png`: avatar oficial quadrado, 1000 × 1000, com o wordmark inteiro em papel e o ponto azul-claro sobre tinta.
+- `social/avence-post-01.png`, `-02.png` e `-03.png`: exemplos 1:1; `post-examples.html` preserva a versão animada.
+- `logo/avence-marca-anterior.png`: a marca anterior, somente para a comparação histórica.
 
-Construção: "avence" em Instrument Serif Regular, espaçamento −0,015em; o ponto é um quadrado de 0,12 da altura da letra, a 0,025 do "e", sobre a linha de base; "STUDIO" em Inter Tight Medium com 0,19 da altura da letra e +0,26em, na mesma linha de base (horizontal) ou embaixo, alinhado ao "a" (empilhada). Na página, o cabeçalho e o rodapé escrevem a assinatura em texto nativo, com o mesmo desenho. Tamanho mínimo: assinatura com 96px de largura, símbolo com 16px. Área livre: a altura do "a" em volta de tudo.
+Construção: "avence" em Geist Medium 500, espaçamento −0,06em; o ponto é um pequeno quadrado alinhado à base óptica da palavra. Não existe complemento "STUDIO" no logo oficial. Instrument Serif não faz parte do wordmark: ela permanece nos destaques editoriais e no grande rodapé. Tamanho mínimo recomendado: 96px de largura. Área livre: a altura do “a” em volta da assinatura.
 
 ## 3. Cores
 

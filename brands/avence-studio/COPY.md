@@ -65,7 +65,7 @@ Voz: direta, calma, concreta; mostra o trabalho. A velocidade aparece no process
 
 1. **Autorização dos cases**: confirmar com cada cliente (ProcessBase, Vizor, Flávia Neto, Zena, Contplan, PrexParts) que o site pode aparecer no portfólio, com nome e telas; e que o trabalho foi do studio (e qual parte: desenho, texto, desenvolvimento).
 2. **Infinity Day e Tankker**: se tiverem outro endereço no ar, mandar; senão, ficam fora.
-3. **Aplicar a identidade oficial nas contas**: em 2026-10-11 o usuário definiu como oficial o logo que já estava em `Rodas (cópia)`, manteve a Instrument Serif nos destaques e limitou o azul `#2B3CF0` a pontos de atenção — nunca a uma seção inteira. Atualizar a página `Identidade` e os arquivos em `public/brands/avence-studio/logo/` a partir dessa marca; a troca efetiva da foto, do nome do Instagram e do favicon continua sendo um passo externo separado.
+3. **Aplicar a identidade oficial nas contas**: a página `Identidade`, os wordmarks e o avatar 1000 × 1000 já foram atualizados a partir do logo de `Rodas (cópia)`. A troca efetiva da foto, do nome do Instagram e do favicon continua sendo um passo externo separado.
 4. **WhatsApp oficial**: (51) 99179-8877 está na página de obrigado do site atual; confirmar.
 5. **E-mail** do studio para o formulário (hoje vai para o administrador do WordPress) e a página `/obrigado/` no WordPress novo.
 6. **Preço**: fora do site até o padrão do serviço ser decidido.
