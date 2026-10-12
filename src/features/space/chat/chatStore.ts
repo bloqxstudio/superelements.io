@@ -41,6 +41,8 @@ interface ChatState {
   openConversation?: (projectId: string, epoch: number) => void
   /** Apaga uma conversa do histórico. */
   forgetConversation?: (projectId: string, epoch: number) => void
+  /** Traz a conversa de um projeto que não está aberto (o funil acompanha as páginas em criação). */
+  watch?: (projectId: string) => void
 }
 
 export const useChat = create<ChatState>()((set) => ({

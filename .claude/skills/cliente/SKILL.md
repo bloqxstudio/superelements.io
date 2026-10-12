@@ -71,6 +71,7 @@ Escreva no painel do Claude no canvas (`space say "…"`) ao entrar, antes de ca
 | `new <nome> [--context "…" \| --context-file <arquivo>]` | Criar um projeto na conta, com o briefing, e ligar a sessão a ele |
 | `close` | Terminou: o projeto em segundo plano salva e fecha agora |
 | `brief [--set "…" \| --file <arquivo>]` | Ver ou trocar o briefing do projeto (o campo Contexto) |
+| `prospect <id> [--stage pagina] [--brief-file <roteiro.json>] [--next "…"] [--note "…"]` | A oportunidade do funil de prospecção; no fim da página de um prospecto, devolve o cartão para "Página pronta" com o roteiro de venda reescrito |
 | `brand [<DESIGN.md>] [--on\|--off]` | Ver, gravar (e ligar) ou ligar/desligar a marca do projeto; a anterior fica em `.space/<projeto>/marca-anterior.md` |
 | `pull [--page <nome>]` | Baixar páginas para `.space/<projeto>/` (sem `--page`, todas) |
 | `push <arquivo\|pasta>… --label "…"` | Gravar as seções alteradas e as novas (só as que mudaram desde a leitura) |

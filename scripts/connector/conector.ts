@@ -48,6 +48,7 @@ Pasta do conector do Superelements (ele reescreve este arquivo ao abrir). Aqui o
 - Seção nova: um arquivo sem \`id\`, com \`title\`, \`place\` (\`{ "after": "<id da seção>" }\`) e \`elements\`. Parta de uma seção da mesma página, para manter o padrão.
 - Imagens anexadas no chat ficam em \`.space/anexos/\`. Para pôr uma na página, use o caminho dela no \`url\` da imagem: o \`push\` troca o caminho pela imagem.
 - \`shot --section <id>\`: foto da seção, para conferir antes de entregar.
+- \`prospect <id>\`: a oportunidade do funil de prospecção, quando o pedido vem do botão ▶ da "Fila da página" (a skill do pedido diz o caminho inteiro, até devolver o cartão com \`--stage pagina\`).
 
 ## Regras
 

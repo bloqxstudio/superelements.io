@@ -25,6 +25,7 @@ import {
   type ChatSendPayload,
   type ChatStep,
   type ChatStepKind,
+  type ChatTask,
   type ChatTokens,
   type CursorMode,
   totalTokens,
@@ -56,6 +57,8 @@ const KEEP_HISTORY = 30
 const MAX_TEXT = 8000
 /** Uma resposta parada há tanto tempo sem sinal do agente é encerrada. */
 const RUN_TIMEOUT = 20 * 60_000
+/** A página inteira de um prospecto (ler o site, marca, várias seções, fotos): bem mais que um pedido no canvas. */
+const TASK_TIMEOUT = 90 * 60_000
 
 /** Comandos da ponte que mexem fora do canvas: o agente do chat não roda. */
 const OUTSIDE = ['publish', 'restore', 'approval', 'invite', 'wp', 'new', 'open', 'close']
@@ -391,10 +394,28 @@ function imageLines(images: ChatImage[], agent: ChatAgentId) {
   ]
 }
 
-function promptFor(payload: ChatSendPayload, first: boolean, projectName: string | undefined, guide: string, extra: { images: ChatImage[]; skill?: PromptSkill; skillFull: boolean }) {
+/** O trabalho que veio de fora do canvas (o botão do funil). */
+function taskLines(task: ChatTask | undefined, agent: ChatAgentId) {
+  if (!task) return []
+  return [
+    '',
+    'Este pedido veio do botão do funil de prospecção, não do canvas: quem pediu não está olhando o chat. Não pare para perguntar; siga a skill até o fim e deixe as dúvidas como pendências na resposta.',
+    `Oportunidade no funil de prospecção: \`${task.opportunityId}\` (é o id do \`prospect\`).`,
+    agent === 'claude' ? 'Para ler o site da empresa, use a ferramenta WebFetch.' : 'Para ler o site da empresa, a rede do sandbox está aberta.',
+  ]
+}
+
+function promptFor(
+  payload: ChatSendPayload,
+  first: boolean,
+  projectName: string | undefined,
+  guide: string,
+  extra: { images: ChatImage[]; skill?: PromptSkill; skillFull: boolean; task?: ChatTask }
+) {
   const parts = [
     first ? preamble(payload.projectId, projectName, payload.agent, guide) : '',
     ...skillLines(extra.skill, extra.skillFull),
+    ...taskLines(extra.task, payload.agent),
     'Selecionado no canvas agora:',
     ...contextLines(payload.context),
     ...imageLines(extra.images, payload.agent),
@@ -441,6 +462,7 @@ function stepFromCommand(command: string): Pick<ChatStep, 'kind' | 'text' | 'det
     focus: ['canvas', 'Levando o canvas até a seção'],
     brand: ['canvas', 'Olhando a marca do projeto'],
     brief: ['read', 'Lendo o briefing'],
+    prospect: /--stage|--brief-file/.test(args) ? ['note', 'Devolvendo o cartão ao funil'] : ['read', 'Lendo a oportunidade no funil'],
     say: ['note', quoted(args) ?? 'Escrevendo no painel'],
   }
   const [kind, text] = map[name] ?? ['run', `space ${name}`]
@@ -743,6 +765,8 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
         const info = CHAT_AGENTS[payload.agent]
         const context: ChatContext = { ...payload.context, sections: payload.context?.sections ?? [] }
         const skill = COMMAND.test(text) ? undefined : resolveSkill(payload.skill)
+        const opportunityId = payload.task?.kind === 'prospect' ? clip(payload.task.opportunityId, 200) : ''
+        const task: ChatTask | undefined = opportunityId && !COMMAND.test(text) ? { kind: 'prospect', opportunityId } : undefined
         // A skill que este agente recebeu por último nesta conversa: a mesma (e na mesma versão) vai só como lembrete
         const lastSkill = storedSkillKey([...conversation.messages].reverse().find((m) => m.role === 'user' && m.agent === payload.agent && !COMMAND.test(m.text ?? ''))?.skill)
 
@@ -807,6 +831,7 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
           images,
           skill,
           skillFull: !!skill && (!resume || lastSkill !== skill.key),
+          task,
         })
         const env: NodeJS.ProcessEnv = { ...process.env, SPACE_SESSION: session, SPACE_AGENT: info.name, NO_COLOR: '1', FORCE_COLOR: '0' }
         // A ponte deste servidor (a da aba que pediu), mesmo que outro servidor de dev tenha gravado o .space/bridge.json
@@ -828,6 +853,8 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
                 '--permission-mode', 'acceptEdits',
                 '--strict-mcp-config',
                 '--allowedTools', `Bash(${space}:*)`, `PowerShell(${space}:*)`, 'Read', 'Edit', 'Write', 'Glob', 'Grep', 'Skill', 'TodoWrite',
+                // A página de um prospecto parte do site atual da empresa
+                ...(task ? ['WebFetch'] : []),
                 '--disallowedTools', ...OUTSIDE.flatMap((cmd) => [`Bash(${space} ${cmd}:*)`, `PowerShell(${space} ${cmd}:*)`]),
                 ...(resume ? ['--resume', resume] : []),
               ]
@@ -855,7 +882,10 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
           stopped: false,
           finished: false,
           stderr: '',
-          timer: setTimeout(() => stop(payload.projectId, payload.agent, 'Passou de 20 minutos sem terminar: parei.'), RUN_TIMEOUT),
+          timer: setTimeout(
+            () => stop(payload.projectId, payload.agent, `Passou de ${(task ? TASK_TIMEOUT : RUN_TIMEOUT) / 60_000} minutos sem terminar: parei.`),
+            task ? TASK_TIMEOUT : RUN_TIMEOUT
+          ),
           streamed: new Set(),
           newBlock: false,
           steps: new Map(),

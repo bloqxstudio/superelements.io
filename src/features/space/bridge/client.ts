@@ -3,6 +3,9 @@ import { loadApprovals, shareState, useApprovalStore } from '@/features/approval
 import { htmlHash, isLocalAppUrl, shareUrl, type PageShare } from '@/features/approval/shares'
 import { cancelInvite, createInvite, inviteUrl, listInvites, listPeople } from '@/features/projects/access'
 import { useProjectStore } from '@/features/projects/projectStore'
+import { getFunnel, updateOpportunity } from '@/features/prospects/api'
+import { BRIEF_FIELDS, STAGE_LABEL, type OpportunityPatch, type SalesBrief } from '@/features/prospects/funnel'
+import { draftOffer } from '@/features/prospects/offer'
 import { useProjectSync } from '@/features/projects/useProjectSession'
 import { getActiveBrand, useBrandStore } from '@/features/space/brand/brandStore'
 import { parseDesignMd } from '@/features/space/brand/designMd'
@@ -686,6 +689,38 @@ async function brief(params: { context?: string }) {
   return { name: project?.name, context: project?.context ?? '' }
 }
 
+/**
+ * Uma oportunidade do funil de prospecção (`/prospeccao`). O agente que cria a
+ * página pelo botão da fila lê a empresa por aqui e, no fim, devolve o cartão
+ * para "Página pronta" com o roteiro de venda reescrito. Só etapa (entre a fila
+ * e a página pronta), roteiro, próximo passo e uma nota a mais: a oferta e o
+ * valor ficam com quem vende.
+ */
+async function prospect(params: { id?: string; stage?: string; brief?: Partial<SalesBrief>; nextStep?: string; note?: string; projectName?: string }) {
+  const id = params.id?.trim()
+  if (!id) throw new Error('Diga o id da oportunidade')
+  const current = (await getFunnel()).find((o) => o.id === id)
+  if (!current) throw new Error(`A oportunidade ${id} não está no funil`)
+  const patch: OpportunityPatch = {}
+  if (params.stage !== undefined) {
+    if (params.stage !== 'pagina' && params.stage !== 'selecionado') throw new Error('O agente só move o cartão entre "selecionado" (Fila da página) e "pagina" (Página pronta)')
+    patch.stage = params.stage
+  }
+  if (params.brief) {
+    const brief = { ...(current.brief ?? draftOffer(current.lead).brief) }
+    for (const { key } of BRIEF_FIELDS) {
+      const value = params.brief[key]
+      if (typeof value === 'string' && value.trim()) brief[key] = value.trim()
+    }
+    patch.brief = brief
+  }
+  if (params.nextStep?.trim()) patch.nextStep = params.nextStep.trim()
+  if (params.note?.trim()) patch.notes = [current.notes, params.note.trim()].filter(Boolean).join('\n\n')
+  if (params.projectName?.trim() && !current.projectName) patch.projectName = params.projectName.trim()
+  const saved = Object.keys(patch).length ? await updateOpportunity(id, patch) : current
+  return { opportunity: { ...saved, lead: current.lead }, stageLabel: STAGE_LABEL[saved.stage], changed: Object.keys(patch) }
+}
+
 // ---------- ciclo com o cliente: aprovação, convite, WordPress ----------
 
 /** A página como o player mostra, com as animações: é o que o cliente vê no link. */
@@ -1127,7 +1162,7 @@ function component(
 
 const METHODS: Record<string, (params: never, ctx: CallContext) => unknown> = {
   status, pull, apply, focus, say, work, plan, render, view, projects, open, create, brand,
-  brief, approval, invite, wordpress, details, publish, restore, component, componentPlan,
+  brief, approval, invite, wordpress, details, publish, restore, component, componentPlan, prospect,
 }
 
 // ---------- projetos em segundo plano (só na tela de uma pessoa) ----------

@@ -1,11 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowRight, Copy, ExternalLink, MapPin, MessageCircle, RotateCcw, Trash2, X } from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight, Copy, ExternalLink, Loader2, MapPin, MessageCircle, Play, RotateCcw, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { ConnectorPrompt } from '@/features/space/chat/ConnectorPrompt'
+import { useChat } from '@/features/space/chat/chatStore'
+import { CHAT_AGENTS } from '@/features/space/chat/protocol'
 import { cn } from '@/lib/utils'
-import { getFunnelSettings, removeOpportunity, saveFunnelSettings, updateOpportunity } from './api'
+import { getFunnel, getFunnelSettings, removeOpportunity, rescore, saveFunnelSettings, updateOpportunity } from './api'
 import {
   BRIEF_FIELDS,
   DEFAULT_SETTINGS,
@@ -23,8 +27,9 @@ import {
 } from './funnel'
 import { AdLinks, AdsBadge, Contacts } from './LeadTable'
 import { advertises } from './score'
-import { draftOffer } from './offer'
+import { displayName, draftOffer } from './offer'
 import { PlatformBadge, ScorePill, SURFACE } from './ui'
+import { startPageBuild, stopPageBuild, useBuildState, usePageAgent } from './usePageBuild'
 
 const FIELD = 'w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 const day = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
@@ -56,6 +61,129 @@ const cityOf = (o: Opportunity) => {
 
 const whatsappOf = (o: Opportunity) => o.lead.scan?.whatsapp ?? (o.lead.phone && digits(o.lead.phone).length === 11 ? o.lead.phone : undefined)
 
+// ---------------------------------------------------------------- página pela IA
+
+/** Os botões da faixa de criação: pequenos, dentro do cartão. */
+const BAR_BUTTON = 'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors'
+
+/**
+ * A página do cartão pela IA conectada (só na "Fila da página"): o ▶ cria o
+ * projeto e pede a página; depois, o andamento da conversa do agente, com
+ * parar e retomar. Quem devolve o cartão para "Página pronta" é o agente.
+ */
+const BuildBar: React.FC<{ item: Opportunity; agentName?: string; starting: boolean; onBuild: () => void; onStop: () => void }> = ({ item, agentName, starting, onBuild, onStop }) => {
+  const state = useBuildState(item)
+  const watchLink = item.build && (
+    <Link to={`/projetos/${item.build.projectId}`} className="inline-flex items-center gap-0.5 text-[11px] font-medium text-violet-700 hover:underline">
+      Ver no Space <ArrowRight className="h-3 w-3" aria-hidden />
+    </Link>
+  )
+
+  if (starting || state.kind === 'running') {
+    return (
+      <div className="mt-2 rounded-md bg-violet-50 px-2 py-1.5 ring-1 ring-inset ring-violet-600/15" role="status">
+        <div className="flex items-center gap-1.5">
+          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-violet-700" aria-hidden />
+          <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-violet-900">{state.kind === 'running' ? `${state.agent} criando a página` : 'Criando o projeto…'}</span>
+          {state.kind === 'running' && (
+            <button type="button" onClick={onStop} className={cn(BAR_BUTTON, 'text-violet-800 hover:bg-violet-100')}>
+              Parar
+            </button>
+          )}
+        </div>
+        {state.kind === 'running' && (
+          <p className="mt-0.5 truncate text-[11px] text-violet-900/70" title={state.text}>
+            {state.text}
+          </p>
+        )}
+        {watchLink && <div className="mt-1">{watchLink}</div>}
+      </div>
+    )
+  }
+
+  if (state.kind === 'idle') {
+    return (
+      <button
+        type="button"
+        onClick={onBuild}
+        disabled={!agentName}
+        title={agentName ? `Cria o projeto no Space e o ${agentName} monta a página inicial` : 'Conecte o Claude Code ou o Codex (no topo da coluna) para criar'}
+        className="mt-2 inline-flex h-7 w-full items-center justify-center gap-1.5 rounded-md bg-gray-900 text-xs font-medium text-white transition-[background-color,transform] hover:bg-gray-700 active:scale-[0.97] disabled:bg-gray-100 disabled:text-gray-400"
+      >
+        <Play className="h-3 w-3 fill-current" aria-hidden />
+        {agentName ? `Criar página com ${agentName}` : 'Criar página'}
+      </button>
+    )
+  }
+
+  const tone = state.kind === 'failed' ? 'bg-rose-50 ring-rose-600/15 text-rose-900' : 'bg-gray-50 ring-gray-900/10 text-gray-800'
+  const title = state.kind === 'failed' ? 'Parou' : state.kind === 'answered' ? `${state.agent} respondeu sem terminar` : `Criação começou em ${day(item.build!.startedAt)}`
+  return (
+    <div className={cn('mt-2 rounded-md px-2 py-1.5 ring-1 ring-inset', tone)}>
+      <p className="text-[11px] font-medium">{title}</p>
+      {state.kind !== 'unknown' && (
+        <p className="mt-0.5 line-clamp-2 text-[11px] opacity-80" title={state.text}>
+          {state.text}
+        </p>
+      )}
+      <div className="mt-1 flex items-center justify-between gap-2">
+        {watchLink}
+        {agentName && (
+          <button type="button" onClick={onBuild} className={cn(BAR_BUTTON, 'text-gray-800 hover:bg-white')}>
+            <RotateCcw className="h-3 w-3" aria-hidden /> Retomar
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Topo da "Fila da página": que IA cria as páginas, ou como conectar uma. */
+const AgentStrip: React.FC = () => {
+  const { connected, available, agent, setAgent } = usePageAgent()
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (connected) setOpen(false)
+  }, [connected])
+
+  if (!connected) {
+    // No `npm run dev` o chat vem do servidor do Vite; no app publicado, do conector
+    if (import.meta.hot) return <p className="mt-2 text-[11px] leading-snug text-gray-500">O chat dos agentes não respondeu. Confira o servidor de dev.</p>
+    return (
+      <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-white px-2 py-1.5 text-[11px] text-gray-600 ring-1 ring-gray-200">
+        <span>Conecte sua IA para criar as páginas.</span>
+        <button type="button" onClick={() => setOpen(true)} className={cn(BAR_BUTTON, 'bg-gray-900 text-white hover:bg-gray-700')}>
+          Conectar
+        </button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="max-w-sm gap-0 p-0">
+            <DialogTitle className="sr-only">Conectar meus agentes</DialogTitle>
+            <ConnectorPrompt />
+          </DialogContent>
+        </Dialog>
+      </div>
+    )
+  }
+  if (!agent) return <p className="mt-2 text-[11px] leading-snug text-gray-500">Nenhuma IA neste computador. Instale o Claude Code ou o Codex.</p>
+  return (
+    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-600">
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: CHAT_AGENTS[agent].color }} aria-hidden />
+      {available.length > 1 ? (
+        <select value={agent} onChange={(e) => setAgent(e.target.value as typeof agent)} aria-label="IA que cria as páginas" className="h-6 rounded border border-gray-200 bg-white px-1 text-[11px] text-gray-900">
+          {available.map((id) => (
+            <option key={id} value={id}>
+              {CHAT_AGENTS[id].name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="font-medium text-gray-900">{CHAT_AGENTS[agent].name}</span>
+      )}
+      <span>conectado</span>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------- cartão
 
 const Card: React.FC<{
@@ -63,10 +191,12 @@ const Card: React.FC<{
   value: number
   active: boolean
   dragging: boolean
+  /** Só na "Fila da página": a criação da página pela IA. */
+  build?: { agentName?: string; starting: boolean; onBuild: () => void; onStop: () => void }
   onOpen: () => void
   onAdvance: (stage: Stage) => void
   onDrag: (id: string | null) => void
-}> = ({ item, value, active, dragging, onOpen, onAdvance, onDrag }) => {
+}> = ({ item, value, active, dragging, build, onOpen, onAdvance, onDrag }) => {
   const lead = item.lead
   const next = nextStage(item.stage)
   const wa = whatsappOf(item)
@@ -117,6 +247,7 @@ const Card: React.FC<{
           {item.nextDate && <span className="text-gray-500"> · {new Date(`${item.nextDate}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>}
         </p>
       )}
+      {build && <BuildBar item={item} {...build} />}
       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
         {wa ? (
           <a href={`https://wa.me/55${digits(wa)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900" aria-label={`WhatsApp de ${lead.name}`}>
@@ -530,6 +661,73 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems }> = ({
     }
   }
 
+  // ---------- a página pela IA (coluna "Fila da página") ----------
+
+  const navigate = useNavigate()
+  const pageAgent = usePageAgent()
+  const pageAgentName = pageAgent.agent ? CHAT_AGENTS[pageAgent.agent].name : undefined
+  const [starting, setStarting] = useState<string[]>([])
+
+  const buildPage = async (o: Opportunity) => {
+    const agent = pageAgent.agent
+    if (!agent || starting.includes(o.id)) return
+    setStarting((list) => [...list, o.id])
+    let started = false
+    try {
+      const updated = await startPageBuild(o, agent)
+      started = true
+      onChange((prev) => prev.map((x) => (x.id === o.id ? updated : x)))
+      const projectId = updated.build?.projectId
+      toast(`${CHAT_AGENTS[agent].name} começou a página de ${displayName(o.lead.name)}`, {
+        description: `No projeto ${updated.projectName}, em segundo plano. O cartão vai para Página pronta quando ela terminar.`,
+        action: projectId ? { label: 'Ver no Space', onClick: () => navigate(`/projetos/${projectId}`) } : undefined,
+      })
+    } catch (e) {
+      toast.error('Não deu para começar a página', { description: e instanceof Error ? e.message : undefined })
+    } finally {
+      // A conversa do agente leva um instante para chegar: até lá, o cartão segue "criando"
+      const done = () => setStarting((list) => list.filter((id) => id !== o.id))
+      if (started) setTimeout(done, 2000)
+      else done()
+    }
+  }
+
+  // A conversa de cada projeto em criação, para o cartão mostrar o andamento (também depois de recarregar)
+  const watch = useChat((s) => s.watch)
+  const building = useMemo(() => items.filter((o) => o.build && o.stage === 'selecionado').map((o) => o.build!.projectId), [items])
+  const buildingKey = building.join(',')
+  useEffect(() => {
+    if (watch) for (const id of buildingKey.split(',').filter(Boolean)) watch(id)
+  }, [watch, buildingKey])
+
+  // Criação que terminou: o agente pode ter movido o cartão e reescrito o roteiro
+  const runningKey = useChat((s) => building.filter((id) => s.conversations[id]?.running.length).join(','))
+  const lastRunning = useRef(runningKey)
+  const itemsRef = useRef(items)
+  itemsRef.current = items
+  useEffect(() => {
+    const now = new Set(runningKey.split(',').filter(Boolean))
+    const ended = lastRunning.current.split(',').filter((id) => id && !now.has(id))
+    lastRunning.current = runningKey
+    if (!ended.length) return
+    getFunnel()
+      .then((list) => {
+        const before = new Map(itemsRef.current.map((o) => [o.id, o.stage]))
+        onChange(list.map((o) => ({ ...o, lead: rescore(o.lead) })))
+        for (const o of list) {
+          if (o.stage !== 'pagina' || before.get(o.id) !== 'selecionado') continue
+          const projectId = o.build?.projectId
+          toast.success(`Página pronta: ${displayName(o.lead.name)}`, {
+            description: 'O roteiro de venda foi reescrito com o que a IA achou no site.',
+            action: projectId ? { label: 'Ver no Space', onClick: () => navigate(`/projetos/${projectId}`) } : undefined,
+          })
+        }
+      })
+      .catch(() => {
+        // Sem o funil agora: a próxima abertura da tela traz o cartão como o agente deixou
+      })
+  }, [runningKey, onChange, navigate])
+
   const open = items.find((o) => o.id === openId)
   const total = (list: Opportunity[]) => list.reduce((sum, o) => sum + valueOf(o, settings).total, 0)
   const openValue = total(items.filter((o) => OPEN_STAGES.includes(o.stage)))
@@ -639,6 +837,7 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems }> = ({
                     </span>
                   </div>
                   <p className="mt-0.5 text-[11px] leading-snug text-gray-500">{stage.hint}</p>
+                  {stage.id === 'selecionado' && <AgentStrip />}
                 </header>
                 <div className="min-h-16 flex-1 space-y-2">
                   {cards.map((item) => (
@@ -648,6 +847,11 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems }> = ({
                       value={valueOf(item, settings).total}
                       active={item.id === openId}
                       dragging={item.id === dragId}
+                      build={
+                        stage.id === 'selecionado'
+                          ? { agentName: pageAgentName, starting: starting.includes(item.id), onBuild: () => void buildPage(item), onStop: () => stopPageBuild(item) }
+                          : undefined
+                      }
                       onOpen={() => setOpenId(item.id)}
                       onAdvance={(next) => void move(item.id, next)}
                       onDrag={(id) => {

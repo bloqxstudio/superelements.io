@@ -40,6 +40,9 @@ quem acompanha não muda. Acompanhe todos em /agentes no app.
                                   depois de 6 min sem pedido)
   brief [--set "<texto>" | --file <arquivo>]
                                   mostra ou troca o briefing do projeto (o campo Contexto)
+  prospect <id> [--stage pagina|selecionado] [--brief-file <roteiro.json>] [--next "<próximo passo>"] [--note "…"]
+                                  a oportunidade do funil de prospecção; ao terminar a página do prospecto, --stage pagina
+                                  põe o cartão em "Página pronta" e o roteiro (what, how, best, points, objections) entra no lugar
   pull [--page <nome>]...         baixa as páginas para .space/<projeto>/<página>/ (uma seção por arquivo)
   push <arquivo|pasta>... --label "<o que mudou>" [--force] [--no-focus]
                                   grava no canvas as seções alteradas e as novas (um passo do Ctrl+Z); um "url" de imagem com o
@@ -950,6 +953,55 @@ async function cmdBrief() {
   console.log(result.context.trim() || `${result.name} ainda não tem briefing. Grave com: brief --set "<texto>" ou brief --file <arquivo>`)
 }
 
+/** Os campos do roteiro de venda (`SalesBrief` em src/features/prospects/funnel.ts). */
+const BRIEF_KEYS = { what: 'O que entregamos', how: 'Como ofertar', best: 'A melhor forma', points: 'O que o site novo resolve', objections: 'Objeções e respostas' }
+
+/** Funil de prospecção: a oportunidade da página que o botão da fila pediu; no fim, o cartão volta com o roteiro reescrito. */
+async function cmdProspect() {
+  const id = positional.join(' ').trim()
+  if (!id) fail('Diga o id da oportunidade (vem no pedido do funil): prospect <id>')
+  const stage = one(flags.stage)
+  if (stage !== undefined && !['pagina', 'selecionado'].includes(stage)) fail('--stage aceita pagina (Página pronta) ou selecionado (Fila da página)')
+  const file = one(flags['brief-file'])
+  let brief
+  if (file) {
+    if (!existsSync(file)) fail(`Arquivo não encontrado: ${file}`)
+    try {
+      brief = JSON.parse(readFileSync(file, 'utf8'))
+    } catch (error) {
+      fail(`${file} não é um JSON: ${error.message}`)
+    }
+    if (!brief || typeof brief !== 'object' || !Object.keys(BRIEF_KEYS).some((k) => typeof brief[k] === 'string' && brief[k].trim())) {
+      fail(`${file} precisa ter os campos do roteiro: ${Object.keys(BRIEF_KEYS).join(', ')}`)
+    }
+  }
+  // A página pronta fica ligada ao projeto desta sessão, se o cartão ainda não tem um
+  const params = { id, stage, brief, nextStep: one(flags.next), note: one(flags.note), projectName: stage === 'pagina' ? target?.name : undefined }
+  const { opportunity: o, stageLabel, changed } = await call('prospect', params)
+  if (flags.json) return console.log(JSON.stringify(o, null, 2))
+  const lead = o.lead ?? {}
+  const scan = lead.scan ?? {}
+  if (changed.length) console.log(`✔ ${lead.name}: ${changed.map((k) => (k === 'stage' ? `cartão em ${stageLabel}` : k === 'brief' ? 'roteiro de venda reescrito' : k === 'nextStep' ? 'próximo passo' : k === 'notes' ? 'nota' : 'projeto ligado')).join(', ')}.\n`)
+  console.log(
+    [
+      `# ${lead.name}`,
+      `- Etapa: ${stageLabel}${o.projectName ? ` · projeto ${o.projectName}` : ''}`,
+      `- ${[lead.niche, lead.address ?? o.region].filter(Boolean).join(' · ')}`,
+      scan.url && `- Site: ${scan.url} (${[scan.platform, scan.wpVersion && `WordPress ${scan.wpVersion}`, scan.elementorVersion && `Elementor ${scan.elementorVersion}${scan.elementorPro ? ' Pro' : ''}`, scan.theme && `tema ${scan.theme}`].filter(Boolean).join(', ')})`,
+      `- Contato: ${[lead.phone, scan.whatsapp && `WhatsApp ${scan.whatsapp}`, ...(scan.emails ?? []), scan.instagram].filter(Boolean).join(' · ') || 'nenhum na busca'}`,
+      scan.ads?.length && `- Anúncio pago no site: ${scan.ads.join(', ')}`,
+      scan.agency && `- Site atual feito por: ${scan.agency.name}`,
+      o.offer?.service && `- Serviço da oferta: ${o.offer.service}`,
+      o.nextStep && `- Próximo passo: ${o.nextStep}`,
+      '',
+      '## Roteiro de venda',
+      ...Object.entries(BRIEF_KEYS).flatMap(([k, label]) => [`### ${label}`, o.brief?.[k] ?? '(padrão do funil)', '']),
+    ]
+      .filter((line) => typeof line === 'string')
+      .join('\n')
+  )
+}
+
 function printShares(result) {
   for (const s of result.pages) {
     if (!s.link) {
@@ -1482,6 +1534,7 @@ const COMMANDS = {
   brand: cmdBrand,
   focus: cmdFocus,
   brief: cmdBrief,
+  prospect: cmdProspect,
   approval: cmdApproval,
   invite: cmdInvite,
   wp: cmdWp,

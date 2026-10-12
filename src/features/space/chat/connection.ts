@@ -76,6 +76,7 @@ export function startSpaceChat(hot: Hot) {
     reset: (projectId) => hot.send(CHAT_EVENTS.reset, { projectId }),
     openConversation: (projectId, epoch) => hot.send(CHAT_EVENTS.open, { projectId, epoch }),
     forgetConversation: (projectId, epoch) => hot.send(CHAT_EVENTS.forget, { projectId, epoch }),
+    watch: (projectId) => hot.send(CHAT_EVENTS.hello, { projectId }),
   })
   hello()
 
@@ -84,7 +85,7 @@ export function startSpaceChat(hot: Hot) {
     hot.off(CHAT_EVENTS.cursor, onCursor)
     hot.off('vite:ws:connect', hello)
     unsubscribe()
-    useChat.setState({ connected: false, send: undefined, stop: undefined, reset: undefined, openConversation: undefined, forgetConversation: undefined })
+    useChat.setState({ connected: false, send: undefined, stop: undefined, reset: undefined, openConversation: undefined, forgetConversation: undefined, watch: undefined })
   }
 }
 

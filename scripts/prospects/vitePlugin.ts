@@ -110,7 +110,7 @@ export const prospecting = (): Plugin => {
           if (opportunity && req.method === 'PATCH') {
             const patch = (await readJson(req)) as OpportunityPatch
             if (patch.stage && !STAGES.some((s) => s.id === patch.stage)) return send(res, 400, { error: 'Etapa desconhecida' })
-            const allowed = ['stage', 'projectName', 'video', 'notes', 'nextStep', 'nextDate', 'offer', 'brief'] as const
+            const allowed = ['stage', 'projectName', 'video', 'notes', 'nextStep', 'nextDate', 'offer', 'brief', 'build'] as const
             const clean = Object.fromEntries(allowed.filter((k) => k in patch).map((k) => [k, patch[k]])) as OpportunityPatch
             const updated = await updateOpportunity(decodeURIComponent(opportunity[1]), clean)
             return updated ? send(res, 200, updated) : send(res, 404, { error: 'Oportunidade não encontrada' })

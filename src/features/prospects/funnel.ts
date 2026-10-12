@@ -10,7 +10,7 @@ export type Stage = 'mapeado' | 'selecionado' | 'pagina' | 'contatado' | 'conver
 
 export const STAGES: { id: Stage; label: string; hint: string }[] = [
   { id: 'mapeado', label: 'Mapeado', hint: 'Veio da busca e ainda não foi escolhido.' },
-  { id: 'selecionado', label: 'Fila da página', hint: 'Escolhido para ganhar uma versão nova no Space. Peça ao Claude para rodar a fila.' },
+  { id: 'selecionado', label: 'Fila da página', hint: 'Escolhido para ganhar uma versão nova no Space. O ▶ do cartão cria a página com a IA conectada.' },
   { id: 'pagina', label: 'Página pronta', hint: 'Versão nova no Space e vídeo para o primeiro contato.' },
   { id: 'contatado', label: 'Contatado', hint: 'Mensagem enviada, esperando resposta.' },
   { id: 'conversa', label: 'Em conversa', hint: 'Respondeu: mandar o link da página ou marcar uma conversa.' },
@@ -49,13 +49,28 @@ export interface Opportunity {
   offer?: Offer
   /** Roteiro de venda: o que falar, como ofertar e como responder. */
   brief?: SalesBrief
+  /** A página que a IA conectada está criando (ou criou) pelo botão da fila. */
+  build?: PageBuild
   history: { at: string; stage: Stage }[]
   createdAt: string
   updatedAt: string
 }
 
+/**
+ * Criação da página pelo botão da coluna "Fila da página": o projeto do Space
+ * e o agente que trabalha nele. O andamento vem da conversa do agente nesse
+ * projeto; o fim, do próprio agente, que move o cartão (`space prospect`).
+ */
+export interface PageBuild {
+  projectId: string
+  /** `claude` ou `codex` (os ids do chat do Space). */
+  agent: string
+  /** ISO */
+  startedAt: string
+}
+
 /** O que a tela pode mudar numa oportunidade. */
-export type OpportunityPatch = Partial<Pick<Opportunity, 'stage' | 'projectName' | 'video' | 'notes' | 'nextStep' | 'nextDate' | 'offer' | 'brief'>>
+export type OpportunityPatch = Partial<Pick<Opportunity, 'stage' | 'projectName' | 'video' | 'notes' | 'nextStep' | 'nextDate' | 'offer' | 'brief' | 'build'>>
 
 /**
  * O que vendemos é serviço, como agência: o site novo, cobrado uma vez, e um

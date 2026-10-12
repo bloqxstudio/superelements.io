@@ -104,8 +104,8 @@ const LONG_TIMEOUT = 280_000
 const OPEN_TIMEOUT = 45_000
 /** Projeto em segundo plano sem pedido de agente nem prévia por esse tempo: fecha. */
 const IDLE_CLOSE = 6 * 60_000
-/** Pedidos que não são sobre um projeto: vão para a tela de uma pessoa. */
-const ACCOUNT_CALLS = new Set(['projects', 'create', 'open'])
+/** Pedidos que não são sobre um projeto: vão para a tela de uma pessoa (`prospect` é o funil de prospecção). */
+const ACCOUNT_CALLS = new Set(['projects', 'create', 'open', 'prospect'])
 /** Pedidos que só leem: podem ser repetidos se a aba sumiu no meio. */
 const READS = new Set(['status', 'pull', 'render', 'view', 'say', 'work', 'focus'])
 /** Falha destes vai para o diário do agente: quem acompanha precisa saber. */

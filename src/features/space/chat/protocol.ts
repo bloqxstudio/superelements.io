@@ -226,6 +226,18 @@ export const CHAT_EVENTS = {
   cursor: 'space-chat:cursor',
 } as const
 
+/**
+ * Trabalho que não nasce de uma conversa no canvas. `prospect`: o botão de
+ * criar página do funil de prospecção (`/prospeccao`); o agente lê o site da
+ * empresa (o Claude Code ganha o WebFetch) e tem mais tempo para montar a
+ * página inteira.
+ */
+export interface ChatTask {
+  kind: 'prospect'
+  /** A oportunidade do funil: o agente devolve o cartão com `space prospect <id>`. */
+  opportunityId: string
+}
+
 export interface ChatSendPayload {
   projectId: string
   projectName?: string
@@ -234,6 +246,7 @@ export interface ChatSendPayload {
   context: ChatContext
   images?: ChatImageUpload[]
   skill?: ChatSkillRef
+  task?: ChatTask
 }
 
 /** Sessão da ponte (SPACE_SESSION) de um agente no chat de um projeto. */
