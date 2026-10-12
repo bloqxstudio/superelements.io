@@ -21,16 +21,11 @@ export interface ProspectConfig {
 
 const BUCKET = 'space-projects'
 
-const owner = async () => {
-  const { data } = await supabase.auth.getUser()
-  if (!data.user) throw new Error('Sessão encerrada')
-  return data.user.id
-}
-
-const pathFor = async (name: string) => `${await owner()}/prospeccao/${name}`
+/** Uma pasta só para todos os admins (migração 20261012200000), não uma por conta. */
+const pathFor = (name: string) => `prospeccao/${name}`
 
 const readCloud = async <T,>(name: string, fallback?: T): Promise<T> => {
-  const { data, error } = await supabase.storage.from(BUCKET).download(await pathFor(name))
+  const { data, error } = await supabase.storage.from(BUCKET).download(pathFor(name))
   if (error) {
     if (fallback !== undefined && /not found|does not exist|404/i.test(error.message)) return fallback
     throw new Error(error.message)
@@ -40,7 +35,7 @@ const readCloud = async <T,>(name: string, fallback?: T): Promise<T> => {
 
 const writeCloud = async (name: string, value: unknown) => {
   const body = new Blob([JSON.stringify(value)], { type: 'application/json' })
-  const { error } = await supabase.storage.from(BUCKET).upload(await pathFor(name), body, { contentType: 'application/json', upsert: true })
+  const { error } = await supabase.storage.from(BUCKET).upload(pathFor(name), body, { contentType: 'application/json', upsert: true })
   if (error) throw new Error(error.message)
 }
 
@@ -74,7 +69,7 @@ const summary = ({ id, createdAt, label, input, regionLabel, stats }: SearchReco
 
 export const listSearches = async (): Promise<SearchSummary[]> => {
   if (!remote) return json<SearchSummary[]>(await fetch(`${BASE}/buscas`))
-  const prefix = await pathFor('searches')
+  const prefix = pathFor('searches')
   const { data, error } = await supabase.storage.from(BUCKET).list(prefix, { limit: 1000, sortBy: { column: 'name', order: 'desc' } })
   if (error) throw new Error(error.message)
   const records = await Promise.all((data ?? []).filter((file) => file.name.endsWith('.json')).map((file) => readCloud<SearchRecord>(`searches/${file.name}`)))
@@ -92,7 +87,7 @@ export const getSearch = async (id: string) => {
 
 export const removeSearch = async (id: string) => {
   if (!remote) return json(await fetch(`${BASE}/buscas/${encodeURIComponent(id)}`, { method: 'DELETE' }))
-  const { error } = await supabase.storage.from(BUCKET).remove([await pathFor(`searches/${id}.json`)])
+  const { error } = await supabase.storage.from(BUCKET).remove([pathFor(`searches/${id}.json`)])
   if (error) throw new Error(error.message)
   return { ok: true }
 }
