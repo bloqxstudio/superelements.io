@@ -229,8 +229,7 @@ export const CHAT_EVENTS = {
 /**
  * Trabalho que não nasce de uma conversa no canvas. `prospect`: o botão de
  * criar página do funil de prospecção (`/prospeccao`); o agente lê o site da
- * empresa (o Claude Code ganha o WebFetch) e tem mais tempo para montar a
- * página inteira.
+ * empresa e tem mais tempo para montar a página inteira.
  */
 export interface ChatTask {
   kind: 'prospect'
