@@ -71,7 +71,19 @@ const Projects: React.FC = () => {
   }, [navigate])
 
   const sorted = useMemo(() => [...projects].sort((a, b) => b.updatedAt - a.updatedAt), [projects])
+  // A conta admin também vê os projetos das outras contas (migração 20261006180000): ficam numa parte separada
+  const mine = useMemo(() => sorted.filter((p) => p.role !== 'admin'), [sorted])
+  const others = useMemo(() => sorted.filter((p) => p.role === 'admin'), [sorted])
   const ready = status === 'ready'
+  const card = (project: Project) => (
+    <ProjectCard
+      key={project.id}
+      project={project}
+      onEdit={() => setDialog({ open: true, project })}
+      onDelete={() => setDeleting(project)}
+      onLeave={() => setLeaving(project)}
+    />
+  )
 
   const submit = async (fields: { name: string; context: string }) => {
     if (dialog.project) {
@@ -124,7 +136,7 @@ const Projects: React.FC = () => {
               Um projeto por cliente: a marca, o contexto e as páginas montadas no canvas.
             </p>
           </div>
-          {ready && sorted.length > 0 && (
+          {ready && mine.length > 0 && (
             <Button onClick={() => setDialog({ open: true })} className="gap-1.5">
               <Plus className="h-4 w-4" />
               Novo projeto
@@ -149,18 +161,8 @@ const Projects: React.FC = () => {
               Tentar de novo
             </Button>
           </div>
-        ) : sorted.length ? (
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sorted.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onEdit={() => setDialog({ open: true, project })}
-                onDelete={() => setDeleting(project)}
-                onLeave={() => setLeaving(project)}
-              />
-            ))}
-          </div>
+        ) : mine.length ? (
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{mine.map(card)}</div>
         ) : (
           <div className="mt-8 flex flex-col items-center rounded-xl border border-dashed border-gray-300 px-6 py-16 text-center">
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-gray-500 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)]">
@@ -175,6 +177,18 @@ const Projects: React.FC = () => {
               Criar projeto
             </Button>
           </div>
+        )}
+
+        {ready && others.length > 0 && (
+          <section className="mt-12" aria-labelledby="projetos-outras-contas">
+            <h2 id="projetos-outras-contas" className="text-sm font-semibold text-gray-900">
+              De outras contas
+            </h2>
+            <p className="mt-0.5 max-w-2xl text-sm text-gray-500">
+              Você vê e edita estes projetos porque é admin, como os que a equipe cria pela Prospecção. Publicar, conectar o WordPress e convidar pessoas continuam com quem criou.
+            </p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{others.map(card)}</div>
+          </section>
         )}
 
         <p className="mt-10 text-xs text-gray-400">Os projetos ficam salvos na sua conta e abrem em qualquer navegador em que você entrar.</p>

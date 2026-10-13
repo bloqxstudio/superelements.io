@@ -10,8 +10,10 @@
  *                                         (um site indicado: lê e põe na fila da página)
  *   npm run prospectar -- --fila          (empresas na fila da página, no funil)
  *
- * Salva a busca em data/prospeccao/<id>.json e a planilha ao lado (.csv),
- * e aparece na lista de buscas da tela. Fonte padrão: Google Maps lido de graça
+ * Salva a busca em data/prospeccao/<id>.json e a planilha ao lado (.csv) e a
+ * envia para a nuvem, onde aparece na tela para a equipe toda. `--site` e
+ * `--fila` usam o funil da nuvem, o mesmo da tela (precisam da
+ * SUPABASE_SERVICE_ROLE_KEY no .env.local). Fonte padrão: Google Maps lido de graça
  * (`--fonte maps`); `--fonte osm` usa o mapa aberto e `--fonte google`, a API
  * paga com a GOOGLE_PLACES_API_KEY do .env. `--cobertura cidade` varre a cidade
  * inteira em pontos (minutos por nicho); o padrão é uma busca funda no centro
@@ -25,6 +27,7 @@ import { leadsToCsv } from '../../src/features/prospects/csv.ts'
 import { NICHES } from '../../src/features/prospects/niches.ts'
 import { PLATFORM_LABEL } from '../../src/features/prospects/score.ts'
 import type { ProspectSource } from '../../src/features/prospects/types.ts'
+import { hasCloud, putJson, shared } from './cloud.ts'
 import { leadFromSite, runSearch, saveSearch } from './engine.ts'
 import { addToFunnel, readFunnel } from './funnelStore.ts'
 
@@ -124,6 +127,18 @@ const main = async () => {
   }
   for (const note of record.notes) console.log(`\nAviso: ${note}`)
   console.log(`\nBusca salva: ${path.relative(root, file)}\nPlanilha: ${path.relative(root, csv)}`)
+
+  // Para a equipe ver na tela; sem a chave, fica para o npm run prospectar:subir
+  if (!hasCloud()) {
+    console.log('A busca ficou só neste computador (falta SUPABASE_SERVICE_ROLE_KEY no .env.local). Envie com npm run prospectar:subir.')
+    return
+  }
+  try {
+    await putJson(shared(`searches/${record.id}.json`), record)
+    console.log('Enviada para a equipe: aparece em /prospeccao.')
+  } catch (error) {
+    console.error(`Não deu para enviar a busca (${error instanceof Error ? error.message : error}). Envie com npm run prospectar:subir.`)
+  }
 }
 
 await main()

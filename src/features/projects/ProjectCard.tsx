@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { LogOut, MoreHorizontal, Pencil, Trash2, Users } from 'lucide-react'
+import { Eye, LogOut, MoreHorizontal, Pencil, Trash2, Users } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -143,6 +143,12 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDel
             Compartilhado com você
           </span>
         )}
+        {project.role === 'admin' && (
+          <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-gray-600 shadow-[0_0_0_1px_rgb(0_0_0/0.08)]">
+            <Eye className="h-3 w-3" aria-hidden />
+            De outra conta
+          </span>
+        )}
         <AgentBadge projectId={project.id} />
       </div>
       <div className="px-4 py-3 pr-12">
@@ -168,8 +174,9 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDel
           <Pencil className="mr-2 h-3.5 w-3.5" />
           Editar detalhes
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {project.role === 'editor' ? (
+        {/* Admin vendo o projeto de outra conta: edita, mas excluir e sair não são dele */}
+        {project.role !== 'admin' && <DropdownMenuSeparator />}
+        {project.role === 'admin' ? null : project.role === 'editor' ? (
           <DropdownMenuItem onSelect={onLeave}>
             <LogOut className="mr-2 h-3.5 w-3.5" />
             Sair do projeto

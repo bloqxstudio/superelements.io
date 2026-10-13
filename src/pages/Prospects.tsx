@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { CircleAlert, Download, Loader2, Radar, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { addToFunnel, byScore, getConfig, getFunnel, getSearch, listSearches, removeSearch, rescore, startSearch, type ProspectConfig } from '@/features/prospects/api'
+import { addToFunnel, byScore, getConfig, getFunnel, getSearch, listSearches, pollFunnel, removeSearch, rescore, shareSearch, startSearch, type ProspectConfig } from '@/features/prospects/api'
 import { AgencyList } from '@/features/prospects/AgencyList'
 import { leadsToCsv } from '@/features/prospects/csv'
 import { Funnel } from '@/features/prospects/FunnelBoard'
@@ -40,16 +40,15 @@ const SavedSearches: React.FC<{
   items: SearchSummary[]
   currentId?: string
   disabled: boolean
-  remote: boolean
   onOpen: (id: string) => void
   onDelete: (id: string) => void
-}> = ({ items, currentId, disabled, remote, onOpen, onDelete }) => {
+}> = ({ items, currentId, disabled, onOpen, onDelete }) => {
   const [confirm, setConfirm] = useState<string | null>(null)
   return (
     <aside className={cn(SURFACE, 'flex max-h-[520px] flex-col p-4')}>
       <h2 className="text-sm font-semibold text-gray-900">Buscas salvas</h2>
       {!items.length ? (
-        <p className="mt-2 text-sm text-gray-500">{remote ? 'Ainda não há buscas salvas nesta conta.' : 'As buscas ficam guardadas neste computador para você reabrir e baixar a planilha.'}</p>
+        <p className="mt-2 text-sm text-gray-500">Ainda não há buscas salvas. Cada busca fica guardada para toda a equipe reabrir e baixar a planilha.</p>
       ) : (
         <ul className="-mx-2 mt-2 space-y-0.5 overflow-y-auto">
           {items.map((item) => (
@@ -170,6 +169,33 @@ const Prospects: React.FC = () => {
     return () => runningRef.current?.controller.abort()
   }, [reloadSaved, show])
 
+  // O que a equipe muda aparece sem recarregar: ao voltar para a aba e a cada 30 s com ela à vista
+  useEffect(() => {
+    if (!config) return
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return
+      pollFunnel()
+        .then((list) => list && setFunnel(list.map((o) => ({ ...o, lead: rescore(o.lead) }))))
+        .catch(() => {})
+    }
+    // Trocar de aba dispara foco e visibilidade juntos: uma atualização só
+    let last = 0
+    const back = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < 2000) return
+      last = Date.now()
+      refresh()
+      if (!runningRef.current) reloadSaved()
+    }
+    const timer = setInterval(refresh, 30_000)
+    window.addEventListener('focus', back)
+    document.addEventListener('visibilitychange', back)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', back)
+      document.removeEventListener('visibilitychange', back)
+    }
+  }, [config, reloadSaved])
+
   const stages = useMemo(() => new Map(funnel.map((o) => [o.id, o.stage])), [funnel])
 
   const addSelected = async (stage?: Stage) => {
@@ -240,6 +266,7 @@ const Prospects: React.FC = () => {
         if (runningRef.current === state) setRunning({ ...state, leads: [...state.leads] })
       }, 400)
     }
+    let finished: SearchRecord | null = null
     try {
       await startSearch(
         input,
@@ -252,6 +279,7 @@ const Prospects: React.FC = () => {
           }
           else if (event.type === 'error') setError(event.message)
           else if (event.type === 'done') {
+            finished = event.record
             show({ ...event.record, leads: event.record.leads.map(rescore).sort(byScore) })
             toast.success(`${plural(event.record.stats.businesses, 'empresa', 'empresas')} em ${event.record.input.region}`, {
               description: `${event.record.stats.elementor} com WordPress + Elementor`,
@@ -260,6 +288,14 @@ const Prospects: React.FC = () => {
         },
         controller.signal
       )
+      // A varredura roda neste computador; a busca vai para a nuvem, onde a equipe toda a vê
+      if (finished) {
+        await shareSearch(finished).catch((e) =>
+          toast.error('A busca ficou só neste computador', {
+            description: `${e instanceof Error ? `${e.message}. ` : ''}Envie depois com npm run prospectar:subir.`,
+          })
+        )
+      }
     } catch (e) {
       if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -321,10 +357,8 @@ const Prospects: React.FC = () => {
         ) : config === null ? (
           <div className="mt-8 flex flex-col items-center rounded-xl border border-dashed border-gray-300 px-6 py-16 text-center">
             <Radar className="h-5 w-5 text-gray-400" aria-hidden />
-            <h2 className="mt-3 text-sm font-semibold text-gray-900">A prospecção roda no app aberto neste computador</h2>
-            <p className="mt-1 max-w-md text-sm text-gray-500">
-              É o computador que abre o site de cada empresa. Abra o app pelo npm run dev (ou o preview do Ship Studio), ou use o terminal: npm run prospectar.
-            </p>
+            <h2 className="mt-3 text-sm font-semibold text-gray-900">A sessão expirou</h2>
+            <p className="mt-1 max-w-md text-sm text-gray-500">Entre de novo na conta para ver as buscas e o funil da equipe.</p>
           </div>
         ) : (
           <>
@@ -361,13 +395,13 @@ const Prospects: React.FC = () => {
               ) : (
                 <div className={cn(SURFACE, 'flex min-h-48 flex-col justify-center p-6')}>
                   <Radar className="h-5 w-5 text-gray-400" aria-hidden />
-                  <h2 className="mt-3 text-sm font-semibold text-gray-900">Histórico e funil estão online</h2>
+                  <h2 className="mt-3 text-sm font-semibold text-gray-900">Varreduras novas rodam no app local</h2>
                   <p className="mt-1 max-w-xl text-sm leading-6 text-gray-500">
-                    Para iniciar uma varredura nova, abra o app local. Ela visita mapas e centenas de sites; quando terminar, envie os resultados com <code className="rounded bg-gray-100 px-1 py-0.5 text-xs text-gray-700">npm run prospectar:subir</code>.
+                    Elas visitam mapas e centenas de sites, então rodam no app aberto pelo servidor de dev (ou no preview do Ship Studio). Quando terminam, a busca aparece aqui para a equipe toda. As buscas e o funil desta tela já são os mesmos para todos.
                   </p>
                 </div>
               )}
-              <SavedSearches items={saved} currentId={record?.id} disabled={Boolean(running)} remote={config.remote} onOpen={open} onDelete={remove} />
+              <SavedSearches items={saved} currentId={record?.id} disabled={Boolean(running)} onOpen={open} onDelete={remove} />
             </div>
 
             {running && (
