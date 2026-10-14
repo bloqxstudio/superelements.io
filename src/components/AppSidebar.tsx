@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { Bot, Building2, FolderKanban, KanbanSquare, LogOut, Radar, Users, Wand2, X } from 'lucide-react'
+import { Bot, Building2, FolderKanban, KanbanSquare, LogOut, Radar, Send, Users, Wand2, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCrm } from '@/features/crm/crmStore'
@@ -109,6 +109,7 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
           <Section title="CRM">
             <Item to="/crm" end icon={KanbanSquare} label="Oportunidades" />
             <Item to="/crm/clientes" icon={Building2} label="Clientes" />
+            <Item to="/crm/social" icon={Send} label="Social" />
             <Item to="/prospeccao" icon={Radar} label="Prospecção" />
             <Item to="/crm/equipe" icon={Users} label="Equipe" />
           </Section>

@@ -143,6 +143,8 @@ export type Database = {
           whatsapp: string | null
           email: string | null
           instagram: string | null
+          linkedin: string | null
+          facebook: string | null
           source: string
           status: string
           owner_id: string | null
@@ -167,6 +169,8 @@ export type Database = {
           whatsapp?: string | null
           email?: string | null
           instagram?: string | null
+          linkedin?: string | null
+          facebook?: string | null
           source?: string
           status?: string
           owner_id?: string | null
@@ -191,6 +195,8 @@ export type Database = {
           whatsapp?: string | null
           email?: string | null
           instagram?: string | null
+          linkedin?: string | null
+          facebook?: string | null
           source?: string
           status?: string
           owner_id?: string | null

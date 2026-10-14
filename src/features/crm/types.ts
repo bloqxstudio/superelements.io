@@ -114,10 +114,11 @@ export interface Contact {
 
 export type ContactDraft = Omit<Contact, 'id' | 'clientId'>
 
-export type ActivityKind = 'note' | 'call' | 'whatsapp' | 'email' | 'meeting' | 'stage' | 'created'
+/** `social`: um toque nas redes, anotado pela tela Social (`data.network`, `data.step`). */
+export type ActivityKind = 'note' | 'call' | 'whatsapp' | 'email' | 'meeting' | 'social' | 'stage' | 'created'
 
 /** Os registros que a pessoa escreve (etapa e entrada no funil o banco grava sozinho). */
-export const NOTE_KINDS: { id: Exclude<ActivityKind, 'stage' | 'created'>; label: string }[] = [
+export const NOTE_KINDS: { id: Exclude<ActivityKind, 'stage' | 'created' | 'social'>; label: string }[] = [
   { id: 'note', label: 'Nota' },
   { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'call', label: 'Ligação' },
@@ -131,7 +132,7 @@ export interface Activity {
   opportunityId?: string
   kind: ActivityKind
   body: string
-  data: { from?: string; to?: string }
+  data: { from?: string; to?: string; network?: string; step?: string }
   createdBy?: string
   createdAt: number
 }

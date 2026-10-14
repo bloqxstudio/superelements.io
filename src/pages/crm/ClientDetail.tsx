@@ -282,7 +282,7 @@ const Opportunities: React.FC<{ client: Client; list: Opportunity[]; people?: Te
 
 // ---------------------------------------------------------------- linha do tempo
 
-const KIND_LABEL: Record<Activity['kind'], string> = { note: 'Nota', call: 'Ligação', whatsapp: 'WhatsApp', email: 'E-mail', meeting: 'Reunião', stage: 'Etapa', created: 'No funil' }
+const KIND_LABEL: Record<Activity['kind'], string> = { note: 'Nota', call: 'Ligação', whatsapp: 'WhatsApp', email: 'E-mail', meeting: 'Reunião', social: 'Redes sociais', stage: 'Etapa', created: 'No funil' }
 
 const Timeline: React.FC<{ clientId: string; version: number; people?: TeamPerson[] }> = ({ clientId, version, people }) => {
   const { user } = useAuth()
