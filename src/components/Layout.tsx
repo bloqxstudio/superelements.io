@@ -1,41 +1,48 @@
-import React from 'react';
-import { Link, Outlet, useMatch } from 'react-router-dom';
-import { UserAvatar } from '@/components/UserAvatar';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Link, Outlet, useLocation, useMatch } from 'react-router-dom';
+import { Menu } from 'lucide-react';
+import { AppSidebar } from '@/components/AppSidebar';
 import { Logo } from '@/components/Logo';
-import { AgentsButton } from '@/features/agents/AgentsButton';
-import { ProspectsButton } from '@/features/prospects/ProspectsButton';
-import { SkillsButton } from '@/features/skills/SkillsButton';
 
 /**
- * Header das telas da conta (56px + 1px de borda). Dentro de um projeto quem
- * desenha a barra é o próprio Space, no desenho do Framer, e ele ocupa a tela.
+ * Telas da conta: menu lateral com Produção e CRM (no celular, uma barra com
+ * o botão do menu). Dentro de um projeto quem desenha a barra é o próprio
+ * Space, no desenho do Framer, e ele ocupa a tela.
  */
 const Layout: React.FC = () => {
   const inProject = !!useMatch('/projetos/:projectId');
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+
+  // Trocou de tela pelo menu do celular: ele fecha
+  useEffect(() => setOpen(false), [pathname]);
 
   if (inProject) return <Outlet />;
 
   return (
-    <div className="min-h-screen bg-background w-full flex flex-col">
-      <header className="h-14 box-content border-b bg-white sticky top-0 z-30 w-full">
-        <div className="h-full w-full px-4 md:px-6 flex items-center justify-between gap-3">
-          <nav aria-label="Navegação" className="flex min-w-0 items-center gap-2.5">
-            <Link to="/" aria-label="Projetos" className="shrink-0 transition-opacity hover:opacity-80">
-              <Logo />
-            </Link>
-          </nav>
-          <div className="flex shrink-0 items-center gap-2">
-            <ProspectsButton />
-            <SkillsButton />
-            <AgentsButton />
-            <UserAvatar />
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen w-full bg-zinc-50">
+      <AppSidebar open={open} onClose={close} />
+      <div className="flex min-h-screen min-w-0 flex-col md:pl-60">
+        <header className="sticky top-0 z-30 box-content flex h-14 items-center gap-3 border-b bg-white px-4 md:hidden">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label="Abrir o menu"
+            aria-expanded={open}
+            className="-ml-1 flex h-9 w-9 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100 active:scale-[0.96]"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <Link to="/" aria-label="Projetos" className="transition-opacity hover:opacity-80">
+            <Logo />
+          </Link>
+        </header>
 
-      <main className="flex-1 min-w-0">
-        <Outlet />
-      </main>
+        <main className="min-w-0 flex-1">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 };

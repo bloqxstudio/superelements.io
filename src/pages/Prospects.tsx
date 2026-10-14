@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { CircleAlert, Download, Loader2, Radar, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { addToFunnel, byScore, getConfig, getFunnel, getSearch, listSearches, pollFunnel, removeSearch, rescore, shareSearch, startSearch, type ProspectConfig } from '@/features/prospects/api'
+import { addToFunnel, byScore, getConfig, getFunnel, getSearch, listSearches, removeSearch, rescore, shareSearch, startSearch, type ProspectConfig } from '@/features/prospects/api'
 import { AgencyList } from '@/features/prospects/AgencyList'
 import { leadsToCsv } from '@/features/prospects/csv'
-import { Funnel } from '@/features/prospects/FunnelBoard'
 import type { Opportunity, Stage } from '@/features/prospects/funnel'
 import { LeadTable } from '@/features/prospects/LeadTable'
 import { nicheFor } from '@/features/prospects/niches'
@@ -97,8 +96,8 @@ const SavedSearches: React.FC<{
 /**
  * Prospecção: empresas de uma cidade e de um nicho, com o que o site delas
  * usa e a nota de oportunidade para o Superelements. O motor roda no
- * servidor de dev (`scripts/prospects`), que abre os sites. Histórico e funil
- * também abrem no app publicado, persistidos por conta no Supabase.
+ * servidor de dev (`scripts/prospects`), que abre os sites. As buscas ficam na
+ * pasta da equipe do CRM, e o funil são as Oportunidades do CRM (`/crm`).
  */
 const Prospects: React.FC = () => {
   const [config, setConfig] = useState<ProspectConfig | null | undefined>(undefined)
@@ -116,10 +115,12 @@ const Prospects: React.FC = () => {
   const [funnel, setFunnel] = useState<Opportunity[]>([])
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const runningRef = useRef<Running | null>(null)
-  // A busca aberta (?busca=) e a aba (?aba=funil) ficam no endereço: recarregar ou mandar o link reabre igual
+  // A busca aberta (?busca=) fica no endereço: recarregar ou mandar o link reabre igual
   const [params, setParams] = useSearchParams()
   const linked = useRef(params.get('busca'))
-  const [view, setView] = useState<'buscar' | 'funil'>(params.get('aba') === 'funil' ? 'funil' : 'buscar')
+  // O funil saiu daqui para as Oportunidades do CRM: o link antigo (?aba=funil) vai para lá
+  const oldFunnelLink = params.get('aba') === 'funil'
+  const navigate = useNavigate()
 
   const setParam = useCallback(
     (key: string, value: string | null) =>
@@ -134,11 +135,6 @@ const Prospects: React.FC = () => {
       ),
     [setParams]
   )
-
-  const changeView = (next: 'buscar' | 'funil') => {
-    setView(next)
-    setParam('aba', next === 'funil' ? 'funil' : null)
-  }
 
   const reloadSaved = useCallback(() => {
     listSearches().then(setSaved).catch(() => {})
@@ -169,34 +165,28 @@ const Prospects: React.FC = () => {
     return () => runningRef.current?.controller.abort()
   }, [reloadSaved, show])
 
-  // O que a equipe muda aparece sem recarregar: ao voltar para a aba e a cada 30 s com ela à vista
+  // Voltou para a aba: a equipe pode ter posto empresas no funil ou feito buscas
   useEffect(() => {
     if (!config) return
-    const refresh = () => {
-      if (document.visibilityState !== 'visible') return
-      pollFunnel()
-        .then((list) => list && setFunnel(list.map((o) => ({ ...o, lead: rescore(o.lead) }))))
-        .catch(() => {})
-    }
-    // Trocar de aba dispara foco e visibilidade juntos: uma atualização só
     let last = 0
     const back = () => {
-      if (document.visibilityState !== 'visible' || Date.now() - last < 2000) return
+      if (document.visibilityState !== 'visible' || Date.now() - last < 2000 || runningRef.current) return
       last = Date.now()
-      refresh()
-      if (!runningRef.current) reloadSaved()
+      reloadSaved()
+      getFunnel()
+        .then((list) => setFunnel(list))
+        .catch(() => {})
     }
-    const timer = setInterval(refresh, 30_000)
     window.addEventListener('focus', back)
     document.addEventListener('visibilitychange', back)
     return () => {
-      clearInterval(timer)
       window.removeEventListener('focus', back)
       document.removeEventListener('visibilitychange', back)
     }
   }, [config, reloadSaved])
 
-  const stages = useMemo(() => new Map(funnel.map((o) => [o.id, o.stage])), [funnel])
+  // Em que etapa cada empresa da busca já está no funil (pelo id da empresa na busca)
+  const stages = useMemo(() => new Map(funnel.map((o) => [o.key ?? o.lead.id, o.stage])), [funnel])
 
   const addSelected = async (stage?: Stage) => {
     if (!record) return
@@ -206,7 +196,8 @@ const Prospects: React.FC = () => {
       setFunnel(list.map((o) => ({ ...o, lead: rescore(o.lead) })))
       setSelected(new Set())
       toast.success(`${plural(chosen.length, 'empresa', 'empresas')} ${stage === 'selecionado' ? 'na fila da página' : 'no funil'}`, {
-        description: stage === 'selecionado' ? 'Peça ao Claude para rodar a fila: ele cria um projeto e uma página para cada uma.' : undefined,
+        description: stage === 'selecionado' ? 'O ▶ de cada cartão nas Oportunidades cria a página com a IA conectada.' : 'Cada uma virou um cliente no CRM.',
+        action: { label: 'Ver no funil', onClick: () => navigate('/crm') },
       })
     } catch (e) {
       toast.error('Não deu para pôr no funil', { description: e instanceof Error ? e.message : undefined })
@@ -342,6 +333,8 @@ const Prospects: React.FC = () => {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
+  if (oldFunnelLink) return <Navigate to="/crm" replace />
+
   return (
     <div className="min-h-[calc(100vh-57px)] bg-zinc-50">
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10">
@@ -362,33 +355,13 @@ const Prospects: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="mt-6 flex items-center gap-1 border-b border-gray-200" role="tablist" aria-label="Prospecção">
-              {(
-                [
-                  ['buscar', 'Buscar'],
-                  ['funil', `Funil (${funnel.length})`],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={view === id}
-                  onClick={() => changeView(id)}
-                  className={cn(
-                    '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-                    view === id ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-900'
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <p className="mt-4 text-sm text-gray-600">
+              {plural(funnel.length, 'oportunidade', 'oportunidades')} no funil da equipe.{' '}
+              <Link to="/crm" className="font-medium text-gray-900 underline-offset-2 hover:underline">
+                Abrir as Oportunidades
+              </Link>
+            </p>
 
-            {view === 'funil' ? (
-              <Funnel items={funnel} onChange={setFunnel} />
-            ) : (
-              <>
             <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
               {config.canSearch ? (
                 <SearchForm google={config.google} running={Boolean(running)} onSearch={search} />
@@ -397,7 +370,7 @@ const Prospects: React.FC = () => {
                   <Radar className="h-5 w-5 text-gray-400" aria-hidden />
                   <h2 className="mt-3 text-sm font-semibold text-gray-900">Varreduras novas rodam no app local</h2>
                   <p className="mt-1 max-w-xl text-sm leading-6 text-gray-500">
-                    Elas visitam mapas e centenas de sites, então rodam no app aberto pelo servidor de dev (ou no preview do Ship Studio). Quando terminam, a busca aparece aqui para a equipe toda. As buscas e o funil desta tela já são os mesmos para todos.
+                    Elas visitam mapas e centenas de sites, então rodam no app aberto pelo servidor de dev (ou no preview do Ship Studio). Quando terminam, a busca aparece aqui para a equipe toda.
                   </p>
                 </div>
               )}
@@ -587,8 +560,6 @@ const Prospects: React.FC = () => {
                   </button>
                 </div>
               </div>
-            )}
-              </>
             )}
           </>
         )}

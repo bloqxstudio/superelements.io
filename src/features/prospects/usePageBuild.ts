@@ -48,7 +48,7 @@ export async function startPageBuild(o: Opportunity, agent: ChatAgentId): Promis
   if (useProjectStore.getState().status !== 'ready') throw new Error('Os projetos da conta ainda estão carregando. Tente de novo em instantes.')
   const existing = builtProject(o)
   const project = existing ?? (await useProjectStore.getState().create({ name: freeName(displayName(o.lead.name)), context: projectBriefing(o) }))
-  const updated = await updateOpportunity(o.id, { projectName: project.name, build: { projectId: project.id, agent, startedAt: new Date().toISOString() } })
+  const updated = await updateOpportunity(o.id, { projectName: project.name, projectId: project.id, build: { projectId: project.id, agent, startedAt: new Date().toISOString() } })
   send({
     projectId: project.id,
     projectName: project.name,

@@ -14,6 +14,354 @@ export type Database = {
   }
   public: {
     Tables: {
+      crm_teams: {
+        Row: {
+          id: string
+          name: string
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_team_members: {
+        Row: {
+          team_id: string
+          user_id: string
+          role: string
+          invited_by: string | null
+          created_at: string
+        }
+        Insert: {
+          team_id: string
+          user_id: string
+          role?: string
+          invited_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          team_id?: string
+          user_id?: string
+          role?: string
+          invited_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      crm_team_invites: {
+        Row: {
+          id: string
+          team_id: string
+          role: string
+          label: string
+          created_by: string
+          created_at: string
+          expires_at: string
+          accepted_by: string | null
+          accepted_at: string | null
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          role?: string
+          label?: string
+          created_by?: string
+          created_at?: string
+          expires_at?: string
+          accepted_by?: string | null
+          accepted_at?: string | null
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          role?: string
+          label?: string
+          created_by?: string
+          created_at?: string
+          expires_at?: string
+          accepted_by?: string | null
+          accepted_at?: string | null
+        }
+        Relationships: []
+      }
+      crm_pipelines: {
+        Row: {
+          id: string
+          team_id: string
+          name: string
+          position: number
+          settings: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          name: string
+          position?: number
+          settings?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          name?: string
+          position?: number
+          settings?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_clients: {
+        Row: {
+          id: string
+          team_id: string
+          name: string
+          document: string | null
+          website: string | null
+          domain: string | null
+          segment: string | null
+          city: string | null
+          address: string | null
+          phone: string | null
+          whatsapp: string | null
+          email: string | null
+          instagram: string | null
+          source: string
+          status: string
+          owner_id: string | null
+          notes: string | null
+          prospect_key: string | null
+          lead: Json | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          name: string
+          document?: string | null
+          website?: string | null
+          domain?: string | null
+          segment?: string | null
+          city?: string | null
+          address?: string | null
+          phone?: string | null
+          whatsapp?: string | null
+          email?: string | null
+          instagram?: string | null
+          source?: string
+          status?: string
+          owner_id?: string | null
+          notes?: string | null
+          prospect_key?: string | null
+          lead?: Json | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          name?: string
+          document?: string | null
+          website?: string | null
+          domain?: string | null
+          segment?: string | null
+          city?: string | null
+          address?: string | null
+          phone?: string | null
+          whatsapp?: string | null
+          email?: string | null
+          instagram?: string | null
+          source?: string
+          status?: string
+          owner_id?: string | null
+          notes?: string | null
+          prospect_key?: string | null
+          lead?: Json | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_contacts: {
+        Row: {
+          id: string
+          team_id: string
+          client_id: string
+          name: string
+          role: string | null
+          phone: string | null
+          whatsapp: string | null
+          email: string | null
+          notes: string | null
+          is_primary: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          team_id?: string
+          client_id: string
+          name: string
+          role?: string | null
+          phone?: string | null
+          whatsapp?: string | null
+          email?: string | null
+          notes?: string | null
+          is_primary?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          client_id?: string
+          name?: string
+          role?: string | null
+          phone?: string | null
+          whatsapp?: string | null
+          email?: string | null
+          notes?: string | null
+          is_primary?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_opportunities: {
+        Row: {
+          id: string
+          team_id: string
+          pipeline_id: string
+          client_id: string
+          key: string | null
+          stage: string
+          offer: Json | null
+          brief: Json | null
+          build: Json | null
+          project_id: string | null
+          project_name: string | null
+          video: string | null
+          next_step: string | null
+          next_date: string | null
+          notes: string | null
+          search_id: string | null
+          region: string
+          owner_id: string | null
+          history: Json
+          closed_at: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          team_id?: string
+          pipeline_id: string
+          client_id: string
+          key?: string | null
+          stage?: string
+          offer?: Json | null
+          brief?: Json | null
+          build?: Json | null
+          project_id?: string | null
+          project_name?: string | null
+          video?: string | null
+          next_step?: string | null
+          next_date?: string | null
+          notes?: string | null
+          search_id?: string | null
+          region?: string
+          owner_id?: string | null
+          history?: Json
+          closed_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          pipeline_id?: string
+          client_id?: string
+          key?: string | null
+          stage?: string
+          offer?: Json | null
+          brief?: Json | null
+          build?: Json | null
+          project_id?: string | null
+          project_name?: string | null
+          video?: string | null
+          next_step?: string | null
+          next_date?: string | null
+          notes?: string | null
+          search_id?: string | null
+          region?: string
+          owner_id?: string | null
+          history?: Json
+          closed_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_activities: {
+        Row: {
+          id: string
+          team_id: string
+          client_id: string
+          opportunity_id: string | null
+          kind: string
+          body: string
+          data: Json
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          team_id?: string
+          client_id: string
+          opportunity_id?: string | null
+          kind?: string
+          body?: string
+          data?: Json
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          client_id?: string
+          opportunity_id?: string | null
+          kind?: string
+          body?: string
+          data?: Json
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       analytics_config: {
         Row: {
           connection_id: string
@@ -1953,6 +2301,13 @@ export type Database = {
       }
     }
     Functions: {
+      accept_crm_invite: { Args: { p_id: string }; Returns: string }
+      create_crm_team: { Args: { p_name: string }; Returns: string }
+      crm_team_people: {
+        Args: { p_team: string }
+        Returns: { user_id: string; email: string; role: string; joined_at: string }[]
+      }
+      get_crm_invite: { Args: { p_id: string }; Returns: Json }
       accept_space_invite: { Args: { p_id: string }; Returns: string }
       get_page_share: { Args: { p_id: string }; Returns: Json }
       get_space_invite: { Args: { p_id: string }; Returns: Json }

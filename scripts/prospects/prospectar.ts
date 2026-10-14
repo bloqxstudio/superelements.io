@@ -11,9 +11,10 @@
  *   npm run prospectar -- --fila          (empresas na fila da página, no funil)
  *
  * Salva a busca em data/prospeccao/<id>.json e a planilha ao lado (.csv) e a
- * envia para a nuvem, onde aparece na tela para a equipe toda. `--site` e
- * `--fila` usam o funil da nuvem, o mesmo da tela (precisam da
- * SUPABASE_SERVICE_ROLE_KEY no .env.local). Fonte padrão: Google Maps lido de graça
+ * envia para a pasta da equipe do CRM, onde aparece na tela para todos.
+ * `--site` e `--fila` usam o funil do CRM, o mesmo da tela `/crm` (precisam da
+ * SUPABASE_SERVICE_ROLE_KEY no .env.local; com mais de uma equipe, também
+ * PROSPECCAO_EQUIPE com o nome dela). Fonte padrão: Google Maps lido de graça
  * (`--fonte maps`); `--fonte osm` usa o mapa aberto e `--fonte google`, a API
  * paga com a GOOGLE_PLACES_API_KEY do .env. `--cobertura cidade` varre a cidade
  * inteira em pontos (minutos por nicho); o padrão é uma busca funda no centro
@@ -27,7 +28,7 @@ import { leadsToCsv } from '../../src/features/prospects/csv.ts'
 import { NICHES } from '../../src/features/prospects/niches.ts'
 import { PLATFORM_LABEL } from '../../src/features/prospects/score.ts'
 import type { ProspectSource } from '../../src/features/prospects/types.ts'
-import { hasCloud, putJson, shared } from './cloud.ts'
+import { hasCloud, putJson, teamPath } from './cloud.ts'
 import { leadFromSite, runSearch, saveSearch } from './engine.ts'
 import { addToFunnel, readFunnel } from './funnelStore.ts'
 
@@ -65,14 +66,14 @@ const main = async () => {
   // Um site indicado, fora das buscas: lê o site e põe na fila da página
   if (values.site) {
     const lead = await leadFromSite(values.site, { niche: values.nichos?.split(',')[0] ?? 'advogados', name: values.nome, region: values.regiao })
-    await addToFunnel([lead], { region: values.regiao ?? lead.city ?? '—', stage: 'selecionado' })
-    console.log(`${lead.name} (${lead.domain}) está na fila da página.\n  id ${lead.id}\n  nota ${lead.score} · ${lead.scan?.platform}${lead.scan?.elementorVersion ? ` · Elementor ${lead.scan.elementorVersion}` : ''}\n  ${lead.reasons.join(' · ')}`)
+    const [id] = await addToFunnel([lead], { region: values.regiao ?? lead.city ?? '—', stage: 'selecionado' })
+    console.log(`${lead.name} (${lead.domain}) está na fila da página.\n  id ${id}\n  nota ${lead.score} · ${lead.scan?.platform}${lead.scan?.elementorVersion ? ` · Elementor ${lead.scan.elementorVersion}` : ''}\n  ${lead.reasons.join(' · ')}`)
     return
   }
 
   // A fila da página: o que foi marcado no funil para ganhar uma versão nova no Space
   if (values.fila) {
-    const queue = (await readFunnel()).filter((o) => o.stage === 'selecionado')
+    const queue = await readFunnel('selecionado')
     if (!queue.length) console.log('A fila está vazia: marque empresas numa busca e use "Pôr na fila da página".')
     for (const o of queue) {
       const l = o.lead
@@ -134,7 +135,7 @@ const main = async () => {
     return
   }
   try {
-    await putJson(shared(`searches/${record.id}.json`), record)
+    await putJson(await teamPath(`searches/${record.id}.json`), record)
     console.log('Enviada para a equipe: aparece em /prospeccao.')
   } catch (error) {
     console.error(`Não deu para enviar a busca (${error instanceof Error ? error.message : error}). Envie com npm run prospectar:subir.`)

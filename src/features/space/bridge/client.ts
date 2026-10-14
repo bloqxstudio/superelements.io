@@ -3,7 +3,7 @@ import { loadApprovals, shareState, useApprovalStore } from '@/features/approval
 import { htmlHash, isLocalAppUrl, shareUrl, type PageShare } from '@/features/approval/shares'
 import { cancelInvite, createInvite, inviteUrl, listInvites, listPeople } from '@/features/projects/access'
 import { useProjectStore } from '@/features/projects/projectStore'
-import { getFunnel, updateOpportunity } from '@/features/prospects/api'
+import { findOpportunity, updateOpportunity } from '@/features/crm/opportunities'
 import { BRIEF_FIELDS, STAGE_LABEL, type OpportunityPatch, type SalesBrief } from '@/features/prospects/funnel'
 import { draftOffer } from '@/features/prospects/offer'
 import { useProjectSync } from '@/features/projects/useProjectSession'
@@ -699,7 +699,8 @@ async function brief(params: { context?: string }) {
 async function prospect(params: { id?: string; stage?: string; brief?: Partial<SalesBrief>; nextStep?: string; note?: string; projectName?: string }) {
   const id = params.id?.trim()
   if (!id) throw new Error('Diga o id da oportunidade')
-  const current = (await getFunnel()).find((o) => o.id === id)
+  // O id da oportunidade ou o da empresa na busca (pedidos feitos antes do CRM)
+  const current = await findOpportunity(id)
   if (!current) throw new Error(`A oportunidade ${id} não está no funil`)
   const patch: OpportunityPatch = {}
   if (params.stage !== undefined) {
@@ -717,7 +718,7 @@ async function prospect(params: { id?: string; stage?: string; brief?: Partial<S
   if (params.nextStep?.trim()) patch.nextStep = params.nextStep.trim()
   if (params.note?.trim()) patch.notes = [current.notes, params.note.trim()].filter(Boolean).join('\n\n')
   if (params.projectName?.trim() && !current.projectName) patch.projectName = params.projectName.trim()
-  const saved = Object.keys(patch).length ? await updateOpportunity(id, patch) : current
+  const saved = Object.keys(patch).length ? await updateOpportunity(current.id, patch) : current
   return { opportunity: { ...saved, lead: current.lead }, stageLabel: STAGE_LABEL[saved.stage], changed: Object.keys(patch) }
 }
 

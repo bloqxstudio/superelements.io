@@ -400,12 +400,15 @@ const Panel: React.FC<{
   const lead = item.lead
   const scan = lead.scan
   return (
-    <aside className="fixed inset-y-0 right-0 z-40 flex w-full max-w-xl flex-col border-l border-gray-200 bg-white shadow-[-12px_0_32px_-12px_rgb(0_0_0/0.18)] md:top-[57px]" aria-label={`Oportunidade: ${lead.name}`}>
+    <aside className="fixed inset-y-0 right-0 z-40 flex w-full max-w-xl flex-col border-l border-gray-200 bg-white shadow-[-12px_0_32px_-12px_rgb(0_0_0/0.18)]" aria-label={`Oportunidade: ${lead.name}`}>
       <header className="border-b border-gray-100 px-5 pt-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-gray-900">{lead.name}</h2>
             <p className="mt-0.5 text-xs text-gray-500">{[lead.niche, lead.address ?? item.region].filter(Boolean).join(' · ')}</p>
+            <Link to={`/crm/clientes/${item.clientId}`} className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-gray-700 underline-offset-2 hover:underline">
+              Ficha do cliente <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
           </div>
           <button type="button" onClick={onClose} aria-label="Fechar" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900">
             <X className="h-4 w-4" />
@@ -522,7 +525,7 @@ const Panel: React.FC<{
       <footer className="border-t border-gray-100 px-5 py-3">
         {confirm ? (
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs text-gray-600">Tirar do funil? A oferta e as notas se perdem.</p>
+            <p className="text-xs text-gray-600">Tirar do funil? A oferta e as notas desta oportunidade se perdem; o cliente continua no CRM.</p>
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={() => setConfirm(false)}>
                 Manter
@@ -591,10 +594,11 @@ const SettingsBar: React.FC<{ settings: FunnelSettings; onSave: (s: FunnelSettin
  * cartão vai de uma coluna para outra arrastando (ou pelo botão de avançar);
  * cada oportunidade tem a oferta com o valor e o roteiro de venda.
  */
-export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems }> = ({ items, onChange }) => {
+/** `initialOpen`: a oportunidade que já abre no painel (o link da ficha do cliente). */
+export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initialOpen?: string }> = ({ items, onChange, initialOpen }) => {
   const projectIds = useProjectIds()
   const [settings, setSettings] = useState<FunnelSettings>(DEFAULT_SETTINGS)
-  const [openId, setOpenId] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(initialOpen ?? null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [over, setOver] = useState<Stage | null>(null)
   const [region, setRegion] = useState('todas')
@@ -740,7 +744,7 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems }> = ({
       <div className="mt-6 flex flex-col items-center rounded-xl border border-dashed border-gray-300 px-6 py-16 text-center">
         <h2 className="text-sm font-semibold text-gray-900">O funil está vazio</h2>
         <p className="mt-1 max-w-md text-sm text-gray-500">
-          Abra uma busca, marque as empresas que interessam e use "Pôr no funil" ou "Pôr na fila da página". Elas aparecem aqui, uma coluna por etapa.
+          Cadastre um cliente com uma oportunidade, ou abra uma busca na Prospecção, marque as empresas que interessam e use "Pôr no funil" ou "Pôr na fila da página". Elas aparecem aqui, uma coluna por etapa.
         </p>
       </div>
     )
@@ -878,7 +882,7 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems }> = ({
           key={open.id}
           item={open}
           settings={settings}
-          projectId={open.projectName ? projectIds.get(open.projectName.trim().toLowerCase()) : undefined}
+          projectId={open.projectId ?? (open.projectName ? projectIds.get(open.projectName.trim().toLowerCase()) : undefined)}
           onClose={() => setOpenId(null)}
           onPatch={(change) => void patch(open.id, change)}
           onRemove={() => void remove(open.id)}

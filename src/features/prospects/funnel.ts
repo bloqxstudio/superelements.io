@@ -1,9 +1,10 @@
 import type { Lead } from './types.ts'
 
 /**
- * Funil de oportunidades: as empresas que saíram das buscas e estão sendo
- * trabalhadas, da escolha até o fechamento. Vale para a tela (`/prospeccao`,
- * aba Funil) e para o motor no Node (`scripts/prospects/funnelStore.ts`).
+ * Funil de oportunidades: as empresas que saíram das buscas (ou foram
+ * cadastradas no CRM) e estão sendo trabalhadas, da escolha até o fechamento.
+ * Fica nas tabelas do CRM (`src/features/crm/opportunities.ts`); vale para a
+ * tela (`/crm`) e para o terminal (`scripts/prospects/funnelStore.ts`).
  */
 
 export type Stage = 'mapeado' | 'selecionado' | 'pagina' | 'contatado' | 'conversa' | 'proposta' | 'fechado' | 'perdido'
@@ -29,9 +30,14 @@ export const nextStage = (stage: Stage): Stage | null => {
 }
 
 export interface Opportunity {
-  /** O mesmo id da empresa na busca (`google:…`, `osm:…`). */
+  /** Id da oportunidade no CRM (tabela `crm_opportunities`). */
   id: string
-  /** A empresa como estava na busca (contato, site, plataforma, nota). */
+  /** O cliente no CRM: a ficha com contatos e linha do tempo. */
+  clientId: string
+  pipelineId: string
+  /** Id da empresa na busca (`google:…`, `osm:…`), quando veio da Prospecção. */
+  key?: string
+  /** A empresa como estava na busca (contato, site, plataforma, nota), com o nome do cadastro. */
   lead: Lead
   searchId?: string
   /** Cidade da busca ("São Leopoldo, RS"). */
@@ -39,6 +45,7 @@ export interface Opportunity {
   stage: Stage
   /** Projeto do Space com a versão nova. */
   projectName?: string
+  projectId?: string
   /** Vídeo para o primeiro contato (caminho no computador ou link). */
   video?: string
   notes?: string
@@ -70,7 +77,7 @@ export interface PageBuild {
 }
 
 /** O que a tela pode mudar numa oportunidade. */
-export type OpportunityPatch = Partial<Pick<Opportunity, 'stage' | 'projectName' | 'video' | 'notes' | 'nextStep' | 'nextDate' | 'offer' | 'brief' | 'build'>>
+export type OpportunityPatch = Partial<Pick<Opportunity, 'stage' | 'projectName' | 'projectId' | 'video' | 'notes' | 'nextStep' | 'nextDate' | 'offer' | 'brief' | 'build'>>
 
 /**
  * O que vendemos é serviço, como agência: o site novo, cobrado uma vez, e um

@@ -18,6 +18,12 @@ import Skills from "@/pages/Skills";
 import WordPressCallback from "@/pages/WordPressCallback";
 import PageApproval from "@/pages/PageApproval";
 import ProjectInvite from "@/pages/ProjectInvite";
+import TeamInvite from "@/pages/TeamInvite";
+import CrmOpportunities from "@/pages/crm/Opportunities";
+import CrmClients from "@/pages/crm/Clients";
+import CrmClientDetail from "@/pages/crm/ClientDetail";
+import CrmTeam from "@/pages/crm/Team";
+import { CrmGate } from "@/features/crm/CrmGate";
 import MenuzitoModel from "@/pages/MenuzitoModel";
 import MenuzitoStyleGuide from "@/pages/MenuzitoStyleGuide";
 import UglyCashModel from "@/pages/UglyCashModel";
@@ -55,6 +61,8 @@ function App() {
               <Route path="/aprovar/:shareId" element={<PageApproval />} />
               {/* Convite para editar um projeto junto: mostra o convite antes do login */}
               <Route path="/convite/:inviteId" element={<ProjectInvite />} />
+              {/* Convite para a equipe do CRM: mostra o convite antes do login */}
+              <Route path="/equipe/convite/:inviteId" element={<TeamInvite />} />
               <Route path="/menuzito-modelo" element={<MenuzitoModel />} />
               <Route path="/menuzito-style-guide" element={<MenuzitoStyleGuide />} />
               <Route path="/uglycash-modelo" element={<UglyCashModel />} />
@@ -90,8 +98,13 @@ function App() {
                 <Route path="agentes" element={<Agents />} />
                 {/* As skills do chat dos agentes: padrão, da equipe e as suas */}
                 <Route path="skills" element={<Skills />} />
-                {/* Histórico e funil na nuvem; a varredura pesada continua no app local. */}
-                <Route path="prospeccao" element={<ProtectedRoute requireRole={['admin']}><Prospects /></ProtectedRoute>} />
+                {/* CRM da equipe: funil, clientes, equipe e convites; só para quem é de uma equipe */}
+                <Route path="crm" element={<CrmGate><CrmOpportunities /></CrmGate>} />
+                <Route path="crm/clientes" element={<CrmGate><CrmClients /></CrmGate>} />
+                <Route path="crm/clientes/:clientId" element={<CrmGate><CrmClientDetail /></CrmGate>} />
+                <Route path="crm/equipe" element={<CrmGate><CrmTeam /></CrmGate>} />
+                {/* Buscas da equipe na nuvem; a varredura pesada continua no app local. */}
+                <Route path="prospeccao" element={<CrmGate><Prospects /></CrmGate>} />
               </Route>
               {/* Projeto aberto em segundo plano para um agente (iframe escondido, só no dev) */}
               <Route path="/agente/:projectId" element={import.meta.hot ? <ProtectedRoute><AgentWorker /></ProtectedRoute> : <Navigate to="/" replace />} />

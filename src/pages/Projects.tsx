@@ -8,6 +8,7 @@ import { ProjectCard } from '@/features/projects/ProjectCard'
 import { ProjectDialog } from '@/features/projects/ProjectDialog'
 import { browserProjects, moveBrowserProjects } from '@/features/projects/browserImport'
 import { pendingInvite } from '@/features/projects/access'
+import { pendingTeamInvite } from '@/features/crm/teams'
 import { reloadProjects, useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import type { Project } from '@/features/projects/types'
 
@@ -64,10 +65,12 @@ const Projects: React.FC = () => {
   const [deleting, setDeleting] = useState<Project | null>(null)
   const [leaving, setLeaving] = useState<Project | null>(null)
 
-  // Entrou (ou criou a conta) pelo link de um convite: volta para ele
+  // Entrou (ou criou a conta) pelo link de um convite, de projeto ou da equipe do CRM: volta para ele
   useEffect(() => {
     const invite = pendingInvite()
-    if (invite) navigate(`/convite/${invite}`, { replace: true })
+    if (invite) return navigate(`/convite/${invite}`, { replace: true })
+    const team = pendingTeamInvite()
+    if (team) navigate(`/equipe/convite/${team}`, { replace: true })
   }, [navigate])
 
   const sorted = useMemo(() => [...projects].sort((a, b) => b.updatedAt - a.updatedAt), [projects])
