@@ -52,6 +52,7 @@ interface OpportunityRow {
   notes: string | null
   search_id: string | null
   region: string
+  owner_id: string | null
   history: Json
   created_at: string
   updated_at: string
@@ -123,6 +124,7 @@ export const toOpportunity = (row: OpportunityRow): Opportunity => ({
   offer: or(row.offer) as unknown as Opportunity['offer'],
   brief: or(row.brief) as unknown as Opportunity['brief'],
   build: or(row.build) as unknown as Opportunity['build'],
+  ownerId: or(row.owner_id),
   history: (Array.isArray(row.history) ? row.history : []) as unknown as Opportunity['history'],
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -179,6 +181,7 @@ const columnsOf = (patch: OpportunityPatch) => {
   if ('offer' in patch) row.offer = patch.offer ?? null
   if ('brief' in patch) row.brief = patch.brief ?? null
   if ('build' in patch) row.build = patch.build ?? null
+  if ('ownerId' in patch) row.owner_id = patch.ownerId ?? null
   return row
 }
 

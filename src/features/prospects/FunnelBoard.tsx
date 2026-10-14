@@ -1,9 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, Copy, ExternalLink, Loader2, MapPin, MessageCircle, Play, RotateCcw, Trash2, X } from 'lucide-react'
+import { ArrowRight, Copy, ExternalLink, Loader2, MapPin, MessageCircle, MessageSquare, Play, RotateCcw, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { useAuth } from '@/contexts/AuthContext'
+import { useComments, type OpportunityComment } from '@/features/crm/comments'
+import { useCrm } from '@/features/crm/crmStore'
+import { OpportunityComments } from '@/features/crm/OpportunityComments'
+import { nameOf, personLabel, useTeamPeople } from '@/features/crm/people'
+import type { TeamPerson, TeamRole } from '@/features/crm/types'
+import { Avatar } from '@/features/crm/ui'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { ConnectorPrompt } from '@/features/space/chat/ConnectorPrompt'
 import { useChat } from '@/features/space/chat/chatStore'
@@ -189,6 +196,9 @@ const AgentStrip: React.FC = () => {
 const Card: React.FC<{
   item: Opportunity
   value: number
+  /** Quem da equipe está com o cliente. */
+  owner?: { id: string; name: string }
+  comments: number
   active: boolean
   dragging: boolean
   /** Só na "Fila da página": a criação da página pela IA. */
@@ -196,7 +206,7 @@ const Card: React.FC<{
   onOpen: () => void
   onAdvance: (stage: Stage) => void
   onDrag: (id: string | null) => void
-}> = ({ item, value, active, dragging, build, onOpen, onAdvance, onDrag }) => {
+}> = ({ item, value, owner, comments, active, dragging, build, onOpen, onAdvance, onDrag }) => {
   const lead = item.lead
   const next = nextStage(item.stage)
   const wa = whatsappOf(item)
@@ -227,7 +237,15 @@ const Card: React.FC<{
             {lead.name}
           </button>
         </h3>
-        <span className="shrink-0 rounded bg-gray-100 px-1.5 text-xs font-semibold tabular-nums text-gray-700">{lead.score}</span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {owner && (
+            <span title={`Com ${owner.name}`}>
+              <Avatar id={owner.id} name={owner.name} />
+              <span className="sr-only">Com {owner.name}</span>
+            </span>
+          )}
+          <span className="rounded bg-gray-100 px-1.5 text-xs font-semibold tabular-nums text-gray-700">{lead.score}</span>
+        </div>
       </div>
       <p className="mt-0.5 truncate text-xs text-gray-500">{lead.niche}</p>
       <p className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-gray-700" title={lead.address ?? cityOf(item)}>
@@ -248,7 +266,7 @@ const Card: React.FC<{
         </p>
       )}
       {build && <BuildBar item={item} {...build} />}
-      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
+      <div className="mt-2.5 flex items-center gap-2 border-t border-gray-100 pt-2">
         {wa ? (
           <a href={`https://wa.me/55${digits(wa)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900" aria-label={`WhatsApp de ${lead.name}`}>
             <MessageCircle className="h-3.5 w-3.5" aria-hidden /> WhatsApp
@@ -256,8 +274,15 @@ const Card: React.FC<{
         ) : (
           <span className="text-xs text-gray-400">Sem WhatsApp</span>
         )}
+        {comments > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs tabular-nums text-gray-500" title={plural(comments, 'comentário', 'comentários')}>
+            <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+            {comments}
+            <span className="sr-only"> {comments === 1 ? 'comentário' : 'comentários'}</span>
+          </span>
+        )}
         {next && (
-          <button type="button" onClick={() => onAdvance(next)} className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900">
+          <button type="button" onClick={() => onAdvance(next)} className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900">
             {STAGE_LABEL[next]} <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </button>
         )}
@@ -387,15 +412,50 @@ const BriefSection: React.FC<{ item: Opportunity; onPatch: (patch: OpportunityPa
 
 // ---------------------------------------------------------------- painel
 
+/** Quem está com o cliente: as pessoas da equipe, e "Assumir" quando ninguém está. */
+const OwnerPicker: React.FC<{ ownerId?: string; people?: TeamPerson[]; onAssign: (ownerId: string | undefined) => void }> = ({ ownerId, people, onAssign }) => {
+  const { user } = useAuth()
+  const name = nameOf(people, ownerId)
+  const outside = Boolean(ownerId && people && !name)
+  const meInTeam = Boolean(user && people?.some((p) => p.userId === user.id))
+  return (
+    <div className="flex items-center gap-2">
+      <Avatar id={ownerId} name={name} size="md" />
+      <select aria-label="Responsável" className={cn(FIELD, 'h-9 w-auto max-w-[13rem]')} value={ownerId ?? ''} onChange={(e) => onAssign(e.target.value || undefined)} disabled={!people}>
+        <option value="">Sem responsável</option>
+        {people?.map((p) => (
+          <option key={p.userId} value={p.userId}>
+            {personLabel(p.email)}
+            {p.userId === user?.id ? ' (eu)' : ''}
+          </option>
+        ))}
+        {outside && <option value={ownerId}>Fora da equipe</option>}
+      </select>
+      {!ownerId && meInTeam && (
+        <button type="button" onClick={() => onAssign(user!.id)} className="text-xs font-medium text-gray-700 underline-offset-2 hover:text-gray-900 hover:underline">
+          Assumir
+        </button>
+      )}
+    </div>
+  )
+}
+
 const Panel: React.FC<{
   item: Opportunity
   settings: FunnelSettings
   projectId?: string
+  people?: TeamPerson[]
+  role?: TeamRole
+  /** Os comentários deste cartão; null enquanto lê. */
+  comments: OpportunityComment[] | null
   onClose: () => void
   onPatch: (patch: OpportunityPatch) => void
+  onAssign: (ownerId: string | undefined) => void
+  onCommentSaved: (comment: OpportunityComment) => void
+  onCommentDeleted: (id: string) => void
   onRemove: () => void
-}> = ({ item, settings, projectId, onClose, onPatch, onRemove }) => {
-  const [tab, setTab] = useState<'venda' | 'empresa'>('venda')
+}> = ({ item, settings, projectId, people, role, comments, onClose, onPatch, onAssign, onCommentSaved, onCommentDeleted, onRemove }) => {
+  const [tab, setTab] = useState<'venda' | 'empresa' | 'comentarios'>('venda')
   const [confirm, setConfirm] = useState(false)
   const lead = item.lead
   const scan = lead.scan
@@ -414,7 +474,7 @@ const Panel: React.FC<{
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="mt-3 flex items-center gap-3">
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
           <select aria-label="Etapa" className={cn(FIELD, 'h-9 w-auto')} value={item.stage} onChange={(e) => onPatch({ stage: e.target.value as Stage })}>
             {STAGES.map((s) => (
               <option key={s.id} value={s.id}>
@@ -423,12 +483,16 @@ const Panel: React.FC<{
             ))}
           </select>
           <span className="text-sm font-semibold tabular-nums text-gray-900">{money(valueOf(item, settings).total)}</span>
+          <div className="ml-auto">
+            <OwnerPicker ownerId={item.ownerId} people={people} onAssign={onAssign} />
+          </div>
         </div>
         <div className="mt-3 flex gap-1" role="tablist">
           {(
             [
               ['venda', 'Oferta e roteiro'],
               ['empresa', 'Empresa e acompanhamento'],
+              ['comentarios', comments?.length ? `Comentários (${comments.length})` : 'Comentários'],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -445,6 +509,9 @@ const Panel: React.FC<{
         </div>
       </header>
 
+      {tab === 'comentarios' ? (
+        <OpportunityComments opportunity={item} comments={comments} people={people} role={role} onSaved={onCommentSaved} onDeleted={onCommentDeleted} />
+      ) : (
       <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
         {tab === 'venda' ? (
           <>
@@ -521,6 +588,7 @@ const Panel: React.FC<{
           </>
         )}
       </div>
+      )}
 
       <footer className="border-t border-gray-100 px-5 py-3">
         {confirm ? (
@@ -602,12 +670,24 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
   const [dragId, setDragId] = useState<string | null>(null)
   const [over, setOver] = useState<Stage | null>(null)
   const [region, setRegion] = useState('todas')
+  const [owner, setOwner] = useState<'todos' | 'meus' | 'ninguem' | string>('todos')
   const [niche, setNiche] = useState('todos')
   const [text, setText] = useState('')
 
   useEffect(() => {
     getFunnelSettings().then(setSettings).catch(() => {})
   }, [])
+
+  // Quem atende cada cliente e os comentários dos cartões, da equipe aberta
+  const { user } = useAuth()
+  const team = useCrm((s) => s.team)
+  const people = useTeamPeople(team?.id)
+  const { comments, put: putComment, drop: dropComment } = useComments(team?.id)
+  const commentsOf = useMemo(() => {
+    const map = new Map<string, OpportunityComment[]>()
+    for (const c of comments ?? []) map.set(c.opportunityId, [...(map.get(c.opportunityId) ?? []), c])
+    return map
+  }, [comments])
 
   const saveSettings = async (next: FunnelSettings) => {
     setSettings(next)
@@ -624,9 +704,10 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
     const query = text.trim().toLowerCase()
     return items
       .filter((o) => (region === 'todas' || o.region === region) && (niche === 'todos' || o.lead.niche === niche))
+      .filter((o) => owner === 'todos' || (owner === 'ninguem' ? !o.ownerId : o.ownerId === (owner === 'meus' ? user?.id : owner)))
       .filter((o) => !query || [o.lead.name, o.lead.domain, o.projectName, o.notes].some((v) => v?.toLowerCase().includes(query)))
       .sort((a, b) => b.lead.score - a.lead.score || a.lead.name.localeCompare(b.lead.name, 'pt-BR'))
-  }, [items, region, niche, text])
+  }, [items, region, niche, owner, user, text])
 
   /** Grava no servidor e mantém a empresa como a tela já tinha (com a nota pela regra atual). */
   const patch = async (id: string, change: OpportunityPatch) => {
@@ -652,6 +733,20 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
     } catch (e) {
       onChange((prev) => prev.map((o) => (o.id === id ? current : o)))
       toast.error('Não deu para mover', { description: e instanceof Error ? e.message : undefined })
+    }
+  }
+
+  /** Troca quem está com o cliente na hora e confirma no servidor; se falhar, volta. */
+  const assign = async (id: string, ownerId: string | undefined) => {
+    const current = items.find((o) => o.id === id)
+    if (!current || current.ownerId === ownerId) return
+    onChange((prev) => prev.map((o) => (o.id === id ? { ...o, ownerId } : o)))
+    try {
+      const updated = await updateOpportunity(id, { ownerId })
+      onChange((prev) => prev.map((o) => (o.id === id ? { ...updated, lead: o.lead } : o)))
+    } catch (e) {
+      onChange((prev) => prev.map((o) => (o.id === id ? { ...o, ownerId: current.ownerId } : o)))
+      toast.error('Não deu para trocar o responsável', { description: e instanceof Error ? e.message : undefined })
     }
   }
 
@@ -788,6 +883,18 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
               ))}
             </select>
           )}
+          {people && people.length > 1 && (
+            <select value={owner} onChange={(e) => setOwner(e.target.value)} aria-label="Responsável" className={cn(FIELD, 'h-9 w-auto')}>
+              <option value="todos">Todos os responsáveis</option>
+              <option value="meus">Comigo</option>
+              <option value="ninguem">Sem responsável</option>
+              {people.map((p) => (
+                <option key={p.userId} value={p.userId}>
+                  {personLabel(p.email)}
+                </option>
+              ))}
+            </select>
+          )}
           {niches.length > 1 && (
             <select value={niche} onChange={(e) => setNiche(e.target.value)} aria-label="Nicho" className={cn(FIELD, 'h-9 w-auto')}>
               <option value="todos">Todos os nichos</option>
@@ -849,6 +956,8 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
                       key={item.id}
                       item={item}
                       value={valueOf(item, settings).total}
+                      owner={item.ownerId && people ? { id: item.ownerId, name: nameOf(people, item.ownerId) ?? 'Fora da equipe' } : undefined}
+                      comments={commentsOf.get(item.id)?.length ?? 0}
                       active={item.id === openId}
                       dragging={item.id === dragId}
                       build={
@@ -883,8 +992,14 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
           item={open}
           settings={settings}
           projectId={open.projectId ?? (open.projectName ? projectIds.get(open.projectName.trim().toLowerCase()) : undefined)}
+          people={people}
+          role={team?.role}
+          comments={comments === null ? null : (commentsOf.get(open.id) ?? [])}
           onClose={() => setOpenId(null)}
           onPatch={(change) => void patch(open.id, change)}
+          onAssign={(ownerId) => void assign(open.id, ownerId)}
+          onCommentSaved={putComment}
+          onCommentDeleted={dropComment}
           onRemove={() => void remove(open.id)}
         />
       )}

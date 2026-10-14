@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { initialsOf } from './people'
 
 /** Peças das telas do CRM, no desenho das telas da conta (Prospecção, Agentes). */
 
@@ -96,6 +97,39 @@ export const Surface: React.FC<{ title?: string; action?: React.ReactNode; class
     )}
     {children}
   </section>
+)
+
+const AVATAR_TONES = [
+  'bg-sky-100 text-sky-800',
+  'bg-emerald-100 text-emerald-800',
+  'bg-amber-100 text-amber-800',
+  'bg-violet-100 text-violet-800',
+  'bg-rose-100 text-rose-800',
+  'bg-teal-100 text-teal-800',
+  'bg-orange-100 text-orange-800',
+  'bg-indigo-100 text-indigo-800',
+]
+
+/** A cor de cada pessoa, sempre a mesma (sai do id da conta). */
+const toneOf = (id: string) => {
+  let hash = 0
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) | 0
+  return AVATAR_TONES[Math.abs(hash) % AVATAR_TONES.length]
+}
+
+/** Iniciais da pessoa num círculo com a cor dela. `name` vazio: ninguém (tracejado). */
+export const Avatar: React.FC<{ id?: string; name?: string; size?: 'sm' | 'md'; className?: string }> = ({ id, name, size = 'sm', className }) => (
+  <span
+    className={cn(
+      'inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold',
+      size === 'sm' ? 'h-5 w-5 text-[9px]' : 'h-7 w-7 text-[11px]',
+      id && name ? toneOf(id) : 'border border-dashed border-gray-300 text-gray-400',
+      className
+    )}
+    aria-hidden
+  >
+    {id && name ? initialsOf(name) : ''}
+  </span>
 )
 
 const STATUS_TONE: Record<string, string> = {

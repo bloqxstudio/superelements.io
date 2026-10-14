@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { addActivity, deleteActivity, deleteClient, deleteContact, getClient, listActivities, listContacts, saveContact, updateClient } from '@/features/crm/clients'
 import { useCrm } from '@/features/crm/crmStore'
 import { createOpportunity, leadForClient, listClientOpportunities, updateOpportunity } from '@/features/crm/opportunities'
-import { listPeople } from '@/features/crm/teams'
+import { nameOf, personLabel, useTeamPeople } from '@/features/crm/people'
 import {
   NOTE_KINDS,
   SOURCES,
@@ -20,11 +20,11 @@ import {
   type ClientPatch,
   type Contact,
   type ContactDraft,
+  type TeamPerson,
 } from '@/features/crm/types'
 import { AutoField, FIELD, Page, StatusBadge, Surface, dayLabel, instagramUrl, siteUrl, whatsappUrl, whenLabel } from '@/features/crm/ui'
 import { DEFAULT_SETTINGS, STAGE_LABEL, STAGES, money, valueOf, type Opportunity, type Stage } from '@/features/prospects/funnel'
 import { PlatformBadge, ScorePill } from '@/features/prospects/ui'
-import { personName } from '@/features/projects/access'
 import { cn } from '@/lib/utils'
 
 type Load = { state: 'loading' } | { state: 'missing' } | { state: 'error' } | { state: 'ready'; client: Client }
@@ -173,7 +173,13 @@ const Contacts: React.FC<{ clientId: string }> = ({ clientId }) => {
 
 // ---------------------------------------------------------------- oportunidades
 
-const Opportunities: React.FC<{ client: Client; list: Opportunity[]; onChange: (list: Opportunity[]) => void; onActivity: () => void }> = ({ client, list, onChange, onActivity }) => {
+const Opportunities: React.FC<{ client: Client; list: Opportunity[]; people?: TeamPerson[]; onChange: (list: Opportunity[]) => void; onActivity: () => void }> = ({
+  client,
+  list,
+  people,
+  onChange,
+  onActivity,
+}) => {
   const pipeline = useCrm((s) => s.pipeline)
   const settings = { ...DEFAULT_SETTINGS, ...pipeline?.settings }
   const [creating, setCreating] = useState(false)
@@ -187,6 +193,17 @@ const Opportunities: React.FC<{ client: Client; list: Opportunity[]; onChange: (
     } catch (error) {
       onChange(list)
       toast.error('Não foi possível mudar a etapa', { description: error instanceof Error ? error.message : undefined })
+    }
+  }
+
+  const assign = async (o: Opportunity, ownerId: string | undefined) => {
+    onChange(list.map((x) => (x.id === o.id ? { ...x, ownerId } : x)))
+    try {
+      const saved = await updateOpportunity(o.id, { ownerId })
+      onChange(list.map((x) => (x.id === o.id ? saved : x)))
+    } catch (error) {
+      onChange(list)
+      toast.error('Não foi possível trocar o responsável', { description: error instanceof Error ? error.message : undefined })
     }
   }
 
@@ -229,6 +246,15 @@ const Opportunities: React.FC<{ client: Client; list: Opportunity[]; onChange: (
                     ))}
                   </select>
                   <span className="text-sm font-semibold tabular-nums text-gray-900">{money(valueOf(o, settings).total)}</span>
+                  <select aria-label="Responsável" value={o.ownerId ?? ''} onChange={(e) => void assign(o, e.target.value || undefined)} disabled={!people} className={cn(FIELD, 'h-8 w-auto max-w-[11rem]')}>
+                    <option value="">Sem responsável</option>
+                    {people?.map((p) => (
+                      <option key={p.userId} value={p.userId}>
+                        {personLabel(p.email)}
+                      </option>
+                    ))}
+                    {o.ownerId && people && !nameOf(people, o.ownerId) && <option value={o.ownerId}>Fora da equipe</option>}
+                  </select>
                   <Link to={`/crm?oportunidade=${o.id}`} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-gray-700 hover:underline">
                     Abrir no funil <ArrowRight className="h-3.5 w-3.5" aria-hidden />
                   </Link>
@@ -258,11 +284,10 @@ const Opportunities: React.FC<{ client: Client; list: Opportunity[]; onChange: (
 
 const KIND_LABEL: Record<Activity['kind'], string> = { note: 'Nota', call: 'Ligação', whatsapp: 'WhatsApp', email: 'E-mail', meeting: 'Reunião', stage: 'Etapa', created: 'No funil' }
 
-const Timeline: React.FC<{ clientId: string; version: number }> = ({ clientId, version }) => {
+const Timeline: React.FC<{ clientId: string; version: number; people?: TeamPerson[] }> = ({ clientId, version, people }) => {
   const { user } = useAuth()
   const team = useCrm((s) => s.team)
   const [list, setList] = useState<Activity[] | null>(null)
-  const [people, setPeople] = useState<Map<string, string>>(new Map())
   const [kind, setKind] = useState<(typeof NOTE_KINDS)[number]['id']>('note')
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
@@ -270,10 +295,6 @@ const Timeline: React.FC<{ clientId: string; version: number }> = ({ clientId, v
   useEffect(() => {
     listActivities(clientId).then(setList).catch(() => setList([]))
   }, [clientId, version])
-
-  useEffect(() => {
-    if (team) listPeople(team.id).then((list) => setPeople(new Map(list.map((p) => [p.userId, personName(p.email)])))).catch(() => {})
-  }, [team])
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -351,10 +372,11 @@ const Timeline: React.FC<{ clientId: string; version: number }> = ({ clientId, v
                 <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', auto ? 'bg-gray-300' : 'bg-gray-900')} aria-hidden />
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] text-gray-500">
-                    <span className="font-medium text-gray-700">{KIND_LABEL[a.kind]}</span>
+                    {/* As notas presas a uma oportunidade são os comentários do cartão no funil */}
+                    <span className="font-medium text-gray-700">{a.kind === 'note' && a.opportunityId ? 'Comentário no cartão' : KIND_LABEL[a.kind]}</span>
                     {' · '}
                     {whenLabel(a.createdAt)}
-                    {a.createdBy && people.get(a.createdBy) && ` · ${people.get(a.createdBy)}`}
+                    {nameOf(people, a.createdBy) && ` · ${nameOf(people, a.createdBy)}`}
                   </p>
                   <p className={cn('mt-0.5 whitespace-pre-wrap text-sm', auto ? 'text-gray-600' : 'text-gray-900')}>{describe(a)}</p>
                 </div>
@@ -383,6 +405,7 @@ const ClientDetail: React.FC = () => {
   const { clientId = '' } = useParams()
   const navigate = useNavigate()
   const team = useCrm((s) => s.team)
+  const people = useTeamPeople(team?.id)
   const [load, setLoad] = useState<Load>({ state: 'loading' })
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [version, setVersion] = useState(0)
@@ -563,8 +586,8 @@ const ClientDetail: React.FC = () => {
         </div>
 
         <div className="grid content-start gap-4">
-          <Opportunities client={client} list={opportunities} onChange={setOpportunities} onActivity={() => setVersion((n) => n + 1)} />
-          <Timeline clientId={client.id} version={version} />
+          <Opportunities client={client} list={opportunities} people={people} onChange={setOpportunities} onActivity={() => setVersion((n) => n + 1)} />
+          <Timeline clientId={client.id} version={version} people={people} />
           <p className="text-xs text-gray-400">
             No CRM desde {dayLabel(client.createdAt)}
             {client.prospectKey?.startsWith('google:') && ' · veio da Prospecção'}

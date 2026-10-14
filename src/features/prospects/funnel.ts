@@ -58,6 +58,8 @@ export interface Opportunity {
   brief?: SalesBrief
   /** A página que a IA conectada está criando (ou criou) pelo botão da fila. */
   build?: PageBuild
+  /** Quem da equipe está atendendo este cliente (id da conta). */
+  ownerId?: string
   history: { at: string; stage: Stage }[]
   createdAt: string
   updatedAt: string
@@ -77,7 +79,7 @@ export interface PageBuild {
 }
 
 /** O que a tela pode mudar numa oportunidade. */
-export type OpportunityPatch = Partial<Pick<Opportunity, 'stage' | 'projectName' | 'projectId' | 'video' | 'notes' | 'nextStep' | 'nextDate' | 'offer' | 'brief' | 'build'>>
+export type OpportunityPatch = Partial<Pick<Opportunity, 'stage' | 'projectName' | 'projectId' | 'video' | 'notes' | 'nextStep' | 'nextDate' | 'offer' | 'brief' | 'build' | 'ownerId'>>
 
 /**
  * O que vendemos é serviço, como agência: o site novo, cobrado uma vez, e um
