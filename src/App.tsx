@@ -24,6 +24,7 @@ import CrmClients from "@/pages/crm/Clients";
 import CrmClientDetail from "@/pages/crm/ClientDetail";
 import CrmTeam from "@/pages/crm/Team";
 import CrmSocial from "@/pages/crm/Social";
+import CrmDiagnosis from "@/pages/crm/Diagnosis";
 import { CrmGate } from "@/features/crm/CrmGate";
 import MenuzitoModel from "@/pages/MenuzitoModel";
 import MenuzitoStyleGuide from "@/pages/MenuzitoStyleGuide";
@@ -106,6 +107,7 @@ function App() {
                 <Route path="crm/equipe" element={<CrmGate><CrmTeam /></CrmGate>} />
                 {/* Social selling: a fila do dia nas redes; quem segue e envia é a pessoa */}
                 <Route path="crm/social" element={<CrmGate><CrmSocial /></CrmGate>} />
+                <Route path="crm/diagnostico" element={<CrmGate><CrmDiagnosis /></CrmGate>} />
                 {/* Buscas da equipe na nuvem; a varredura pesada continua no app local. */}
                 <Route path="prospeccao" element={<CrmGate><Prospects /></CrmGate>} />
               </Route>

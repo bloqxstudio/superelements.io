@@ -10,7 +10,8 @@ import {
 } from '@/features/crm/opportunities'
 import type { FunnelSettings, Opportunity, OpportunityPatch, Stage } from './funnel.ts'
 import { scoreLead } from './score.ts'
-import type { Lead, SearchEvent, SearchInput, SearchRecord, SearchSummary } from './types.ts'
+import type { CopyInput, CopyReading, PhoneCapture } from './demand.ts'
+import type { Lead, SearchEvent, SearchInput, SearchRecord, SearchSummary, SiteDiagnosis } from './types.ts'
 
 /**
  * A Prospecção da equipe do CRM. O funil são as oportunidades do CRM
@@ -150,6 +151,53 @@ export const removeOpportunity = (id: string) => removeCrmOpportunity(id)
 export const getFunnelSettings = (): Promise<FunnelSettings> => getPipelineSettings()
 
 export const saveFunnelSettings = (settings: FunnelSettings) => savePipelineSettings(settings)
+
+/** A função `site-diagnostico` ainda não está publicada no Supabase (o deploy é de quem cuida do projeto). */
+export class DiagnosisUnavailable extends Error {}
+
+/**
+ * O diagnóstico de um site (`/crm/diagnostico`): no servidor de dev, pelo
+ * motor local; no app publicado, pela função `site-diagnostico` do Supabase.
+ * As duas rodam o mesmo código (`supabase/functions/_shared/siteScan.ts`).
+ */
+export const diagnoseSite = async (url: string, signal?: AbortSignal): Promise<SiteDiagnosis> => {
+  if (local) {
+    const response = await fetch(`${BASE}/diagnostico`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url }), signal })
+    return json<SiteDiagnosis>(response)
+  }
+  let result: { data: SiteDiagnosis | { error: string } | null; error: unknown }
+  try {
+    result = await supabase.functions.invoke<SiteDiagnosis | { error: string }>('site-diagnostico', { body: { url } })
+  } catch {
+    throw new DiagnosisUnavailable('A função do diagnóstico não respondeu.')
+  }
+  const { data, error } = result
+  if (signal?.aborted) throw new DOMException('Parou', 'AbortError')
+  if (data && 'scan' in data) return data
+  // Erro da função: a mensagem vem no corpo da resposta; sem resposta (ou 404), a função não está publicada
+  const context = (error as { context?: unknown } | null)?.context
+  const response = context instanceof Response ? context : undefined
+  const message = response ? await response.json().then((body: { error?: unknown }) => body?.error, () => undefined) : data && 'error' in data ? data.error : undefined
+  if (response?.status === 401) throw new Error('A sessão expirou: entre de novo na conta.')
+  if (typeof message === 'string' && response?.status !== 404) throw new Error(message)
+  throw new DiagnosisUnavailable(response && response.status !== 404 ? `A função site-diagnostico respondeu com erro ${response.status}.` : 'A função site-diagnostico não está publicada no Supabase.')
+}
+
+/**
+ * A foto do celular e a leitura do texto rodam nesta máquina: o Edge headless
+ * e o Claude Code instalados aqui (`scripts/prospects/phone.ts` e
+ * `copyReader.ts`). Só no app aberto pelo servidor de dev.
+ */
+export const canReadPhone = local
+
+const postLocal = async <T,>(path: string, body: unknown, signal?: AbortSignal): Promise<T> => {
+  if (!local) throw new DiagnosisUnavailable('A foto do celular e a leitura do texto rodam no app local (servidor de dev) por enquanto.')
+  return json<T>(await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal }))
+}
+
+export const capturePhone = (url: string, signal?: AbortSignal) => postLocal<PhoneCapture>('/diagnostico/celular', { url }, signal)
+
+export const readCopy = (input: CopyInput & { image?: string }, signal?: AbortSignal) => postLocal<CopyReading>('/diagnostico/texto', input, signal)
 
 /** Roda a busca local e entrega cada evento assim que chega (uma linha de JSON por evento). */
 export const startSearch = async (input: SearchInput, onEvent: (event: SearchEvent) => void, signal?: AbortSignal) => {

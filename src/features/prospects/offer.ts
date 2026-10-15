@@ -26,6 +26,9 @@ const COUNCILS: Record<string, string> = {
   Veterinários: 'do CFMV',
 }
 
+/** As regras de publicidade do conselho da profissão ("da OAB (Provimento 205/2021)"), quando há. */
+export const councilFor = (niche: string | undefined) => (niche ? COUNCILS[niche] : undefined)
+
 /**
  * O nome como se fala com a pessoa: sem o slogan que o Google Maps junta
  * ("Fulano Advogados | Advogado Imobiliário") e sem tudo em maiúsculas.
@@ -41,25 +44,32 @@ export const displayName = (name: string) => {
     .join(' ')
 }
 
-/** Problemas do site atual, em frases para o dono (sem jargão). */
+/**
+ * Problemas do site atual, em frases para o dono (sem jargão), do que mais
+ * perde contato ao que menos. Versão do WordPress, do Elementor ou do PHP não
+ * entra: o dono não liga, e não é por isso que ele compra (o usuário,
+ * 2026-10-14: "se a versão 3 funcionar muito bem, por que eu vou atualizar?").
+ * O cliente ideal está em `brands/avence-studio/CLIENTE-IDEAL.md`.
+ */
 const problemsOf = (lead: Lead) => {
   const scan = lead.scan
   const list: string[] = []
   if (!scan) return list
+  const opened = Boolean(scan.status && scan.status < 400)
   if (scan.platform === 'fora-do-ar') list.push(`o site está fora do ar${scan.error ? ` (${scan.error})` : ''}`)
-  const old = lead.reasons.filter((r) => /desatualizado/.test(r))
-  if (old.length) list.push(`o site roda em versões antigas (${old.map((r) => r.replace(' desatualizado', '')).join(' e ')})`)
-  if (scan.status && scan.status < 400 && !scan.https) list.push('o navegador mostra "não seguro" para quem abre o site')
-  if (scan.error && scan.status && scan.status < 400) list.push(scan.error)
-  if (scan.status && scan.status < 400 && !scan.viewport && scan.platform !== 'sem-site') list.push('o site não se adapta ao celular')
-  if (scan.ms > 4000) list.push(`o site demora ${(scan.ms / 1000).toFixed(1).replace('.', ',')} s para responder`)
+  if (opened && !scan.viewport && scan.platform !== 'sem-site') list.push('o site não se adapta ao celular, e é pelo celular que chega quase todo mundo')
+  if (opened && !scan.whatsapp && scan.platform !== 'sem-site') list.push('quem chega pelo celular não acha um botão de WhatsApp na página inicial')
+  if (scan.ms > 4000) list.push(`o site demora ${(scan.ms / 1000).toFixed(1).replace('.', ',')} s só para começar a abrir`)
+  if (opened && !scan.https) list.push('o navegador mostra "não seguro" para quem abre o site')
+  if (scan.error && opened) list.push(scan.error)
   if (scan.copyrightYear && scan.copyrightYear <= new Date().getFullYear() - 2) list.push(`o rodapé ainda diz ${scan.copyrightYear}`)
   if (scan.platform === 'sem-site') list.push(scan.builder ? `não tem site próprio, só ${scan.builder}` : 'não tem site próprio')
   if (scan.platform === 'construtor') list.push(`o site está no ${scan.builder ?? 'construtor'}, que limita o que dá para fazer`)
   return list
 }
 
-export const draftOffer = (lead: Lead): { offer: Offer; brief: SalesBrief } => {
+/** `observation`: a frase do problema na primeira mensagem, quando o diagnóstico de captação achou uma melhor (`pitchOf`). */
+export const draftOffer = (lead: Lead, options: { observation?: string } = {}): { offer: Offer; brief: SalesBrief } => {
   const scan = lead.scan
   const onWordPress = scan?.platform === 'wp-elementor' || scan?.platform === 'wordpress'
   const council = COUNCILS[lead.niche]
@@ -68,12 +78,15 @@ export const draftOffer = (lead: Lead): { offer: Offer; brief: SalesBrief } => {
   const praise = lead.reviews && lead.reviews >= 30 && lead.rating ? `nota ${lead.rating.toFixed(1).replace('.', ',')} com ${lead.reviews} avaliações no Google` : null
   const who = displayName(lead.name)
 
+  // Vendemos contato, não tecnologia: o site existe para gerar demanda
   const service = onWordPress
-    ? `Redesign do site de ${who}, feito por nós no mesmo WordPress que eles já têm e entregue pronto.`
-    : `Site novo para ${who} em WordPress, feito por nós e entregue pronto, no lugar de ${scan?.platform === 'sem-site' ? 'só o perfil em rede social' : (scan?.builder ?? 'o site atual')}.`
+    ? `Página inicial nova para ${who}, feita para transformar quem chega (do anúncio ou do Google) em conversa no WhatsApp, no mesmo WordPress que eles já têm e entregue pronta.`
+    : `Site novo para ${who} em WordPress, feito para transformar quem chega em conversa no WhatsApp e entregue pronto, no lugar de ${scan?.platform === 'sem-site' ? 'só o perfil em rede social' : (scan?.builder ?? 'o site atual')}.`
 
+  const outdated = onWordPress && lead.reasons.some((r) => /desatualizado/.test(r))
   const what = [
     '- A página inicial nova, já montada: a conversa começa mostrando o site pronto, não um orçamento. Outras páginas: combinar.',
+    outdated ? '- Na troca, o WordPress e os plugins vão para a versão atual, com cópia de segurança antes. É cuidado da entrega, não argumento de venda.' : '',
     '- Ajustes depois da conversa (fotos, nomes, textos que só a empresa sabe).',
     onWordPress ? '- Publicação no WordPress deles, com a versão atual guardada antes da troca.' : '- Instalação em WordPress e publicação (combinar domínio e hospedagem).',
     council ? `- Textos dentro das regras de publicidade ${council}.` : '',
@@ -86,7 +99,9 @@ export const draftOffer = (lead: Lead): { offer: Offer; brief: SalesBrief } => {
   const paidAds = (scan?.ads ?? []).filter((ad) => ad !== 'Tag Manager')
   const adChannel = paidAds.includes('Google Ads') ? 'no Google' : paidAds.includes('Pixel da Meta') ? 'no Instagram' : 'em anúncios'
   // Frases curtas: o anúncio (se houver), depois um problema ou a reputação, depois o pedido
-  const observation = problems[0]
+  const observation = options.observation
+    ? options.observation
+    : problems[0]
     ? `Reparei que ${problems[0]}.`
     : praise
       ? `A reputação de vocês (${praise}) merece um site à altura.`

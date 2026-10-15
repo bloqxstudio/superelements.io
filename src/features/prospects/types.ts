@@ -5,6 +5,14 @@
  * (`scripts/prospects/engine.ts`, Node) e para a tela (`/prospeccao`).
  */
 
+import type { SiteScan } from '../../../supabase/functions/_shared/siteScan.ts'
+
+/**
+ * A leitura do site mora com o código que a faz, que roda também na função
+ * do Supabase (por isso fora de `src`).
+ */
+export type { HostGuard, Platform, SiteChecks, SiteDiagnosis, SiteScan, WordPressInfo } from '../../../supabase/functions/_shared/siteScan.ts'
+
 /**
  * De onde vêm as empresas: o Google Maps lido como o navegador lê (`maps`, grátis),
  * o mapa aberto (`osm`, grátis, cobre pouco) ou a API do Google (`google`, chave paga).
@@ -13,16 +21,6 @@ export type ProspectSource = 'maps' | 'osm' | 'google'
 
 /** `centro`: uma busca funda no centro da cidade (ou em cada bairro); `cidade`: varre a cidade em pontos. */
 export type Coverage = 'centro' | 'cidade'
-
-/** O que o site da empresa é, do melhor encaixe para o Superelements ao pior. */
-export type Platform =
-  | 'wp-elementor'
-  | 'wordpress'
-  | 'construtor'
-  | 'outro'
-  | 'sem-site'
-  | 'fora-do-ar'
-  | 'indefinido'
 
 export type Temperature = 'quente' | 'morna' | 'fria'
 
@@ -60,38 +58,6 @@ export interface Business {
   rating?: number
   reviews?: number
   mapsUrl?: string
-}
-
-/** O que a primeira página do site mostrou. */
-export interface SiteScan {
-  /** Endereço final, depois dos redirecionamentos. */
-  url: string
-  status: number | null
-  error?: string
-  https: boolean
-  ms: number
-  platform: Platform
-  /** Elementor, WPBakery, Divi, Wix, Instagram, Doctoralia… */
-  builder?: string
-  wpVersion?: string
-  elementorVersion?: string
-  elementorPro?: boolean
-  theme?: string
-  title?: string
-  emails: string[]
-  phones: string[]
-  whatsapp?: string
-  instagram?: string
-  facebook?: string
-  linkedin?: string
-  /** Crédito do rodapé ("Desenvolvido por …"): a agência que fez o site. */
-  agency?: { name: string; url?: string }
-  copyrightYear?: number
-  viewport: boolean
-  /** Rastros de anúncio pago na página: tag de conversão do Google Ads, pixel da Meta… (sinal de que investe em trazer gente). */
-  ads?: string[]
-  /** Ferramentas de venda no site: agenda online, checkout de programa ou curso, loja. */
-  sales?: string[]
 }
 
 export interface Lead extends Business {

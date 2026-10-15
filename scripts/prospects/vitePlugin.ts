@@ -1,7 +1,11 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadEnv, type Plugin } from 'vite'
 import type { SearchEvent, SearchInput } from '../../src/features/prospects/types.ts'
+import { diagnoseSite } from '../../supabase/functions/_shared/siteScan.ts'
+import type { CopyInput } from '../../src/features/prospects/demand.ts'
+import { readCopy } from './copyReader.ts'
 import { deleteSearch, listSearches, readSearch, runSearch, saveSearch } from './engine.ts'
+import { capturePhone } from './phone.ts'
 
 /**
  * Prospecção no servidor de dev: a tela `/prospeccao` pede a busca aqui,
@@ -17,6 +21,9 @@ import { deleteSearch, listSearches, readSearch, runSearch, saveSearch } from '.
  *   GET    /__prospeccao/buscas/:id   uma busca inteira
  *   DELETE /__prospeccao/buscas/:id
  *   POST   /__prospeccao/buscar       SearchInput → uma linha de JSON por SearchEvent
+ *   POST   /__prospeccao/diagnostico  { url } → SiteDiagnosis (no app publicado, a função site-diagnostico)
+ *   POST   /__prospeccao/diagnostico/celular  { url } → PhoneCapture (Edge headless desta máquina, `phone.ts`)
+ *   POST   /__prospeccao/diagnostico/texto    CopyInput + { image } → CopyReading (Claude Code desta máquina, `copyReader.ts`)
  */
 
 const send = (res: ServerResponse, status: number, body: unknown) => {
@@ -83,6 +90,34 @@ export const prospecting = (): Plugin => {
           if (one && req.method === 'DELETE') {
             await deleteSearch(one[1])
             return send(res, 200, { ok: true })
+          }
+
+          if ((route === '/diagnostico' || route === '/diagnostico/celular' || route === '/diagnostico/texto') && req.method === 'POST') {
+            const body = (await readJson(req)) as { url?: unknown } & Partial<CopyInput> & { image?: unknown }
+            const site = body.url
+            if (typeof site !== 'string' || !site.trim() || site.length > 500) return send(res, 400, { error: 'Diga o endereço do site.' })
+            const controller = new AbortController()
+            res.on('close', () => {
+              if (!res.writableFinished) controller.abort()
+            })
+            try {
+              if (route === '/diagnostico') return send(res, 200, await diagnoseSite(site.trim(), { signal: controller.signal }))
+              if (route === '/diagnostico/celular') return send(res, 200, await capturePhone(site.trim(), controller.signal))
+              const input: CopyInput & { image?: string } = {
+                url: site.trim(),
+                name: String(body.name ?? '').slice(0, 200),
+                niche: typeof body.niche === 'string' ? body.niche.slice(0, 80) : undefined,
+                description: typeof body.description === 'string' ? body.description.slice(0, 400) : undefined,
+                firstScreenText: Array.isArray(body.firstScreenText) ? body.firstScreenText.slice(0, 40) : [],
+                headings: Array.isArray(body.headings) ? body.headings.filter((h) => typeof h === 'string').slice(0, 40) : [],
+                pageText: typeof body.pageText === 'string' ? body.pageText.slice(0, 6000) : '',
+                image: typeof body.image === 'string' ? body.image : undefined,
+              }
+              return send(res, 200, await readCopy(input, controller.signal))
+            } catch (error) {
+              if (controller.signal.aborted) return res.end()
+              return send(res, 422, { error: error instanceof Error ? error.message : String(error) })
+            }
           }
 
           if (route === '/buscar' && req.method === 'POST') {

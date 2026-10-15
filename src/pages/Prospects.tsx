@@ -360,6 +360,10 @@ const Prospects: React.FC = () => {
               <Link to="/crm" className="font-medium text-gray-900 underline-offset-2 hover:underline">
                 Abrir as Oportunidades
               </Link>
+              . Um site só?{' '}
+              <Link to="/crm/diagnostico" className="font-medium text-gray-900 underline-offset-2 hover:underline">
+                Diagnóstico de site
+              </Link>
             </p>
 
             <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">

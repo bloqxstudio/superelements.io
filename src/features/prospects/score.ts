@@ -16,9 +16,16 @@ export const TEMPERATURE_LABEL: Record<Temperature, string> = { quente: 'Quente'
  * Versões a partir das quais o site não conta como desatualizado
  * (outubro de 2026: WordPress 7.1 e Elementor 4.3 são as atuais).
  */
-const RECENT = { wordpress: [6, 8], elementor: [3, 25] }
+export const RECENT = { wordpress: [6, 8], elementor: [3, 25] }
 
-const older = (version: string | undefined, [major, minor]: number[]) => {
+/**
+ * As versões atuais, para o diagnóstico dizer "a atual é…" (outubro de 2026).
+ * PHP: a 8.2 é a mais antiga que ainda recebe correção de segurança (até dezembro de 2026).
+ */
+export const CURRENT = { wordpress: '7.1', elementor: '4.3', php: '8.4' }
+export const PHP_SUPPORTED = [8, 2]
+
+export const older = (version: string | undefined, [major, minor]: number[]) => {
   if (!version) return false
   const [a = 0, b = 0] = version.split('.').map(Number)
   return a < major || (a === major && b < minor)

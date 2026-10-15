@@ -257,7 +257,7 @@ function saveImages(root: string, projectId: string, uploads: ChatImageUpload[] 
 const isWindows = process.platform === 'win32'
 
 /** O executável do agente: variável de ambiente, PATH, ou onde o instalador costuma pôr. */
-function findBin(id: ChatAgentId): string | undefined {
+export function findBin(id: ChatAgentId): string | undefined {
   const fromEnv = process.env[id === 'claude' ? 'SPACE_CLAUDE_BIN' : 'SPACE_CODEX_BIN']?.trim()
   if (fromEnv) return existsSync(fromEnv) ? fromEnv : undefined
   const names = isWindows ? [`${id}.exe`, `${id}.cmd`] : [id]
@@ -278,7 +278,7 @@ function findBin(id: ChatAgentId): string | undefined {
 }
 
 /** `.cmd` no Windows só roda por um shell; os argumentos vão entre aspas. */
-function launch(bin: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv }) {
+export function launch(bin: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv }) {
   if (isWindows && bin.toLowerCase().endsWith('.cmd')) {
     const quoted = [bin, ...args].map((a) => `"${a.replaceAll('"', '\\"')}"`).join(' ')
     return spawn(quoted, { ...options, shell: true, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
@@ -294,7 +294,7 @@ const versionOf = (bin: string) =>
   })
 
 /** Encerra o agente e o que ele abriu (no Windows, a árvore inteira). */
-function kill(child: ChildProcess) {
+export function kill(child: ChildProcess) {
   if (child.exitCode !== null || !child.pid) return
   if (isWindows) spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' })
   else child.kill('SIGTERM')

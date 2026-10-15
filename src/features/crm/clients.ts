@@ -108,6 +108,14 @@ export async function getClient(id: string): Promise<Client | undefined> {
   return data ? toClient(data as ClientRow) : undefined
 }
 
+/** O cliente da equipe com esse domínio ("exemplo.com.br"), se houver: o Diagnóstico de site não cria outro. */
+export async function findClientByDomain(domain: string): Promise<Client | undefined> {
+  const { team } = await crmContext()
+  const { data, error } = await supabase.from('crm_clients').select(CLIENT_COLUMNS).eq('team_id', team.id).ilike('domain', domain).order('updated_at', { ascending: false }).limit(1)
+  if (error) throw error
+  return data?.[0] ? toClient(data[0] as ClientRow) : undefined
+}
+
 export async function createClient(fields: ClientPatch & { name: string }): Promise<Client> {
   const { team } = await crmContext()
   const { data, error } = await supabase
