@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 740 680" role="img" aria-labelledby="title desc">
+  <title id="title">Comparação entre site confuso e site claro</title>
+  <desc id="desc">Duas telas vetoriais colocadas lado a lado mostram antes e depois de um redesign.</desc>
+  <g id="device-before" transform="translate(0 28)" opacity=".62">
+    <rect x="1" y="1" width="333" height="648" rx="22" fill="#15151A" stroke="#8B8B98"/>
+    <path d="M18 58H317" stroke="#51515B"/><circle cx="32" cy="32" r="7" fill="#777784"/><circle cx="54" cy="32" r="7" fill="#777784"/><circle cx="76" cy="32" r="7" fill="#777784"/>
+    <circle cx="42" cy="100" r="14" fill="#777784"/><rect x="250" y="88" width="42" height="6" fill="#777784"/>
+    <rect x="32" y="145" width="150" height="135" fill="#4A4A54"/><path d="M32 280l60-68 36 34 54-72v106z" fill="#6A6A74"/><rect x="205" y="145" width="95" height="135" fill="#3A3A43"/>
+    <g fill="#4C4C56"><rect x="32" y="320" width="78" height="70"/><rect x="128" y="320" width="78" height="70"/><rect x="224" y="320" width="78" height="70"/><rect x="32" y="430" width="270" height="140"/></g>
+  </g>
+  <g id="device-after" transform="translate(395 0)">
+    <rect x="1" y="1" width="343" height="648" rx="22" fill="#15151A" stroke="#8F9BFF"/>
+    <path d="M18 58H327" stroke="#6E6E79"/><circle cx="32" cy="32" r="7" fill="#8F9BFF"/><circle cx="54" cy="32" r="7" fill="#8F9BFF"/><circle cx="76" cy="32" r="7" fill="#8F9BFF"/>
+    <circle cx="42" cy="100" r="14" fill="#F3F1EC"/><rect x="82" y="94" width="96" height="7" fill="#8B8B97"/>
+    <rect x="32" y="155" width="205" height="14" fill="#F3F1EC"/><rect x="32" y="190" width="240" height="13" fill="#F3F1EC"/><rect x="32" y="225" width="184" height="10" fill="#8B8B97"/><rect x="32" y="270" width="135" height="48" fill="#2B3CF0"/>
+    <rect x="20" y="350" width="305" height="250" fill="#E4E2DE"/><path d="M20 510l100-92 64 60 56-74 85 106v90H20z" fill="#B9BBC4"/>
+  </g>
+</svg>

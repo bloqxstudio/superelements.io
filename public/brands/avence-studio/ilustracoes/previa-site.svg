@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 640" role="img" aria-labelledby="title desc">
+  <title id="title">Prévia de uma nova página</title>
+  <desc id="desc">Janela vetorial de um novo site apresentada como prévia.</desc>
+  <rect id="preview-frame" x="1" y="1" width="758" height="638" fill="#F4F2ED" stroke="#111111" stroke-width="2"/>
+  <g id="preview-toolbar"><path d="M0 80H760" stroke="#B8B5AE"/><circle cx="35" cy="40" r="7" fill="#333333"/><circle cx="58" cy="40" r="7" fill="#333333"/><circle cx="81" cy="40" r="7" fill="#333333"/><rect x="235" y="27" width="245" height="18" rx="9" fill="none" stroke="#C7C3BB"/><rect x="650" y="18" width="52" height="44" fill="#2B3CF0"/></g>
+  <g id="preview-copy"><rect x="48" y="130" width="115" height="20" fill="#111111"/><rect x="48" y="225" width="245" height="38" fill="#111111"/><rect x="48" y="280" width="215" height="34" fill="#111111"/><rect x="48" y="350" width="182" height="8" fill="#77736C"/><rect x="48" y="378" width="205" height="7" fill="#77736C"/></g>
+  <rect id="preview-cta" x="48" y="430" width="142" height="52" fill="#2B3CF0"/>
+  <g id="preview-image"><rect x="345" y="138" width="330" height="320" fill="#D8D8D8"/><circle cx="550" cy="235" r="34" fill="#F3F1EC"/><path d="M345 402l100-105 70 66 74-92 86 131v56H345z" fill="#B9BBC4"/></g>
+  <g id="preview-cards" fill="#E3E1DC"><rect x="345" y="495" width="135" height="100"/><rect x="495" y="495" width="135" height="100"/><rect x="645" y="495" width="95" height="100"/></g>
+</svg>

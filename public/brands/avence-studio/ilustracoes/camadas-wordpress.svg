@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 680" role="img" aria-labelledby="title desc">
+  <title id="title">Camadas de páginas no WordPress</title>
+  <desc id="desc">Três composições vetoriais sobrepostas representam a reorganização de um site.</desc>
+  <g id="projection-grid" fill="none" stroke="#3150FF" stroke-width="1.25" opacity=".9">
+    <path d="M128 18v318M548 68v296M55 248v224M445 255v244M180 402v270M530 430v240"/>
+    <path d="M106 340L548 68M24 466l421-211M152 672l378-242M445 499l85-69M548 364l-103 135"/>
+    <path d="M55 472l390 27 85-69M180 672l350-2v-240"/>
+    <path d="M105 325l443 39M25 455l420 44M152 657l378 13" opacity=".65"/>
+  </g>
+  <g id="layer-back" transform="translate(128 36) rotate(7 210 155)">
+    <rect width="420" height="310" fill="#15151A" stroke="#7482FF"/>
+    <path d="M0 48H420" stroke="#7482FF"/>
+    <circle cx="24" cy="24" r="6" fill="#8F9BFF"/><circle cx="45" cy="24" r="6" fill="#8F9BFF"/><circle cx="66" cy="24" r="6" fill="#8F9BFF"/>
+    <rect x="28" y="82" width="110" height="148" fill="#2B3CF0"/>
+    <rect x="180" y="92" width="170" height="8" fill="#666773"/><rect x="180" y="127" width="135" height="7" fill="#555660"/><rect x="180" y="218" width="155" height="52" fill="#303039"/>
+  </g>
+  <g id="layer-middle" transform="translate(55 266) rotate(-7 195 103)">
+    <rect width="390" height="205" fill="#F3F1EC" stroke="#A7A7B1"/>
+    <rect x="28" y="40" width="105" height="105" fill="#24242A"/>
+    <rect x="170" y="50" width="150" height="8" fill="#8B8B95"/><rect x="170" y="78" width="175" height="7" fill="#A8A8B0"/><rect x="170" y="114" width="80" height="32" fill="#2B3CF0"/>
+  </g>
+  <g id="layer-front" transform="translate(180 420) rotate(6 175 128)">
+    <rect width="350" height="255" fill="#15151A" stroke="#7482FF"/>
+    <rect x="25" y="42" width="90" height="85" fill="#2B3CF0"/><rect x="143" y="45" width="76" height="84" fill="#3D3D47"/><rect x="247" y="45" width="76" height="84" fill="#3D3D47"/>
+    <rect x="25" y="158" width="115" height="8" fill="#676772"/><rect x="25" y="182" width="90" height="7" fill="#52525C"/>
+  </g>
+</svg>

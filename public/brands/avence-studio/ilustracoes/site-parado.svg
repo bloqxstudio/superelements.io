@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 520" role="img" aria-labelledby="title desc">
+  <title id="title">Janela de um site desatualizado</title>
+  <desc id="desc">Ilustração vetorial de uma página de site dentro de uma janela de navegador.</desc>
+  <rect id="browser-frame" x="1" y="1" width="648" height="518" fill="#F8F7F3" stroke="#111111" stroke-width="2"/>
+  <g id="browser-toolbar">
+    <path d="M1 62H649" stroke="#111111"/>
+    <circle cx="45" cy="31" r="9" fill="#B9B9B9"/><circle cx="78" cy="31" r="9" fill="#B9B9B9"/><circle cx="111" cy="31" r="9" fill="#B9B9B9"/>
+    <rect x="390" y="25" width="190" height="12" fill="#C8C8C8"/>
+  </g>
+  <g id="browser-content">
+    <rect id="browser-accent" x="50" y="110" width="142" height="142" fill="#2B3CF0"/>
+    <g id="browser-copy" fill="#D2D2D2"><rect x="235" y="110" width="270" height="19" fill="#C6C6C6"/><rect x="235" y="154" width="320" height="15"/><rect x="235" y="196" width="218" height="15"/></g>
+    <g id="browser-image"><rect x="48" y="300" width="520" height="220" fill="#D5D5D5"/><path d="M48 462l126-104 93 75 88-90 112 119 101-72v130H48z" fill="#B9BBC4"/></g>
+  </g>
+</svg>
