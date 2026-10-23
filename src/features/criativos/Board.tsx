@@ -2,6 +2,7 @@ import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, 
 import { Copy, Download, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { agentInfo, PHASE_LABEL, useAgent } from './agentStore'
+import { gridOf, guidesOf, snapAxis, snapTargets, type PostGrid } from './grid'
 import { rememberPointer, sendPointer, useLive } from './live'
 import { drawSlide, fontCss, layerBox, type ImageMap } from './render'
 import { useEditor } from './store'
@@ -77,6 +78,40 @@ const SlideCanvas = memo(function SlideCanvas({ slide, format, images, scale, hi
   return <canvas ref={ref} width={Math.round(width * scale)} height={Math.round(height * scale)} className="block" style={{ width, height }} />
 })
 
+const KIND_COLOR = { margin: '#f43f5e', column: '#f43f5e', third: '#0ea5e9', center: '#8b5cf6' } as const
+
+/** As guias de um post sobre cada card (só na tela de edição: nada disto vai para a imagem exportada). */
+export const GridOverlay = memo(function GridOverlay({ format, grid, snap }: { format: FormatId; grid: PostGrid; snap?: { v: number[]; h: number[] } | null }) {
+  const { width: W, height: H } = sizeOf(format)
+  const g = guidesOf(format, grid)
+  const line = { vectorEffect: 'non-scaling-stroke' as const, strokeWidth: 1 }
+  return (
+    <svg className="pointer-events-none absolute inset-0" viewBox={`0 0 ${W} ${H}`} width="100%" height="100%" aria-hidden>
+      {g.columns.map(([a, b], i) => (
+        <rect key={i} x={a} y={0} width={b - a} height={H} fill="#f43f5e" fillOpacity={0.07} />
+      ))}
+      {g.covered.map((c, i) => (
+        <g key={i}>
+          <rect x={c.x} y={c.y} width={c.w} height={c.h} fill="#0b0b0f" fillOpacity={0.38} />
+          {c.w > 160 && <text x={c.x + 24} y={c.y + Math.min(c.h - 14, 46)} fill="#fff" fillOpacity={0.9} fontSize={26} fontFamily="Inter, system-ui, sans-serif">{c.label}</text>}
+        </g>
+      ))}
+      {g.h.map((l, i) => (
+        <line key={`h${i}`} x1={0} x2={W} y1={l.at} y2={l.at} stroke={KIND_COLOR[l.kind]} strokeOpacity={l.kind === 'margin' ? 0.8 : 0.55} strokeDasharray={l.kind === 'margin' ? undefined : '6 6'} {...line} />
+      ))}
+      {g.v.map((l, i) => (
+        <line key={`v${i}`} x1={l.at} x2={l.at} y1={0} y2={H} stroke={KIND_COLOR[l.kind]} strokeOpacity={l.kind === 'margin' ? 0.8 : l.kind === 'column' ? 0.4 : 0.55} strokeDasharray={l.kind === 'margin' || l.kind === 'column' ? undefined : '6 6'} {...line} />
+      ))}
+      {(snap?.h ?? []).map((y, i) => (
+        <line key={`sh${i}`} x1={0} x2={W} y1={y} y2={y} stroke="#ff2bd6" {...line} strokeWidth={1.5} />
+      ))}
+      {(snap?.v ?? []).map((x, i) => (
+        <line key={`sv${i}`} x1={x} x2={x} y1={0} y2={H} stroke="#ff2bd6" {...line} strokeWidth={1.5} />
+      ))}
+    </svg>
+  )
+})
+
 type View = { x: number; y: number; k: number }
 
 type Drag =
@@ -115,6 +150,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   const [editing, setEditing] = useState<{ postId: string; slideId: string; layerId: string } | null>(null)
   const [menu, setMenu] = useState<{ postId: string; x: number; y: number } | null>(null)
   const [panning, setPanning] = useState(false)
+  const [snapped, setSnapped] = useState<{ slideId: string; v: number[]; h: number[] } | null>(null)
   const fitted = useRef(false)
 
   const { rows, bounds } = useMemo(() => layout(set), [set.posts]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -268,14 +304,59 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
     const w = world(e)
     const dx = w.x - d.px
     const dy = w.y - d.py
-    if (d.kind === 'move') patchLayer(d.postId, d.slideId, d.origin.id, { x: Math.round(d.origin.x + dx), y: Math.round(d.origin.y + dy) })
-    else patchLayer(d.postId, d.slideId, d.origin.id, { w: Math.max(40, Math.round(d.origin.w + dx)), h: Math.max(d.origin.type === 'text' ? 0 : 40, Math.round(d.origin.h + dy)) })
+    const post = set.posts.find((p) => p.id === d.postId)
+    const grid = gridOf(post)
+    const slide = post?.slides.find((x) => x.id === d.slideId)
+    const limit = 10 / view.k
+    const targets = post && slide && grid.snap && !e.altKey ? snapTargets(post.format, grid, slide, d.origin.id, layerBox) : undefined
+    const ob = layerBox(d.origin)
+    if (d.kind === 'move') {
+      let x = Math.round(d.origin.x + dx)
+      let y = Math.round(d.origin.y + dy)
+      let gv: number[] = []
+      let gh: number[] = []
+      if (targets) {
+        // Borda esquerda, meio e borda direita; topo, meio e base: o que chegar perto de uma guia encaixa nela
+        const sx = snapAxis([x, x + ob.w / 2, x + ob.w], targets.xs, limit)
+        const sy = snapAxis([y, y + ob.h / 2, y + ob.h], targets.ys, limit)
+        if (sx) {
+          x += Math.round(sx.delta)
+          gv = [sx.at]
+        }
+        if (sy) {
+          y += Math.round(sy.delta)
+          gh = [sy.at]
+        }
+      }
+      setSnapped(gv.length || gh.length ? { slideId: d.slideId, v: gv, h: gh } : null)
+      patchLayer(d.postId, d.slideId, d.origin.id, { x, y })
+    } else {
+      let right = d.origin.x + d.origin.w + dx
+      let bottom = d.origin.y + ob.h + dy
+      let gv: number[] = []
+      let gh: number[] = []
+      if (targets) {
+        const sx = snapAxis([right], targets.xs, limit)
+        const sy = d.origin.type === 'text' ? undefined : snapAxis([bottom], targets.ys, limit)
+        if (sx) {
+          right += sx.delta
+          gv = [sx.at]
+        }
+        if (sy) {
+          bottom += sy.delta
+          gh = [sy.at]
+        }
+      }
+      setSnapped(gv.length || gh.length ? { slideId: d.slideId, v: gv, h: gh } : null)
+      patchLayer(d.postId, d.slideId, d.origin.id, { w: Math.max(40, Math.round(right - d.origin.x)), h: Math.max(d.origin.type === 'text' ? 0 : 40, Math.round(bottom - d.origin.y)) })
+    }
   }
 
   const onUp = () => {
     const d = drag.current
     drag.current = null
     setPanning(false)
+    setSnapped(null)
     if (d && d.kind !== 'pan' && d.before && useEditor.getState().set !== d.before) useEditor.getState().checkpoint(d.before)
   }
 
@@ -360,6 +441,11 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
                 ) : (
                   <div className="h-full w-full" style={{ background: p.slide.background }} />
                 )}
+                {(() => {
+                  const pg = gridOf(set.posts.find((x) => x.id === p.postId))
+                  const mine = snapped?.slideId === p.slideId ? snapped : null
+                  return pg.show || mine ? <GridOverlay format={p.format} grid={pg.show ? pg : { ...pg, margins: false, columns: 0, thirds: false, center: false, safe: false }} snap={mine} /> : null
+                })()}
                 <span className="pointer-events-none absolute left-0 whitespace-nowrap font-medium text-zinc-500" style={{ top: -34 * inv * 1.4, fontSize: 22, lineHeight: 1 }}>
                   {p.index + 1}
                 </span>

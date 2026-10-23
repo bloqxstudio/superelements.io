@@ -137,6 +137,8 @@ export interface Post {
   id: string
   name: string
   format: FormatId
+  /** Guias de edição deste post (margens, colunas, terços, zonas do Instagram) e o ímã. */
+  grid?: import('./grid').PostGrid
   slides: Slide[]
   /** Legenda para publicar junto com o post. */
   caption?: string

@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Blend, Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Grid3x3, Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { drawSlide, slideToBlob, type ExportType } from './render'
+import { drawSlide, layerBox, slideToBlob, type ExportType } from './render'
 import { Stage } from './Stage'
 import { currentLayer, currentPost, currentSlide, reformat, useEditor } from './store'
 import { uploadAsset } from './storage'
@@ -21,6 +21,7 @@ import { joinSetLive, useLive } from './live'
 import { shareSet } from './storage'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { alpha } from './color'
+import { gridOf, marginOf, type PostGrid } from './grid'
 import { FormatField } from './FormatField'
 import { generateLayerImage } from './generate'
 import { useCreativeLink } from './link'
@@ -57,6 +58,26 @@ const editSlide = (fn: (slide: Slide, post: Post) => Slide) => {
 
 const editLayer = (id: string, fields: Partial<Layer>) =>
   editSlide((sl) => ({ ...sl, layers: sl.layers.map((l) => (l.id === id ? ({ ...l, ...fields } as Layer) : l)) }))
+
+type Align = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'
+
+/** Leva o componente para uma margem ou para o centro do card (as margens são as da grade de boas práticas). */
+const alignLayer = (layer: Layer, how: Align) => {
+  const { set, postId } = useEditor.getState()
+  const post = set?.posts.find((p) => p.id === postId)
+  if (!post) return
+  const { width: W, height: H } = sizeOf(post.format)
+  const m = marginOf(post.format)
+  const box = layerBox(layer)
+  const fields: Partial<Layer> = {}
+  if (how === 'left') Object.assign(fields, { x: m, ...(layer.type === 'text' ? { align: 'left' } : {}) })
+  if (how === 'center') Object.assign(fields, { x: Math.round((W - box.w) / 2), ...(layer.type === 'text' ? { align: 'center' } : {}) })
+  if (how === 'right') Object.assign(fields, { x: W - m - box.w, ...(layer.type === 'text' ? { align: 'right' } : {}) })
+  if (how === 'top') fields.y = m
+  if (how === 'middle') fields.y = Math.round((H - box.h) / 2)
+  if (how === 'bottom') fields.y = H - m - box.h
+  editLayer(layer.id, fields)
+}
 
 const addLayer = (layer: Layer) => {
   editSlide((sl) => ({ ...sl, layers: [...sl.layers, layer] }))
@@ -293,6 +314,15 @@ const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer })
         </>
       )}
 
+      <Field label="Alinhar no card (margens da grade)">
+        <div className="flex gap-1">
+          {([['left', AlignStartVertical, 'Margem esquerda'], ['center', AlignCenterVertical, 'Centralizar na horizontal'], ['right', AlignEndVertical, 'Margem direita'], ['top', AlignStartHorizontal, 'Margem de cima'], ['middle', AlignCenterHorizontal, 'Centralizar na vertical'], ['bottom', AlignEndHorizontal, 'Margem de baixo']] as const).map(([how, Icon, title]) => (
+            <Button key={how} type="button" variant="outline" size="icon" className="h-8 flex-1 bg-white" title={title} aria-label={title} onClick={() => alignLayer(layer, how)}>
+              <Icon className="h-4 w-4" />
+            </Button>
+          ))}
+        </div>
+      </Field>
       <div className="grid grid-cols-2 gap-2">
         <Num label="X" value={layer.x} onChange={(n) => set_({ x: n })} />
         <Num label="Y" value={layer.y} onChange={(n) => set_({ y: n })} />
@@ -372,6 +402,9 @@ export const CreativeEditor: React.FC = () => {
   const sharedId = set?.shared ? set.id : undefined
   const sharedProject = set?.projectId
   const [panel, setPanel] = useState<'ia' | 'props'>('ia')
+  const [gridOpen, setGridOpen] = useState(false)
+  const grid = gridOf(post)
+  const setGrid = (patch: Partial<PostGrid>) => editPost((p) => ({ ...p, grid: { ...gridOf(p), ...patch } }))
   const upload = useRef<HTMLInputElement>(null)
   const pasteImage = useRef<(file: File) => void>(() => undefined)
 
@@ -386,7 +419,11 @@ export const CreativeEditor: React.FC = () => {
       if (t.closest('input, textarea, select')) return
       const st = useEditor.getState()
       const mod = e.metaKey || e.ctrlKey
-      if (mod && e.key.toLowerCase() === 'z') {
+      if (mod && (e.key === "'" || e.code === 'Quote')) {
+        e.preventDefault()
+        const p = currentPost(st)
+        if (p) editPost((x) => ({ ...x, grid: { ...gridOf(x), show: !gridOf(x).show } }))
+      } else if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         if (e.shiftKey) st.redo()
         else st.undo()
@@ -660,6 +697,27 @@ export const CreativeEditor: React.FC = () => {
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'text', name: 'Texto', text: 'Novo texto', x: 84, y: 200, w: 600, h: 0, font: set.brand.bodyFont, weight: 500, size: 56, color: '#111111', align: 'left', lineHeight: 1.15, letterSpacing: 0 })}><Type className="h-4 w-4" /> Texto</Button>
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'rect', name: 'Forma', x: 84, y: 200, w: 300, h: 300, fill: set.brand.colors[0]?.hex ?? '#2b3cf0', radius: 0 })}><Square className="h-4 w-4" /> Forma</Button>
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'rect', name: 'Degradê', x: 0, y: Math.round(sizeOf(format).height * 0.5), w: sizeOf(format).width, h: Math.round(sizeOf(format).height * 0.5), fill: alpha(set.brand.colors[0]?.hex ?? '#111111', 0), fill2: alpha(set.brand.colors[0]?.hex ?? '#111111', 0.9), angle: 180, radius: 0 })}><Blend className="h-4 w-4" /> Degradê</Button>
+            <div className="relative">
+              <Button variant="ghost" size="sm" className={cn('h-8 gap-1.5', grid.show && 'bg-violet-50 text-violet-800')} onClick={() => setGridOpen((o) => !o)} title="Grade de boas práticas deste post (Ctrl+')"><Grid3x3 className="h-4 w-4" /> Grade</Button>
+              {gridOpen && post && (
+                <div className="absolute left-0 top-10 z-40 w-72 space-y-2 rounded-xl border bg-white p-3 text-sm shadow-xl">
+                  <label className="flex items-center justify-between gap-2 font-medium text-gray-900">Mostrar as guias <input type="checkbox" checked={grid.show} onChange={(e) => setGrid({ show: e.target.checked })} /></label>
+                  <p className="text-xs text-gray-500">Guias só deste post, para a edição: não saem na imagem. Margem de {marginOf(post.format)} px.</p>
+                  <div className="space-y-1.5 border-t border-gray-100 pt-2 text-gray-700">
+                    {([['margins', 'Margens de segurança'], ['thirds', 'Terços (regra dos terços)'], ['center', 'Centro'], ['safe', sizeOf(post.format).height / sizeOf(post.format).width > 1.6 ? 'Zonas do story (perfil e botões)' : 'Recorte do perfil do Instagram (3:4)']] as const).map(([key, label]) => (
+                      <label key={key} className="flex items-center justify-between gap-2">{label}<input type="checkbox" checked={grid[key]} onChange={(e) => setGrid({ [key]: e.target.checked, show: true })} /></label>
+                    ))}
+                    <label className="flex items-center justify-between gap-2">Colunas
+                      <select value={grid.columns} onChange={(e) => setGrid({ columns: Number(e.target.value), show: true })} className="h-7 rounded-md border border-gray-200 bg-white px-1.5 text-sm">
+                        {[0, 2, 3, 4, 6, 12].map((n) => (<option key={n} value={n}>{n === 0 ? 'Sem colunas' : `${n} colunas`}</option>))}
+                      </select>
+                    </label>
+                  </div>
+                  <label className="flex items-start justify-between gap-2 border-t border-gray-100 pt-2 text-gray-700"><span>Ímã: encaixar nas guias e nos outros componentes ao arrastar<span className="block text-xs text-gray-500">Segure Alt para arrastar sem encaixar.</span></span><input type="checkbox" className="mt-1" checked={grid.snap} onChange={(e) => setGrid({ snap: e.target.checked })} /></label>
+                </div>
+              )}
+            </div>
+
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => upload.current?.click()}><ImagePlus className="h-4 w-4" /> Imagem</Button>
             <input ref={upload} type="file" accept="image/*" className="hidden" onChange={(e) => void sendLayerImage(e.target.files?.[0])} />
             <label className="ml-auto flex items-center gap-2 text-xs text-gray-500">

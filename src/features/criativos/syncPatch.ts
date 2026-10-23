@@ -12,6 +12,7 @@ export interface PostMeta {
   name: string
   format: FormatId
   caption?: string
+  grid?: Post['grid']
   slideIds: string[]
 }
 
@@ -24,10 +25,10 @@ export interface SyncPatch {
   name?: string
 }
 
-const metaOf = (p: Post): PostMeta => ({ id: p.id, name: p.name, format: p.format, caption: p.caption, slideIds: p.slides.map((s) => s.id) })
+const metaOf = (p: Post): PostMeta => ({ id: p.id, name: p.name, format: p.format, caption: p.caption, grid: p.grid, slideIds: p.slides.map((s) => s.id) })
 
 const sameMeta = (a: PostMeta, b: PostMeta) =>
-  a.id === b.id && a.name === b.name && a.format === b.format && a.caption === b.caption && a.slideIds.length === b.slideIds.length && a.slideIds.every((id, i) => id === b.slideIds[i])
+  a.id === b.id && a.name === b.name && a.format === b.format && a.caption === b.caption && JSON.stringify(a.grid) === JSON.stringify(b.grid) && a.slideIds.length === b.slideIds.length && a.slideIds.every((id, i) => id === b.slideIds[i])
 
 /** O que mudou de `before` para `after`; nada, se são iguais. */
 export function diffSets(before: CreativeSet, after: CreativeSet): SyncPatch | undefined {
@@ -52,7 +53,7 @@ export function mergePatch(set: CreativeSet, patch: SyncPatch): CreativeSet {
     posts = patch.posts.map((meta) => {
       const existing = set.posts.find((p) => p.id === meta.id)
       const slides = meta.slideIds.flatMap((id) => incoming.get(id) ?? known.get(id) ?? [])
-      return { ...(existing ?? { id: meta.id, slides: [] }), id: meta.id, name: meta.name, format: meta.format, caption: meta.caption, slides }
+      return { ...(existing ?? { id: meta.id, slides: [] }), id: meta.id, name: meta.name, format: meta.format, caption: meta.caption, grid: meta.grid, slides }
     })
   } else {
     posts = set.posts.map((p) => (p.slides.some((s) => incoming.has(s.id)) ? { ...p, slides: p.slides.map((s) => incoming.get(s.id) ?? s) } : p))

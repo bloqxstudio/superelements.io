@@ -1,7 +1,7 @@
 import { mix } from '@/features/space/brand/color'
 import { paletteOf, type Palette } from './brand'
 import { alpha } from './color'
-import { measureText } from './render'
+import { measureText, widestLine } from './render'
 import { caseBySlug, caseImage, ILLUSTRATIONS } from './library'
 import type { CaseView, SlideSpec, TemplateId } from './plan'
 import { sizeOf, uid, type FormatId, type ImageLayer, type Layer, type Post, type SetBrand, type ShapeLayer, type Slide, type TextLayer } from './types'
@@ -48,11 +48,12 @@ function heightOf(layer: TextLayer) {
   return measureText(layer).height
 }
 
-/** Encolhe o texto aos poucos até caber em `maxLines` linhas (sem passar de 62% do tamanho original). */
+/** Encolhe o texto aos poucos até caber (sem passar de 62% do tamanho original). */
 function fit(layer: TextLayer, maxLines: number, floor = 0.62): TextLayer {
   let current = layer
   const min = layer.size * floor
-  while (current.size > min && measureText(current).lines.length > maxLines) current = { ...current, size: Math.round(current.size * 0.94) }
+  // Encolhe enquanto passar de `maxLines` linhas ou uma palavra for mais larga que a caixa
+  while (current.size > min && (measureText(current).lines.length > maxLines || widestLine(current) > current.w + 0.5)) current = { ...current, size: Math.round(current.size * 0.94) }
   return current
 }
 

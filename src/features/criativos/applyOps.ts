@@ -3,7 +3,7 @@ import type { EditOp, LayerFields, SlideDef } from './edit'
 import { LIBRARY } from './library'
 import { alpha } from './color'
 import { reformat } from './store'
-import { measureText } from './render'
+import { measureText, widestLine } from './render'
 import { buildSlide } from './templates'
 import { parseFormat, sizeOf, uid, type CreativeSet, type FormatId, type Layer, type Post, type Slide } from './types'
 
@@ -95,7 +95,7 @@ function polishSlide(slide: Slide, format: FormatId): Slide {
       if (l.type !== 'text') return l
       let layer = { ...l, lineHeight: Math.min(1.8, Math.max(0.85, l.lineHeight)), x: Math.min(Math.max(0, l.x), width - 240) }
       layer.w = Math.max(200, Math.min(layer.w, width - Math.round(margin / 2) - layer.x))
-      for (let i = 0; i < 4 && layer.y + measureText(layer).height > height - margin * 0.6 && layer.size > 20; i++) layer = { ...layer, size: Math.round(layer.size * 0.92) }
+      for (let i = 0; i < 6 && (layer.y + measureText(layer).height > height - margin * 0.6 || widestLine(layer) > layer.w + 0.5) && layer.size > 20; i++) layer = { ...layer, size: Math.round(layer.size * 0.92) }
       return layer
     }),
   }

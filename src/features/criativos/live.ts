@@ -189,7 +189,7 @@ export function joinSetLive(set: CreativeSet): () => void {
       useLive.subscribe((s, prev) => {
         if (s.people.length > prev.people.length) {
           const state = useEditor.getState().set
-          if (state && state.id === setId) send('cr-sync', { patch: { posts: state.posts.map((p) => ({ id: p.id, name: p.name, format: p.format, caption: p.caption, slideIds: p.slides.map((x) => x.id) })), slides: state.posts.flatMap((p) => p.slides.map((slide) => ({ postId: p.id, slide }))), assets: state.assets, name: state.name } satisfies SyncPatch })
+          if (state && state.id === setId) send('cr-sync', { patch: { posts: state.posts.map((p) => ({ id: p.id, name: p.name, format: p.format, caption: p.caption, grid: p.grid, slideIds: p.slides.map((x) => x.id) })), slides: state.posts.flatMap((p) => p.slides.map((slide) => ({ postId: p.id, slide }))), assets: state.assets, name: state.name } satisfies SyncPatch })
         }
       })
     )

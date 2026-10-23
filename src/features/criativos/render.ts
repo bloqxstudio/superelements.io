@@ -210,6 +210,22 @@ export function measureText(layer: TextLayer, ctx: CanvasRenderingContext2D | nu
   return { lines, lineHeight, height: lines.length * lineHeight }
 }
 
+/** A linha mais larga do texto, depois da quebra: maior que a caixa quer dizer que uma palavra não coube. */
+export function widestLine(layer: TextLayer, ctx: CanvasRenderingContext2D | null = scratch): number {
+  if (!ctx) return 0
+  const { lines } = measureText(layer, ctx)
+  ctx.save()
+  setText(ctx, layer)
+  const space = ctx.measureText(' ').width
+  let widest = 0
+  for (const line of lines) {
+    const total = line.reduce((n, r, k) => n + runWidth(ctx, layer, r) + (k && !r.glue ? space : 0), 0)
+    if (total > widest) widest = total
+  }
+  ctx.restore()
+  return widest
+}
+
 function drawText(ctx: CanvasRenderingContext2D, layer: TextLayer) {
   const { lines, lineHeight } = measureText(layer, ctx)
   ctx.textAlign = 'left'
