@@ -92,6 +92,8 @@ export interface ImageLayer extends LayerBase {
   frame: ImageFrame
   /** Posição vertical da imagem dentro da moldura (0 topo, 1 fim); serve para páginas altas. */
   focusY?: number
+  /** O que pediu à IA de imagens; sem `src` ainda, a camada mostra "gerando". */
+  prompt?: string
 }
 
 export interface ShapeLayer extends LayerBase {

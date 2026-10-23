@@ -10,11 +10,12 @@ export const CREATIVE_EVENTS = {
   result: 'criativos:resposta',
   stop: 'criativos:parar',
   progress: 'criativos:progresso',
+  key: 'criativos:chave',
 } as const
 
 export interface CreativeCall {
   id: string
-  kind: 'edit' | 'plan'
+  kind: 'edit' | 'plan' | 'image'
   request: unknown
 }
 
@@ -36,4 +37,12 @@ export interface CreativeAgentInfo {
   name: string
   available: boolean
   version?: string
+}
+
+/** Serviço de geração de imagens com chave neste computador. */
+export type CreativeImageProvider = 'openai' | 'gemini'
+
+export interface CreativeImageRequest {
+  prompt: string
+  ratio: 'square' | 'portrait' | 'landscape'
 }

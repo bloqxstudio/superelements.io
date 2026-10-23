@@ -1,9 +1,10 @@
 import type { Plugin } from 'vite'
 import type { EditRequest } from '../../src/features/criativos/edit.ts'
 import type { PlanRequest } from '../../src/features/criativos/plan.ts'
-import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeCall, type CreativeProgress, type CreativeResult } from '../../src/features/criativos/protocol.ts'
+import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageRequest, type CreativeCall, type CreativeProgress, type CreativeResult } from '../../src/features/criativos/protocol.ts'
 import { CHAT_AGENTS } from '../../src/features/space/chat/protocol.ts'
 import { checkAgents } from '../space/chatPlugin.ts'
+import { generateImage, hasKey, imageProvider, saveImageKey } from './imagem.ts'
 import { editCreatives } from './edit.ts'
 import { planPosts } from './plan.ts'
 
@@ -55,7 +56,7 @@ export const criativos = (): Plugin => ({
     server.ws.on(CREATIVE_EVENTS.hello, () => {
       void checkAgents().then((found) => {
         const agents: CreativeAgentInfo[] = found.map((a) => ({ id: a.id, name: CHAT_AGENTS[a.id].name, available: a.available, version: a.version }))
-        server.ws.send(CREATIVE_EVENTS.status, { ia: agents.some((a) => a.available), agents })
+        server.ws.send(CREATIVE_EVENTS.status, { ia: agents.some((a) => a.available), agents, images: imageProvider(), keys: { openai: hasKey('openai'), gemini: hasKey('gemini') } })
       })
     })
 
@@ -72,6 +73,10 @@ export const criativos = (): Plugin => ({
             send({ id, ok: true, data: await editCreatives(input, controller.signal, (step) => server.ws.send(CREATIVE_EVENTS.progress, { id, step } satisfies CreativeProgress)) })
           } else if (call.kind === 'plan') {
             send({ id, ok: true, data: await planPosts(planInput(call.request as Partial<PlanRequest>), controller.signal) })
+          } else if (call.kind === 'image') {
+            const req = call.request as Partial<CreativeImageRequest>
+            const ratio = req.ratio === 'portrait' || req.ratio === 'landscape' ? req.ratio : 'square'
+            send({ id, ok: true, data: await generateImage(String(req.prompt ?? ''), ratio, controller.signal) })
           } else throw new Error('Pedido desconhecido.')
         } catch (error) {
           if (controller.signal.aborted) return
@@ -80,6 +85,14 @@ export const criativos = (): Plugin => ({
           runs.delete(id)
         }
       })()
+    })
+
+    // A chave vai do navegador só até este computador; fica no arquivo da pessoa e nunca volta para a tela
+    server.ws.on(CREATIVE_EVENTS.key, (data: { provider?: string; key?: string }) => {
+      if (data?.provider === 'openai' || data?.provider === 'gemini') {
+        saveImageKey(data.provider, String(data.key ?? '').slice(0, 300))
+        server.ws.send(CREATIVE_EVENTS.status, { images: imageProvider(), keys: { openai: hasKey('openai'), gemini: hasKey('gemini') } })
+      }
     })
 
     server.ws.on(CREATIVE_EVENTS.stop, (data: { id?: string }) => {

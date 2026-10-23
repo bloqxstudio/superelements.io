@@ -14,7 +14,7 @@ import { parseFormat, uid, type CreativeSet, type FormatId, type Layer, type Pos
 const COMMON = ['name', 'x', 'y', 'w', 'h', 'opacity', 'rotation'] as const
 const BY_TYPE: Record<Layer['type'], readonly string[]> = {
   text: ['text', 'font', 'weight', 'size', 'color', 'align', 'lineHeight', 'letterSpacing', 'upper', 'emphasis', 'emphasisColor'],
-  image: ['src', 'fit', 'radius', 'frame', 'focusY'],
+  image: ['src', 'fit', 'radius', 'frame', 'focusY', 'prompt'],
   rect: ['fill', 'radius', 'stroke', 'strokeWidth'],
   ring: ['stroke', 'strokeWidth'],
   dots: ['color', 'gap', 'dot'],
@@ -28,7 +28,7 @@ const COLORS = new Set(['color', 'emphasisColor', 'fill', 'stroke'])
 const COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\))$/i
 const ENUMS: Record<string, string[]> = { align: ['left', 'center', 'right'], fit: ['cover', 'contain'], frame: ['none', 'browser', 'phone'] }
 const BOOLS = new Set(['upper', 'emphasis'])
-const STRINGS = new Set(['name', 'text', 'font', 'src'])
+const STRINGS = new Set(['name', 'text', 'font', 'src', 'prompt'])
 
 const clamp = (n: number, [lo, hi]: [number, number]) => Math.min(hi, Math.max(lo, n))
 
@@ -93,6 +93,8 @@ export interface Applied {
   focus?: { postId: string; slideId: string; layerId?: string }
   /** Slides que mudaram (ou nasceram), para o canvas destacar. */
   touched: string[]
+  /** Imagens a gerar: camadas com `prompt` novo ou mudado. */
+  toGenerate: { slideId: string; layerId: string; prompt: string }[]
 }
 
 /** `defaults`: o que estava escolhido; vale quando a IA esquece um id. */
@@ -221,5 +223,17 @@ export function applyOps(start: CreativeSet, ops: EditOp[], defaults?: { postId?
     }
   })
 
-  return { set, applied, skipped, focus, touched: [...touched] }
+  // Imagens a gerar: prompt novo ou mudado, sem uma imagem nova posta junto
+  const before = new Map(start.posts.flatMap((p) => p.slides.flatMap((sl) => sl.layers.map((l) => [l.id, l] as const))))
+  const toGenerate = set.posts.flatMap((p) =>
+    p.slides.flatMap((sl) =>
+      sl.layers.flatMap((l) => {
+        if (l.type !== 'image' || !l.prompt?.trim()) return []
+        const old = before.get(l.id)
+        const was = old?.type === 'image' ? old : undefined
+        return !was || (was.prompt !== l.prompt && (!l.src || l.src === was.src)) ? [{ slideId: sl.id, layerId: l.id, prompt: l.prompt.trim() }] : []
+      })
+    )
+  )
+  return { set, applied, skipped, focus, touched: [...touched], toGenerate }
 }

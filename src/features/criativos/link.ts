@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { AgentChannel } from '@/features/space/connector/channel'
-import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeCall, type CreativeProgress, type CreativeResult, type CreativeStep } from './protocol'
+import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageProvider, type CreativeCall, type CreativeProgress, type CreativeResult, type CreativeStep } from './protocol'
 
 /**
  * Lado da aba da IA dos criativos: usa o mesmo canal que o chat do Space
@@ -8,7 +8,7 @@ import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeCall, type Creati
  * e os tipos das chamadas ficam em `protocol.ts`, que o servidor também lê.
  */
 
-export { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeCall, type CreativeResult, type CreativeStep }
+export { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageProvider, type CreativeCall, type CreativeResult, type CreativeStep }
 
 interface LinkState {
   channel?: AgentChannel
@@ -22,9 +22,12 @@ interface LinkState {
   agents: CreativeAgentInfo[]
   /** O conector não manda a lista de IAs: versão antiga, que só sabe do Claude Code. */
   legacy: boolean
+  /** Serviço de imagens com chave neste computador (o que gera); null: nenhum. */
+  images: CreativeImageProvider | null
+  keys: { openai: boolean; gemini: boolean }
 }
 
-export const useCreativeLink = create<LinkState>()(() => ({ connected: false, ia: null, stale: false, agents: [], legacy: false }))
+export const useCreativeLink = create<LinkState>()(() => ({ connected: false, ia: null, stale: false, agents: [], legacy: false, images: null, keys: { openai: false, gemini: false } }))
 
 /** Verdadeiro, falso ou "ainda não sei" (null), para a tela decidir o que mostrar. */
 export const useAiAvailable = (): boolean | null => useCreativeLink((s) => (!s.connected ? false : s.ia))
@@ -49,11 +52,14 @@ const failAll = (message: string) => {
 /** Liga a IA dos criativos a um canal; devolve a função que desliga. */
 export function startCreativeLink(channel: AgentChannel) {
   let helloTimer: ReturnType<typeof setTimeout> | undefined
-  const onStatus = (data: { ia?: boolean; agents?: CreativeAgentInfo[] }) => {
+  const onStatus = (data: { ia?: boolean; agents?: CreativeAgentInfo[]; images?: CreativeImageProvider | null; keys?: { openai: boolean; gemini: boolean } }) => {
     clearTimeout(helloTimer)
+    const images = { images: data?.images ?? null, keys: data?.keys ?? { openai: false, gemini: false } }
+    // Aviso só das chaves de imagem (depois de salvar uma): o resto continua como está
+    if (data && data.ia === undefined && !data.agents) return void useCreativeLink.setState(images)
     // Conector anterior à escolha de IA: só diz se há uma (o Claude Code), sem a lista
     const agents = data?.agents ?? (data?.ia ? [{ id: 'claude' as const, name: 'Claude Code', available: true }] : [])
-    useCreativeLink.setState({ connected: true, ia: !!data?.ia, stale: false, agents, legacy: !data?.agents })
+    useCreativeLink.setState({ connected: true, ia: !!data?.ia, stale: false, agents, legacy: !data?.agents, ...images })
   }
   const onResult = (result: CreativeResult) => {
     const call = pending.get(result?.id)
@@ -75,7 +81,7 @@ export function startCreativeLink(channel: AgentChannel) {
   channel.on(CREATIVE_EVENTS.result, onResult)
   channel.on(CREATIVE_EVENTS.progress, onProgress)
   channel.on('vite:ws:connect', hello)
-  useCreativeLink.setState({ channel, connected: false, ia: null, stale: false, agents: [], legacy: false })
+  useCreativeLink.setState({ channel, connected: false, ia: null, stale: false, agents: [], legacy: false, images: null, keys: { openai: false, gemini: false } })
   hello()
   return () => {
     channel.off(CREATIVE_EVENTS.status, onStatus)
@@ -84,7 +90,7 @@ export function startCreativeLink(channel: AgentChannel) {
     channel.off('vite:ws:connect', hello)
     clearTimeout(helloTimer)
     failAll('A conexão com a IA caiu.')
-    useCreativeLink.setState({ channel: undefined, connected: false, ia: null, stale: false, agents: [], legacy: false })
+    useCreativeLink.setState({ channel: undefined, connected: false, ia: null, stale: false, agents: [], legacy: false, images: null, keys: { openai: false, gemini: false } })
   }
 }
 
@@ -106,7 +112,9 @@ export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?:
       reject(new Error('A IA passou de 5 minutos sem responder.'))
     }, TIMEOUT)
     // Sem nenhum passo vindo do outro lado, o conector provavelmente não conhece este pedido
-    let silence = setTimeout(() => fail(STALE_MESSAGE), SILENCE)
+    // Imagem não manda passos (leva até 1 minuto): só vale o limite total
+    const watch = kind !== 'image'
+    let silence = watch ? setTimeout(() => fail(STALE_MESSAGE), SILENCE) : undefined
     const fail = (message: string) => {
       if (!pending.delete(id)) return
       clearTimeout(timer)
@@ -115,7 +123,7 @@ export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?:
     }
     const alive = (step: CreativeStep) => {
       clearTimeout(silence)
-      silence = setTimeout(() => fail('O Claude Code parou de responder. Tente de novo.'), SILENCE * 2)
+      if (watch) silence = setTimeout(() => fail('O Claude Code parou de responder. Tente de novo.'), SILENCE * 2)
       onStep?.(step)
     }
     pending.set(id, {
@@ -134,4 +142,13 @@ export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?:
     if (signal?.aborted) return abort()
     channel.send(CREATIVE_EVENTS.call, { id, kind, request } satisfies CreativeCall)
   })
+}
+
+/** Pede uma imagem ao serviço configurado neste computador; vem como data URL. */
+export const requestImage = (prompt: string, ratio: 'square' | 'portrait' | 'landscape', signal?: AbortSignal) =>
+  callAi<{ data: string; provider: CreativeImageProvider; model: string }>('image', { prompt, ratio }, signal)
+
+/** Guarda a chave de um serviço de imagens no computador de quem usa (vazia, apaga). */
+export function saveImageKey(provider: CreativeImageProvider, key: string) {
+  useCreativeLink.getState().channel?.send(CREATIVE_EVENTS.key, { provider, key })
 }

@@ -36,6 +36,8 @@ export interface LayerFields {
   radius?: number
   frame?: 'none' | 'browser' | 'phone'
   focusY?: number
+  /** Imagem a gerar (camada de imagem): descrição da cena, em inglês. */
+  prompt?: string
   fill?: string
   stroke?: string
   strokeWidth?: number
@@ -101,6 +103,8 @@ export interface EditRequest {
   image?: string
   /** Prints e imagens que a pessoa anexou (referências); `src` é onde ficaram no conjunto, para usar numa camada. */
   attachments?: { name: string; src: string; data: string }[]
+  /** Há uma chave de imagens neste computador: a IA pode pedir imagens (`prompt` numa camada de imagem). */
+  canGenerateImages?: boolean
   /** Skill escolhida: um jeito de trabalhar para este pedido. */
   skill?: { name: string; instructions: string }
   history?: { role: 'user' | 'ai'; text: string }[]
@@ -136,6 +140,7 @@ const layerProps = {
   radius: { type: 'number' },
   frame: { type: 'string', enum: ['none', 'browser', 'phone'] },
   focusY: { type: 'number' },
+  prompt: { type: 'string' },
   fill: { type: 'string' },
   stroke: { type: 'string' },
   strokeWidth: { type: 'number' },
@@ -159,6 +164,8 @@ const specSchema = {
     illustration: { type: 'string', enum: [...ILLUSTRATION_IDS] },
     focus: { type: 'number' },
     dark: { type: 'boolean' },
+    prompt: { type: 'string' },
+    number: { type: 'string' },
   },
 } as const
 

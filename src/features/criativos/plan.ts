@@ -5,7 +5,7 @@
  * `@/`: o servidor de desenvolvimento (Node) lê este arquivo também.
  */
 
-export const TEMPLATE_IDS = ['manifesto', 'case-janela', 'case-duo', 'case-capa', 'ilustracao', 'lista', 'cta'] as const
+export const TEMPLATE_IDS = ['manifesto', 'case-janela', 'case-duo', 'case-capa', 'ilustracao', 'lista', 'cta', 'viral-capa', 'viral-foto', 'viral-dado', 'viral-frase', 'viral-fecho'] as const
 export type TemplateId = (typeof TEMPLATE_IDS)[number]
 export type CaseView = 'capa' | 'pagina' | 'celular'
 export const ILLUSTRATION_IDS = ['site-parado', 'clique-conversa', 'previa-site', 'antes-depois', 'camadas-wordpress'] as const
@@ -33,6 +33,10 @@ export interface SlideSpec {
   focus?: number
   /** Fundo escuro (padrão) ou papel. */
   dark?: boolean
+  /** Modelos viral-*: a cena da imagem a gerar (em inglês), sem texto dentro. */
+  prompt?: string
+  /** viral-dado e viral-foto: o número grande ("73%", "2\u00ba", "02"). */
+  number?: string
 }
 
 export interface PostPlan {
@@ -90,6 +94,8 @@ export const PLAN_SCHEMA = {
                 illustration: { type: 'string', enum: [...ILLUSTRATION_IDS] },
                 focus: { type: 'number' },
                 dark: { type: 'boolean' },
+                prompt: { type: 'string' },
+                number: { type: 'string' },
               },
             },
           },
