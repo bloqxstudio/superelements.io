@@ -424,7 +424,7 @@ export function drawSlide(ctx: CanvasRenderingContext2D, slide: Slide, format: F
   ctx.clearRect(0, 0, width, height)
   ctx.fillStyle = slide.background
   ctx.fillRect(0, 0, width, height)
-  for (const layer of slide.layers) drawLayer(ctx, layer, images)
+  for (const layer of slide.layers) if (!layer.hidden) drawLayer(ctx, layer, images)
   ctx.restore()
 }
 

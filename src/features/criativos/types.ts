@@ -58,6 +58,12 @@ interface LayerBase {
   opacity?: number
   /** Graus, em volta do centro da camada. */
   rotation?: number
+  /** Escondida: não aparece no card nem na imagem exportada. */
+  hidden?: boolean
+  /** Travada: não se escolhe nem se arrasta pelo canvas (só pelo painel de camadas). */
+  locked?: boolean
+  /** Grupo a que pertence: camadas com o mesmo id se escolhem, movem e duplicam juntas. */
+  group?: string
 }
 
 export type TextAlign = 'left' | 'center' | 'right'

@@ -224,7 +224,7 @@ const Working: React.FC = () => {
     return () => clearInterval(t)
   }, [])
   if (!working) return null
-  const order = (working.phase === 'generating' ? ['sending', 'start', 'thinking', 'writing', 'applying', 'generating'] : ['sending', 'start', 'thinking', 'writing', 'applying']) as AgentPhase[]
+  const order = ['sending', 'start', 'thinking', ...(working.phase === 'reading' ? ['reading'] : []), 'writing', 'applying', ...(working.phase === 'generating' ? ['generating'] : [])] as AgentPhase[]
   const at = order.indexOf(working.phase)
   const AGENT = agentInfo(working.agent)
   return (
@@ -281,6 +281,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   const slide = useEditor(currentSlide)
   const layer = useEditor(currentLayer)
   const row = useEditor((s) => s.row)
+  const layerIds = useEditor((s) => s.layerIds)
   const stale = useCreativeLink((s) => s.stale)
   const agents = useCreativeLink((s) => s.agents)
   const legacy = useCreativeLink((s) => s.legacy)
@@ -392,6 +393,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   const stop = () => control.current?.abort()
 
   function scopeName() {
+    if (scope === 'layer' && layerIds.length > 1) return `${layerIds.length} componentes · slide ${(post?.slides.findIndex((s) => s.id === slide?.id) ?? 0) + 1}`
     if (scope === 'layer') return `${layer?.name ?? 'Componente'} · slide ${(post?.slides.findIndex((s) => s.id === slide?.id) ?? 0) + 1}`
     if (scope === 'slide') return `Slide ${(post?.slides.findIndex((s) => s.id === slide?.id) ?? 0) + 1}`
     if (scope === 'post') return `${post?.name ?? 'Post'} · ${post?.slides.length ?? 0} cards`
@@ -436,6 +438,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
           postId: state.postId,
           slideId: state.slideId,
           layerId: scope === 'layer' ? state.layerId : undefined,
+          layerIds: scope === 'layer' && state.layerIds.length > 1 ? state.layerIds : undefined,
           images: state.images,
           history: history.slice(0, -1),
           attachments,
@@ -584,6 +587,9 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
           </div>
         )}
 
+        {/https?:\/\/\S+/i.test(text) && (
+          <p className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-[11px] leading-snug text-sky-900">A IA vai abrir o link. Instagram, TikTok e LinkedIn pedem login e quase nunca abrem: se não abrir, cole os prints de cada slide aqui. Ela recria o layout com fidelidade, mas não copia o texto, as fotos nem a marca de outra pessoa.</p>
+        )}
         {refs.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {refs.map((r) => (

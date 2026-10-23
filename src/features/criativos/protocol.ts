@@ -22,7 +22,7 @@ export interface CreativeCall {
 export type CreativeResult = { id: string; ok: true; data: unknown } | { id: string; ok: false; error: string }
 
 /** O que o Claude Code está fazendo, em passos que a tela mostra enquanto espera. */
-export type CreativeStep = 'start' | 'thinking' | 'writing'
+export type CreativeStep = 'start' | 'thinking' | 'reading' | 'writing'
 
 export interface CreativeProgress {
   id: string

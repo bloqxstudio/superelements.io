@@ -2,6 +2,7 @@ import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, 
 import { AtSign, Copy, Download, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { agentInfo, PHASE_LABEL, useAgent } from './agentStore'
+import { boundsOf, withGroups } from './layerOps'
 import { useRefs } from './refStore'
 import { gridOf, guidesOf, snapAxis, snapTargets, type PostGrid } from './grid'
 import { rememberPointer, sendPointer, useLive } from './live'
@@ -117,7 +118,8 @@ type View = { x: number; y: number; k: number }
 
 type Drag =
   | { kind: 'pan'; sx: number; sy: number; view: View }
-  | { kind: 'move' | 'resize'; postId: string; slideId: string; origin: Layer; px: number; py: number; before: CreativeSet | undefined }
+  | { kind: 'move' | 'resize'; postId: string; slideId: string; origin: Layer; /** Todos os escolhidos no começo do arrasto (o próprio incluso). */ group: Layer[]; px: number; py: number; before: CreativeSet | undefined }
+  | { kind: 'marquee'; postId: string; slideId: string; slide: Placed; x0: number; y0: number; moved: boolean; base: string[]; additive: boolean }
 
 interface Props {
   onAddSlide: (postId: string, template: string) => void
@@ -151,6 +153,8 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   const [editing, setEditing] = useState<{ postId: string; slideId: string; layerId: string } | null>(null)
   const [menu, setMenu] = useState<{ postId: string; x: number; y: number } | null>(null)
   const [panning, setPanning] = useState(false)
+  const [marquee, setMarquee] = useState<{ slideId: string; x: number; y: number; w: number; h: number } | null>(null)
+  const layerIds = useEditor((s) => s.layerIds)
   const [snapped, setSnapped] = useState<{ slideId: string; v: number[]; h: number[] } | null>(null)
   const fitted = useRef(false)
 
@@ -238,6 +242,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   const layerAt = (p: Placed, wx: number, wy: number) => {
     for (let i = p.slide.layers.length - 1; i >= 0; i--) {
       const l = p.slide.layers[i]
+      if (l.hidden || l.locked) continue
       // Fundos de tela cheia (pontos, anéis, formas do tamanho do slide) não roubam o clique
       if ((l.type === 'dots' || l.type === 'ring') && (l.w >= p.w * 0.9 || l.type === 'ring')) continue
       const b = layerBox(l)
@@ -249,6 +254,13 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
     useEditor.getState().draft((s) => ({
       ...s,
       posts: s.posts.map((p) => (p.id !== pid ? p : { ...p, slides: p.slides.map((sl) => (sl.id !== sid ? sl : { ...sl, layers: sl.layers.map((l) => (l.id === id ? ({ ...l, ...fields } as Layer) : l)) })) })),
+    }))
+
+  /** Muda vários componentes de uma vez (rascunho, sem histórico). */
+  const patchLayers = (pid: string, sid: string, patches: Map<string, Partial<Layer>>) =>
+    useEditor.getState().draft((s) => ({
+      ...s,
+      posts: s.posts.map((p) => (p.id !== pid ? p : { ...p, slides: p.slides.map((sl) => (sl.id !== sid ? sl : { ...sl, layers: sl.layers.map((l) => (patches.has(l.id) ? ({ ...l, ...patches.get(l.id) } as Layer) : l)) })) })),
     }))
 
   const onDown = (e: React.PointerEvent) => {
@@ -268,22 +280,42 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
     if (state.postId !== hit.postId) state.selectPost(hit.postId)
     if (state.slideId !== hit.slideId) state.selectSlide(hit.slideId)
 
-    // Alça de redimensionar da camada já selecionada
-    const sel = hit.slide.layers.find((l) => l.id === state.layerId)
-    if (sel && state.slideId === hit.slideId) {
-      const b = layerBox(sel)
+    const additive = e.shiftKey || e.metaKey || e.ctrlKey
+
+    // Alça de redimensionar: só com um componente escolhido
+    const only = state.layerIds.length === 1 ? hit.slide.layers.find((l) => l.id === state.layerIds[0]) : undefined
+    if (only && state.slideId === hit.slideId && !only.locked) {
+      const b = layerBox(only)
       if (Math.hypot(w.x - hit.x - (b.x + b.w), w.y - hit.y - (b.y + b.h)) < 30 / view.k) {
-        drag.current = { kind: 'resize', postId: hit.postId, slideId: hit.slideId, origin: sel, px: w.x, py: w.y, before: state.set }
+        drag.current = { kind: 'resize', postId: hit.postId, slideId: hit.slideId, origin: only, group: [only], px: w.x, py: w.y, before: state.set }
         e.currentTarget.setPointerCapture(e.pointerId)
         return
       }
     }
+
     const target = layerAt(hit, w.x, w.y)
-    state.selectLayer(target?.id)
-    if (target) {
-      drag.current = { kind: 'move', postId: hit.postId, slideId: hit.slideId, origin: target, px: w.x, py: w.y, before: state.set }
+    if (!target) {
+      // Fundo do card: arrastar desenha um retângulo que escolhe o que ele toca
+      const base = additive && state.slideId === hit.slideId ? state.layerIds : []
+      if (!additive) state.selectLayers([])
+      drag.current = { kind: 'marquee', postId: hit.postId, slideId: hit.slideId, slide: hit, x0: w.x - hit.x, y0: w.y - hit.y, moved: false, base, additive }
       e.currentTarget.setPointerCapture(e.pointerId)
+      return
     }
+    // Escolher um do grupo escolhe o grupo; Alt escolhe só o componente
+    const members = e.altKey ? [target.id] : withGroups(hit.slide.layers, [target.id])
+    if (additive) {
+      const has = members.every((id) => state.layerIds.includes(id))
+      state.selectLayers(has ? state.layerIds.filter((id) => !members.includes(id)) : [...new Set([...state.layerIds, ...members])])
+      return
+    }
+    // Clicar num já escolhido mantém a seleção (arrasta todos juntos)
+    const keep = state.slideId === hit.slideId && state.layerIds.includes(target.id)
+    const ids = keep ? state.layerIds : members
+    if (!keep) state.selectLayers(members)
+    const group = hit.slide.layers.filter((l) => ids.includes(l.id) && !l.locked)
+    drag.current = { kind: 'move', postId: hit.postId, slideId: hit.slideId, origin: target, group: group.length ? group : [target], px: w.x, py: w.y, before: state.set }
+    e.currentTarget.setPointerCapture(e.pointerId)
   }
 
   const onMove = (e: React.PointerEvent) => {
@@ -303,35 +335,57 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
     }
     if (d.kind === 'pan') return setView({ ...d.view, x: d.view.x + e.clientX - d.sx, y: d.view.y + e.clientY - d.sy })
     const w = world(e)
+    if (d.kind === 'marquee') {
+      const x1 = Math.min(d.slide.w, Math.max(0, w.x - d.slide.x))
+      const y1 = Math.min(d.slide.h, Math.max(0, w.y - d.slide.y))
+      const rect = { x: Math.min(d.x0, x1), y: Math.min(d.y0, y1), w: Math.abs(x1 - d.x0), h: Math.abs(y1 - d.y0) }
+      if (!d.moved && Math.hypot(rect.w, rect.h) * view.k < 5) return
+      d.moved = true
+      setMarquee({ slideId: d.slideId, ...rect })
+      const hits = d.slide.slide.layers.filter((l) => {
+        if (l.hidden || l.locked) return false
+        const b = layerBox(l)
+        // Fundos de tela cheia não entram numa seleção por área
+        if (b.w >= d.slide.w * 0.9 && b.h >= d.slide.h * 0.9) return false
+        return b.x < rect.x + rect.w && b.x + b.w > rect.x && b.y < rect.y + rect.h && b.y + b.h > rect.y
+      })
+      const ids = withGroups(d.slide.slide.layers, hits.map((l) => l.id))
+      useEditor.getState().selectLayers([...new Set([...d.base, ...ids])])
+      return
+    }
     const dx = w.x - d.px
     const dy = w.y - d.py
     const post = set.posts.find((p) => p.id === d.postId)
     const grid = gridOf(post)
     const slide = post?.slides.find((x) => x.id === d.slideId)
     const limit = 10 / view.k
-    const targets = post && slide && grid.snap && !e.altKey ? snapTargets(post.format, grid, slide, d.origin.id, layerBox) : undefined
-    const ob = layerBox(d.origin)
+    const moving = new Set(d.group.map((l) => l.id))
+    const targets = post && slide && grid.snap && !e.altKey ? snapTargets(post.format, grid, { ...slide, layers: slide.layers.filter((l) => !moving.has(l.id)) }, '', layerBox) : undefined
     if (d.kind === 'move') {
-      let x = Math.round(d.origin.x + dx)
-      let y = Math.round(d.origin.y + dy)
+      // A caixa que todos os escolhidos formam é que encaixa nas guias
+      const box = d.group.length > 1 ? boundsOf(d.group) : layerBox(d.origin)
+      let mx = Math.round(dx)
+      let my = Math.round(dy)
       let gv: number[] = []
       let gh: number[] = []
       if (targets) {
-        // Borda esquerda, meio e borda direita; topo, meio e base: o que chegar perto de uma guia encaixa nela
-        const sx = snapAxis([x, x + ob.w / 2, x + ob.w], targets.xs, limit)
-        const sy = snapAxis([y, y + ob.h / 2, y + ob.h], targets.ys, limit)
+        const x = box.x + mx
+        const y = box.y + my
+        const sx = snapAxis([x, x + box.w / 2, x + box.w], targets.xs, limit)
+        const sy = snapAxis([y, y + box.h / 2, y + box.h], targets.ys, limit)
         if (sx) {
-          x += Math.round(sx.delta)
+          mx += Math.round(sx.delta)
           gv = [sx.at]
         }
         if (sy) {
-          y += Math.round(sy.delta)
+          my += Math.round(sy.delta)
           gh = [sy.at]
         }
       }
       setSnapped(gv.length || gh.length ? { slideId: d.slideId, v: gv, h: gh } : null)
-      patchLayer(d.postId, d.slideId, d.origin.id, { x, y })
+      patchLayers(d.postId, d.slideId, new Map(d.group.map((l) => [l.id, { x: l.x + mx, y: l.y + my }])))
     } else {
+      const ob = layerBox(d.origin)
       let right = d.origin.x + d.origin.w + dx
       let bottom = d.origin.y + ob.h + dy
       let gv: number[] = []
@@ -358,7 +412,8 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
     drag.current = null
     setPanning(false)
     setSnapped(null)
-    if (d && d.kind !== 'pan' && d.before && useEditor.getState().set !== d.before) useEditor.getState().checkpoint(d.before)
+    setMarquee(null)
+    if (d && d.kind !== 'pan' && d.kind !== 'marquee' && d.before && useEditor.getState().set !== d.before) useEditor.getState().checkpoint(d.before)
   }
 
   const onDouble = (e: React.MouseEvent) => {
@@ -484,12 +539,34 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
           const b = layerBox(hoverLayer)
           return <div className="pointer-events-none absolute" style={{ left: hoverPlaced.x + b.x, top: hoverPlaced.y + b.y, width: b.w, height: b.h, outline: `${2 * inv}px solid rgb(139 92 246 / 0.55)` }} />
         })()}
-        {selected && selBox && (
+        {/* Um componente escolhido: contorno, alça de tamanho e nome */}
+        {selected && selBox && layerIds.length <= 1 && (
           <div className="pointer-events-none absolute" style={{ left: selected.x + selBox.x, top: selected.y + selBox.y, width: selBox.w, height: selBox.h, outline: `${3 * inv}px solid #8b5cf6` }}>
-            <span className="absolute rounded-sm border-violet-500 bg-white" style={{ right: -9 * inv, bottom: -9 * inv, width: 18 * inv, height: 18 * inv, borderWidth: 3 * inv, borderStyle: 'solid' }} />
-            <span className="absolute left-0 whitespace-nowrap rounded bg-violet-600 px-1.5 py-0.5 font-medium text-white" style={{ bottom: '100%', marginBottom: 6 * inv, fontSize: 12 * inv * 1.6 }}>{selLayer!.name}</span>
+            {!selLayer!.locked && <span className="absolute rounded-sm border-violet-500 bg-white" style={{ right: -9 * inv, bottom: -9 * inv, width: 18 * inv, height: 18 * inv, borderWidth: 3 * inv, borderStyle: 'solid' }} />}
+            <span className="absolute left-0 whitespace-nowrap rounded bg-violet-600 px-1.5 py-0.5 font-medium text-white" style={{ bottom: '100%', marginBottom: 6 * inv, fontSize: 12 * inv * 1.6 }}>{selLayer!.name}{selLayer!.locked ? ' · travado' : ''}{selLayer!.group ? ' · grupo' : ''}</span>
           </div>
         )}
+        {/* Vários escolhidos: cada um com contorno fino e uma caixa em volta de todos */}
+        {selected && layerIds.length > 1 && (() => {
+          const chosen = selected.slide.layers.filter((l) => layerIds.includes(l.id))
+          if (!chosen.length) return null
+          const all = boundsOf(chosen)
+          return (
+            <>
+              {chosen.map((l) => {
+                const b = layerBox(l)
+                return <div key={l.id} className="pointer-events-none absolute" style={{ left: selected.x + b.x, top: selected.y + b.y, width: b.w, height: b.h, outline: `${2 * inv}px solid rgb(139 92 246 / 0.85)` }} />
+              })}
+              <div className="pointer-events-none absolute" style={{ left: selected.x + all.x, top: selected.y + all.y, width: all.w, height: all.h, outline: `${3 * inv}px dashed #7c3aed` }}>
+                <span className="absolute left-0 whitespace-nowrap rounded bg-violet-600 px-1.5 py-0.5 font-medium text-white" style={{ bottom: '100%', marginBottom: 6 * inv, fontSize: 12 * inv * 1.6 }}>{chosen.length} componentes</span>
+              </div>
+            </>
+          )
+        })()}
+        {marquee && (() => {
+          const m = placed.find((p) => p.slideId === marquee.slideId)
+          return m ? <div className="pointer-events-none absolute" style={{ left: m.x + marquee.x, top: m.y + marquee.y, width: marquee.w, height: marquee.h, background: 'rgb(139 92 246 / 0.12)', outline: `${2 * inv}px solid #8b5cf6` }} /> : null
+        })()}
 
         {/* O agente à vista: o alvo do pedido, o cursor que passa de elemento em elemento e o que mudou */}
         {working && (() => {

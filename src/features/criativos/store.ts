@@ -20,6 +20,8 @@ interface EditorState {
   postId?: string
   slideId?: string
   layerId?: string
+  /** Os componentes escolhidos no slide (um ou mais); `layerId` é o último escolhido. */
+  layerIds: string[]
   /** O post inteiro está escolhido (todos os cards da fileira), não só um slide. */
   row?: boolean
   images: ImageMap
@@ -34,6 +36,10 @@ interface EditorState {
   selectRow: (id: string) => void
   selectSlide: (id: string) => void
   selectLayer: (id?: string) => void
+  /** Troca a seleção por estes componentes (do slide escolhido). */
+  selectLayers: (ids: string[]) => void
+  /** Entra ou sai da seleção (Shift ou ⌘ + clique, ou o painel de camadas). */
+  toggleLayer: (id: string) => void
   /** Troca o conjunto inteiro (rascunho, sem histórico), como no arrasto. */
   draft: (fn: (set: CreativeSet) => CreativeSet) => void
   /** Grava o rascunho atual como um passo desfazível. */
@@ -63,6 +69,7 @@ export const useEditor = create<EditorState>()((set, get) => {
 
   return {
     status: 'loading',
+    layerIds: [],
     images: new Map(),
     past: [],
     future: [],
@@ -74,7 +81,7 @@ export const useEditor = create<EditorState>()((set, get) => {
         const loaded = await loadSet(id, projectId)
         if (!loaded) return set({ status: 'missing' })
         const post = loaded.posts[0]
-        set({ set: loaded, status: 'ready', postId: post?.id, slideId: post?.slides[0]?.id, layerId: undefined })
+        set({ set: loaded, status: 'ready', postId: post?.id, slideId: post?.slides[0]?.id, layerId: undefined, layerIds: [] })
         void get().ensureAssets()
       } catch (err) {
         console.error('[criativos]', err)
@@ -87,14 +94,20 @@ export const useEditor = create<EditorState>()((set, get) => {
     },
     selectPost: (postId) => {
       const post = get().set?.posts.find((p) => p.id === postId)
-      set({ postId, slideId: post?.slides[0]?.id, layerId: undefined, row: false })
+      set({ postId, slideId: post?.slides[0]?.id, layerId: undefined, layerIds: [], row: false })
     },
     selectRow: (postId) => {
       const post = get().set?.posts.find((p) => p.id === postId)
-      if (post) set({ postId, slideId: post.slides[0]?.id, layerId: undefined, row: true })
+      if (post) set({ postId, slideId: post.slides[0]?.id, layerId: undefined, layerIds: [], row: true })
     },
-    selectSlide: (slideId) => set({ slideId, layerId: undefined, row: false }),
-    selectLayer: (layerId) => set({ layerId, row: false }),
+    selectSlide: (slideId) => set({ slideId, layerId: undefined, layerIds: [], row: false }),
+    selectLayer: (layerId) => set({ layerId, layerIds: layerId ? [layerId] : [], row: false }),
+    selectLayers: (ids) => set({ layerId: ids.at(-1), layerIds: ids, row: false }),
+    toggleLayer: (id) => {
+      const ids = get().layerIds
+      const next = ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
+      set({ layerId: next.at(-1), layerIds: next, row: false })
+    },
 
     draft: (fn) => {
       const current = get().set
@@ -136,9 +149,11 @@ export const useEditor = create<EditorState>()((set, get) => {
       const postId = next.posts.some((p) => p.id === get().postId) ? get().postId : next.posts[0]?.id
       const post = next.posts.find((p) => p.id === postId)
       const slideId = post?.slides.some((s) => s.id === get().slideId) ? get().slideId : post?.slides[0]?.id
-      const layerId = post?.slides.find((s) => s.id === slideId)?.layers.some((l) => l.id === get().layerId) ? get().layerId : undefined
+      const alive = new Set(post?.slides.find((s) => s.id === slideId)?.layers.map((l) => l.id))
+      const layerIds = get().layerIds.filter((id) => alive.has(id))
+      const layerId = layerIds.includes(get().layerId ?? '') ? get().layerId : layerIds.at(-1)
       // O desfazer e o refazer também recebem, para não desfazer o trabalho dos outros
-      set((s) => ({ set: next, postId, slideId, layerId, past: s.past.map((x) => mergePatch(x, patch)), future: s.future.map((x) => mergePatch(x, patch)) }))
+      set((s) => ({ set: next, postId, slideId, layerId, layerIds, past: s.past.map((x) => mergePatch(x, patch)), future: s.future.map((x) => mergePatch(x, patch)) }))
       void get().ensureAssets()
     },
 

@@ -34,6 +34,7 @@ const editInput = (body: Partial<EditRequest>): EditRequest => ({
   postId: body.postId ? String(body.postId) : undefined,
   slideId: body.slideId ? String(body.slideId) : undefined,
   layerId: body.layerId ? String(body.layerId) : undefined,
+  layerIds: Array.isArray(body.layerIds) ? body.layerIds.slice(0, 60).map(String) : undefined,
   brand: body.brand as EditRequest['brand'],
   posts: body.posts ?? [],
   fonts: Array.isArray(body.fonts) ? body.fonts.slice(0, 60).map(String) : [],

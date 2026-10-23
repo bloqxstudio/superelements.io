@@ -32,14 +32,16 @@ interface Ask {
   maxTurns?: number
   signal?: AbortSignal
   /** O que o Claude Code está fazendo (começou, pensando, escrevendo a resposta). */
-  onStep?: (step: 'start' | 'thinking' | 'writing') => void
+  onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing') => void
+  /** Lê páginas e pesquisa na web (WebFetch e WebSearch), só leitura: para pedidos que trazem um link. */
+  web?: boolean
   /** Esforço de raciocínio do Claude Code: `low` é bem mais rápido e basta para ajustes pequenos. */
   effort?: 'low' | 'medium' | 'high'
   /** Sem nenhuma saída do Claude Code por este tempo, o pedido falha em vez de ficar esperando. */
   idleMs?: number
 }
 
-export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeoutMs = 180_000, maxTurns = 2, signal, onStep, effort, idleMs = 90_000 }: Ask): Promise<T> =>
+export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeoutMs = 180_000, maxTurns = 2, signal, onStep, effort, idleMs = 90_000, web = false }: Ask): Promise<T> =>
   new Promise((resolve, reject) => {
     const bin = findBin('claude')
     if (!bin) return reject(new Error('O Claude Code não foi encontrado nesta máquina (ou diga onde está em SPACE_CLAUDE_BIN).'))
@@ -48,7 +50,7 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
     for (const key of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT']) delete env[key]
     const inPrompt = viaPrompt()
     const args = [
-      '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--model', model, '--strict-mcp-config', '--tools', '', '--max-turns', String(maxTurns),
+      '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--model', model, '--strict-mcp-config', '--tools', web ? 'WebFetch,WebSearch' : '', ...(web ? ['--allowedTools', 'WebFetch', 'WebSearch'] : []), '--max-turns', String(web ? Math.max(maxTurns, 10) : maxTurns),
       ...(inPrompt ? ['--system-prompt', 'Responda somente com um objeto JSON válido, sem texto antes ou depois.'] : ['--system-prompt', system, '--json-schema', JSON.stringify(schema)]),
       ...(effort ? ['--effort', effort] : []),
     ]
@@ -63,12 +65,8 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
     let lastOutput = Date.now()
     let buffer = ''
     let stderr = ''
-    let lastStep = ''
-    const step = (next: 'start' | 'thinking' | 'writing') => {
-      if (next === lastStep) return
-      lastStep = next
-      onStep?.(next)
-    }
+    // Cada evento do Claude Code avisa a tela (ela usa isso como sinal de vida, também nas leituras longas da web)
+    const step = (next: 'start' | 'thinking' | 'reading' | 'writing') => onStep?.(next)
     let answer: T | undefined
     let failure: string | undefined
     const finish = (error?: Error) => {
@@ -108,9 +106,11 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
         try {
           const event = JSON.parse(line)
           if (event.type === 'system') step('start')
+          else if (event.type === 'user') step('reading')
           else if (event.type === 'assistant') {
             const blocks = Array.isArray(event.message?.content) ? event.message.content : []
-            step(blocks.some((b: { type?: string }) => b.type === 'tool_use' || b.type === 'text') ? 'writing' : 'thinking')
+            const reading = blocks.some((b: { type?: string; name?: string }) => b.type === 'tool_use' && /^Web(Fetch|Search)$/.test(b.name ?? ''))
+            step(reading ? 'reading' : blocks.some((b: { type?: string }) => b.type === 'tool_use' || b.type === 'text') ? 'writing' : 'thinking')
           }
           if (event.type !== 'result') continue
           if (event.structured_output) answer = event.structured_output as T

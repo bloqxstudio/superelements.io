@@ -18,8 +18,10 @@ interface Ask {
   images?: string[]
   timeoutMs?: number
   idleMs?: number
+  /** Pesquisa na web (ferramenta de busca do Codex), para pedidos com link. */
+  web?: boolean
   signal?: AbortSignal
-  onStep?: (step: 'start' | 'thinking' | 'writing') => void
+  onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing') => void
 }
 
 /** O primeiro objeto JSON completo de um texto (a resposta pode vir com ``` ou uma frase antes). */
@@ -49,7 +51,7 @@ export function extractJson<T>(text: string): T | undefined {
   return undefined
 }
 
-export const askCodex = <T>({ prompt, images = [], timeoutMs = 360_000, idleMs = 90_000, signal, onStep }: Ask): Promise<T> =>
+export const askCodex = <T>({ prompt, images = [], timeoutMs = 360_000, idleMs = 90_000, web = false, signal, onStep }: Ask): Promise<T> =>
   new Promise((resolve, reject) => {
     const bin = findBin('codex')
     if (!bin) return reject(new Error('O Codex não foi encontrado nesta máquina (ou diga onde está em SPACE_CODEX_BIN).'))
@@ -63,7 +65,7 @@ export const askCodex = <T>({ prompt, images = [], timeoutMs = 360_000, idleMs =
     })
     const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }
     for (const key of ['CODEX_THREAD_ID', 'CODEX_SESSION_ID']) delete env[key]
-    const args = ['exec', '--json', '-s', 'read-only', '--skip-git-repo-check', ...files.map((f) => `--image=${f}`), '-']
+    const args = ['exec', '--json', '-s', 'read-only', '--skip-git-repo-check', ...(web ? ['-c', 'web_search="live"'] : []), ...files.map((f) => `--image=${f}`), '-']
     let child: ChildProcess
     try {
       child = launch(bin, args, { cwd, env })
@@ -120,6 +122,7 @@ export const askCodex = <T>({ prompt, images = [], timeoutMs = 360_000, idleMs =
           const item = event.item ?? {}
           if (event.type === 'thread.started') onStep?.('start')
           else if (event.type === 'turn.started' || (event.type === 'item.started' && item.type === 'reasoning')) onStep?.('thinking')
+          else if (item.type === 'web_search') onStep?.('reading')
           else if (event.type === 'item.completed' && item.type === 'agent_message') {
             onStep?.('writing')
             message = String(item.text ?? '')

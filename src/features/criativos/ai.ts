@@ -93,6 +93,7 @@ export interface EditCall {
   postId?: string
   slideId?: string
   layerId?: string
+  layerIds?: string[]
   images: ImageMap
   history: { role: 'user' | 'ai'; text: string }[]
   attachments?: EditRequest['attachments']
@@ -117,6 +118,7 @@ export async function requestEdit(call: EditCall, fonts: string[], signal?: Abor
     postId: call.postId,
     slideId: call.slideId,
     layerId: call.layerId,
+    layerIds: call.layerIds,
     brand: { name: set.brand.name, colors: set.brand.colors, headingFont: set.brand.headingFont, bodyFont: set.brand.bodyFont },
     // Escopo menor que o conjunto: só o post aberto vai para a IA
     posts: compactPosts(call.scope === 'set' || !post ? set.posts : [post], { postId: call.postId, slideId: call.slideId, scope: call.scope }),

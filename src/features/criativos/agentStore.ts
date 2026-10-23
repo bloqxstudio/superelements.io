@@ -18,6 +18,7 @@ export const PHASE_LABEL: Record<AgentPhase, string> = {
   sending: 'Lendo o pedido',
   start: 'Olhando o conjunto',
   thinking: 'Pensando',
+  reading: 'Lendo o link',
   writing: 'Escrevendo as mudanças',
   applying: 'Aplicando',
   generating: 'Gerando as imagens',

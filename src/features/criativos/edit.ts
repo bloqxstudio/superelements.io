@@ -96,6 +96,8 @@ export interface EditRequest {
   postId?: string
   slideId?: string
   layerId?: string
+  /** Vários componentes escolhidos (o `layerId` é o último). */
+  layerIds?: string[]
   brand: { name: string; colors: { name: string; hex: string }[]; headingFont: string; bodyFont: string; emphasisFont?: string }
   /** Conjunto resumido para a IA ler (ids, textos, caixas). */
   posts: unknown

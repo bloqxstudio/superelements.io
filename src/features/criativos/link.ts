@@ -37,7 +37,7 @@ export const useAiAvailable = (): boolean | null => useCreativeLink((s) => (!s.c
 export const STALE_MESSAGE = 'A IA não respondeu. O conector pode estar desatualizado: baixe o conector.mjs de novo e abra-o.'
 
 const pending = new Map<string, { resolve: (data: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>; onStep?: (step: CreativeStep) => void }>()
-const TIMEOUT = 5 * 60_000
+const TIMEOUT = 9 * 60_000
 /** Quanto esperar a resposta ao "oi" antes de achar o conector desatualizado. */
 const HELLO_WAIT = 4000
 /** Sem nenhum sinal de vida do Claude Code por este tempo, o pedido falha em vez de esperar os 5 minutos. */
@@ -111,7 +111,7 @@ export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?:
     const timer = setTimeout(() => {
       pending.delete(id)
       channel.send(CREATIVE_EVENTS.stop, { id })
-      reject(new Error('A IA passou de 5 minutos sem responder.'))
+      reject(new Error('A IA passou de 9 minutos sem responder.'))
     }, TIMEOUT)
     // Sem nenhum passo vindo do outro lado, o conector provavelmente não conhece este pedido
     // Imagem não manda passos (leva até 1 minuto): só vale o limite total

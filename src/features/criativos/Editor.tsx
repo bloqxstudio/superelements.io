@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Grid3x3, Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
+import { LayersPanel } from './LayersPanel'
+import { alignLayers, currentLayers, distributeLayers, duplicateLayers, groupLayers, moveLayers, patchLayerFields, removeLayers, stackLayers, ungroupLayers, type AlignHow } from './layerOps'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { drawSlide, layerBox, slideToBlob, type ExportType } from './render'
@@ -59,26 +61,6 @@ const editSlide = (fn: (slide: Slide, post: Post) => Slide) => {
 
 const editLayer = (id: string, fields: Partial<Layer>) =>
   editSlide((sl) => ({ ...sl, layers: sl.layers.map((l) => (l.id === id ? ({ ...l, ...fields } as Layer) : l)) }))
-
-type Align = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'
-
-/** Leva o componente para uma margem ou para o centro do card (as margens são as da grade de boas práticas). */
-const alignLayer = (layer: Layer, how: Align) => {
-  const { set, postId } = useEditor.getState()
-  const post = set?.posts.find((p) => p.id === postId)
-  if (!post) return
-  const { width: W, height: H } = sizeOf(post.format)
-  const m = marginOf(post.format)
-  const box = layerBox(layer)
-  const fields: Partial<Layer> = {}
-  if (how === 'left') Object.assign(fields, { x: m, ...(layer.type === 'text' ? { align: 'left' } : {}) })
-  if (how === 'center') Object.assign(fields, { x: Math.round((W - box.w) / 2), ...(layer.type === 'text' ? { align: 'center' } : {}) })
-  if (how === 'right') Object.assign(fields, { x: W - m - box.w, ...(layer.type === 'text' ? { align: 'right' } : {}) })
-  if (how === 'top') fields.y = m
-  if (how === 'middle') fields.y = Math.round((H - box.h) / 2)
-  if (how === 'bottom') fields.y = H - m - box.h
-  editLayer(layer.id, fields)
-}
 
 const addLayer = (layer: Layer) => {
   editSlide((sl) => ({ ...sl, layers: [...sl.layers, layer] }))
@@ -318,7 +300,7 @@ const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer })
       <Field label="Alinhar no card (margens da grade)">
         <div className="flex gap-1">
           {([['left', AlignStartVertical, 'Margem esquerda'], ['center', AlignCenterVertical, 'Centralizar na horizontal'], ['right', AlignEndVertical, 'Margem direita'], ['top', AlignStartHorizontal, 'Margem de cima'], ['middle', AlignCenterHorizontal, 'Centralizar na vertical'], ['bottom', AlignEndHorizontal, 'Margem de baixo']] as const).map(([how, Icon, title]) => (
-            <Button key={how} type="button" variant="outline" size="icon" className="h-8 flex-1 bg-white" title={title} aria-label={title} onClick={() => alignLayer(layer, how)}>
+            <Button key={how} type="button" variant="outline" size="icon" className="h-8 flex-1 bg-white" title={title} aria-label={title} onClick={() => alignLayers([layer.id], how)}>
               <Icon className="h-4 w-4" />
             </Button>
           ))}
@@ -336,19 +318,13 @@ const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer })
       <div className="flex gap-1.5 border-t border-gray-100 pt-3">
         <Button type="button" variant="outline" size="icon" className="h-8 w-8 bg-white" title="Trazer para a frente" onClick={() => move(1)}><ArrowUp className="h-4 w-4" /></Button>
         <Button type="button" variant="outline" size="icon" className="h-8 w-8 bg-white" title="Enviar para trás" onClick={() => move(-1)}><ArrowDown className="h-4 w-4" /></Button>
-        <Button type="button" variant="outline" size="icon" className="h-8 w-8 bg-white" title="Duplicar (Ctrl+D)" onClick={() => duplicate(layer)}><Copy className="h-4 w-4" /></Button>
-        <Button type="button" variant="outline" size="icon" className="ml-auto h-8 w-8 bg-white text-red-600" title="Excluir (Delete)" onClick={() => remove(layer.id)}><Trash2 className="h-4 w-4" /></Button>
+        <Button type="button" variant="outline" size="icon" className="h-8 w-8 bg-white" title="Duplicar (Ctrl+D)" onClick={() => duplicateLayers([layer.id])}><Copy className="h-4 w-4" /></Button>
+        <Button type="button" variant="outline" size="icon" className="ml-auto h-8 w-8 bg-white text-red-600" title="Excluir (Delete)" onClick={() => removeLayers([layer.id])}><Trash2 className="h-4 w-4" /></Button>
       </div>
     </div>
   )
 }
 
-const remove = (id: string) => {
-  editSlide((sl) => ({ ...sl, layers: sl.layers.filter((l) => l.id !== id) }))
-  useEditor.getState().selectLayer(undefined)
-}
-
-const duplicate = (layer: Layer) => addLayer({ ...layer, id: uid(), name: `${layer.name} (cópia)`, x: layer.x + 30, y: layer.y + 30 })
 
 // Exportação
 
@@ -373,6 +349,60 @@ async function exportFiles(scope: 'slide' | 'post' | 'set', type: ExportType) {
   } catch (err) {
     toast.error(err instanceof Error ? err.message : 'Não consegui exportar.')
   }
+}
+
+// Vários componentes escolhidos
+
+const ALIGN: [AlignHow, React.ComponentType<{ className?: string }>, string][] = [
+  ['left', AlignStartVertical, 'Alinhar à esquerda'],
+  ['center', AlignCenterVertical, 'Centralizar na horizontal'],
+  ['right', AlignEndVertical, 'Alinhar à direita'],
+  ['top', AlignStartHorizontal, 'Alinhar em cima'],
+  ['middle', AlignCenterHorizontal, 'Centralizar na vertical'],
+  ['bottom', AlignEndHorizontal, 'Alinhar embaixo'],
+]
+
+const MultiInspector: React.FC<{ ids: string[] }> = ({ ids }) => {
+  const layers = currentLayers().filter((l) => ids.includes(l.id))
+  const grouped = layers.some((l) => l.group)
+  const locked = layers.every((l) => l.locked)
+  const hidden = layers.every((l) => l.hidden)
+  return (
+    <div className="space-y-4">
+      <p className="text-sm font-semibold text-gray-900">{ids.length} componentes escolhidos</p>
+      <Field label="Alinhar entre si">
+        <div className="flex gap-1">
+          {ALIGN.map(([how, Icon, title]) => (
+            <Button key={how} type="button" variant="outline" size="icon" className="h-8 flex-1 bg-white" title={title} aria-label={title} onClick={() => alignLayers(ids, how)}>
+              <Icon className="h-4 w-4" />
+            </Button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Distribuir por igual (3 ou mais)">
+        <div className="flex gap-1.5">
+          <Button type="button" variant="outline" size="sm" className="h-8 flex-1 bg-white text-xs" disabled={ids.length < 3} onClick={() => distributeLayers(ids, 'x')}>Na horizontal</Button>
+          <Button type="button" variant="outline" size="sm" className="h-8 flex-1 bg-white text-xs" disabled={ids.length < 3} onClick={() => distributeLayers(ids, 'y')}>Na vertical</Button>
+        </div>
+      </Field>
+      <div className="grid grid-cols-2 gap-1.5">
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 bg-white" onClick={() => groupLayers(ids)}><Group className="h-4 w-4" /> Agrupar</Button>
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 bg-white" disabled={!grouped} onClick={() => ungroupLayers(ids)}><Ungroup className="h-4 w-4" /> Desagrupar</Button>
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 bg-white" onClick={() => stackLayers(ids, 'front')}><ArrowUp className="h-4 w-4" /> Para a frente</Button>
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 bg-white" onClick={() => stackLayers(ids, 'back')}><ArrowDown className="h-4 w-4" /> Para trás</Button>
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 bg-white" onClick={() => patchLayerFields(ids, { locked: !locked } as Partial<Layer>)}><Lock className="h-4 w-4" /> {locked ? 'Destravar' : 'Travar'}</Button>
+        <Button type="button" variant="outline" size="sm" className="h-8 bg-white" onClick={() => patchLayerFields(ids, { hidden: !hidden } as Partial<Layer>)}>{hidden ? 'Mostrar' : 'Esconder'}</Button>
+      </div>
+      <Field label="Opacidade de todos">
+        <input type="range" min={0} max={1} step={0.05} defaultValue={1} onChange={(e) => patchLayerFields(ids, { opacity: Number(e.target.value) } as Partial<Layer>)} className="w-full" />
+      </Field>
+      <div className="flex gap-1.5 border-t border-gray-100 pt-3">
+        <Button type="button" variant="outline" size="icon" className="h-8 w-8 bg-white" title="Duplicar (Ctrl+D)" onClick={() => duplicateLayers(ids)}><Copy className="h-4 w-4" /></Button>
+        <Button type="button" variant="outline" size="icon" className="ml-auto h-8 w-8 bg-white text-red-600" title="Excluir (Delete)" onClick={() => removeLayers(ids)}><Trash2 className="h-4 w-4" /></Button>
+      </div>
+      <p className="text-xs text-gray-500">Shift ou ⌘ + clique soma; arraste o fundo do card para escolher por área; Alt + clique escolhe um só dentro de um grupo.</p>
+    </div>
+  )
 }
 
 // Tela
@@ -402,9 +432,10 @@ export const CreativeEditor: React.FC = () => {
   const live = useLive((s) => s.live)
   const sharedId = set?.shared ? set.id : undefined
   const sharedProject = set?.projectId
-  const [panel, setPanel] = useState<'ia' | 'props'>('ia')
+  const [panel, setPanel] = useState<'ia' | 'props' | 'layers'>('ia')
   const [gridOpen, setGridOpen] = useState(false)
   const refFocus = useRefs((r) => r.focus)
+  const layerIds = useEditor((s) => s.layerIds)
   useEffect(() => {
     if (refFocus) setPanel('ia')
   }, [refFocus])
@@ -432,17 +463,25 @@ export const CreativeEditor: React.FC = () => {
         e.preventDefault()
         if (e.shiftKey) st.redo()
         else st.undo()
-      } else if (mod && e.key.toLowerCase() === 'd' && currentLayer(st)) {
+      } else if (mod && e.key.toLowerCase() === 'g') {
         e.preventDefault()
-        duplicate(currentLayer(st)!)
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && st.layerId) {
+        if (e.shiftKey) ungroupLayers(st.layerIds)
+        else groupLayers(st.layerIds)
+      } else if (mod && e.key.toLowerCase() === 'a') {
         e.preventDefault()
-        remove(st.layerId)
-      } else if (st.layerId && e.key.startsWith('Arrow')) {
+        st.selectLayers(currentLayers().filter((l) => !l.locked && !l.hidden).map((l) => l.id))
+      } else if (mod && e.key.toLowerCase() === 'd' && st.layerIds.length) {
         e.preventDefault()
-        const l = currentLayer(st)!
+        duplicateLayers(st.layerIds)
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && st.layerIds.length) {
+        e.preventDefault()
+        removeLayers(st.layerIds)
+      } else if (e.key === 'Escape' && st.layerIds.length) {
+        st.selectLayers([])
+      } else if (st.layerIds.length && e.key.startsWith('Arrow')) {
+        e.preventDefault()
         const n = e.shiftKey ? 10 : 1
-        editLayer(l.id, { x: l.x + (e.key === 'ArrowRight' ? n : e.key === 'ArrowLeft' ? -n : 0), y: l.y + (e.key === 'ArrowDown' ? n : e.key === 'ArrowUp' ? -n : 0) })
+        moveLayers(st.layerIds, e.key === 'ArrowRight' ? n : e.key === 'ArrowLeft' ? -n : 0, e.key === 'ArrowDown' ? n : e.key === 'ArrowUp' ? -n : 0)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -735,14 +774,16 @@ export const CreativeEditor: React.FC = () => {
 
         <aside className="hidden w-80 shrink-0 flex-col border-l bg-white lg:flex" onClick={(e) => e.stopPropagation()}>
           <div className="flex h-10 shrink-0 border-b" role="tablist">
-            {([['ia', 'IA', Sparkles], ['props', 'Propriedades', SlidersHorizontal]] as const).map(([id, label, Icon]) => (
+            {([['ia', 'IA', Sparkles], ['layers', 'Camadas', LayersIcon], ['props', 'Propriedades', SlidersHorizontal]] as const).map(([id, label, Icon]) => (
               <button key={id} type="button" role="tab" aria-selected={panel === id} onClick={() => setPanel(id)} className={cn('flex flex-1 items-center justify-center gap-1.5 border-b-2 text-xs font-semibold', panel === id ? 'border-violet-600 text-violet-800' : 'border-transparent text-gray-500 hover:text-gray-800')}>
                 <Icon className="h-3.5 w-3.5" /> {label}
               </button>
             ))}
           </div>
-          {panel === 'ia' ? <div className="min-h-0 flex-1"><AiChat available={ai} /></div> : <div className="min-h-0 flex-1 overflow-y-auto p-3" data-scroll>
-          {layer ? (
+          {panel === 'ia' ? <div className="min-h-0 flex-1"><AiChat available={ai} /></div> : panel === 'layers' ? <div className="min-h-0 flex-1"><LayersPanel /></div> : <div className="min-h-0 flex-1 overflow-y-auto p-3" data-scroll>
+          {layerIds.length > 1 ? (
+            <MultiInspector ids={layerIds} />
+          ) : layer ? (
             <Inspector key={layer.id} set={set} layer={layer} />
           ) : (
             <div className="space-y-3 text-sm text-gray-600">
