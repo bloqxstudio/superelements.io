@@ -22,6 +22,7 @@ import { shareSet } from './storage'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { alpha } from './color'
 import { gridOf, marginOf, type PostGrid } from './grid'
+import { useRefs } from './refStore'
 import { FormatField } from './FormatField'
 import { generateLayerImage } from './generate'
 import { useCreativeLink } from './link'
@@ -403,6 +404,10 @@ export const CreativeEditor: React.FC = () => {
   const sharedProject = set?.projectId
   const [panel, setPanel] = useState<'ia' | 'props'>('ia')
   const [gridOpen, setGridOpen] = useState(false)
+  const refFocus = useRefs((r) => r.focus)
+  useEffect(() => {
+    if (refFocus) setPanel('ia')
+  }, [refFocus])
   const grid = gridOf(post)
   const setGrid = (patch: Partial<PostGrid>) => editPost((p) => ({ ...p, grid: { ...gridOf(p), ...patch } }))
   const upload = useRef<HTMLInputElement>(null)

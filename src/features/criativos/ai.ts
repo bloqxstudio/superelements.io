@@ -99,6 +99,8 @@ export interface EditCall {
   skill?: EditRequest['skill']
   agent?: EditRequest['agent']
   canGenerateImages?: boolean
+  references?: EditRequest['references']
+  projects?: string[]
 }
 
 export async function requestEdit(call: EditCall, fonts: string[], signal?: AbortSignal, onStep?: (step: CreativeStep) => void): Promise<EditResponse> {
@@ -108,6 +110,8 @@ export async function requestEdit(call: EditCall, fonts: string[], signal?: Abor
   const body: EditRequest = {
     agent: call.agent,
     canGenerateImages: call.canGenerateImages,
+    references: call.references,
+    projects: call.projects,
     message: call.message,
     scope: call.scope,
     postId: call.postId,

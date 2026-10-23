@@ -60,9 +60,13 @@ function clean(type: Layer['type'], fields: LayerFields | undefined, set: Creati
   return out
 }
 
+/** Imagens de fora do conjunto que a pessoa trouxe com @ (o logo de um projeto): valem nesta sessão. */
+const allowed = new Set<string>()
+export const allowImages = (srcs: string[]) => srcs.forEach((s) => allowed.add(s))
+
 /** Imagem que existe: a da biblioteca, o logo da marca, uma enviada ao conjunto. */
 export const imageOk = (src: string, set: CreativeSet) =>
-  src === '' || LIBRARY.some((i) => i.src === src) || src === set.brand.logoOnLight || src === set.brand.logoOnDark || (src.startsWith('asset:') && set.assets.some((a) => a.id === src.slice(6)))
+  src === '' || allowed.has(src) || LIBRARY.some((i) => i.src === src) || src === set.brand.logoOnLight || src === set.brand.logoOnDark || (src.startsWith('asset:') && set.assets.some((a) => a.id === src.slice(6)))
 
 const DEFAULTS: Record<Layer['type'], (set: CreativeSet) => Record<string, unknown>> = {
   text: (set) => ({ text: 'Texto', h: 0, w: 600, font: set.brand.bodyFont, weight: 500, size: 56, color: '#111111', align: 'left', lineHeight: 1.15, letterSpacing: 0 }),

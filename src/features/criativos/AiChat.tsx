@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { create } from 'zustand'
 import { toast } from 'sonner'
-import { Check, ImageIcon, Loader2, Paperclip, Send, Sparkles, Square, Undo2, Wand2, X } from 'lucide-react'
+import { AtSign, Check, ImageIcon, Loader2, Paperclip, Send, Sparkles, Square, Undo2, Wand2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ConnectorPrompt } from '@/features/space/chat/ConnectorPrompt'
@@ -17,6 +17,10 @@ import type { ChatAgentId } from '@/features/space/chat/protocol'
 import { useConnector } from '@/features/space/connector/connectorStore'
 import { applyOps, type Applied } from './applyOps'
 import { generateAll, markNotGenerated } from './generate'
+import { AV_CASES } from '@/features/avence/cases'
+import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { resolveRefs } from './references'
+import { useRefs, type Ref } from './refStore'
 import { CREATIVE_SKILLS } from './skills'
 import { uploadAsset } from './storage'
 import { currentLayer, currentPost, currentSlide, useEditor } from './store'
@@ -137,6 +141,15 @@ const savedAgent = (): ChatAgentId | undefined => {
   } catch {
     return undefined
   }
+}
+
+/** Sem acento e em minúsculas, para filtrar o que a pessoa digita depois do @. */
+const plain = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+interface MentionItem {
+  ref: Ref
+  group: string
+  hint?: string
 }
 
 interface Attached {
@@ -296,6 +309,58 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   const control = useRef<AbortController | null>(null)
   const end = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
+  const input = useRef<HTMLTextAreaElement>(null)
+  const refs = useRefs((r) => r.refs)
+  const focusTick = useRefs((r) => r.focus)
+  const [mention, setMention] = useState<{ start: number; query: string } | null>(null)
+  const [mentionAt, setMentionAt] = useState(0)
+  useProjectList()
+  const projects = useProjectStore((p) => p.projects)
+
+  // O canvas pediu para referenciar algo: a caixa do chat ganha o foco
+  useEffect(() => {
+    if (focusTick) input.current?.focus()
+  }, [focusTick])
+
+  // Marcas de outro conjunto não valem neste
+  useEffect(() => {
+    useRefs.getState().clear()
+  }, [set.id])
+
+  // Posts e slides do conjunto, projetos da conta e os cases: o que o @ oferece
+  const mentionItems = useMemo<MentionItem[]>(() => {
+    const q = plain(mention?.query ?? '')
+    const all: MentionItem[] = [
+      ...set.posts.map((p): MentionItem => ({ group: 'Posts deste conjunto', hint: `${p.slides.length} slides`, ref: { id: `post:${p.id}`, kind: 'post', label: p.name, postId: p.id } })),
+      ...set.posts.flatMap((p) => p.slides.map((sl, i): MentionItem => ({ group: 'Slides', hint: p.name, ref: { id: `slide:${sl.id}`, kind: 'slide', label: `${p.name} · slide ${i + 1}`, postId: p.id, slideId: sl.id } }))),
+      ...projects.map((p): MentionItem => ({ group: 'Projetos da conta', hint: 'marca, briefing e textos das páginas', ref: { id: `project:${p.id}`, kind: 'project', label: p.name, projectId: p.id } })),
+      { group: 'Cases', hint: `${AV_CASES.length} sites no ar`, ref: { id: 'case:*', kind: 'case', label: 'Todos os cases', slug: '*' } },
+      ...AV_CASES.map((c): MentionItem => ({ group: 'Cases', hint: c.segment, ref: { id: `case:${c.slug}`, kind: 'case', label: c.name, slug: c.slug } })),
+    ]
+    return (q ? all.filter((i) => plain(`${i.ref.label} ${i.hint ?? ''}`).includes(q)) : all).slice(0, 40)
+  }, [mention?.query, set.posts, projects])
+
+  const pickMention = (item: MentionItem) => {
+    if (mention) {
+      const el = input.current
+      const end = el?.selectionStart ?? mention.start + mention.query.length + 1
+      setText((t) => `${t.slice(0, mention.start)}${t.slice(end)}`.replace(/\s{2,}/g, ' '))
+    }
+    useRefs.getState().add(item.ref)
+    setMention(null)
+    requestAnimationFrame(() => input.current?.focus())
+  }
+
+  const onType = (value: string, caret: number) => {
+    setText(value)
+    // Um @ no começo de uma palavra abre a lista; espaço ou apagar o @ fecha
+    const before = value.slice(0, caret)
+    const m = /(^|\s)@([^\s@]*)$/.exec(before)
+    if (m) {
+      setMention({ start: before.length - m[2].length - 1, query: m[2] })
+      setMentionAt(0)
+    } else setMention(null)
+  }
 
   useEffect(() => watchSkills(), [])
 
@@ -334,11 +399,12 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   }
 
   const send = async (override?: string) => {
-    const message = (override ?? text).trim() || (files.length ? 'Faça posts com base nesta referência.' : '')
+    const message = (override ?? text).trim() || (files.length ? 'Faça posts com base nesta referência.' : useRefs.getState().refs.length ? 'Use o que marquei como referência.' : '')
     if (!message || busy || !post || available !== true) return
     const push = useChat.getState().push
     const sent = files
-    push(set.id, { id: crypto.randomUUID(), role: 'user', text: message, scope: scopeName(), previews: sent.map((f) => f.preview), skill: skill?.name })
+    const labels = useRefs.getState().refs.map((r) => `@${r.label}`)
+    push(set.id, { id: crypto.randomUUID(), role: 'user', text: labels.length ? `${labels.join(' ')} ${message}` : message, scope: scopeName(), previews: sent.map((f) => f.preview), skill: skill?.name })
     setText('')
     setFiles([])
     setBusy(true)
@@ -359,6 +425,9 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
       const current = state.set!
       const history = (useChat.getState().bySet[set.id] ?? []).filter((m) => !m.error).map((m) => ({ role: m.role, text: m.text }))
       const fonts = [...new Set([current.brand.headingFont, current.brand.bodyFont, ...FONTS])]
+      const marked = useRefs.getState().refs
+      const resolved = marked.length ? await resolveRefs(marked, current, state.images, (id) => projects.find((p) => p.id === id)?.name) : { refs: [], extra: [] }
+      useRefs.getState().clear()
       const answer = await requestEdit(
         {
           message,
@@ -373,6 +442,8 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
           skill: skill ? { name: skill.name, instructions: skill.instructions } : undefined,
           agent,
           canGenerateImages: !!useCreativeLink.getState().images,
+          references: resolved.refs,
+          projects: projects.map((p) => p.name),
         },
         fonts,
         control.current.signal,
@@ -513,7 +584,32 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
           </div>
         )}
 
+        {refs.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {refs.map((r) => (
+              <span key={r.id} className="inline-flex items-center gap-1 rounded-full bg-violet-100 py-0.5 pl-2 pr-1 text-[11px] font-medium text-violet-800" title={`${r.kind === 'post' ? 'Post' : r.kind === 'slide' ? 'Slide' : r.kind === 'project' ? 'Projeto' : 'Case'} marcado`}>
+                <AtSign className="h-3 w-3" />
+                {r.label}
+                <button type="button" aria-label={`Tirar ${r.label}`} onClick={() => useRefs.getState().remove(r.id)} className="rounded-full p-0.5 hover:bg-violet-200"><X className="h-3 w-3" /></button>
+              </span>
+            ))}
+          </div>
+        )}
         <div className="relative">
+          {mention && (
+            <div className="absolute bottom-full left-0 z-40 mb-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white p-1 shadow-xl" data-scroll role="listbox" aria-label="Marcar com @">
+              {mentionItems.length === 0 && <p className="px-2 py-2 text-xs text-gray-500">Nada encontrado para "{mention.query}".</p>}
+              {mentionItems.map((item, i) => (
+                <React.Fragment key={item.ref.id}>
+                  {(i === 0 || mentionItems[i - 1].group !== item.group) && <p className="px-2 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">{item.group}</p>}
+                  <button type="button" role="option" aria-selected={i === mentionAt} onMouseEnter={() => setMentionAt(i)} onMouseDown={(e) => { e.preventDefault(); pickMention(item) }} className={cn('flex w-full items-baseline gap-2 rounded-lg px-2 py-1.5 text-left', i === mentionAt ? 'bg-violet-50' : 'hover:bg-gray-50')}>
+                    <span className="min-w-0 truncate text-xs font-medium text-gray-900">{item.ref.label}</span>
+                    {item.hint && <span className="min-w-0 truncate text-[11px] text-gray-500">{item.hint}</span>}
+                  </button>
+                </React.Fragment>
+              ))}
+            </div>
+          )}
           {menu && (
             <div className="absolute bottom-full left-0 z-30 mb-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-white p-1 shadow-xl" data-scroll>
               {skills.map((k) => {
@@ -533,9 +629,29 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
           )}
           <div className="flex items-end gap-1.5">
             <textarea
+              ref={input}
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => onType(e.target.value, e.target.selectionStart)}
               onKeyDown={(e) => {
+                if (mention && mentionItems.length) {
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    setMentionAt((i) => (i + (e.key === 'ArrowDown' ? 1 : -1) + mentionItems.length) % mentionItems.length)
+                    e.stopPropagation()
+                    return
+                  }
+                  if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault()
+                    pickMention(mentionItems[mentionAt] ?? mentionItems[0])
+                    e.stopPropagation()
+                    return
+                  }
+                }
+                if (mention && e.key === 'Escape') {
+                  setMention(null)
+                  e.stopPropagation()
+                  return
+                }
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
                   void send()
@@ -550,13 +666,13 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
                 }
               }}
               rows={2}
-              placeholder={files.length ? 'O que fazer com a referência?' : 'O que você quer mudar? Cole um print aqui.'}
+              placeholder={files.length || refs.length ? 'O que fazer com a referência?' : 'O que você quer mudar? @ marca um post, projeto ou case. Cole um print aqui.'}
               className="min-h-[56px] flex-1 resize-none rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             {busy ? (
               <Button type="button" size="icon" variant="outline" className="h-9 w-9 shrink-0 bg-white" title="Parar" onClick={stop}><Square className="h-4 w-4" /></Button>
             ) : (
-              <Button type="button" size="icon" className="h-9 w-9 shrink-0" title="Enviar (Enter)" disabled={(!text.trim() && !files.length) || available === null} onClick={() => void send()}><Send className="h-4 w-4" /></Button>
+              <Button type="button" size="icon" className="h-9 w-9 shrink-0" title="Enviar (Enter)" disabled={(!text.trim() && !files.length && !refs.length) || available === null} onClick={() => void send()}><Send className="h-4 w-4" /></Button>
             )}
           </div>
         </div>

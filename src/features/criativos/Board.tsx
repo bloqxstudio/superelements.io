@@ -1,7 +1,8 @@
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Copy, Download, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
+import { AtSign, Copy, Download, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { agentInfo, PHASE_LABEL, useAgent } from './agentStore'
+import { useRefs } from './refStore'
 import { gridOf, guidesOf, snapAxis, snapTargets, type PostGrid } from './grid'
 import { rememberPointer, sendPointer, useLive } from './live'
 import { drawSlide, fontCss, layerBox, type ImageMap } from './render'
@@ -434,6 +435,17 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
               <span className={cn('font-semibold', row.postId === postId ? 'text-violet-700' : 'text-zinc-800')}>{row.name}</span>
               <span className="text-[22px] text-zinc-500">{sizeOf(row.format).label} · {row.slides.length} {row.slides.length === 1 ? 'slide' : 'slides'}{rowSelected && row.postId === postId ? ' · post inteiro' : ''}</span>
             </button>
+            <button
+              type="button"
+              data-ui
+              onClick={() => useRefs.getState().add({ id: `post:${row.postId}`, kind: 'post', label: row.name, postId: row.postId }, true)}
+              title="Referenciar este post no chat (@): diga o que trazer dele"
+              aria-label={`Referenciar ${row.name} no chat`}
+              className="absolute flex items-center justify-center rounded-xl text-zinc-500 hover:bg-violet-100 hover:text-violet-700"
+              style={{ left: Math.min(row.width - 60, 1180), top: row.y, width: 64, height: HEAD - 10 }}
+            >
+              <AtSign style={{ width: 34, height: 34 }} />
+            </button>
             {row.slides.map((p) => (
               <div key={p.slideId} className="absolute bg-white" style={{ left: p.x, top: p.y, width: p.w, height: p.h, boxShadow: p.slideId === slideId || (rowSelected && p.postId === postId) ? `0 0 0 ${3 * inv}px #8b5cf6` : `0 0 0 ${1 * inv}px rgb(0 0 0 / 0.14), 0 ${16 * inv}px ${40 * inv}px -${12 * inv}px rgb(0 0 0 / 0.25)` }}>
                 {visible.has(p.slideId) ? (
@@ -581,6 +593,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
           <div className="absolute" style={{ left: selected.x + selected.w, top: selected.y - 24 * inv, width: 0, height: 0 }}>
             <div data-ui className="absolute bottom-0 right-0 flex items-center gap-1 whitespace-nowrap rounded-xl border bg-white p-1 shadow-lg" style={{ height: 36, transform: `scale(${inv * 1.4})`, transformOrigin: 'right bottom' }}>
               <span className="px-2 text-xs font-semibold text-gray-700">Slide {selected.index + 1}</span>
+              <BarButton label="Referenciar no chat (@): diga o que trazer daqui" onClick={() => useRefs.getState().add({ id: `slide:${selected.slideId}`, kind: 'slide', label: `${set.posts.find((x) => x.id === selected.postId)?.name ?? 'Post'} · slide ${selected.index + 1}`, postId: selected.postId, slideId: selected.slideId }, true)}><AtSign className="h-4 w-4" /></BarButton>
               <BarButton label="Ampliar" onClick={() => fit({ x: selected.x - 80, y: selected.y - 120, w: selected.w + 160, h: selected.h + 240 })}><Maximize2 className="h-4 w-4" /></BarButton>
               <BarButton label="Baixar slide" onClick={() => onDownloadSlide(selected.postId, selected.slideId)}><Download className="h-4 w-4" /></BarButton>
               <BarButton label="Duplicar slide" onClick={() => onDuplicateSlide(selected.postId, selected.slideId)}><Copy className="h-4 w-4" /></BarButton>

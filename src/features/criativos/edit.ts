@@ -109,6 +109,10 @@ export interface EditRequest {
   attachments?: { name: string; src: string; data: string }[]
   /** Escopo post: uma imagem de cada slide do post, na ordem (para a IA ver a fileira inteira). */
   previews?: string[]
+  /** O que a pessoa marcou com @ para trazer ao pedido (posts, slides, projetos, cases), já resumido. */
+  references?: { kind: string; label: string; text: string; images?: string[] }[]
+  /** Projetos da conta (nomes), para a IA saber o que existe e pedir o @ certo. */
+  projects?: string[]
   /** Há uma chave de imagens neste computador: a IA pode pedir imagens (`prompt` numa camada de imagem). */
   canGenerateImages?: boolean
   /** Skill escolhida: um jeito de trabalhar para este pedido. */

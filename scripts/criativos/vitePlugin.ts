@@ -41,6 +41,10 @@ const editInput = (body: Partial<EditRequest>): EditRequest => ({
   cases: Array.isArray(body.cases) ? body.cases.slice(0, 12) : [],
   image: typeof body.image === 'string' && body.image.length < 2_000_000 ? body.image : undefined,
   previews: Array.isArray(body.previews) ? body.previews.slice(0, 10).filter((x) => typeof x === 'string' && x.length < 1_000_000) : [],
+  references: Array.isArray(body.references)
+    ? body.references.slice(0, 8).map((r) => ({ kind: String(r?.kind ?? ''), label: String(r?.label ?? '').slice(0, 120), text: String(r?.text ?? '').slice(0, 12_000), images: Array.isArray(r?.images) ? r.images.slice(0, 8).filter((x) => typeof x === 'string' && x.length < 700_000) : [] }))
+    : [],
+  projects: Array.isArray(body.projects) ? body.projects.slice(0, 60).map((p) => String(p).slice(0, 80)) : [],
   history: Array.isArray(body.history) ? body.history.slice(-6) : [],
   attachments: Array.isArray(body.attachments)
     ? body.attachments.slice(0, 4).filter((a) => typeof a?.data === 'string' && a.data.length < 3_000_000).map((a) => ({ name: String(a.name ?? 'imagem').slice(0, 80), src: String(a.src ?? ''), data: a.data }))
