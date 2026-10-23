@@ -64,6 +64,12 @@ interface LayerBase {
   locked?: boolean
   /** Grupo a que pertence: camadas com o mesmo id se escolhem, movem e duplicam juntas. */
   group?: string
+  /**
+   * Faixa contínua: a mesma peça atravessa todos os cards do post (cada card guarda
+   * uma cópia deslocada de uma largura de card por posição). `index` é a posição do
+   * card na faixa; mudar uma cópia muda as outras.
+   */
+  span?: { id: string; index: number }
 }
 
 export type TextAlign = 'left' | 'center' | 'right'

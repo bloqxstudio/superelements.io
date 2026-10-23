@@ -339,6 +339,67 @@ export function pageWindowSlide(brand: SetBrand, format: FormatId, o: { src: str
   ])
 }
 
+export interface SidewaysInput {
+  /** A foto da página inteira (a que está no conjunto). */
+  src: string
+  imgW: number
+  imgH: number
+  /** O case: o nome do projeto. */
+  title: string
+  /** A página: o que o card de conteúdo diz embaixo. */
+  sub: string
+  /** Rótulo pequeno no topo. */
+  label: string
+}
+
+/**
+ * Carrossel "case + site de lado": o primeiro card é só o case (nome e um
+ * trecho do site); os outros formam uma faixa contínua com a página inteira
+ * deitada, correndo de card em card até o fim (cada card guarda a fatia dele, e
+ * as cópias se mantêm emendadas). Fundo escuro da marca, para o site aparecer.
+ */
+export function sidewaysSlides(brand: SetBrand, format: FormatId, o: SidewaysInput): Slide[] {
+  const c = ctxOf(brand, format, true)
+  const { width: W, height: H } = sizeOf(format)
+  const top = c.m + 150
+  const bottom = H - c.m - 96
+  let hv = bottom - top
+  let k = hv / o.imgW
+  // Cards de conteúdo: a página deitada mais as margens das pontas; no máximo 8
+  const n = Math.min(8, Math.max(1, Math.ceil((o.imgH * k + c.m * 2) / W)))
+  if (o.imgH * k + c.m * 2 > n * W) {
+    k = (n * W - c.m * 2) / o.imgH
+    hv = o.imgW * k
+  }
+  const length = o.imgH * k
+  const x0 = c.m + (n * W - c.m * 2 - length) / 2
+  const cx = x0 + length / 2
+  const cy = top + (bottom - top) / 2
+  const span = uid()
+  const stripX = (j: number) => cx - hv / 2 - j * W
+  const total = n + 1
+
+  const cover = slide(c.p.ink, [
+    ...backdrop(c, [[c.w - 460, -220, 800], [-260, c.h - 520, 640]]),
+    ...header(c, o.label),
+    text(c, 'Rótulo do case', 'Case', { x: c.m, y: c.m + 150, w: c.w - c.m * 2, size: 26, weight: 700, letterSpacing: 0.16, upper: true, color: c.hi }),
+    title(c, o.title, { x: c.m, y: c.m + 200, w: c.w - c.m * 2, size: c.h > 1500 ? 168 : 148, weight: 500, lineHeight: 0.96, letterSpacing: -0.05, maxLines: 3 }),
+    image('Trecho do site', o.src, { x: c.m, y: H - c.m - 560, w: c.w - c.m * 2, h: 560, frame: 'browser', focusY: 0 }),
+    text(c, 'Arraste', 'Arraste para ver o site →', { x: c.m, y: H - c.m - 560 - 64, w: c.w - c.m * 2, size: 26, weight: 600, letterSpacing: 0.12, upper: true, color: c.soft }),
+  ])
+
+  const content = Array.from({ length: n }, (_, j) =>
+    slide(c.p.ink, [
+      ...backdrop(c, []),
+      ...header(c, `${o.label} · ${j + 2}/${total}`),
+      image('Site de lado', o.src, { x: stripX(j), y: cy - (length / 2), w: hv, h: length, fit: 'cover', radius: 14, frame: 'none', rotation: -90, span: { id: span, index: j } }),
+      text(c, 'Página', o.sub, { x: c.m, y: H - c.m - 36, w: c.w - c.m * 2 - 360, size: 26, weight: 600, letterSpacing: 0.1, upper: true, color: c.soft }),
+      ...(j < n - 1 ? swipe(c) : []),
+    ])
+  )
+  return [cover, ...content]
+}
+
 export interface SlideTemplate {
   id: TemplateId
   name: string

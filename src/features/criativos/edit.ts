@@ -7,7 +7,7 @@
 
 import { ILLUSTRATION_IDS, TEMPLATE_IDS, type SlideSpec } from './plan.ts'
 
-export const EDIT_OPS = ['update_layer', 'add_layer', 'delete_layer', 'move_layer', 'update_slide', 'add_slide', 'duplicate_slide', 'delete_slide', 'update_post', 'add_post', 'delete_post'] as const
+export const EDIT_OPS = ['update_layer', 'add_layer', 'delete_layer', 'move_layer', 'update_slide', 'add_slide', 'duplicate_slide', 'delete_slide', 'update_post', 'add_post', 'delete_post', 'spread_layer'] as const
 export type EditOpName = (typeof EDIT_OPS)[number]
 
 /** Campos que uma camada pode ter; cada tipo usa os seus e o editor ignora o resto. */

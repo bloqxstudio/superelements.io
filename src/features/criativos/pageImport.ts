@@ -6,7 +6,7 @@ import { buildLandingPage } from '@/features/space/landingPage'
 import { pageSections } from '@/features/space/pages/pages'
 import { isFromSite, renderKit } from '@/features/space/renderKit'
 import { capturePageViaLink } from './link'
-import { pageSlideCount, pageWindowSlide } from './templates'
+import { pageSlideCount, pageWindowSlide, sidewaysSlides } from './templates'
 import { uploadAsset } from './storage'
 import { useEditor } from './store'
 import { uid, type CreativeSet, type Post, type SetAsset } from './types'
@@ -95,6 +95,19 @@ export async function importPageAsPost(projectId: string, pageId: string, projec
   const total = pageSlideCount(format, asset.width, asset.height)
   const slides = Array.from({ length: total }, (_, index) => pageWindowSlide(set.brand, format, { src: `asset:${asset.id}`, imgW: asset.width, imgH: asset.height, index, total, title: shot.name, label: projectName, dark: index % 2 === 0 }))
   const post: Post = { id: uid(), name: `Página · ${projectName} › ${shot.name}`, format, slides }
+  useEditor.getState().edit((s) => ({ ...s, posts: [...s.posts, post] }))
+  useEditor.getState().selectPost(post.id)
+  void useEditor.getState().ensureAssets()
+  return post
+}
+
+/** O carrossel "case + site de lado": capa só com o case e a página inteira deitada correndo pelos outros cards. */
+export async function importPageSideways(projectId: string, pageId: string, projectName: string, signal?: AbortSignal): Promise<Post> {
+  const shot = await capturePageShot(projectId, pageId, projectName, signal)
+  const set = useEditor.getState().set as CreativeSet
+  const { asset } = shot
+  const slides = sidewaysSlides(set.brand, '4x5', { src: `asset:${asset.id}`, imgW: asset.width, imgH: asset.height, title: projectName, sub: shot.name, label: set.brand.name })
+  const post: Post = { id: uid(), name: `Carrossel · ${projectName} › ${shot.name}`, format: '4x5', slides }
   useEditor.getState().edit((s) => ({ ...s, posts: [...s.posts, post] }))
   useEditor.getState().selectPost(post.id)
   void useEditor.getState().ensureAssets()

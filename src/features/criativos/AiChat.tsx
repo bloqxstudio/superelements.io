@@ -20,7 +20,7 @@ import { generateAll, markNotGenerated } from './generate'
 import { AV_CASES } from '@/features/avence/cases'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { projectPages, resolveRefs, type ResolvedRef } from './references'
-import { importPageAsPost } from './pageImport'
+import { importPageAsPost, importPageSideways } from './pageImport'
 import { useRefs, type Ref } from './refStore'
 import { CREATIVE_SKILLS } from './skills'
 import { uploadAsset } from './storage'
@@ -128,6 +128,7 @@ const OP_TEXT: Record<EditOp['op'], string> = {
   update_post: 'Ajustando o post',
   add_post: 'Criando um post',
   delete_post: 'Removendo o post',
+  spread_layer: 'Passando por todos os cards',
 }
 
 /** Onde o cursor do agente vai para esta operação (antes de ela acontecer). */
@@ -157,13 +158,14 @@ async function playOps(ops: EditOp[], defaults: { postId?: string; slideId?: str
   const skipped: string[] = []
   const touched = new Set<string>()
   const toGenerate: Applied['toGenerate'] = []
+  const aliases = new Map<string, string>()
   let focus: Applied['focus']
   for (const [i, op] of ops.entries()) {
     if (signal.aborted) break
     const target = opTarget(op, defaults)
     if (target) agentState.point({ ...target, agent, text: OP_TEXT[op.op] })
     await sleep(i === 0 ? 700 : 450)
-    const result = applyOps(useEditor.getState().set!, [op], defaults)
+    const result = applyOps(useEditor.getState().set!, [op], defaults, aliases)
     skipped.push(...result.skipped)
     if (!result.applied) continue
     applied++
@@ -394,7 +396,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
       const pages = Array.isArray(stage.pages) ? stage.pages : []
       const all: MentionItem[] = [
         { group: stage.name, hint: 'marca, briefing e textos (sem a imagem das páginas)', ref: { id: `project:${stage.projectId}`, kind: 'project', label: stage.name, projectId: stage.projectId } },
-        ...pages.map((pg): MentionItem => ({ group: 'Páginas: clique para a IA ver a página; "Importar" cria um post com ela', ref: { id: `project:${stage.projectId}:${pg.id}`, kind: 'project', label: `${stage.name} › ${pg.name}`, projectId: stage.projectId, pageId: pg.id } })),
+        ...pages.map((pg): MentionItem => ({ group: 'Páginas: clique para a IA ver a página; "De lado" ou "Janela" cria um post com ela', ref: { id: `project:${stage.projectId}:${pg.id}`, kind: 'project', label: `${stage.name} › ${pg.name}`, projectId: stage.projectId, pageId: pg.id } })),
       ]
       return q ? all.filter((i) => plain(i.ref.label).includes(q)) : all
     }
@@ -407,15 +409,15 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   }, [mention?.query, set.posts, projects, stage])
 
   /** Importa a página escolhida como um post novo: o conector fotografa a página e os cards rolam do topo ao fim. */
-  const importPage = async (ref: Ref) => {
+  const importPage = async (ref: Ref, mode: 'sideways' | 'window' = 'sideways') => {
     if (!ref.projectId || !ref.pageId) return
     closeMention()
     setText((t) => t.replace(/(^|\s)@\S*$/, '$1'))
     const projectName = projects.find((p) => p.id === ref.projectId)?.name ?? ref.label.split(' › ')[0]
-    const toastId = toast.loading(`Fotografando a página de ${projectName}… leva de 10 a 40 s`)
+    const toastId = toast.loading(`Fotografando a página de ${projectName} e montando o carrossel… leva de 10 a 40 s`)
     try {
-      const post = await importPageAsPost(ref.projectId, ref.pageId, projectName)
-      toast.success(`Página importada: ${post.slides.length} ${post.slides.length === 1 ? 'card' : 'cards'} no post "${post.name}".`, { id: toastId })
+      const post = await (mode === 'sideways' ? importPageSideways : importPageAsPost)(ref.projectId, ref.pageId, projectName)
+      toast.success(`Página importada: ${post.slides.length} ${post.slides.length === 1 ? 'card' : 'cards'} em "${post.name}".`, { id: toastId })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Não consegui importar a página.', { id: toastId })
     }
@@ -749,7 +751,10 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
                       {item.hint && <span className="min-w-0 truncate text-[11px] text-gray-500">{item.hint}</span>}
                     </button>
                     {item.ref.pageId && (
-                      <button type="button" onMouseDown={(e) => { e.preventDefault(); void importPage(item.ref) }} title="Importar a página como um post novo, com a foto dela em cards" className="mr-1 shrink-0 rounded-md bg-violet-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-violet-700">Importar</button>
+                      <>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); void importPage(item.ref, 'sideways') }} title="Carrossel pronto: capa só com o case e o site deitado passando de card em card" className="mr-1 shrink-0 rounded-md bg-violet-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-violet-700">De lado</button>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); void importPage(item.ref, 'window') }} title="Cards com a página numa janela de navegador, rolando do topo ao fim" className="mr-1 shrink-0 rounded-md bg-white px-2 py-0.5 text-[11px] font-semibold text-violet-700 ring-1 ring-violet-300 hover:bg-violet-50">Janela</button>
+                      </>
                     )}
                   </div>
                 </React.Fragment>

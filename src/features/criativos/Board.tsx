@@ -6,7 +6,7 @@ import { boundsOf, withGroups } from './layerOps'
 import { useRefs } from './refStore'
 import { gridOf, guidesOf, snapAxis, snapTargets, type PostGrid } from './grid'
 import { rememberPointer, sendPointer, useLive } from './live'
-import { drawSlide, fontCss, layerBox, type ImageMap } from './render'
+import { drawLayer, drawSlide, fontCss, layerBox, type ImageMap } from './render'
 import { useEditor } from './store'
 import { TEMPLATES } from './templates'
 import { sizeOf, type CreativeSet, type FormatId, type Layer, type Slide, type TextLayer } from './types'
@@ -78,6 +78,47 @@ const SlideCanvas = memo(function SlideCanvas({ slide, format, images, scale, hi
     drawSlide(ctx, hideLayer ? { ...slide, layers: slide.layers.map((l) => (l.id === hideLayer ? { ...l, opacity: 0 } : l)) } : slide, format, images)
   }, [slide, format, images, scale, hideLayer])
   return <canvas ref={ref} width={Math.round(width * scale)} height={Math.round(height * scale)} className="block" style={{ width, height }} />
+})
+
+/** Quanto do que passa da borda do card aparece em volta dele (e é onde dá para pegar e arrastar). */
+const PAD = 420
+
+/** Algum componente passa da borda do card (menos os fundos que cobrem o card inteiro). */
+const sticksOut = (slide: Slide, w: number, h: number) =>
+  slide.layers.some((l) => {
+    if (l.hidden) return false
+    const b = layerBox(l)
+    return b.x < -2 || b.y < -2 || b.x + b.w > w + 2 || b.y + b.h > h + 2
+  })
+
+/**
+ * O que passa da borda do card, desenhado em volta dele, esmaecido e por trás dos
+ * cards vizinhos: a mesa de trabalho do Canva. A imagem exportada continua
+ * sendo só o card.
+ */
+const OverflowCanvas = memo(function OverflowCanvas({ slide, format, images, scale }: { slide: Slide; format: FormatId; images: ImageMap; scale: number }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  const { width, height } = sizeOf(format)
+  const cw = width + PAD * 2
+  const ch = height + PAD * 2
+  const k = Math.min(scale, 0.5)
+  useEffect(() => {
+    const ctx = ref.current?.getContext('2d')
+    if (!ctx) return
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, ref.current!.width, ref.current!.height)
+    ctx.scale(k, k)
+    ctx.translate(PAD, PAD)
+    for (const layer of slide.layers) if (!layer.hidden) drawLayer(ctx, layer, images)
+    // Dentro do card não se repete: ele já tem o seu desenho; fora, esmaece
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.fillRect(0, 0, width, height)
+    ctx.globalCompositeOperation = 'source-atop'
+    ctx.fillStyle = 'rgba(244,244,245,0.55)'
+    ctx.fillRect(-PAD, -PAD, cw, ch)
+    ctx.globalCompositeOperation = 'source-over'
+  }, [slide, format, images, k, width, height, cw, ch])
+  return <canvas ref={ref} width={Math.round(cw * k)} height={Math.round(ch * k)} className="block" style={{ width: cw, height: ch }} />
 })
 
 const KIND_COLOR = { margin: '#f43f5e', column: '#f43f5e', third: '#0ea5e9', center: '#8b5cf6' } as const
@@ -237,7 +278,20 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
     return { x: (e.clientX - r.left - view.x) / view.k, y: (e.clientY - r.top - view.y) / view.k }
   }
 
-  const slideAt = (wx: number, wy: number) => rows.flatMap((r) => r.slides).find((p) => wx >= p.x && wx <= p.x + p.w && wy >= p.y && wy <= p.y + p.h)
+  const slideAt = (wx: number, wy: number) => {
+    const all = rows.flatMap((r) => r.slides)
+    const inside = all.find((p) => wx >= p.x && wx <= p.x + p.w && wy >= p.y && wy <= p.y + p.h)
+    if (inside) return inside
+    // Fora do card: vale o slide cujo componente (que passa da borda) está embaixo do ponteiro
+    return all.find((p) => {
+      if (wx < p.x - PAD || wx > p.x + p.w + PAD || wy < p.y - PAD || wy > p.y + p.h + PAD) return false
+      return p.slide.layers.some((l) => {
+        if (l.hidden || l.locked) return false
+        const b = layerBox(l)
+        return wx - p.x >= b.x && wx - p.x <= b.x + b.w && wy - p.y >= b.y && wy - p.y <= b.y + b.h
+      })
+    })
+  }
 
   const layerAt = (p: Placed, wx: number, wy: number) => {
     for (let i = p.slide.layers.length - 1; i >= 0; i--) {
@@ -477,6 +531,14 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
     >
       <style>{`@keyframes agentPulse{0%,100%{opacity:.45}50%{opacity:1}}@keyframes agentSweep{from{left:-35%}to{left:105%}}@keyframes agentFlash{0%{opacity:1}70%{opacity:1}100%{opacity:0}}@keyframes agentBob{0%,100%{transform:translate(0,0)}50%{transform:translate(8px,-6px)}}`}</style>
       <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
+        {/* O que passa da borda dos cards, por trás de todos eles */}
+        {placed.map((p) =>
+          visible.has(p.slideId) && sticksOut(p.slide, p.w, p.h) ? (
+            <div key={`out-${p.slideId}`} className="pointer-events-none absolute" style={{ left: p.x - PAD, top: p.y - PAD, width: p.w + PAD * 2, height: p.h + PAD * 2 }}>
+              <OverflowCanvas slide={p.slide} format={p.format} images={images} scale={scale} />
+            </div>
+          ) : null
+        )}
         {rows.map((row) => (
           <React.Fragment key={row.postId}>
             <button

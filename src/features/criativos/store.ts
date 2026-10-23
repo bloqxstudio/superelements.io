@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { EMPHASIS_FONT, loadFont, loadImage, type ImageMap } from './render'
 import { loadSet, saveSet, assetUrl } from './storage'
 import { mergePatch, type SyncPatch } from './syncPatch'
+import { syncSpans } from './spanOps'
 import type { CreativeSet, FormatId, Layer, Post, Slide } from './types'
 import { sizeOf } from './types'
 
@@ -112,7 +113,7 @@ export const useEditor = create<EditorState>()((set, get) => {
     draft: (fn) => {
       const current = get().set
       if (!current) return
-      set({ set: fn(current) })
+      set({ set: syncSpans(current, fn(current)) })
     },
     checkpoint: (before) => {
       set((s) => ({ past: [...s.past, before].slice(-HISTORY), future: [] }))
@@ -122,7 +123,7 @@ export const useEditor = create<EditorState>()((set, get) => {
       const current = get().set
       if (!current) return
       set((s) => ({ past: [...s.past, current].slice(-HISTORY), future: [] }))
-      apply(fn(current))
+      apply(syncSpans(current, fn(current)))
       schedule()
     },
     undo: () => {

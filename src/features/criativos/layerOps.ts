@@ -2,6 +2,7 @@ import { layerBox } from './render'
 import { useEditor } from './store'
 import { sizeOf, uid, type Layer } from './types'
 import { marginOf } from './grid'
+import { spreadLayer, unspreadLayer } from './spanOps'
 
 /**
  * Edição de vários componentes de uma vez, no slide escolhido: grupo, apagar,
@@ -161,4 +162,18 @@ export function stackLayers(ids: string[], where: 'front' | 'back') {
 
 export function patchLayerFields(ids: string[], fields: Partial<Layer>) {
   editLayers((all) => all.map((l) => (ids.includes(l.id) ? ({ ...l, ...fields } as Layer) : l)))
+}
+
+/** Passa o componente por todos os cards do post, emendado (faixa contínua). */
+export function spreadSelected(layerId: string) {
+  const { postId, slideId } = useEditor.getState()
+  if (!postId || !slideId) return
+  useEditor.getState().edit((s) => spreadLayer(s, postId, slideId, layerId))
+}
+
+/** Solta o componente da faixa: cada cópia passa a valer sozinha. */
+export function unspreadSelected(spanId: string) {
+  const { postId } = useEditor.getState()
+  if (!postId) return
+  useEditor.getState().edit((s) => unspreadLayer(s, postId, spanId))
 }

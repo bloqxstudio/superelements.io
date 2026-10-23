@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
 import { LayersPanel } from './LayersPanel'
-import { alignLayers, currentLayers, distributeLayers, duplicateLayers, groupLayers, moveLayers, patchLayerFields, removeLayers, stackLayers, ungroupLayers, type AlignHow } from './layerOps'
+import { spreadSelected, unspreadSelected, alignLayers, currentLayers, distributeLayers, duplicateLayers, groupLayers, moveLayers, patchLayerFields, removeLayers, stackLayers, ungroupLayers, type AlignHow } from './layerOps'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { drawSlide, layerBox, slideToBlob, type ExportType } from './render'
@@ -297,6 +297,19 @@ const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer })
         </>
       )}
 
+      <Field label="Faixa contínua (passa de card em card)">
+        {layer.span ? (
+          <div className="space-y-1.5">
+            <p className="text-xs text-gray-600">Este componente é uma faixa: as cópias nos outros cards se movem e mudam juntas, e cada card mostra a fatia dele.</p>
+            <Button type="button" variant="outline" size="sm" className="w-full bg-white" onClick={() => unspreadSelected(layer.span!.id)}>Soltar da faixa</Button>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <Button type="button" variant="outline" size="sm" className="w-full bg-white" disabled={(set.posts.find((p) => p.id === useEditor.getState().postId)?.slides.length ?? 0) < 2} onClick={() => spreadSelected(layer.id)}>Passar por todos os cards</Button>
+            <p className="text-xs text-gray-500">Põe uma cópia deslocada em cada card do post: arraste o componente para fora do card e o carrossel emenda no deslizar.</p>
+          </div>
+        )}
+      </Field>
       <Field label="Alinhar no card (margens da grade)">
         <div className="flex gap-1">
           {([['left', AlignStartVertical, 'Margem esquerda'], ['center', AlignCenterVertical, 'Centralizar na horizontal'], ['right', AlignEndVertical, 'Margem direita'], ['top', AlignStartHorizontal, 'Margem de cima'], ['middle', AlignCenterHorizontal, 'Centralizar na vertical'], ['bottom', AlignEndHorizontal, 'Margem de baixo']] as const).map(([how, Icon, title]) => (

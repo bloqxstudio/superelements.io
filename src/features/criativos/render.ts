@@ -364,7 +364,7 @@ function drawImage(ctx: CanvasRenderingContext2D, layer: ImageLayer, images: Ima
   }
 }
 
-function drawLayer(ctx: CanvasRenderingContext2D, layer: Layer, images: ImageMap) {
+export function drawLayer(ctx: CanvasRenderingContext2D, layer: Layer, images: ImageMap) {
   ctx.save()
   ctx.globalAlpha = layer.opacity ?? 1
   if (layer.rotation) {

@@ -2,6 +2,7 @@ import { AV_CASES } from '@/features/avence/cases'
 import type { EditOp, LayerFields, SlideDef } from './edit'
 import { LIBRARY } from './library'
 import { alpha } from './color'
+import { spreadLayer } from './spanOps'
 import { reformat } from './store'
 import { measureText, widestLine } from './render'
 import { buildSlide } from './templates'
@@ -128,20 +129,21 @@ export interface Applied {
   toGenerate: { slideId: string; layerId: string; prompt: string }[]
 }
 
-/** `defaults`: o que estava escolhido; vale quando a IA esquece um id. */
-export function applyOps(start: CreativeSet, ops: EditOp[], defaults?: { postId?: string; slideId?: string; layerId?: string }): Applied {
+/** `defaults`: o que estava escolhido; vale quando a IA esquece um id. `aliases`: o nome que a IA deu a uma camada nova (o `layerId` do `add_layer`), para as próximas operações dela. */
+export function applyOps(start: CreativeSet, ops: EditOp[], defaults?: { postId?: string; slideId?: string; layerId?: string }, aliases: Map<string, string> = new Map()): Applied {
   let set = start
   let applied = 0
   let focus: Applied['focus']
   const skipped: string[] = []
   const touched = new Set<string>()
+  const lid = (op: EditOp) => (op.layerId && aliases.get(op.layerId)) || op.layerId
 
   const findSlide = (op: EditOp) => {
     const all = set.posts.flatMap((post) => post.slides.map((slide) => ({ post, slide })))
     // O slide pelo id; sem ele (ou com um id que não existe), pela camada; por fim, o que estava escolhido
     return (
       (op.slideId && all.find((x) => x.slide.id === op.slideId)) ||
-      (op.layerId && all.find((x) => x.slide.layers.some((l) => l.id === op.layerId))) ||
+      (lid(op) && all.find((x) => x.slide.layers.some((l) => l.id === lid(op)))) ||
       (op.postId && all.find((x) => x.post.id === op.postId && x.slide.id === defaults?.slideId)) ||
       (defaults?.slideId ? all.find((x) => x.slide.id === defaults.slideId) : undefined) ||
       undefined
@@ -235,11 +237,12 @@ export function applyOps(start: CreativeSet, ops: EditOp[], defaults?: { postId?
         const layer = makeLayer(op.layer, set)
         if (!layer) return skipped.push(`${label}: faltou o tipo da camada`)
         mapSlide(slide.id, (s) => ({ ...s, layers: [...s.layers, layer] }))
+        if (op.layerId) aliases.set(op.layerId, layer.id)
         focus = { postId: post.id, slideId: slide.id, layerId: layer.id }
         return void applied++
       }
 
-      const layer = slide.layers.find((l) => l.id === (op.layerId ?? defaults?.layerId))
+      const layer = slide.layers.find((l) => l.id === (lid(op) ?? defaults?.layerId))
       if (!layer) return skipped.push(`${label}: camada não existe`)
       focus = { postId: post.id, slideId: slide.id, layerId: layer.id }
 
@@ -256,6 +259,12 @@ export function applyOps(start: CreativeSet, ops: EditOp[], defaults?: { postId?
           layers.splice(to, 0, layers.splice(from, 1)[0])
           return { ...s, layers }
         })
+        return void applied++
+      }
+      if (op.op === 'spread_layer') {
+        const next = spreadLayer(set, post.id, slide.id, layer.id)
+        if (next === set) return skipped.push(`${label}: o post precisa de 2 cards e a camada não pode já estar numa faixa`)
+        set = next
         return void applied++
       }
       if (op.op === 'update_layer') {
