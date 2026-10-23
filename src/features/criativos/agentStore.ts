@@ -7,7 +7,10 @@ import type { CreativeStep } from './protocol'
  * mudou por um instante. Mesma cor do Claude Code no chat do Space.
  */
 
-export const AGENT = { name: 'Claude Code', color: '#D97757' }
+import { CHAT_AGENTS, type ChatAgentId } from '@/features/space/chat/protocol'
+
+/** Cores e nomes dos agentes: os mesmos do chat do Space. */
+export const agentInfo = (id: ChatAgentId) => ({ name: CHAT_AGENTS[id].name, color: id === 'codex' ? '#10A37F' : CHAT_AGENTS[id].color })
 
 export type AgentPhase = 'sending' | CreativeStep | 'applying'
 
@@ -27,25 +30,35 @@ interface Target {
 }
 
 interface AgentState {
-  working?: { target: Target; phase: AgentPhase; since: number; label: string }
+  working?: { target: Target; phase: AgentPhase; since: number; label: string; agent: ChatAgentId }
+  /** Onde o cursor do agente está: um slide e, se for o caso, uma camada (o canvas calcula a posição). */
+  cursor?: { slideId: string; layerId?: string; agent: ChatAgentId; text?: string }
   /** Slides que a última resposta mudou, por alguns segundos. */
   flash: string[]
-  begin: (target: Target, label: string) => void
+  begin: (target: Target, label: string, agent: ChatAgentId) => void
+  point: (cursor: AgentState['cursor']) => void
   phase: (phase: AgentPhase) => void
   end: () => void
   highlight: (slideIds: string[]) => void
 }
 
 let timer: ReturnType<typeof setTimeout> | undefined
+let cursorTimer: ReturnType<typeof setTimeout> | undefined
 
 export const useAgent = create<AgentState>()((set, get) => ({
   flash: [],
-  begin: (target, label) => set({ working: { target, phase: 'sending', since: Date.now(), label } }),
+  begin: (target, label, agent) => set({ working: { target, phase: 'sending', since: Date.now(), label, agent }, cursor: target.slideId ? { slideId: target.slideId, layerId: target.layerId, agent } : undefined }),
+  point: (cursor) => set({ cursor }),
   phase: (phase) => {
     const w = get().working
     if (w) set({ working: { ...w, phase } })
   },
-  end: () => set({ working: undefined }),
+  end: () => {
+    set({ working: undefined })
+    // O cursor fica um instante onde terminou e some
+    clearTimeout(cursorTimer)
+    cursorTimer = setTimeout(() => set({ cursor: undefined }), 1800)
+  },
   highlight: (slideIds) => {
     clearTimeout(timer)
     set({ flash: slideIds })

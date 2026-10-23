@@ -127,6 +127,10 @@ const MESSAGES = {
   aborted: '',
 }
 
+/** Procura o conector de novo enquanto não há ligação: abrir o conector depois do app basta, sem colar nada. */
+let retrying: ReturnType<typeof setInterval> | undefined
+const RETRY_EVERY = 4000
+
 let stops: Array<() => void> = []
 const stopAll = () => {
   for (const stop of stops) stop()
@@ -200,6 +204,12 @@ export const useConnector = create<ConnectorState>()((set, get) => {
     resume: () => {
       const pairing = get().pairing
       if (pairing && get().status === 'off') void open(pairing, true)
+      if (!retrying)
+        retrying = setInterval(() => {
+          const { status, error, pairing: saved } = get()
+          // Só quando o conector simplesmente não estava aberto; recusa, bloqueio e código errado esperam a pessoa
+          if (document.visibilityState === 'visible' && saved && (status === 'failed' || status === 'off') && !error) void open(saved, true)
+        }, RETRY_EVERY)
     },
     disconnect: () => {
       current?.abort()

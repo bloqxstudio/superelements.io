@@ -95,7 +95,8 @@ export interface Applied {
   touched: string[]
 }
 
-export function applyOps(start: CreativeSet, ops: EditOp[]): Applied {
+/** `defaults`: o que estava escolhido; vale quando a IA esquece um id. */
+export function applyOps(start: CreativeSet, ops: EditOp[], defaults?: { postId?: string; slideId?: string; layerId?: string }): Applied {
   let set = start
   let applied = 0
   let focus: Applied['focus']
@@ -103,11 +104,15 @@ export function applyOps(start: CreativeSet, ops: EditOp[]): Applied {
   const touched = new Set<string>()
 
   const findSlide = (op: EditOp) => {
-    for (const post of set.posts) {
-      if (op.postId && post.id !== op.postId && !op.slideId) continue
-      const slide = post.slides.find((s) => s.id === op.slideId)
-      if (slide) return { post, slide }
-    }
+    const all = set.posts.flatMap((post) => post.slides.map((slide) => ({ post, slide })))
+    // O slide pelo id; sem ele (ou com um id que não existe), pela camada; por fim, o que estava escolhido
+    return (
+      (op.slideId && all.find((x) => x.slide.id === op.slideId)) ||
+      (op.layerId && all.find((x) => x.slide.layers.some((l) => l.id === op.layerId))) ||
+      (op.postId && all.find((x) => x.post.id === op.postId && x.slide.id === defaults?.slideId)) ||
+      (defaults?.slideId ? all.find((x) => x.slide.id === defaults.slideId) : undefined) ||
+      undefined
+    )
   }
   const mapSlide = (slideId: string, fn: (slide: Slide, post: Post) => Slide) => {
     set = { ...set, posts: set.posts.map((p) => ({ ...p, slides: p.slides.map((s) => (s.id === slideId ? fn(s, p) : s)) })) }
@@ -183,7 +188,7 @@ export function applyOps(start: CreativeSet, ops: EditOp[]): Applied {
         return void applied++
       }
 
-      const layer = slide.layers.find((l) => l.id === op.layerId)
+      const layer = slide.layers.find((l) => l.id === (op.layerId ?? defaults?.layerId))
       if (!layer) return skipped.push(`${label}: camada não existe`)
       focus = { postId: post.id, slideId: slide.id, layerId: layer.id }
 

@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Copy, Download, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { AGENT, PHASE_LABEL, useAgent } from './agentStore'
+import { agentInfo, PHASE_LABEL, useAgent } from './agentStore'
 import { drawSlide, fontCss, layerBox, type ImageMap } from './render'
 import { useEditor } from './store'
 import { TEMPLATES } from './templates'
@@ -97,6 +97,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   const layerId = useEditor((s) => s.layerId)
   const working = useAgent((s) => s.working)
   const flash = useAgent((s) => s.flash)
+  const cursor = useAgent((s) => s.cursor)
 
   const host = useRef<HTMLDivElement>(null)
   const drag = useRef<Drag | null>(null)
@@ -292,6 +293,19 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   }
 
   const placed = rows.flatMap((r) => r.slides)
+
+  // O cursor do agente foi para um slide fora da tela: a vista acompanha
+  const cursorSlide = cursor?.slideId
+  useEffect(() => {
+    if (!cursorSlide) return
+    const p = rows.flatMap((r) => r.slides).find((x) => x.slideId === cursorSlide)
+    if (!p) return
+    const v = viewRef.current
+    const left = p.x * v.k + v.x
+    const top = p.y * v.k + v.y
+    const out = left + 40 < 0 || top + 40 < 0 || left + p.w * v.k - 40 > size.w || top + p.h * v.k - 40 > size.h
+    if (out) setView({ k: v.k, x: size.w / 2 - (p.x + p.w / 2) * v.k, y: size.h / 2 - (p.y + p.h / 2) * v.k })
+  }, [cursorSlide]) // eslint-disable-line react-hooks/exhaustive-deps
   const selected = placed.find((p) => p.slideId === slideId)
   const selLayer = selected?.slide.layers.find((l) => l.id === layerId)
   const selBox = selLayer && layerBox(selLayer)
@@ -313,7 +327,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
       onDoubleClick={onDouble}
       aria-label="Canvas dos criativos"
     >
-      <style>{`@keyframes agentPulse{0%,100%{opacity:.45}50%{opacity:1}}@keyframes agentSweep{from{left:-35%}to{left:105%}}@keyframes agentFlash{0%{opacity:1}70%{opacity:1}100%{opacity:0}}`}</style>
+      <style>{`@keyframes agentPulse{0%,100%{opacity:.45}50%{opacity:1}}@keyframes agentSweep{from{left:-35%}to{left:105%}}@keyframes agentFlash{0%{opacity:1}70%{opacity:1}100%{opacity:0}}@keyframes agentBob{0%,100%{transform:translate(0,0)}50%{transform:translate(8px,-6px)}}`}</style>
       <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
         {rows.map((row) => (
           <React.Fragment key={row.postId}>
@@ -361,9 +375,10 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
           </div>
         )}
 
-        {/* O agente à vista: o alvo do pedido enquanto ele trabalha e o que ele mudou depois */}
+        {/* O agente à vista: o alvo do pedido, o cursor que passa de elemento em elemento e o que mudou */}
         {working && (() => {
           const t = working.target
+          const A = agentInfo(working.agent)
           const rects: { x: number; y: number; w: number; h: number }[] = []
           const slideOf = (id?: string) => placed.find((p) => p.slideId === id)
           if (t.scope === 'layer') {
@@ -378,31 +393,39 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
             if (p) rects.push({ x: p.x, y: p.y, w: p.w, h: p.h })
           } else if (t.scope === 'post') placed.filter((p) => p.postId === t.postId).forEach((p) => rects.push({ x: p.x, y: p.y, w: p.w, h: p.h }))
           else placed.forEach((p) => rects.push({ x: p.x, y: p.y, w: p.w, h: p.h }))
-          const first = rects[0]
-          return (
-            <>
-              {rects.map((r, i) => (
-                <div key={i} className="pointer-events-none absolute overflow-hidden" style={{ left: r.x, top: r.y, width: r.w, height: r.h, outline: `${3 * inv}px dashed ${AGENT.color}`, animation: 'agentPulse 1.4s ease-in-out infinite' }}>
-                  <div className="absolute inset-y-0 w-1/3" style={{ background: `linear-gradient(90deg, transparent, ${AGENT.color}33, transparent)`, animation: 'agentSweep 1.8s linear infinite' }} />
-                </div>
-              ))}
-              {first && (
-                <div className="pointer-events-none absolute flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 font-semibold text-white shadow-lg" style={{ left: first.x, top: first.y - 14 * inv, transform: `translateY(-100%) scale(${inv * 1.4})`, transformOrigin: 'left bottom', background: AGENT.color, fontSize: 12 }}>
-                  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden><path d="M1 1l9 3.6-3.8 1.4L4.6 10z" fill="#fff" /></svg>
-                  {AGENT.name} · {PHASE_LABEL[working.phase]}…
-                </div>
-              )}
-            </>
-          )
+          return rects.map((r, i) => (
+            <div key={i} className="pointer-events-none absolute overflow-hidden" style={{ left: r.x, top: r.y, width: r.w, height: r.h, outline: `${3 * inv}px dashed ${A.color}`, animation: 'agentPulse 1.4s ease-in-out infinite' }}>
+              <div className="absolute inset-y-0 w-1/3" style={{ background: `linear-gradient(90deg, transparent, ${A.color}33, transparent)`, animation: 'agentSweep 1.8s linear infinite' }} />
+            </div>
+          ))
         })()}
         {flash.map((id) => {
           const p = placed.find((x) => x.slideId === id)
-          return p ? (
-            <div key={id} className="pointer-events-none absolute" style={{ left: p.x, top: p.y, width: p.w, height: p.h, outline: `${5 * inv}px solid ${AGENT.color}`, animation: 'agentFlash 3.2s ease-out forwards' }}>
-              <span className="absolute left-0 whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold text-white" style={{ top: -14 * inv, transform: `translateY(-100%) scale(${inv * 1.4})`, transformOrigin: 'left bottom', background: AGENT.color }}>{AGENT.name} mudou</span>
-            </div>
-          ) : null
+          const A = agentInfo(cursor?.agent ?? working?.agent ?? 'claude')
+          return p ? <div key={id} className="pointer-events-none absolute" style={{ left: p.x, top: p.y, width: p.w, height: p.h, outline: `${5 * inv}px solid ${A.color}`, animation: 'agentFlash 3.2s ease-out forwards' }} /> : null
         })}
+        {cursor && (() => {
+          const p = placed.find((x) => x.slideId === cursor.slideId)
+          if (!p) return null
+          const A = agentInfo(cursor.agent)
+          const l = cursor.layerId ? p.slide.layers.find((x) => x.id === cursor.layerId) : undefined
+          const b = l && layerBox(l)
+          const cx = b ? p.x + b.x + Math.min(b.w * 0.5, 420) : p.x + p.w * 0.5
+          const cy = b ? p.y + b.y + Math.min(b.h * 0.5, 160) : p.y + p.h * 0.45
+          const text = working ? PHASE_LABEL[working.phase] : cursor.text
+          return (
+            <div className="pointer-events-none absolute left-0 top-0 z-20" style={{ transform: `translate(${cx}px, ${cy}px) scale(${inv * 1.35})`, transformOrigin: '0 0', transition: 'transform .8s cubic-bezier(.22,1,.36,1)' }}>
+              <div style={{ animation: working ? 'agentBob 1.6s ease-in-out infinite' : undefined }}>
+                <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden style={{ filter: 'drop-shadow(0 2px 3px rgb(0 0 0 / 0.35))' }}>
+                  <path d="M3 2l17 8.2-7.4 2.1L9.6 20z" fill={A.color} stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
+                </svg>
+                <span className="absolute left-5 top-5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold text-white shadow-lg" style={{ background: A.color }}>
+                  {A.name}{text ? ` · ${text}` : ''}
+                </span>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Barra do slide escolhido */}
         {selected && (

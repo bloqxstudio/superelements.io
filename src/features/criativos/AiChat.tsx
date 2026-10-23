@@ -10,8 +10,12 @@ import type { ChatSkill } from '@/features/space/chat/skills'
 import { skillIcon } from '@/features/skills/skillIcon'
 import { useSkills, watchSkills } from '@/features/skills/skillsStore'
 import { requestEdit, type EditScope } from './ai'
-import { AGENT, PHASE_LABEL, useAgent } from './agentStore'
-import { applyOps } from './applyOps'
+import { useCreativeLink } from './link'
+import { agentInfo, PHASE_LABEL, useAgent } from './agentStore'
+import type { EditOp } from './edit'
+import type { ChatAgentId } from '@/features/space/chat/protocol'
+import { useConnector } from '@/features/space/connector/connectorStore'
+import { applyOps, type Applied } from './applyOps'
 import { CREATIVE_SKILLS } from './skills'
 import { uploadAsset } from './storage'
 import { currentLayer, currentPost, currentSlide, useEditor } from './store'
@@ -56,6 +60,82 @@ const SUGGESTIONS: Record<EditScope, string[]> = {
 
 const SCOPE_LABEL: Record<EditScope, string> = { layer: 'Componente', slide: 'Slide', post: 'Post', set: 'Tudo' }
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+const OP_TEXT: Record<EditOp['op'], string> = {
+  update_layer: 'Editando',
+  add_layer: 'Adicionando um componente',
+  delete_layer: 'Removendo um componente',
+  move_layer: 'Reordenando',
+  update_slide: 'Ajustando o fundo',
+  add_slide: 'Criando um slide',
+  duplicate_slide: 'Duplicando o slide',
+  delete_slide: 'Removendo o slide',
+  update_post: 'Ajustando o post',
+  add_post: 'Criando um post',
+  delete_post: 'Removendo o post',
+}
+
+/** Onde o cursor do agente vai para esta operação (antes de ela acontecer). */
+function opTarget(op: EditOp, defaults: { slideId?: string; layerId?: string }) {
+  const set = useEditor.getState().set
+  if (!set) return undefined
+  const slides = set.posts.flatMap((p) => p.slides)
+  const slide =
+    slides.find((s) => s.id === op.slideId) ??
+    slides.find((s) => s.layers.some((l) => l.id === op.layerId)) ??
+    (op.postId ? set.posts.find((p) => p.id === op.postId)?.slides[0] : undefined) ??
+    slides.find((s) => s.id === defaults.slideId)
+  if (!slide) return undefined
+  const layerId = op.layerId ?? (op.op === 'update_layer' ? defaults.layerId : undefined)
+  return { slideId: slide.id, layerId: layerId && slide.layers.some((l) => l.id === layerId) ? layerId : undefined }
+}
+
+/**
+ * Aplica as operações uma a uma, com o cursor do agente indo até cada
+ * componente, como num editor com alguém trabalhando junto. Tudo vira um passo
+ * só do desfazer.
+ */
+async function playOps(ops: EditOp[], defaults: { postId?: string; slideId?: string; layerId?: string }, agent: ChatAgentId, signal: AbortSignal): Promise<Applied> {
+  const before = useEditor.getState().set!
+  const agentState = useAgent.getState()
+  let applied = 0
+  const skipped: string[] = []
+  const touched = new Set<string>()
+  let focus: Applied['focus']
+  for (const [i, op] of ops.entries()) {
+    if (signal.aborted) break
+    const target = opTarget(op, defaults)
+    if (target) agentState.point({ ...target, agent, text: OP_TEXT[op.op] })
+    await sleep(i === 0 ? 700 : 450)
+    const result = applyOps(useEditor.getState().set!, [op], defaults)
+    skipped.push(...result.skipped)
+    if (!result.applied) continue
+    applied++
+    useEditor.getState().draft(() => ({ ...result.set, updatedAt: Date.now() }))
+    for (const id of result.touched) touched.add(id)
+    if (result.focus) {
+      focus = result.focus
+      // Slide ou post que acabou de nascer: o cursor vai até ele
+      agentState.point({ slideId: result.focus.slideId, layerId: result.focus.layerId, agent, text: OP_TEXT[op.op] })
+    }
+    void useEditor.getState().ensureAssets()
+  }
+  if (applied) useEditor.getState().checkpoint(before)
+  await sleep(500)
+  return { set: useEditor.getState().set!, applied, skipped, focus, touched: [...touched] }
+}
+
+const AGENT_KEY = 'criativos-agente'
+const savedAgent = (): ChatAgentId | undefined => {
+  try {
+    const v = localStorage.getItem(AGENT_KEY)
+    return v === 'codex' || v === 'claude' ? v : undefined
+  } catch {
+    return undefined
+  }
+}
+
 interface Attached {
   id: string
   name: string
@@ -76,6 +156,7 @@ const Working: React.FC = () => {
   if (!working) return null
   const order = ['sending', 'start', 'thinking', 'writing', 'applying'] as const
   const at = order.indexOf(working.phase)
+  const AGENT = agentInfo(working.agent)
   return (
     <div className="space-y-1.5 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-gray-700">
       <p className="flex items-center gap-1.5 font-semibold text-gray-900">
@@ -95,11 +176,52 @@ const Working: React.FC = () => {
   )
 }
 
+/** Sem ponte: o que está acontecendo e o que fazer, com a procura do conector rodando sozinha. */
+const Offline: React.FC<{ stale: boolean }> = ({ stale }) => {
+  const status = useConnector((c) => c.status)
+  const pairing = useConnector((c) => c.pairing)
+  const error = useConnector((c) => c.error)
+  const connected = useCreativeLink((l) => l.connected)
+  const searching = !stale && !!pairing && status !== 'connected' && !error
+  const line = stale
+    ? 'O conector aberto é uma versão antiga e não conhece a IA dos criativos.'
+    : connected
+      ? 'Conectado, mas nenhuma IA foi encontrada neste computador. Instale o Claude Code ou o Codex e abra o conector de novo.'
+      : searching
+        ? 'Procurando o conector neste computador…'
+        : error ?? 'A IA roda no seu computador (Claude Code ou Codex), por um conector.'
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto" data-scroll>
+      <div className="m-3 flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-700">
+        {searching ? <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-violet-600" /> : <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-500" />}
+        <div className="space-y-1">
+          <p className="font-medium text-gray-900">{line}</p>
+          {searching && <p className="text-gray-500">Abra o conector.mjs no terminal: a aba liga sozinha em alguns segundos, sem colar nada.</p>}
+          {stale && <p className="text-gray-500">Baixe o conector.mjs de novo (passo 1), feche o que está aberto e rode o novo. O código é o mesmo.</p>}
+        </div>
+      </div>
+      <ConnectorPrompt />
+    </div>
+  )
+}
+
 export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) => {
   const set = useEditor((s) => s.set)!
   const post = useEditor(currentPost)
   const slide = useEditor(currentSlide)
   const layer = useEditor(currentLayer)
+  const stale = useCreativeLink((s) => s.stale)
+  const agents = useCreativeLink((s) => s.agents)
+  const [chosen, setChosen] = useState<ChatAgentId | undefined>(savedAgent)
+  const agent: ChatAgentId = (chosen && agents.find((a) => a.id === chosen)?.available ? chosen : agents.find((a) => a.available)?.id) ?? 'claude'
+  const pickAgent = (id: ChatAgentId) => {
+    setChosen(id)
+    try {
+      localStorage.setItem(AGENT_KEY, id)
+    } catch {
+      // sem armazenamento: vale até recarregar
+    }
+  }
   const msgs = useChat((s) => s.bySet[set.id]) ?? []
   const lastChanged = [...msgs].reverse().find((x) => x.changed)?.id
   const custom = useSkills((s) => s.custom)
@@ -154,7 +276,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
 
   const send = async (override?: string) => {
     const message = (override ?? text).trim() || (files.length ? 'Faça posts com base nesta referência.' : '')
-    if (!message || busy || !post) return
+    if (!message || busy || !post || available !== true) return
     const push = useChat.getState().push
     const sent = files
     push(set.id, { id: crypto.randomUUID(), role: 'user', text: message, scope: scopeName(), previews: sent.map((f) => f.preview), skill: skill?.name })
@@ -162,7 +284,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
     setFiles([])
     setBusy(true)
     control.current = new AbortController()
-    useAgent.getState().begin({ scope, postId: post.id, slideId: slide?.id, layerId: scope === 'layer' ? layer?.id : undefined }, scopeName())
+    useAgent.getState().begin({ scope, postId: post.id, slideId: slide?.id, layerId: scope === 'layer' ? layer?.id : undefined }, scopeName(), agent)
     try {
       // Os prints entram no conjunto: assim a IA (e você) podem pôr um deles num slide
       const attachments: { name: string; src: string; data: string }[] = []
@@ -190,15 +312,16 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
           history: history.slice(0, -1),
           attachments,
           skill: skill ? { name: skill.name, instructions: skill.instructions } : undefined,
+          agent,
         },
         fonts,
         control.current.signal,
         (step) => useAgent.getState().phase(step)
       )
       useAgent.getState().phase('applying')
-      const result = applyOps(useEditor.getState().set!, answer.ops)
+      const defaults = { postId: state.postId, slideId: state.slideId, layerId: scope === 'layer' ? state.layerId : undefined }
+      const result = await playOps(answer.ops, defaults, agent, control.current.signal)
       if (result.applied) {
-        useEditor.getState().edit(() => result.set)
         if (result.focus) {
           if (result.focus.postId !== useEditor.getState().postId) useEditor.getState().selectPost(result.focus.postId)
           useEditor.getState().selectSlide(result.focus.slideId)
@@ -221,13 +344,10 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
     return import.meta.env.DEV ? (
       <div className="space-y-2 p-4 text-sm text-gray-600">
         <p className="font-semibold text-gray-900">IA indisponível</p>
-        <p>O servidor de desenvolvimento não achou o Claude Code nesta máquina. Instale-o e recarregue.</p>
+        <p>O servidor de desenvolvimento não achou o Claude Code nem o Codex nesta máquina. Instale um deles e recarregue.</p>
       </div>
     ) : (
-      <div className="min-h-0 flex-1 overflow-y-auto" data-scroll>
-        <p className="px-3.5 pt-3 text-xs text-gray-600">A conversa usa o Claude Code do seu computador, pela mesma ponte do chat do canvas. É a conexão que você já fez nos projetos: se ainda não fez, siga os passos.</p>
-        <ConnectorPrompt />
-      </div>
+      <Offline stale={stale} />
     )
 
   const SkillIcon = skill ? skillIcon(skill) : Wand2
@@ -371,6 +491,27 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
               <Button type="button" size="icon" className="h-9 w-9 shrink-0" title="Enviar (Enter)" disabled={(!text.trim() && !files.length) || available === null} onClick={() => void send()}><Send className="h-4 w-4" /></Button>
             )}
           </div>
+        </div>
+
+        <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-0.5" role="group" aria-label="Qual IA usar">
+          {(['claude', 'codex'] as const).map((id) => {
+            const info = agentInfo(id)
+            const found = agents.find((a) => a.id === id)
+            const ok = !!found?.available
+            return (
+              <button
+                key={id}
+                type="button"
+                disabled={!ok || busy}
+                onClick={() => pickAgent(id)}
+                title={ok ? `${info.name}${found?.version ? ` ${found.version}` : ''}` : `${info.name} não foi encontrado neste computador`}
+                className={cn('flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md text-[11px] font-semibold disabled:opacity-40', agent === id && ok ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800')}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ background: info.color }} />
+                {info.name}
+              </button>
+            )
+          })}
         </div>
 
         <div className="flex items-center gap-1.5">

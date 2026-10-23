@@ -1,6 +1,7 @@
 import { EDIT_SCHEMA, type EditRequest, type EditResponse } from '../../src/features/criativos/edit.ts'
 import { TEMPLATE_IDS } from '../../src/features/criativos/plan.ts'
 import { askClaude, imageBlock } from './claude.ts'
+import { askCodex } from './codex.ts'
 
 /**
  * Edição por conversa: o Claude Code desta máquina lê o conjunto (e a imagem do
@@ -13,7 +14,7 @@ const SYSTEM = [
   'Você edita criativos de Instagram dentro de um editor de camadas (como o Canva), a pedido de quem está na tela.',
   'Você recebe a marca, o conjunto de posts em JSON (com ids de post, slide e camada) e, quando há, uma imagem do slide selecionado. Responda só pelo esquema: `reply` (uma ou duas frases em português do Brasil, dizendo o que fez ou o que falta) e `ops` (as mudanças).',
   'Cada slide é uma tela de largura e altura fixas (as do formato, em pixels, com origem no canto superior esquerdo). x, y, w, h são pixels dessa tela. Camada de texto tem h = 0 (a altura vem do texto); só mude w para quebrar linhas diferente.',
-  'Use SEMPRE os ids que recebeu. Mude o mínimo que o pedido exige: se a pessoa selecionou uma camada, o pedido é sobre ela; se selecionou um slide, é sobre o slide; sem seleção, sobre o conjunto. Não mexa no que não foi pedido.',
+  'Use SEMPRE os ids que recebeu. Em toda operação sobre camada mande `slideId` e `layerId`; sobre slide, `slideId`; sobre post, `postId`. Mude o mínimo que o pedido exige: se a pessoa selecionou uma camada, o pedido é sobre ela; se selecionou um slide, é sobre o slide; sem seleção, sobre o conjunto. Não mexa no que não foi pedido.',
   'Cores sempre em #rrggbb, preferindo as da marca. Fontes só da lista recebida. Imagens só da lista recebida (`src`). Destaque em serifa: `emphasis: true` e a palavra entre asteriscos no texto (*assim*), uma por título.',
   'Você pode mexer em qualquer coisa: textos, cores, fontes, imagens, formas, ordem das camadas, fundos, slides, posts inteiros (`add_post`, `delete_post`, `update_post` com `format` para mudar o tamanho) e legendas. Os posts ficam lado a lado no mesmo canvas e cada um tem o seu formato: prontos (4x5 feed, 1x1 quadrado, 9x16 story, 16x9 paisagem, link 1200x628, 2x3 vertical) ou livre, escrito como "LARGURAxALTURA" em pixels.',
   'Slide ou post novo: use `spec` (modelo da marca + textos) quando um dos modelos servir, e `layers` (camadas de baixo para cima, com `background`) quando o pedido for um layout próprio ou uma referência. Modelos: ' + TEMPLATE_IDS.join(', ') + '.',
@@ -47,12 +48,30 @@ const promptOf = (r: EditRequest) =>
     `## Conjunto (JSON)\n${JSON.stringify(r.posts)}`,
   ].join('\n')
 
-export const editCreatives = (input: EditRequest, signal?: AbortSignal, onStep?: (step: 'start' | 'thinking' | 'writing') => void): Promise<EditResponse> =>
-  askClaude<EditResponse>({
+const FORMAT_NOTE = [
+  'Responda SOMENTE com um objeto JSON válido, sem texto antes ou depois e sem ```, neste formato:',
+  '{"reply": string, "ops": [ { "op": "update_layer"|"add_layer"|"delete_layer"|"move_layer"|"update_slide"|"add_slide"|"duplicate_slide"|"delete_slide"|"update_post"|"add_post"|"delete_post", "postId"?, "slideId"?, "layerId"?, "layer"?: {campos da camada}, "background"?, "spec"?: {"template", "label"?, "title"?, "body"?, "items"?, "cta"?, "case"?, "view"?, "illustration"?, "focus"?, "dark"?}, "slide"?: {"background"?, "spec"?, "layers"?: [camadas]}, "post"?: {"name"?, "format"?, "caption"?, "slides"?: [slide]}, "format"?, "direction"?: "front"|"back"|"up"|"down", "name"?, "caption"? } ] }',
+  'Campos de camada: type (text|image|rect|ring|dots), name, x, y, w, h, opacity, rotation, text, font, weight, size, color, align (left|center|right), lineHeight, letterSpacing, upper, emphasis, emphasisColor, src, fit (cover|contain), radius, frame (none|browser|phone), focusY, fill, stroke, strokeWidth, gap, dot.',
+].join('\n')
+
+export const editCreatives = (input: EditRequest, signal?: AbortSignal, onStep?: (step: 'start' | 'thinking' | 'writing') => void): Promise<EditResponse> => {
+  if (input.agent === 'codex') {
+    const images = [...(input.attachments ?? []).map((a) => a.data), ...(input.image ? [input.image] : [])]
+    return askCodex<EditResponse>({
+      prompt: [SYSTEM, '', FORMAT_NOTE, '', images.length ? `As ${images.length} imagens anexadas à mensagem são, na ordem: ${[...(input.attachments ?? []).map((a) => a.name), ...(input.image ? ['o slide selecionado'] : [])].join(', ')}.` : '', '', promptOf(input)].join('\n'),
+      images,
+      signal,
+      onStep,
+    })
+  }
+  return askClaude<EditResponse>({
     system: SYSTEM,
     schema: EDIT_SCHEMA,
     content: [...(input.attachments ?? []).flatMap((a) => imageBlock(a.data)), ...imageBlock(input.image), { type: 'text', text: promptOf(input) }],
     timeoutMs: 360_000,
     signal,
     onStep,
+    // Ajuste pequeno (um componente ou um slide, sem referência nem skill): esforço baixo, quase o dobro de rápido
+    effort: (input.scope === 'layer' || input.scope === 'slide') && !input.attachments?.length && !input.skill ? 'low' : undefined,
   })
+}

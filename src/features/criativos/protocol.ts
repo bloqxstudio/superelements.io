@@ -27,3 +27,13 @@ export interface CreativeProgress {
   id: string
   step: CreativeStep
 }
+
+/** Quais agentes a máquina tem (o que o conector ou o servidor de dev achou). */
+export type CreativeAgentId = 'claude' | 'codex'
+
+export interface CreativeAgentInfo {
+  id: CreativeAgentId
+  name: string
+  available: boolean
+  version?: string
+}

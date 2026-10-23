@@ -5,7 +5,7 @@ import type { EditRequest, EditResponse } from './edit'
 import { callAi, type CreativeStep } from './link'
 import { LIBRARY } from './library'
 import { drawSlide, type ImageMap } from './render'
-import type { CreativeSet, Post, SetBrand, Slide } from './types'
+import type { CreativeSet, Layer, Post, SetBrand, Slide } from './types'
 import { FORMATS, sizeOf } from './types'
 
 export interface AiForm {
@@ -52,8 +52,14 @@ export async function generatePosts(form: AiForm, brand: SetBrand, signal?: Abor
 
 export type EditScope = EditRequest['scope']
 
-/** O conjunto como a IA lê: ids, caixas e textos, sem nada que só serve ao desenho. */
-const compactPosts = (posts: Post[]) =>
+/** Camada inteira, só para o que a IA vai mexer; o resto vai resumido (menos texto, resposta mais rápida). */
+const slimLayer = (l: Layer) => ({ id: l.id, type: l.type, name: l.name, ...(l.type === 'text' ? { text: l.text } : {}) })
+
+/**
+ * O conjunto como a IA lê: ids, caixas e textos. O que está em foco (o slide
+ * escolhido, ou o post inteiro) vai completo; os demais slides, só com os textos.
+ */
+const compactPosts = (posts: Post[], focus: { postId?: string; slideId?: string; scope: EditScope }) =>
   posts.map((p) => ({
     id: p.id,
     name: p.name,
@@ -61,7 +67,10 @@ const compactPosts = (posts: Post[]) =>
     width: sizeOf(p.format).width,
     height: sizeOf(p.format).height,
     caption: p.caption,
-    slides: p.slides.map((s) => ({ id: s.id, background: s.background, layers: s.layers })),
+    slides: p.slides.map((s) => {
+      const full = p.id === focus.postId && (focus.scope === 'post' || focus.scope === 'set' || s.id === focus.slideId)
+      return { id: s.id, background: s.background, layers: full ? s.layers : s.layers.map(slimLayer) }
+    }),
   }))
 
 /** JPEG pequeno do slide, para a IA ver o que a pessoa vê. */
@@ -88,6 +97,7 @@ export interface EditCall {
   history: { role: 'user' | 'ai'; text: string }[]
   attachments?: EditRequest['attachments']
   skill?: EditRequest['skill']
+  agent?: EditRequest['agent']
 }
 
 export async function requestEdit(call: EditCall, fonts: string[], signal?: AbortSignal, onStep?: (step: CreativeStep) => void): Promise<EditResponse> {
@@ -95,6 +105,7 @@ export async function requestEdit(call: EditCall, fonts: string[], signal?: Abor
   const post = set.posts.find((p) => p.id === call.postId)
   const slide = post?.slides.find((s) => s.id === call.slideId)
   const body: EditRequest = {
+    agent: call.agent,
     message: call.message,
     scope: call.scope,
     postId: call.postId,
@@ -102,7 +113,7 @@ export async function requestEdit(call: EditCall, fonts: string[], signal?: Abor
     layerId: call.layerId,
     brand: { name: set.brand.name, colors: set.brand.colors, headingFont: set.brand.headingFont, bodyFont: set.brand.bodyFont },
     // Escopo menor que o conjunto: só o post aberto vai para a IA
-    posts: compactPosts(call.scope === 'set' || !post ? set.posts : [post]),
+    posts: compactPosts(call.scope === 'set' || !post ? set.posts : [post], { postId: call.postId, slideId: call.slideId, scope: call.scope }),
     fonts,
     images: [
       ...LIBRARY.map((i) => ({ src: i.src, label: i.label })),

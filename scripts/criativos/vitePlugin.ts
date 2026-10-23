@@ -1,8 +1,9 @@
 import type { Plugin } from 'vite'
 import type { EditRequest } from '../../src/features/criativos/edit.ts'
 import type { PlanRequest } from '../../src/features/criativos/plan.ts'
-import { CREATIVE_EVENTS, type CreativeCall, type CreativeProgress, type CreativeResult } from '../../src/features/criativos/protocol.ts'
-import { claudeAvailable } from './claude.ts'
+import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeCall, type CreativeProgress, type CreativeResult } from '../../src/features/criativos/protocol.ts'
+import { CHAT_AGENTS } from '../../src/features/space/chat/protocol.ts'
+import { checkAgents } from '../space/chatPlugin.ts'
 import { editCreatives } from './edit.ts'
 import { planPosts } from './plan.ts'
 
@@ -25,6 +26,7 @@ const planInput = (body: Partial<PlanRequest>): PlanRequest => ({
 })
 
 const editInput = (body: Partial<EditRequest>): EditRequest => ({
+  agent: body.agent === 'codex' ? 'codex' : 'claude',
   message: String(body.message ?? '').slice(0, 4000),
   scope: ['layer', 'slide', 'post', 'set'].includes(String(body.scope)) ? (body.scope as EditRequest['scope']) : 'set',
   postId: body.postId ? String(body.postId) : undefined,
@@ -50,7 +52,12 @@ export const criativos = (): Plugin => ({
     const runs = new Map<string, AbortController>()
     const send = (result: CreativeResult) => server.ws.send(CREATIVE_EVENTS.result, result)
 
-    server.ws.on(CREATIVE_EVENTS.hello, () => server.ws.send(CREATIVE_EVENTS.status, { ia: claudeAvailable() }))
+    server.ws.on(CREATIVE_EVENTS.hello, () => {
+      void checkAgents().then((found) => {
+        const agents: CreativeAgentInfo[] = found.map((a) => ({ id: a.id, name: CHAT_AGENTS[a.id].name, available: a.available, version: a.version }))
+        server.ws.send(CREATIVE_EVENTS.status, { ia: agents.some((a) => a.available), agents })
+      })
+    })
 
     server.ws.on(CREATIVE_EVENTS.call, (call: CreativeCall) => {
       void (async () => {

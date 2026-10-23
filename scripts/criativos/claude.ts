@@ -23,16 +23,20 @@ interface Ask {
   signal?: AbortSignal
   /** O que o Claude Code está fazendo (começou, pensando, escrevendo a resposta). */
   onStep?: (step: 'start' | 'thinking' | 'writing') => void
+  /** Esforço de raciocínio do Claude Code: `low` é bem mais rápido e basta para ajustes pequenos. */
+  effort?: 'low' | 'medium' | 'high'
+  /** Sem nenhuma saída do Claude Code por este tempo, o pedido falha em vez de ficar esperando. */
+  idleMs?: number
 }
 
-export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeoutMs = 180_000, maxTurns = 2, signal, onStep }: Ask): Promise<T> =>
+export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeoutMs = 180_000, maxTurns = 2, signal, onStep, effort, idleMs = 90_000 }: Ask): Promise<T> =>
   new Promise((resolve, reject) => {
     const bin = findBin('claude')
     if (!bin) return reject(new Error('O Claude Code não foi encontrado nesta máquina (ou diga onde está em SPACE_CLAUDE_BIN).'))
     const cwd = mkdtempSync(path.join(os.tmpdir(), 'se-criativos-'))
     const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }
     for (const key of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT']) delete env[key]
-    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--model', model, '--strict-mcp-config', '--tools', '', '--max-turns', String(maxTurns), '--system-prompt', system, '--json-schema', JSON.stringify(schema)]
+    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--model', model, '--strict-mcp-config', '--tools', '', '--max-turns', String(maxTurns), '--system-prompt', system, '--json-schema', JSON.stringify(schema), ...(effort ? ['--effort', effort] : [])]
     let child: ChildProcess
     try {
       child = launch(bin, args, { cwd, env })
@@ -41,6 +45,7 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
       return reject(new Error(`Não consegui abrir o Claude Code: ${error instanceof Error ? error.message : String(error)}`))
     }
     let settled = false
+    let lastOutput = Date.now()
     let buffer = ''
     let stderr = ''
     let lastStep = ''
@@ -55,6 +60,7 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
       if (settled) return
       settled = true
       clearTimeout(timer)
+      clearInterval(idle)
       signal?.removeEventListener('abort', abort)
       kill(child)
       setTimeout(() => {
@@ -72,8 +78,12 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
     signal?.addEventListener('abort', abort, { once: true })
     const timer = setTimeout(() => finish(new Error(`A IA passou de ${Math.round(timeoutMs / 60000)} minutos sem responder.`)), timeoutMs)
 
+    const idle = setInterval(() => {
+      if (Date.now() - lastOutput > idleMs) finish(new Error('O Claude Code parou de responder (sem sinal há mais de 90 s). Tente de novo.'))
+    }, 5000)
     child.stdout?.setEncoding('utf8')
     child.stdout?.on('data', (chunk: string) => {
+      lastOutput = Date.now()
       buffer += chunk
       let nl: number
       while ((nl = buffer.indexOf('\n')) >= 0) {
