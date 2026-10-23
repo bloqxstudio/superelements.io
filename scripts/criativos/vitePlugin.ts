@@ -1,12 +1,16 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
 import type { PlanRequest } from '../../src/features/criativos/plan.ts'
+import type { EditRequest } from '../../src/features/criativos/edit.ts'
+import { claudeAvailable } from './claude.ts'
+import { editCreatives } from './edit.ts'
 import { planPosts } from './plan.ts'
 
 /**
  * Só no servidor de desenvolvimento, na mesma origem do app:
  *   POST /__criativos/plano   PlanRequest → { posts } (Claude Code desta máquina, `plan.ts`)
- *   GET  /__criativos/status  → { ia: true }; o app usa para saber se a IA está disponível
+ *   POST /__criativos/editar  EditRequest → { reply, ops } (conversa do editor; o app aplica as operações)
+ *   GET  /__criativos/status  → { ia }; true se o Claude Code desta máquina foi encontrado
  */
 
 const send = (res: ServerResponse, status: number, body: unknown) => {
@@ -20,7 +24,7 @@ const readJson = (req: IncomingMessage) =>
     let size = 0
     req.on('data', (c: Buffer) => {
       size += c.length
-      if (size > 200_000) reject(new Error('Pedido grande demais'))
+      if (size > 2_500_000) reject(new Error('Pedido grande demais'))
       else chunks.push(c)
     })
     req.on('end', () => {
@@ -55,7 +59,35 @@ export const criativos = (): Plugin => ({
       const route = new URL(req.url ?? '/', 'http://localhost').pathname.replace(/\/+$/, '') || '/'
       void (async () => {
         if (!sameOrigin(req)) return send(res, 403, { error: 'Só o app pode pedir isto' })
-        if (route === '/status' && req.method === 'GET') return send(res, 200, { ia: true })
+        if (route === '/status' && req.method === 'GET') return send(res, 200, { ia: claudeAvailable() })
+        if (route === '/editar' && req.method === 'POST') {
+          const body = (await readJson(req)) as Partial<EditRequest>
+          const input: EditRequest = {
+            message: String(body.message ?? '').slice(0, 4000),
+            scope: ['layer', 'slide', 'post', 'set'].includes(String(body.scope)) ? (body.scope as EditRequest['scope']) : 'set',
+            postId: body.postId ? String(body.postId) : undefined,
+            slideId: body.slideId ? String(body.slideId) : undefined,
+            layerId: body.layerId ? String(body.layerId) : undefined,
+            brand: body.brand as EditRequest['brand'],
+            posts: body.posts ?? [],
+            fonts: Array.isArray(body.fonts) ? body.fonts.slice(0, 60).map(String) : [],
+            images: Array.isArray(body.images) ? body.images.slice(0, 80) : [],
+            cases: Array.isArray(body.cases) ? body.cases.slice(0, 12) : [],
+            image: typeof body.image === 'string' && body.image.length < 2_000_000 ? body.image : undefined,
+            history: Array.isArray(body.history) ? body.history.slice(-6) : [],
+          }
+          if (!input.message.trim()) return send(res, 400, { error: 'Escreva o que quer mudar.' })
+          const controller = new AbortController()
+          res.on('close', () => {
+            if (!res.writableFinished) controller.abort()
+          })
+          try {
+            return send(res, 200, await editCreatives(input, controller.signal))
+          } catch (error) {
+            if (controller.signal.aborted) return res.end()
+            return send(res, 422, { error: error instanceof Error ? error.message : String(error) })
+          }
+        }
         if (route === '/plano' && req.method === 'POST') {
           const body = (await readJson(req)) as Partial<PlanRequest>
           const input: PlanRequest = {

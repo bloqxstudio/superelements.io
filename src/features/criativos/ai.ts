@@ -1,7 +1,10 @@
 import { AV_CASES } from '@/features/avence/cases'
 import type { PlanRequest, PlanResponse, FormatKey } from './plan'
 import { buildPost } from './templates'
-import type { Post, SetBrand } from './types'
+import type { EditRequest, EditResponse } from './edit'
+import { LIBRARY } from './library'
+import { drawSlide, type ImageMap } from './render'
+import type { CreativeSet, Post, SetBrand, Slide } from './types'
 import { FORMATS } from './types'
 
 /** A IA roda no Claude Code desta máquina, pelo servidor de desenvolvimento; no app publicado não existe. */
@@ -54,4 +57,74 @@ export async function generatePosts(form: AiForm, brand: SetBrand, signal?: Abor
       brand
     )
   )
+}
+
+// Conversa de edição
+
+export type EditScope = EditRequest['scope']
+
+/** O conjunto como a IA lê: ids, caixas e textos, sem nada que só serve ao desenho. */
+const compactPosts = (posts: Post[]) =>
+  posts.map((p) => ({
+    id: p.id,
+    name: p.name,
+    format: p.format,
+    width: FORMATS[p.format].width,
+    height: FORMATS[p.format].height,
+    caption: p.caption,
+    slides: p.slides.map((s) => ({ id: s.id, background: s.background, layers: s.layers })),
+  }))
+
+/** JPEG pequeno do slide, para a IA ver o que a pessoa vê. */
+export function slidePreview(slide: Slide, format: Post['format'], images: ImageMap): string {
+  const { width, height } = FORMATS[format]
+  const k = 720 / width
+  const canvas = document.createElement('canvas')
+  canvas.width = 720
+  canvas.height = Math.round(height * k)
+  const ctx = canvas.getContext('2d')!
+  ctx.scale(k, k)
+  drawSlide(ctx, slide, format, images)
+  return canvas.toDataURL('image/jpeg', 0.8)
+}
+
+export interface EditCall {
+  message: string
+  scope: EditScope
+  set: CreativeSet
+  postId?: string
+  slideId?: string
+  layerId?: string
+  images: ImageMap
+  history: { role: 'user' | 'ai'; text: string }[]
+}
+
+export async function requestEdit(call: EditCall, fonts: string[], signal?: AbortSignal): Promise<EditResponse> {
+  const { set } = call
+  const post = set.posts.find((p) => p.id === call.postId)
+  const slide = post?.slides.find((s) => s.id === call.slideId)
+  const body: EditRequest = {
+    message: call.message,
+    scope: call.scope,
+    postId: call.postId,
+    slideId: call.slideId,
+    layerId: call.layerId,
+    brand: { name: set.brand.name, colors: set.brand.colors, headingFont: set.brand.headingFont, bodyFont: set.brand.bodyFont },
+    // Escopo menor que o conjunto: só o post aberto vai para a IA
+    posts: compactPosts(call.scope === 'set' || !post ? set.posts : [post]),
+    fonts,
+    images: [
+      ...LIBRARY.map((i) => ({ src: i.src, label: i.label })),
+      ...set.assets.map((a) => ({ src: `asset:${a.id}`, label: `Enviada: ${a.name}` })),
+      ...(set.brand.logoOnLight ? [{ src: set.brand.logoOnLight, label: 'Logo para fundo claro' }] : []),
+      ...(set.brand.logoOnDark ? [{ src: set.brand.logoOnDark, label: 'Logo para fundo escuro' }] : []),
+    ],
+    cases: AV_CASES.map((c) => ({ slug: c.slug, name: c.name, segment: c.segment, summary: c.summary })),
+    image: slide && post ? slidePreview(slide, post.format, call.images) : undefined,
+    history: call.history,
+  }
+  const res = await fetch('/__criativos/editar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal })
+  const json = (await res.json().catch(() => ({}))) as Partial<EditResponse> & { error?: string }
+  if (!res.ok || !json.ops) throw new Error(json.error ?? 'A IA não respondeu.')
+  return { reply: json.reply ?? '', ops: json.ops }
 }

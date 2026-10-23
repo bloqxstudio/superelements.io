@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Sparkles, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
+import { Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { drawSlide, slideToBlob, type ExportType } from './render'
@@ -9,11 +9,14 @@ import { Stage } from './Stage'
 import { currentLayer, currentPost, currentSlide, reformat, useEditor } from './store'
 import { uploadAsset } from './storage'
 import { TEMPLATES, buildSlide } from './templates'
+import type { TemplateId } from './plan'
 import { FORMAT_LIST, FORMATS, uid, type CreativeSet, type FormatId, type ImageLayer, type Layer, type Post, type Slide, type TextLayer } from './types'
 import { zipFiles } from './zip'
 import { aiAvailable } from './ai'
 import { AiDialog } from './AiDialog'
 import { LIBRARY } from './library'
+import { AiChat } from './AiChat'
+import { Board } from './Board'
 
 const FONTS = ['Inter', 'Inter Tight', 'Geist', 'Instrument Serif', 'Playfair Display', 'DM Sans', 'Manrope', 'Poppins', 'Montserrat', 'Space Grotesk', 'Fraunces', 'Archivo', 'Bebas Neue']
 
@@ -326,6 +329,8 @@ export const CreativeEditor: React.FC = () => {
   const [menu, setMenu] = useState<'add' | 'export' | 'slide' | null>(null)
   const [ai, setAi] = useState<boolean | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
+  const [view, setView] = useState<'canvas' | 'slide'>('canvas')
+  const [panel, setPanel] = useState<'ia' | 'props'>('ia')
   const upload = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -383,11 +388,38 @@ export const CreativeEditor: React.FC = () => {
     )
 
   const addSlide = (templateId: string) => {
-    const next = buildSlide(templateId, set.brand, format)
+    const next = buildSlide(templateId as TemplateId, set.brand, format)
     editPost((p) => ({ ...p, slides: [...p.slides, next] }))
     useEditor.getState().selectSlide(next.id)
     setMenu(null)
     void useEditor.getState().ensureAssets()
+  }
+
+  const addSlideTo = (postId: string, templateId: string) => {
+    const target = set.posts.find((p) => p.id === postId)
+    if (!target) return
+    const next = buildSlide(templateId as TemplateId, set.brand, target.format)
+    useEditor.getState().edit((s) => ({ ...s, posts: s.posts.map((p) => (p.id === postId ? { ...p, slides: [...p.slides, next] } : p)) }))
+    useEditor.getState().selectPost(postId)
+    useEditor.getState().selectSlide(next.id)
+    void useEditor.getState().ensureAssets()
+  }
+
+  const duplicateSlide = (postId: string, slideId: string) => {
+    const copy = set.posts.find((p) => p.id === postId)?.slides.find((s) => s.id === slideId)
+    if (!copy) return
+    const next: Slide = { ...copy, id: uid(), layers: copy.layers.map((l) => ({ ...l, id: uid() })) }
+    useEditor.getState().edit((s) => ({ ...s, posts: s.posts.map((p) => (p.id !== postId ? p : { ...p, slides: p.slides.flatMap((x) => (x.id === slideId ? [x, next] : [x])) })) }))
+    useEditor.getState().selectSlide(next.id)
+  }
+
+  const deleteSlide = (postId: string, slideId: string) => {
+    const target = set.posts.find((p) => p.id === postId)
+    if (!target || target.slides.length < 2) return toast.error('O post precisa de pelo menos um slide.')
+    const index = target.slides.findIndex((s) => s.id === slideId)
+    const nextId = (target.slides[index + 1] ?? target.slides[index - 1]).id
+    useEditor.getState().edit((s) => ({ ...s, posts: s.posts.map((p) => (p.id !== postId ? p : { ...p, slides: p.slides.filter((x) => x.id !== slideId) })) }))
+    useEditor.getState().selectSlide(nextId)
   }
 
   const sendLayerImage = async (file?: File) => {
@@ -415,6 +447,13 @@ export const CreativeEditor: React.FC = () => {
         <div className="ml-auto flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Desfazer (Ctrl+Z)" disabled={!canUndo} onClick={() => useEditor.getState().undo()}><Undo2 className="h-4 w-4" /></Button>
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Refazer (Ctrl+Shift+Z)" disabled={!canRedo} onClick={() => useEditor.getState().redo()}><Redo2 className="h-4 w-4" /></Button>
+          <div className="mr-1 flex rounded-lg border border-gray-200 bg-white p-0.5" role="group" aria-label="Modo de edição">
+            {([['canvas', 'Canvas', LayoutGrid], ['slide', 'Slide', SquareDashed]] as const).map(([id, label, Icon]) => (
+              <button key={id} type="button" onClick={() => setView(id)} className={cn('flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium', view === id ? 'bg-violet-100 text-violet-800' : 'text-gray-600 hover:bg-gray-100')}>
+                <Icon className="h-3.5 w-3.5" /> {label}
+              </button>
+            ))}
+          </div>
           <Button variant="outline" size="sm" className="gap-1.5 bg-white" onClick={() => setAiOpen(true)} disabled={ai === false} title={ai === false ? 'A IA roda no app local (servidor de desenvolvimento com o Claude Code).' : 'Gerar posts com IA'}>
             <Sparkles className="h-4 w-4 text-violet-600" /> IA
           </Button>
@@ -444,7 +483,7 @@ export const CreativeEditor: React.FC = () => {
 
       <AiDialog open={aiOpen} onClose={() => setAiOpen(false)} />
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-56 shrink-0 flex-col border-r bg-white md:flex" onClick={(e) => e.stopPropagation()}>
+        <aside className={cn('w-56 shrink-0 flex-col border-r bg-white', view === 'slide' ? 'hidden md:flex' : 'hidden')} onClick={(e) => e.stopPropagation()}>
           <div className="border-b p-2">
             <select aria-label="Post" value={post?.id} onChange={(e) => useEditor.getState().selectPost(e.target.value)} className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-sm font-medium">
               {set.posts.map((p) => (
@@ -483,10 +522,18 @@ export const CreativeEditor: React.FC = () => {
               {slide && <input type="color" aria-label="Cor do fundo" value={/^#[0-9a-f]{6}$/i.test(slide.background) ? slide.background : '#ffffff'} onChange={(e) => editSlide((sl) => ({ ...sl, background: e.target.value }))} className="h-6 w-8 cursor-pointer rounded border border-gray-200 bg-white p-0.5" />}
             </label>
           </div>
-          <Stage />
+          {view === 'canvas' ? <Board onAddSlide={addSlideTo} onDownloadSlide={() => void exportFiles('slide', exportType)} onDuplicateSlide={duplicateSlide} onDeleteSlide={deleteSlide} /> : <Stage />}
         </main>
 
-        <aside className="hidden w-72 shrink-0 overflow-y-auto border-l bg-white p-3 lg:block" onClick={(e) => e.stopPropagation()}>
+        <aside className="hidden w-80 shrink-0 flex-col border-l bg-white lg:flex" onClick={(e) => e.stopPropagation()}>
+          <div className="flex h-10 shrink-0 border-b" role="tablist">
+            {([['ia', 'IA', Sparkles], ['props', 'Propriedades', SlidersHorizontal]] as const).map(([id, label, Icon]) => (
+              <button key={id} type="button" role="tab" aria-selected={panel === id} onClick={() => setPanel(id)} className={cn('flex flex-1 items-center justify-center gap-1.5 border-b-2 text-xs font-semibold', panel === id ? 'border-violet-600 text-violet-800' : 'border-transparent text-gray-500 hover:text-gray-800')}>
+                <Icon className="h-3.5 w-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+          {panel === 'ia' ? <div className="min-h-0 flex-1"><AiChat available={ai} /></div> : <div className="min-h-0 flex-1 overflow-y-auto p-3" data-scroll>
           {layer ? (
             <Inspector key={layer.id} set={set} layer={layer} />
           ) : (
@@ -512,6 +559,7 @@ export const CreativeEditor: React.FC = () => {
               <p className="text-xs text-gray-500">Clique numa camada para editar. Arraste para mover, puxe o canto para redimensionar. Setas movem 1px (Shift, 10px).</p>
             </div>
           )}
+                  </div>}
         </aside>
       </div>
     </div>
