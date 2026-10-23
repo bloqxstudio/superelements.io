@@ -10,6 +10,7 @@ import { useProjectList, useProjectStore } from '@/features/projects/projectStor
 import { loadProjectDoc } from '@/features/projects/storage'
 import { setBrandFrom } from '@/features/criativos/brand'
 import { deleteSet, listSets, saveSet } from '@/features/criativos/storage'
+import { IMPORTED_NAME, importedSet } from '@/features/criativos/imported'
 import { POST_MODELS, buildPost } from '@/features/criativos/templates'
 import { aiAvailable, generatePosts, type AiForm } from '@/features/criativos/ai'
 import { AiFields, EMPTY_AI } from '@/features/criativos/AiFields'
@@ -131,6 +132,8 @@ const Creatives: React.FC = () => {
   const [sets, setSets] = useState<SetSummary[] | null>(null)
   const [error, setError] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const navigate = useNavigate()
 
   const load = () =>
     listSets()
@@ -144,6 +147,21 @@ const Creatives: React.FC = () => {
       })
 
   useEffect(() => void load(), [])
+
+  const bringReady = async () => {
+    const existing = sets?.find((x) => x.name === IMPORTED_NAME)
+    if (existing && !window.confirm('Os criativos prontos já estão na sua conta. Trazer uma segunda cópia?')) return navigate(`/criativos/${existing.id}`)
+    setImporting(true)
+    try {
+      const set = importedSet()
+      await saveSet(set)
+      navigate(`/criativos/${set.id}`)
+    } catch (err) {
+      console.error(err)
+      toast.error('Não consegui trazer os criativos.')
+      setImporting(false)
+    }
+  }
 
   const remove = async (set: SetSummary) => {
     if (!window.confirm(`Excluir "${set.name}" e as imagens enviadas para ele?`)) return
@@ -163,7 +181,10 @@ const Creatives: React.FC = () => {
             <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Criativos</h1>
             <p className="mt-1 max-w-2xl text-sm text-gray-500">Posts de Instagram na marca de cada projeto. Edite como no Canva e baixe em PNG ou JPG no tamanho do feed, do quadrado e do story.</p>
           </div>
-          <Button className="gap-1.5" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Novo conjunto</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" className="gap-1.5 bg-white" disabled={importing} onClick={() => void bringReady()}><Images className="h-4 w-4" /> {importing ? 'Trazendo…' : 'Trazer criativos prontos'}</Button>
+            <Button className="gap-1.5" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Novo conjunto</Button>
+          </div>
         </div>
 
         {error && <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">Não consegui ler os conjuntos da conta. <button className="underline" onClick={() => void load()}>Tentar de novo</button></p>}
