@@ -160,6 +160,8 @@ export interface CreativeSet {
   name: string
   projectId?: string
   projectName?: string
+  /** Guardado na pasta do projeto: a equipe dele abre e edita junto, ao vivo. */
+  shared?: boolean
   brand: SetBrand
   posts: Post[]
   assets: SetAsset[]
@@ -171,7 +173,9 @@ export interface CreativeSet {
 export interface SetSummary {
   id: string
   name: string
+  projectId?: string
   projectName?: string
+  shared?: boolean
   posts: number
   colors: string[]
   updatedAt: number

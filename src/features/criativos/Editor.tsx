@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
+import { Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { drawSlide, slideToBlob, type ExportType } from './render'
@@ -17,6 +17,9 @@ import { AiDialog } from './AiDialog'
 import { LIBRARY } from './library'
 import { AiChat } from './AiChat'
 import { Board } from './Board'
+import { joinSetLive, useLive } from './live'
+import { shareSet } from './storage'
+import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { FormatField } from './FormatField'
 
 const FONTS = ['Inter', 'Inter Tight', 'Geist', 'Instrument Serif', 'Playfair Display', 'DM Sans', 'Manrope', 'Poppins', 'Montserrat', 'Space Grotesk', 'Fraunces', 'Archivo', 'Bebas Neue']
@@ -123,7 +126,7 @@ const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer })
   const sendImage = async (file?: File) => {
     if (!file) return
     try {
-      const asset = await uploadAsset(set.id, file, file.name)
+      const asset = await uploadAsset(set, file, file.name)
       useEditor.getState().edit((s) => ({ ...s, assets: [...s.assets, asset] }))
       set_({ src: `asset:${asset.id}` } as Partial<ImageLayer>)
       await useEditor.getState().ensureImage(`asset:${asset.id}`)
@@ -318,6 +321,7 @@ async function exportFiles(scope: 'slide' | 'post' | 'set', type: ExportType) {
 
 export const CreativeEditor: React.FC = () => {
   const { setId = '' } = useParams()
+  const projectParam = useSearchParams()[0].get('projeto') ?? undefined
   const status = useEditor((s) => s.status)
   const set = useEditor((s) => s.set)
   const post = useEditor(currentPost)
@@ -332,14 +336,22 @@ export const CreativeEditor: React.FC = () => {
   const [aiOpen, setAiOpen] = useState(false)
   const [view, setView] = useState<'canvas' | 'slide'>('canvas')
   const [newPost, setNewPost] = useState<{ name: string; format: FormatId } | null>(null)
+  const [sharing, setSharing] = useState<{ projectId: string; busy: boolean } | null>(null)
+  const navigate = useNavigate()
+  useProjectList()
+  const projects = useProjectStore((s) => s.projects)
+  const people = useLive((s) => s.people)
+  const live = useLive((s) => s.live)
+  const sharedId = set?.shared ? set.id : undefined
+  const sharedProject = set?.projectId
   const [panel, setPanel] = useState<'ia' | 'props'>('ia')
   const upload = useRef<HTMLInputElement>(null)
   const pasteImage = useRef<(file: File) => void>(() => undefined)
 
   useEffect(() => {
-    void useEditor.getState().open(setId)
+    void useEditor.getState().open(setId, projectParam)
     return () => useEditor.getState().close()
-  }, [setId])
+  }, [setId, projectParam])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -367,6 +379,13 @@ export const CreativeEditor: React.FC = () => {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // Conjunto compartilhado: entra no canal ao vivo do projeto (pessoas, cursores e mudanças chegando)
+  useEffect(() => {
+    if (status !== 'ready' || !sharedId) return
+    const current = useEditor.getState().set
+    return current ? joinSetLive(current) : undefined
+  }, [status, sharedId, sharedProject])
 
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
@@ -433,6 +452,23 @@ export const CreativeEditor: React.FC = () => {
     useEditor.getState().selectSlide(nextId)
   }
 
+  const share = async () => {
+    if (!sharing || !set) return
+    const project = projects.find((p) => p.id === sharing.projectId)
+    if (!project) return
+    setSharing({ ...sharing, busy: true })
+    try {
+      await useEditor.getState().flush()
+      const moved = await shareSet(useEditor.getState().set!, project.id, project.name)
+      toast.success(`Compartilhado com a equipe de ${project.name}.`)
+      navigate(`/criativos/${moved.id}?projeto=${project.id}`, { replace: true })
+    } catch (err) {
+      console.error(err)
+      toast.error(err instanceof Error ? err.message : 'Não consegui compartilhar o conjunto.')
+      setSharing({ ...sharing, busy: false })
+    }
+  }
+
   const createPost = () => {
     if (!newPost) return
     const colors = set.brand.colors.map((c) => c.hex)
@@ -454,7 +490,7 @@ export const CreativeEditor: React.FC = () => {
   const sendLayerImage = async (file?: File) => {
     if (!file) return
     try {
-      const asset = await uploadAsset(set.id, file, file.name)
+      const asset = await uploadAsset(set, file, file.name)
       useEditor.getState().edit((s) => ({ ...s, assets: [...s.assets, asset] }))
       const { width } = sizeOf(format)
       const w = Math.min(width - 168, 760)
@@ -475,6 +511,40 @@ export const CreativeEditor: React.FC = () => {
         <Link to="/criativos" aria-label="Voltar aos criativos" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
         <input aria-label="Nome do conjunto" value={set.name} onChange={(e) => useEditor.getState().edit((s) => ({ ...s, name: e.target.value }))} className="h-8 w-56 rounded-md border border-transparent px-2 text-sm font-semibold text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none" />
         <span className="text-xs text-gray-500">{savingLabel}</span>
+        {set.shared ? (
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <span className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700" title={live ? 'Ao vivo com a equipe do projeto' : 'Conectando ao canal ao vivo…'}>
+              <span className={cn('h-1.5 w-1.5 rounded-full', live ? 'bg-emerald-500' : 'bg-amber-400')} /> {set.projectName ?? 'Equipe'}
+            </span>
+            <div className="flex -space-x-1.5">
+              {people.map((p) => (
+                <span key={p.userId} title={`${p.name} está neste conjunto`} className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold text-white ring-2 ring-white" style={{ background: p.color }}>
+                  {p.name.charAt(0)}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" onClick={() => setSharing(sharing ? null : { projectId: set.projectId ?? projects[0]?.id ?? '', busy: false })} disabled={!projects.length}>
+              <Users className="h-4 w-4" /> Compartilhar
+            </Button>
+            {sharing && (
+              <div className="absolute left-0 top-10 z-40 w-72 space-y-2 rounded-xl border bg-white p-3 shadow-xl">
+                <p className="text-xs text-gray-600">A equipe do projeto abre e edita este conjunto junto, ao vivo: cada um vê o mouse, a seleção e o agente do outro. Quem ainda não está no projeto entra pelo convite dele.</p>
+                <select value={sharing.projectId} onChange={(e) => setSharing({ ...sharing, projectId: e.target.value })} className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-sm">
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <div className="flex justify-end gap-1.5">
+                  <Button type="button" variant="outline" size="sm" className="bg-white" onClick={() => setSharing(null)} disabled={sharing.busy}>Cancelar</Button>
+                  <Button type="button" size="sm" onClick={() => void share()} disabled={sharing.busy || !sharing.projectId}>{sharing.busy ? 'Compartilhando…' : 'Compartilhar'}</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <div className="ml-auto flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Desfazer (Ctrl+Z)" disabled={!canUndo} onClick={() => useEditor.getState().undo()}><Undo2 className="h-4 w-4" /></Button>
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Refazer (Ctrl+Shift+Z)" disabled={!canRedo} onClick={() => useEditor.getState().redo()}><Redo2 className="h-4 w-4" /></Button>

@@ -136,5 +136,6 @@ export const askCodex = <T>({ prompt, images = [], timeoutMs = 360_000, idleMs =
     })
     child.on('error', (error) => finish(new Error(`Não consegui abrir o Codex: ${error.message}`)))
     child.on('close', () => finish())
+    child.stdin?.on('error', () => {})
     child.stdin?.end(prompt)
   })

@@ -2,6 +2,7 @@ import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, 
 import { Copy, Download, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { agentInfo, PHASE_LABEL, useAgent } from './agentStore'
+import { rememberPointer, sendPointer, useLive } from './live'
 import { drawSlide, fontCss, layerBox, type ImageMap } from './render'
 import { useEditor } from './store'
 import { TEMPLATES } from './templates'
@@ -98,6 +99,9 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   const working = useAgent((s) => s.working)
   const flash = useAgent((s) => s.flash)
   const cursor = useAgent((s) => s.cursor)
+  const people = useLive((s) => s.people)
+  const peerCursors = useLive((s) => s.cursors)
+  const peerAgents = useLive((s) => s.agents)
 
   const host = useRef<HTMLDivElement>(null)
   const drag = useRef<Drag | null>(null)
@@ -246,6 +250,11 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
 
   const onMove = (e: React.PointerEvent) => {
     const d = drag.current
+    {
+      const w = world(e)
+      rememberPointer(w.x, w.y)
+      sendPointer(w)
+    }
     if (!d) {
       if (e.buttons) return
       const w = world(e)
@@ -324,6 +333,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
       onPointerMove={onMove}
       onPointerUp={onUp}
       onPointerCancel={onUp}
+      onPointerLeave={() => sendPointer(null)}
       onDoubleClick={onDouble}
       aria-label="Canvas dos criativos"
     >
@@ -426,6 +436,51 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
             </div>
           )
         })()}
+
+        {/* As outras pessoas: seleção, mouse e o agente que cada uma está usando */}
+        {people.map((person) => {
+          const c = peerCursors[person.userId]
+          if (!c) return null
+          const slide = placed.find((p) => p.slideId === c.slideId)
+          const layer = slide?.slide.layers.find((l) => l.id === c.layerId)
+          const b = layer && layerBox(layer)
+          return (
+            <React.Fragment key={person.userId}>
+              {slide && (
+                <div className="pointer-events-none absolute" style={b ? { left: slide.x + b.x, top: slide.y + b.y, width: b.w, height: b.h, outline: `${3 * inv}px solid ${person.color}` } : { left: slide.x, top: slide.y, width: slide.w, height: slide.h, outline: `${3 * inv}px solid ${person.color}` }}>
+                  <span className="absolute left-0 whitespace-nowrap rounded px-1.5 py-0.5 font-semibold text-white" style={{ bottom: '100%', marginBottom: 4 * inv, background: person.color, fontSize: 12 * inv * 1.5 }}>{person.name}</span>
+                </div>
+              )}
+              <div className="pointer-events-none absolute left-0 top-0 z-20" style={{ transform: `translate(${c.x}px, ${c.y}px) scale(${inv * 1.3})`, transformOrigin: '0 0', transition: 'transform .12s linear' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden style={{ filter: 'drop-shadow(0 2px 3px rgb(0 0 0 / 0.3))' }}>
+                  <path d="M3 2l17 8.2-7.4 2.1L9.6 20z" fill={person.color} stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
+                </svg>
+                <span className="absolute left-4 top-4 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold text-white shadow" style={{ background: person.color }}>{person.name}</span>
+              </div>
+            </React.Fragment>
+          )
+        })}
+        {Object.values(peerAgents).map((a) => {
+          const slide = placed.find((p) => p.slideId === a.slideId)
+          if (!slide) return null
+          const A = agentInfo(a.agent)
+          const layer = slide.slide.layers.find((l) => l.id === a.layerId)
+          const b = layer && layerBox(layer)
+          const cx = b ? slide.x + b.x + Math.min(b.w * 0.5, 420) : slide.x + slide.w * 0.5
+          const cy = b ? slide.y + b.y + Math.min(b.h * 0.5, 160) : slide.y + slide.h * 0.45
+          return (
+            <div key={a.key} className="pointer-events-none absolute left-0 top-0 z-20" style={{ transform: `translate(${cx}px, ${cy}px) scale(${inv * 1.35})`, transformOrigin: '0 0', transition: 'transform .8s cubic-bezier(.22,1,.36,1)' }}>
+              <div style={{ animation: 'agentBob 1.6s ease-in-out infinite' }}>
+                <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden style={{ filter: 'drop-shadow(0 2px 3px rgb(0 0 0 / 0.35))' }}>
+                  <path d="M3 2l17 8.2-7.4 2.1L9.6 20z" fill={A.color} stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
+                </svg>
+                <span className="absolute left-5 top-5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold text-white shadow-lg" style={{ background: A.color }}>
+                  {A.name} · {a.owner}{a.text ? ` · ${a.text}` : ''}
+                </span>
+              </div>
+            </div>
+          )
+        })}
 
         {/* Barra do slide escolhido */}
         {selected && (

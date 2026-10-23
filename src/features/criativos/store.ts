@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { toast } from 'sonner'
 import { EMPHASIS_FONT, loadFont, loadImage, type ImageMap } from './render'
 import { loadSet, saveSet, assetUrl } from './storage'
+import { mergePatch, type SyncPatch } from './syncPatch'
 import type { CreativeSet, FormatId, Layer, Post, Slide } from './types'
 import { sizeOf } from './types'
 
@@ -24,7 +25,7 @@ interface EditorState {
   future: CreativeSet[]
   saving: 'saved' | 'dirty' | 'saving' | 'error'
 
-  open: (id: string) => Promise<void>
+  open: (id: string, projectId?: string) => Promise<void>
   close: () => void
   selectPost: (id: string) => void
   selectSlide: (id: string) => void
@@ -39,6 +40,8 @@ interface EditorState {
   ensureAssets: () => Promise<void>
   /** Marca o conjunto para salvar sem abrir um passo no histórico (um anexo que subiu, por exemplo). */
   persist: () => void
+  /** Uma mudança que outra pessoa fez no mesmo conjunto: entra sem abrir passo no histórico nem salvar daqui. */
+  applyRemote: (patch: SyncPatch) => void
   ensureImage: (src: string) => Promise<void>
   flush: () => Promise<void>
 }
@@ -61,10 +64,10 @@ export const useEditor = create<EditorState>()((set, get) => {
     future: [],
     saving: 'saved',
 
-    open: async (id) => {
+    open: async (id, projectId) => {
       set({ status: 'loading', set: undefined, past: [], future: [], images: new Map(), saving: 'saved' })
       try {
-        const loaded = await loadSet(id)
+        const loaded = await loadSet(id, projectId)
         if (!loaded) return set({ status: 'missing' })
         const post = loaded.posts[0]
         set({ set: loaded, status: 'ready', postId: post?.id, slideId: post?.slides[0]?.id, layerId: undefined })
@@ -117,6 +120,19 @@ export const useEditor = create<EditorState>()((set, get) => {
     },
 
     persist: () => schedule(),
+
+    applyRemote: (patch) => {
+      const current = get().set
+      if (!current) return
+      const next = mergePatch(current, patch)
+      const postId = next.posts.some((p) => p.id === get().postId) ? get().postId : next.posts[0]?.id
+      const post = next.posts.find((p) => p.id === postId)
+      const slideId = post?.slides.some((s) => s.id === get().slideId) ? get().slideId : post?.slides[0]?.id
+      const layerId = post?.slides.find((s) => s.id === slideId)?.layers.some((l) => l.id === get().layerId) ? get().layerId : undefined
+      // O desfazer e o refazer também recebem, para não desfazer o trabalho dos outros
+      set((s) => ({ set: next, postId, slideId, layerId, past: s.past.map((x) => mergePatch(x, patch)), future: s.future.map((x) => mergePatch(x, patch)) }))
+      void get().ensureAssets()
+    },
 
     ensureImage: async (src) => {
       const { images, set: current } = get()

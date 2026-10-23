@@ -83,7 +83,7 @@ export const ConnectorPrompt: React.FC<{ place?: { left: number; width: number; 
               {copied ? <Check className="h-3.5 w-3.5 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0 opacity-60" />}
             </button>
             <p className="text-[11px] leading-snug text-gray-500">
-              {platform === 'windows' ? 'Clique com o direito no botão Iniciar › Terminal. ' : ''}Se o arquivo não foi para Downloads, troque o caminho. Deixe a janela aberta enquanto usa o chat.
+              {platform === 'windows' ? 'Clique com o direito no botão Iniciar › Terminal. ' : ''}Se o arquivo não está em Downloads (ou o Windows está em outro disco), digite `node` e um espaço, arraste o conector.mjs para a janela do terminal e aperte Enter. Deixe a janela aberta enquanto usa o chat.
             </p>
           </Step>
 

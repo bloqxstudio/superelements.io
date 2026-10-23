@@ -23,6 +23,9 @@ import { uid, type CreativeSet, type SetBrand, type SetSummary } from '@/feature
  * de post escolhidos; daí se edita no editor e se baixa em PNG ou JPG.
  */
 
+/** O endereço do conjunto: os compartilhados dizem de que projeto são. */
+export const setLink = (s: Pick<SetSummary, 'id' | 'projectId' | 'shared'>) => `/criativos/${s.id}${s.shared && s.projectId ? `?projeto=${s.projectId}` : ''}`
+
 const when = (at: number) => new Date(at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 
 const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
@@ -33,6 +36,7 @@ const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClos
   const [name, setName] = useState('')
   const [models, setModels] = useState<string[]>(['carrossel-5'])
   const [busy, setBusy] = useState(false)
+  const [share, setShare] = useState(true)
   const [mode, setMode] = useState<'models' | 'ai'>('models')
   const ai = useAiAvailable()
   const [form, setForm] = useState<AiForm>(EMPTY_AI)
@@ -56,6 +60,7 @@ const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClos
         name: name.trim() || (project ? `${project.name} · criativos` : 'Novo conjunto'),
         projectId: project?.id,
         projectName: project?.name,
+        shared: !!project && share,
         brand,
         posts: mode === 'ai' ? await generatePosts(form, brand) : POST_MODELS.filter((m) => models.includes(m.id)).map((m) => buildPost(m, brand)),
         assets: [],
@@ -63,7 +68,7 @@ const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClos
         updatedAt: now,
       }
       await saveSet(set)
-      navigate(`/criativos/${set.id}`)
+      navigate(setLink(set))
     } catch (err) {
       console.error(err)
       toast.error(err instanceof Error ? err.message : 'Não consegui criar o conjunto.')
@@ -88,6 +93,12 @@ const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClos
               ))}
             </select>
           </label>
+          {project && (
+            <label className="flex items-start gap-2 text-sm text-gray-700">
+              <input type="checkbox" className="mt-1" checked={share} onChange={(e) => setShare(e.target.checked)} />
+              <span>Compartilhar com a equipe do projeto<span className="block text-xs text-gray-500">Quem está no projeto abre e edita junto, ao vivo, e vê o mouse e o agente de cada um.</span></span>
+            </label>
+          )}
           <label className="block text-sm">
             <span className="mb-1 block font-medium text-gray-800">Nome do conjunto</span>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder={project ? `${project.name} · criativos` : 'Novo conjunto'} className="h-9 w-full rounded-md border border-gray-200 px-2 text-sm" />
@@ -131,9 +142,11 @@ const Creatives: React.FC = () => {
   const [creating, setCreating] = useState(false)
   const [importing, setImporting] = useState(false)
   const navigate = useNavigate()
+  useProjectList()
+  const projectIds = useProjectStore((s) => s.projects).map((p) => p.id).join(',')
 
   const load = () =>
-    listSets()
+    listSets(projectIds ? projectIds.split(',') : [])
       .then((s) => {
         setSets(s)
         setError(false)
@@ -143,11 +156,11 @@ const Creatives: React.FC = () => {
         setError(true)
       })
 
-  useEffect(() => void load(), [])
+  useEffect(() => void load(), [projectIds]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const bringReady = async () => {
     const existing = sets?.find((x) => x.name === IMPORTED_NAME)
-    if (existing && !window.confirm('Os criativos prontos já estão na sua conta. Trazer uma segunda cópia?')) return navigate(`/criativos/${existing.id}`)
+    if (existing && !window.confirm('Os criativos prontos já estão na sua conta. Trazer uma segunda cópia?')) return navigate(setLink(existing))
     setImporting(true)
     try {
       const set = importedSet()
@@ -163,7 +176,7 @@ const Creatives: React.FC = () => {
   const remove = async (set: SetSummary) => {
     if (!window.confirm(`Excluir "${set.name}" e as imagens enviadas para ele?`)) return
     try {
-      await deleteSet(set.id)
+      await deleteSet(set)
       setSets((list) => list?.filter((s) => s.id !== set.id) ?? null)
     } catch {
       toast.error('Não consegui excluir.')
@@ -190,12 +203,12 @@ const Creatives: React.FC = () => {
           {sets === null && !error && [0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06)]" />)}
           {sets?.map((s) => (
             <div key={s.id} className="group relative rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] transition-shadow hover:shadow-[0_0_0_1px_rgb(0_0_0/0.1),0_6px_16px_-6px_rgb(0_0_0/0.14)]">
-              <Link to={`/criativos/${s.id}`} className="block rounded-xl p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Link to={setLink(s)} className="block rounded-xl p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <div className="flex gap-1">
                   {s.colors.length ? s.colors.map((c) => <span key={c} className="h-5 w-5 rounded-md ring-1 ring-black/10" style={{ background: c }} />) : <span className="h-5 text-xs text-gray-400">Sem marca</span>}
                 </div>
                 <p className="mt-4 truncate text-sm font-semibold text-gray-900">{s.name}</p>
-                <p className="mt-0.5 text-xs text-gray-500">{s.projectName ? `${s.projectName} · ` : ''}{s.posts} {s.posts === 1 ? 'post' : 'posts'} · {when(s.updatedAt)}</p>
+                <p className="mt-0.5 text-xs text-gray-500">{s.projectName ? `${s.projectName}${s.shared ? ' (equipe)' : ''} · ` : ''}{s.posts} {s.posts === 1 ? 'post' : 'posts'} · {when(s.updatedAt)}</p>
               </Link>
               <button type="button" aria-label={`Excluir ${s.name}`} onClick={() => void remove(s)} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md text-gray-400 opacity-0 hover:bg-gray-100 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100">
                 <Trash2 className="h-4 w-4" />

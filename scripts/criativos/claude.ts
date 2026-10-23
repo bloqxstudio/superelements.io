@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { findBin, kill, launch } from '../space/chatPlugin.ts'
+import { extractJson } from './codex.ts'
 
 /**
  * Uma pergunta ao Claude Code desta máquina (o mesmo do chat, sem chave de
@@ -11,6 +12,15 @@ import { findBin, kill, launch } from '../space/chatPlugin.ts'
  */
 
 export const claudeAvailable = () => !!findBin('claude')
+
+/**
+ * No Windows o Claude Code costuma abrir por um `.cmd`, e a linha de comando
+ * passa de 8 mil caracteres com o prompt e o esquema como argumentos: o
+ * processo morre na hora. Lá (ou com `SE_PROMPT_JSON=1`, para testar em outro
+ * sistema), as instruções e o esquema vão no texto da mensagem e a resposta é
+ * lida como JSON, com argumentos curtos.
+ */
+const viaPrompt = () => process.platform === 'win32' || process.env.SE_PROMPT_JSON === '1'
 
 interface Ask {
   system: string
@@ -36,7 +46,12 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
     const cwd = mkdtempSync(path.join(os.tmpdir(), 'se-criativos-'))
     const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }
     for (const key of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT']) delete env[key]
-    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--model', model, '--strict-mcp-config', '--tools', '', '--max-turns', String(maxTurns), '--system-prompt', system, '--json-schema', JSON.stringify(schema), ...(effort ? ['--effort', effort] : [])]
+    const inPrompt = viaPrompt()
+    const args = [
+      '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--model', model, '--strict-mcp-config', '--tools', '', '--max-turns', String(maxTurns),
+      ...(inPrompt ? ['--system-prompt', 'Responda somente com um objeto JSON válido, sem texto antes ou depois.'] : ['--system-prompt', system, '--json-schema', JSON.stringify(schema)]),
+      ...(effort ? ['--effort', effort] : []),
+    ]
     let child: ChildProcess
     try {
       child = launch(bin, args, { cwd, env })
@@ -99,6 +114,7 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
           }
           if (event.type !== 'result') continue
           if (event.structured_output) answer = event.structured_output as T
+          else if (inPrompt && !event.is_error && typeof event.result === 'string' && extractJson<T>(event.result)) answer = extractJson<T>(event.result)
           else failure = event.is_error ? String(event.result ?? 'O Claude Code parou com erro.').slice(0, 400) : 'O Claude Code não devolveu a resposta no formato pedido.'
         } catch {
           // linha que não é evento
@@ -111,7 +127,10 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
     })
     child.on('error', (error) => finish(new Error(`Não consegui abrir o Claude Code: ${error.message}`)))
     child.on('close', () => finish())
-    child.stdin?.end(`${JSON.stringify({ type: 'user', message: { role: 'user', content } })}\n`)
+    // O processo pode morrer antes de ler a mensagem: o erro de escrita não pode derrubar o servidor
+    child.stdin?.on('error', () => {})
+    const lead = inPrompt ? [{ type: 'text', text: `${system}\n\nResponda somente com um objeto JSON válido (sem texto antes ou depois, sem \`\`\`) que siga este JSON Schema:\n${JSON.stringify(schema)}\n\n---\n` }] : []
+    child.stdin?.end(`${JSON.stringify({ type: 'user', message: { role: 'user', content: [...lead, ...content] } })}\n`)
   })
 
 /** Bloco de imagem para a mensagem, a partir de uma data URL. */

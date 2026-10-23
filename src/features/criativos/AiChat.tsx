@@ -291,7 +291,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
       const attachments: { name: string; src: string; data: string }[] = []
       for (const f of sent) {
         const blob = await dataToBlob(f.data)
-        const asset = await uploadAsset(set.id, blob, f.name.includes('.') ? f.name : `${f.name}.${blob.type.includes('png') ? 'png' : 'jpg'}`)
+        const asset = await uploadAsset(set, blob, f.name.includes('.') ? f.name : `${f.name}.${blob.type.includes('png') ? 'png' : 'jpg'}`)
         useEditor.getState().draft((s) => ({ ...s, assets: [...s.assets, asset] }))
         attachments.push({ name: f.name, src: `asset:${asset.id}`, data: f.data })
       }

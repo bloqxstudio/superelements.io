@@ -288,6 +288,9 @@ const close = () => {
   httpServer.closeAllConnections?.()
   setTimeout(() => process.exit(0), 300)
 }
+// Um erro solto (um agente que morreu cedo, uma conexão que caiu) não pode derrubar o conector: a aba ficaria desconectada
+process.on('uncaughtException', (error) => console.error(`\n  ⚠ Erro no conector (continua aberto): ${error instanceof Error ? error.message : String(error)}\n`))
+process.on('unhandledRejection', (reason) => console.error(`\n  ⚠ Erro no conector (continua aberto): ${reason instanceof Error ? reason.message : String(reason)}\n`))
 process.on('SIGINT', close)
 process.on('SIGTERM', close)
 
