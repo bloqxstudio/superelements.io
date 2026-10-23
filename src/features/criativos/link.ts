@@ -115,7 +115,7 @@ export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?:
     }, TIMEOUT)
     // Sem nenhum passo vindo do outro lado, o conector provavelmente não conhece este pedido
     // Imagem não manda passos (leva até 1 minuto): só vale o limite total
-    const watch = kind !== 'image'
+    const watch = kind !== 'image' && kind !== 'download'
     let silence = watch ? setTimeout(() => fail(STALE_MESSAGE), SILENCE) : undefined
     const fail = (message: string) => {
       if (!pending.delete(id)) return
@@ -177,3 +177,6 @@ export const requestImage = (prompt: string, ratio: 'square' | 'portrait' | 'lan
 export function saveImageKey(provider: 'openai' | 'gemini', key: string) {
   useCreativeLink.getState().channel?.send(CREATIVE_EVENTS.key, { provider, key })
 }
+
+/** Baixa uma imagem da web pelo conector deste computador (sem as travas de CORS do navegador); vem como data URL. */
+export const downloadImageViaLink = (url: string, signal?: AbortSignal) => callAi<{ data: string; type: string }>('download', { url }, signal)

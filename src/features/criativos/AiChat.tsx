@@ -19,7 +19,7 @@ import { applyOps, type Applied } from './applyOps'
 import { generateAll, markNotGenerated } from './generate'
 import { AV_CASES } from '@/features/avence/cases'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
-import { resolveRefs } from './references'
+import { projectPages, resolveRefs, type ResolvedRef } from './references'
 import { useRefs, type Ref } from './refStore'
 import { CREATIVE_SKILLS } from './skills'
 import { uploadAsset } from './storage'
@@ -41,17 +41,65 @@ interface Msg {
   scope?: string
   previews?: string[]
   skill?: string
+  /** Anexos, referências e skill desta mensagem, em texto: a IA lembra deles nas próximas. */
+  note?: string
+  /** O que a resposta mudou, resumido: a IA lembra do que já fez. */
+  ops?: string
   /** A resposta mexeu no conjunto. */
   changed?: number
   skipped?: string[]
   error?: boolean
 }
 
-const useChat = create<{ bySet: Record<string, Msg[]>; push: (setId: string, m: Msg) => void; clear: (setId: string) => void }>((set) => ({
+const CHAT_KEY = (setId: string) => `criativos-conversa:${setId}`
+const KEEP = 80
+
+/** A conversa de um conjunto volta ao reabrir (sem as miniaturas, que pesam). */
+const readChat = (setId: string): Msg[] => {
+  try {
+    return JSON.parse(localStorage.getItem(CHAT_KEY(setId)) ?? '[]')
+  } catch {
+    return []
+  }
+}
+const writeChat = (setId: string, list: Msg[]) => {
+  try {
+    localStorage.setItem(CHAT_KEY(setId), JSON.stringify(list.slice(-KEEP).map(({ previews: _p, ...m }) => m)))
+  } catch {
+    // sem armazenamento: a conversa vale até fechar a aba
+  }
+}
+
+const useChat = create<{ bySet: Record<string, Msg[]>; ensure: (setId: string) => void; push: (setId: string, m: Msg) => void; clear: (setId: string) => void }>((set, get) => ({
   bySet: {},
-  push: (setId, m) => set((s) => ({ bySet: { ...s.bySet, [setId]: [...(s.bySet[setId] ?? []), m] } })),
-  clear: (setId) => set((s) => ({ bySet: { ...s.bySet, [setId]: [] } })),
+  ensure: (setId) => {
+    if (!get().bySet[setId]) set((s) => ({ bySet: { ...s.bySet, [setId]: readChat(setId) } }))
+  },
+  push: (setId, m) => {
+    const list = [...(get().bySet[setId] ?? readChat(setId)), m]
+    writeChat(setId, list)
+    set((s) => ({ bySet: { ...s.bySet, [setId]: list } }))
+  },
+  clear: (setId) => {
+    writeChat(setId, [])
+    set((s) => ({ bySet: { ...s.bySet, [setId]: [] } }))
+  },
 }))
+
+/** O que uma resposta mudou, em poucas palavras, para a IA lembrar do que já fez na conversa. */
+function summarizeOps(ops: EditOp[]): string {
+  return ops
+    .slice(0, 12)
+    .map((op) => {
+      const target = op.layerId ?? op.slideId ?? op.postId ?? ''
+      if (op.op === 'add_post') return `criou o post "${op.post?.name ?? ''}" (${op.post?.slides?.length ?? 0} slides)`
+      if (op.op === 'update_post') return op.post?.slides?.length ? `refez o post ${op.postId} com ${op.post.slides.length} slides` : `ajustou o post ${op.postId}`
+      if (op.op === 'add_slide') return `criou um slide${op.spec?.template ? ` (${op.spec.template})` : ''} em ${op.postId ?? op.slideId ?? ''}`
+      if (op.op === 'update_layer') return `mudou ${target}: ${Object.keys(op.layer ?? {}).join(', ')}`
+      return `${op.op} ${target}`.trim()
+    })
+    .join('; ')
+}
 
 const FONTS = ['Inter', 'Inter Tight', 'Geist', 'Instrument Serif', 'Playfair Display', 'DM Sans', 'Manrope', 'Poppins', 'Montserrat', 'Space Grotesk', 'Fraunces', 'Archivo', 'Bebas Neue']
 const MAX_IMAGES = 4
@@ -143,6 +191,9 @@ const savedAgent = (): ChatAgentId | undefined => {
   }
 }
 
+/** Projetos e cases já lidos nesta conversa: nas próximas mensagens não são lidos (nem baixados) de novo. */
+const resolvedCache = new Map<string, { ref: ResolvedRef; extra: { src: string; label: string }[] }>()
+
 /** Sem acento e em minúsculas, para filtrar o que a pessoa digita depois do @. */
 const plain = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
@@ -157,6 +208,8 @@ interface Attached {
   name: string
   data: string
   preview: string
+  /** Onde ficou no conjunto depois do primeiro envio: nas próximas mensagens não sobe de novo. */
+  src?: string
 }
 
 const dataToBlob = async (data: string) => (await fetch(data)).blob()
@@ -296,6 +349,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
     }
   }
   const msgs = useChat((s) => s.bySet[set.id]) ?? []
+  useEffect(() => useChat.getState().ensure(set.id), [set.id])
   const lastChanged = [...msgs].reverse().find((x) => x.changed)?.id
   const custom = useSkills((s) => s.custom)
   const skills = useMemo<ChatSkill[]>(() => [...custom.filter((k) => k.source === 'personal'), ...custom.filter((k) => k.source === 'global'), ...CREATIVE_SKILLS], [custom])
@@ -312,6 +366,9 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   const picker = useRef<HTMLInputElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const refs = useRefs((r) => r.refs)
+  // Ids das marcas que já foram para a IA: elas ficam na conversa (e na lista) até você tirar
+  const usedRefs = useRef(new Set<string>())
+  const [, bump] = useState(0)
   const focusTick = useRefs((r) => r.focus)
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null)
   const [mentionAt, setMentionAt] = useState(0)
@@ -328,27 +385,52 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
     useRefs.getState().clear()
   }, [set.id])
 
-  // Posts e slides do conjunto, projetos da conta e os cases: o que o @ oferece
+  // O que o @ oferece, na ordem: projetos da conta, cases, posts e slides. Sem filtro, os slides mostram só alguns (a lista não esconde o resto)
+  const [stage, setStage] = useState<{ projectId: string; name: string; pages: { id: string; name: string }[] | 'loading' | 'error' } | null>(null)
   const mentionItems = useMemo<MentionItem[]>(() => {
     const q = plain(mention?.query ?? '')
-    const all: MentionItem[] = [
-      ...set.posts.map((p): MentionItem => ({ group: 'Posts deste conjunto', hint: `${p.slides.length} slides`, ref: { id: `post:${p.id}`, kind: 'post', label: p.name, postId: p.id } })),
-      ...set.posts.flatMap((p) => p.slides.map((sl, i): MentionItem => ({ group: 'Slides', hint: p.name, ref: { id: `slide:${sl.id}`, kind: 'slide', label: `${p.name} · slide ${i + 1}`, postId: p.id, slideId: sl.id } }))),
-      ...projects.map((p): MentionItem => ({ group: 'Projetos da conta', hint: 'marca, briefing e textos das páginas', ref: { id: `project:${p.id}`, kind: 'project', label: p.name, projectId: p.id } })),
-      { group: 'Cases', hint: `${AV_CASES.length} sites no ar`, ref: { id: 'case:*', kind: 'case', label: 'Todos os cases', slug: '*' } },
-      ...AV_CASES.map((c): MentionItem => ({ group: 'Cases', hint: c.segment, ref: { id: `case:${c.slug}`, kind: 'case', label: c.name, slug: c.slug } })),
-    ]
-    return (q ? all.filter((i) => plain(`${i.ref.label} ${i.hint ?? ''}`).includes(q)) : all).slice(0, 40)
-  }, [mention?.query, set.posts, projects])
+    if (stage) {
+      const pages = Array.isArray(stage.pages) ? stage.pages : []
+      const all: MentionItem[] = [
+        { group: stage.name, hint: 'marca, briefing e textos de todas as páginas', ref: { id: `project:${stage.projectId}`, kind: 'project', label: stage.name, projectId: stage.projectId } },
+        ...pages.map((pg): MentionItem => ({ group: 'Só uma página (traz os textos e as fotos dela)', ref: { id: `project:${stage.projectId}:${pg.id}`, kind: 'project', label: `${stage.name} › ${pg.name}`, projectId: stage.projectId, pageId: pg.id } })),
+      ]
+      return q ? all.filter((i) => plain(i.ref.label).includes(q)) : all
+    }
+    const projectItems = projects.map((p): MentionItem => ({ group: 'Projetos da conta', hint: 'escolha o projeto e depois a página', ref: { id: `project:${p.id}`, kind: 'project', label: p.name, projectId: p.id } }))
+    const caseItems: MentionItem[] = [{ group: 'Cases da Avence', hint: `${AV_CASES.length} sites no ar`, ref: { id: 'case:*', kind: 'case', label: 'Todos os cases', slug: '*' } }, ...AV_CASES.map((c): MentionItem => ({ group: 'Cases da Avence', hint: c.segment, ref: { id: `case:${c.slug}`, kind: 'case', label: c.name, slug: c.slug } }))]
+    const postItems = set.posts.map((p): MentionItem => ({ group: 'Posts deste conjunto', hint: `${p.slides.length} slides`, ref: { id: `post:${p.id}`, kind: 'post', label: p.name, postId: p.id } }))
+    const slideItems = set.posts.flatMap((p) => p.slides.map((sl, i): MentionItem => ({ group: 'Slides', hint: p.name, ref: { id: `slide:${sl.id}`, kind: 'slide', label: `${p.name} · slide ${i + 1}`, postId: p.id, slideId: sl.id } })))
+    const match = (list: MentionItem[]) => (q ? list.filter((i) => plain(`${i.ref.label} ${i.hint ?? ''}`).includes(q)) : list)
+    return [...match(projectItems), ...match(caseItems), ...match(postItems), ...(q ? match(slideItems) : slideItems.slice(0, 8))]
+  }, [mention?.query, set.posts, projects, stage])
+
+  const closeMention = () => {
+    setMention(null)
+    setStage(null)
+  }
 
   const pickMention = (item: MentionItem) => {
+    // Projeto: antes de marcar, a pessoa escolhe o projeto inteiro ou uma página dele
+    if (item.ref.kind === 'project' && !stage && item.ref.projectId) {
+      const { projectId, label } = item.ref
+      setStage({ projectId, name: label, pages: 'loading' })
+      setMentionAt(0)
+      setText((t) => (mention ? `${t.slice(0, mention.start + 1)}${t.slice(input.current?.selectionStart ?? t.length)}` : t))
+      setMention((m) => (m ? { ...m, query: '' } : m))
+      projectPages(projectId)
+        .then((pages) => setStage((st) => (st?.projectId === projectId ? { ...st, pages } : st)))
+        .catch(() => setStage((st) => (st?.projectId === projectId ? { ...st, pages: 'error' } : st)))
+      requestAnimationFrame(() => input.current?.focus())
+      return
+    }
     if (mention) {
       const el = input.current
       const end = el?.selectionStart ?? mention.start + mention.query.length + 1
       setText((t) => `${t.slice(0, mention.start)}${t.slice(end)}`.replace(/\s{2,}/g, ' '))
     }
     useRefs.getState().add(item.ref)
-    setMention(null)
+    closeMention()
     requestAnimationFrame(() => input.current?.focus())
   }
 
@@ -360,7 +442,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
     if (m) {
       setMention({ start: before.length - m[2].length - 1, query: m[2] })
       setMentionAt(0)
-    } else setMention(null)
+    } else closeMention()
   }
 
   useEffect(() => watchSkills(), [])
@@ -401,35 +483,63 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   }
 
   const send = async (override?: string) => {
-    const message = (override ?? text).trim() || (files.length ? 'Faça posts com base nesta referência.' : useRefs.getState().refs.length ? 'Use o que marquei como referência.' : '')
+    const refsNow = useRefs.getState().refs
+    const message = (override ?? text).trim() || (files.length ? 'Faça posts com base nesta referência.' : refsNow.length ? 'Use o que marquei como referência.' : '')
     if (!message || busy || !post || available !== true) return
     const push = useChat.getState().push
     const sent = files
-    const labels = useRefs.getState().refs.map((r) => `@${r.label}`)
-    push(set.id, { id: crypto.randomUUID(), role: 'user', text: labels.length ? `${labels.join(' ')} ${message}` : message, scope: scopeName(), previews: sent.map((f) => f.preview), skill: skill?.name })
+    // O que é novo nesta mensagem; o que já foi antes continua valendo, sem enviar de novo
+    const freshRefs = refsNow.filter((r) => !usedRefs.current.has(r.id))
+    const freshFiles = sent.filter((f) => !f.src)
+    const labels = freshRefs.map((r) => `@${r.label}`)
+    const note = [freshFiles.length ? `anexou: ${freshFiles.map((f) => f.name).join(', ')}` : '', freshRefs.length ? `marcou: ${freshRefs.map((r) => r.label).join(', ')}` : '', skill ? `skill: ${skill.name}` : '', `editando: ${scopeName()}`].filter(Boolean).join(' · ')
+    push(set.id, { id: crypto.randomUUID(), role: 'user', text: labels.length ? `${labels.join(' ')} ${message}` : message, note, scope: scopeName(), previews: freshFiles.map((f) => f.preview), skill: skill?.name })
     setText('')
-    setFiles([])
     setBusy(true)
     control.current = new AbortController()
     useAgent.getState().begin({ scope, postId: post.id, slideId: slide?.id, layerId: scope === 'layer' ? layer?.id : undefined }, scopeName(), agent)
     try {
-      // Os prints entram no conjunto: assim a IA (e você) podem pôr um deles num slide
+      // Os prints entram no conjunto: assim a IA (e você) podem pôr um deles num slide. Só sobem na primeira vez
       const attachments: { name: string; src: string; data: string }[] = []
+      const uploaded = new Map<string, string>()
       for (const f of sent) {
+        if (f.src) {
+          attachments.push({ name: f.name, src: f.src, data: f.data })
+          continue
+        }
         const blob = await dataToBlob(f.data)
         const asset = await uploadAsset(set, blob, f.name.includes('.') ? f.name : `${f.name}.${blob.type.includes('png') ? 'png' : 'jpg'}`)
         useEditor.getState().draft((s) => ({ ...s, assets: [...s.assets, asset] }))
+        uploaded.set(f.id, `asset:${asset.id}`)
         attachments.push({ name: f.name, src: `asset:${asset.id}`, data: f.data })
       }
-      if (sent.length) useEditor.getState().persist()
+      if (uploaded.size) {
+        useEditor.getState().persist()
+        setFiles((list) => list.map((f) => (uploaded.has(f.id) ? { ...f, src: uploaded.get(f.id) } : f)))
+      }
       await useEditor.getState().ensureAssets()
       const state = useEditor.getState()
       const current = state.set!
-      const history = (useChat.getState().bySet[set.id] ?? []).filter((m) => !m.error).map((m) => ({ role: m.role, text: m.text }))
+      // A conversa toda (até 30 mensagens), com o que a IA já mudou: "isso", "o anterior" e o que você já disse continuam valendo
+      const history = (useChat.getState().bySet[set.id] ?? [])
+        .filter((m) => !m.error)
+        .slice(-31, -1)
+        .map((m) => ({ role: m.role, text: m.role === 'user' ? (m.note ? `${m.text}\n[${m.note}]` : m.text) : m.ops ? `${m.text}\n[Mudanças feitas: ${m.ops}]` : m.text }))
       const fonts = [...new Set([current.brand.headingFont, current.brand.bodyFont, ...FONTS])]
-      const marked = useRefs.getState().refs
-      const resolved = marked.length ? await resolveRefs(marked, current, state.images, (id) => projects.find((p) => p.id === id)?.name) : { refs: [], extra: [] }
-      useRefs.getState().clear()
+      // Projeto e case lidos uma vez ficam em memória; post e slide são lidos de novo (mudam a cada edição)
+      const nameOf = (id: string) => projects.find((p) => p.id === id)?.name
+      const resolved = { refs: [] as ResolvedRef[], extra: [] as { src: string; label: string }[] }
+      for (const r of refsNow) {
+        const key = `${set.id}|${r.id}`
+        const cached = r.kind === 'project' || r.kind === 'case' ? resolvedCache.get(key) : undefined
+        const got = cached ?? (await resolveRefs([r], current, state.images, nameOf).then((x) => ({ ref: x.refs[0], extra: x.extra })))
+        if (!got.ref) continue
+        if (!cached && (r.kind === 'project' || r.kind === 'case')) resolvedCache.set(key, got)
+        resolved.refs.push(got.ref)
+        resolved.extra.push(...got.extra)
+      }
+      refsNow.forEach((r) => usedRefs.current.add(r.id))
+      bump((n) => n + 1)
       const answer = await requestEdit(
         {
           message,
@@ -472,7 +582,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
       const noKey = result.toGenerate.length > 0 && !useCreativeLink.getState().images
       if (noKey) markNotGenerated(result.toGenerate)
       const note = noKey ? '\n\nAs imagens ainda não foram geradas: falta um serviço de imagens (botão "Imagens" aqui embaixo: o Codex gera sem chave, ou use uma chave do OpenAI ou do Google).' : made < result.toGenerate.length && result.toGenerate.length ? `\n\n${made} de ${result.toGenerate.length} imagens geradas.` : ''
-      push(set.id, { id: crypto.randomUUID(), role: 'ai', text: (answer.reply || (result.applied ? 'Pronto.' : 'Não precisei mudar nada.')) + note, changed: result.applied, skipped: result.skipped })
+      push(set.id, { id: crypto.randomUUID(), role: 'ai', text: (answer.reply || (result.applied ? 'Pronto.' : 'Não precisei mudar nada.')) + note, changed: result.applied, skipped: result.skipped, ops: result.applied ? summarizeOps(answer.ops) : undefined })
     } catch (err) {
       if ((err as Error).name === 'AbortError') push(set.id, { id: crypto.randomUUID(), role: 'ai', text: 'Parei.', error: true })
       else push(set.id, { id: crypto.randomUUID(), role: 'ai', text: err instanceof Error ? err.message : 'A IA não respondeu.', error: true })
@@ -569,7 +679,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
             </button>
           ))}
           {msgs.length > 0 && (
-            <button type="button" className="ml-auto text-[11px] text-gray-400 hover:text-gray-700" onClick={() => useChat.getState().clear(set.id)}>Limpar</button>
+            <button type="button" className="ml-auto text-[11px] text-gray-400 hover:text-gray-700" onClick={() => { useChat.getState().clear(set.id); setFiles([]); useRefs.getState().clear(); usedRefs.current.clear(); for (const k of [...resolvedCache.keys()]) if (k.startsWith(`${set.id}|`)) resolvedCache.delete(k) }} title="Começa uma conversa nova: esquece o que foi dito, os anexos e as marcas">Nova conversa</button>
           )}
         </div>
         <p className="truncate text-[11px] text-gray-500" title={scopeName()}>{scopeName()}</p>
@@ -578,7 +688,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
           <div className="flex flex-wrap gap-1.5">
             {files.map((f) => (
               <span key={f.id} className="group relative">
-                <img src={f.preview} alt={f.name} title={f.name} className="h-14 w-14 rounded-md object-cover ring-1 ring-black/10" />
+                <img src={f.preview} alt={f.name} title={f.src ? `${f.name}: já está na conversa; a IA continua com ela até você tirar` : f.name} className={cn('h-14 w-14 rounded-md object-cover ring-1', f.src ? 'ring-violet-300' : 'ring-black/10')} />
                 <button type="button" aria-label={`Tirar ${f.name}`} onClick={() => setFiles((l) => l.filter((x) => x.id !== f.id))} className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900 text-white">
                   <X className="h-2.5 w-2.5" />
                 </button>
@@ -590,13 +700,14 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
         {/https?:\/\/\S+/i.test(text) && (
           <p className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-[11px] leading-snug text-sky-900">A IA vai abrir o link. Instagram, TikTok e LinkedIn pedem login e quase nunca abrem: se não abrir, cole os prints de cada slide aqui. Ela recria o layout com fidelidade, mas não copia o texto, as fotos nem a marca de outra pessoa.</p>
         )}
+        {(refs.length > 0 || files.some((f) => f.src)) && <p className="text-[10px] leading-tight text-gray-400">Anexos e marcas ficam na conversa: não precisa enviar de novo.</p>}
         {refs.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {refs.map((r) => (
-              <span key={r.id} className="inline-flex items-center gap-1 rounded-full bg-violet-100 py-0.5 pl-2 pr-1 text-[11px] font-medium text-violet-800" title={`${r.kind === 'post' ? 'Post' : r.kind === 'slide' ? 'Slide' : r.kind === 'project' ? 'Projeto' : 'Case'} marcado`}>
+              <span key={r.id} className={cn('inline-flex items-center gap-1 rounded-full py-0.5 pl-2 pr-1 text-[11px] font-medium', usedRefs.current.has(r.id) ? 'bg-violet-50 text-violet-700 ring-1 ring-violet-200' : 'bg-violet-100 text-violet-800')} title={usedRefs.current.has(r.id) ? 'Já está na conversa: a IA continua com isso. Tire no X quando não precisar mais.' : `${r.kind === 'post' ? 'Post' : r.kind === 'slide' ? 'Slide' : r.kind === 'project' ? 'Projeto' : 'Case'} marcado`}>
                 <AtSign className="h-3 w-3" />
                 {r.label}
-                <button type="button" aria-label={`Tirar ${r.label}`} onClick={() => useRefs.getState().remove(r.id)} className="rounded-full p-0.5 hover:bg-violet-200"><X className="h-3 w-3" /></button>
+                <button type="button" aria-label={`Tirar ${r.label}`} onClick={() => { usedRefs.current.delete(r.id); resolvedCache.delete(`${set.id}|${r.id}`); useRefs.getState().remove(r.id) }} className="rounded-full p-0.5 hover:bg-violet-200"><X className="h-3 w-3" /></button>
               </span>
             ))}
           </div>
@@ -604,7 +715,15 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
         <div className="relative">
           {mention && (
             <div className="absolute bottom-full left-0 z-40 mb-1 max-h-64 w-full overflow-y-auto rounded-xl border bg-white p-1 shadow-xl" data-scroll role="listbox" aria-label="Marcar com @">
-              {mentionItems.length === 0 && <p className="px-2 py-2 text-xs text-gray-500">Nada encontrado para "{mention.query}".</p>}
+              {stage && (
+                <div className="flex items-center gap-1 border-b border-gray-100 px-1 pb-1">
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); setStage(null); setMentionAt(0) }} className="rounded-md px-1.5 py-0.5 text-xs font-medium text-violet-700 hover:bg-violet-50">‹ Projetos</button>
+                  <span className="truncate text-xs font-semibold text-gray-800">{stage.name}</span>
+                  {stage.pages === 'loading' && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-gray-400" />}
+                </div>
+              )}
+              {stage?.pages === 'error' && <p className="px-2 py-1.5 text-xs text-amber-700">Não consegui ler as páginas deste projeto. Dá para marcar o projeto inteiro.</p>}
+              {mentionItems.length === 0 && !stage && <p className="px-2 py-2 text-xs text-gray-500">Nada encontrado para "{mention.query}".</p>}
               {mentionItems.map((item, i) => (
                 <React.Fragment key={item.ref.id}>
                   {(i === 0 || mentionItems[i - 1].group !== item.group) && <p className="px-2 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">{item.group}</p>}
@@ -654,7 +773,8 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
                   }
                 }
                 if (mention && e.key === 'Escape') {
-                  setMention(null)
+                  if (stage) setStage(null)
+                  else closeMention()
                   e.stopPropagation()
                   return
                 }

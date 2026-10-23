@@ -14,6 +14,8 @@ export interface Ref {
   postId?: string
   slideId?: string
   projectId?: string
+  /** Página do projeto (só ela entra); sem isso, o projeto inteiro. */
+  pageId?: string
   /** Slug do case; `*` são todos. */
   slug?: string
 }

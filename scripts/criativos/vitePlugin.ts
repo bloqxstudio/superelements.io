@@ -4,6 +4,7 @@ import type { PlanRequest } from '../../src/features/criativos/plan.ts'
 import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageRequest, type CreativeCall, type CreativeProgress, type CreativeResult } from '../../src/features/criativos/protocol.ts'
 import { CHAT_AGENTS } from '../../src/features/space/chat/protocol.ts'
 import { checkAgents } from '../space/chatPlugin.ts'
+import { downloadImage } from './baixar.ts'
 import { generateImage, hasKey, imageProvider, imageProviders, saveImageKey } from './imagem.ts'
 import { editCreatives } from './edit.ts'
 import { planPosts } from './plan.ts'
@@ -46,7 +47,7 @@ const editInput = (body: Partial<EditRequest>): EditRequest => ({
     ? body.references.slice(0, 8).map((r) => ({ kind: String(r?.kind ?? ''), label: String(r?.label ?? '').slice(0, 120), text: String(r?.text ?? '').slice(0, 12_000), images: Array.isArray(r?.images) ? r.images.slice(0, 8).filter((x) => typeof x === 'string' && x.length < 700_000) : [] }))
     : [],
   projects: Array.isArray(body.projects) ? body.projects.slice(0, 60).map((p) => String(p).slice(0, 80)) : [],
-  history: Array.isArray(body.history) ? body.history.slice(-6) : [],
+  history: Array.isArray(body.history) ? body.history.slice(-30).map((h) => ({ role: h?.role === 'ai' ? ('ai' as const) : ('user' as const), text: String(h?.text ?? '').slice(0, 1500) })) : [],
   attachments: Array.isArray(body.attachments)
     ? body.attachments.slice(0, 4).filter((a) => typeof a?.data === 'string' && a.data.length < 3_000_000).map((a) => ({ name: String(a.name ?? 'imagem').slice(0, 80), src: String(a.src ?? ''), data: a.data }))
     : [],
@@ -85,6 +86,8 @@ export const criativos = (): Plugin => ({
             const ratio = req.ratio === 'portrait' || req.ratio === 'landscape' ? req.ratio : 'square'
             const prefer = req.provider === 'codex' || req.provider === 'openai' || req.provider === 'gemini' ? req.provider : undefined
             send({ id, ok: true, data: await generateImage(String(req.prompt ?? ''), ratio, controller.signal, prefer) })
+          } else if (call.kind === 'download') {
+            send({ id, ok: true, data: await downloadImage(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
           } else throw new Error('Pedido desconhecido.')
         } catch (error) {
           if (controller.signal.aborted) return
