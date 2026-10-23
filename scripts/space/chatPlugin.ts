@@ -273,7 +273,7 @@ export function findBin(id: ChatAgentId): string | undefined {
   const known =
     id === 'claude'
       ? [path.join(home, '.local', 'bin', isWindows ? 'claude.exe' : 'claude'), path.join(roaming, 'npm', 'claude.cmd')]
-      : [path.join(local, 'Programs', 'OpenAI', 'Codex', 'bin', 'codex.exe'), path.join(roaming, 'npm', 'codex.cmd'), '/usr/local/bin/codex', '/opt/homebrew/bin/codex']
+      : [path.join(local, 'Programs', 'OpenAI', 'Codex', 'bin', 'codex.exe'), path.join(roaming, 'npm', 'codex.cmd'), '/usr/local/bin/codex', '/opt/homebrew/bin/codex', path.join(home, '.local', 'bin', 'codex'), path.join(home, '.npm-global', 'bin', 'codex'), path.join(home, '.bun', 'bin', 'codex'), path.join(home, '.volta', 'bin', 'codex')]
   return known.find((file) => existsSync(file))
 }
 

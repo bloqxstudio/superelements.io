@@ -663,7 +663,7 @@ function findBin(id) {
   const home = os.homedir();
   const local = process.env.LOCALAPPDATA ?? path2.join(home, "AppData", "Local");
   const roaming = process.env.APPDATA ?? path2.join(home, "AppData", "Roaming");
-  const known = id === "claude" ? [path2.join(home, ".local", "bin", isWindows ? "claude.exe" : "claude"), path2.join(roaming, "npm", "claude.cmd")] : [path2.join(local, "Programs", "OpenAI", "Codex", "bin", "codex.exe"), path2.join(roaming, "npm", "codex.cmd"), "/usr/local/bin/codex", "/opt/homebrew/bin/codex"];
+  const known = id === "claude" ? [path2.join(home, ".local", "bin", isWindows ? "claude.exe" : "claude"), path2.join(roaming, "npm", "claude.cmd")] : [path2.join(local, "Programs", "OpenAI", "Codex", "bin", "codex.exe"), path2.join(roaming, "npm", "codex.cmd"), "/usr/local/bin/codex", "/opt/homebrew/bin/codex", path2.join(home, ".local", "bin", "codex"), path2.join(home, ".npm-global", "bin", "codex"), path2.join(home, ".bun", "bin", "codex"), path2.join(home, ".volta", "bin", "codex")];
   return known.find((file) => existsSync2(file));
 }
 function launch(bin, args, options) {
@@ -2131,7 +2131,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610231524", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610231530", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -2148,7 +2148,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610231524" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610231530" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);

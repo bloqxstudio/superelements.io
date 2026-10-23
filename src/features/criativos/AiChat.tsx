@@ -212,6 +212,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   const layer = useEditor(currentLayer)
   const stale = useCreativeLink((s) => s.stale)
   const agents = useCreativeLink((s) => s.agents)
+  const legacy = useCreativeLink((s) => s.legacy)
   const [chosen, setChosen] = useState<ChatAgentId | undefined>(savedAgent)
   const agent: ChatAgentId = (chosen && agents.find((a) => a.id === chosen)?.available ? chosen : agents.find((a) => a.available)?.id) ?? 'claude'
   const pickAgent = (id: ChatAgentId) => {
@@ -504,7 +505,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
                 type="button"
                 disabled={!ok || busy}
                 onClick={() => pickAgent(id)}
-                title={ok ? `${info.name}${found?.version ? ` ${found.version}` : ''}` : `${info.name} não foi encontrado neste computador`}
+                title={ok ? `${info.name}${found?.version ? ` ${found.version}` : ''}` : legacy ? 'Seu conector é antigo e não sabe do Codex: baixe o conector.mjs de novo' : `${info.name} não foi encontrado neste computador`}
                 className={cn('flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md text-[11px] font-semibold disabled:opacity-40', agent === id && ok ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800')}
               >
                 <span className="h-2 w-2 rounded-full" style={{ background: info.color }} />
@@ -514,6 +515,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
           })}
         </div>
 
+        {legacy && <p className="text-[11px] leading-snug text-amber-700">Conector antigo: só o Claude Code aparece. Baixe o conector.mjs de novo para escolher o Codex.</p>}
         <div className="flex items-center gap-1.5">
           <button type="button" onClick={() => picker.current?.click()} className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-gray-600 hover:bg-gray-100" title="Anexar print ou imagem (Ctrl/⌘+V cola)">
             <Paperclip className="h-3.5 w-3.5" /> Anexar

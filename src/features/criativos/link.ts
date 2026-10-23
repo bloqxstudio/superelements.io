@@ -20,9 +20,11 @@ interface LinkState {
   stale: boolean
   /** As IAs desta máquina (Claude Code, Codex) e se cada uma está instalada. */
   agents: CreativeAgentInfo[]
+  /** O conector não manda a lista de IAs: versão antiga, que só sabe do Claude Code. */
+  legacy: boolean
 }
 
-export const useCreativeLink = create<LinkState>()(() => ({ connected: false, ia: null, stale: false, agents: [] }))
+export const useCreativeLink = create<LinkState>()(() => ({ connected: false, ia: null, stale: false, agents: [], legacy: false }))
 
 /** Verdadeiro, falso ou "ainda não sei" (null), para a tela decidir o que mostrar. */
 export const useAiAvailable = (): boolean | null => useCreativeLink((s) => (!s.connected ? false : s.ia))
@@ -49,7 +51,9 @@ export function startCreativeLink(channel: AgentChannel) {
   let helloTimer: ReturnType<typeof setTimeout> | undefined
   const onStatus = (data: { ia?: boolean; agents?: CreativeAgentInfo[] }) => {
     clearTimeout(helloTimer)
-    useCreativeLink.setState({ connected: true, ia: !!data?.ia, stale: false, agents: data?.agents ?? [] })
+    // Conector anterior à escolha de IA: só diz se há uma (o Claude Code), sem a lista
+    const agents = data?.agents ?? (data?.ia ? [{ id: 'claude' as const, name: 'Claude Code', available: true }] : [])
+    useCreativeLink.setState({ connected: true, ia: !!data?.ia, stale: false, agents, legacy: !data?.agents })
   }
   const onResult = (result: CreativeResult) => {
     const call = pending.get(result?.id)
@@ -71,7 +75,7 @@ export function startCreativeLink(channel: AgentChannel) {
   channel.on(CREATIVE_EVENTS.result, onResult)
   channel.on(CREATIVE_EVENTS.progress, onProgress)
   channel.on('vite:ws:connect', hello)
-  useCreativeLink.setState({ channel, connected: false, ia: null, stale: false, agents: [] })
+  useCreativeLink.setState({ channel, connected: false, ia: null, stale: false, agents: [], legacy: false })
   hello()
   return () => {
     channel.off(CREATIVE_EVENTS.status, onStatus)
@@ -80,7 +84,7 @@ export function startCreativeLink(channel: AgentChannel) {
     channel.off('vite:ws:connect', hello)
     clearTimeout(helloTimer)
     failAll('A conexão com a IA caiu.')
-    useCreativeLink.setState({ channel: undefined, connected: false, ia: null, stale: false, agents: [] })
+    useCreativeLink.setState({ channel: undefined, connected: false, ia: null, stale: false, agents: [], legacy: false })
   }
 }
 
