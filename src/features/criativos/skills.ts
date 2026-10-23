@@ -12,6 +12,23 @@ const lines = (...text: string[]) => text.join('\n')
 
 export const CREATIVE_SKILLS: ChatSkill[] = [
   {
+    id: 'cr-viral',
+    source: 'builtin',
+    name: 'Carrossel viral',
+    hint: 'Carrossel de análise de marca: capa com foto, dados e fecho',
+    starters: ['Faça um carrossel viral sobre como a Nike virou a marca mais lembrada do esporte', 'Crie um carrossel de 8 slides sobre por que embalagens simples vendem mais', 'Transforme este texto em um carrossel viral'],
+    instructions: lines(
+      'Você monta carrosséis de Instagram que viralizam, no estilo de contas de análise de marcas: uma história, uma tese, fotos fortes e títulos pesados.',
+      '1. Formato 4x5 (1080×1350), a menos que peçam outro. Crie um post novo (`add_post`) com 7 a 10 slides, em `spec`, com os modelos viral-*.',
+      '2. Estrutura: slide 1 viral-capa (gancho: uma afirmação que surpreende ou uma pergunta que a pessoa quer ver respondida, até 10 palavras, mais a foto); slides do meio alternam viral-foto (um ponto por slide, com o número 01, 02…), viral-dado (um número enorme e o que ele significa) e viral-frase (o insight); o último é viral-fecho (salvar, enviar, seguir). Cada slide termina deixando o próximo ser necessário.',
+      '3. Um assunto por slide. Título com no máximo 12 palavras, uma palavra de destaque entre asteriscos. Corpo de uma frase. Nada de parágrafo.',
+      '4. Fatos: use só o que a pessoa escreveu no pedido ou mostrou nos anexos. Você não tem como pesquisar: nunca invente número, data, valor, nome de pessoa ou citação. Se faltar um dado, escreva o slide sem ele (ou com um dado genérico que a pessoa mandou) e liste em `reply` o que ela precisa conferir e completar.',
+      '5. Imagens: toda capa e todo viral-foto leva `prompt`. Escreva em inglês, com sujeito, cenário, luz, lente e clima, e repita a mesma linha de estilo nos prompts do carrossel para as fotos parecerem da mesma sessão (ex.: "shot on 35mm film, natural window light, muted warm palette, shallow depth of field"). Pessoas genéricas e reais de verdade (idade aproximada, roupa, expressão), nunca uma pessoa famosa nem o rosto de alguém que apareça no print; nada de logos ou texto dentro da imagem.',
+      '6. Cores e fontes vêm da marca do conjunto; o destaque usa a cor mais forte dela. Alterne fundo escuro e claro só onde ajuda o ritmo.',
+      '7. Escreva também a legenda do post (`caption`): primeira linha forte, o resumo da tese e um convite para salvar e compartilhar, até 4 hashtags.'
+    ),
+  },
+  {
     id: 'cr-referencia',
     source: 'builtin',
     name: 'Recriar referência',
@@ -21,7 +38,7 @@ export const CREATIVE_SKILLS: ChatSkill[] = [
     instructions: lines(
       'A pessoa mandou um print como referência de layout.',
       '1. Descreva para si a estrutura: grade e alinhamentos, o que se lê primeiro, proporção entre título, apoio e imagem, margens, elementos repetidos (cards, selos, numeração, botões).',
-      '2. Monte o post com camadas (`add_post` com `slides[].layers`) no formato pedido, ou no mesmo formato do print se não pedirem outro.',
+      '2. Monte o post com camadas (`add_post` com `slides[].layers`) no formato pedido, ou no mesmo formato do print se não pedirem outro. Onde o print tem foto de pessoa ou cena, ponha uma camada de imagem com `prompt` descrevendo uma cena equivalente (genérica, nunca a pessoa do print).',
       '3. Leve a composição, não a marca de outro: cores, fontes e logo vêm da marca do conjunto; os textos vêm do pedido, nunca do print.',
       '4. Em `reply`, diga o que foi levado da referência e o que foi adaptado.'
     ),

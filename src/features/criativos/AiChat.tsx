@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { create } from 'zustand'
 import { toast } from 'sonner'
-import { Check, Loader2, Paperclip, Send, Sparkles, Square, Undo2, Wand2, X } from 'lucide-react'
+import { Check, ImageIcon, Loader2, Paperclip, Send, Sparkles, Square, Undo2, Wand2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ConnectorPrompt } from '@/features/space/chat/ConnectorPrompt'
@@ -10,12 +10,13 @@ import type { ChatSkill } from '@/features/space/chat/skills'
 import { skillIcon } from '@/features/skills/skillIcon'
 import { useSkills, watchSkills } from '@/features/skills/skillsStore'
 import { requestEdit, type EditScope } from './ai'
-import { useCreativeLink } from './link'
-import { agentInfo, PHASE_LABEL, useAgent } from './agentStore'
+import { chooseImageProvider, saveImageKey, useCreativeLink, type CreativeImageProvider } from './link'
+import { agentInfo, PHASE_LABEL, useAgent, type AgentPhase } from './agentStore'
 import type { EditOp } from './edit'
 import type { ChatAgentId } from '@/features/space/chat/protocol'
 import { useConnector } from '@/features/space/connector/connectorStore'
 import { applyOps, type Applied } from './applyOps'
+import { generateAll, markNotGenerated } from './generate'
 import { CREATIVE_SKILLS } from './skills'
 import { uploadAsset } from './storage'
 import { currentLayer, currentPost, currentSlide, useEditor } from './store'
@@ -102,6 +103,7 @@ async function playOps(ops: EditOp[], defaults: { postId?: string; slideId?: str
   let applied = 0
   const skipped: string[] = []
   const touched = new Set<string>()
+  const toGenerate: Applied['toGenerate'] = []
   let focus: Applied['focus']
   for (const [i, op] of ops.entries()) {
     if (signal.aborted) break
@@ -114,6 +116,7 @@ async function playOps(ops: EditOp[], defaults: { postId?: string; slideId?: str
     applied++
     useEditor.getState().draft(() => ({ ...result.set, updatedAt: Date.now() }))
     for (const id of result.touched) touched.add(id)
+    toGenerate.push(...result.toGenerate)
     if (result.focus) {
       focus = result.focus
       // Slide ou post que acabou de nascer: o cursor vai até ele
@@ -123,7 +126,7 @@ async function playOps(ops: EditOp[], defaults: { postId?: string; slideId?: str
   }
   if (applied) useEditor.getState().checkpoint(before)
   await sleep(500)
-  return { set: useEditor.getState().set!, applied, skipped, focus, touched: [...touched] }
+  return { set: useEditor.getState().set!, applied, skipped, focus, touched: [...touched], toGenerate }
 }
 
 const AGENT_KEY = 'criativos-agente'
@@ -145,6 +148,60 @@ interface Attached {
 
 const dataToBlob = async (data: string) => (await fetch(data)).blob()
 
+const PROVIDER_NAME: Record<CreativeImageProvider, string> = { codex: 'Codex', openai: 'OpenAI', gemini: 'Google' }
+
+/** Serviço de imagens: o Codex gera sem chave (login do ChatGPT); OpenAI e Google pedem uma chave, que fica só neste computador. */
+const ImageKeys: React.FC = () => {
+  const images = useCreativeLink((l) => l.images)
+  const providers = useCreativeLink((l) => l.providers)
+  const keys = useCreativeLink((l) => l.keys)
+  const [open, setOpen] = useState(false)
+  const [provider, setProvider] = useState<'openai' | 'gemini'>('openai')
+  const [key, setKey] = useState('')
+  const label = images ? `Imagens · ${PROVIDER_NAME[images]}` : 'Imagens'
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)} className={cn('inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium', images ? 'text-emerald-700 hover:bg-emerald-50' : 'text-amber-700 hover:bg-amber-50')} title={images ? 'Geração de imagens ligada' : 'Conecte o Codex ou uma chave para a IA gerar imagens'}>
+        <ImageIcon className="h-3.5 w-3.5" /> {label}
+        {images ? <Check className="h-3 w-3" /> : null}
+      </button>
+      {open && (
+        <div className="absolute bottom-9 left-0 z-40 w-72 space-y-2 rounded-xl border bg-white p-3 text-xs text-gray-600 shadow-xl">
+          <p className="font-semibold text-gray-900">Geração de imagens</p>
+          {providers.length > 0 && (
+            <div className="space-y-1" role="radiogroup" aria-label="Quem gera as imagens">
+              {providers.map((p) => (
+                <label key={p} className={cn('flex cursor-pointer items-start gap-2 rounded-lg border px-2 py-1.5', images === p ? 'border-violet-400 bg-violet-50' : 'border-gray-200 hover:bg-gray-50')}>
+                  <input type="radio" name="img-provider" className="mt-0.5" checked={images === p} onChange={() => chooseImageProvider(p)} />
+                  <span>
+                    <span className="block font-medium text-gray-900">{PROVIDER_NAME[p]}</span>
+                    <span className="block text-[11px] text-gray-500">{p === 'codex' ? 'Sem chave: usa o login do ChatGPT no Codex deste computador (rode `codex login` se pedir).' : 'Com a sua chave, guardada neste computador.'}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+          {!providers.includes('codex') && <p className="text-[11px] text-gray-500">O Codex não foi encontrado neste computador. Com ele instalado e logado, as imagens saem sem chave.</p>}
+          <p className="pt-1 font-medium text-gray-800">Ou use uma chave</p>
+          <select value={provider} onChange={(e) => setProvider(e.target.value as 'openai' | 'gemini')} className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-sm">
+            <option value="openai">OpenAI (platform.openai.com/api-keys){keys.openai ? ' · tem chave' : ''}</option>
+            <option value="gemini">Google (aistudio.google.com/apikey){keys.gemini ? ' · tem chave' : ''}</option>
+          </select>
+          <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder={keys[provider] ? '•••••••• (guardada)' : 'Cole a chave'} autoComplete="off" spellCheck={false} className="h-8 w-full rounded-md border border-gray-200 px-2 text-sm text-gray-900" />
+          <div className="flex justify-between gap-1.5">
+            <Button type="button" variant="outline" size="sm" className="bg-white text-red-600" disabled={!keys[provider]} onClick={() => { saveImageKey(provider, ''); setKey('') }}>Apagar</Button>
+            <div className="flex gap-1.5">
+              <Button type="button" variant="outline" size="sm" className="bg-white" onClick={() => setOpen(false)}>Fechar</Button>
+              <Button type="button" size="sm" disabled={key.trim().length < 20} onClick={() => { saveImageKey(provider, key); setKey(''); toast.success('Chave guardada neste computador.') }}>Guardar</Button>
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-400">A chave vai só até o conector deste computador, não para a nuvem. Imagens por chave têm custo no serviço; pelo Codex, entram no seu plano do ChatGPT.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** O passo em que o agente está, com o tempo que já levou. */
 const Working: React.FC = () => {
   const working = useAgent((s) => s.working)
@@ -154,7 +211,7 @@ const Working: React.FC = () => {
     return () => clearInterval(t)
   }, [])
   if (!working) return null
-  const order = ['sending', 'start', 'thinking', 'writing', 'applying'] as const
+  const order = (working.phase === 'generating' ? ['sending', 'start', 'thinking', 'writing', 'applying', 'generating'] : ['sending', 'start', 'thinking', 'writing', 'applying']) as AgentPhase[]
   const at = order.indexOf(working.phase)
   const AGENT = agentInfo(working.agent)
   return (
@@ -314,6 +371,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
           attachments,
           skill: skill ? { name: skill.name, instructions: skill.instructions } : undefined,
           agent,
+          canGenerateImages: !!useCreativeLink.getState().images,
         },
         fonts,
         control.current.signal,
@@ -322,6 +380,11 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
       useAgent.getState().phase('applying')
       const defaults = { postId: state.postId, slideId: state.slideId, layerId: scope === 'layer' ? state.layerId : undefined }
       const result = await playOps(answer.ops, defaults, agent, control.current.signal)
+      let made = 0
+      if (result.toGenerate.length && useCreativeLink.getState().images) {
+        useAgent.getState().phase('generating')
+        made = await generateAll(result.toGenerate, agent, control.current.signal)
+      }
       if (result.applied) {
         if (result.focus) {
           if (result.focus.postId !== useEditor.getState().postId) useEditor.getState().selectPost(result.focus.postId)
@@ -331,7 +394,10 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
         void useEditor.getState().ensureAssets()
         useAgent.getState().highlight(result.touched)
       }
-      push(set.id, { id: crypto.randomUUID(), role: 'ai', text: answer.reply || (result.applied ? 'Pronto.' : 'Não precisei mudar nada.'), changed: result.applied, skipped: result.skipped })
+      const noKey = result.toGenerate.length > 0 && !useCreativeLink.getState().images
+      if (noKey) markNotGenerated(result.toGenerate)
+      const note = noKey ? '\n\nAs imagens ainda não foram geradas: falta um serviço de imagens (botão "Imagens" aqui embaixo: o Codex gera sem chave, ou use uma chave do OpenAI ou do Google).' : made < result.toGenerate.length && result.toGenerate.length ? `\n\n${made} de ${result.toGenerate.length} imagens geradas.` : ''
+      push(set.id, { id: crypto.randomUUID(), role: 'ai', text: (answer.reply || (result.applied ? 'Pronto.' : 'Não precisei mudar nada.')) + note, changed: result.applied, skipped: result.skipped })
     } catch (err) {
       if ((err as Error).name === 'AbortError') push(set.id, { id: crypto.randomUUID(), role: 'ai', text: 'Parei.', error: true })
       else push(set.id, { id: crypto.randomUUID(), role: 'ai', text: err instanceof Error ? err.message : 'A IA não respondeu.', error: true })
@@ -527,6 +593,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
           {skill && (
             <button type="button" aria-label={`Tirar a skill ${skill.name}`} onClick={() => setSkillId(null)} className="text-gray-400 hover:text-gray-700"><X className="h-3.5 w-3.5" /></button>
           )}
+          <ImageKeys />
         </div>
       </div>
     </div>

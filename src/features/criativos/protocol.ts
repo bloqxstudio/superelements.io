@@ -40,9 +40,11 @@ export interface CreativeAgentInfo {
 }
 
 /** Serviço de geração de imagens com chave neste computador. */
-export type CreativeImageProvider = 'openai' | 'gemini'
+export type CreativeImageProvider = 'codex' | 'openai' | 'gemini'
 
 export interface CreativeImageRequest {
   prompt: string
+  /** Qual serviço usar (o escolhido na tela); sem ele, o primeiro pronto. */
+  provider?: CreativeImageProvider
   ratio: 'square' | 'portrait' | 'landscape'
 }

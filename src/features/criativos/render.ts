@@ -200,6 +200,29 @@ function paintImage(ctx: CanvasRenderingContext2D, img: CanvasImageSource & { wi
 function drawImage(ctx: CanvasRenderingContext2D, layer: ImageLayer, images: ImageMap) {
   const img = images.get(layer.src)
   const { x, y, w, h } = layer
+  // Imagem pedida à IA e ainda não pronta: um bloco listrado que diz que está vindo
+  if (!img && !layer.src && layer.prompt) {
+    ctx.save()
+    roundRect(ctx, x, y, w, h, layer.radius)
+    ctx.clip()
+    ctx.fillStyle = '#cfcfca'
+    ctx.fillRect(x, y, w, h)
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)'
+    ctx.lineWidth = 36
+    for (let k = -h; k < w; k += 90) {
+      ctx.beginPath()
+      ctx.moveTo(x + k, y + h)
+      ctx.lineTo(x + k + h, y)
+      ctx.stroke()
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'
+    ctx.font = `600 ${Math.max(24, Math.min(46, Math.round(w * 0.045)))}px Inter, system-ui, sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(layer.genFailed ? 'Imagem não gerada' : 'Gerando imagem…', x + w / 2, y + h / 2)
+    ctx.restore()
+    return
+  }
   ctx.save()
 
   let ix = x

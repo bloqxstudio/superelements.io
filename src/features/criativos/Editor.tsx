@@ -21,6 +21,8 @@ import { joinSetLive, useLive } from './live'
 import { shareSet } from './storage'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { FormatField } from './FormatField'
+import { generateLayerImage } from './generate'
+import { useCreativeLink } from './link'
 
 const FONTS = ['Inter', 'Inter Tight', 'Geist', 'Instrument Serif', 'Playfair Display', 'DM Sans', 'Manrope', 'Poppins', 'Montserrat', 'Space Grotesk', 'Fraunces', 'Archivo', 'Bebas Neue']
 
@@ -120,6 +122,7 @@ const Colors: React.FC<{ set: CreativeSet; value: string; onChange: (hex: string
 
 const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer }) => {
   const upload = useRef<HTMLInputElement>(null)
+  const hasImages = !!useCreativeLink((l) => l.images)
   const fonts = [...new Set([set.brand.headingFont, set.brand.bodyFont, ...FONTS])]
   const set_ = (fields: Partial<Layer>) => editLayer(layer.id, fields)
 
@@ -233,6 +236,14 @@ const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer })
                 <ImagePlus className="h-4 w-4" /> Enviar imagem
               </Button>
               <input ref={upload} type="file" accept="image/*" className="hidden" onChange={(e) => void sendImage(e.target.files?.[0])} />
+            </div>
+          </Field>
+          <Field label="Imagem gerada por IA">
+            <div className="space-y-1.5">
+              <textarea className={cn(inputClass, 'h-20 py-1.5 text-xs leading-snug')} value={layer.prompt ?? ''} placeholder="Descreva a cena (em inglês rende melhor): uma mulher de 30 anos, luz de janela, foto editorial…" onChange={(e) => set_({ prompt: e.target.value } as Partial<ImageLayer>)} />
+              <Button type="button" variant="outline" size="sm" className="w-full gap-1.5 bg-white" disabled={!layer.prompt?.trim() || !hasImages} title={hasImages ? undefined : 'Ligue o Codex ou uma chave de imagens na aba IA (botão Imagens)'} onClick={() => void generateLayerImage(useEditor.getState().slideId!, layer.id, layer.prompt ?? '')}>
+                <Sparkles className="h-4 w-4 text-violet-600" /> {layer.src ? 'Gerar de novo' : 'Gerar imagem'}
+              </Button>
             </div>
           </Field>
           <div className="grid grid-cols-2 gap-2">

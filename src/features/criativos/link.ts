@@ -24,10 +24,12 @@ interface LinkState {
   legacy: boolean
   /** Serviço de imagens com chave neste computador (o que gera); null: nenhum. */
   images: CreativeImageProvider | null
+  /** Todos os serviços de imagem prontos neste computador, do preferido ao último. */
+  providers: CreativeImageProvider[]
   keys: { openai: boolean; gemini: boolean }
 }
 
-export const useCreativeLink = create<LinkState>()(() => ({ connected: false, ia: null, stale: false, agents: [], legacy: false, images: null, keys: { openai: false, gemini: false } }))
+export const useCreativeLink = create<LinkState>()(() => ({ connected: false, ia: null, stale: false, agents: [], legacy: false, images: null, providers: [], keys: { openai: false, gemini: false } }))
 
 /** Verdadeiro, falso ou "ainda não sei" (null), para a tela decidir o que mostrar. */
 export const useAiAvailable = (): boolean | null => useCreativeLink((s) => (!s.connected ? false : s.ia))
@@ -52,9 +54,9 @@ const failAll = (message: string) => {
 /** Liga a IA dos criativos a um canal; devolve a função que desliga. */
 export function startCreativeLink(channel: AgentChannel) {
   let helloTimer: ReturnType<typeof setTimeout> | undefined
-  const onStatus = (data: { ia?: boolean; agents?: CreativeAgentInfo[]; images?: CreativeImageProvider | null; keys?: { openai: boolean; gemini: boolean } }) => {
+  const onStatus = (data: { ia?: boolean; agents?: CreativeAgentInfo[]; images?: CreativeImageProvider | null; providers?: CreativeImageProvider[]; keys?: { openai: boolean; gemini: boolean } }) => {
     clearTimeout(helloTimer)
-    const images = { images: data?.images ?? null, keys: data?.keys ?? { openai: false, gemini: false } }
+    const images = { images: data?.images ?? null, providers: data?.providers ?? [], keys: data?.keys ?? { openai: false, gemini: false } }
     // Aviso só das chaves de imagem (depois de salvar uma): o resto continua como está
     if (data && data.ia === undefined && !data.agents) return void useCreativeLink.setState(images)
     // Conector anterior à escolha de IA: só diz se há uma (o Claude Code), sem a lista
@@ -81,7 +83,7 @@ export function startCreativeLink(channel: AgentChannel) {
   channel.on(CREATIVE_EVENTS.result, onResult)
   channel.on(CREATIVE_EVENTS.progress, onProgress)
   channel.on('vite:ws:connect', hello)
-  useCreativeLink.setState({ channel, connected: false, ia: null, stale: false, agents: [], legacy: false, images: null, keys: { openai: false, gemini: false } })
+  useCreativeLink.setState({ channel, connected: false, ia: null, stale: false, agents: [], legacy: false, images: null, providers: [], keys: { openai: false, gemini: false } })
   hello()
   return () => {
     channel.off(CREATIVE_EVENTS.status, onStatus)
@@ -90,7 +92,7 @@ export function startCreativeLink(channel: AgentChannel) {
     channel.off('vite:ws:connect', hello)
     clearTimeout(helloTimer)
     failAll('A conexão com a IA caiu.')
-    useCreativeLink.setState({ channel: undefined, connected: false, ia: null, stale: false, agents: [], legacy: false, images: null, keys: { openai: false, gemini: false } })
+    useCreativeLink.setState({ channel: undefined, connected: false, ia: null, stale: false, agents: [], legacy: false, images: null, providers: [], keys: { openai: false, gemini: false } })
   }
 }
 
@@ -144,11 +146,34 @@ export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?:
   })
 }
 
-/** Pede uma imagem ao serviço configurado neste computador; vem como data URL. */
+const CHOICE_KEY = 'criativos-imagens'
+
+/** O serviço de imagens que a pessoa escolheu, se ainda está pronto; senão, o primeiro pronto. */
+export function imageProviderChoice(): CreativeImageProvider | undefined {
+  const { providers } = useCreativeLink.getState()
+  let saved: string | null = null
+  try {
+    saved = localStorage.getItem(CHOICE_KEY)
+  } catch {
+    // sem armazenamento
+  }
+  return (providers.find((p) => p === saved) ?? providers[0]) || undefined
+}
+
+export function chooseImageProvider(provider: CreativeImageProvider) {
+  try {
+    localStorage.setItem(CHOICE_KEY, provider)
+  } catch {
+    // vale até recarregar
+  }
+  useCreativeLink.setState((s) => ({ images: s.providers.includes(provider) ? provider : s.images }))
+}
+
+/** Pede uma imagem ao serviço escolhido neste computador; vem como data URL. */
 export const requestImage = (prompt: string, ratio: 'square' | 'portrait' | 'landscape', signal?: AbortSignal) =>
-  callAi<{ data: string; provider: CreativeImageProvider; model: string }>('image', { prompt, ratio }, signal)
+  callAi<{ data: string; provider: CreativeImageProvider; model: string }>('image', { prompt, ratio, provider: imageProviderChoice() }, signal)
 
 /** Guarda a chave de um serviço de imagens no computador de quem usa (vazia, apaga). */
-export function saveImageKey(provider: CreativeImageProvider, key: string) {
+export function saveImageKey(provider: 'openai' | 'gemini', key: string) {
   useCreativeLink.getState().channel?.send(CREATIVE_EVENTS.key, { provider, key })
 }

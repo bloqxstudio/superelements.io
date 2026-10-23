@@ -12,7 +12,7 @@ import { CHAT_AGENTS, type ChatAgentId } from '@/features/space/chat/protocol'
 /** Cores e nomes dos agentes: os mesmos do chat do Space. */
 export const agentInfo = (id: ChatAgentId) => ({ name: CHAT_AGENTS[id].name, color: id === 'codex' ? '#10A37F' : CHAT_AGENTS[id].color })
 
-export type AgentPhase = 'sending' | CreativeStep | 'applying'
+export type AgentPhase = 'sending' | CreativeStep | 'applying' | 'generating'
 
 export const PHASE_LABEL: Record<AgentPhase, string> = {
   sending: 'Lendo o pedido',
@@ -20,6 +20,7 @@ export const PHASE_LABEL: Record<AgentPhase, string> = {
   thinking: 'Pensando',
   writing: 'Escrevendo as mudanças',
   applying: 'Aplicando',
+  generating: 'Gerando as imagens',
 }
 
 interface Target {

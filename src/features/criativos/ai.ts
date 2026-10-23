@@ -98,6 +98,7 @@ export interface EditCall {
   attachments?: EditRequest['attachments']
   skill?: EditRequest['skill']
   agent?: EditRequest['agent']
+  canGenerateImages?: boolean
 }
 
 export async function requestEdit(call: EditCall, fonts: string[], signal?: AbortSignal, onStep?: (step: CreativeStep) => void): Promise<EditResponse> {
@@ -106,6 +107,7 @@ export async function requestEdit(call: EditCall, fonts: string[], signal?: Abor
   const slide = post?.slides.find((s) => s.id === call.slideId)
   const body: EditRequest = {
     agent: call.agent,
+    canGenerateImages: call.canGenerateImages,
     message: call.message,
     scope: call.scope,
     postId: call.postId,

@@ -4,7 +4,7 @@ import type { PlanRequest } from '../../src/features/criativos/plan.ts'
 import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageRequest, type CreativeCall, type CreativeProgress, type CreativeResult } from '../../src/features/criativos/protocol.ts'
 import { CHAT_AGENTS } from '../../src/features/space/chat/protocol.ts'
 import { checkAgents } from '../space/chatPlugin.ts'
-import { generateImage, hasKey, imageProvider, saveImageKey } from './imagem.ts'
+import { generateImage, hasKey, imageProvider, imageProviders, saveImageKey } from './imagem.ts'
 import { editCreatives } from './edit.ts'
 import { planPosts } from './plan.ts'
 
@@ -28,6 +28,7 @@ const planInput = (body: Partial<PlanRequest>): PlanRequest => ({
 
 const editInput = (body: Partial<EditRequest>): EditRequest => ({
   agent: body.agent === 'codex' ? 'codex' : 'claude',
+  canGenerateImages: !!body.canGenerateImages && !!imageProvider(),
   message: String(body.message ?? '').slice(0, 4000),
   scope: ['layer', 'slide', 'post', 'set'].includes(String(body.scope)) ? (body.scope as EditRequest['scope']) : 'set',
   postId: body.postId ? String(body.postId) : undefined,
@@ -56,7 +57,7 @@ export const criativos = (): Plugin => ({
     server.ws.on(CREATIVE_EVENTS.hello, () => {
       void checkAgents().then((found) => {
         const agents: CreativeAgentInfo[] = found.map((a) => ({ id: a.id, name: CHAT_AGENTS[a.id].name, available: a.available, version: a.version }))
-        server.ws.send(CREATIVE_EVENTS.status, { ia: agents.some((a) => a.available), agents, images: imageProvider(), keys: { openai: hasKey('openai'), gemini: hasKey('gemini') } })
+        server.ws.send(CREATIVE_EVENTS.status, { ia: agents.some((a) => a.available), agents, images: imageProvider(), providers: imageProviders(), keys: { openai: hasKey('openai'), gemini: hasKey('gemini') } })
       })
     })
 
@@ -76,7 +77,8 @@ export const criativos = (): Plugin => ({
           } else if (call.kind === 'image') {
             const req = call.request as Partial<CreativeImageRequest>
             const ratio = req.ratio === 'portrait' || req.ratio === 'landscape' ? req.ratio : 'square'
-            send({ id, ok: true, data: await generateImage(String(req.prompt ?? ''), ratio, controller.signal) })
+            const prefer = req.provider === 'codex' || req.provider === 'openai' || req.provider === 'gemini' ? req.provider : undefined
+            send({ id, ok: true, data: await generateImage(String(req.prompt ?? ''), ratio, controller.signal, prefer) })
           } else throw new Error('Pedido desconhecido.')
         } catch (error) {
           if (controller.signal.aborted) return
@@ -91,7 +93,7 @@ export const criativos = (): Plugin => ({
     server.ws.on(CREATIVE_EVENTS.key, (data: { provider?: string; key?: string }) => {
       if (data?.provider === 'openai' || data?.provider === 'gemini') {
         saveImageKey(data.provider, String(data.key ?? '').slice(0, 300))
-        server.ws.send(CREATIVE_EVENTS.status, { images: imageProvider(), keys: { openai: hasKey('openai'), gemini: hasKey('gemini') } })
+        server.ws.send(CREATIVE_EVENTS.status, { images: imageProvider(), providers: imageProviders(), keys: { openai: hasKey('openai'), gemini: hasKey('gemini') } })
       }
     })
 

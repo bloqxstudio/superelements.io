@@ -94,6 +94,8 @@ export interface ImageLayer extends LayerBase {
   focusY?: number
   /** O que pediu à IA de imagens; sem `src` ainda, a camada mostra "gerando". */
   prompt?: string
+  /** A última tentativa de gerar esta imagem falhou. */
+  genFailed?: boolean
 }
 
 export interface ShapeLayer extends LayerBase {
