@@ -1,7 +1,7 @@
 import type { Plugin } from 'vite'
 import type { EditRequest } from '../../src/features/criativos/edit.ts'
 import type { PlanRequest } from '../../src/features/criativos/plan.ts'
-import { CREATIVE_EVENTS, type CreativeCall, type CreativeResult } from '../../src/features/criativos/protocol.ts'
+import { CREATIVE_EVENTS, type CreativeCall, type CreativeProgress, type CreativeResult } from '../../src/features/criativos/protocol.ts'
 import { claudeAvailable } from './claude.ts'
 import { editCreatives } from './edit.ts'
 import { planPosts } from './plan.ts'
@@ -37,6 +37,10 @@ const editInput = (body: Partial<EditRequest>): EditRequest => ({
   cases: Array.isArray(body.cases) ? body.cases.slice(0, 12) : [],
   image: typeof body.image === 'string' && body.image.length < 2_000_000 ? body.image : undefined,
   history: Array.isArray(body.history) ? body.history.slice(-6) : [],
+  attachments: Array.isArray(body.attachments)
+    ? body.attachments.slice(0, 4).filter((a) => typeof a?.data === 'string' && a.data.length < 3_000_000).map((a) => ({ name: String(a.name ?? 'imagem').slice(0, 80), src: String(a.src ?? ''), data: a.data }))
+    : [],
+  skill: body.skill && typeof body.skill.instructions === 'string' ? { name: String(body.skill.name ?? 'Skill').slice(0, 80), instructions: body.skill.instructions.slice(0, 30000) } : undefined,
 })
 
 export const criativos = (): Plugin => ({
@@ -58,7 +62,7 @@ export const criativos = (): Plugin => ({
           if (call.kind === 'edit') {
             const input = editInput(call.request as Partial<EditRequest>)
             if (!input.message.trim()) throw new Error('Escreva o que quer mudar.')
-            send({ id, ok: true, data: await editCreatives(input, controller.signal) })
+            send({ id, ok: true, data: await editCreatives(input, controller.signal, (step) => server.ws.send(CREATIVE_EVENTS.progress, { id, step } satisfies CreativeProgress)) })
           } else if (call.kind === 'plan') {
             send({ id, ok: true, data: await planPosts(planInput(call.request as Partial<PlanRequest>), controller.signal) })
           } else throw new Error('Pedido desconhecido.')

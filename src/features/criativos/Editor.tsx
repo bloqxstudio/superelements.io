@@ -10,13 +10,14 @@ import { currentLayer, currentPost, currentSlide, reformat, useEditor } from './
 import { uploadAsset } from './storage'
 import { TEMPLATES, buildSlide } from './templates'
 import type { TemplateId } from './plan'
-import { FORMAT_LIST, FORMATS, uid, type CreativeSet, type FormatId, type ImageLayer, type Layer, type Post, type Slide, type TextLayer } from './types'
+import { FORMAT_LIST, sizeOf, uid, type CreativeSet, type FormatId, type ImageLayer, type Layer, type Post, type Slide, type TextLayer } from './types'
 import { zipFiles } from './zip'
 import { useAiAvailable } from './link'
 import { AiDialog } from './AiDialog'
 import { LIBRARY } from './library'
 import { AiChat } from './AiChat'
 import { Board } from './Board'
+import { FormatField } from './FormatField'
 
 const FONTS = ['Inter', 'Inter Tight', 'Geist', 'Instrument Serif', 'Playfair Display', 'DM Sans', 'Manrope', 'Poppins', 'Montserrat', 'Space Grotesk', 'Fraunces', 'Archivo', 'Bebas Neue']
 
@@ -66,7 +67,7 @@ const editPost = (fn: (p: Post) => Post) => {
 const Thumb: React.FC<{ slide: Slide; format: FormatId; active: boolean; index: number; onClick: () => void }> = ({ slide, format, active, index, onClick }) => {
   const ref = useRef<HTMLCanvasElement>(null)
   const images = useEditor((s) => s.images)
-  const { width, height } = FORMATS[format]
+  const { width, height } = sizeOf(format)
   useEffect(() => {
     const ctx = ref.current?.getContext('2d')
     if (!ctx) return
@@ -330,8 +331,10 @@ export const CreativeEditor: React.FC = () => {
   const ai = useAiAvailable()
   const [aiOpen, setAiOpen] = useState(false)
   const [view, setView] = useState<'canvas' | 'slide'>('canvas')
+  const [newPost, setNewPost] = useState<{ name: string; format: FormatId } | null>(null)
   const [panel, setPanel] = useState<'ia' | 'props'>('ia')
   const upload = useRef<HTMLInputElement>(null)
+  const pasteImage = useRef<(file: File) => void>(() => undefined)
 
   useEffect(() => {
     void useEditor.getState().open(setId)
@@ -363,6 +366,18 @@ export const CreativeEditor: React.FC = () => {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if ((e.target as HTMLElement | null)?.closest('input, textarea, select')) return
+      const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'))
+      if (!file) return
+      e.preventDefault()
+      pasteImage.current(file)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
   }, [])
 
   useEffect(() => {
@@ -418,12 +433,30 @@ export const CreativeEditor: React.FC = () => {
     useEditor.getState().selectSlide(nextId)
   }
 
+  const createPost = () => {
+    if (!newPost) return
+    const colors = set.brand.colors.map((c) => c.hex)
+    const slideNew: Slide = { id: uid(), background: colors.find((c) => /^#(f|e)[0-9a-f]{5}$/i.test(c)) ?? '#ffffff', layers: [] }
+    const created: Post = { id: uid(), name: newPost.name.trim() || `Post ${set.posts.length + 1}`, format: newPost.format, slides: [slideNew] }
+    useEditor.getState().edit((s) => ({ ...s, posts: [...s.posts, created] }))
+    useEditor.getState().selectPost(created.id)
+    setNewPost(null)
+  }
+
+  const deletePost = () => {
+    if (!post || set.posts.length < 2) return toast.error('O conjunto precisa de pelo menos um post.')
+    if (!window.confirm(`Excluir o post "${post.name}" com ${post.slides.length} ${post.slides.length === 1 ? 'slide' : 'slides'}?`)) return
+    const rest = set.posts.filter((p) => p.id !== post.id)
+    useEditor.getState().edit((s) => ({ ...s, posts: s.posts.filter((p) => p.id !== post.id) }))
+    useEditor.getState().selectPost(rest[0].id)
+  }
+
   const sendLayerImage = async (file?: File) => {
     if (!file) return
     try {
       const asset = await uploadAsset(set.id, file, file.name)
       useEditor.getState().edit((s) => ({ ...s, assets: [...s.assets, asset] }))
-      const { width } = FORMATS[format]
+      const { width } = sizeOf(format)
       const w = Math.min(width - 168, 760)
       addLayer({ id: uid(), type: 'image', name: file.name, src: `asset:${asset.id}`, x: 84, y: 200, w, h: Math.round((w * asset.height) / asset.width), fit: 'cover', radius: 0, frame: 'none' })
       await useEditor.getState().ensureImage(`asset:${asset.id}`)
@@ -433,6 +466,8 @@ export const CreativeEditor: React.FC = () => {
       if (upload.current) upload.current.value = ''
     }
   }
+
+  pasteImage.current = (file) => void sendLayerImage(file.name === 'image.png' ? new File([file], 'imagem colada.png', { type: file.type }) : file)
 
   return (
     <div className="flex h-[calc(100vh-56px)] min-h-[560px] flex-col md:h-screen" onClick={() => menu && setMenu(null)}>
@@ -453,11 +488,7 @@ export const CreativeEditor: React.FC = () => {
           <Button variant="outline" size="sm" className="gap-1.5 bg-white" onClick={() => setAiOpen(true)} disabled={ai === false} title={ai === false ? 'A IA roda no app local (servidor de desenvolvimento com o Claude Code).' : 'Gerar posts com IA'}>
             <Sparkles className="h-4 w-4 text-violet-600" /> IA
           </Button>
-          <select aria-label="Formato" value={format} onChange={(e) => editPost((p) => reformat(p, e.target.value as FormatId))} className="h-8 rounded-md border border-gray-200 bg-white px-2 text-sm">
-            {FORMAT_LIST.map((f) => (
-              <option key={f.id} value={f.id}>{f.label} · {f.width}×{f.height}</option>
-            ))}
-          </select>
+          <FormatField value={format} onChange={(f) => editPost((p) => reformat(p, f))} />
           <div className="relative">
             <Button size="sm" className="gap-1.5" onClick={() => setMenu(menu === 'export' ? null : 'export')}><Download className="h-4 w-4" /> Baixar</Button>
             {menu === 'export' && (
@@ -470,7 +501,7 @@ export const CreativeEditor: React.FC = () => {
                 <Button variant="outline" className="w-full justify-start bg-white" onClick={() => void exportFiles('slide', exportType)}>Este slide</Button>
                 <Button variant="outline" className="w-full justify-start bg-white" onClick={() => void exportFiles('post', exportType)} disabled={(post?.slides.length ?? 0) < 2}>Post inteiro (ZIP · {post?.slides.length} slides)</Button>
                 <Button variant="outline" className="w-full justify-start bg-white" onClick={() => void exportFiles('set', exportType)}>Conjunto todo (ZIP)</Button>
-                <p className="text-[11px] leading-snug text-gray-500">{FORMATS[format].width}×{FORMATS[format].height}px, no tamanho do Instagram.</p>
+                <p className="text-[11px] leading-snug text-gray-500">{sizeOf(format).width}×{sizeOf(format).height}px, no tamanho do Instagram.</p>
               </div>
             )}
           </div>
@@ -508,7 +539,27 @@ export const CreativeEditor: React.FC = () => {
         </aside>
 
         <main className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-10 shrink-0 items-center gap-1.5 border-b bg-white px-3" onClick={(e) => e.stopPropagation()}>
+          <div className="relative flex h-10 shrink-0 items-center gap-1.5 border-b bg-white px-3" onClick={(e) => e.stopPropagation()}>
+            {post && <input aria-label="Nome do post" value={post.name} onChange={(e) => editPost((p) => ({ ...p, name: e.target.value }))} className="h-8 w-40 rounded-md border border-transparent px-2 text-sm font-medium text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none" />}
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" onClick={() => setNewPost(newPost ? null : { name: '', format: '4x5' })}><Plus className="h-4 w-4" /> Novo post</Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-red-600" title="Excluir este post" onClick={deletePost}><Trash2 className="h-4 w-4" /></Button>
+            <span className="mx-1 h-5 w-px bg-gray-200" />
+            {newPost && (
+              <div className="absolute left-3 top-11 z-40 w-72 space-y-2 rounded-xl border bg-white p-3 shadow-xl">
+                <label className="block text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                  Nome
+                  <input autoFocus value={newPost.name} onChange={(e) => setNewPost({ ...newPost, name: e.target.value })} placeholder={`Post ${set.posts.length + 1}`} className="mt-1 h-8 w-full rounded-md border border-gray-200 px-2 text-sm normal-case text-gray-900" />
+                </label>
+                <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                  Formato
+                  <div className="mt-1"><FormatField value={newPost.format} onChange={(f) => setNewPost({ ...newPost, format: f })} className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-sm normal-case text-gray-900" /></div>
+                </div>
+                <div className="flex justify-end gap-1.5">
+                  <Button type="button" variant="outline" size="sm" className="bg-white" onClick={() => setNewPost(null)}>Cancelar</Button>
+                  <Button type="button" size="sm" onClick={createPost}>Criar em branco</Button>
+                </div>
+              </div>
+            )}
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'text', name: 'Texto', text: 'Novo texto', x: 84, y: 200, w: 600, h: 0, font: set.brand.bodyFont, weight: 500, size: 56, color: '#111111', align: 'left', lineHeight: 1.15, letterSpacing: 0 })}><Type className="h-4 w-4" /> Texto</Button>
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'rect', name: 'Forma', x: 84, y: 200, w: 300, h: 300, fill: set.brand.colors[0]?.hex ?? '#2b3cf0', radius: 0 })}><Square className="h-4 w-4" /> Forma</Button>
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => upload.current?.click()}><ImagePlus className="h-4 w-4" /> Imagem</Button>

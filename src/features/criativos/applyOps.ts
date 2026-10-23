@@ -1,8 +1,9 @@
 import { AV_CASES } from '@/features/avence/cases'
-import type { EditOp, LayerFields } from './edit'
+import type { EditOp, LayerFields, SlideDef } from './edit'
 import { LIBRARY } from './library'
+import { reformat } from './store'
 import { buildSlide } from './templates'
-import { uid, type CreativeSet, type Layer, type Post, type Slide } from './types'
+import { parseFormat, uid, type CreativeSet, type FormatId, type Layer, type Post, type Slide } from './types'
 
 /**
  * Aplica o que a IA devolveu. Cada operação é conferida contra o conjunto
@@ -64,21 +65,42 @@ const DEFAULTS: Record<Layer['type'], (set: CreativeSet) => Record<string, unkno
   dots: () => ({ w: 400, h: 400, color: '#ffffff', gap: 40, dot: 3, opacity: 0.07 }),
 }
 
+const NAMES: Record<Layer['type'], string> = { text: 'Texto', image: 'Imagem', rect: 'Forma', ring: 'Anel', dots: 'Pontos' }
+
+/** Camada nova a partir dos campos que a IA mandou; sem tipo válido, nada. */
+function makeLayer(fields: LayerFields | undefined, set: CreativeSet): Layer | undefined {
+  const type = fields?.type
+  if (!type || !(type in BY_TYPE)) return undefined
+  return { id: uid(), type, name: NAMES[type], x: 84, y: 200, ...DEFAULTS[type](set), ...clean(type, fields, set) } as Layer
+}
+
+/** Slide novo: por camadas, ou por um modelo pronto. */
+function makeSlide(def: SlideDef | undefined, set: CreativeSet, format: FormatId): Slide | undefined {
+  if (!def) return undefined
+  if (def.spec) {
+    const known = new Set(AV_CASES.map((c) => c.slug))
+    return buildSlide({ ...def.spec, case: def.spec.case && known.has(def.spec.case) ? def.spec.case : AV_CASES[0].slug }, set.brand, format)
+  }
+  const background = def.background && COLOR.test(def.background.trim()) ? def.background.trim() : '#ffffff'
+  return { id: uid(), background, layers: (def.layers ?? []).flatMap((l) => makeLayer(l, set) ?? []) }
+}
+
 export interface Applied {
   set: CreativeSet
   applied: number
   skipped: string[]
   /** O que a pessoa deve ver depois: o último slide e a última camada tocados. */
   focus?: { postId: string; slideId: string; layerId?: string }
+  /** Slides que mudaram (ou nasceram), para o canvas destacar. */
+  touched: string[]
 }
-
-const NAMES: Record<Layer['type'], string> = { text: 'Texto', image: 'Imagem', rect: 'Forma', ring: 'Anel', dots: 'Pontos' }
 
 export function applyOps(start: CreativeSet, ops: EditOp[]): Applied {
   let set = start
   let applied = 0
   let focus: Applied['focus']
   const skipped: string[] = []
+  const touched = new Set<string>()
 
   const findSlide = (op: EditOp) => {
     for (const post of set.posts) {
@@ -93,19 +115,37 @@ export function applyOps(start: CreativeSet, ops: EditOp[]): Applied {
 
   ops.forEach((op, i) => {
     const label = `${i + 1}. ${op.op}`
+    const prior = focus
     try {
       if (op.op === 'update_post') {
         const post = set.posts.find((p) => p.id === op.postId)
         if (!post) return skipped.push(`${label}: post não existe`)
-        set = { ...set, posts: set.posts.map((p) => (p.id !== post.id ? p : { ...p, ...(op.name ? { name: op.name.slice(0, 120) } : {}), ...(op.caption !== undefined ? { caption: op.caption.slice(0, 2200) } : {}) })) }
+        const format = parseFormat(op.format)
+        set = { ...set, posts: set.posts.map((p) => (p.id !== post.id ? p : { ...(format && format !== p.format ? reformat(p, format) : p), ...(op.name ? { name: op.name.slice(0, 120) } : {}), ...(op.caption !== undefined ? { caption: op.caption.slice(0, 2200) } : {}) })) }
+        return void applied++
+      }
+
+      if (op.op === 'add_post') {
+        const def = op.post
+        if (!def) return skipped.push(`${label}: faltou o post`)
+        const format = parseFormat(def.format) ?? '4x5'
+        const slides = (def.slides ?? []).flatMap((d) => makeSlide(d, set, format) ?? [])
+        const post: Post = { id: uid(), name: (def.name || 'Post novo').slice(0, 120), format, caption: def.caption?.slice(0, 2200), slides: slides.length ? slides : [{ id: uid(), background: '#ffffff', layers: [] }] }
+        set = { ...set, posts: [...set.posts, post] }
+        focus = { postId: post.id, slideId: post.slides[0].id }
+        for (const created of post.slides) touched.add(created.id)
+        return void applied++
+      }
+      if (op.op === 'delete_post') {
+        if (set.posts.length < 2 || !set.posts.some((p) => p.id === op.postId)) return skipped.push(`${label}: o conjunto precisa de pelo menos um post`)
+        set = { ...set, posts: set.posts.filter((p) => p.id !== op.postId) }
         return void applied++
       }
 
       if (op.op === 'add_slide') {
         const post = set.posts.find((p) => p.id === op.postId) ?? findSlide(op)?.post
-        if (!post || !op.spec) return skipped.push(`${label}: faltou o post ou o modelo`)
-        const known = new Set(AV_CASES.map((c) => c.slug))
-        const slide = buildSlide({ ...op.spec, case: op.spec.case && known.has(op.spec.case) ? op.spec.case : AV_CASES[0].slug }, set.brand, post.format)
+        const slide = makeSlide(op.slide ?? (op.spec ? { spec: op.spec } : undefined), set, post?.format ?? '4x5')
+        if (!post || !slide) return skipped.push(`${label}: faltou o post ou o conteúdo do slide`)
         const at = op.slideId ? post.slides.findIndex((s) => s.id === op.slideId) + 1 : post.slides.length
         set = { ...set, posts: set.posts.map((p) => (p.id !== post.id ? p : { ...p, slides: [...p.slides.slice(0, at), slide, ...p.slides.slice(at)] })) }
         focus = { postId: post.id, slideId: slide.id }
@@ -136,9 +176,8 @@ export function applyOps(start: CreativeSet, ops: EditOp[]): Applied {
       }
 
       if (op.op === 'add_layer') {
-        const type = op.layer?.type
-        if (!type || !(type in BY_TYPE)) return skipped.push(`${label}: faltou o tipo da camada`)
-        const layer = { id: uid(), type, name: NAMES[type], x: 84, y: 200, ...DEFAULTS[type](set), ...clean(type, op.layer, set) } as Layer
+        const layer = makeLayer(op.layer, set)
+        if (!layer) return skipped.push(`${label}: faltou o tipo da camada`)
         mapSlide(slide.id, (s) => ({ ...s, layers: [...s.layers, layer] }))
         focus = { postId: post.id, slideId: slide.id, layerId: layer.id }
         return void applied++
@@ -172,8 +211,10 @@ export function applyOps(start: CreativeSet, ops: EditOp[]): Applied {
       skipped.push(`${label}: operação desconhecida`)
     } catch (error) {
       skipped.push(`${label}: ${error instanceof Error ? error.message : 'erro'}`)
+    } finally {
+      if (focus && focus !== prior) touched.add(focus.slideId)
     }
   })
 
-  return { set, applied, skipped, focus }
+  return { set, applied, skipped, focus, touched: [...touched] }
 }

@@ -7,7 +7,7 @@
 
 import { ILLUSTRATION_IDS, TEMPLATE_IDS, type SlideSpec } from './plan.ts'
 
-export const EDIT_OPS = ['update_layer', 'add_layer', 'delete_layer', 'move_layer', 'update_slide', 'add_slide', 'duplicate_slide', 'delete_slide', 'update_post'] as const
+export const EDIT_OPS = ['update_layer', 'add_layer', 'delete_layer', 'move_layer', 'update_slide', 'add_slide', 'duplicate_slide', 'delete_slide', 'update_post', 'add_post', 'delete_post'] as const
 export type EditOpName = (typeof EDIT_OPS)[number]
 
 /** Campos que uma camada pode ter; cada tipo usa os seus e o editor ignora o resto. */
@@ -43,6 +43,22 @@ export interface LayerFields {
   dot?: number
 }
 
+/** Um slide por camadas (sem modelo): o fundo e as camadas, de baixo para cima. */
+export interface SlideDef {
+  background?: string
+  /** Em vez de camadas: um modelo pronto. */
+  spec?: SlideSpec
+  layers?: LayerFields[]
+}
+
+export interface PostDef {
+  name?: string
+  /** Formato pronto (4x5, 1x1, 9x16, 16x9, link, 2x3) ou tamanho livre ("1200x628"). */
+  format?: string
+  caption?: string
+  slides?: SlideDef[]
+}
+
 export interface EditOp {
   op: EditOpName
   postId?: string
@@ -57,6 +73,12 @@ export interface EditOp {
   /** update_post */
   name?: string
   caption?: string
+  /** update_post: muda o formato e reacomoda as camadas. */
+  format?: string
+  /** add_slide: slide por camadas, no lugar de `spec`. */
+  slide?: SlideDef
+  /** add_post */
+  post?: PostDef
 }
 
 export interface EditRequest {
@@ -75,6 +97,10 @@ export interface EditRequest {
   cases: { slug: string; name: string; segment: string; summary: string }[]
   /** JPEG (data URL) do slide selecionado, para ela ver o que a pessoa vê. */
   image?: string
+  /** Prints e imagens que a pessoa anexou (referências); `src` é onde ficaram no conjunto, para usar numa camada. */
+  attachments?: { name: string; src: string; data: string }[]
+  /** Skill escolhida: um jeito de trabalhar para este pedido. */
+  skill?: { name: string; instructions: string }
   history?: { role: 'user' | 'ai'; text: string }[]
 }
 
@@ -115,6 +141,33 @@ const layerProps = {
   dot: { type: 'number' },
 } as const
 
+const specSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['template'],
+  properties: {
+    template: { type: 'string', enum: [...TEMPLATE_IDS] },
+    label: { type: 'string' },
+    title: { type: 'string' },
+    body: { type: 'string' },
+    items: { type: 'array', maxItems: 4, items: { type: 'string' } },
+    cta: { type: 'string' },
+    case: { type: 'string' },
+    view: { type: 'string', enum: ['capa', 'pagina', 'celular'] },
+    illustration: { type: 'string', enum: [...ILLUSTRATION_IDS] },
+    focus: { type: 'number' },
+    dark: { type: 'boolean' },
+  },
+} as const
+
+const layerSchema = { type: 'object', additionalProperties: false, properties: layerProps } as const
+
+const slideSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { background: { type: 'string' }, spec: specSchema, layers: { type: 'array', maxItems: 60, items: layerSchema } },
+} as const
+
 export const EDIT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -133,26 +186,16 @@ export const EDIT_SCHEMA = {
           postId: { type: 'string' },
           slideId: { type: 'string' },
           layerId: { type: 'string' },
-          layer: { type: 'object', additionalProperties: false, properties: layerProps },
+          layer: layerSchema,
           background: { type: 'string' },
-          spec: {
+          spec: specSchema,
+          slide: slideSchema,
+          post: {
             type: 'object',
             additionalProperties: false,
-            required: ['template'],
-            properties: {
-              template: { type: 'string', enum: [...TEMPLATE_IDS] },
-              label: { type: 'string' },
-              title: { type: 'string' },
-              body: { type: 'string' },
-              items: { type: 'array', maxItems: 4, items: { type: 'string' } },
-              cta: { type: 'string' },
-              case: { type: 'string' },
-              view: { type: 'string', enum: ['capa', 'pagina', 'celular'] },
-              illustration: { type: 'string', enum: [...ILLUSTRATION_IDS] },
-              focus: { type: 'number' },
-              dark: { type: 'boolean' },
-            },
+            properties: { name: { type: 'string' }, format: { type: 'string' }, caption: { type: 'string' }, slides: { type: 'array', maxItems: 12, items: slideSchema } },
           },
+          format: { type: 'string' },
           direction: { type: 'string', enum: ['front', 'back', 'up', 'down'] },
           name: { type: 'string' },
           caption: { type: 'string' },

@@ -2,7 +2,7 @@ import { mix } from '@/features/space/brand/color'
 import { paletteOf, type Palette } from './brand'
 import { caseBySlug, caseImage, ILLUSTRATIONS } from './library'
 import type { CaseView, SlideSpec, TemplateId } from './plan'
-import { FORMATS, uid, type FormatId, type ImageLayer, type Layer, type Post, type SetBrand, type ShapeLayer, type Slide, type TextLayer } from './types'
+import { sizeOf, uid, type FormatId, type ImageLayer, type Layer, type Post, type SetBrand, type ShapeLayer, type Slide, type TextLayer } from './types'
 
 /**
  * Modelos de post na linguagem da identidade: tinta e papel, título justo com
@@ -28,7 +28,7 @@ interface Ctx {
 
 const ctxOf = (brand: SetBrand, format: FormatId, dark: boolean): Ctx => {
   const p = paletteOf(brand)
-  const { width: w, height: h } = FORMATS[format]
+  const { width: w, height: h } = sizeOf(format)
   return { brand, p, w, h, m: 84, dark, hi: dark ? mix(p.accent, '#ffffff', 0.5) : p.accent, fg: dark ? p.paper : p.ink, soft: dark ? 'rgba(255,255,255,0.62)' : p.muted }
 }
 

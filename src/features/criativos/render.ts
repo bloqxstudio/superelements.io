@@ -1,4 +1,4 @@
-import { FORMATS, type FormatId, type ImageLayer, type Layer, type Slide, type TextLayer } from './types'
+import { sizeOf, type FormatId, type ImageLayer, type Layer, type Slide, type TextLayer } from './types'
 
 /**
  * Desenho de um slide no canvas 2D, no tamanho real do formato. A tela do
@@ -316,7 +316,7 @@ function drawLayer(ctx: CanvasRenderingContext2D, layer: Layer, images: ImageMap
 
 /** Desenha o slide inteiro; o canvas já deve ter o tamanho do formato. */
 export function drawSlide(ctx: CanvasRenderingContext2D, slide: Slide, format: FormatId, images: ImageMap) {
-  const { width, height } = FORMATS[format]
+  const { width, height } = sizeOf(format)
   ctx.save()
   ctx.clearRect(0, 0, width, height)
   ctx.fillStyle = slide.background
@@ -336,7 +336,7 @@ export function layerBox(layer: Layer): { x: number; y: number; w: number; h: nu
 export type ExportType = 'png' | 'jpg'
 
 export async function slideToBlob(slide: Slide, format: FormatId, images: ImageMap, type: ExportType): Promise<Blob> {
-  const { width, height } = FORMATS[format]
+  const { width, height } = sizeOf(format)
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height

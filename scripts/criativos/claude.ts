@@ -21,9 +21,11 @@ interface Ask {
   timeoutMs?: number
   maxTurns?: number
   signal?: AbortSignal
+  /** O que o Claude Code está fazendo (começou, pensando, escrevendo a resposta). */
+  onStep?: (step: 'start' | 'thinking' | 'writing') => void
 }
 
-export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeoutMs = 180_000, maxTurns = 2, signal }: Ask): Promise<T> =>
+export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeoutMs = 180_000, maxTurns = 2, signal, onStep }: Ask): Promise<T> =>
   new Promise((resolve, reject) => {
     const bin = findBin('claude')
     if (!bin) return reject(new Error('O Claude Code não foi encontrado nesta máquina (ou diga onde está em SPACE_CLAUDE_BIN).'))
@@ -41,6 +43,12 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
     let settled = false
     let buffer = ''
     let stderr = ''
+    let lastStep = ''
+    const step = (next: 'start' | 'thinking' | 'writing') => {
+      if (next === lastStep) return
+      lastStep = next
+      onStep?.(next)
+    }
     let answer: T | undefined
     let failure: string | undefined
     const finish = (error?: Error) => {
@@ -74,6 +82,11 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
         if (!line.startsWith('{')) continue
         try {
           const event = JSON.parse(line)
+          if (event.type === 'system') step('start')
+          else if (event.type === 'assistant') {
+            const blocks = Array.isArray(event.message?.content) ? event.message.content : []
+            step(blocks.some((b: { type?: string }) => b.type === 'tool_use' || b.type === 'text') ? 'writing' : 'thinking')
+          }
           if (event.type !== 'result') continue
           if (event.structured_output) answer = event.structured_output as T
           else failure = event.is_error ? String(event.result ?? 'O Claude Code parou com erro.').slice(0, 400) : 'O Claude Code não devolveu a resposta no formato pedido.'

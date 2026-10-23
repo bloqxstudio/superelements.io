@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { drawSlide, layerBox } from './render'
 import { currentSlide, useEditor } from './store'
-import { FORMATS, type Layer } from './types'
+import { sizeOf, type Layer } from './types'
 
 /** A área de edição: o slide no tamanho real, escalado para caber, com seleção, arrasto e redimensionamento. */
 
@@ -19,7 +19,7 @@ export const Stage: React.FC = () => {
   const layerId = useEditor((s) => s.layerId)
   const images = useEditor((s) => s.images)
   const format = set?.posts.find((p) => p.id === postId)?.format ?? '4x5'
-  const { width, height } = FORMATS[format]
+  const { width, height } = sizeOf(format)
 
   useLayoutEffect(() => {
     const el = wrap.current

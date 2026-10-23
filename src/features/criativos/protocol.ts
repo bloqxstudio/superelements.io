@@ -9,6 +9,7 @@ export const CREATIVE_EVENTS = {
   call: 'criativos:chamar',
   result: 'criativos:resposta',
   stop: 'criativos:parar',
+  progress: 'criativos:progresso',
 } as const
 
 export interface CreativeCall {
@@ -18,3 +19,11 @@ export interface CreativeCall {
 }
 
 export type CreativeResult = { id: string; ok: true; data: unknown } | { id: string; ok: false; error: string }
+
+/** O que o Claude Code está fazendo, em passos que a tela mostra enquanto espera. */
+export type CreativeStep = 'start' | 'thinking' | 'writing'
+
+export interface CreativeProgress {
+  id: string
+  step: CreativeStep
+}

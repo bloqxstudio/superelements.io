@@ -2,11 +2,11 @@ import { AV_CASES } from '@/features/avence/cases'
 import type { PlanRequest, PlanResponse, FormatKey } from './plan'
 import { buildPost } from './templates'
 import type { EditRequest, EditResponse } from './edit'
-import { callAi } from './link'
+import { callAi, type CreativeStep } from './link'
 import { LIBRARY } from './library'
 import { drawSlide, type ImageMap } from './render'
 import type { CreativeSet, Post, SetBrand, Slide } from './types'
-import { FORMATS } from './types'
+import { FORMATS, sizeOf } from './types'
 
 export interface AiForm {
   brief: string
@@ -58,15 +58,15 @@ const compactPosts = (posts: Post[]) =>
     id: p.id,
     name: p.name,
     format: p.format,
-    width: FORMATS[p.format].width,
-    height: FORMATS[p.format].height,
+    width: sizeOf(p.format).width,
+    height: sizeOf(p.format).height,
     caption: p.caption,
     slides: p.slides.map((s) => ({ id: s.id, background: s.background, layers: s.layers })),
   }))
 
 /** JPEG pequeno do slide, para a IA ver o que a pessoa vê. */
 export function slidePreview(slide: Slide, format: Post['format'], images: ImageMap): string {
-  const { width, height } = FORMATS[format]
+  const { width, height } = sizeOf(format)
   const k = 720 / width
   const canvas = document.createElement('canvas')
   canvas.width = 720
@@ -86,9 +86,11 @@ export interface EditCall {
   layerId?: string
   images: ImageMap
   history: { role: 'user' | 'ai'; text: string }[]
+  attachments?: EditRequest['attachments']
+  skill?: EditRequest['skill']
 }
 
-export async function requestEdit(call: EditCall, fonts: string[], signal?: AbortSignal): Promise<EditResponse> {
+export async function requestEdit(call: EditCall, fonts: string[], signal?: AbortSignal, onStep?: (step: CreativeStep) => void): Promise<EditResponse> {
   const { set } = call
   const post = set.posts.find((p) => p.id === call.postId)
   const slide = post?.slides.find((s) => s.id === call.slideId)
@@ -111,8 +113,10 @@ export async function requestEdit(call: EditCall, fonts: string[], signal?: Abor
     cases: AV_CASES.map((c) => ({ slug: c.slug, name: c.name, segment: c.segment, summary: c.summary })),
     image: slide && post ? slidePreview(slide, post.format, call.images) : undefined,
     history: call.history,
+    attachments: call.attachments,
+    skill: call.skill,
   }
-  const json = await callAi<Partial<EditResponse>>('edit', body, signal)
+  const json = await callAi<Partial<EditResponse>>('edit', body, signal, onStep)
   if (!json.ops) throw new Error('A IA não respondeu.')
   return { reply: json.reply ?? '', ops: json.ops }
 }

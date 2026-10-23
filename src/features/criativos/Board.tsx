@@ -1,10 +1,11 @@
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Copy, Download, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AGENT, PHASE_LABEL, useAgent } from './agentStore'
 import { drawSlide, fontCss, layerBox, type ImageMap } from './render'
 import { useEditor } from './store'
 import { TEMPLATES } from './templates'
-import { FORMATS, type CreativeSet, type FormatId, type Layer, type Slide, type TextLayer } from './types'
+import { sizeOf, type CreativeSet, type FormatId, type Layer, type Slide, type TextLayer } from './types'
 
 /**
  * O canvas dos criativos: todos os posts do conjunto lado a lado, um post por
@@ -46,7 +47,7 @@ function layout(set: CreativeSet) {
   const rows: Row[] = []
   let y = 0
   for (const post of set.posts) {
-    const { width, height } = FORMATS[post.format]
+    const { width, height } = sizeOf(post.format)
     const slides: Placed[] = post.slides.map((slide, index) => ({ postId: post.id, slideId: slide.id, index, format: post.format, x: index * (width + GAP), y: y + HEAD, w: width, h: height, slide }))
     const rowWidth = post.slides.length * (width + GAP) + width * 0.3
     rows.push({ postId: post.id, name: post.name, format: post.format, y, width: rowWidth, slides, addX: post.slides.length * (width + GAP) })
@@ -64,7 +65,7 @@ const bucket = (k: number) => {
 
 const SlideCanvas = memo(function SlideCanvas({ slide, format, images, scale, hideLayer }: { slide: Slide; format: FormatId; images: ImageMap; scale: number; hideLayer?: string }) {
   const ref = useRef<HTMLCanvasElement>(null)
-  const { width, height } = FORMATS[format]
+  const { width, height } = sizeOf(format)
   useEffect(() => {
     const ctx = ref.current?.getContext('2d')
     if (!ctx) return
@@ -94,6 +95,8 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   const postId = useEditor((s) => s.postId)
   const slideId = useEditor((s) => s.slideId)
   const layerId = useEditor((s) => s.layerId)
+  const working = useAgent((s) => s.working)
+  const flash = useAgent((s) => s.flash)
 
   const host = useRef<HTMLDivElement>(null)
   const drag = useRef<Drag | null>(null)
@@ -134,7 +137,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
     if (fitted.current || !rows.length || size.w < 200) return
     fitted.current = true
     const first = rows[0]
-    fit({ x: 0, y: 0, w: Math.min(bounds.w, first.width), h: Math.min(bounds.h, (FORMATS[first.format].height + HEAD) * 1.12) })
+    fit({ x: 0, y: 0, w: Math.min(bounds.w, first.width), h: Math.min(bounds.h, (sizeOf(first.format).height + HEAD) * 1.12) })
   }, [rows, size.w, bounds.w, bounds.h, fit])
 
   const zoomAt = useCallback((cx: number, cy: number, factor: number) => {
@@ -310,12 +313,13 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
       onDoubleClick={onDouble}
       aria-label="Canvas dos criativos"
     >
+      <style>{`@keyframes agentPulse{0%,100%{opacity:.45}50%{opacity:1}}@keyframes agentSweep{from{left:-35%}to{left:105%}}@keyframes agentFlash{0%{opacity:1}70%{opacity:1}100%{opacity:0}}`}</style>
       <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
         {rows.map((row) => (
           <React.Fragment key={row.postId}>
             <div className="absolute flex items-baseline gap-3 whitespace-nowrap" style={{ left: 0, top: row.y, height: HEAD, fontSize: 30 }}>
               <span className={cn('font-semibold', row.postId === postId ? 'text-violet-700' : 'text-zinc-800')}>{row.name}</span>
-              <span className="text-[22px] text-zinc-500">{FORMATS[row.format].label} · {row.slides.length} {row.slides.length === 1 ? 'slide' : 'slides'}</span>
+              <span className="text-[22px] text-zinc-500">{sizeOf(row.format).label} · {row.slides.length} {row.slides.length === 1 ? 'slide' : 'slides'}</span>
             </div>
             {row.slides.map((p) => (
               <div key={p.slideId} className="absolute bg-white" style={{ left: p.x, top: p.y, width: p.w, height: p.h, boxShadow: p.slideId === slideId ? `0 0 0 ${3 * inv}px #8b5cf6` : `0 0 0 ${1 * inv}px rgb(0 0 0 / 0.14), 0 ${16 * inv}px ${40 * inv}px -${12 * inv}px rgb(0 0 0 / 0.25)` }}>
@@ -337,7 +341,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
                 setMenu({ postId: row.postId, x: e.clientX - r.left, y: e.clientY - r.top })
               }}
               className="absolute flex items-center justify-center rounded-3xl border-2 border-dashed border-zinc-400 text-zinc-500 hover:border-violet-500 hover:text-violet-600"
-              style={{ left: row.addX, top: row.y + HEAD, width: FORMATS[row.format].width * 0.3, height: FORMATS[row.format].height, fontSize: 28 }}
+              style={{ left: row.addX, top: row.y + HEAD, width: sizeOf(row.format).width * 0.3, height: sizeOf(row.format).height, fontSize: 28 }}
               aria-label={`Novo slide em ${row.name}`}
             >
               <span className="flex flex-col items-center gap-3"><Plus style={{ width: 64, height: 64 }} />Novo slide</span>
@@ -356,6 +360,49 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
             <span className="absolute left-0 whitespace-nowrap rounded bg-violet-600 px-1.5 py-0.5 font-medium text-white" style={{ bottom: '100%', marginBottom: 6 * inv, fontSize: 12 * inv * 1.6 }}>{selLayer!.name}</span>
           </div>
         )}
+
+        {/* O agente à vista: o alvo do pedido enquanto ele trabalha e o que ele mudou depois */}
+        {working && (() => {
+          const t = working.target
+          const rects: { x: number; y: number; w: number; h: number }[] = []
+          const slideOf = (id?: string) => placed.find((p) => p.slideId === id)
+          if (t.scope === 'layer') {
+            const p = slideOf(t.slideId)
+            const l = p?.slide.layers.find((x) => x.id === t.layerId)
+            if (p && l) {
+              const b = layerBox(l)
+              rects.push({ x: p.x + b.x, y: p.y + b.y, w: b.w, h: b.h })
+            }
+          } else if (t.scope === 'slide') {
+            const p = slideOf(t.slideId)
+            if (p) rects.push({ x: p.x, y: p.y, w: p.w, h: p.h })
+          } else if (t.scope === 'post') placed.filter((p) => p.postId === t.postId).forEach((p) => rects.push({ x: p.x, y: p.y, w: p.w, h: p.h }))
+          else placed.forEach((p) => rects.push({ x: p.x, y: p.y, w: p.w, h: p.h }))
+          const first = rects[0]
+          return (
+            <>
+              {rects.map((r, i) => (
+                <div key={i} className="pointer-events-none absolute overflow-hidden" style={{ left: r.x, top: r.y, width: r.w, height: r.h, outline: `${3 * inv}px dashed ${AGENT.color}`, animation: 'agentPulse 1.4s ease-in-out infinite' }}>
+                  <div className="absolute inset-y-0 w-1/3" style={{ background: `linear-gradient(90deg, transparent, ${AGENT.color}33, transparent)`, animation: 'agentSweep 1.8s linear infinite' }} />
+                </div>
+              ))}
+              {first && (
+                <div className="pointer-events-none absolute flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 font-semibold text-white shadow-lg" style={{ left: first.x, top: first.y - 14 * inv, transform: `translateY(-100%) scale(${inv * 1.4})`, transformOrigin: 'left bottom', background: AGENT.color, fontSize: 12 }}>
+                  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden><path d="M1 1l9 3.6-3.8 1.4L4.6 10z" fill="#fff" /></svg>
+                  {AGENT.name} · {PHASE_LABEL[working.phase]}…
+                </div>
+              )}
+            </>
+          )
+        })()}
+        {flash.map((id) => {
+          const p = placed.find((x) => x.slideId === id)
+          return p ? (
+            <div key={id} className="pointer-events-none absolute" style={{ left: p.x, top: p.y, width: p.w, height: p.h, outline: `${5 * inv}px solid ${AGENT.color}`, animation: 'agentFlash 3.2s ease-out forwards' }}>
+              <span className="absolute left-0 whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold text-white" style={{ top: -14 * inv, transform: `translateY(-100%) scale(${inv * 1.4})`, transformOrigin: 'left bottom', background: AGENT.color }}>{AGENT.name} mudou</span>
+            </div>
+          ) : null
+        })}
 
         {/* Barra do slide escolhido */}
         {selected && (

@@ -4,7 +4,8 @@
  * tamanho real de exportação, então o que se vê é o que se baixa.
  */
 
-export type FormatId = '4x5' | '1x1' | '9x16'
+/** Um formato pronto (`4x5`) ou um tamanho livre (`1200x628px`). */
+export type FormatId = string
 
 export interface Format {
   id: FormatId
@@ -14,10 +15,34 @@ export interface Format {
   height: number
 }
 
-export const FORMATS: Record<FormatId, Format> = {
+export const FORMATS: Record<string, Format> = {
   '4x5': { id: '4x5', label: 'Feed 4:5', use: 'Feed e anúncio', width: 1080, height: 1350 },
   '1x1': { id: '1x1', label: 'Quadrado 1:1', use: 'Feed e carrossel', width: 1080, height: 1080 },
   '9x16': { id: '9x16', label: 'Story 9:16', use: 'Stories e Reels', width: 1080, height: 1920 },
+  '16x9': { id: '16x9', label: 'Paisagem 16:9', use: 'Capa, YouTube e apresentação', width: 1920, height: 1080 },
+  link: { id: 'link', label: 'Link 1.91:1', use: 'Anúncio de link e LinkedIn', width: 1200, height: 628 },
+  '2x3': { id: '2x3', label: 'Vertical 2:3', use: 'Pinterest', width: 1000, height: 1500 },
+}
+
+const CUSTOM = /^(\d{3,4})x(\d{3,4})px$/
+
+/** Tamanho livre como id de formato. Cada lado fica entre 200 e 4000 px. */
+export const customFormat = (width: number, height: number): FormatId => `${Math.min(4000, Math.max(200, Math.round(width)))}x${Math.min(4000, Math.max(200, Math.round(height)))}px`
+
+/** "1080x1350", "1080 × 1350 px" ou o id de um formato pronto; nada que se leia: undefined. */
+export function parseFormat(text: string | undefined): FormatId | undefined {
+  const raw = (text ?? '').trim().toLowerCase()
+  if (raw in FORMATS) return raw
+  const m = /^(\d{3,4})\s*[x×]\s*(\d{3,4})\s*(px)?$/.exec(raw)
+  return m ? customFormat(Number(m[1]), Number(m[2])) : undefined
+}
+
+/** Largura e altura de um formato, pronto ou livre. */
+export function sizeOf(id: FormatId): Format {
+  const known = FORMATS[id]
+  if (known) return known
+  const m = CUSTOM.exec(id)
+  return m ? { id, label: `${m[1]}×${m[2]}`, use: 'Tamanho livre', width: Number(m[1]), height: Number(m[2]) } : FORMATS['4x5']
 }
 
 export const FORMAT_LIST = Object.values(FORMATS)

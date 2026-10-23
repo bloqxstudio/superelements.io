@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { EMPHASIS_FONT, loadFont, loadImage, type ImageMap } from './render'
 import { loadSet, saveSet, assetUrl } from './storage'
 import type { CreativeSet, FormatId, Layer, Post, Slide } from './types'
-import { FORMATS } from './types'
+import { sizeOf } from './types'
 
 /**
  * Estado do editor aberto: o conjunto, o que está selecionado, o histórico para
@@ -37,6 +37,8 @@ interface EditorState {
   undo: () => void
   redo: () => void
   ensureAssets: () => Promise<void>
+  /** Marca o conjunto para salvar sem abrir um passo no histórico (um anexo que subiu, por exemplo). */
+  persist: () => void
   ensureImage: (src: string) => Promise<void>
   flush: () => Promise<void>
 }
@@ -114,6 +116,8 @@ export const useEditor = create<EditorState>()((set, get) => {
       schedule()
     },
 
+    persist: () => schedule(),
+
     ensureImage: async (src) => {
       const { images, set: current } = get()
       if (!src || images.has(src)) return
@@ -174,8 +178,8 @@ export const currentLayer = (s: Pick<EditorState, 'set' | 'postId' | 'slideId' |
 
 /** Troca de formato: as camadas acompanham a proporção nova. */
 export function reformat(post: Post, format: FormatId): Post {
-  const from = FORMATS[post.format]
-  const to = FORMATS[format]
+  const from = sizeOf(post.format)
+  const to = sizeOf(format)
   const fx = to.width / from.width
   const fy = to.height / from.height
   const f = Math.min(fx, fy)
