@@ -1,0 +1,52 @@
+{
+  "nome": "arquitetos-casa-212",
+  "space": { "projeto": "817e7afc-f37b-46b0-95da-860469e8e8aa", "pagina": "30c4d7f3-08cb-4484-b7db-810531151953" },
+  "etapas": [
+    { "k": "Abertura", "t": "Abertura em <em class=\"serif\">tela cheia.</em>" },
+    { "k": "Capítulos", "t": "Capítulos que <em class=\"serif\">empilham.</em>" },
+    { "k": "Decisões", "t": "Texto curto, <em class=\"serif\">lista clara.</em>" },
+    { "k": "Galeria", "t": "Galeria que <em class=\"serif\">desliza.</em>" }
+  ],
+  "tempos": { "hookOut": 2.5, "siteInicio": 2.5, "winIn": 2.9 },
+  "formatos": {
+    "4x5": {
+      "w": 1080, "h": 1350, "kind": "desk",
+      "site": { "largura": 1280, "altura": 900, "escala": 1.25, "mobile": false, "device": "desktop" },
+      "layout": {
+        "r1": 760, "r1x": -360, "r1y": 760, "r2": 520, "r2x": 700, "r2y": 90, "sqx": 930, "sqy": 1190,
+        "brandY": 58, "hookY": 330, "hookFs": 118, "hookH": 420, "endY": 400, "endFs": 126, "endH": 290, "pH": 190,
+        "win": { "x": 60, "y": 190, "w": 960 }, "capY": 960, "capH": 230, "capFs": 68, "progY": 1238, "noteY": 1280
+      },
+      "inicio": 2.0,
+      "passos": [
+        { "ate": 900, "dur": 1.1, "pausa": 0.4, "etapa": 0 },
+        { "ate": 1981, "dur": 1.0, "pausa": 0.3, "etapa": 1 },
+        { "ate": 2881, "dur": 0.8, "pausa": 0.2, "etapa": 1 },
+        { "ate": 3781, "dur": 0.8, "pausa": 0.2, "etapa": 1 },
+        { "ate": 4681, "dur": 0.8, "pausa": 0.2, "etapa": 1 },
+        { "ate": 5581, "dur": 1.0, "pausa": 0.9, "etapa": 2 },
+        { "ate": 6817, "dur": 1.1, "pausa": 0.3, "etapa": 3 },
+        { "ate": 8700, "dur": 3.4, "pausa": 0.5, "etapa": 3, "ease": "linear" }
+      ]
+    },
+    "9x16": {
+      "w": 1080, "h": 1920, "kind": "phone",
+      "site": { "largura": 390, "altura": 844, "escala": 2, "mobile": true, "device": "mobile" },
+      "layout": {
+        "r1": 900, "r1x": -460, "r1y": 1180, "r2": 620, "r2x": 640, "r2y": 140, "sqx": 900, "sqy": 1600,
+        "brandY": 96, "hookY": 560, "hookFs": 132, "hookH": 460, "endY": 540, "endFs": 140, "endH": 320, "pH": 230,
+        "win": { "x": 270, "y": 410, "w": 540 }, "capY": 190, "capH": 220, "capFs": 62, "progY": 366, "noteY": 1676
+      },
+      "inicio": 2.0,
+      "passos": [
+        { "ate": 844, "dur": 1.1, "pausa": 0.4, "etapa": 0 },
+        { "ate": 2065, "dur": 1.5, "pausa": 0.3, "etapa": 1 },
+        { "ate": 2909, "dur": 0.8, "pausa": 0.2, "etapa": 1 },
+        { "ate": 3753, "dur": 0.8, "pausa": 0.2, "etapa": 1 },
+        { "ate": 4597, "dur": 0.8, "pausa": 0.2, "etapa": 1 },
+        { "ate": 5441, "dur": 1.0, "pausa": 1.0, "etapa": 2 },
+        { "ate": 6948, "dur": 1.8, "pausa": 1.2, "etapa": 3 }
+      ]
+    }
+  }
+}

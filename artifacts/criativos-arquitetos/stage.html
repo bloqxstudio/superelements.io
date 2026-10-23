@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Palco · criativos Avence</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600&display=swap">
+<style>
+@font-face{font-family:"Geist Avence";src:url("../../public/brands/avence-studio/fonts/Geist-Medium.woff2") format("woff2");font-weight:500}
+:root{--blue:#2b3cf0;--bl:#8f9bff;--ink:#111;--raised:#1b1b1b;--paper:#f3f1ec;--muted:#66625a}
+*{box-sizing:border-box}html,body{margin:0;background:#111;overflow:hidden}
+#s{position:relative;overflow:hidden;background:var(--ink);color:var(--paper);font-family:"Inter Tight",Arial,sans-serif;isolation:isolate}
+.abs{position:absolute}
+.dots{position:absolute;inset:0;background-image:radial-gradient(rgba(143,155,255,.26) 1.3px,transparent 1.8px);background-size:20px 20px;-webkit-mask-image:radial-gradient(ellipse 80% 60% at 50% 42%,#000 0,transparent 80%);mask-image:radial-gradient(ellipse 80% 60% at 50% 42%,#000 0,transparent 80%)}
+.ring{position:absolute;border:1px solid rgba(143,155,255,.22);border-radius:50%}
+.ring::after{content:"";position:absolute;inset:13%;border:1px solid rgba(143,155,255,.16);border-radius:50%}
+.sq{position:absolute;background:var(--blue)}
+.grain{position:absolute;inset:-100px;pointer-events:none;opacity:.1;z-index:50;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='2' seed='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E")}
+.brand{position:absolute;display:flex;align-items:flex-end;font:500 46px/.82 "Geist Avence",Arial,sans-serif;letter-spacing:-.06em;z-index:20}
+.brand i{width:8px;height:8px;margin-left:4px;background:var(--blue);display:block;flex:none}
+.meta{position:absolute;font:600 13px/1 "Inter Tight",Arial,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--bl);z-index:20;white-space:nowrap}
+.serif{font-family:"Instrument Serif",Georgia,serif;font-style:italic;font-weight:400}
+.hook{position:absolute;left:64px;right:64px;margin:0;font-weight:500;letter-spacing:-.065em;line-height:.93;z-index:10}
+.hook span{display:block;will-change:transform,opacity,filter}
+.hook em{color:var(--bl);font-size:1.12em;line-height:.9}
+.sub{position:absolute;left:68px;font:600 15px/1.4 "Inter Tight";letter-spacing:.14em;text-transform:uppercase;color:rgba(243,241,236,.6);z-index:10}
+.win{position:absolute;z-index:8;will-change:transform,opacity}
+.desk{background:#000;border:1px solid rgba(243,241,236,.16);box-shadow:0 50px 120px -40px rgba(0,0,0,.9)}
+.bar{height:44px;background:var(--raised);display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid rgba(243,241,236,.1)}
+.bar b{width:9px;height:9px;background:rgba(243,241,236,.22);display:block}
+.bar b:first-child{background:var(--blue)}
+.bar u{margin-left:16px;flex:1;max-width:420px;height:24px;background:rgba(243,241,236,.08);text-decoration:none;font:500 13px/24px "Inter Tight";letter-spacing:.02em;color:rgba(243,241,236,.6);padding:0 12px}
+.desk img,.phone img{display:block;width:100%;height:auto;background:#0c0c0b}
+.phone{background:#161616;border:1px solid rgba(243,241,236,.2);padding:10px;box-shadow:0 50px 120px -40px rgba(0,0,0,.95)}
+.phone .scr{position:relative;overflow:hidden}
+
+.cap{position:absolute;z-index:12}
+.cap .k{font:600 14px/1 "Inter Tight";letter-spacing:.16em;text-transform:uppercase;color:var(--bl);display:flex;align-items:center;gap:10px}
+.cap .k::before{content:"";width:8px;height:8px;background:var(--blue);display:block}
+.cap .t{font-weight:500;letter-spacing:-.055em;line-height:.98;margin-top:14px}
+.cap .t em{color:var(--bl);font-size:1.08em}
+.chip{position:absolute;left:0;top:0;right:0;will-change:transform,opacity,filter}
+.prog{position:absolute;display:flex;gap:6px;z-index:12}
+.prog i{display:block;height:3px;background:rgba(243,241,236,.18);overflow:hidden;position:relative}
+.prog i b{position:absolute;inset:0;background:var(--bl);transform-origin:left;transform:scaleX(0)}
+.note{position:absolute;left:64px;font:500 13px/1 "Inter Tight";letter-spacing:.12em;text-transform:uppercase;color:rgba(243,241,236,.5);z-index:12}
+#end{position:absolute;inset:0;z-index:30;background:var(--paper);color:var(--ink);will-change:clip-path;clip-path:inset(100% 0 0 0)}
+#end::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 49.92%,rgba(43,60,240,.16) 50%,transparent 50.08%),linear-gradient(transparent 49.92%,rgba(43,60,240,.1) 50%,transparent 50.08%);background-size:180px 180px}
+#end .ring{border-color:rgba(43,60,240,.22)}#end .ring::after{border-color:rgba(43,60,240,.14)}
+#end .brand{color:var(--ink)}
+#end .meta{color:var(--blue)}
+.h2{position:absolute;left:64px;right:64px;margin:0;font-weight:500;letter-spacing:-.07em;line-height:.92}
+.h2 span{display:block}.h2 em{color:var(--blue);font-size:1.1em}
+.p2{position:absolute;left:68px;margin:0;font-size:29px;line-height:1.3;letter-spacing:-.01em;color:#3a3833;max-width:760px}
+.cta{position:absolute;left:68px;display:flex;align-items:center;gap:22px}
+.btn{display:flex;align-items:center;gap:14px;height:76px;padding:0 34px;background:var(--blue);color:#fff;font:600 19px/1 "Inter Tight";letter-spacing:.12em;text-transform:uppercase}
+.btn::after{content:"→";font-size:26px;letter-spacing:0}
+.handle{font:500 26px/1.2 "Inter Tight";letter-spacing:-.02em;color:var(--ink)}
+.handle small{display:block;font:600 13px/1 "Inter Tight";letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.rise{will-change:transform,opacity,filter}
+</style></head>
+<body>
+<div id="s">
+  <div class="dots"></div>
+  <div class="ring" id="r1"></div><div class="ring" id="r2"></div>
+  <div class="sq" id="sq"></div>
+  <div class="brand" id="brand">avence<i></i></div>
+  <div class="meta" id="meta">Sites para arquitetos</div>
+  <h1 class="hook" id="hook"><span>Site de arquiteto</span><span>tem que parecer</span><span><em class="serif">projeto.</em></span></h1>
+  <div class="sub" id="sub">Exemplo · Casa 212, projeto fictício</div>
+  <div class="win" id="win"></div>
+  <div class="cap" id="cap"></div>
+  <div class="prog" id="prog"></div>
+  <div class="note" id="note">Projeto de exemplo · fotos ilustrativas</div>
+  <div id="end">
+    <div class="ring" id="er1"></div><div class="ring" id="er2"></div>
+    <div class="brand" id="ebrand">avence<i></i></div>
+    <div class="meta" id="emeta">Sites para arquitetos</div>
+    <h2 class="h2 rise" id="eh"><span>Seu portfólio em</span><span><em class="serif">tela cheia.</em></span></h2>
+    <p class="p2 rise" id="ep">Foto grande, texto curto e movimento que conduz o olhar até o contato. Sites em WordPress e Elementor para escritórios de arquitetura.</p>
+    <div class="cta rise" id="ecta"><div class="btn">Peça uma prévia</div><div class="handle"><small>Chame no Direct</small>@avencestudio</div></div>
+    <div class="note rise" id="enote" style="color:#66625a">São Leopoldo · RS</div>
+  </div>
+  <div class="grain" id="grain"></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id)
+const clamp = (x) => Math.max(0, Math.min(1, x))
+const outQuart = (x) => 1 - Math.pow(1 - x, 4)
+const outExpo = (x) => (x === 1 ? 1 : 1 - Math.pow(2, -10 * x))
+const inOut = (x) => (x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2)
+const prog = (t, t0, d, f = outQuart) => f(clamp((t - t0) / d))
+let C, img
+function rise(el, p, dy = 40, blur = 10) { el.style.opacity = p; el.style.transform = `translateY(${(1 - p) * dy}px)`; el.style.filter = p < 1 ? `blur(${(1 - p) * blur}px)` : 'none' }
+
+window.configurar = (cfg) => {
+  C = cfg
+  const s = $('s'); s.style.width = cfg.w + 'px'; s.style.height = cfg.h + 'px'
+  const L = cfg.layout
+  // fundo
+  const set = (el, o) => Object.assign(el.style, o)
+  set($('r1'), { width: L.r1 + 'px', height: L.r1 + 'px', left: L.r1x + 'px', top: L.r1y + 'px' })
+  set($('r2'), { width: L.r2 + 'px', height: L.r2 + 'px', left: L.r2x + 'px', top: L.r2y + 'px' })
+  set($('sq'), { width: '70px', height: '70px', left: L.sqx + 'px', top: L.sqy + 'px' })
+  set($('er1'), { width: L.r1 + 'px', height: L.r1 + 'px', left: L.r1x + 'px', top: L.r1y + 'px' })
+  set($('er2'), { width: L.r2 + 'px', height: L.r2 + 'px', left: L.r2x + 'px', top: L.r2y + 'px' })
+  for (const id of ['brand', 'ebrand']) set($(id), { left: '64px', top: L.brandY + 'px' })
+  for (const id of ['meta', 'emeta']) set($(id), { right: '64px', top: L.brandY + 8 + 'px' })
+  set($('hook'), { top: L.hookY + 'px', fontSize: L.hookFs + 'px' })
+  set($('sub'), { top: L.hookY + L.hookH + 'px' })
+  set($('eh'), { top: L.endY + 'px', fontSize: L.endFs + 'px' })
+  set($('ep'), { top: L.endY + L.endH + 'px' })
+  set($('ecta'), { top: L.endY + L.endH + L.pH + 'px' })
+  set($('enote'), { top: cfg.h - 120 + 'px' })
+  set($('note'), { top: L.noteY + 'px' })
+  // janela
+  const w = $('win')
+  if (cfg.kind === 'desk') {
+    w.className = 'win desk'; w.innerHTML = '<div class="bar"><b></b><b></b><b></b><u>seuescritorio.com.br</u></div><img id="shot">'
+    set(w, { left: L.win.x + 'px', top: L.win.y + 'px', width: L.win.w + 'px' })
+  } else {
+    w.className = 'win phone'; w.innerHTML = '<div class="scr"><img id="shot"></div>'
+    set(w, { left: L.win.x + 'px', top: L.win.y + 'px', width: L.win.w + 'px', borderRadius: '66px' })
+    w.querySelector('.scr').style.borderRadius = '56px'
+  }
+  img = $('shot')
+  // legendas
+  const cap = $('cap'); set(cap, { left: '64px', top: L.capY + 'px', width: cfg.w - 128 + 'px', height: L.capH + 'px' })
+  cap.innerHTML = cfg.etapas.map((e) => `<div class="chip"><div class="k">${e.n} / ${String(cfg.etapas.length).padStart(2, '0')} · ${e.k}</div><div class="t" style="font-size:${L.capFs}px">${e.t}</div></div>`).join('')
+  const pr = $('prog'); set(pr, { left: '64px', top: L.progY + 'px', width: cfg.w - 128 + 'px' })
+  pr.innerHTML = cfg.etapas.map(() => '<i style="flex:1"><b></b></i>').join('')
+  return true
+}
+
+window.quadro = async (t, base64) => {
+  const L = C.layout, E = C.etapas
+  if (base64) { img.src = 'data:image/jpeg;base64,' + base64; await img.decode().catch(() => {}) }
+  // fundo vivo
+  $('r1').style.rotate = t * 5 + 'deg'; $('r2').style.rotate = -t * 7 + 'deg'
+  $('er1').style.rotate = t * 5 + 'deg'; $('er2').style.rotate = -t * 7 + 'deg'
+  const sqp = 0.5 + 0.5 * Math.sin(t * 1.6)
+  $('sq').style.transform = `rotate(${45 * sqp}deg) scale(${1 - 0.28 * sqp})`
+  $('grain').style.transform = `translate(${((t * 12) | 0) % 5 * -22}px, ${((t * 12) | 0) % 7 * 14}px)`
+  const bp = prog(t, 0.1, 0.9)
+  rise($('brand'), bp, 14, 6); rise($('meta'), bp, 14, 6)
+
+  // gancho
+  const hs = $('hook').children
+  const hOut = prog(t, C.t.hookOut, 0.6, inOut)
+  for (let i = 0; i < 3; i++) {
+    const p = prog(t, 0.35 + i * 0.28, 0.9, outExpo)
+    rise(hs[i], p * (1 - hOut), 56, 14)
+    if (hOut > 0) hs[i].style.transform = `translateY(${-hOut * 90}px)`
+  }
+  const sp = prog(t, 1.5, 0.8) * (1 - hOut); rise($('sub'), sp, 14, 4)
+  $('hook').style.visibility = $('sub').style.visibility = t > C.t.hookOut + 0.7 ? 'hidden' : 'visible'
+
+  // janela
+  const wIn = prog(t, C.t.winIn, 1.1, outExpo), wOut = prog(t, C.t.winOut, 0.8, inOut)
+  const w = $('win'), sc = 0.93 + 0.07 * wIn - 0.05 * wOut
+  w.style.opacity = wIn * (1 - wOut)
+  w.style.transform = `translateY(${(1 - wIn) * 160 + wOut * 120}px) scale(${sc})`
+  w.style.filter = wIn < 1 ? `blur(${(1 - wIn) * 10}px)` : 'none'
+  w.style.visibility = (wIn <= 0 || wOut >= 1) ? 'hidden' : 'visible'
+
+  // legendas por etapa
+  const chips = $('cap').children, segs = $('prog').children
+  const capOn = prog(t, C.t.winIn + 0.5, 0.6) * (1 - prog(t, C.t.winOut - 0.2, 0.5))
+  $('prog').style.opacity = capOn; $('note').style.opacity = capOn * 0.9
+  E.forEach((e, i) => {
+    const pin = prog(t, e.t0, 0.6, outExpo), pout = prog(t, e.t1 - 0.35, 0.35, inOut)
+    const p = pin * (1 - pout)
+    chips[i].style.opacity = p * capOn
+    chips[i].style.transform = `translateY(${(1 - pin) * 34 - pout * 18}px)`
+    chips[i].style.filter = p < 1 ? `blur(${(1 - p) * 8}px)` : 'none'
+    segs[i].firstChild.style.transform = `scaleX(${clamp((t - e.t0) / (e.t1 - e.t0))})`
+  })
+
+  // cartão final
+  const eIn = prog(t, C.t.endIn, 1.0, inOut)
+  $('end').style.clipPath = `inset(${(1 - eIn) * 100}% 0 0 0)`
+  const e0 = C.t.endIn + 0.7
+  rise($('eh'), prog(t, e0, 0.9, outExpo), 50, 12)
+  rise($('ep'), prog(t, e0 + 0.35, 0.8, outExpo), 30, 8)
+  rise($('ecta'), prog(t, e0 + 0.7, 0.8, outExpo), 30, 8)
+  rise($('enote'), prog(t, e0 + 1.0, 0.8), 14, 4)
+  await new Promise((r) => requestAnimationFrame(() => r()))
+  return true
+}
+</script></body></html>

@@ -34,3 +34,21 @@ dist-ssr
 
 # Prospecção (npm run prospectar e a tela /prospeccao): contatos de empresas e pessoas, ficam só neste computador
 /data/prospeccao/
+
+# Criativos de campanha (artifacts/criativos-arquitetos): mídia e zips ficam só neste computador; scripts e textos seguem no git
+*.zip
+/artifacts/criativos-arquitetos/estaticos/
+/artifacts/criativos-arquitetos/videos/
+/artifacts/criativos-arquitetos/cases/
+/artifacts/criativos-arquitetos/comercial/
+/artifacts/criativos-arquitetos/frames/
+/artifacts/criativos-arquitetos/frames-pb-*/
+/artifacts/criativos-arquitetos/capturas/
+/artifacts/criativos-arquitetos/capturas-cases/
+/artifacts/criativos-arquitetos/quadros/
+/artifacts/criativos-arquitetos/*.mp4
+/artifacts/criativos-arquitetos/*.png
+/artifacts/criativos-arquitetos/log-*.txt
+/artifacts/criativos-arquitetos/comercial-e-processbase/
+/artifacts/criativos-arquitetos/posts-feed-cases/
+/artifacts/criativos-arquitetos/criativos-arquitetos-avence/

@@ -1,0 +1,10 @@
+[
+  { "id": "v1", "kick": "Escritórios de arquitetura", "l1": "Seu portfólio", "l2": "vende ou só enfeita?", "fs": 124,
+    "lede": "Transformamos seu portfólio em um site que mostra cada projeto em tela cheia e leva o cliente direto ao seu WhatsApp." },
+  { "id": "v2", "kick": "Para escritórios de arquitetura", "l1": "Projeto bom", "l2": "chama cliente.", "fs": 132,
+    "lede": "Cases em tela cheia e um caminho direto até o seu WhatsApp. Mostre o trabalho e receba mais conversas." },
+  { "id": "v3", "kick": "Para escritórios de arquitetura", "l1": "Mais orçamento.", "l2": "Menos explicação.", "fs": 124,
+    "lede": "O site apresenta o escritório e os cases por você. O cliente chega ao WhatsApp já sabendo quem você é." },
+  { "id": "v4", "kick": "Para escritórios de arquitetura", "l1": "Seu escritório", "l2": "pronto para vender.", "fs": 124,
+    "lede": "Site com acabamento de estúdio para apresentar seus projetos. Chame no Direct e veja a prévia antes de fechar." }
+]

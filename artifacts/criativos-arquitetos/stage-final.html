@@ -1,0 +1,94 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Palco final · arquitetos</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600&display=swap">
+<style>
+@font-face{font-family:"Geist Avence";src:url("../../public/brands/avence-studio/fonts/Geist-Medium.woff2") format("woff2");font-weight:500}
+:root{--blue:#2b3cf0;--bl:#8f9bff;--ink:#111;--raised:#1b1b1b;--paper:#f3f1ec;--muted:#66625a}
+*{box-sizing:border-box}html,body{margin:0;background:#090a10;font-family:"Inter Tight",Arial,sans-serif}
+body{display:grid;gap:48px;justify-content:center;padding:48px}
+.post{position:relative;width:1080px;height:1350px;overflow:hidden;isolation:isolate;background:var(--ink);color:var(--paper)}
+.post.paper{background:var(--paper);color:var(--ink)}
+.post::after{content:"";position:absolute;inset:-80px;z-index:60;pointer-events:none;opacity:.11;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='2' seed='9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E")}
+.dots{position:absolute;inset:0;z-index:-2;background-image:radial-gradient(rgba(143,155,255,.24) 1.3px,transparent 1.8px);background-size:20px 20px;-webkit-mask-image:radial-gradient(ellipse 85% 60% at 60% 70%,#000,transparent 85%)}
+.paper .dots{display:none}
+.grid{position:absolute;inset:0;z-index:-2;display:none;background:linear-gradient(90deg,transparent 49.92%,rgba(43,60,240,.14) 50%,transparent 50.08%),linear-gradient(transparent 49.92%,rgba(43,60,240,.09) 50%,transparent 50.08%);background-size:180px 180px}
+.paper .grid{display:block}
+.ring{position:absolute;z-index:-1;border:1px solid rgba(143,155,255,.2);border-radius:50%}.ring::after{content:"";position:absolute;inset:13%;border:1px solid rgba(143,155,255,.14);border-radius:50%}
+.paper .ring{border-color:rgba(43,60,240,.2)}.paper .ring::after{border-color:rgba(43,60,240,.12)}
+.brand{position:absolute;left:64px;top:58px;display:flex;align-items:flex-end;font:500 46px/.82 "Geist Avence",Arial,sans-serif;letter-spacing:-.06em;z-index:20}
+.brand i{width:8px;height:8px;margin-left:4px;background:var(--blue);display:block}
+.meta{position:absolute;right:64px;top:66px;font:600 13px/1 "Inter Tight";letter-spacing:.16em;text-transform:uppercase;color:var(--bl);z-index:20}
+.paper .meta{color:var(--blue)}
+.kick{position:absolute;left:68px;font:600 15px/1 "Inter Tight";letter-spacing:.16em;text-transform:uppercase;color:var(--bl);display:flex;align-items:center;gap:12px;z-index:10}
+.kick::before{content:"";width:9px;height:9px;background:var(--blue)}
+.paper .kick{color:var(--blue)}
+h1,h2{position:absolute;left:64px;margin:0;font-weight:500;letter-spacing:-.07em;line-height:.92;z-index:10}
+h1 em,h2 em{font-family:"Instrument Serif",Georgia,serif;font-style:italic;font-weight:400;color:var(--bl);font-size:1.1em;line-height:.88}
+.paper h1 em,.paper h2 em{color:var(--blue)}
+.lede{position:absolute;left:68px;margin:0;font-size:28px;line-height:1.32;letter-spacing:-.012em;color:rgba(243,241,236,.74);z-index:10}
+.paper .lede{color:#3a3833}
+.btn{position:absolute;left:68px;display:flex;align-items:center;gap:14px;height:76px;padding:0 34px;background:var(--blue);color:#fff;font:600 19px/1 "Inter Tight";letter-spacing:.12em;text-transform:uppercase;z-index:30}
+.btn::after{content:"→";font-size:26px;letter-spacing:0}
+.chips{position:absolute;left:68px;display:flex;gap:10px;flex-wrap:wrap;z-index:30}
+.chips span{font:600 13px/1 "Inter Tight";letter-spacing:.12em;text-transform:uppercase;padding:12px 14px;border:1px solid rgba(243,241,236,.28);color:rgba(243,241,236,.86)}
+.paper .chips span{border-color:rgba(17,17,17,.3);color:#222}
+/* mockups */
+.lap{position:absolute;background:#000;border:1px solid rgba(243,241,236,.18);box-shadow:0 60px 120px -30px rgba(0,0,0,.85),0 0 0 1px rgba(0,0,0,.4);z-index:5}
+.paper .lap{border-color:rgba(17,17,17,.2);box-shadow:0 60px 110px -40px rgba(17,17,17,.55)}
+.lap .bar{height:38px;background:var(--raised);display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid rgba(243,241,236,.1)}
+.lap .bar b{width:9px;height:9px;background:rgba(243,241,236,.22)}.lap .bar b:first-child{background:var(--blue)}
+.lap .bar u{margin-left:14px;height:22px;width:320px;background:rgba(243,241,236,.08);text-decoration:none;font:500 12px/22px "Inter Tight";color:rgba(243,241,236,.55);padding:0 12px}
+.lap img{display:block;width:100%;height:auto}
+.ph{position:absolute;background:#161616;border:1px solid rgba(243,241,236,.22);padding:9px;box-shadow:0 60px 110px -30px rgba(0,0,0,.9);z-index:6}
+.paper .ph{box-shadow:0 60px 100px -40px rgba(17,17,17,.6)}
+.ph img{display:block;width:100%;height:auto}.ph .s{overflow:hidden}
+.tag{position:absolute;z-index:40;display:flex;align-items:center;gap:10px;background:var(--paper);color:var(--ink);font:600 14px/1 "Inter Tight";letter-spacing:.1em;text-transform:uppercase;padding:13px 16px}
+.tag::before{content:"";width:9px;height:9px;background:var(--blue);flex:none}
+.tag.b{background:var(--blue);color:#fff}.tag.b::before{background:#fff}
+.row{position:absolute;left:64px;right:64px;display:flex;gap:30px;align-items:baseline;padding:30px 0;border-top:2px solid var(--ink);z-index:10}
+.row i{font:600 15px/1 "Inter Tight";letter-spacing:.14em;color:var(--blue);font-style:normal;width:40px}
+.row p{margin:0;font-size:46px;line-height:1.06;letter-spacing:-.045em;font-weight:500}
+.chk{position:absolute;left:68px;margin:0;padding:0;list-style:none;z-index:10}
+.chk li{display:flex;gap:16px;align-items:center;font:500 31px/1.2 "Inter Tight";letter-spacing:-.025em;padding:18px 0;border-top:1px solid rgba(243,241,236,.18)}
+.chk li::before{content:"";width:16px;height:16px;background:var(--blue);flex:none}
+.paper .chk li{border-top-color:rgba(17,17,17,.2)}
+.foot{position:absolute;left:68px;font:600 13px/1 "Inter Tight";letter-spacing:.14em;text-transform:uppercase;color:rgba(243,241,236,.5);z-index:30}
+.paper .foot{color:var(--muted)}
+
+body{display:block;padding:0}
+.rise{will-change:transform,opacity,filter}
+.lap img{background:#0c0c0b}
+</style></head><body>
+<article class="post" id="p">
+  <div class="dots"></div><div class="grid"></div><div class="ring" id="r1" style="width:820px;height:820px;right:-380px;top:520px"></div><div class="ring" id="r2" style="width:560px;height:560px;left:-260px;top:900px"></div>
+  <div class="brand rise" id="brand">avence<i></i></div>
+  <div class="kick rise" id="kick" style="top:176px">Para escritórios de arquitetura</div>
+  <h1 id="h" style="top:226px;font-size:124px"><span class="rise" style="display:block">Seu site tem que</span><span class="rise" style="display:block"><em>fechar projeto.</em></span></h1>
+  <p class="lede rise" id="lede" style="top:500px;width:900px">Mostre seus projetos em tela cheia, apresente o escritório com autoridade e leve o cliente direto ao seu WhatsApp.</p>
+  <div class="lap rise" id="lap" style="left:64px;top:660px;width:940px"><div class="bar"><b></b><b></b><b></b><u>seuescritorio.com.br/casa-212</u></div><img id="shot" src="capturas/d-abertura.png"></div>
+  <div class="ph rise" id="ph" style="left:790px;top:830px;width:260px;border-radius:46px;transform:rotate(3deg)"><div class="s" style="border-radius:38px"><img src="capturas/m-arquitetura.png"></div></div>
+</article>
+<script>
+const $=(i)=>document.getElementById(i),clamp=(x)=>Math.max(0,Math.min(1,x)),oq=(x)=>1-Math.pow(1-x,4),ox=(x)=>x===1?1:1-Math.pow(2,-10*x)
+const prog=(t,a,d,f=oq)=>f(clamp((t-a)/d))
+function rise(el,p,dy=40,b=10){el.style.opacity=p;el.style.transform='translateY('+(1-p)*dy+'px)';el.style.filter=p<1?'blur('+(1-p)*b+'px)':'none'}
+let E=[]
+window.configurar=(cfg)=>{
+  const c=cfg.copy
+  $('p').classList.toggle('paper',cfg.tema==='claro')
+  $('kick').textContent=c.kick
+  const hs=$('h').children;hs[0].textContent=c.l1;hs[1].innerHTML='<em>'+c.l2+'</em>'
+  $('h').style.fontSize=(c.fs||124)+'px'
+  $('lede').textContent=c.lede
+  return true}
+window.quadro=async(t,b64)=>{
+  if(b64){const im=$('shot');im.src='data:image/jpeg;base64,'+b64;await im.decode().catch(()=>{})}
+  $('r1').style.rotate=t*5+'deg';$('r2').style.rotate=-t*7+'deg'
+  rise($('brand'),prog(t,0.05,0.8),14,6);rise($('kick'),prog(t,0.2,0.8),16,6)
+  const hs=$('h').children;rise(hs[0],prog(t,0.3,1.0,ox),60,14);rise(hs[1],prog(t,0.55,1.0,ox),60,14)
+  rise($('lede'),prog(t,1.0,0.9),30,8);
+  const lp=prog(t,0.7,1.2,ox);const l=$('lap');l.style.opacity=lp;l.style.transform='perspective(2400px) translateY('+(1-lp)*180+'px) rotateX('+((1-lp)*9+3*Math.sin(t*.8)*lp)+'deg) rotateY('+(2.5*Math.sin(t*.6+1)*lp)+'deg)';l.style.filter=lp<1?'blur('+(1-lp)*10+'px)':'none'
+  const pp=prog(t,1.6,1.1,ox);const p=$('ph');p.style.opacity=pp;p.style.transform='rotate('+(3+1.5*Math.sin(t*.7))+'deg) translateY('+((1-pp)*140+10*Math.sin(t*1.1)*pp)+'px)'
+  
+  
+  await new Promise((r)=>requestAnimationFrame(()=>r()));return true}
+</script></body></html>

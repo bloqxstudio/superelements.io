@@ -5,6 +5,7 @@ import { componentTagger } from "lovable-tagger";
 import { spaceBridge } from "./scripts/space/vitePlugin";
 import { spaceChat } from "./scripts/space/chatPlugin";
 import { prospecting } from "./scripts/prospects/vitePlugin";
+import { criativos } from "./scripts/criativos/vitePlugin";
 
 // Login automático do dev server (ver AuthContext). Sem prefixo VITE_ de propósito:
 // algumas dependências leem import.meta.env inteiro, o que colaria toda VITE_* no bundle.
@@ -54,6 +55,7 @@ export default defineConfig(({ command, mode }) => ({
     spaceChat(),
     // Prospecção: busca empresas e lê os sites delas (só no dev, tela /prospeccao)
     prospecting(),
+    criativos(),
   ].filter(Boolean),
   resolve: {
     alias: {

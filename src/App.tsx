@@ -15,6 +15,8 @@ import Agents from "@/pages/Agents";
 import AgentWorker from "@/pages/AgentWorker";
 import Prospects from "@/pages/Prospects";
 import Skills from "@/pages/Skills";
+import Creatives from "@/pages/Creatives";
+import { CreativeEditor } from "@/features/criativos/Editor";
 import WordPressCallback from "@/pages/WordPressCallback";
 import PageApproval from "@/pages/PageApproval";
 import ProjectInvite from "@/pages/ProjectInvite";
@@ -100,6 +102,9 @@ function App() {
                 <Route path="agentes" element={<Agents />} />
                 {/* As skills do chat dos agentes: padrão, da equipe e as suas */}
                 <Route path="skills" element={<Skills />} />
+                {/* Posts de Instagram na marca de cada projeto: editor de camadas e exportação */}
+                <Route path="criativos" element={<Creatives />} />
+                <Route path="criativos/:setId" element={<CreativeEditor />} />
                 {/* CRM da equipe: funil, clientes, equipe e convites; só para quem é de uma equipe */}
                 <Route path="crm" element={<CrmGate><CrmOpportunities /></CrmGate>} />
                 <Route path="crm/clientes" element={<CrmGate><CrmClients /></CrmGate>} />
