@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { Loader2, Send, Sparkles, Square, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { ConnectorPrompt } from '@/features/space/chat/ConnectorPrompt'
 import { requestEdit, type EditScope } from './ai'
 import { applyOps } from './applyOps'
 import { currentLayer, currentPost, currentSlide, useEditor } from './store'
@@ -110,10 +111,15 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   }
 
   if (available === false)
-    return (
+    return import.meta.env.DEV ? (
       <div className="space-y-2 p-4 text-sm text-gray-600">
         <p className="font-semibold text-gray-900">IA indisponível</p>
-        <p>A conversa usa o Claude Code desta máquina, pelo servidor de desenvolvimento do app. Abra o app local (<code>npm run dev</code>) com o Claude Code instalado.</p>
+        <p>O servidor de desenvolvimento não achou o Claude Code nesta máquina. Instale-o e recarregue.</p>
+      </div>
+    ) : (
+      <div className="min-h-0 flex-1 overflow-y-auto" data-scroll>
+        <p className="px-3.5 pt-3 text-xs text-gray-600">A conversa usa o Claude Code do seu computador, pela mesma ponte do chat do canvas. É a conexão que você já fez nos projetos: se ainda não fez, siga os passos.</p>
+        <ConnectorPrompt />
       </div>
     )
 

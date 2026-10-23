@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { startCreativeLink, useCreativeLink } from '@/features/criativos/link'
 import { useChat } from '@/features/space/chat/chatStore'
 import { connectorChannel, type ChannelStatus } from './channel'
 
@@ -164,10 +165,13 @@ export const useConnector = create<ConnectorState>()((set, get) => {
       const channel = connectorChannel(base, live.code, (status) => {
         set({ status, error: status === 'failed' ? 'O conector recusou a ligação. Feche a janela dele, rode de novo e cole o código novo.' : undefined })
         // Sem conector, o chat volta para a tela de ligar
-        if (status !== 'connected') useChat.setState({ connected: false })
+        if (status !== 'connected') {
+          useChat.setState({ connected: false })
+          useCreativeLink.setState({ connected: false })
+        }
       })
       const [{ startSpaceBridge }, { startSpaceChat }] = await Promise.all([import('@/features/space/bridge/client'), import('@/features/space/chat/connection')])
-      stops = [startSpaceBridge(channel), startSpaceChat(channel), () => channel.close()]
+      stops = [startSpaceBridge(channel), startSpaceChat(channel), startCreativeLink(channel), () => channel.close()]
       linked = live
       set({ pairing: live, error: undefined })
       return true

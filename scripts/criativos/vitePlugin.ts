@@ -1,115 +1,78 @@
-import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
-import type { PlanRequest } from '../../src/features/criativos/plan.ts'
 import type { EditRequest } from '../../src/features/criativos/edit.ts'
+import type { PlanRequest } from '../../src/features/criativos/plan.ts'
+import { CREATIVE_EVENTS, type CreativeCall, type CreativeResult } from '../../src/features/criativos/protocol.ts'
 import { claudeAvailable } from './claude.ts'
 import { editCreatives } from './edit.ts'
 import { planPosts } from './plan.ts'
 
 /**
- * Só no servidor de desenvolvimento, na mesma origem do app:
- *   POST /__criativos/plano   PlanRequest → { posts } (Claude Code desta máquina, `plan.ts`)
- *   POST /__criativos/editar  EditRequest → { reply, ops } (conversa do editor; o app aplica as operações)
- *   GET  /__criativos/status  → { ia }; true se o Claude Code desta máquina foi encontrado
+ * A IA dos criativos, no mesmo canal do chat do Space: o websocket do Vite no
+ * `npm run dev` e o conector (`scripts/connector/conector.ts`) no app publicado.
+ * A aba manda `criativos:chamar` com um id e recebe `criativos:resposta` com o
+ * mesmo id; `criativos:parar` cancela. O Claude Code roda nesta máquina, sem
+ * ferramentas, e só devolve texto e operações (`edit.ts`, `plan.ts`).
  */
 
-const send = (res: ServerResponse, status: number, body: unknown) => {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
-  res.end(JSON.stringify(body))
-}
-
-const readJson = (req: IncomingMessage) =>
-  new Promise<unknown>((resolve, reject) => {
-    const chunks: Buffer[] = []
-    let size = 0
-    req.on('data', (c: Buffer) => {
-      size += c.length
-      if (size > 2_500_000) reject(new Error('Pedido grande demais'))
-      else chunks.push(c)
-    })
-    req.on('end', () => {
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'))
-      } catch {
-        reject(new Error('Pedido inválido'))
-      }
-    })
-    req.on('error', reject)
-  })
-
-const sameOrigin = (req: IncomingMessage) => {
-  const site = req.headers['sec-fetch-site']
-  if (site && site !== 'same-origin' && site !== 'none') return false
-  const origin = req.headers.origin
-  if (!origin) return true
-  try {
-    return new URL(origin).host === req.headers.host
-  } catch {
-    return false
-  }
-}
-
 const FORMATS = ['4x5', '1x1', '9x16']
+
+const planInput = (body: Partial<PlanRequest>): PlanRequest => ({
+  brief: String(body.brief ?? '').slice(0, 3000),
+  format: FORMATS.includes(String(body.format)) ? (body.format as PlanRequest['format']) : '4x5',
+  slides: Math.min(10, Math.max(1, Number(body.slides) || 5)),
+  posts: Math.min(4, Math.max(1, Number(body.posts) || 1)),
+  cases: Array.isArray(body.cases) ? body.cases.slice(0, 12) : [],
+})
+
+const editInput = (body: Partial<EditRequest>): EditRequest => ({
+  message: String(body.message ?? '').slice(0, 4000),
+  scope: ['layer', 'slide', 'post', 'set'].includes(String(body.scope)) ? (body.scope as EditRequest['scope']) : 'set',
+  postId: body.postId ? String(body.postId) : undefined,
+  slideId: body.slideId ? String(body.slideId) : undefined,
+  layerId: body.layerId ? String(body.layerId) : undefined,
+  brand: body.brand as EditRequest['brand'],
+  posts: body.posts ?? [],
+  fonts: Array.isArray(body.fonts) ? body.fonts.slice(0, 60).map(String) : [],
+  images: Array.isArray(body.images) ? body.images.slice(0, 80) : [],
+  cases: Array.isArray(body.cases) ? body.cases.slice(0, 12) : [],
+  image: typeof body.image === 'string' && body.image.length < 2_000_000 ? body.image : undefined,
+  history: Array.isArray(body.history) ? body.history.slice(-6) : [],
+})
 
 export const criativos = (): Plugin => ({
   name: 'superelements-criativos',
   apply: 'serve',
   configureServer(server) {
-    server.middlewares.use('/__criativos', (req, res) => {
-      const route = new URL(req.url ?? '/', 'http://localhost').pathname.replace(/\/+$/, '') || '/'
+    const runs = new Map<string, AbortController>()
+    const send = (result: CreativeResult) => server.ws.send(CREATIVE_EVENTS.result, result)
+
+    server.ws.on(CREATIVE_EVENTS.hello, () => server.ws.send(CREATIVE_EVENTS.status, { ia: claudeAvailable() }))
+
+    server.ws.on(CREATIVE_EVENTS.call, (call: CreativeCall) => {
       void (async () => {
-        if (!sameOrigin(req)) return send(res, 403, { error: 'Só o app pode pedir isto' })
-        if (route === '/status' && req.method === 'GET') return send(res, 200, { ia: claudeAvailable() })
-        if (route === '/editar' && req.method === 'POST') {
-          const body = (await readJson(req)) as Partial<EditRequest>
-          const input: EditRequest = {
-            message: String(body.message ?? '').slice(0, 4000),
-            scope: ['layer', 'slide', 'post', 'set'].includes(String(body.scope)) ? (body.scope as EditRequest['scope']) : 'set',
-            postId: body.postId ? String(body.postId) : undefined,
-            slideId: body.slideId ? String(body.slideId) : undefined,
-            layerId: body.layerId ? String(body.layerId) : undefined,
-            brand: body.brand as EditRequest['brand'],
-            posts: body.posts ?? [],
-            fonts: Array.isArray(body.fonts) ? body.fonts.slice(0, 60).map(String) : [],
-            images: Array.isArray(body.images) ? body.images.slice(0, 80) : [],
-            cases: Array.isArray(body.cases) ? body.cases.slice(0, 12) : [],
-            image: typeof body.image === 'string' && body.image.length < 2_000_000 ? body.image : undefined,
-            history: Array.isArray(body.history) ? body.history.slice(-6) : [],
-          }
-          if (!input.message.trim()) return send(res, 400, { error: 'Escreva o que quer mudar.' })
-          const controller = new AbortController()
-          res.on('close', () => {
-            if (!res.writableFinished) controller.abort()
-          })
-          try {
-            return send(res, 200, await editCreatives(input, controller.signal))
-          } catch (error) {
-            if (controller.signal.aborted) return res.end()
-            return send(res, 422, { error: error instanceof Error ? error.message : String(error) })
-          }
+        const id = String(call?.id ?? '')
+        if (!id) return
+        const controller = new AbortController()
+        runs.set(id, controller)
+        try {
+          if (call.kind === 'edit') {
+            const input = editInput(call.request as Partial<EditRequest>)
+            if (!input.message.trim()) throw new Error('Escreva o que quer mudar.')
+            send({ id, ok: true, data: await editCreatives(input, controller.signal) })
+          } else if (call.kind === 'plan') {
+            send({ id, ok: true, data: await planPosts(planInput(call.request as Partial<PlanRequest>), controller.signal) })
+          } else throw new Error('Pedido desconhecido.')
+        } catch (error) {
+          if (controller.signal.aborted) return
+          send({ id, ok: false, error: error instanceof Error ? error.message : String(error) })
+        } finally {
+          runs.delete(id)
         }
-        if (route === '/plano' && req.method === 'POST') {
-          const body = (await readJson(req)) as Partial<PlanRequest>
-          const input: PlanRequest = {
-            brief: String(body.brief ?? '').slice(0, 3000),
-            format: FORMATS.includes(String(body.format)) ? (body.format as PlanRequest['format']) : '4x5',
-            slides: Math.min(10, Math.max(1, Number(body.slides) || 5)),
-            posts: Math.min(4, Math.max(1, Number(body.posts) || 1)),
-            cases: Array.isArray(body.cases) ? body.cases.slice(0, 12) : [],
-          }
-          const controller = new AbortController()
-          res.on('close', () => {
-            if (!res.writableFinished) controller.abort()
-          })
-          try {
-            return send(res, 200, await planPosts(input, controller.signal))
-          } catch (error) {
-            if (controller.signal.aborted) return res.end()
-            return send(res, 422, { error: error instanceof Error ? error.message : String(error) })
-          }
-        }
-        return send(res, 404, { error: 'Não existe' })
-      })().catch((error) => send(res, 500, { error: error instanceof Error ? error.message : String(error) }))
+      })()
+    })
+
+    server.ws.on(CREATIVE_EVENTS.stop, (data: { id?: string }) => {
+      runs.get(String(data?.id ?? ''))?.abort()
     })
   },
 })

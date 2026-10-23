@@ -2,21 +2,11 @@ import { AV_CASES } from '@/features/avence/cases'
 import type { PlanRequest, PlanResponse, FormatKey } from './plan'
 import { buildPost } from './templates'
 import type { EditRequest, EditResponse } from './edit'
+import { callAi } from './link'
 import { LIBRARY } from './library'
 import { drawSlide, type ImageMap } from './render'
 import type { CreativeSet, Post, SetBrand, Slide } from './types'
 import { FORMATS } from './types'
-
-/** A IA roda no Claude Code desta máquina, pelo servidor de desenvolvimento; no app publicado não existe. */
-export async function aiAvailable(): Promise<boolean> {
-  if (!import.meta.env.DEV) return false
-  try {
-    const res = await fetch('/__criativos/status', { cache: 'no-store' })
-    return res.ok && (await res.json()).ia === true
-  } catch {
-    return false
-  }
-}
 
 export interface AiForm {
   brief: string
@@ -41,9 +31,8 @@ export async function generatePosts(form: AiForm, brand: SetBrand, signal?: Abor
     posts: form.posts,
     cases: AV_CASES.filter((c) => form.cases.includes(c.slug)).map((c) => ({ slug: c.slug, name: c.name, segment: c.segment, place: c.place, summary: c.summary, stack: c.stack })),
   }
-  const res = await fetch('/__criativos/plano', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(request), signal })
-  const body = (await res.json().catch(() => ({}))) as Partial<PlanResponse> & { error?: string }
-  if (!res.ok || !body.posts) throw new Error(body.error ?? 'A IA não respondeu.')
+  const body = await callAi<Partial<PlanResponse>>('plan', request, signal)
+  if (!body.posts) throw new Error('A IA não respondeu.')
   const known = new Set(AV_CASES.map((c) => c.slug))
   return body.posts.map((p) =>
     buildPost(
@@ -123,8 +112,7 @@ export async function requestEdit(call: EditCall, fonts: string[], signal?: Abor
     image: slide && post ? slidePreview(slide, post.format, call.images) : undefined,
     history: call.history,
   }
-  const res = await fetch('/__criativos/editar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal })
-  const json = (await res.json().catch(() => ({}))) as Partial<EditResponse> & { error?: string }
-  if (!res.ok || !json.ops) throw new Error(json.error ?? 'A IA não respondeu.')
+  const json = await callAi<Partial<EditResponse>>('edit', body, signal)
+  if (!json.ops) throw new Error('A IA não respondeu.')
   return { reply: json.reply ?? '', ops: json.ops }
 }

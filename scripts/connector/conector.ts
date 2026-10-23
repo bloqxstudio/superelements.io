@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { Plugin } from 'vite'
 import { CHAT_AGENTS } from '../../src/features/space/chat/protocol'
+import { criativos } from '../criativos/vitePlugin'
 import { checkAgents, spaceChat } from '../space/chatPlugin'
 import { spaceBridge } from '../space/vitePlugin'
 
@@ -149,6 +150,7 @@ const fakeServer = {
 const mount = (plugin: Plugin) => (plugin.configureServer as (server: unknown) => void)(fakeServer)
 mount(spaceBridge())
 mount(spaceChat({ guide: GUIDE }))
+mount(criativos())
 
 // ---------- HTTP ----------
 

@@ -12,7 +12,7 @@ import { TEMPLATES, buildSlide } from './templates'
 import type { TemplateId } from './plan'
 import { FORMAT_LIST, FORMATS, uid, type CreativeSet, type FormatId, type ImageLayer, type Layer, type Post, type Slide, type TextLayer } from './types'
 import { zipFiles } from './zip'
-import { aiAvailable } from './ai'
+import { useAiAvailable } from './link'
 import { AiDialog } from './AiDialog'
 import { LIBRARY } from './library'
 import { AiChat } from './AiChat'
@@ -327,15 +327,11 @@ export const CreativeEditor: React.FC = () => {
   const canRedo = useEditor((s) => s.future.length > 0)
   const [exportType, setExportType] = useState<ExportType>('png')
   const [menu, setMenu] = useState<'add' | 'export' | 'slide' | null>(null)
-  const [ai, setAi] = useState<boolean | null>(null)
+  const ai = useAiAvailable()
   const [aiOpen, setAiOpen] = useState(false)
   const [view, setView] = useState<'canvas' | 'slide'>('canvas')
   const [panel, setPanel] = useState<'ia' | 'props'>('ia')
   const upload = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    void aiAvailable().then(setAi)
-  }, [])
 
   useEffect(() => {
     void useEditor.getState().open(setId)

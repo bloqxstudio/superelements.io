@@ -12,7 +12,8 @@ import { setBrandFrom } from '@/features/criativos/brand'
 import { deleteSet, listSets, saveSet } from '@/features/criativos/storage'
 import { IMPORTED_NAME, importedSet } from '@/features/criativos/imported'
 import { POST_MODELS, buildPost } from '@/features/criativos/templates'
-import { aiAvailable, generatePosts, type AiForm } from '@/features/criativos/ai'
+import { generatePosts, type AiForm } from '@/features/criativos/ai'
+import { useAiAvailable } from '@/features/criativos/link'
 import { AiFields, EMPTY_AI } from '@/features/criativos/AiFields'
 import { uid, type CreativeSet, type SetBrand, type SetSummary } from '@/features/criativos/types'
 
@@ -33,12 +34,8 @@ const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClos
   const [models, setModels] = useState<string[]>(['carrossel-5'])
   const [busy, setBusy] = useState(false)
   const [mode, setMode] = useState<'models' | 'ai'>('models')
-  const [ai, setAi] = useState<boolean | null>(null)
+  const ai = useAiAvailable()
   const [form, setForm] = useState<AiForm>(EMPTY_AI)
-
-  useEffect(() => {
-    void aiAvailable().then(setAi)
-  }, [])
 
   const project = projects.find((p) => p.id === projectId)
 

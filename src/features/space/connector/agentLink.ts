@@ -11,8 +11,8 @@ export function startAgentLink() {
   if (hot) {
     // O websocket do Vite já é um canal: os eventos dele têm tipo genérico, por isso a conversão
     const channel = hot as unknown as AgentChannel
-    void Promise.all([import('@/features/space/bridge/client'), import('@/features/space/chat/connection')]).then(([bridge, chat]) => {
-      const stops = [bridge.startSpaceBridge(channel), chat.startSpaceChat(channel)]
+    void Promise.all([import('@/features/space/bridge/client'), import('@/features/space/chat/connection'), import('@/features/criativos/link')]).then(([bridge, chat, creatives]) => {
+      const stops = [bridge.startSpaceBridge(channel), chat.startSpaceChat(channel), creatives.startCreativeLink(channel)]
       hot.dispose(() => stops.forEach((stop) => stop()))
     })
     return
