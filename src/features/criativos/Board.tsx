@@ -96,6 +96,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   const postId = useEditor((s) => s.postId)
   const slideId = useEditor((s) => s.slideId)
   const layerId = useEditor((s) => s.layerId)
+  const rowSelected = useEditor((s) => s.row)
   const working = useAgent((s) => s.working)
   const flash = useAgent((s) => s.flash)
   const cursor = useAgent((s) => s.cursor)
@@ -341,12 +342,19 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
       <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
         {rows.map((row) => (
           <React.Fragment key={row.postId}>
-            <div className="absolute flex items-baseline gap-3 whitespace-nowrap" style={{ left: 0, top: row.y, height: HEAD, fontSize: 30 }}>
+            <button
+              type="button"
+              data-ui
+              onClick={() => useEditor.getState().selectRow(row.postId)}
+              title="Escolher o post inteiro (todos os cards): o agente passa a editar a fileira toda"
+              className={cn('absolute flex items-baseline gap-3 whitespace-nowrap rounded-xl text-left hover:bg-violet-100/70', rowSelected && row.postId === postId && 'bg-violet-100 ring-2 ring-violet-400')}
+              style={{ left: 0, top: row.y, height: HEAD - 10, fontSize: 30, padding: '0 16px' }}
+            >
               <span className={cn('font-semibold', row.postId === postId ? 'text-violet-700' : 'text-zinc-800')}>{row.name}</span>
-              <span className="text-[22px] text-zinc-500">{sizeOf(row.format).label} · {row.slides.length} {row.slides.length === 1 ? 'slide' : 'slides'}</span>
-            </div>
+              <span className="text-[22px] text-zinc-500">{sizeOf(row.format).label} · {row.slides.length} {row.slides.length === 1 ? 'slide' : 'slides'}{rowSelected && row.postId === postId ? ' · post inteiro' : ''}</span>
+            </button>
             {row.slides.map((p) => (
-              <div key={p.slideId} className="absolute bg-white" style={{ left: p.x, top: p.y, width: p.w, height: p.h, boxShadow: p.slideId === slideId ? `0 0 0 ${3 * inv}px #8b5cf6` : `0 0 0 ${1 * inv}px rgb(0 0 0 / 0.14), 0 ${16 * inv}px ${40 * inv}px -${12 * inv}px rgb(0 0 0 / 0.25)` }}>
+              <div key={p.slideId} className="absolute bg-white" style={{ left: p.x, top: p.y, width: p.w, height: p.h, boxShadow: p.slideId === slideId || (rowSelected && p.postId === postId) ? `0 0 0 ${3 * inv}px #8b5cf6` : `0 0 0 ${1 * inv}px rgb(0 0 0 / 0.14), 0 ${16 * inv}px ${40 * inv}px -${12 * inv}px rgb(0 0 0 / 0.25)` }}>
                 {visible.has(p.slideId) ? (
                   <SlideCanvas slide={p.slide} format={p.format} images={images} scale={scale} hideLayer={editing?.slideId === p.slideId ? editing.layerId : undefined} />
                 ) : (

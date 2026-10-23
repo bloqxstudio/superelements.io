@@ -20,6 +20,8 @@ interface EditorState {
   postId?: string
   slideId?: string
   layerId?: string
+  /** O post inteiro está escolhido (todos os cards da fileira), não só um slide. */
+  row?: boolean
   images: ImageMap
   past: CreativeSet[]
   future: CreativeSet[]
@@ -28,6 +30,8 @@ interface EditorState {
   open: (id: string, projectId?: string) => Promise<void>
   close: () => void
   selectPost: (id: string) => void
+  /** Escolhe a fileira toda de um post: o agente passa a editar o post inteiro. */
+  selectRow: (id: string) => void
   selectSlide: (id: string) => void
   selectLayer: (id?: string) => void
   /** Troca o conjunto inteiro (rascunho, sem histórico), como no arrasto. */
@@ -83,10 +87,14 @@ export const useEditor = create<EditorState>()((set, get) => {
     },
     selectPost: (postId) => {
       const post = get().set?.posts.find((p) => p.id === postId)
-      set({ postId, slideId: post?.slides[0]?.id, layerId: undefined })
+      set({ postId, slideId: post?.slides[0]?.id, layerId: undefined, row: false })
     },
-    selectSlide: (slideId) => set({ slideId, layerId: undefined }),
-    selectLayer: (layerId) => set({ layerId }),
+    selectRow: (postId) => {
+      const post = get().set?.posts.find((p) => p.id === postId)
+      if (post) set({ postId, slideId: post.slides[0]?.id, layerId: undefined, row: true })
+    },
+    selectSlide: (slideId) => set({ slideId, layerId: undefined, row: false }),
+    selectLayer: (layerId) => set({ layerId, row: false }),
 
     draft: (fn) => {
       const current = get().set

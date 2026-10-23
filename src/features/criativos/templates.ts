@@ -1,5 +1,7 @@
 import { mix } from '@/features/space/brand/color'
 import { paletteOf, type Palette } from './brand'
+import { alpha } from './color'
+import { measureText } from './render'
 import { caseBySlug, caseImage, ILLUSTRATIONS } from './library'
 import type { CaseView, SlideSpec, TemplateId } from './plan'
 import { sizeOf, uid, type FormatId, type ImageLayer, type Layer, type Post, type SetBrand, type ShapeLayer, type Slide, type TextLayer } from './types'
@@ -36,8 +38,23 @@ const text = (c: Ctx, name: string, t: string, o: Partial<TextLayer> & Pick<Text
   id: uid(), type: 'text', name, text: t, h: 0, font: c.brand.bodyFont, weight: 400, color: c.fg, align: 'left', lineHeight: 1.15, letterSpacing: 0, emphasisColor: c.hi, ...o,
 })
 
-const title = (c: Ctx, t: string, o: Partial<TextLayer> & Pick<TextLayer, 'x' | 'y' | 'w' | 'size'>) =>
-  text(c, 'Título', t, { font: c.brand.headingFont, weight: 500, lineHeight: 0.98, letterSpacing: -0.05, emphasis: true, ...o })
+const title = (c: Ctx, t: string, o: Partial<TextLayer> & Pick<TextLayer, 'x' | 'y' | 'w' | 'size'> & { maxLines?: number }) => {
+  const { maxLines, ...rest } = o
+  return fit(text(c, 'Título', t, { font: c.brand.headingFont, weight: 500, lineHeight: 0.98, letterSpacing: -0.05, emphasis: true, ...rest }), maxLines ?? 4)
+}
+
+/** Altura que um texto ocupa com a quebra do editor. */
+function heightOf(layer: TextLayer) {
+  return measureText(layer).height
+}
+
+/** Encolhe o texto aos poucos até caber em `maxLines` linhas (sem passar de 62% do tamanho original). */
+function fit(layer: TextLayer, maxLines: number, floor = 0.62): TextLayer {
+  let current = layer
+  const min = layer.size * floor
+  while (current.size > min && measureText(current).lines.length > maxLines) current = { ...current, size: Math.round(current.size * 0.94) }
+  return current
+}
 
 const label = (c: Ctx, t: string, o: Partial<TextLayer> & Pick<TextLayer, 'x' | 'y' | 'w'>) =>
   text(c, 'Rótulo', t, { size: 24, weight: 600, letterSpacing: 0.16, upper: true, color: c.hi, ...o })
@@ -76,12 +93,10 @@ const caseOf = (spec: SlideSpec) => caseBySlug(spec.case ?? '') ?? caseBySlug('p
 const caseFoot = (c: Ctx, name: string, place?: string): Layer =>
   text(c, 'Rodapé', `${name}${place ? ` · ${place}` : ''}`, { x: c.m, y: c.h - c.m - 30, w: c.w - c.m * 2, size: 28, weight: 500, color: c.soft })
 
-/** Escurece a base da imagem aos poucos (sem gradiente: faixas com opacidade crescente), para o título ler sobre a foto. */
+/** Escurece a base da imagem com um degradê, para o título ler sobre a foto. */
 const scrim = (c: Ctx, from: number, color: string): Layer[] => {
-  const bands = 40
   const top = Math.round(c.h * from)
-  const edge = (i: number) => Math.round(top + ((c.h - top) * i) / bands)
-  return Array.from({ length: bands }, (_, i) => rect(`Escurecimento ${i + 1}`, { x: 0, y: edge(i), w: c.w, h: edge(i + 1) - edge(i), fill: color, opacity: Math.round(((i + 1) / bands) ** 1.7 * 0.94 * 100) / 100 }))
+  return [rect('Degradê', { x: 0, y: top, w: c.w, h: c.h - top, fill: alpha(color, 0), fill2: alpha(color, 0.94), angle: 180 })]
 }
 
 const scene = (spec: SlideSpec, fallback: string) => (spec.prompt?.trim() ? spec.prompt.trim() : `Editorial photograph, cinematic natural light, no text, no logos. Subject: ${fallback}`)
@@ -97,26 +112,40 @@ const BUILDERS: Record<TemplateId, Build> = {
   'viral-capa': (brand, format, spec) => {
     const c = ctxOf(brand, format, true)
     const tall = c.h > 1500
+    const bottom = c.h - c.m - 96
+    const body = spec.body ? fit(text(c, 'Apoio', spec.body, { x: c.m, y: 0, w: c.w - c.m * 2, size: 34, weight: 500, lineHeight: 1.28, color: 'rgba(255,255,255,0.8)' }), 2, 0.8) : undefined
+    const bodyBox = body ? { ...body, y: bottom - heightOf(body) } : undefined
+    const head = title(c, spec.title ?? 'Como a marca *conquistou* todo mundo', { x: c.m, y: 0, w: c.w - c.m * 2, size: tall ? 148 : 124, weight: 800, lineHeight: 0.96, letterSpacing: -0.028, color: '#ffffff', emphasisColor: c.hi, maxLines: 5 })
+    const headBox = { ...head, y: (bodyBox ? bodyBox.y - 40 : bottom) - heightOf(head) }
     return slide(c.p.ink, [
       image('Foto de capa', '', { x: 0, y: 0, w: c.w, h: c.h, prompt: scene(spec, spec.title ?? 'a person at work, candid portrait') }),
-      ...scrim(c, 0.34, c.p.ink),
+      ...scrim(c, 0.28, c.p.ink),
+      rect('Degradê do topo', { x: 0, y: 0, w: c.w, h: Math.round(c.h * 0.18), fill: alpha(c.p.ink, 0.55), fill2: alpha(c.p.ink, 0), angle: 180 }),
       rect('Selo', { x: c.m, y: c.m, w: 16, h: 16, fill: c.p.accent }),
       text(c, 'Rótulo', spec.label ?? 'Análise', { x: c.m + 34, y: c.m - 6, w: c.w - c.m * 2 - 34, size: 26, weight: 700, letterSpacing: 0.16, upper: true, color: '#ffffff' }),
-      title(c, spec.title ?? 'Como a marca *conquistou* todo mundo', { x: c.m, y: c.h - c.m - (tall ? 760 : 560), w: c.w - c.m * 2, size: tall ? 148 : 124, weight: 800, lineHeight: 0.96, letterSpacing: -0.028, color: '#ffffff', emphasisColor: c.hi }),
-      ...(spec.body ? [text(c, 'Apoio', spec.body, { x: c.m, y: c.h - c.m - 140, w: c.w - c.m * 2 - 360, size: 34, weight: 500, lineHeight: 1.25, color: 'rgba(255,255,255,0.78)' })] : []),
+      headBox,
+      ...(bodyBox ? [bodyBox] : []),
       ...swipe(c),
     ])
   },
 
   'viral-foto': (brand, format, spec) => {
     const c = ctxOf(brand, format, spec.dark ?? false)
-    const imgH = Math.round(c.h * 0.5)
+    const limit = c.h - c.m - 96
+    const numH = 150
+    const head0 = title(c, spec.title ?? 'O detalhe que *ninguém* percebeu', { x: c.m, y: 0, w: c.w - c.m * 2, size: c.h > 1500 ? 84 : 74, weight: 800, lineHeight: 1, letterSpacing: -0.022, maxLines: 3 })
+    const body0 = fit(text(c, 'Apoio', spec.body ?? 'Uma frase curta que explica o ponto e faz a pessoa querer ver o próximo slide.', { x: c.m, y: 0, w: c.w - c.m * 2, size: 34, weight: 400, lineHeight: 1.3, color: c.soft }), 3, 0.78)
+    // O texto manda: a foto ocupa o que sobra (entre 34% e 50% da altura), sem nada se tocar
+    const textH = numH + 20 + heightOf(head0) + 28 + heightOf(body0)
+    const imgH = Math.round(Math.min(c.h * 0.5, Math.max(c.h * 0.34, limit - textH - 56)))
+    const numY = imgH + 44
+    const headY = numY + numH + 20
     return slide(bg(c), [
       image('Foto', '', { x: 0, y: 0, w: c.w, h: imgH, prompt: scene(spec, spec.title ?? 'a candid editorial photograph') }),
       rect('Faixa', { x: 0, y: imgH, w: c.w, h: 10, fill: c.p.accent }),
-      text(c, 'Número', spec.number ?? '01', { x: c.m, y: imgH + 52, w: 300, size: 150, weight: 800, letterSpacing: -0.028, lineHeight: 1, color: c.hi, font: c.brand.headingFont }),
-      title(c, spec.title ?? 'O detalhe que *ninguém* percebeu', { x: c.m, y: imgH + 230, w: c.w - c.m * 2, size: c.h > 1500 ? 84 : 72, weight: 800, lineHeight: 1, letterSpacing: -0.022 }),
-      text(c, 'Apoio', spec.body ?? 'Uma frase curta que explica o ponto e faz a pessoa querer ver o próximo slide.', { x: c.m, y: c.h - c.m - 190, w: c.w - c.m * 2 - 240, size: 34, weight: 400, lineHeight: 1.3, color: c.soft }),
+      text(c, 'Número', spec.number ?? '01', { x: c.m, y: numY, w: 300, size: numH, weight: 800, letterSpacing: -0.04, lineHeight: 1, color: c.hi, font: c.brand.headingFont }),
+      { ...head0, y: headY },
+      { ...body0, y: headY + heightOf(head0) + 28 },
       ...swipe(c, ''),
     ])
   },
@@ -124,12 +153,15 @@ const BUILDERS: Record<TemplateId, Build> = {
   'viral-dado': (brand, format, spec) => {
     const c = ctxOf(brand, format, spec.dark ?? true)
     const tall = c.h > 1500
+    const numY = c.h * (tall ? 0.2 : 0.17)
+    const numSize = tall ? 400 : 340
+    const head = title(c, spec.title ?? 'das pessoas decidem *em segundos*', { x: c.m, y: numY + numSize + 92, w: c.w - c.m * 2, size: tall ? 96 : 84, weight: 800, lineHeight: 1, letterSpacing: -0.022, maxLines: 4 })
     return slide(bg(c), [
       ...backdrop(c, [[c.w - 460, -220, 800]]),
       text(c, 'Rótulo', spec.label ?? 'O número', { x: c.m, y: c.m, w: c.w - c.m * 2, size: 26, weight: 700, letterSpacing: 0.16, upper: true, color: c.hi }),
-      text(c, 'Dado', spec.number ?? '73%', { x: c.m - 8, y: c.h * (tall ? 0.22 : 0.2), w: c.w - c.m * 2 + 16, size: tall ? 400 : 340, weight: 800, letterSpacing: -0.045, lineHeight: 0.95, color: c.hi, font: c.brand.headingFont }),
-      rect('Linha', { x: c.m, y: c.h * (tall ? 0.22 : 0.2) + (tall ? 400 : 340) + 36, w: 140, h: 10, fill: c.fg }),
-      title(c, spec.title ?? 'das pessoas decidem *em segundos*', { x: c.m, y: c.h * (tall ? 0.22 : 0.2) + (tall ? 400 : 340) + 90, w: c.w - c.m * 2, size: tall ? 96 : 84, weight: 800, lineHeight: 1, letterSpacing: -0.022 }),
+      text(c, 'Dado', spec.number ?? '73%', { x: c.m - 8, y: numY, w: c.w - c.m * 2 + 16, size: numSize, weight: 800, letterSpacing: -0.045, lineHeight: 0.95, color: c.hi, font: c.brand.headingFont }),
+      rect('Linha', { x: c.m, y: numY + numSize + 36, w: 140, h: 10, fill: c.fg }),
+      head,
       ...(spec.body ? [text(c, 'Fonte', spec.body, { x: c.m, y: c.h - c.m - 70, w: c.w - c.m * 2 - 360, size: 26, weight: 500, color: c.soft })] : []),
       ...swipe(c),
     ])
@@ -138,11 +170,14 @@ const BUILDERS: Record<TemplateId, Build> = {
   'viral-frase': (brand, format, spec) => {
     const c = ctxOf(brand, format, spec.dark ?? false)
     const tall = c.h > 1500
+    const top = c.h * 0.22
+    const head = title(c, spec.title ?? 'Marca forte não *explica*. Ela se faz lembrar.', { x: c.m + 56, y: top, w: c.w - c.m * 2 - 56, size: tall ? 120 : 100, weight: 800, lineHeight: 1.02, letterSpacing: -0.025, maxLines: 6 })
+    const h = heightOf(head)
     return slide(bg(c), [
-      rect('Barra', { x: c.m, y: c.h * 0.24, w: 14, h: c.h * 0.38, fill: c.p.accent }),
-      text(c, 'Rótulo', spec.label ?? 'O insight', { x: c.m + 56, y: c.h * 0.24 - 70, w: c.w - c.m * 2, size: 26, weight: 700, letterSpacing: 0.16, upper: true, color: c.hi }),
-      title(c, spec.title ?? 'Marca forte não *explica*. Ela se faz lembrar.', { x: c.m + 56, y: c.h * 0.24, w: c.w - c.m * 2 - 56, size: tall ? 120 : 100, weight: 800, lineHeight: 1.02, letterSpacing: -0.028 }),
-      ...(spec.body ? [text(c, 'Fonte', spec.body, { x: c.m + 56, y: c.h - c.m - 210, w: c.w - c.m * 2 - 56, size: 32, weight: 500, lineHeight: 1.3, color: c.soft })] : []),
+      rect('Barra', { x: c.m, y: top, w: 14, h, fill: c.p.accent }),
+      text(c, 'Rótulo', spec.label ?? 'O insight', { x: c.m + 56, y: top - 70, w: c.w - c.m * 2, size: 26, weight: 700, letterSpacing: 0.16, upper: true, color: c.hi }),
+      head,
+      ...(spec.body ? [fit(text(c, 'Fonte', spec.body, { x: c.m + 56, y: top + h + 44, w: c.w - c.m * 2 - 56, size: 34, weight: 500, lineHeight: 1.3, color: c.soft }), 3, 0.8)] : []),
       ...swipe(c),
     ])
   },

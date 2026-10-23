@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
+import { Blend, Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { drawSlide, slideToBlob, type ExportType } from './render'
@@ -20,6 +20,7 @@ import { Board } from './Board'
 import { joinSetLive, useLive } from './live'
 import { shareSet } from './storage'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { alpha } from './color'
 import { FormatField } from './FormatField'
 import { generateLayerImage } from './generate'
 import { useCreativeLink } from './link'
@@ -270,9 +271,24 @@ const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer })
 
       {layer.type === 'rect' && (
         <>
-          <Field label="Cor">
+          <Field label={layer.fill2 ? 'Cor inicial' : 'Cor'}>
             <Colors set={set} value={layer.fill} onChange={(fill) => set_({ fill })} />
           </Field>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={!!layer.fill2} onChange={(e) => set_(e.target.checked ? ({ fill2: alpha(layer.fill, 0), angle: layer.angle ?? 180 } as Partial<Layer>) : ({ fill2: undefined } as Partial<Layer>))} /> Degradê
+          </label>
+          {layer.fill2 && (
+            <>
+              <Field label="Cor final (a mesma cor com alfa 0 faz sumir)">
+                <Colors set={set} value={layer.fill2} onChange={(fill2) => set_({ fill2 } as Partial<Layer>)} />
+              </Field>
+              <div className="flex gap-1.5">
+                <Button type="button" variant="outline" size="sm" className="h-8 flex-1 bg-white text-xs" onClick={() => set_({ fill2: alpha(layer.fill, 0) } as Partial<Layer>)}>Sumir</Button>
+                <Button type="button" variant="outline" size="sm" className="h-8 flex-1 bg-white text-xs" onClick={() => set_({ fill: layer.fill2!, fill2: layer.fill } as Partial<Layer>)}>Inverter</Button>
+              </div>
+              <Num label="Direção (180 desce, 90 direita)" value={layer.angle ?? 180} step={15} onChange={(n) => set_({ angle: n } as Partial<Layer>)} />
+            </>
+          )}
           <Num label="Cantos" value={layer.radius} min={0} onChange={(n) => set_({ radius: n })} />
         </>
       )}
@@ -643,6 +659,7 @@ export const CreativeEditor: React.FC = () => {
             )}
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'text', name: 'Texto', text: 'Novo texto', x: 84, y: 200, w: 600, h: 0, font: set.brand.bodyFont, weight: 500, size: 56, color: '#111111', align: 'left', lineHeight: 1.15, letterSpacing: 0 })}><Type className="h-4 w-4" /> Texto</Button>
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'rect', name: 'Forma', x: 84, y: 200, w: 300, h: 300, fill: set.brand.colors[0]?.hex ?? '#2b3cf0', radius: 0 })}><Square className="h-4 w-4" /> Forma</Button>
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'rect', name: 'Degradê', x: 0, y: Math.round(sizeOf(format).height * 0.5), w: sizeOf(format).width, h: Math.round(sizeOf(format).height * 0.5), fill: alpha(set.brand.colors[0]?.hex ?? '#111111', 0), fill2: alpha(set.brand.colors[0]?.hex ?? '#111111', 0.9), angle: 180, radius: 0 })}><Blend className="h-4 w-4" /> Degradê</Button>
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => upload.current?.click()}><ImagePlus className="h-4 w-4" /> Imagem</Button>
             <input ref={upload} type="file" accept="image/*" className="hidden" onChange={(e) => void sendLayerImage(e.target.files?.[0])} />
             <label className="ml-auto flex items-center gap-2 text-xs text-gray-500">

@@ -40,6 +40,7 @@ const editInput = (body: Partial<EditRequest>): EditRequest => ({
   images: Array.isArray(body.images) ? body.images.slice(0, 80) : [],
   cases: Array.isArray(body.cases) ? body.cases.slice(0, 12) : [],
   image: typeof body.image === 'string' && body.image.length < 2_000_000 ? body.image : undefined,
+  previews: Array.isArray(body.previews) ? body.previews.slice(0, 10).filter((x) => typeof x === 'string' && x.length < 1_000_000) : [],
   history: Array.isArray(body.history) ? body.history.slice(-6) : [],
   attachments: Array.isArray(body.attachments)
     ? body.attachments.slice(0, 4).filter((a) => typeof a?.data === 'string' && a.data.length < 3_000_000).map((a) => ({ name: String(a.name ?? 'imagem').slice(0, 80), src: String(a.src ?? ''), data: a.data }))

@@ -39,6 +39,10 @@ export interface LayerFields {
   /** Imagem a gerar (camada de imagem): descrição da cena, em inglês. */
   prompt?: string
   fill?: string
+  /** Degradê: segunda cor da forma (a mesma cor com alfa 0 faz sumir). */
+  fill2?: string
+  /** Direção do degradê em graus (180 desce, 90 vai para a direita, 0 sobe). */
+  angle?: number
   stroke?: string
   strokeWidth?: number
   gap?: number
@@ -103,6 +107,8 @@ export interface EditRequest {
   image?: string
   /** Prints e imagens que a pessoa anexou (referências); `src` é onde ficaram no conjunto, para usar numa camada. */
   attachments?: { name: string; src: string; data: string }[]
+  /** Escopo post: uma imagem de cada slide do post, na ordem (para a IA ver a fileira inteira). */
+  previews?: string[]
   /** Há uma chave de imagens neste computador: a IA pode pedir imagens (`prompt` numa camada de imagem). */
   canGenerateImages?: boolean
   /** Skill escolhida: um jeito de trabalhar para este pedido. */
@@ -142,6 +148,8 @@ const layerProps = {
   focusY: { type: 'number' },
   prompt: { type: 'string' },
   fill: { type: 'string' },
+  fill2: { type: 'string' },
+  angle: { type: 'number' },
   stroke: { type: 'string' },
   strokeWidth: { type: 'number' },
   gap: { type: 'number' },

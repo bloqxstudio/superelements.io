@@ -267,6 +267,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   const post = useEditor(currentPost)
   const slide = useEditor(currentSlide)
   const layer = useEditor(currentLayer)
+  const row = useEditor((s) => s.row)
   const stale = useCreativeLink((s) => s.stale)
   const agents = useCreativeLink((s) => s.agents)
   const legacy = useCreativeLink((s) => s.legacy)
@@ -299,10 +300,10 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   useEffect(() => watchSkills(), [])
 
   // Escopo: o que está escolhido, ou o que a pessoa trocou (sempre dentro do que existe)
-  const natural: EditScope = layer ? 'layer' : slide ? 'slide' : 'post'
-  const options: EditScope[] = [...(layer ? (['layer'] as const) : []), ...(slide ? (['slide'] as const) : []), 'post', 'set']
+  const natural: EditScope = row ? 'post' : layer ? 'layer' : slide ? 'slide' : 'post'
+  const options: EditScope[] = [...(layer && !row ? (['layer'] as const) : []), ...(slide && !row ? (['slide'] as const) : []), 'post', 'set']
   const scope: EditScope = forced && options.includes(forced) ? forced : natural
-  useEffect(() => setForced(null), [layer?.id, slide?.id])
+  useEffect(() => setForced(null), [layer?.id, slide?.id, row])
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' })
@@ -328,7 +329,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   function scopeName() {
     if (scope === 'layer') return `${layer?.name ?? 'Componente'} · slide ${(post?.slides.findIndex((s) => s.id === slide?.id) ?? 0) + 1}`
     if (scope === 'slide') return `Slide ${(post?.slides.findIndex((s) => s.id === slide?.id) ?? 0) + 1}`
-    if (scope === 'post') return post?.name ?? 'Post'
+    if (scope === 'post') return `${post?.name ?? 'Post'} · ${post?.slides.length ?? 0} cards`
     return 'Todos os posts'
   }
 

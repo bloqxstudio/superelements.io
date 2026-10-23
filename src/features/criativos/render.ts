@@ -1,4 +1,4 @@
-import { sizeOf, type FormatId, type ImageLayer, type Layer, type Slide, type TextLayer } from './types'
+import { sizeOf, type FormatId, type ImageLayer, type Layer, type ShapeLayer, type Slide, type TextLayer } from './types'
 
 /**
  * Desenho de um slide no canvas 2D, no tamanho real do formato. A tela do
@@ -130,6 +130,70 @@ const runWidth = (ctx: CanvasRenderingContext2D, layer: TextLayer, run: Run) => 
   return ctx.measureText(run.text).width
 }
 
+// Palavras curtas que não ficam sozinhas no fim da linha: vão junto com a próxima ("de casa", "o site")
+const GLUE = new Set(['a', 'o', 'e', 'é', 'à', 'ao', 'as', 'os', 'da', 'de', 'do', 'em', 'na', 'no', 'um', 'se', 'ou', 'por', 'com', 'que', 'não', 'sua', 'seu', 'para', 'pela', 'pelo', 'das', 'dos', 'nas', 'nos', 'mais', 'mas', 'meu', 'minha', 'suas', 'seus', 'the', 'an', 'of', 'to', 'in', 'is', 'for', 'and'])
+const bare = (t: string) => t.toLowerCase().replace(/[^\p{L}]/gu, '')
+
+/**
+ * Quebra o texto pela largura da caixa, como uma boa tipografia: as palavras
+ * curtas vão com a seguinte, as duas últimas palavras do parágrafo ficam
+ * juntas (nunca uma palavra sozinha na última linha) e os títulos grandes são
+ * equilibrados (linhas de tamanho parecido, sem sobra no fim).
+ */
+function wrapParagraph(ctx: CanvasRenderingContext2D, layer: TextLayer, runs: Run[]): Run[][] {
+  const space = (setText(ctx, layer), ctx.measureText(' ').width)
+  // Unidades que não se separam: uma palavra (com a pontuação colada) ou um grupo preso
+  let units: Run[][] = []
+  for (const run of runs) {
+    if (run.glue && units.length) units[units.length - 1].push(run)
+    else units.push([run])
+  }
+  for (let i = 0; i < units.length - 1; ) {
+    const unit = units[i]
+    if (unit.length === 1 && !unit[0].em && GLUE.has(bare(unit[0].text)) && !/[.,;:!?…]$/.test(unit[0].text)) {
+      units.splice(i, 2, [...unit, ...units[i + 1]])
+    } else i++
+  }
+  const widthOf = (unit: Run[]) => unit.reduce((n, r, k) => n + runWidth(ctx, layer, r) + (k && !r.glue ? space : 0), 0)
+  // As duas últimas palavras ficam juntas, desde que juntas ainda caibam na caixa
+  if (units.length >= 3) {
+    const tail = [...units[units.length - 2], ...units[units.length - 1]]
+    if (widthOf(tail) <= layer.w * 0.9) units = [...units.slice(0, -2), tail]
+  }
+  const sizes = units.map(widthOf)
+  const greedy = (max: number) => {
+    const lines: Run[][] = []
+    let line: Run[] = []
+    let width = 0
+    units.forEach((unit, i) => {
+      const w = sizes[i]
+      if (line.length && width + space + w > max) {
+        lines.push(line)
+        line = []
+        width = 0
+      }
+      line.push(...unit)
+      width += (width ? space : 0) + w
+    })
+    if (line.length) lines.push(line)
+    return lines
+  }
+
+  const full = greedy(layer.w)
+  // Título grande com mais de uma linha: procura a menor largura que mantém o mesmo número de linhas
+  if (layer.size >= 60 && full.length > 1) {
+    let lo = layer.w * 0.5
+    let hi = layer.w
+    for (let i = 0; i < 12; i++) {
+      const mid = (lo + hi) / 2
+      if (greedy(mid).length === full.length) hi = mid
+      else lo = mid
+    }
+    return greedy(hi + 1)
+  }
+  return full
+}
+
 /** Quebra o texto pela largura da caixa e diz a altura que ele ocupa. */
 export function measureText(layer: TextLayer, ctx: CanvasRenderingContext2D | null = scratch): Measured {
   const lineHeight = layer.size * layer.lineHeight
@@ -138,23 +202,9 @@ export function measureText(layer: TextLayer, ctx: CanvasRenderingContext2D | nu
   const source = layer.upper ? layer.text.toUpperCase() : layer.text
   const lines: Run[][] = []
   for (const paragraph of source.split('\n')) {
-    let line: Run[] = []
-    let width = 0
-    ctx.save()
-    for (const word of words(paragraph, !!layer.emphasis)) {
-      setText(ctx, layer, word.em)
-      const space = line.length && !word.glue ? ctx.measureText(' ').width : 0
-      const w = ctx.measureText(word.text).width
-      if (line.length && !word.glue && width + space + w > layer.w) {
-        lines.push(line)
-        line = []
-        width = 0
-      }
-      line.push(word)
-      width += space + w
-    }
-    ctx.restore()
-    lines.push(line)
+    const runs = words(paragraph, !!layer.emphasis)
+    if (!runs.length) lines.push([])
+    else lines.push(...wrapParagraph(ctx, layer, runs))
   }
   ctx.restore()
   return { lines, lineHeight, height: lines.length * lineHeight }
@@ -326,7 +376,7 @@ function drawLayer(ctx: CanvasRenderingContext2D, layer: Layer, images: ImageMap
     ctx.restore()
   } else {
     roundRect(ctx, layer.x, layer.y, layer.w, layer.h, layer.radius)
-    ctx.fillStyle = layer.fill
+    ctx.fillStyle = layer.fill2 ? gradientOf(ctx, layer) : layer.fill
     ctx.fill()
     if (layer.stroke && layer.strokeWidth) {
       ctx.strokeStyle = layer.stroke
@@ -335,6 +385,20 @@ function drawLayer(ctx: CanvasRenderingContext2D, layer: Layer, images: ImageMap
     }
   }
   ctx.restore()
+}
+
+/** Degradê linear da forma, com a direção em graus do CSS (180 = de cima para baixo). */
+function gradientOf(ctx: CanvasRenderingContext2D, layer: ShapeLayer) {
+  const a = (((layer.angle ?? 180) % 360) * Math.PI) / 180
+  const cx = layer.x + layer.w / 2
+  const cy = layer.y + layer.h / 2
+  const half = (Math.abs(layer.w * Math.sin(a)) + Math.abs(layer.h * Math.cos(a))) / 2
+  const dx = Math.sin(a) * half
+  const dy = -Math.cos(a) * half
+  const g = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy)
+  g.addColorStop(0, layer.fill)
+  g.addColorStop(1, layer.fill2 ?? layer.fill)
+  return g
 }
 
 /** Desenha o slide inteiro; o canvas já deve ter o tamanho do formato. */

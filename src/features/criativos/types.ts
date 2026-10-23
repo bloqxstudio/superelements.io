@@ -101,6 +101,10 @@ export interface ImageLayer extends LayerBase {
 export interface ShapeLayer extends LayerBase {
   type: 'rect'
   fill: string
+  /** Segunda cor: com ela a forma vira um degradê de `fill` para `fill2`. */
+  fill2?: string
+  /** Direção do degradê em graus, como no CSS: 180 desce (de cima para baixo), 90 vai para a direita, 0 sobe. */
+  angle?: number
   radius: number
   stroke?: string
   strokeWidth?: number

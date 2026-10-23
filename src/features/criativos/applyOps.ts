@@ -1,9 +1,11 @@
 import { AV_CASES } from '@/features/avence/cases'
 import type { EditOp, LayerFields, SlideDef } from './edit'
 import { LIBRARY } from './library'
+import { alpha } from './color'
 import { reformat } from './store'
+import { measureText } from './render'
 import { buildSlide } from './templates'
-import { parseFormat, uid, type CreativeSet, type FormatId, type Layer, type Post, type Slide } from './types'
+import { parseFormat, sizeOf, uid, type CreativeSet, type FormatId, type Layer, type Post, type Slide } from './types'
 
 /**
  * Aplica o que a IA devolveu. Cada operação é conferida contra o conjunto
@@ -15,17 +17,17 @@ const COMMON = ['name', 'x', 'y', 'w', 'h', 'opacity', 'rotation'] as const
 const BY_TYPE: Record<Layer['type'], readonly string[]> = {
   text: ['text', 'font', 'weight', 'size', 'color', 'align', 'lineHeight', 'letterSpacing', 'upper', 'emphasis', 'emphasisColor'],
   image: ['src', 'fit', 'radius', 'frame', 'focusY', 'prompt'],
-  rect: ['fill', 'radius', 'stroke', 'strokeWidth'],
+  rect: ['fill', 'fill2', 'angle', 'radius', 'stroke', 'strokeWidth'],
   ring: ['stroke', 'strokeWidth'],
   dots: ['color', 'gap', 'dot'],
 }
 
 const NUMBERS: Record<string, [number, number]> = {
   x: [-3000, 5000], y: [-3000, 5000], w: [1, 5000], h: [0, 5000], opacity: [0, 1], rotation: [-360, 360], weight: [100, 900], size: [8, 700],
-  lineHeight: [0.6, 3], letterSpacing: [-0.5, 1], radius: [0, 2000], focusY: [0, 1], strokeWidth: [0, 100], gap: [4, 400], dot: [1, 100],
+  lineHeight: [0.6, 3], letterSpacing: [-0.5, 1], radius: [0, 2000], focusY: [0, 1], angle: [-360, 720], strokeWidth: [0, 100], gap: [4, 400], dot: [1, 100],
 }
-const COLORS = new Set(['color', 'emphasisColor', 'fill', 'stroke'])
-const COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\))$/i
+const COLORS = new Set(['color', 'emphasisColor', 'fill', 'fill2', 'stroke'])
+const COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%/]+\)|transparent)$/i
 const ENUMS: Record<string, string[]> = { align: ['left', 'center', 'right'], fit: ['cover', 'contain'], frame: ['none', 'browser', 'phone'] }
 const BOOLS = new Set(['upper', 'emphasis'])
 const STRINGS = new Set(['name', 'text', 'font', 'src', 'prompt'])
@@ -33,7 +35,7 @@ const STRINGS = new Set(['name', 'text', 'font', 'src', 'prompt'])
 const clamp = (n: number, [lo, hi]: [number, number]) => Math.min(hi, Math.max(lo, n))
 
 /** Só o que a camada daquele tipo aceita, com valores dentro do que o editor desenha. */
-function clean(type: Layer['type'], fields: LayerFields | undefined, set: CreativeSet): Record<string, unknown> {
+function clean(type: Layer['type'], fields: LayerFields | undefined, set: CreativeSet, base?: Layer): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   const allowed = new Set<string>([...COMMON, ...BY_TYPE[type]])
   for (const [key, value] of Object.entries(fields ?? {})) {
@@ -50,6 +52,11 @@ function clean(type: Layer['type'], fields: LayerFields | undefined, set: Creati
       if (typeof value === 'string' && imageOk(value, set)) out[key] = value
     } else if (STRINGS.has(key) && typeof value === 'string') out[key] = value.slice(0, 2000)
   }
+  // "transparent" num degradê vira a cor vizinha com alfa 0: sem isso o degradê passa por um cinza sujo
+  const baseFill = base?.type === 'rect' ? base.fill : undefined
+  const baseFill2 = base?.type === 'rect' ? base.fill2 : undefined
+  if (out.fill2 === 'transparent') out.fill2 = alpha(String(out.fill ?? baseFill ?? '#000000'), 0)
+  if (out.fill === 'transparent') out.fill = alpha(String(out.fill2 ?? baseFill2 ?? '#000000'), 0)
   return out
 }
 
@@ -74,6 +81,26 @@ function makeLayer(fields: LayerFields | undefined, set: CreativeSet): Layer | u
   return { id: uid(), type, name: NAMES[type], x: 84, y: 200, ...DEFAULTS[type](set), ...clean(type, fields, set) } as Layer
 }
 
+/**
+ * Arruma o que a IA desenhou camada por camada: o texto não passa das margens
+ * nem do fim do slide (diminui o corpo aos poucos), e entrelinha e largura ficam
+ * em faixas legíveis. Slides de modelo já nascem certos.
+ */
+function polishSlide(slide: Slide, format: FormatId): Slide {
+  const { width, height } = sizeOf(format)
+  const margin = Math.round(Math.min(width, height) * 0.07)
+  return {
+    ...slide,
+    layers: slide.layers.map((l) => {
+      if (l.type !== 'text') return l
+      let layer = { ...l, lineHeight: Math.min(1.8, Math.max(0.85, l.lineHeight)), x: Math.min(Math.max(0, l.x), width - 240) }
+      layer.w = Math.max(200, Math.min(layer.w, width - Math.round(margin / 2) - layer.x))
+      for (let i = 0; i < 4 && layer.y + measureText(layer).height > height - margin * 0.6 && layer.size > 20; i++) layer = { ...layer, size: Math.round(layer.size * 0.92) }
+      return layer
+    }),
+  }
+}
+
 /** Slide novo: por camadas, ou por um modelo pronto. */
 function makeSlide(def: SlideDef | undefined, set: CreativeSet, format: FormatId): Slide | undefined {
   if (!def) return undefined
@@ -82,7 +109,7 @@ function makeSlide(def: SlideDef | undefined, set: CreativeSet, format: FormatId
     return buildSlide({ ...def.spec, case: def.spec.case && known.has(def.spec.case) ? def.spec.case : AV_CASES[0].slug }, set.brand, format)
   }
   const background = def.background && COLOR.test(def.background.trim()) ? def.background.trim() : '#ffffff'
-  return { id: uid(), background, layers: (def.layers ?? []).flatMap((l) => makeLayer(l, set) ?? []) }
+  return polishSlide({ id: uid(), background, layers: (def.layers ?? []).flatMap((l) => makeLayer(l, set) ?? []) }, format)
 }
 
 export interface Applied {
@@ -127,8 +154,26 @@ export function applyOps(start: CreativeSet, ops: EditOp[], defaults?: { postId?
       if (op.op === 'update_post') {
         const post = set.posts.find((p) => p.id === op.postId)
         if (!post) return skipped.push(`${label}: post não existe`)
-        const format = parseFormat(op.format)
-        set = { ...set, posts: set.posts.map((p) => (p.id !== post.id ? p : { ...(format && format !== p.format ? reformat(p, format) : p), ...(op.name ? { name: op.name.slice(0, 120) } : {}), ...(op.caption !== undefined ? { caption: op.caption.slice(0, 2200) } : {}) })) }
+        const def = op.post
+        const format = parseFormat(def?.format ?? op.format)
+        const name = def?.name ?? op.name
+        const caption = def?.caption ?? op.caption
+        // `post.slides` refaz o post inteiro: os slides de hoje saem e entram os novos, no formato do post
+        const target = format ?? post.format
+        const slides = def?.slides?.length ? def.slides.flatMap((d) => makeSlide(d, set, target) ?? []) : undefined
+        set = {
+          ...set,
+          posts: set.posts.map((p) => {
+            if (p.id !== post.id) return p
+            let next: Post = format && format !== p.format ? reformat(p, format) : p
+            if (slides?.length) next = { ...next, slides }
+            return { ...next, ...(name ? { name: name.slice(0, 120) } : {}), ...(caption !== undefined ? { caption: caption.slice(0, 2200) } : {}) }
+          }),
+        }
+        if (slides?.length) {
+          for (const created of slides) touched.add(created.id)
+          focus = { postId: post.id, slideId: slides[0].id }
+        }
         return void applied++
       }
 
@@ -210,7 +255,7 @@ export function applyOps(start: CreativeSet, ops: EditOp[], defaults?: { postId?
         return void applied++
       }
       if (op.op === 'update_layer') {
-        const fields = clean(layer.type, op.layer, set)
+        const fields = clean(layer.type, op.layer, set, layer)
         if (!Object.keys(fields).length) return skipped.push(`${label}: nada para mudar`)
         mapSlide(slide.id, (s) => ({ ...s, layers: s.layers.map((l) => (l.id === layer.id ? ({ ...l, ...fields } as Layer) : l)) }))
         return void applied++

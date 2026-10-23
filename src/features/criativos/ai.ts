@@ -74,11 +74,11 @@ const compactPosts = (posts: Post[], focus: { postId?: string; slideId?: string;
   }))
 
 /** JPEG pequeno do slide, para a IA ver o que a pessoa vê. */
-export function slidePreview(slide: Slide, format: Post['format'], images: ImageMap): string {
+export function slidePreview(slide: Slide, format: Post['format'], images: ImageMap, side = 720 /* largura da imagem */): string {
   const { width, height } = sizeOf(format)
-  const k = 720 / width
+  const k = side / width
   const canvas = document.createElement('canvas')
-  canvas.width = 720
+  canvas.width = Math.round(width * k)
   canvas.height = Math.round(height * k)
   const ctx = canvas.getContext('2d')!
   ctx.scale(k, k)
@@ -124,7 +124,9 @@ export async function requestEdit(call: EditCall, fonts: string[], signal?: Abor
       ...(set.brand.logoOnDark ? [{ src: set.brand.logoOnDark, label: 'Logo para fundo escuro' }] : []),
     ],
     cases: AV_CASES.map((c) => ({ slug: c.slug, name: c.name, segment: c.segment, summary: c.summary })),
-    image: slide && post ? slidePreview(slide, post.format, call.images) : undefined,
+    image: slide && post && call.scope !== 'post' ? slidePreview(slide, post.format, call.images) : undefined,
+    // O post inteiro: a IA vê todos os cards, não só um
+    previews: post && call.scope === 'post' ? post.slides.slice(0, 10).map((sl) => slidePreview(sl, post.format, call.images, 540)) : undefined,
     history: call.history,
     attachments: call.attachments,
     skill: call.skill,
