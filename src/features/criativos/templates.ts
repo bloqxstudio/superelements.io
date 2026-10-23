@@ -309,6 +309,36 @@ const BUILDERS: Record<TemplateId, Build> = {
   },
 }
 
+/** Geometria da janela de navegador de um card com a página de um site: a largura útil e a altura visível da página dentro dela. */
+function pageWindow(format: FormatId, imgW: number, imgH: number) {
+  const { width: w, height: h } = sizeOf(format)
+  const m = 84
+  const winW = w - m * 2
+  // Janela grande: a página é o assunto do card (o título ocupa até duas linhas em cima)
+  const winH = Math.min(Math.round(winW * (h > 1500 ? 1.45 : 0.9)), h - 544)
+  const bar = Math.max(34, Math.round(winW * 0.045))
+  const visible = winH - bar
+  return { m, winW, winH, visible, scaled: imgH * (winW / imgW) }
+}
+
+/** Quantos cards a página importada ocupa, rolando de cima para baixo (com uma sobra entre eles). */
+export const pageSlideCount = (format: FormatId, imgW: number, imgH: number) => {
+  const g = pageWindow(format, imgW, imgH)
+  return Math.min(8, Math.max(1, Math.ceil((g.scaled - g.visible * 0.15) / (g.visible * 0.85))))
+}
+
+/** Um card da página importada: a janela de navegador mostra um trecho dela (`index` de `total`), do topo ao fim. */
+export function pageWindowSlide(brand: SetBrand, format: FormatId, o: { src: string; imgW: number; imgH: number; index: number; total: number; title: string; label: string; dark: boolean }): Slide {
+  const c = ctxOf(brand, format, o.dark)
+  const g = pageWindow(format, o.imgW, o.imgH)
+  return slide(bg(c), [
+    ...backdrop(c, [[c.w - 360, -200, 560]]),
+    ...header(c, `${o.label} · ${o.index + 1}/${o.total}`),
+    title(c, o.title, { x: c.m, y: c.m + 120, w: g.winW, size: c.h > 1500 ? 96 : 84, maxLines: 2 }),
+    image('Página importada', o.src, { x: c.m, y: c.h - c.m - 60 - g.winH, w: g.winW, h: g.winH, frame: 'browser', focusY: o.total > 1 ? Math.round((o.index / (o.total - 1)) * 100) / 100 : 0 }),
+  ])
+}
+
 export interface SlideTemplate {
   id: TemplateId
   name: string

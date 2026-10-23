@@ -4,6 +4,7 @@ import { parseDesignMd } from '@/features/space/brand/designMd'
 import type { SectionNodeData } from '@/types/space'
 import { slidePreview } from './ai'
 import { allowImages } from './applyOps'
+import { capturePageShot } from './pageImport'
 import { downloadImageViaLink } from './link'
 import { uploadAsset } from './storage'
 import { useEditor } from './store'
@@ -128,8 +129,21 @@ async function describeProject(ref: Ref): Promise<ResolvedRef & { logos: { src: 
   })
   const logos = [parsed?.logo?.onLight && { src: parsed.logo.onLight, label: `Logo de ${ref.label} (fundo claro)` }, parsed?.logo?.onDark && { src: parsed.logo.onDark, label: `Logo de ${ref.label} (fundo escuro)` }, parsed?.logo?.symbol && { src: parsed.logo.symbol, label: `Símbolo de ${ref.label}` }].filter(Boolean) as { src: string; label: string }[]
   const photos = ref.pageId ? await bringImages(urls, ref.label) : []
+  // A página em si: o conector fotografa a página inteira (montada com a marca do projeto) e a foto entra no conjunto
+  let shotNote = ''
+  let crops: string[] = []
+  if (ref.pageId) {
+    try {
+      const shot = await capturePageShot(ref.projectId!, ref.pageId, ref.label.split(' › ')[0])
+      crops = shot.crops
+      shotNote = `A página foi importada como imagem e já está no conjunto (src asset:${shot.asset.id}, ${shot.asset.width}x${shot.asset.height}). Para mostrá-la num card, use uma camada de imagem com esse src, \`frame: "browser"\` e \`focusY\` (0 mostra o topo, 1 o fim). Você vê ${crops.length} recorte${crops.length > 1 ? 's' : ''} dela (topo${crops.length > 2 ? ', meio e fim' : ''}) nas imagens desta referência.`
+    } catch (err) {
+      shotNote = `Não consegui fotografar a página (${err instanceof Error ? err.message : 'erro'}). Use os textos e as fotos abaixo.`
+    }
+  }
   const text = [
     ref.pageId ? `Página escolhida do projeto (um cliente da conta): ${ref.label}.` : `Projeto "${ref.label}" (um cliente da conta), todas as páginas.`,
+    shotNote,
     parsed ? `Marca: cores ${parsed.colors.map((c) => `${c.name} ${c.hex}`).join(', ')}; fonte de títulos ${parsed.fonts.heading?.family ?? '?'}, de texto ${parsed.fonts.body?.family ?? '?'}.` : 'Sem marca definida.',
     logos.length ? `Logos disponíveis para camadas de imagem (src): ${logos.map((l) => `${l.src} (${l.label})`).join('; ')}` : '',
     photos.length ? `Fotos desta página, já no conjunto, para camadas de imagem (src): ${photos.map((p) => `${p.src} (${p.label})`).join('; ')}` : ref.pageId && urls.length ? 'A página tem fotos, mas nenhuma foi baixada (o conector não conseguiu).' : '',
@@ -138,7 +152,7 @@ async function describeProject(ref: Ref): Promise<ResolvedRef & { logos: { src: 
   ]
     .filter(Boolean)
     .join('\n')
-  return { kind: 'project', label: ref.label, text, images: [], logos: [...logos, ...photos] }
+  return { kind: 'project', label: ref.label, text, images: crops, logos: [...logos, ...photos] }
 }
 
 export async function resolveRefs(refs: Ref[], set: CreativeSet, images: ImageMap, projectName: (id: string) => string | undefined): Promise<{ refs: ResolvedRef[]; extra: { src: string; label: string }[] }> {
@@ -164,7 +178,7 @@ export async function resolveRefs(refs: Ref[], set: CreativeSet, images: ImageMa
       })
     } else if (ref.kind === 'project' && ref.projectId) {
       try {
-        const described = await describeProject({ ...ref, label: projectName(ref.projectId) ?? ref.label })
+        const described = await describeProject({ ...ref, label: ref.pageId ? ref.label : projectName(ref.projectId) ?? ref.label })
         extra.push(...described.logos)
         out.push(described)
       } catch {

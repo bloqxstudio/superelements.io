@@ -20,6 +20,7 @@ import { generateAll, markNotGenerated } from './generate'
 import { AV_CASES } from '@/features/avence/cases'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { projectPages, resolveRefs, type ResolvedRef } from './references'
+import { importPageAsPost } from './pageImport'
 import { useRefs, type Ref } from './refStore'
 import { CREATIVE_SKILLS } from './skills'
 import { uploadAsset } from './storage'
@@ -392,8 +393,8 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
     if (stage) {
       const pages = Array.isArray(stage.pages) ? stage.pages : []
       const all: MentionItem[] = [
-        { group: stage.name, hint: 'marca, briefing e textos de todas as páginas', ref: { id: `project:${stage.projectId}`, kind: 'project', label: stage.name, projectId: stage.projectId } },
-        ...pages.map((pg): MentionItem => ({ group: 'Só uma página (traz os textos e as fotos dela)', ref: { id: `project:${stage.projectId}:${pg.id}`, kind: 'project', label: `${stage.name} › ${pg.name}`, projectId: stage.projectId, pageId: pg.id } })),
+        { group: stage.name, hint: 'marca, briefing e textos (sem a imagem das páginas)', ref: { id: `project:${stage.projectId}`, kind: 'project', label: stage.name, projectId: stage.projectId } },
+        ...pages.map((pg): MentionItem => ({ group: 'Páginas: clique para a IA ver a página; "Importar" cria um post com ela', ref: { id: `project:${stage.projectId}:${pg.id}`, kind: 'project', label: `${stage.name} › ${pg.name}`, projectId: stage.projectId, pageId: pg.id } })),
       ]
       return q ? all.filter((i) => plain(i.ref.label).includes(q)) : all
     }
@@ -404,6 +405,21 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
     const match = (list: MentionItem[]) => (q ? list.filter((i) => plain(`${i.ref.label} ${i.hint ?? ''}`).includes(q)) : list)
     return [...match(projectItems), ...match(caseItems), ...match(postItems), ...(q ? match(slideItems) : slideItems.slice(0, 8))]
   }, [mention?.query, set.posts, projects, stage])
+
+  /** Importa a página escolhida como um post novo: o conector fotografa a página e os cards rolam do topo ao fim. */
+  const importPage = async (ref: Ref) => {
+    if (!ref.projectId || !ref.pageId) return
+    closeMention()
+    setText((t) => t.replace(/(^|\s)@\S*$/, '$1'))
+    const projectName = projects.find((p) => p.id === ref.projectId)?.name ?? ref.label.split(' › ')[0]
+    const toastId = toast.loading(`Fotografando a página de ${projectName}… leva de 10 a 40 s`)
+    try {
+      const post = await importPageAsPost(ref.projectId, ref.pageId, projectName)
+      toast.success(`Página importada: ${post.slides.length} ${post.slides.length === 1 ? 'card' : 'cards'} no post "${post.name}".`, { id: toastId })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não consegui importar a página.', { id: toastId })
+    }
+  }
 
   const closeMention = () => {
     setMention(null)
@@ -727,10 +743,15 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
               {mentionItems.map((item, i) => (
                 <React.Fragment key={item.ref.id}>
                   {(i === 0 || mentionItems[i - 1].group !== item.group) && <p className="px-2 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">{item.group}</p>}
-                  <button type="button" role="option" aria-selected={i === mentionAt} onMouseEnter={() => setMentionAt(i)} onMouseDown={(e) => { e.preventDefault(); pickMention(item) }} className={cn('flex w-full items-baseline gap-2 rounded-lg px-2 py-1.5 text-left', i === mentionAt ? 'bg-violet-50' : 'hover:bg-gray-50')}>
-                    <span className="min-w-0 truncate text-xs font-medium text-gray-900">{item.ref.label}</span>
-                    {item.hint && <span className="min-w-0 truncate text-[11px] text-gray-500">{item.hint}</span>}
-                  </button>
+                  <div className={cn('flex items-center rounded-lg', i === mentionAt ? 'bg-violet-50' : 'hover:bg-gray-50')} onMouseEnter={() => setMentionAt(i)}>
+                    <button type="button" role="option" aria-selected={i === mentionAt} onMouseDown={(e) => { e.preventDefault(); pickMention(item) }} className="flex min-w-0 flex-1 items-baseline gap-2 px-2 py-1.5 text-left">
+                      <span className="min-w-0 truncate text-xs font-medium text-gray-900">{item.ref.pageId ? item.ref.label.split(' › ')[1] : item.ref.label}</span>
+                      {item.hint && <span className="min-w-0 truncate text-[11px] text-gray-500">{item.hint}</span>}
+                    </button>
+                    {item.ref.pageId && (
+                      <button type="button" onMouseDown={(e) => { e.preventDefault(); void importPage(item.ref) }} title="Importar a página como um post novo, com a foto dela em cards" className="mr-1 shrink-0 rounded-md bg-violet-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-violet-700">Importar</button>
+                    )}
+                  </div>
                 </React.Fragment>
               ))}
             </div>

@@ -5,6 +5,7 @@ import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageRequest, typ
 import { CHAT_AGENTS } from '../../src/features/space/chat/protocol.ts'
 import { checkAgents } from '../space/chatPlugin.ts'
 import { downloadImage } from './baixar.ts'
+import { capturePage, findBrowser } from './captura.ts'
 import { generateImage, hasKey, imageProvider, imageProviders, saveImageKey } from './imagem.ts'
 import { editCreatives } from './edit.ts'
 import { planPosts } from './plan.ts'
@@ -64,7 +65,7 @@ export const criativos = (): Plugin => ({
     server.ws.on(CREATIVE_EVENTS.hello, () => {
       void checkAgents().then((found) => {
         const agents: CreativeAgentInfo[] = found.map((a) => ({ id: a.id, name: CHAT_AGENTS[a.id].name, available: a.available, version: a.version }))
-        server.ws.send(CREATIVE_EVENTS.status, { ia: agents.some((a) => a.available), agents, images: imageProvider(), providers: imageProviders(), keys: { openai: hasKey('openai'), gemini: hasKey('gemini') } })
+        server.ws.send(CREATIVE_EVENTS.status, { ia: agents.some((a) => a.available), agents, images: imageProvider(), providers: imageProviders(), keys: { openai: hasKey('openai'), gemini: hasKey('gemini') }, browser: !!findBrowser() })
       })
     })
 
@@ -88,6 +89,9 @@ export const criativos = (): Plugin => ({
             send({ id, ok: true, data: await generateImage(String(req.prompt ?? ''), ratio, controller.signal, prefer) })
           } else if (call.kind === 'download') {
             send({ id, ok: true, data: await downloadImage(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
+          } else if (call.kind === 'capture') {
+            const req = call.request as { html?: string; width?: number }
+            send({ id, ok: true, data: await capturePage(String(req?.html ?? '').slice(0, 25_000_000), Number(req?.width) || 1280, controller.signal) })
           } else throw new Error('Pedido desconhecido.')
         } catch (error) {
           if (controller.signal.aborted) return

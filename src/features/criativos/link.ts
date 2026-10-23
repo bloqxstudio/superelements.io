@@ -115,7 +115,7 @@ export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?:
     }, TIMEOUT)
     // Sem nenhum passo vindo do outro lado, o conector provavelmente não conhece este pedido
     // Imagem não manda passos (leva até 1 minuto): só vale o limite total
-    const watch = kind !== 'image' && kind !== 'download'
+    const watch = kind !== 'image' && kind !== 'download' && kind !== 'capture'
     let silence = watch ? setTimeout(() => fail(STALE_MESSAGE), SILENCE) : undefined
     const fail = (message: string) => {
       if (!pending.delete(id)) return
@@ -180,3 +180,6 @@ export function saveImageKey(provider: 'openai' | 'gemini', key: string) {
 
 /** Baixa uma imagem da web pelo conector deste computador (sem as travas de CORS do navegador); vem como data URL. */
 export const downloadImageViaLink = (url: string, signal?: AbortSignal) => callAi<{ data: string; type: string }>('download', { url }, signal)
+
+/** Fotografa uma página (HTML completo) com o navegador deste computador: a página inteira, em PNG (data URL). */
+export const capturePageViaLink = (html: string, width: number, signal?: AbortSignal) => callAi<{ data: string; width: number; height: number }>('capture', { html, width }, signal)
