@@ -1,9 +1,12 @@
 import type { Plugin } from 'vite'
 import type { EditRequest } from '../../src/features/criativos/edit.ts'
 import type { PlanRequest } from '../../src/features/criativos/plan.ts'
+import type { CopyRequest } from '../../src/features/copy/protocol.ts'
 import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageRequest, type CreativeCall, type CreativeProgress, type CreativeResult } from '../../src/features/criativos/protocol.ts'
 import { CHAT_AGENTS } from '../../src/features/space/chat/protocol.ts'
 import { checkAgents } from '../space/chatPlugin.ts'
+import { runCopy } from '../copy/agent.ts'
+import { copyToSlides, type SlidesRequest } from '../copy/slides.ts'
 import { downloadImage } from './baixar.ts'
 import { capturePage, findBrowser } from './captura.ts'
 import { generateImage, hasKey, imageProvider, imageProviders, saveImageKey } from './imagem.ts'
@@ -87,6 +90,13 @@ export const criativos = (): Plugin => ({
             const ratio = req.ratio === 'portrait' || req.ratio === 'landscape' ? req.ratio : 'square'
             const prefer = req.provider === 'codex' || req.provider === 'openai' || req.provider === 'gemini' ? req.provider : undefined
             send({ id, ok: true, data: await generateImage(String(req.prompt ?? ''), ratio, controller.signal, prefer) })
+          } else if (call.kind === 'copy') {
+            const req = call.request as CopyRequest
+            if (!String(req?.message ?? '').trim()) throw new Error('Escreva o que você quer.')
+            send({ id, ok: true, data: await runCopy({ ...req, message: String(req.message).slice(0, 6000), doc: { ...req.doc, blocks: (req.doc?.blocks ?? []).slice(0, 400) }, history: (req.history ?? []).slice(-30) }, controller.signal, (step) => server.ws.send(CREATIVE_EVENTS.progress, { id, step } satisfies CreativeProgress)) })
+          } else if (call.kind === 'copy-slides') {
+            const req = call.request as SlidesRequest
+            send({ id, ok: true, data: await copyToSlides({ name: String(req?.name ?? 'Post').slice(0, 120), kind: req?.kind === 'story' ? 'story' : 'post', text: String(req?.text ?? '') }, controller.signal) })
           } else if (call.kind === 'download') {
             send({ id, ok: true, data: await downloadImage(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
           } else if (call.kind === 'capture') {

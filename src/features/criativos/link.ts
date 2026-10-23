@@ -115,6 +115,7 @@ export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?:
     }, TIMEOUT)
     // Sem nenhum passo vindo do outro lado, o conector provavelmente não conhece este pedido
     // Imagem não manda passos (leva até 1 minuto): só vale o limite total
+    // Imagem, download e captura não mandam passos; a pesquisa lê a web por minutos entre um sinal e outro
     const watch = kind !== 'image' && kind !== 'download' && kind !== 'capture'
     let silence = watch ? setTimeout(() => fail(STALE_MESSAGE), SILENCE) : undefined
     const fail = (message: string) => {
