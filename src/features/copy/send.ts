@@ -7,7 +7,7 @@ import { buildPost } from '@/features/criativos/templates'
 import type { SetSummary } from '@/features/criativos/types'
 import { parseDesignMd } from '@/features/space/brand/designMd'
 import type { SpaceNode, SpacePage } from '@/types/space'
-import { recordDelivery } from '@/features/operations/jobs'
+import { announce, recordDelivery } from '@/features/operations/jobs'
 import { formatById } from './knowledge'
 import { htmlToMark } from './html'
 import { plainOf, type Block, type CopyDoc } from './types'
@@ -34,6 +34,10 @@ export function docText(doc: CopyDoc): string {
 // ---------- Criativos ----------
 
 /** O endereço de um post entregue: abre só ele. */
+/** Slides sem foto gerada: as fotos precisam de um serviço de imagem, então o que dependia delas vira texto (capa vira manifesto, foto vira frase). */
+const withoutPhotos = (slides: PlanResponse['posts'][number]['slides']) =>
+  slides.map((s) => ({ ...s, prompt: undefined, template: s.template === 'viral-capa' ? 'manifesto' : s.template === 'viral-foto' ? 'viral-frase' : s.template }))
+
 const postHref = (set: Pick<SetSummary, 'id' | 'shared' | 'projectId'>, postId: string) => `/criativos/${set.id}?${set.shared && set.projectId ? `projeto=${set.projectId}&` : ''}post=${postId}`
 
 export async function sendToCriativos(doc: CopyDoc, target: SetSummary, signal?: AbortSignal, count = 3): Promise<{ postName: string; postNames: string[]; slides: number }> {
@@ -45,8 +49,9 @@ export async function sendToCriativos(doc: CopyDoc, target: SetSummary, signal?:
   if (!plans.length) throw new Error('O agente não montou os slides.')
   const set = await loadSet(target.id, target.shared ? target.projectId : undefined)
   if (!set) throw new Error('Não achei o conjunto de criativos.')
-  const posts = plans.map((p, i) => buildPost({ name: p.name || (research ? `${doc.folderName || doc.title} ${i + 1}` : doc.title || 'Post'), format: story ? '9x16' : '4x5', caption: p.caption, slides: p.slides }, set.brand))
+  const posts = plans.map((p, i) => buildPost({ name: p.name || (research ? `${doc.folderName || doc.title} ${i + 1}` : doc.title || 'Post'), format: story ? '9x16' : '4x5', caption: p.caption, slides: withoutPhotos(p.slides) }, set.brand))
   await saveSet({ ...set, posts: [...set.posts, ...posts], updatedAt: Date.now() })
+  announce(posts.length > 1 ? `${posts.length} posts enviados para ${target.name}` : `Post enviado para ${target.name}`, postHref(target, posts[0].id), posts[0].name)
   posts.forEach((p) => recordDelivery({ area: 'criativos', kind: 'Post enviado', label: `${p.name} → ${target.name}`, agent: 'Enviado da Copy', href: postHref(target, p.id) }))
   return { postName: posts[0].name, postNames: posts.map((p) => p.name), slides: posts.reduce((n, p) => n + p.slides.length, 0) }
 }
@@ -58,8 +63,9 @@ export async function postsFromRequest(request: string, target: SetSummary, coun
   if (!plans.length) throw new Error('O agente não montou os posts.')
   const set = await loadSet(target.id, target.shared ? target.projectId : undefined)
   if (!set) throw new Error('Não achei o conjunto de criativos.')
-  const posts = plans.map((p, i) => buildPost({ name: p.name || `Post ${i + 1}`, format: '4x5', caption: p.caption, slides: p.slides }, set.brand))
+  const posts = plans.map((p, i) => buildPost({ name: p.name || `Post ${i + 1}`, format: '4x5', caption: p.caption, slides: withoutPhotos(p.slides) }, set.brand))
   await saveSet({ ...set, posts: [...set.posts, ...posts], updatedAt: Date.now() })
+  announce(posts.length > 1 ? `${posts.length} posts criados em ${target.name}` : `Post criado em ${target.name}`, postHref(target, posts[0].id), posts[0].name)
   posts.forEach((p) => recordDelivery({ area: 'criativos', kind: 'Post criado', label: `${p.name} → ${target.name}`, agent: 'Pedido ao agente', href: postHref(target, p.id) }))
   return { postNames: posts.map((p) => p.name) }
 }

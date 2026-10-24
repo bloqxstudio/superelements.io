@@ -98,7 +98,7 @@ export const SendDialog: React.FC<{ open: boolean; onClose: () => void; initial?
         const target = sets?.find((s) => s.id === setId)
         if (!target) throw new Error('Escolha um conjunto de criativos.')
         const r = await sendToCriativos(useCopy.getState().doc!, target, undefined, count)
-        toast.success(`${r.postNames.length > 1 ? `${r.postNames.length} posts criados` : `Post "${r.postName}" criado`} com ${r.slides} ${r.slides === 1 ? 'slide' : 'slides'} em ${target.name}.`, { action: { label: 'Abrir', onClick: () => (window.location.href = `/criativos/${target.id}${target.shared && target.projectId ? `?projeto=${target.projectId}` : ''}`) } })
+        void r
       } else {
         if (!projectId) throw new Error('Escolha um projeto.')
         const r = await sendToProject(useCopy.getState().doc!, projectId)

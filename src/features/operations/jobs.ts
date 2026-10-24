@@ -37,6 +37,8 @@ export interface Job {
   /** Para abrir o que está sendo feito. */
   href?: string
   docId?: string
+  /** Sem aviso ao terminar (o resultado de verdade é anunciado por quem grava a entrega). */
+  silent?: boolean
   /** O que o agente foi fazendo, do mais antigo ao mais novo. */
   log?: { at: number; text: string }[]
 }
@@ -72,7 +74,7 @@ useJobs.subscribe((s, prev) => {
 
 const stops = new Map<string, AbortController>()
 
-export function startJob(init: Pick<Job, 'area' | 'kind' | 'label' | 'agent'> & Partial<Pick<Job, 'color' | 'href' | 'docId' | 'step'>>, controller?: AbortController): string {
+export function startJob(init: Pick<Job, 'area' | 'kind' | 'label' | 'agent'> & Partial<Pick<Job, 'color' | 'href' | 'docId' | 'step' | 'silent'>>, controller?: AbortController): string {
   const id = crypto.randomUUID()
   if (controller) stops.set(id, controller)
   useJobs.setState((s) => ({ jobs: [{ ...init, id, step: init.step ?? 'Começando', status: 'running' as const, startedAt: Date.now(), log: [{ at: Date.now(), text: init.step ?? 'Começando' }] }, ...s.jobs].slice(0, KEEP) }))
@@ -92,11 +94,14 @@ export function finishJob(id: string, error?: unknown) {
   const stopped = (error as Error | undefined)?.name === 'AbortError'
   // Avisa onde quer que a pessoa esteja: terminou, e como ver o resultado
   const job = useJobs.getState().jobs.find((j) => j.id === id)
-  if (job && !error) toast.success(`${job.kind} pronto: ${job.label}`.slice(0, 110), job.href ? { action: { label: 'Ver aqui', onClick: () => openPreview({ href: job.href!, title: `${job.kind} · ${job.label}` }) } } : undefined)
+  if (job && !error && !job.silent) toast.success(`${job.kind} pronto: ${job.label}`.slice(0, 110), job.href ? { action: { label: 'Ver aqui', onClick: () => openPreview({ href: job.href!, title: `${job.kind} · ${job.label}` }) } } : undefined)
   useJobs.setState((s) => ({
     jobs: s.jobs.map((j) => (j.id === id ? { ...j, status: error && !stopped ? 'error' : 'done', step: error ? (stopped ? 'Parado' : 'Não terminou') : 'Pronto', error: error && !stopped ? (error instanceof Error ? error.message : String(error)) : undefined, endedAt: Date.now() } : j)),
   }))
 }
+
+/** Avisa que uma entrega ficou pronta, com o caminho para ver só ela. */
+export const announce = (message: string, href: string, title: string) => toast.success(message, { action: { label: 'Ver aqui', onClick: () => openPreview({ href, title }) } })
 
 /** Uma entrega que não passou por um agente aqui (um post ou uma página enviados): entra direto na lista. */
 export function recordDelivery(init: Pick<Job, 'area' | 'kind' | 'label' | 'agent'> & Partial<Pick<Job, 'href' | 'docId'>>) {

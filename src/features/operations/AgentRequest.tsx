@@ -85,7 +85,7 @@ export const AgentRequest: React.FC<{ who: Who; compact?: boolean }> = ({ who, c
         if (!set) throw new Error('Escolha um conjunto de criativos.')
         setText('')
         void postsFromRequest(request, set, count)
-          .then((r) => toast.success(`${r.postNames.length} post${r.postNames.length > 1 ? 's criados' : ' criado'} em ${set.name}.`, { action: { label: 'Abrir', onClick: () => (window.location.href = `/criativos/${set.id}${set.shared && set.projectId ? `?projeto=${set.projectId}` : ''}`) } }))
+          .then(() => undefined)
           .catch((err) => (err as Error).name !== 'AbortError' && toast.error(err instanceof Error ? err.message : 'Não consegui criar os posts.'))
         return
       }
