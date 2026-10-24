@@ -156,6 +156,22 @@ var CHAT_SKILLS = [
       "5. Se\xE7\xE3o nova: arquivo sem `id`, com `place` perto da sele\xE7\xE3o. Se\xE7\xE3o selecionada: mude ela e mantenha os ids que ficarem.",
       "6. Confira com `shot --section <id> --device all` comparando com a imagem, ajuste o que ficou longe e responda com o que foi levado e o que foi adaptado \xE0 marca."
     )
+  },
+  {
+    id: "pagina-copy",
+    source: "builtin",
+    name: "P\xE1gina da copy",
+    hint: "Monta a p\xE1gina inteira em Elementor nativo a partir de uma copy aprovada",
+    starters: ["Monte a p\xE1gina com a copy da pasta, uma se\xE7\xE3o por vez", "Transforme a copy desta p\xE1gina em se\xE7\xF5es do Elementor, na marca do projeto", "Refa\xE7a em Elementor nativo a p\xE1gina que ficou em HTML"],
+    instructions: lines(
+      "Voc\xEA monta (ou refaz) uma p\xE1gina a partir de uma copy j\xE1 escrita e aprovada. A entrega \xE9 Elementor nativo no canvas do Space, nunca HTML.",
+      '1. Leia a copy inteira (o texto que a pessoa mandou, ou as se\xE7\xF5es "Copy \xB7 \u2026" que o envio do Copy j\xE1 p\xF4s no projeto) e a marca (`marca.md`). Os textos s\xE3o a copy: n\xE3o reescreva nem invente fato; se faltar um dado, diga o que falta.',
+      "2. Regra firme: nada de widget HTML com layout ou conte\xFAdo dentro, nem p\xE1gina inteira em HTML/CSS solto. Use containers flex ou grid e os widgets de t\xEDtulo, texto, imagem, bot\xE3o, lista com \xEDcones, formul\xE1rio e accordion/FAQ. O \xFAnico HTML permitido \xE9 um widget s\xF3 de comportamento (anima\xE7\xE3o), sem conte\xFAdo.",
+      "3. Uma se\xE7\xE3o por arquivo, em ordem: abertura (t\xEDtulo, apoio, bot\xE3o), o problema, a solu\xE7\xE3o, como funciona, prova (s\xF3 o que a copy traz), perguntas, chamada final, rodap\xE9. Container raiz com largura da marca e o espa\xE7o entre se\xE7\xF5es das outras p\xE1ginas; cards, grades e passos como containers com widgets dentro.",
+      "4. Estilo vem da marca do projeto (cores, fontes, cantos, bot\xF5es), por settings do Elementor e pelas classes que as outras se\xE7\xF5es j\xE1 usam. Responsivo com os sufixos `_tablet` e `_mobile`.",
+      "5. Uma se\xE7\xE3o por push: confira com `shot --section <id> --device all`, corrija e siga. No fim, responda com a lista de se\xE7\xF5es e o que ficou sem dado.",
+      "6. Se a p\xE1gina que a pessoa mostrou est\xE1 em HTML, refa\xE7a cada parte nativa e remova o widget HTML; mantenha os textos e a ordem."
+    )
   }
 ];
 var CHAT_SKILL_IDS = CHAT_SKILLS.map((s) => s.id);
@@ -3085,7 +3101,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610240038", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610240048", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -3102,7 +3118,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610240038" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610240048" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);

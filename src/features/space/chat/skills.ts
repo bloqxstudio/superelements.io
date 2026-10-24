@@ -11,7 +11,7 @@
  */
 
 /** As padrão, que vêm no código. */
-export type ChatSkillId = 'designer' | 'copy' | 'seo' | 'conversao' | 'celular' | 'acessibilidade' | 'referencia'
+export type ChatSkillId = 'designer' | 'copy' | 'seo' | 'conversao' | 'celular' | 'acessibilidade' | 'referencia' | 'pagina-copy'
 
 /** Padrão (no código), global (da equipe, na conta) ou pessoal (de quem criou). */
 export type ChatSkillSource = 'builtin' | 'global' | 'personal'
@@ -141,6 +141,22 @@ export const CHAT_SKILLS: Array<ChatSkill & { id: ChatSkillId }> = [
       '4. Foto para usar na página (e não referência): ponha o caminho do arquivo no `url` da imagem.',
       '5. Seção nova: arquivo sem `id`, com `place` perto da seleção. Seção selecionada: mude ela e mantenha os ids que ficarem.',
       '6. Confira com `shot --section <id> --device all` comparando com a imagem, ajuste o que ficou longe e responda com o que foi levado e o que foi adaptado à marca.'
+    ),
+  },
+  {
+    id: 'pagina-copy',
+    source: 'builtin',
+    name: 'Página da copy',
+    hint: 'Monta a página inteira em Elementor nativo a partir de uma copy aprovada',
+    starters: ['Monte a página com a copy da pasta, uma seção por vez', 'Transforme a copy desta página em seções do Elementor, na marca do projeto', 'Refaça em Elementor nativo a página que ficou em HTML'],
+    instructions: lines(
+      'Você monta (ou refaz) uma página a partir de uma copy já escrita e aprovada. A entrega é Elementor nativo no canvas do Space, nunca HTML.',
+      '1. Leia a copy inteira (o texto que a pessoa mandou, ou as seções "Copy · …" que o envio do Copy já pôs no projeto) e a marca (`marca.md`). Os textos são a copy: não reescreva nem invente fato; se faltar um dado, diga o que falta.',
+      '2. Regra firme: nada de widget HTML com layout ou conteúdo dentro, nem página inteira em HTML/CSS solto. Use containers flex ou grid e os widgets de título, texto, imagem, botão, lista com ícones, formulário e accordion/FAQ. O único HTML permitido é um widget só de comportamento (animação), sem conteúdo.',
+      '3. Uma seção por arquivo, em ordem: abertura (título, apoio, botão), o problema, a solução, como funciona, prova (só o que a copy traz), perguntas, chamada final, rodapé. Container raiz com largura da marca e o espaço entre seções das outras páginas; cards, grades e passos como containers com widgets dentro.',
+      '4. Estilo vem da marca do projeto (cores, fontes, cantos, botões), por settings do Elementor e pelas classes que as outras seções já usam. Responsivo com os sufixos `_tablet` e `_mobile`.',
+      '5. Uma seção por push: confira com `shot --section <id> --device all`, corrija e siga. No fim, responda com a lista de seções e o que ficou sem dado.',
+      '6. Se a página que a pessoa mostrou está em HTML, refaça cada parte nativa e remova o widget HTML; mantenha os textos e a ordem.'
     ),
   },
 ]
