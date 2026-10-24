@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { FileText, Microscope, Plus, Search, Trash2 } from 'lucide-react'
+import { ArrowLeft, FileText, FolderOpen, Microscope, Plus, Search, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { FORMATS, NICHES, formatById, nicheById, type FormatGroup, type FormatSpec } from '@/features/copy/knowledge'
 import { escapeHtml } from '@/features/copy/html'
+import { renameFolder } from '@/features/copy/folder'
 import { deleteDoc, listDocs, saveDoc } from '@/features/copy/storage'
 import { block, EMPTY_BRIEF, uid, type CopyDoc, type CopySummary, type FormatId } from '@/features/copy/types'
 
@@ -22,7 +23,7 @@ const GROUPS: FormatGroup[] = ['Redes sociais', 'Site e páginas', 'Campanhas', 
 
 export const setLink = (d: Pick<CopySummary, 'id' | 'projectId' | 'shared'>) => `/copy/${d.id}${d.shared && d.projectId ? `?projeto=${d.projectId}` : ''}`
 
-const NewDoc: React.FC<{ open: boolean; research: boolean; onClose: () => void }> = ({ open, research, onClose }) => {
+const NewDoc: React.FC<{ open: boolean; research: boolean; folders: { id: string; name: string }[]; defaultFolder?: string; onClose: () => void }> = ({ open, research, folders, defaultFolder, onClose }) => {
   const navigate = useNavigate()
   useProjectList()
   const projects = useProjectStore((s) => s.projects)
@@ -33,10 +34,15 @@ const NewDoc: React.FC<{ open: boolean; research: boolean; onClose: () => void }
   const [projectId, setProjectId] = useState('')
   const [share, setShare] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [folder, setFolder] = useState('')
+  const [folderName, setFolderName] = useState('')
 
   useEffect(() => {
-    if (open) setFormat(research ? 'pesquisa' : 'post-instagram')
-  }, [open, research])
+    if (open) {
+      setFormat(research ? 'pesquisa' : 'post-instagram')
+      setFolder(defaultFolder ?? '')
+    }
+  }, [open, research, defaultFolder])
 
   const spec = formatById(format)
   const project = projects.find((p) => p.id === projectId)
@@ -46,6 +52,11 @@ const NewDoc: React.FC<{ open: boolean; research: boolean; onClose: () => void }
     try {
       const now = Date.now()
       const label = nicheById(niche)?.label
+      // Uma pesquisa abre a pasta do assunto; um documento entra numa pasta existente, numa nova ou fica solto
+      const existing = folders.find((f) => f.id === folder)
+      const folderId = research ? uid() : folder === '__new' ? uid() : existing?.id
+      const newName = research ? topic.trim().slice(0, 60) : folderName.trim() || title.trim() || spec.label
+      const folderLabel = research || folder === '__new' ? newName : existing?.name
       const doc: CopyDoc = {
         id: uid(),
         title: title.trim() || (format === 'pesquisa' && topic.trim() ? `Pesquisa · ${topic.trim().slice(0, 60)}` : `${spec.label}${label ? ` · ${label}` : ''}`),
@@ -54,6 +65,8 @@ const NewDoc: React.FC<{ open: boolean; research: boolean; onClose: () => void }
         projectId: project?.id,
         projectName: project?.name,
         shared: !!project && share,
+        folderId,
+        folderName: folderId ? folderLabel : undefined,
         brief: { ...EMPTY_BRIEF, ...(format === 'pesquisa' ? { objective: 'Mapear dores, desejos, objeções, clientes, jornada, campanhas e posts de referência para criar conteúdo', notes: topic.trim() } : {}) },
         blocks: spec.skeleton.map((b) => block(b.type, escapeHtml(b.text ?? ''), b.label)),
         comments: [],
@@ -122,6 +135,25 @@ const NewDoc: React.FC<{ open: boolean; research: boolean; onClose: () => void }
               <span>Compartilhar com a equipe do projeto<span className="block text-xs text-gray-500">Quem está no projeto edita junto, ao vivo, e vê onde cada um escreve, os comentários e os agentes.</span></span>
             </label>
           )}
+          {!research && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-gray-800">Pasta do assunto</span>
+                <select value={folder} onChange={(e) => setFolder(e.target.value)} className="h-9 w-full rounded-md border border-gray-200 bg-white px-2 text-sm">
+                  <option value="">Sem pasta</option>
+                  {folders.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
+                  <option value="__new">Nova pasta…</option>
+                </select>
+              </label>
+              {folder === '__new' && (
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-gray-800">Nome da pasta</span>
+                  <input value={folderName} onChange={(e) => setFolderName(e.target.value)} placeholder="Ex.: Site para arquitetos" className="h-9 w-full rounded-md border border-gray-200 px-2 text-sm" />
+                </label>
+              )}
+            </div>
+          )}
+          {research && <p className="rounded-md bg-violet-50 px-3 py-2 text-xs text-violet-900">A pesquisa abre uma pasta com o nome do assunto. Depois dela, crie na mesma pasta a copy da LP, o conteúdo orgânico e o de conversão: os agentes leem a pesquisa e cada documento vai para o seu lugar.</p>}
           <label className="block text-sm">
             <span className="mb-1 block font-medium text-gray-800">Título (opcional)</span>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${spec.label}${nicheById(niche) ? ` · ${nicheById(niche)!.label}` : ''}`} className="h-9 w-full rounded-md border border-gray-200 px-2 text-sm" />
@@ -142,6 +174,8 @@ const Copy: React.FC = () => {
   const [creating, setCreating] = useState<null | 'doc' | 'research'>(null)
   const [query, setQuery] = useState('')
   const [group, setGroup] = useState<FormatGroup | 'Todos'>('Todos')
+  const [params, setParams] = useSearchParams()
+  const folderParam = params.get('pasta') ?? undefined
   useProjectList()
   const projectIds = useProjectStore((s) => s.projects).map((p) => p.id).join(',')
 
@@ -160,8 +194,35 @@ const Copy: React.FC = () => {
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return (docs ?? []).filter((d) => (group === 'Todos' || formatById(d.format).group === group) && (!q || `${d.title} ${nicheById(d.niche)?.label ?? ''} ${d.projectName ?? ''}`.toLowerCase().includes(q)))
-  }, [docs, query, group])
+    return (docs ?? []).filter((d) => (!folderParam || d.folderId === folderParam) && ( (group === 'Todos' || formatById(d.format).group === group) && (!q || `${d.title} ${nicheById(d.niche)?.label ?? ''} ${d.projectName ?? ''}`.toLowerCase().includes(q))))
+  }, [docs, query, group, folderParam])
+
+  const folders = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; docs: CopySummary[] }>()
+    for (const d of docs ?? []) {
+      if (!d.folderId) continue
+      const f = map.get(d.folderId) ?? { id: d.folderId, name: d.folderName || 'Pasta', docs: [] }
+      f.docs.push(d)
+      map.set(d.folderId, f)
+    }
+    return [...map.values()].sort((a, b) => Math.max(...b.docs.map((x) => x.updatedAt)) - Math.max(...a.docs.map((x) => x.updatedAt)))
+  }, [docs])
+  const openFolder = folders.find((f) => f.id === folderParam)
+  const filtering = !!query.trim() || group !== 'Todos'
+  const showFolders = !folderParam && !filtering
+  const listed = showFolders ? shown.filter((d) => !d.folderId) : shown
+
+  const rename = async () => {
+    if (!openFolder) return
+    const name = window.prompt('Nome da pasta', openFolder.name)?.trim()
+    if (!name || name === openFolder.name) return
+    try {
+      await renameFolder(openFolder.id, name)
+      await load()
+    } catch {
+      toast.error('Não consegui renomear a pasta.')
+    }
+  }
 
   const remove = async (d: CopySummary) => {
     if (!window.confirm(`Excluir "${d.title}"?`)) return
@@ -178,8 +239,18 @@ const Copy: React.FC = () => {
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
+            {folderParam ? (
+              <>
+                <button type="button" onClick={() => setParams({})} className="mb-1 flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-900"><ArrowLeft className="h-3.5 w-3.5" /> Todas as pastas</button>
+                <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-gray-900"><FolderOpen className="h-6 w-6 text-amber-600" />{openFolder?.name ?? 'Pasta'}</h1>
+                <p className="mt-1 max-w-2xl text-sm text-gray-500">Pesquisa, copy da LP e conteúdos deste assunto. Os agentes leem a pesquisa da pasta antes de escrever, e cada documento é enviado para o seu lugar. <button type="button" onClick={() => void rename()} className="underline">Renomear</button></p>
+              </>
+            ) : (
+              <>
             <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Copy</h1>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">O documento de texto da empresa: posts, landing pages, sites, campanhas, stories, e-mails e pesquisas. Os agentes escrevem e revisam com você acompanhando, a equipe edita e comenta ao vivo, e o texto segue para Criativos ou Projetos.</p>
+            <p className="mt-1 max-w-2xl text-sm text-gray-500">O documento de texto da empresa: posts, landing pages, sites, campanhas, stories, e-mails e pesquisas. Os agentes escrevem e revisam com você acompanhando, a equipe edita e comenta ao vivo, e o texto segue para Criativos ou Projetos. Um assunto vira uma pasta com a pesquisa e os documentos que saem dela.</p>
+              </>
+            )}
           </div>
           <div className="flex gap-2">
             <Button variant="outline" className="gap-1.5 bg-white" onClick={() => setCreating('research')}><Microscope className="h-4 w-4" /> Nova pesquisa</Button>
@@ -201,7 +272,14 @@ const Copy: React.FC = () => {
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {docs === null && !error && [0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06)]" />)}
-          {shown.map((d) => {
+          {showFolders && folders.map((f) => (
+            <Link key={f.id} to={`/copy?pasta=${f.id}`} className="block rounded-xl bg-white p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] transition-shadow hover:shadow-[0_0_0_1px_rgb(0_0_0/0.1),0_6px_16px_-6px_rgb(0_0_0/0.14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800"><FolderOpen className="h-3 w-3" />Pasta · {f.docs.length} documento{f.docs.length > 1 ? 's' : ''}</span>
+              <p className="mt-3 truncate text-sm font-semibold text-gray-900">{f.name}</p>
+              <p className="mt-0.5 truncate text-xs text-gray-500">{[...new Set(f.docs.map((d) => formatById(d.format).label))].join(' · ')}</p>
+            </Link>
+          ))}
+          {listed.map((d) => {
             const f = formatById(d.format)
             return (
               <div key={d.id} className="group relative rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] transition-shadow hover:shadow-[0_0_0_1px_rgb(0_0_0/0.1),0_6px_16px_-6px_rgb(0_0_0/0.14)]">
@@ -228,7 +306,7 @@ const Copy: React.FC = () => {
           </div>
         )}
       </div>
-      <NewDoc open={!!creating} research={creating === 'research'} onClose={() => setCreating(null)} />
+      <NewDoc open={!!creating} research={creating === 'research'} folders={folders.map((f) => ({ id: f.id, name: f.name }))} defaultFolder={folderParam} onClose={() => setCreating(null)} />
     </div>
   )
 }

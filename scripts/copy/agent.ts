@@ -63,7 +63,7 @@ const promptOf = (r: CopyRequest) => {
     `## Frameworks de escrita à disposição (escolha o que serve, sem anunciar)\n${FRAMEWORKS.map((f) => `- ${f.name}: ${f.steps}`).join('\n')}`,
     `## Fórmulas de gancho\n${HOOKS.map((h) => `- ${h.name}: ${h.example}`).join('\n')}`,
     '',
-    r.references?.length ? `## Referências marcadas\n${r.references.map((x, i) => `### ${i + 1}. ${x.kind}: ${x.label}\n${x.text.slice(0, 8000)}`).join('\n\n')}\n` : '',
+    r.references?.length ? `## Referências (pesquisa e documentos da pasta, e o que a pessoa marcou)\n${r.references.map((x, i) => `### ${i + 1}. ${x.kind}: ${x.label}\n${x.text.slice(0, 8000)}`).join('\n\n')}\n` : '',
     r.doc.comments?.length ? `## Comentários em aberto\n${r.doc.comments.slice(0, 30).map((c) => `[${c.blockId}] ${c.author}: ${c.text}`).join('\n')}\n` : '',
     `## Conversa até aqui\n${(r.history ?? []).slice(-30).map((m) => `${m.role === 'user' ? 'Pessoa' : 'Você'}: ${m.text.slice(0, 1200)}`).join('\n') || '(começo)'}`,
     '',

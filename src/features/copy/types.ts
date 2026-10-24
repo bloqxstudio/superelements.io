@@ -76,6 +76,9 @@ export interface CopyDoc {
   projectName?: string
   /** Guardado na pasta do projeto: a equipe dele abre e edita junto, ao vivo. */
   shared?: boolean
+  /** Pasta (o assunto): a pesquisa, a copy da LP e os conteúdos do mesmo assunto ficam juntos e se leem. */
+  folderId?: string
+  folderName?: string
   brief: Brief
   blocks: Block[]
   comments: CopyComment[]
@@ -93,6 +96,8 @@ export interface CopySummary {
   projectId?: string
   projectName?: string
   shared?: boolean
+  folderId?: string
+  folderName?: string
   words: number
   updatedAt: number
 }

@@ -6,6 +6,7 @@ import { engineInfo, useCopyAgent } from './agentStore'
 import { escapeHtml, htmlToMark } from './html'
 import { applyCopyOps } from './ops'
 import type { CopyOp, CopyRequest, CopyResponse } from './protocol'
+import { folderReferences } from './folder'
 import { useCopy } from './store'
 import { plainOf, type CopyDoc, type Person } from './types'
 
@@ -130,7 +131,8 @@ export async function runCopyAgent(input: RunInput, signal: AbortSignal): Promis
   agentState.point({ blockId: target })
   try {
     // O pedido já está na conversa: a IA recebe o histórico sem ele
-    const answer = await callAi<CopyResponse>('copy', buildRequest(doc, input, history.slice(0, -1)), signal, (step) => useCopyAgent.getState().phase(step))
+    const folderRefs = await folderReferences(doc)
+    const answer = await callAi<CopyResponse>('copy', buildRequest(doc, { ...input, references: [...folderRefs, ...(input.references ?? [])] }, history.slice(0, -1)), signal, (step) => useCopyAgent.getState().phase(step))
     if (!Array.isArray(answer.ops)) throw new Error('A IA não respondeu no formato esperado.')
     useCopyAgent.getState().phase('applying')
 

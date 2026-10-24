@@ -2192,7 +2192,7 @@ ${FRAMEWORKS.map((f) => `- ${f.name}: ${f.steps}`).join("\n")}`,
     `## F\xF3rmulas de gancho
 ${HOOKS.map((h) => `- ${h.name}: ${h.example}`).join("\n")}`,
     "",
-    r.references?.length ? `## Refer\xEAncias marcadas
+    r.references?.length ? `## Refer\xEAncias (pesquisa e documentos da pasta, e o que a pessoa marcou)
 ${r.references.map((x, i) => `### ${i + 1}. ${x.kind}: ${x.label}
 ${x.text.slice(0, 8e3)}`).join("\n\n")}
 ` : "",
@@ -3085,7 +3085,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610232346", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610240038", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -3102,7 +3102,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610232346" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610240038" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);

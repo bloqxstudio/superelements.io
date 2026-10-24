@@ -49,7 +49,7 @@ const folderOf = async (projectId?: string) => {
 
 const placeOf = (d: Pick<CopyDoc, 'projectId' | 'shared'>) => (d.shared ? d.projectId : undefined)
 
-export const summaryOf = (d: CopyDoc): CopySummary => ({ id: d.id, title: d.title, format: d.format, niche: d.niche, projectId: d.projectId, projectName: d.projectName, shared: d.shared, words: wordsOf(d), updatedAt: d.updatedAt })
+export const summaryOf = (d: CopyDoc): CopySummary => ({ id: d.id, title: d.title, format: d.format, niche: d.niche, projectId: d.projectId, projectName: d.projectName, shared: d.shared, folderId: d.folderId, folderName: d.folderName, words: wordsOf(d), updatedAt: d.updatedAt })
 
 /** Os documentos da conta e os dos projetos que ela abre, do mais novo ao mais antigo. */
 export async function listDocs(projectIds: string[] = []): Promise<CopySummary[]> {

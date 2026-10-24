@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, FileText, MessageSquare, Redo2, Send, Sparkles, Undo2, Users } from 'lucide-react'
+import { ArrowLeft, FileText, FolderOpen, MessageSquare, Redo2, Send, Sparkles, Undo2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { AgentPanel, type Pending } from './AgentPanel'
 import { CommentsPanel, type Composer } from './Comments'
 import { DocEditor } from './DocEditor'
+import { FolderPanel } from './FolderPanel'
 import { formatById } from './knowledge'
 import { joinDocLive, useCopyLive } from './live'
 import { useCopyChat } from './runner'
@@ -18,12 +19,13 @@ import { useCopy } from './store'
 
 /** A tela do documento: o texto no meio, o painel do agente, dos comentários e do briefing ao lado, e quem está junto no topo. */
 
-type Tab = 'agente' | 'comentarios' | 'briefing' | 'fontes'
+type Tab = 'pasta' | 'agente' | 'comentarios' | 'briefing' | 'fontes'
 
 export const CopyEditorPage: React.FC = () => {
   const { docId = '' } = useParams()
   const projectParam = useSearchParams()[0].get('projeto') ?? undefined
   const autoRun = useSearchParams()[0].get('rodar')
+  const autoSend = useSearchParams()[0].get('enviar')
   const navigate = useNavigate()
   const status = useCopy((s) => s.status)
   const doc = useCopy((s) => s.doc)
@@ -65,6 +67,11 @@ export const CopyEditorPage: React.FC = () => {
       setTab('agente')
     }
   }, [status, doc, autoRun])
+
+  // Vindo da pasta com "Enviar": abre o envio
+  useEffect(() => {
+    if (status === 'ready' && autoSend) setSend(true)
+  }, [status, autoSend])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -115,6 +122,7 @@ export const CopyEditorPage: React.FC = () => {
   }
 
   const tabs: [Tab, string, React.ComponentType<{ className?: string }>, number?][] = [
+    ...(doc.folderId ? ([['pasta', 'Pasta', FolderOpen]] as [Tab, string, React.ComponentType<{ className?: string }>, number?][]) : []),
     ['agente', 'Agente', Sparkles],
     ['comentarios', 'Comentários', MessageSquare, openComments],
     ['briefing', 'Briefing', FileText],
@@ -187,6 +195,7 @@ export const CopyEditorPage: React.FC = () => {
             ))}
           </div>
           <div className="min-h-0 flex-1">
+            {tab === 'pasta' && <FolderPanel />}
             {tab === 'agente' && <AgentPanel pending={pending} />}
             {tab === 'comentarios' && <CommentsPanel composer={composer} onClose={() => setComposer(null)} />}
             {tab === 'briefing' && <BriefPanel />}
