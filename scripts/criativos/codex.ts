@@ -21,7 +21,7 @@ interface Ask {
   /** Pesquisa na web (ferramenta de busca do Codex), para pedidos com link. */
   web?: boolean
   signal?: AbortSignal
-  onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing') => void
+  onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing', detail?: string) => void
 }
 
 /** O primeiro objeto JSON completo de um texto (a resposta pode vir com ``` ou uma frase antes). */

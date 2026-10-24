@@ -15,7 +15,7 @@ export const CREATIVE_EVENTS = {
 
 export interface CreativeCall {
   id: string
-  kind: 'edit' | 'plan' | 'image' | 'download' | 'capture' | 'copy' | 'copy-slides'
+  kind: 'edit' | 'plan' | 'image' | 'download' | 'capture' | 'copy' | 'copy-slides' | 'copy-plan'
   request: unknown
 }
 
@@ -27,6 +27,8 @@ export type CreativeStep = 'start' | 'thinking' | 'reading' | 'writing'
 export interface CreativeProgress {
   id: string
   step: CreativeStep
+  /** O que está fazendo agora, em uma linha (a busca ou a página que lê). */
+  detail?: string
 }
 
 /** Quais agentes a máquina tem (o que o conector ou o servidor de dev achou). */

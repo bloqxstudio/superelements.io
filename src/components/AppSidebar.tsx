@@ -1,3 +1,4 @@
+import { useJobs } from '@/features/operations/jobs'
 import React, { useEffect } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { Bot, Building2, FolderKanban, Images, PenLine, KanbanSquare, LogOut, Radar, ScanSearch, Send, Users, Wand2, X } from 'lucide-react'
@@ -38,13 +39,13 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
   </div>
 )
 
-/** Agentes: só quando o app local está ligado a eles, com quantos trabalham e quantos esperam. */
+/** Agentes: sempre à vista, com quantos trabalham (agentes dos projetos e trabalhos de copy e criativos) e quantos esperam. */
 const AgentsItem: React.FC = () => {
   const connected = useAgents((s) => s.connected)
   const agents = useAgents((s) => s.agents)
   const now = useTick()
-  if (!connected) return null
-  const working = agents.filter((a) => agentStatus(a, now) === 'working').length
+  const jobsRunning = useJobs((s) => s.jobs.filter((j) => j.status === 'running').length)
+  const working = (connected ? agents.filter((a) => agentStatus(a, now) === 'working').length : 0) + jobsRunning
   const asking = agents.filter((a) => agentStatus(a, now) === 'question').length
   return (
     <Item to="/agentes" icon={Bot} label="Agentes">

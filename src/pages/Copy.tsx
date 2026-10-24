@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { FORMATS, NICHES, formatById, nicheById, type FormatGroup, type FormatSpec } from '@/features/copy/knowledge'
 import { escapeHtml } from '@/features/copy/html'
+import { FolderAgentBox } from '@/features/copy/FolderAgentBox'
+import { useJobs } from '@/features/operations/jobs'
 import { renameFolder } from '@/features/copy/folder'
 import { deleteDoc, listDocs, saveDoc } from '@/features/copy/storage'
 import { block, EMPTY_BRIEF, uid, type CopyDoc, type CopySummary, type FormatId } from '@/features/copy/types'
@@ -174,6 +176,8 @@ const Copy: React.FC = () => {
   const [creating, setCreating] = useState<null | 'doc' | 'research'>(null)
   const [query, setQuery] = useState('')
   const [group, setGroup] = useState<FormatGroup | 'Todos'>('Todos')
+  const jobs = useJobs((s) => s.jobs)
+  const runningCount = jobs.filter((j) => j.status === 'running').length
   const [params, setParams] = useSearchParams()
   const folderParam = params.get('pasta') ?? undefined
   useProjectList()
@@ -190,7 +194,7 @@ const Copy: React.FC = () => {
         setError(true)
       })
 
-  useEffect(() => void load(), [projectIds]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => void load(), [projectIds, runningCount]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -268,6 +272,8 @@ const Copy: React.FC = () => {
           ))}
         </div>
 
+        {openFolder && <div className="mt-5"><FolderAgentBox folderId={openFolder.id} docs={openFolder.docs} onDone={() => void load()} /></div>}
+
         {error && <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">Não consegui ler os documentos da conta. <button className="underline" onClick={() => void load()}>Tentar de novo</button></p>}
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -275,6 +281,7 @@ const Copy: React.FC = () => {
           {showFolders && folders.map((f) => (
             <Link key={f.id} to={`/copy?pasta=${f.id}`} className="block rounded-xl bg-white p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] transition-shadow hover:shadow-[0_0_0_1px_rgb(0_0_0/0.1),0_6px_16px_-6px_rgb(0_0_0/0.14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800"><FolderOpen className="h-3 w-3" />Pasta · {f.docs.length} documento{f.docs.length > 1 ? 's' : ''}</span>
+              {jobs.some((j) => j.status === 'running' && (f.docs.some((d) => d.id === j.docId) || j.href === `/copy?pasta=${f.id}`)) && <span className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-800"><span className="h-1.5 w-1.5 rounded-full bg-violet-600 motion-safe:animate-pulse" />trabalhando</span>}
               <p className="mt-3 truncate text-sm font-semibold text-gray-900">{f.name}</p>
               <p className="mt-0.5 truncate text-xs text-gray-500">{[...new Set(f.docs.map((d) => formatById(d.format).label))].join(' · ')}</p>
             </Link>
@@ -286,6 +293,7 @@ const Copy: React.FC = () => {
                 <Link to={setLink(d)} className="block rounded-xl p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-800">{f.id === 'pesquisa' ? <Microscope className="h-3 w-3" /> : <FileText className="h-3 w-3" />}{f.label}</span>
                   <p className="mt-3 truncate text-sm font-semibold text-gray-900">{d.title || 'Documento sem título'}</p>
+                  {jobs.find((j) => j.docId === d.id && j.status === 'running') && <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-violet-700"><span className="h-1.5 w-1.5 rounded-full bg-violet-600 motion-safe:animate-pulse" />{jobs.find((j) => j.docId === d.id && j.status === 'running')!.agent} · {jobs.find((j) => j.docId === d.id && j.status === 'running')!.step}</p>}
                   <p className="mt-0.5 text-xs text-gray-500">{[nicheById(d.niche)?.label, d.projectName && `${d.projectName}${d.shared ? ' (equipe)' : ''}`, `${d.words} palavras`, when(d.updatedAt)].filter(Boolean).join(' · ')}</p>
                 </Link>
                 <button type="button" aria-label={`Excluir ${d.title}`} onClick={() => void remove(d)} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md text-gray-400 opacity-0 hover:bg-gray-100 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"><Trash2 className="h-4 w-4" /></button>

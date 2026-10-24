@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { AgentPanel, type Pending } from './AgentPanel'
 import { CommentsPanel, type Composer } from './Comments'
+import { elapsed, useSeconds } from '@/features/operations/JobFeed'
+import { useRunningFor } from '@/features/operations/jobs'
 import { DocEditor } from './DocEditor'
 import { FolderPanel } from './FolderPanel'
 import { formatById } from './knowledge'
@@ -20,6 +22,22 @@ import { useCopy } from './store'
 /** A tela do documento: o texto no meio, o painel do agente, dos comentários e do briefing ao lado, e quem está junto no topo. */
 
 type Tab = 'pasta' | 'agente' | 'comentarios' | 'briefing' | 'fontes'
+
+/** Logo após o clique: quem está trabalhando neste documento, há quanto tempo e o passo de agora. */
+const RunBanner: React.FC<{ docId: string }> = ({ docId }) => {
+  const job = useRunningFor(docId)
+  const now = useSeconds(!!job)
+  if (!job) return null
+  return (
+    <div role="status" aria-live="polite" className="sticky top-0 z-30 flex items-center gap-2.5 border-b px-4 py-2 text-sm backdrop-blur" style={{ background: `${job.color ?? '#7c3aed'}14` }}>
+      <span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full rounded-full opacity-60 motion-safe:animate-ping" style={{ background: job.color }} /><span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: job.color }} /></span>
+      <span className="font-semibold text-gray-900">{job.agent}</span>
+      <span className="min-w-0 flex-1 truncate text-gray-600">{job.kind === 'Pesquisa' ? 'pesquisando' : 'escrevendo'} · {job.step}</span>
+      <span className="tabular-nums text-xs text-gray-500">{elapsed(job.startedAt, now)}</span>
+      <span className="hidden text-xs text-gray-500 sm:inline">Pode sair desta tela: ele continua.</span>
+    </div>
+  )
+}
 
 export const CopyEditorPage: React.FC = () => {
   const { docId = '' } = useParams()
@@ -174,6 +192,7 @@ export const CopyEditorPage: React.FC = () => {
 
       <div className="flex min-h-0 flex-1">
         <main className="min-w-0 flex-1 overflow-y-auto bg-white" data-scroll>
+          <RunBanner docId={doc.id} />
           <DocEditor
             onComment={(blockId, quote) => {
               setComposer({ blockId, quote })

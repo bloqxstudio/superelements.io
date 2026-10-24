@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { AgentChannel } from '@/features/space/connector/channel'
+import { finishJob, noteJob, patchJob, startJob } from '@/features/operations/jobs'
 import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageProvider, type CreativeCall, type CreativeProgress, type CreativeResult, type CreativeStep } from './protocol'
 
 /**
@@ -36,7 +37,7 @@ export const useAiAvailable = (): boolean | null => useCreativeLink((s) => (!s.c
 
 export const STALE_MESSAGE = 'A IA não respondeu. O conector pode estar desatualizado: baixe o conector.mjs de novo e abra-o.'
 
-const pending = new Map<string, { resolve: (data: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>; onStep?: (step: CreativeStep) => void }>()
+const pending = new Map<string, { resolve: (data: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>; onStep?: (step: CreativeStep, detail?: string) => void }>()
 const TIMEOUT = 9 * 60_000
 /** Quanto esperar a resposta ao "oi" antes de achar o conector desatualizado. */
 const HELLO_WAIT = 4000
@@ -71,7 +72,7 @@ export function startCreativeLink(channel: AgentChannel) {
     if (result.ok === true) call.resolve(result.data)
     else call.reject(new Error((result as { error: string }).error))
   }
-  const onProgress = (progress: CreativeProgress) => pending.get(progress?.id)?.onStep?.(progress.step)
+  const onProgress = (progress: CreativeProgress) => pending.get(progress?.id)?.onStep?.(progress.step, progress.detail)
   const hello = () => {
     useCreativeLink.setState({ connected: true })
     channel.send(CREATIVE_EVENTS.hello)
@@ -96,8 +97,37 @@ export function startCreativeLink(channel: AgentChannel) {
   }
 }
 
-/** Pede uma resposta à IA desta máquina. `signal` cancela (e para o Claude Code). */
-export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?: AbortSignal, onStep?: (step: CreativeStep) => void): Promise<T> {
+const TRACKED: Partial<Record<CreativeCall['kind'], { kind: string; label: (r: Record<string, unknown>) => unknown }>> = {
+  edit: { kind: 'Edição', label: (r) => r.message },
+  plan: { kind: 'Plano de posts', label: (r) => r.brief },
+  image: { kind: 'Imagem', label: (r) => r.prompt },
+  'copy-slides': { kind: 'Post da copy', label: (r) => r.name },
+}
+const STEP_TEXT: Record<CreativeStep, string> = { start: 'Lendo o pedido', thinking: 'Pensando', reading: 'Pesquisando na web', writing: 'Escrevendo' }
+
+/** Pede uma resposta à IA desta máquina. Os pedidos de criativos aparecem na tela Agentes enquanto rodam. */
+export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?: AbortSignal, onStep?: (step: CreativeStep, detail?: string) => void): Promise<T> {
+  const track = TRACKED[kind]
+  if (!track) return callAiRaw<T>(kind, request, signal, onStep)
+  const label = String(track.label((request ?? {}) as Record<string, unknown>) ?? '').replace(/\s+/g, ' ').trim().slice(0, 90) || track.kind
+  const jobId = startJob({ area: 'criativos', kind: track.kind, label, agent: 'Claude Code · Criativos', color: '#D97757', step: 'Enviando o pedido' })
+  return callAiRaw<T>(kind, request, signal, (step, detail) => {
+    patchJob(jobId, { step: detail ?? STEP_TEXT[step] })
+    noteJob(jobId, detail ?? STEP_TEXT[step])
+    onStep?.(step, detail)
+  }).then(
+    (data) => {
+      finishJob(jobId)
+      return data
+    },
+    (error) => {
+      finishJob(jobId, error)
+      throw error
+    }
+  )
+}
+
+function callAiRaw<T>(kind: CreativeCall['kind'], request: unknown, signal?: AbortSignal, onStep?: (step: CreativeStep, detail?: string) => void): Promise<T> {
   const { channel, connected, stale } = useCreativeLink.getState()
   if (!channel || !connected) return Promise.reject(new Error('A IA não está conectada. Abra o app local ou o conector.'))
   if (stale) return Promise.reject(new Error(STALE_MESSAGE))
@@ -124,10 +154,10 @@ export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?:
       channel.send(CREATIVE_EVENTS.stop, { id })
       reject(new Error(message))
     }
-    const alive = (step: CreativeStep) => {
+    const alive = (step: CreativeStep, detail?: string) => {
       clearTimeout(silence)
       if (watch) silence = setTimeout(() => fail('O Claude Code parou de responder. Tente de novo.'), SILENCE * 2)
-      onStep?.(step)
+      onStep?.(step, detail)
     }
     pending.set(id, {
       resolve: (data) => {

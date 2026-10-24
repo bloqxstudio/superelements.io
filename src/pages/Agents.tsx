@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { Bot } from 'lucide-react'
+import { Operations } from '@/features/operations/Operations'
 import { AgentRunCard, AgentRunRow } from '@/features/agents/AgentRunCard'
 import { useTick } from '@/features/agents/useTick'
 import { useProjectList } from '@/features/projects/projectStore'
@@ -52,6 +53,11 @@ const Agents: React.FC = () => {
     <div className="min-h-[calc(100vh-57px)] bg-zinc-50">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Agentes</h1>
+        <p className="mt-1 max-w-2xl text-sm text-gray-500">
+          A empresa inteira operando: cada área com o que existe, o que está em produção e quem está trabalhando agora. Os agentes seguem em segundo plano mesmo se você sair da tela.
+        </p>
+        <div className="mt-6"><Operations /></div>
+        <h2 className="mt-10 text-sm font-semibold text-gray-900">Agentes nos projetos (Space)</h2>
         <p className="mt-1 max-w-2xl text-sm text-gray-500">
           Cada agente trabalha no seu projeto, todos ao mesmo tempo. Você acompanha as páginas sendo montadas, responde quando um deles pergunta e aprova antes de ir para o cliente.
         </p>

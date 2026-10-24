@@ -9,6 +9,8 @@ import type { ChatSkill } from '@/features/space/chat/skills'
 import { skillIcon } from '@/features/skills/skillIcon'
 import { useSkills, watchSkills } from '@/features/skills/skillsStore'
 import { COPY_AGENTS, agentById, type CopyAgentId } from './agents'
+import { JobFeed } from '@/features/operations/JobFeed'
+import { stopJob, useRunningFor } from '@/features/operations/jobs'
 import { PHASE_LABEL, engineInfo, useCopyAgent } from './agentStore'
 import { formatById } from './knowledge'
 import { runCopyAgent, useCopyChat } from './runner'
@@ -39,7 +41,8 @@ const saved = <T extends string>(key: string, ok: readonly T[]): T | undefined =
 }
 
 const Working: React.FC = () => {
-  const working = useCopyAgent((s) => s.working)
+  const docId = useCopy((s) => s.doc?.id)
+  const working = useCopyAgent((s) => (s.working?.docId === docId ? s.working : undefined))
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000)
@@ -92,9 +95,9 @@ export const AgentPanel: React.FC<{ pending?: Pending | null }> = ({ pending }) 
   const skill = skills.find((k) => k.id === skillId)
   const [menu, setMenu] = useState(false)
   const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
+  const job = useRunningFor(doc.id)
+  const busy = !!job
   const [web, setWeb] = useState(false)
-  const control = useRef<AbortController | null>(null)
   const end = useRef<HTMLDivElement>(null)
 
   const agent = agentById(role)
@@ -121,17 +124,13 @@ export const AgentPanel: React.FC<{ pending?: Pending | null }> = ({ pending }) 
     const note = [`${agent.name} (${engineInfo(engine).name})`, skill ? `skill: ${skill.name}` : '', targets?.length ? `sobre ${targets.length} bloco${targets.length > 1 ? 's' : ''}` : 'documento inteiro', web || agent.web ? 'com pesquisa na web' : ''].filter(Boolean).join(' · ')
     push(doc.id, { id: crypto.randomUUID(), role: 'user', text: clean, note })
     setText('')
-    setBusy(true)
-    control.current = new AbortController()
     try {
-      const result = await runCopyAgent({ message: clean, role, engine, blockIds: targets, skill: skill ? { name: skill.name, instructions: skill.instructions } : undefined, web: web || undefined }, control.current.signal)
+      const result = await runCopyAgent({ message: clean, role, engine, blockIds: targets, skill: skill ? { name: skill.name, instructions: skill.instructions } : undefined, web: web || undefined })
       push(doc.id, { id: crypto.randomUUID(), role: 'ai', text: result.reply || (result.applied ? 'Pronto.' : 'Não precisei mudar nada.'), changed: result.applied, skipped: result.skipped, ops: result.applied ? result.summary : undefined })
     } catch (err) {
       const stopped = (err as Error).name === 'AbortError'
       push(doc.id, { id: crypto.randomUUID(), role: 'ai', text: stopped ? 'Parei.' : err instanceof Error ? err.message : 'A IA não respondeu.', error: true })
       if (!stopped) toast.error('O agente não conseguiu terminar.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -214,6 +213,7 @@ export const AgentPanel: React.FC<{ pending?: Pending | null }> = ({ pending }) 
             )}
           </div>
         ))}
+        {busy && job && <JobFeed job={job} lines={6} />}
         {busy && <Working />}
         <div ref={end} />
       </div>
@@ -241,7 +241,7 @@ export const AgentPanel: React.FC<{ pending?: Pending | null }> = ({ pending }) 
             className="min-h-[56px] flex-1 resize-none rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           {busy ? (
-            <Button type="button" size="icon" variant="outline" className="h-9 w-9 shrink-0 bg-white" title="Parar" onClick={() => control.current?.abort()}><Square className="h-4 w-4" /></Button>
+            <Button type="button" size="icon" variant="outline" className="h-9 w-9 shrink-0 bg-white" title="Parar" onClick={() => job && stopJob(job.id)}><Square className="h-4 w-4" /></Button>
           ) : (
             <Button type="button" size="icon" className="h-9 w-9 shrink-0" title="Enviar (Enter)" disabled={!text.trim() || available === null} onClick={() => void run(text)}><Send className="h-4 w-4" /></Button>
           )}

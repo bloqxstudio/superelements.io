@@ -107,8 +107,9 @@ export const DocEditor: React.FC<Props> = ({ onComment, onAsk }) => {
   const people = useCopyLive((s) => s.people)
   const focus = useCopyLive((s) => s.focus)
   const peerAgents = useCopyLive((s) => s.agents)
-  const agentCursor = useCopyAgent((s) => s.cursor)
-  const working = useCopyAgent((s) => s.working)
+  const openId = useCopy((s) => s.doc?.id)
+  const agentCursor = useCopyAgent((s) => (s.cursor?.docId === openId ? s.cursor : undefined))
+  const working = useCopyAgent((s) => (s.working?.docId === openId ? s.working : undefined))
   const flash = useCopyAgent((s) => s.flash)
 
   const typing = useRef<{ before: CopyDoc; timer?: ReturnType<typeof setTimeout> } | null>(null)

@@ -22,12 +22,12 @@ export const PHASE_LABEL: Record<CopyPhase, string> = {
 }
 
 interface State {
-  working?: { engine: ChatAgentId; role: CopyAgentId; phase: CopyPhase; since: number; label: string }
+  working?: { docId?: string; engine: ChatAgentId; role: CopyAgentId; phase: CopyPhase; since: number; label: string }
   /** O bloco em que o agente está agora. */
-  cursor?: { blockId?: string; engine: ChatAgentId; role: CopyAgentId; agent: string; text?: string }
+  cursor?: { docId?: string; blockId?: string; engine: ChatAgentId; role: CopyAgentId; agent: string; text?: string }
   /** Blocos que o agente mudou, por alguns segundos. */
   flash: string[]
-  begin: (engine: ChatAgentId, role: CopyAgentId) => void
+  begin: (engine: ChatAgentId, role: CopyAgentId, docId?: string) => void
   phase: (phase: CopyPhase) => void
   point: (cursor: { blockId?: string; text?: string } | undefined) => void
   end: () => void
@@ -39,9 +39,9 @@ let endTimer: ReturnType<typeof setTimeout> | undefined
 
 export const useCopyAgent = create<State>()((set, get) => ({
   flash: [],
-  begin: (engine, role) => {
+  begin: (engine, role, docId) => {
     clearTimeout(endTimer)
-    set({ working: { engine, role, phase: 'sending', since: Date.now(), label: PHASE_LABEL.sending }, cursor: { engine, role, agent: `${engineInfo(engine).name} · ${role}` } })
+    set({ working: { docId, engine, role, phase: 'sending', since: Date.now(), label: PHASE_LABEL.sending }, cursor: { docId, engine, role, agent: `${engineInfo(engine).name} · ${role}` } })
   },
   phase: (phase) => {
     const w = get().working

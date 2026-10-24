@@ -6,6 +6,7 @@ import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageRequest, typ
 import { CHAT_AGENTS } from '../../src/features/space/chat/protocol.ts'
 import { checkAgents } from '../space/chatPlugin.ts'
 import { runCopy } from '../copy/agent.ts'
+import { planFolder, type FolderPlanRequest } from '../copy/plan.ts'
 import { copyToSlides, type SlidesRequest } from '../copy/slides.ts'
 import { downloadImage } from './baixar.ts'
 import { capturePage, findBrowser } from './captura.ts'
@@ -82,7 +83,7 @@ export const criativos = (): Plugin => ({
           if (call.kind === 'edit') {
             const input = editInput(call.request as Partial<EditRequest>)
             if (!input.message.trim()) throw new Error('Escreva o que quer mudar.')
-            send({ id, ok: true, data: await editCreatives(input, controller.signal, (step) => server.ws.send(CREATIVE_EVENTS.progress, { id, step } satisfies CreativeProgress)) })
+            send({ id, ok: true, data: await editCreatives(input, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
           } else if (call.kind === 'plan') {
             send({ id, ok: true, data: await planPosts(planInput(call.request as Partial<PlanRequest>), controller.signal) })
           } else if (call.kind === 'image') {
@@ -93,7 +94,11 @@ export const criativos = (): Plugin => ({
           } else if (call.kind === 'copy') {
             const req = call.request as CopyRequest
             if (!String(req?.message ?? '').trim()) throw new Error('Escreva o que você quer.')
-            send({ id, ok: true, data: await runCopy({ ...req, message: String(req.message).slice(0, 6000), doc: { ...req.doc, blocks: (req.doc?.blocks ?? []).slice(0, 400) }, history: (req.history ?? []).slice(-30) }, controller.signal, (step) => server.ws.send(CREATIVE_EVENTS.progress, { id, step } satisfies CreativeProgress)) })
+            send({ id, ok: true, data: await runCopy({ ...req, message: String(req.message).slice(0, 6000), doc: { ...req.doc, blocks: (req.doc?.blocks ?? []).slice(0, 400) }, history: (req.history ?? []).slice(-30) }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
+          } else if (call.kind === 'copy-plan') {
+            const req = call.request as FolderPlanRequest
+            if (!String(req?.request ?? '').trim()) throw new Error('Escreva o que você quer criar na pasta.')
+            send({ id, ok: true, data: await planFolder({ ...req, engine: req.engine === 'codex' ? 'codex' : 'claude', folder: String(req.folder ?? '').slice(0, 160), existing: (req.existing ?? []).slice(0, 60) }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
           } else if (call.kind === 'copy-slides') {
             const req = call.request as SlidesRequest
             send({ id, ok: true, data: await copyToSlides({ name: String(req?.name ?? 'Post').slice(0, 120), kind: req?.kind === 'story' ? 'story' : req?.kind === 'pesquisa' ? 'pesquisa' : 'post', count: Number(req?.count) || undefined, text: String(req?.text ?? '') }, controller.signal) })

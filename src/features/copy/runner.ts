@@ -2,11 +2,13 @@ import { create } from 'zustand'
 import { callAi } from '@/features/criativos/link'
 import type { ChatAgentId } from '@/features/space/chat/protocol'
 import { agentById, type CopyAgentId } from './agents'
-import { engineInfo, useCopyAgent } from './agentStore'
+import { PHASE_LABEL, engineInfo, useCopyAgent } from './agentStore'
 import { escapeHtml, htmlToMark } from './html'
 import { applyCopyOps } from './ops'
 import type { CopyOp, CopyRequest, CopyResponse } from './protocol'
-import { folderReferences } from './folder'
+import { finishJob, noteJob, patchJob, startJob } from '@/features/operations/jobs'
+import { docLink, folderReferences } from './folder'
+import { saveDoc } from './storage'
 import { useCopy } from './store'
 import { plainOf, type CopyDoc, type Person } from './types'
 
@@ -65,6 +67,9 @@ export const useCopyChat = create<{ byDoc: Record<string, ChatMessage[]>; ensure
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
+/** O pedido padrão para escrever a primeira versão de um documento novo. */
+export const WRITE_REQUEST = 'Escreva a primeira versão completa deste documento, usando a pesquisa e os outros documentos da pasta como base.'
+
 export interface RunInput {
   message: string
   role: CopyAgentId
@@ -119,57 +124,107 @@ async function typeInto(id: string, finalHtml: string, quick: boolean, signal: A
   set(finalHtml)
 }
 
-export async function runCopyAgent(input: RunInput, signal: AbortSignal): Promise<{ reply: string; applied: number; skipped: string[]; summary: string }> {
+/**
+ * Roda o agente no documento aberto e segue sozinho se a pessoa sair da tela:
+ * o trabalho é um job (`operations/jobs`), não da tela. Com o documento aberto,
+ * o texto é digitado à vista; sem ele, as mudanças entram direto e o documento
+ * é salvo no fim.
+ */
+export async function runCopyAgent(input: RunInput, external?: AbortSignal, onDoc?: CopyDoc): Promise<{ reply: string; applied: number; skipped: string[]; summary: string }> {
   const store = useCopy.getState()
-  const doc = store.doc
-  if (!doc) throw new Error('Abra um documento.')
-  const history = useCopyChat.getState().byDoc[doc.id] ?? []
-  const agentState = useCopyAgent.getState()
+  const start = onDoc ?? store.doc
+  if (!start) throw new Error('Abra um documento.')
+  const docId = start.id
+  const history = useCopyChat.getState().byDoc[docId] ?? []
   const role = agentById(input.role)
+  const controller = new AbortController()
+  external?.addEventListener('abort', () => controller.abort(), { once: true })
+  const signal = controller.signal
+  const jobId = startJob(
+    { area: start.format === 'lp' ? 'landing' : start.format === 'site' ? 'sites' : 'copy', kind: start.format === 'pesquisa' ? 'Pesquisa' : 'Escrita', label: start.title || 'Documento sem título', agent: `${role.name} · ${engineInfo(input.engine).name}`, color: engineInfo(input.engine).color, href: docLink(start), docId, step: PHASE_LABEL.sending },
+    controller
+  )
+  const isOpen = () => useCopy.getState().doc?.id === docId
   const target = input.blockIds?.[0] ?? store.focusId
-  agentState.begin(input.engine, input.role)
-  agentState.point({ blockId: target })
+  useCopyAgent.getState().begin(input.engine, input.role, docId)
+  useCopyAgent.getState().point({ blockId: target })
+  let error: unknown
   try {
     // O pedido já está na conversa: a IA recebe o histórico sem ele
-    const folderRefs = await folderReferences(doc)
-    const answer = await callAi<CopyResponse>('copy', buildRequest(doc, { ...input, references: [...folderRefs, ...(input.references ?? [])] }, history.slice(0, -1)), signal, (step) => useCopyAgent.getState().phase(step))
+    const folderRefs = await folderReferences(start)
+    const answer = await callAi<CopyResponse>('copy', buildRequest(start, { ...input, references: [...folderRefs, ...(input.references ?? [])] }, history.slice(0, -1)), signal, (step, detail) => {
+      useCopyAgent.getState().phase(step)
+      patchJob(jobId, { step: detail ?? PHASE_LABEL[step] })
+      noteJob(jobId, detail ?? PHASE_LABEL[step])
+    })
     if (!Array.isArray(answer.ops)) throw new Error('A IA não respondeu no formato esperado.')
     useCopyAgent.getState().phase('applying')
+    patchJob(jobId, { step: PHASE_LABEL.applying })
+    noteJob(jobId, PHASE_LABEL.applying)
 
     const author: Person = { id: `agent:${input.engine}:${input.role}`, name: `${role.name} (${engineInfo(input.engine).name})`, color: engineInfo(input.engine).color }
-    const before = useCopy.getState().doc!
+    // A cópia de trabalho: segue valendo se a pessoa fechar o documento no meio
+    let local: CopyDoc = useCopy.getState().doc?.id === docId ? useCopy.getState().doc! : start
+    const before = local
     let applied = 0
+    let leftOpen = true
     const skipped: string[] = []
     const touched = new Set<string>()
     const quick = answer.ops.length > 14
     for (const [i, op] of answer.ops.entries()) {
       if (signal.aborted) break
-      const current = useCopy.getState().doc!
-      const at = op.op === 'insert' ? (op.after && op.after !== 'end' && op.after !== 'start' ? op.after : current.blocks.at(-1)?.id) : op.blockId
-      useCopyAgent.getState().point({ blockId: at, text: op.op === 'comment' ? 'Comentando' : op.op === 'delete' ? 'Apagando' : 'Escrevendo' })
-      await sleep(i === 0 ? 500 : quick ? 40 : 260)
-      const result = applyCopyOps(current, [op], author)
+      const open = isOpen()
+      if (!open) leftOpen = false
+      const current = open ? useCopy.getState().doc! : local
+      if (open) {
+        const at = op.op === 'insert' ? (op.after && op.after !== 'end' && op.after !== 'start' ? op.after : current.blocks.at(-1)?.id) : op.blockId
+        useCopyAgent.getState().point({ blockId: at, text: op.op === 'comment' ? 'Comentando' : op.op === 'delete' ? 'Apagando' : 'Escrevendo' })
+        await sleep(i === 0 ? 500 : quick ? 40 : 260)
+      }
+      const base = isOpen() ? useCopy.getState().doc! : local
+      const result = applyCopyOps(base, [op], author)
       skipped.push(...result.skipped)
       if (!result.applied) continue
       applied += result.applied
-      // Os blocos com texto novo entram vazios e são digitados
-      const typed = [...result.created, ...(op.op === 'replace' && op.blockId ? [op.blockId] : [])]
-      const finals = new Map(result.doc.blocks.filter((b) => typed.includes(b.id)).map((b) => [b.id, b.html]))
-      useCopy.getState().draft(() => ({ ...result.doc, blocks: result.doc.blocks.map((b) => (finals.has(b.id) ? { ...b, html: '' } : b)) }))
-      for (const id of typed) {
-        if (signal.aborted) break
-        useCopyAgent.getState().point({ blockId: id, text: 'Escrevendo' })
-        await typeInto(id, finals.get(id) ?? '', quick, signal)
+      local = result.doc
+      if (isOpen()) {
+        // Os blocos com texto novo entram vazios e são digitados
+        const typed = [...result.created, ...(op.op === 'replace' && op.blockId ? [op.blockId] : [])]
+        const finals = new Map(result.doc.blocks.filter((b) => typed.includes(b.id)).map((b) => [b.id, b.html]))
+        useCopy.getState().draft(() => ({ ...result.doc, blocks: result.doc.blocks.map((b) => (finals.has(b.id) ? { ...b, html: '' } : b)) }))
+        for (const id of typed) {
+          if (signal.aborted || !isOpen()) break
+          useCopyAgent.getState().point({ blockId: id, text: 'Escrevendo' })
+          await typeInto(id, finals.get(id) ?? '', quick, signal)
+        }
+        if (!isOpen()) local = result.doc
       }
-      for (const id of [...typed, ...result.touched]) touched.add(id)
+      for (const id of [...result.created, ...result.touched, ...(op.op === 'replace' && op.blockId ? [op.blockId] : [])]) touched.add(id)
     }
-    // As fontes de uma pesquisa e o fecho da edição
-    if (answer.sources?.length) useCopy.getState().draft((d) => applyCopyOps(d, [], author, answer.sources).doc)
-    if (applied || answer.sources?.length) useCopy.getState().checkpoint(before)
-    useCopyAgent.getState().highlight([...touched])
-    await sleep(400)
+    // As fontes de uma pesquisa
+    if (answer.sources?.length) {
+      if (isOpen()) useCopy.getState().draft((d) => applyCopyOps(d, [], author, answer.sources).doc)
+      else local = applyCopyOps(local, [], author, answer.sources).doc
+    }
+    if (isOpen()) {
+      if (applied || answer.sources?.length) useCopy.getState().checkpoint(before)
+      useCopyAgent.getState().highlight([...touched])
+      // Saiu no meio e voltou: o que foi feito fora da tela já está em `local`, que a tela aberta não viu
+      if (!leftOpen) {
+        await saveDoc({ ...local, updatedAt: Date.now() })
+        if (useCopy.getState().saving === 'saved') useCopy.getState().draft((d) => ({ ...d, blocks: local.blocks, sources: local.sources ?? d.sources, comments: local.comments, updatedAt: local.updatedAt }))
+      }
+      await sleep(400)
+    } else if (applied || answer.sources?.length) {
+      // O documento não está aberto: grava aqui mesmo
+      await saveDoc({ ...local, updatedAt: Date.now() })
+    }
     return { reply: answer.reply, applied, skipped, summary: summarize(answer.ops) }
+  } catch (err) {
+    error = err
+    throw err
   } finally {
-    useCopyAgent.getState().end()
+    if (useCopyAgent.getState().working?.docId === docId) useCopyAgent.getState().end()
+    finishJob(jobId, error)
   }
 }

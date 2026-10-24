@@ -83,7 +83,7 @@ export const hasLink = (r: Pick<CopyRequest, 'message'>) => /https?:\/\/\S+/i.te
 
 export const needsWeb = (r: CopyRequest) => !!r.web || agentById(r.role).web || formatById(r.doc.format).web || hasLink(r)
 
-export const runCopy = (input: CopyRequest, signal?: AbortSignal, onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing') => void): Promise<CopyResponse> => {
+export const runCopy = (input: CopyRequest, signal?: AbortSignal, onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing', detail?: string) => void): Promise<CopyResponse> => {
   const web = needsWeb(input)
   const system = systemOf(input)
   const prompt = promptOf(input)

@@ -32,7 +32,7 @@ interface Ask {
   maxTurns?: number
   signal?: AbortSignal
   /** O que o Claude Code está fazendo (começou, pensando, escrevendo a resposta). */
-  onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing') => void
+  onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing', detail?: string) => void
   /** Lê páginas e pesquisa na web (WebFetch e WebSearch), só leitura: para pedidos que trazem um link. */
   web?: boolean
   /** Esforço de raciocínio do Claude Code: `low` é bem mais rápido e basta para ajustes pequenos. */
@@ -66,7 +66,7 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
     let buffer = ''
     let stderr = ''
     // Cada evento do Claude Code avisa a tela (ela usa isso como sinal de vida, também nas leituras longas da web)
-    const step = (next: 'start' | 'thinking' | 'reading' | 'writing') => onStep?.(next)
+    const step = (next: 'start' | 'thinking' | 'reading' | 'writing', detail?: string) => onStep?.(next, detail)
     let answer: T | undefined
     let failure: string | undefined
     const finish = (error?: Error) => {
@@ -110,7 +110,10 @@ export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeou
           else if (event.type === 'assistant') {
             const blocks = Array.isArray(event.message?.content) ? event.message.content : []
             const reading = blocks.some((b: { type?: string; name?: string }) => b.type === 'tool_use' && /^Web(Fetch|Search)$/.test(b.name ?? ''))
-            step(reading ? 'reading' : blocks.some((b: { type?: string }) => b.type === 'tool_use' || b.type === 'text') ? 'writing' : 'thinking')
+            // O que está lendo ou buscando, para a tela mostrar
+            const tool = blocks.find((b: { type?: string; name?: string }) => b.type === 'tool_use' && /^Web(Fetch|Search)$/.test(b.name ?? '')) as { name?: string; input?: { query?: string; url?: string } } | undefined
+            const what = tool ? (tool.name === 'WebSearch' ? `Buscando: ${tool.input?.query ?? ''}` : `Lendo ${tool.input?.url ?? ''}`).slice(0, 140) : undefined
+            step(reading ? 'reading' : blocks.some((b: { type?: string }) => b.type === 'tool_use' || b.type === 'text') ? 'writing' : 'thinking', what)
           }
           if (event.type !== 'result') continue
           if (event.structured_output) answer = event.structured_output as T

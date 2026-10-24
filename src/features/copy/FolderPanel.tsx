@@ -4,6 +4,8 @@ import { toast } from 'sonner'
 import { FileText, FolderOpen, Microscope, Plus, Send, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { FolderAgentBox } from './FolderAgentBox'
+import { useJobs } from '@/features/operations/jobs'
 import { createInFolder, DERIVED, docLink, folderDocs, WRITE_FIRST } from './folder'
 import { formatById } from './knowledge'
 import { useCopy } from './store'
@@ -21,6 +23,8 @@ export const FolderPanel: React.FC = () => {
   const total = Object.values(picked).reduce((n, q) => n + q, 0)
   const [busy, setBusy] = useState(false)
   const folderId = doc.folderId
+  const running = useJobs((s) => s.jobs.filter((j) => j.status === 'running').length)
+  const jobsOf = useJobs((s) => s.jobs)
 
   useEffect(() => {
     if (!folderId) return
@@ -29,7 +33,7 @@ export const FolderPanel: React.FC = () => {
     return () => {
       live = false
     }
-  }, [folderId, doc.id, doc.title])
+  }, [folderId, doc.id, doc.title, running])
 
   const create = async () => {
     setBusy(true)
@@ -60,6 +64,8 @@ export const FolderPanel: React.FC = () => {
         <p className="mt-0.5 text-xs text-gray-500">Tudo deste assunto fica aqui. Os agentes leem a pesquisa e os outros documentos da pasta antes de escrever, e cada documento é enviado para o seu lugar.</p>
       </div>
 
+      <FolderAgentBox folderId={folderId} docs={docs ?? []} base={doc} onDone={() => void folderDocs(folderId).then(setDocs)} />
+
       <Button asChild size="sm" className="h-8 w-full gap-1.5"><Link to={docLink(doc, { enviar: 'pasta' })}><Send className="h-4 w-4" /> Enviar a pasta toda</Link></Button>
 
       <ul className="space-y-1.5">
@@ -74,6 +80,7 @@ export const FolderPanel: React.FC = () => {
                 <span className="min-w-0 flex-1 truncate">{d.title}</span>
               </Link>
               <p className="mt-0.5 text-[11px] text-gray-500">{f.label}{f.sendTo ? ` → ${SEND_LABEL[f.sendTo]}` : ''} · {empty ? 'vazio' : `${d.words} palavras`}</p>
+              {jobsOf.find((j) => j.docId === d.id && j.status === 'running') && <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-violet-700"><span className="h-1.5 w-1.5 rounded-full bg-violet-500 motion-safe:animate-pulse" />{jobsOf.find((j) => j.docId === d.id && j.status === 'running')!.step}</p>}
               {!here && (
                 <div className="mt-1.5 flex gap-1">
                   {empty && <Button asChild size="sm" variant="outline" className="h-6 gap-1 bg-white px-2 text-[11px]"><Link to={docLink(d, { rodar: WRITE_FIRST })}><Sparkles className="h-3 w-3" /> Escrever</Link></Button>}

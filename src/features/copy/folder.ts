@@ -18,10 +18,11 @@ export const projectIds = () => useProjectStore.getState().projects.map((p) => p
 export const folderDocs = async (folderId: string): Promise<CopySummary[]> => (await listDocs(projectIds())).filter((d) => d.folderId === folderId)
 
 /** O que os agentes leem da pasta: a pesquisa primeiro, depois os outros documentos já escritos. */
-export async function folderReferences(doc: CopyDoc): Promise<NonNullable<CopyRequest['references']>> {
-  if (!doc.folderId) return []
+export const folderReferences = (doc: CopyDoc) => (doc.folderId ? folderMaterial(doc.folderId, doc.id) : Promise.resolve([]))
+
+export async function folderMaterial(folderId: string, exceptId?: string): Promise<NonNullable<CopyRequest['references']>> {
   try {
-    const siblings = (await folderDocs(doc.folderId)).filter((d) => d.id !== doc.id && d.words > 5).sort((a, b) => Number(b.format === 'pesquisa') - Number(a.format === 'pesquisa')).slice(0, 5)
+    const siblings = (await folderDocs(folderId)).filter((d) => d.id !== exceptId && d.words > 5).sort((a, b) => Number(b.format === 'pesquisa') - Number(a.format === 'pesquisa')).slice(0, 5)
     const loaded = await Promise.all(siblings.map((s) => loadDoc(s.id, s.shared ? s.projectId : undefined).catch(() => undefined)))
     return loaded
       .filter((d): d is CopyDoc => !!d)

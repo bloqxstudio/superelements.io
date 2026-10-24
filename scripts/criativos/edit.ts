@@ -78,7 +78,7 @@ const FORMAT_NOTE = [
   'Campos de camada: type (text|image|rect|ring|dots), name, x, y, w, h, opacity, rotation, text, font, weight, size, color, align (left|center|right), lineHeight, letterSpacing, upper, emphasis, emphasisColor, src, fit (cover|contain), radius, frame (none|browser|phone), focusY, fill, stroke, strokeWidth, gap, dot.',
 ].join('\n')
 
-export const editCreatives = (input: EditRequest, signal?: AbortSignal, onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing') => void): Promise<EditResponse> => {
+export const editCreatives = (input: EditRequest, signal?: AbortSignal, onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing', detail?: string) => void): Promise<EditResponse> => {
   if (input.agent === 'codex') {
     const images = [...(input.attachments ?? []).map((a) => a.data), ...(input.previews ?? []), ...(input.references ?? []).flatMap((r) => r.images ?? []), ...(input.image ? [input.image] : [])]
     return askCodex<EditResponse>({
