@@ -33,6 +33,9 @@ export function docText(doc: CopyDoc): string {
 
 // ---------- Criativos ----------
 
+/** O endereço de um post entregue: abre só ele. */
+const postHref = (set: Pick<SetSummary, 'id' | 'shared' | 'projectId'>, postId: string) => `/criativos/${set.id}?${set.shared && set.projectId ? `projeto=${set.projectId}&` : ''}post=${postId}`
+
 export async function sendToCriativos(doc: CopyDoc, target: SetSummary, signal?: AbortSignal, count = 3): Promise<{ postName: string; postNames: string[]; slides: number }> {
   const story = doc.format === 'story'
   // Uma pesquisa não é um post: o agente tira dela vários posts, um ângulo em cada
@@ -44,7 +47,7 @@ export async function sendToCriativos(doc: CopyDoc, target: SetSummary, signal?:
   if (!set) throw new Error('Não achei o conjunto de criativos.')
   const posts = plans.map((p, i) => buildPost({ name: p.name || (research ? `${doc.folderName || doc.title} ${i + 1}` : doc.title || 'Post'), format: story ? '9x16' : '4x5', caption: p.caption, slides: p.slides }, set.brand))
   await saveSet({ ...set, posts: [...set.posts, ...posts], updatedAt: Date.now() })
-  recordDelivery({ area: 'criativos', kind: posts.length > 1 ? `${posts.length} posts enviados` : 'Post enviado', label: `${doc.folderName || doc.title} → ${target.name}`, agent: 'Enviado da Copy', href: `/criativos/${target.id}${target.shared && target.projectId ? `?projeto=${target.projectId}` : ''}` })
+  posts.forEach((p) => recordDelivery({ area: 'criativos', kind: 'Post enviado', label: `${p.name} → ${target.name}`, agent: 'Enviado da Copy', href: postHref(target, p.id) }))
   return { postName: posts[0].name, postNames: posts.map((p) => p.name), slides: posts.reduce((n, p) => n + p.slides.length, 0) }
 }
 
@@ -57,7 +60,7 @@ export async function postsFromRequest(request: string, target: SetSummary, coun
   if (!set) throw new Error('Não achei o conjunto de criativos.')
   const posts = plans.map((p, i) => buildPost({ name: p.name || `Post ${i + 1}`, format: '4x5', caption: p.caption, slides: p.slides }, set.brand))
   await saveSet({ ...set, posts: [...set.posts, ...posts], updatedAt: Date.now() })
-  recordDelivery({ area: 'criativos', kind: posts.length > 1 ? `${posts.length} posts criados` : 'Post criado', label: `${request.slice(0, 60)} → ${target.name}`, agent: 'Pedido ao agente', href: `/criativos/${target.id}${target.shared && target.projectId ? `?projeto=${target.projectId}` : ''}` })
+  posts.forEach((p) => recordDelivery({ area: 'criativos', kind: 'Post criado', label: `${p.name} → ${target.name}`, agent: 'Pedido ao agente', href: postHref(target, p.id) }))
   return { postNames: posts.map((p) => p.name) }
 }
 

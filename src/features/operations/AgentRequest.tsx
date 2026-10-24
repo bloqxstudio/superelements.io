@@ -44,7 +44,8 @@ const COPY_ROLE: Record<string, { id: CopyAgentId; format: FormatId; web?: boole
 
 const GROUP_FORMATS = FORMATS.filter((f) => f.id !== 'pesquisa' || true)
 
-export const AgentRequest: React.FC<{ who: Who }> = ({ who }) => {
+export const AgentRequest: React.FC<{ who: Who; compact?: boolean }> = ({ who, compact }) => {
+  const [opts, setOpts] = useState(false)
   const available = useAiAvailable()
   useProjectList()
   const projects = useProjectStore((s) => s.projects)
@@ -141,10 +142,11 @@ export const AgentRequest: React.FC<{ who: Who }> = ({ who }) => {
   }
 
   return (
-    <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
-      <p className="text-xs font-semibold text-gray-900">Peça algo a {who.name}</p>
+    <div className={compact ? 'mt-2 space-y-2' : 'mt-3 space-y-2 border-t border-gray-100 pt-3'}>
+      {!compact && <p className="text-xs font-semibold text-gray-900">Peça algo a {who.name}</p>}
       <textarea value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => (e.metaKey || e.ctrlKey) && e.key === 'Enter' && void send()} rows={2} disabled={available !== true} placeholder={isPosts ? 'Ex.: 3 carrosséis sobre por que o Instagram não substitui um site' : who.role === 'Pesquisador' ? 'Ex.: como donos de clínica odontológica escolhem quem faz o site' : who.role === 'Estrategista' ? 'Ex.: 5 posts, uma LP e um artigo sobre as dores da pesquisa' : 'Ex.: escreva um post sobre site rápido para arquitetos'} className="w-full resize-none rounded-md border border-gray-200 bg-white px-2.5 py-2 text-sm" />
-      {isPosts ? (
+      {compact && <button type="button" onClick={() => setOpts((o) => !o)} aria-expanded={opts} className="text-[11px] font-medium text-violet-700 underline-offset-2 hover:underline">{opts ? 'Esconder opções' : `Onde vai: ${isPosts ? sets.find((x) => x.id === setId)?.name ?? 'conjunto' : target === 'novo' ? `${formatById(format).label}, documento novo` : 'documento existente'} · mudar`}</button>}
+      {(!compact || opts) && (isPosts ? (
         <div className="grid gap-2 sm:grid-cols-[1fr_88px]">
           <select aria-label="Conjunto de criativos" value={setId} onChange={(e) => setSetId(e.target.value)} className={input} disabled={!sets.length}>
             {sets.length === 0 && <option value="">Nenhum conjunto de criativos</option>}
@@ -174,7 +176,7 @@ export const AgentRequest: React.FC<{ who: Who }> = ({ who }) => {
             </>
           )}
         </div>
-      )}
+      ))}
       <div className="flex items-center gap-2">
         {available === false && <span className="text-xs text-amber-800">A IA não está conectada: veja o conector acima.</span>}
         {who.role === 'Estrategista' && target === 'novo' && !folder && <span className="text-xs text-gray-500">Escolha uma pasta para ele planejar vários documentos.</span>}
@@ -182,7 +184,7 @@ export const AgentRequest: React.FC<{ who: Who }> = ({ who }) => {
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Pedir
         </Button>
       </div>
-      <p className="text-[11px] text-gray-500">Roda em segundo plano: {who.name} vai para a mesa e você acompanha aqui. <Link to="/copy" className="underline">Abrir a Copy</Link></p>
+      {!compact && <p className="text-[11px] text-gray-500">Roda em segundo plano: {who.name} vai para a mesa e você acompanha aqui. <Link to="/copy" className="underline">Abrir a Copy</Link></p>}
     </div>
   )
 }

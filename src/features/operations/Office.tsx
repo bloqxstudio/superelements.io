@@ -1,13 +1,13 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, CircleAlert, Eye } from 'lucide-react'
+import { Check, CircleAlert, Eye, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { agentStatus, useAgents } from '@/features/space/bridge/agentsStore'
 import { cn } from '@/lib/utils'
 import { AgentRequest } from './AgentRequest'
 import { openPreview } from './Preview'
 import { elapsed, JobFeed, useSeconds } from './JobFeed'
-import { AREAS, useJobs, type Area, type Job } from './jobs'
+import { AREAS, stopJob, useJobs, type Area, type Job } from './jobs'
 
 /**
  * O escritório, uma planta de verdade (no estilo de The Office): recepção, sala
@@ -214,7 +214,25 @@ export const Office: React.FC = () => {
     return out
   }, [running, spaceRuns, now])
 
-  // Onde cada um está: na mesa (trabalhando), na reunião (planejando a pasta) ou na copa (livre)
+  // Posições soltas (arrastadas) de quem está livre; quem trabalha volta para a mesa
+  const [moved, setMoved] = useState<Record<string, { x: number; y: number }>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('escritorio-posicoes') ?? '{}')
+    } catch {
+      return {}
+    }
+  })
+  const [drag, setDrag] = useState<{ key: string; x: number; y: number } | null>(null)
+  const saveMoved = (next: Record<string, { x: number; y: number }>) => {
+    setMoved(next)
+    try {
+      localStorage.setItem('escritorio-posicoes', JSON.stringify(next))
+    } catch {
+      // vale até recarregar
+    }
+  }
+
+  // Onde cada um está: na própria mesa (livre ou trabalhando), na reunião (planejando a pasta) ou, sem mesa, na copa
   const placed = useMemo(() => {
     let rest = 0
     let meeting = 0
@@ -224,21 +242,58 @@ export const Office: React.FC = () => {
         const at = MEETING[meeting++]
         return { s, at, where: 'meeting' as const, working, facing: (at.y < 100 ? 'down' : 'up') as 'down' | 'up', chip: { x: at.x, y: at.y + 24 }, bubble: { x: at.x, y: at.y - 32, below: false } }
       }
-      if (working && s.slot < PODS[s.area].slots) {
+      const custom = !working ? moved[s.key] : undefined
+      if (custom) return { s, at: custom, where: 'free' as const, working, facing: 'down' as const, chip: { x: custom.x, y: custom.y + 24 }, bubble: { x: custom.x, y: custom.y - 32, below: false } }
+      if (s.slot < PODS[s.area].slots) {
         const slot = slotAt(s.area, s.slot)
         const top = slot.row === 0
         return { s, at: slot.seat, where: 'desk' as const, working, facing: (top ? 'down' : 'up') as 'down' | 'up', chip: { x: slot.x + 50, y: top ? slot.y + DESK.h + 8 : slot.y - 7 }, bubble: { x: slot.seat.x, y: top ? slot.seat.y - 32 : slot.seat.y + 30, below: !top } }
       }
-      const at = BREAK[(rest++ + (working ? 4 : 0)) % BREAK.length]
+      const at = BREAK[rest++ % BREAK.length]
       return { s, at, where: 'break' as const, working, facing: 'down' as const, chip: { x: at.x, y: at.y + 24 }, bubble: { x: at.x, y: at.y - 32, below: false } }
     })
-  }, [seats])
+  }, [seats, moved])
 
   const picked = placed.find((p) => p.s.key === selected)?.s
   const total = placed.filter((p) => p.working).length
   const asking = spaceRuns.filter((a) => agentStatus(a, now) === 'question').length
   const finishedToday = jobs.filter((j) => j.status === 'done' && j.endedAt && now - j.endedAt < 86_400_000).length
-  const mine = picked ? jobs.filter((j) => j.status !== 'running' && (picked.job ? false : true) && new RegExp(`^${picked.role}`).test(j.agent)).sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0)).slice(0, 4) : []
+  const pickedAt = placed.find((p) => p.s.key === selected)
+  const mine = picked ? jobs.filter((j) => j.status !== 'running' && new RegExp(`^${picked.role}`).test(j.agent)).sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0)).slice(0, 4) : []
+  const svgRef = useRef<SVGSVGElement>(null)
+  const press = useRef<{ key: string; sx: number; sy: number; ox: number; oy: number; moved: boolean; working: boolean } | null>(null)
+  const toSvg = (e: { clientX: number; clientY: number }) => {
+    const svg = svgRef.current
+    const ctm = svg?.getScreenCTM()
+    if (!svg || !ctm) return { x: 0, y: 0 }
+    const pt = svg.createSVGPoint()
+    pt.x = e.clientX
+    pt.y = e.clientY
+    const p = pt.matrixTransform(ctm.inverse())
+    return { x: p.x, y: p.y }
+  }
+  const onDown = (e: React.PointerEvent, key: string, at: { x: number; y: number }, working: boolean) => {
+    if (e.button !== 0) return
+    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+    const p = toSvg(e)
+    press.current = { key, sx: p.x, sy: p.y, ox: at.x - p.x, oy: at.y - p.y, moved: false, working }
+  }
+  const onMove = (e: React.PointerEvent) => {
+    const d = press.current
+    if (!d || d.working) return
+    const p = toSvg(e)
+    if (!d.moved && Math.hypot(p.x - d.sx, p.y - d.sy) < 5) return
+    d.moved = true
+    setDrag({ key: d.key, x: Math.min(W - 30, Math.max(30, p.x + d.ox)), y: Math.min(H - 40, Math.max(40, p.y + d.oy)) })
+  }
+  const onUp = () => {
+    const d = press.current
+    press.current = null
+    if (!d) return
+    if (d.moved && drag) saveMoved({ ...moved, [d.key]: { x: Math.round(drag.x), y: Math.round(drag.y) } })
+    else setSelected((cur) => (cur === d.key ? null : d.key))
+    setDrag(null)
+  }
   const deskOf = (a: Area, slot: number) => placed.find((p) => p.where === 'desk' && p.s.area === a && p.s.slot === slot)
 
   return (
@@ -248,8 +303,8 @@ export const Office: React.FC = () => {
         <h2 className="text-sm font-semibold text-gray-900">Escritório</h2>
         <p className="text-xs text-gray-500">{total > 0 ? `${total} ${total === 1 ? 'agente trabalhando' : 'agentes trabalhando'} agora` : 'Todos na copa: nenhum trabalho agora'}</p>
       </div>
-      <div className="mt-3 overflow-hidden rounded-2xl bg-stone-200 shadow-[0_0_0_1px_rgb(0_0_0/0.1)]">
-        <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label="Planta do escritório com os agentes">
+      <div className="relative mt-3 rounded-2xl bg-stone-200 shadow-[0_0_0_1px_rgb(0_0_0/0.1)]">
+        <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full touch-none select-none overflow-hidden rounded-2xl" role="img" aria-label="Planta do escritório com os agentes" onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
           <defs>
             <pattern id="of-carpet" width="26" height="26" patternUnits="userSpaceOnUse"><rect width="26" height="26" fill="#CBD2DC" /><path d="M0 0h26v26H0z" fill="none" stroke="#C0C8D4" strokeWidth="1" /><circle cx="13" cy="13" r="1" fill="#B9C2CF" /></pattern>
             <pattern id="of-tile" width="30" height="30" patternUnits="userSpaceOnUse"><rect width="30" height="30" fill="#F3EBD8" /><path d="M0 0h30v30H0z" fill="none" stroke="#E6DABF" strokeWidth="1.2" /></pattern>
@@ -317,7 +372,7 @@ export const Office: React.FC = () => {
               return (
                 <g key={`${a}${i}`}>
                   <circle cx={slot.seat.x} cy={slot.seat.y} r="12" fill={who ? '#475569' : '#94A3B8'} />
-                  <Desk x={slot.x} y={slot.y} flip={slot.row === 1} busy={!!who} color={color} />
+                  <Desk x={slot.x} y={slot.y} flip={slot.row === 1} busy={!!who?.working} color={color} />
                 </g>
               )
             })
@@ -335,63 +390,87 @@ export const Office: React.FC = () => {
           <Plant x={40} y={650} r={13} />
           <Plant x={680} y={226} r={12} />
 
-          {/* as pessoas, de trás para a frente */}
-          {[...placed].sort((a, b) => a.at.y - b.at.y).map(({ s, at, working, facing, chip }) => (
-            <g key={s.key} className="of-walk" style={{ transform: `translate(${at.x}px, ${at.y}px)` }}>
-              <g className={cn(working && 'of-work')} onClick={() => setSelected(selected === s.key ? null : s.key)} style={{ cursor: 'pointer' }} role="button" tabIndex={0} aria-label={`${s.name}, ${s.role}: ${working ? `trabalhando em ${s.job ? `${s.job.kind} ${s.job.label}` : s.space?.project}` : 'livre'}`} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelected(selected === s.key ? null : s.key)}>
-                <circle r="22" fill="transparent" />
-                {selected === s.key && <circle r="22" fill="#8B5CF6" opacity=".18" stroke="#8B5CF6" strokeWidth="1.5" />}
-                <g className="of-body"><Avatar seat={s} working={working} facing={facing} color={s.job?.color ?? '#F97316'} /></g>
+          {/* as pessoas, de trás para a frente: arraste quem está livre, clique para pedir algo */}
+          {[...placed].sort((a, b) => a.at.y - b.at.y).map(({ s, at, working, facing, chip }) => {
+            const dragging = drag?.key === s.key
+            const x = dragging ? drag.x : at.x
+            const y = dragging ? drag.y : at.y
+            return (
+              <g key={s.key} className={dragging ? undefined : 'of-walk'} style={{ transform: `translate(${x}px, ${y}px)` }}>
+                <g
+                  className={cn(working && 'of-work')}
+                  style={{ cursor: working ? 'pointer' : dragging ? 'grabbing' : 'grab' }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${s.name}, ${s.role}: ${working ? `trabalhando em ${s.job ? `${s.job.kind} ${s.job.label}` : s.space?.project}` : 'livre'}. ${working ? 'Clique para ver' : 'Clique para pedir algo, ou arraste para mudar de lugar'}`}
+                  onPointerDown={(e) => onDown(e, s.key, { x, y }, working)}
+                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelected(selected === s.key ? null : s.key)}
+                >
+                  <circle r="22" fill="transparent" />
+                  {selected === s.key && <circle r="23" fill="#8B5CF6" opacity=".16" stroke="#8B5CF6" strokeWidth="1.5" />}
+                  <Avatar seat={s} working={working} facing={dragging ? 'down' : facing} color={s.job?.color ?? '#F97316'} />
+                </g>
+                <g className={dragging ? undefined : 'of-chip'} style={{ transform: `translate(${chip.x - at.x}px, ${chip.y - at.y}px)` }}><Chip x={0} y={0} text={s.name} /></g>
               </g>
-              <g className="of-chip" style={{ transform: `translate(${chip.x - at.x}px, ${chip.y - at.y}px)` }}><Chip x={0} y={0} text={s.name} /></g>
-            </g>
-          ))}
-          {placed.filter((p) => p.working).map(({ s, bubble }) => (
+            )
+          })}
+          {placed.filter((p) => p.working && !(selected === p.s.key)).map(({ s, bubble }) => (
             <g key={`b-${s.key}`} className="of-walk" style={{ transform: `translate(${bubble.x}px, ${bubble.y}px)` }}>
               <Bubble key={s.job?.step ?? s.space?.now} x={0} y={0} below={bubble.below} text={s.job ? s.job.step : s.space ? (s.space.waiting ? 'Esperando você' : s.space.now ?? 'Montando a página') : ''} />
             </g>
           ))}
         </svg>
-      </div>
-
-      {picked && (
-        <div className="mt-3 rounded-xl bg-white p-3 shadow-[0_0_0_1px_rgb(0_0_0/0.06)]">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-gray-900">{picked.name} <span className="font-normal text-gray-500">· {picked.role}</span></p>
-            {(picked.job?.href || picked.space?.href) && (
-              <span className="ml-auto flex gap-1.5">
-                <Button type="button" size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs" onClick={() => openPreview({ href: (picked.job?.href ?? picked.space?.href)!, title: picked.job ? `${picked.job.kind} · ${picked.job.label}` : picked.space!.project })}><Eye className="h-3.5 w-3.5" /> Ver aqui</Button>
-                <Button asChild size="sm" variant="outline" className="h-7 bg-white text-xs"><Link to={(picked.job?.href ?? picked.space?.href)!}>Abrir</Link></Button>
-              </span>
-            )}
-          </div>
-          {picked.job ? (
-            <>
-              <p className="mt-1 text-xs text-gray-600">{picked.job.kind} · {picked.job.label} · {elapsed(picked.job.startedAt, now)}</p>
-              <JobFeed job={picked.job} lines={8} className="mt-2" />
-            </>
-          ) : picked.space ? (
-            <p className="mt-1 text-xs text-gray-600">{picked.space.project}: {picked.space.waiting ? 'esperando a sua resposta' : picked.space.now ?? 'montando a página'}</p>
-          ) : (
-            <p className="mt-1 text-xs text-gray-500">Livre, na copa.</p>
-          )}
-          {!picked.job && mine.length > 0 && (
-            <div className="mt-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">O que {picked.name} fez por último</p>
-              <ul className="mt-1 divide-y divide-gray-100 rounded-lg border border-gray-100">
-                {mine.map((j) => (
-                  <li key={j.id} className="flex items-center gap-2 px-2.5 py-1.5">
-                    {j.status === 'error' ? <CircleAlert className="h-4 w-4 shrink-0 text-red-500" /> : <Check className="h-4 w-4 shrink-0 text-emerald-600" />}
-                    <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-gray-900">{j.kind} · {j.label}</span><span className="block truncate text-[11px] text-gray-500">{j.status === 'error' ? j.error ?? 'não terminou' : 'entregue'}</span></span>
-                    {j.href && j.status !== 'error' && <Button type="button" size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs" onClick={() => openPreview({ href: j.href!, title: `${j.kind} · ${j.label}` })}><Eye className="h-3.5 w-3.5" /> Ver aqui</Button>}
-                  </li>
-                ))}
-              </ul>
+        {picked && pickedAt && (() => {
+          const px = ((drag?.key === picked.key ? drag.x : pickedAt.at.x) / W) * 100
+          const py = ((drag?.key === picked.key ? drag.y : pickedAt.at.y) / H) * 100
+          const below = pickedAt.at.y < 380
+          const left = Math.min(Math.max(px, 17), 83)
+          return (
+            <div role="dialog" aria-label={`Conversar com ${picked.name}`} className="absolute z-30 w-[min(330px,92%)] -translate-x-1/2 rounded-2xl bg-white p-3 shadow-[0_0_0_1px_rgb(0_0_0/0.1),0_12px_32px_-8px_rgb(0_0_0/0.3)]" style={{ left: `${left}%`, top: below ? `calc(${py}% + 34px)` : undefined, bottom: below ? undefined : `calc(${100 - py}% + 34px)`, maxHeight: '70%', overflowY: 'auto' }} onPointerDown={(e) => e.stopPropagation()}>
+              <span aria-hidden className={cn('absolute h-3 w-3 rotate-45 bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.08)]', below ? '-top-1.5' : '-bottom-1.5')} style={{ left: `calc(50% + ${(px - left) * 3.3}px)`, marginLeft: -6 }} />
+              <div className="relative flex items-center gap-2">
+                <span className="h-7 w-7 shrink-0 rounded-full" style={{ background: picked.shirt }} />
+                <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{picked.name} <span className="font-normal text-gray-500">· {picked.role}</span></p>
+                <button type="button" aria-label="Fechar" onClick={() => setSelected(null)} className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"><X className="h-4 w-4" /></button>
+              </div>
+              {picked.job ? (
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-gray-600">{picked.job.kind} · {picked.job.label} · {elapsed(picked.job.startedAt, now)}</p>
+                  <JobFeed job={picked.job} lines={6} />
+                  <div className="flex gap-1.5">
+                    {picked.job.href && <Button type="button" size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs" onClick={() => openPreview({ href: picked.job!.href!, title: `${picked.job!.kind} · ${picked.job!.label}` })}><Eye className="h-3.5 w-3.5" /> Ver aqui</Button>}
+                    <Button type="button" size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs" onClick={() => stopJob(picked.job!.id)}>Parar</Button>
+                  </div>
+                </div>
+              ) : picked.space ? (
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-gray-600">{picked.space.project}: {picked.space.waiting ? 'esperando a sua resposta' : picked.space.now ?? 'montando a página'}</p>
+                  <Button type="button" size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs" onClick={() => openPreview({ href: picked.space!.href, title: picked.space!.project })}><Eye className="h-3.5 w-3.5" /> Ver aqui</Button>
+                </div>
+              ) : (
+                <>
+                  {mine.length > 0 && (
+                    <ul className="mt-2 divide-y divide-gray-100 rounded-lg border border-gray-100">
+                      {mine.slice(0, 3).map((j) => (
+                        <li key={j.id} className="flex items-center gap-2 px-2 py-1.5">
+                          {j.status === 'error' ? <CircleAlert className="h-4 w-4 shrink-0 text-red-500" /> : <Check className="h-4 w-4 shrink-0 text-emerald-600" />}
+                          <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-gray-900">{j.kind} · {j.label}</span><span className="block truncate text-[11px] text-gray-500">{j.status === 'error' ? j.error ?? 'não terminou' : 'entregue'}</span></span>
+                          {j.href && j.status !== 'error' && <Button type="button" size="sm" variant="outline" className="h-7 gap-1 bg-white px-2 text-xs" onClick={() => openPreview({ href: j.href!, title: `${j.kind} · ${j.label}` })}><Eye className="h-3.5 w-3.5" /> Ver</Button>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {!picked.key.includes(':extra:') ? <AgentRequest compact who={{ area: picked.key.split(':')[0] as Area, role: picked.role, name: picked.name }} /> : <p className="mt-2 text-xs text-gray-500">Reforço temporário.</p>}
+                </>
+              )}
             </div>
-          )}
-          {!picked.space && !picked.job && !picked.key.includes(':extra:') && <AgentRequest who={{ area: picked.key.split(':')[0] as Area, role: picked.role, name: picked.name }} />}
-        </div>
-      )}
+          )
+        })()}
+      </div>
+      <div className="mt-2 flex items-center gap-3 text-[11px] text-gray-500">
+        <span>Arraste quem está livre para outro lugar. Clique para pedir algo.</span>
+        {Object.keys(moved).length > 0 && <button type="button" onClick={() => saveMoved({})} className="underline">Voltar todos para as mesas</button>}
+      </div>
     </section>
   )
 }

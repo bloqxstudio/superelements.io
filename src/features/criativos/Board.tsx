@@ -47,10 +47,11 @@ interface Row {
   addX: number
 }
 
-function layout(set: CreativeSet) {
+function layout(set: CreativeSet, only?: string) {
   const rows: Row[] = []
   let y = 0
   for (const post of set.posts) {
+    if (only && post.id !== only) continue
     const { width, height } = sizeOf(post.format)
     const slides: Placed[] = post.slides.map((slide, index) => ({ postId: post.id, slideId: slide.id, index, format: post.format, x: index * (width + GAP), y: y + HEAD, w: width, h: height, slide }))
     const rowWidth = post.slides.length * (width + GAP) + width * 0.3
@@ -167,9 +168,11 @@ interface Props {
   onDownloadSlide: (postId: string, slideId: string) => void
   onDuplicateSlide: (postId: string, slideId: string) => void
   onDeleteSlide: (postId: string, slideId: string) => void
+  /** Mostra só este post (a entrega que alguém abriu), não o conjunto todo. */
+  onlyPostId?: string
 }
 
-export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicateSlide, onDeleteSlide }) => {
+export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicateSlide, onDeleteSlide, onlyPostId }) => {
   const set = useEditor((s) => s.set)!
   const images = useEditor((s) => s.images)
   const postId = useEditor((s) => s.postId)
@@ -198,8 +201,11 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   const layerIds = useEditor((s) => s.layerIds)
   const [snapped, setSnapped] = useState<{ slideId: string; v: number[]; h: number[] } | null>(null)
   const fitted = useRef(false)
+  useEffect(() => {
+    fitted.current = false
+  }, [onlyPostId])
 
-  const { rows, bounds } = useMemo(() => layout(set), [set.posts]) // eslint-disable-line react-hooks/exhaustive-deps
+  const { rows, bounds } = useMemo(() => layout(set, onlyPostId), [set.posts, onlyPostId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tamanho da área
   useLayoutEffect(() => {

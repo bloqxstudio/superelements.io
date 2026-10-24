@@ -422,7 +422,9 @@ const MultiInspector: React.FC<{ ids: string[] }> = ({ ids }) => {
 
 export const CreativeEditor: React.FC = () => {
   const { setId = '' } = useParams()
-  const projectParam = useSearchParams()[0].get('projeto') ?? undefined
+  const [query, setQuery] = useSearchParams()
+  const projectParam = query.get('projeto') ?? undefined
+  const onlyPost = query.get('post') ?? undefined
   const status = useEditor((s) => s.status)
   const set = useEditor((s) => s.set)
   const post = useEditor(currentPost)
@@ -456,6 +458,10 @@ export const CreativeEditor: React.FC = () => {
   const setGrid = (patch: Partial<PostGrid>) => editPost((p) => ({ ...p, grid: { ...gridOf(p), ...patch } }))
   const upload = useRef<HTMLInputElement>(null)
   const pasteImage = useRef<(file: File) => void>(() => undefined)
+
+  useEffect(() => {
+    if (status === 'ready' && onlyPost) useEditor.getState().selectPost(onlyPost)
+  }, [status, onlyPost])
 
   useEffect(() => {
     void useEditor.getState().open(setId, projectParam)
@@ -729,7 +735,7 @@ export const CreativeEditor: React.FC = () => {
           </div>
         </aside>
 
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="relative flex min-w-0 flex-1 flex-col">
           <div className="relative flex h-10 shrink-0 items-center gap-1.5 border-b bg-white px-3" onClick={(e) => e.stopPropagation()}>
             {post && <input aria-label="Nome do post" value={post.name} onChange={(e) => editPost((p) => ({ ...p, name: e.target.value }))} className="h-8 w-40 rounded-md border border-transparent px-2 text-sm font-medium text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none" />}
             <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" onClick={() => setNewPost(newPost ? null : { name: '', format: '4x5' })}><Plus className="h-4 w-4" /> Novo post</Button>
@@ -782,7 +788,12 @@ export const CreativeEditor: React.FC = () => {
               {slide && <input type="color" aria-label="Cor do fundo" value={/^#[0-9a-f]{6}$/i.test(slide.background) ? slide.background : '#ffffff'} onChange={(e) => editSlide((sl) => ({ ...sl, background: e.target.value }))} className="h-6 w-8 cursor-pointer rounded border border-gray-200 bg-white p-0.5" />}
             </label>
           </div>
-          {view === 'canvas' ? <Board onAddSlide={addSlideTo} onDownloadSlide={() => void exportFiles('slide', exportType)} onDuplicateSlide={duplicateSlide} onDeleteSlide={deleteSlide} /> : <Stage />}
+          {onlyPost && set?.posts.some((p) => p.id === onlyPost) && view === 'canvas' && (
+            <div className="pointer-events-none absolute left-1/2 top-14 z-20 -translate-x-1/2">
+              <button type="button" onClick={() => { const next = new URLSearchParams(query); next.delete('post'); setQuery(next, { replace: true }) }} className="pointer-events-auto rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white shadow-lg hover:bg-gray-700">Mostrando só este post · Ver todos</button>
+            </div>
+          )}
+          {view === 'canvas' ? <Board onlyPostId={onlyPost && set?.posts.some((p) => p.id === onlyPost) ? onlyPost : undefined} onAddSlide={addSlideTo} onDownloadSlide={() => void exportFiles('slide', exportType)} onDuplicateSlide={duplicateSlide} onDeleteSlide={deleteSlide} /> : <Stage />}
         </main>
 
         <aside className="hidden w-80 shrink-0 flex-col border-l bg-white lg:flex" onClick={(e) => e.stopPropagation()}>
