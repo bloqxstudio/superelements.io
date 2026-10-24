@@ -32,16 +32,18 @@ export function docText(doc: CopyDoc): string {
 
 // ---------- Criativos ----------
 
-export async function sendToCriativos(doc: CopyDoc, target: SetSummary, signal?: AbortSignal): Promise<{ postName: string; slides: number }> {
+export async function sendToCriativos(doc: CopyDoc, target: SetSummary, signal?: AbortSignal, count = 3): Promise<{ postName: string; postNames: string[]; slides: number }> {
   const story = doc.format === 'story'
-  const plan = await callAi<PlanResponse>('copy-slides', { name: doc.title, kind: story ? 'story' : 'post', text: docText(doc) }, signal)
-  const first = plan.posts?.[0]
-  if (!first?.slides?.length) throw new Error('O agente não montou os slides.')
+  // Uma pesquisa não é um post: o agente tira dela vários posts, um ângulo em cada
+  const research = doc.format === 'pesquisa'
+  const plan = await callAi<PlanResponse>('copy-slides', { name: doc.folderName || doc.title, kind: research ? 'pesquisa' : story ? 'story' : 'post', count, text: docText(doc) }, signal)
+  const plans = (plan.posts ?? []).filter((p) => p.slides?.length).slice(0, research ? 6 : 1)
+  if (!plans.length) throw new Error('O agente não montou os slides.')
   const set = await loadSet(target.id, target.shared ? target.projectId : undefined)
   if (!set) throw new Error('Não achei o conjunto de criativos.')
-  const post = buildPost({ name: first.name || doc.title || 'Post', format: story ? '9x16' : '4x5', caption: first.caption, slides: first.slides }, set.brand)
-  await saveSet({ ...set, posts: [...set.posts, post], updatedAt: Date.now() })
-  return { postName: post.name, slides: post.slides.length }
+  const posts = plans.map((p, i) => buildPost({ name: p.name || (research ? `${doc.folderName || doc.title} ${i + 1}` : doc.title || 'Post'), format: story ? '9x16' : '4x5', caption: p.caption, slides: p.slides }, set.brand))
+  await saveSet({ ...set, posts: [...set.posts, ...posts], updatedAt: Date.now() })
+  return { postName: posts[0].name, postNames: posts.map((p) => p.name), slides: posts.reduce((n, p) => n + p.slides.length, 0) }
 }
 
 // ---------- Projetos (landing page, site) ----------

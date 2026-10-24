@@ -92,11 +92,11 @@ export async function renameFolder(folderId: string, name: string) {
 export const WRITE_FIRST = 'Escreva a primeira versão completa deste documento, usando a pesquisa e os outros documentos da pasta como base.'
 
 /** Endereço de um documento; `rodar` já abre pedindo ao agente, `enviar` já abre o envio. */
-export const docLink = (d: Pick<CopySummary, 'id' | 'projectId' | 'shared'>, extra: { rodar?: string; enviar?: boolean } = {}) => {
+export const docLink = (d: Pick<CopySummary, 'id' | 'projectId' | 'shared'>, extra: { rodar?: string; enviar?: boolean | 'pasta' } = {}) => {
   const q = new URLSearchParams()
   if (d.shared && d.projectId) q.set('projeto', d.projectId)
   if (extra.rodar) q.set('rodar', extra.rodar)
-  if (extra.enviar) q.set('enviar', '1')
+  if (extra.enviar) q.set('enviar', extra.enviar === 'pasta' ? 'pasta' : '1')
   const s = q.toString()
   return `/copy/${d.id}${s ? `?${s}` : ''}`
 }

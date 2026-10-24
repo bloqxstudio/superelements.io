@@ -60,6 +60,8 @@ export const FolderPanel: React.FC = () => {
         <p className="mt-0.5 text-xs text-gray-500">Tudo deste assunto fica aqui. Os agentes leem a pesquisa e os outros documentos da pasta antes de escrever, e cada documento é enviado para o seu lugar.</p>
       </div>
 
+      <Button asChild size="sm" className="h-8 w-full gap-1.5"><Link to={docLink(doc, { enviar: 'pasta' })}><Send className="h-4 w-4" /> Enviar a pasta toda</Link></Button>
+
       <ul className="space-y-1.5">
         {(docs ?? []).map((d) => {
           const f = formatById(d.format)

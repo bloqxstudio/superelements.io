@@ -25,7 +25,8 @@ export const CopyEditorPage: React.FC = () => {
   const { docId = '' } = useParams()
   const projectParam = useSearchParams()[0].get('projeto') ?? undefined
   const autoRun = useSearchParams()[0].get('rodar')
-  const autoSend = useSearchParams()[0].get('enviar')
+  const [search, setSearch] = useSearchParams()
+  const autoSend = search.get('enviar')
   const navigate = useNavigate()
   const status = useCopy((s) => s.status)
   const doc = useCopy((s) => s.doc)
@@ -203,7 +204,14 @@ export const CopyEditorPage: React.FC = () => {
           </div>
         </aside>
       </div>
-      <SendDialog open={send} onClose={() => setSend(false)} />
+      <SendDialog open={send} onClose={() => {
+          setSend(false)
+          if (autoSend) {
+            const next = new URLSearchParams(search)
+            next.delete('enviar')
+            setSearch(next, { replace: true })
+          }
+        }} initial={autoSend === 'pasta' ? 'pasta' : undefined} />
     </div>
   )
 }

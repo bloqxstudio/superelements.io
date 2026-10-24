@@ -96,7 +96,7 @@ export const criativos = (): Plugin => ({
             send({ id, ok: true, data: await runCopy({ ...req, message: String(req.message).slice(0, 6000), doc: { ...req.doc, blocks: (req.doc?.blocks ?? []).slice(0, 400) }, history: (req.history ?? []).slice(-30) }, controller.signal, (step) => server.ws.send(CREATIVE_EVENTS.progress, { id, step } satisfies CreativeProgress)) })
           } else if (call.kind === 'copy-slides') {
             const req = call.request as SlidesRequest
-            send({ id, ok: true, data: await copyToSlides({ name: String(req?.name ?? 'Post').slice(0, 120), kind: req?.kind === 'story' ? 'story' : 'post', text: String(req?.text ?? '') }, controller.signal) })
+            send({ id, ok: true, data: await copyToSlides({ name: String(req?.name ?? 'Post').slice(0, 120), kind: req?.kind === 'story' ? 'story' : req?.kind === 'pesquisa' ? 'pesquisa' : 'post', count: Number(req?.count) || undefined, text: String(req?.text ?? '') }, controller.signal) })
           } else if (call.kind === 'download') {
             send({ id, ok: true, data: await downloadImage(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
           } else if (call.kind === 'capture') {
