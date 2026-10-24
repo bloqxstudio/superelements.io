@@ -127,7 +127,11 @@ export const AgentRequest: React.FC<{ who: Who }> = ({ who }) => {
       useCopyChat.getState().push(created.id, { id: crypto.randomUUID(), role: 'user', text: request, note: `${who.name} · pedido pelo escritório` })
       void runCopyAgent({ message: request, role: cfg.id, engine, web: cfg.web }, undefined, created)
         .then((r) => useCopyChat.getState().push(created.id, { id: crypto.randomUUID(), role: 'ai', text: r.reply || 'Pronto.', changed: r.applied, ops: r.applied ? r.summary : undefined }))
-        .catch((err) => (err as Error).name !== 'AbortError' && useCopyChat.getState().push(created.id, { id: crypto.randomUUID(), role: 'ai', text: err instanceof Error ? err.message : 'A IA não respondeu.', error: true }))
+        .catch((err) => {
+          if ((err as Error).name === 'AbortError') return
+          useCopyChat.getState().push(created.id, { id: crypto.randomUUID(), role: 'ai', text: err instanceof Error ? err.message : 'A IA não respondeu.', error: true })
+          toast.error(`${who.name} não conseguiu terminar: ${err instanceof Error ? err.message : 'a IA não respondeu'}`)
+        })
       toast.success(`${who.name} foi para a mesa.`, { action: { label: 'Abrir', onClick: () => (window.location.href = docLink(created)) } })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Não consegui enviar o pedido.')

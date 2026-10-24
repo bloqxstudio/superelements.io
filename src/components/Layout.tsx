@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useMatch } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { AppSidebar } from '@/components/AppSidebar';
 import { Logo } from '@/components/Logo';
+import { PreviewDrawer } from '@/features/operations/Preview';
 
 /**
  * Telas da conta: menu lateral com Produção e CRM (no celular, uma barra com
@@ -11,14 +12,16 @@ import { Logo } from '@/components/Logo';
  */
 const Layout: React.FC = () => {
   const inProject = !!useMatch('/projetos/:projectId');
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  // Aberto numa prévia (iframe da tela Agentes): só o conteúdo, sem o menu
+  const embedded = new URLSearchParams(search).get('embed') === '1';
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
 
   // Trocou de tela pelo menu do celular: ele fecha
   useEffect(() => setOpen(false), [pathname]);
 
-  if (inProject) return <Outlet />;
+  if (inProject || embedded) return <Outlet />;
 
   return (
     <div className="min-h-screen w-full bg-zinc-50">
@@ -42,6 +45,7 @@ const Layout: React.FC = () => {
         <main className="min-w-0 flex-1">
           <Outlet />
         </main>
+        <PreviewDrawer />
       </div>
     </div>
   );

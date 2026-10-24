@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowUpRight, Check, CircleAlert } from 'lucide-react'
+import { ArrowUpRight, Check, CircleAlert, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { elapsed, useSeconds } from './JobFeed'
+import { openPreview } from './Preview'
 import { AREAS, useJobs, type Area } from './jobs'
 
 /** Há quanto tempo, em português curto. */
@@ -48,15 +49,16 @@ export const Deliveries: React.FC = () => {
                   <span className="block truncate text-xs text-gray-500">{AREAS[j.area].label} · {j.agent}{j.status === 'error' ? ` · ${j.error ?? 'não terminou'}` : j.endedAt && j.endedAt - j.startedAt > 4000 ? ` · levou ${elapsed(j.startedAt, j.endedAt)}` : ''}</span>
                 </span>
                 <span className="shrink-0 text-xs tabular-nums text-gray-500">{ago(j.endedAt ?? j.startedAt, now)}</span>
-                {j.href && <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden />}
               </>
             )
             return (
-              <li key={j.id}>
-                {j.href ? (
-                  <Link to={j.href} className="flex items-start gap-2.5 px-3.5 py-2.5 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none">{body}</Link>
-                ) : (
-                  <div className="flex items-start gap-2.5 px-3.5 py-2.5">{body}</div>
+              <li key={j.id} className="flex items-start gap-1 pr-2 transition-colors hover:bg-gray-50">
+                <div className="flex min-w-0 flex-1 items-start gap-2.5 px-3.5 py-2.5">{body}</div>
+                {j.href && j.status !== 'error' && (
+                  <span className="flex shrink-0 items-center gap-1 py-2">
+                    <button type="button" onClick={() => openPreview({ href: j.href!, title: `${j.kind} · ${j.label}` })} className="flex h-7 items-center gap-1 rounded-md bg-gray-900 px-2.5 text-xs font-medium text-white hover:bg-gray-700"><Eye className="h-3.5 w-3.5" /> Ver aqui</button>
+                    <Link to={j.href} aria-label="Abrir em tela cheia" className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"><ArrowUpRight className="h-4 w-4" /></Link>
+                  </span>
                 )}
               </li>
             )

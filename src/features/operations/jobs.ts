@@ -1,4 +1,6 @@
+import { toast } from 'sonner'
 import { create } from 'zustand'
+import { openPreview } from './Preview'
 
 /**
  * O trabalho assíncrono da empresa: cada pedido a um agente (pesquisa, escrita,
@@ -88,6 +90,9 @@ export const noteJob = (id: string, text: string) =>
 export function finishJob(id: string, error?: unknown) {
   stops.delete(id)
   const stopped = (error as Error | undefined)?.name === 'AbortError'
+  // Avisa onde quer que a pessoa esteja: terminou, e como ver o resultado
+  const job = useJobs.getState().jobs.find((j) => j.id === id)
+  if (job && !error) toast.success(`${job.kind} pronto: ${job.label}`.slice(0, 110), job.href ? { action: { label: 'Ver aqui', onClick: () => openPreview({ href: job.href!, title: `${job.kind} · ${job.label}` }) } } : undefined)
   useJobs.setState((s) => ({
     jobs: s.jobs.map((j) => (j.id === id ? { ...j, status: error && !stopped ? 'error' : 'done', step: error ? (stopped ? 'Parado' : 'Não terminou') : 'Pronto', error: error && !stopped ? (error instanceof Error ? error.message : String(error)) : undefined, endedAt: Date.now() } : j)),
   }))
