@@ -397,16 +397,44 @@ export const Office: React.FC = () => {
           {/* a construção */}
           <rect x="6" y="6" width={W - 12} height={H - 12} rx="14" fill="#F3EFE6" stroke="#64748B" strokeWidth="8" />
 
-          {/* as quatro áreas */}
+          {/* corredor de madeira, carpete em cada área e paredes de vidro com porta */}
+          <rect x="16" y="16" width={W - 32} height={H - 32} rx="10" fill="url(#of-wood)" />
           {ZONES.map((z) => (
             <g key={z.id} aria-hidden>
-              <rect x={z.x} y={z.y} width={z.w} height={z.h} rx="12" fill={z.fill} opacity=".55" stroke={z.line} strokeWidth="2.5" />
-              <text x={z.x + 20} y={z.y + 36} fontSize="20" fontWeight="800" letterSpacing="3" fill={z.ink} fontFamily="Inter, system-ui, sans-serif">{z.title}</text>
-              <text x={z.x + 20} y={z.y + 56} fontSize="12" fill="#475569" fontFamily="Inter, system-ui, sans-serif">{z.hint}</text>
+              <rect x={z.x} y={z.y} width={z.w} height={z.h} rx="8" fill="url(#of-carpet)" />
+              <rect x={z.x} y={z.y} width={z.w} height={z.h} rx="8" fill={z.fill} opacity=".5" />
+              <rect x={z.x} y={z.y} width={z.w} height={z.h} rx="8" fill="none" stroke="#7DD3FC" strokeWidth="4" strokeOpacity=".9" />
+              <rect x={z.x + 4} y={z.y + 4} width={z.w - 8} height={z.h - 8} rx="6" fill="none" stroke="#fff" strokeWidth="1.5" opacity=".75" />
+              {/* porta no lado do corredor */}
+              {z.y < 100 ? (
+                <g><rect x={z.x + z.w / 2 - 26} y={z.y + z.h - 5} width="52" height="10" fill="#E9D8B8" /><path d={`M${z.x + z.w / 2 - 26} ${z.y + z.h} a26 26 0 0 1 26 -22`} fill="none" stroke="#94A3B8" strokeDasharray="3 2" /></g>
+              ) : (
+                <g><rect x={z.x + z.w / 2 - 26} y={z.y - 5} width="52" height="10" fill="#E9D8B8" /><path d={`M${z.x + z.w / 2 - 26} ${z.y} a26 26 0 0 0 26 22`} fill="none" stroke="#94A3B8" strokeDasharray="3 2" /></g>
+              )}
+              <text x={z.x + 22} y={z.y + 38} fontSize="20" fontWeight="800" letterSpacing="3" fill={z.ink} fontFamily="Inter, system-ui, sans-serif">{z.title}</text>
+              <text x={z.x + 22} y={z.y + 58} fontSize="12" fill="#475569" fontFamily="Inter, system-ui, sans-serif">{z.hint}</text>
+              <Plant x={z.x + 24} y={z.y + z.h - 24} r={12} />
+              <Plant x={z.x + z.w - 24} y={z.y + z.h - 24} r={12} />
             </g>
           ))}
-          <rect x="24" y="604" width="1152" height="52" rx="12" fill="#E5E7EB" stroke="#CBD5E1" strokeWidth="2" strokeDasharray="6 5" />
-          <text x="44" y="635" fontSize="11" fontWeight="800" letterSpacing="2" fill="#64748B" fontFamily="Inter, system-ui, sans-serif">REFORÇOS</text>
+          {/* o que cada área tem na parede */}
+          <g aria-hidden>
+            {/* comercial: quadro do funil */}
+            <rect x="446" y="40" width="122" height="46" rx="3" fill="#fff" stroke="#94A3B8" strokeWidth="1.5" />
+            {[0, 1, 2, 3].map((c) => <g key={c}><rect x={452 + c * 29} y="46" width="24" height="5" rx="1" fill="#93C5FD" />{[0, 1].map((r) => (c + r) % 3 !== 2 && <rect key={r} x={453 + c * 29} y={55 + r * 14} width="22" height="10" rx="1.5" fill={['#FDE68A', '#BBF7D0', '#FBCFE8', '#BFDBFE'][(c + r) % 4]} />)}</g>)}
+            {/* tech: servidores */}
+            {[0, 1, 2].map((i) => <g key={i}><rect x={950 + i * 38} y="38" width="32" height="52" rx="3" fill="#1F2937" stroke="#111827" />{[0, 1, 2, 3].map((k) => <g key={k}><rect x={955 + i * 38} y={44 + k * 11} width="22" height="6" rx="1" fill="#374151" /><circle cx={973 + i * 38} cy={47 + k * 11} r="1.6" fill={k % 2 ? '#22C55E' : '#38BDF8'} /></g>)}</g>)}
+            {/* copy: estante de livros */}
+            <rect x="476" y="348" width="92" height="44" rx="3" fill="#92400E" stroke="#78350F" />
+            {Array.from({ length: 9 }, (_, i) => <rect key={i} x={480 + i * 9} y={352 + (i % 3) * 2} width="7" height={34 - (i % 3) * 2} rx="1" fill={['#EF4444', '#3B82F6', '#F59E0B', '#10B981', '#8B5CF6'][i % 5]} />)}
+            {/* marketing: mural de posts */}
+            <rect x="1030" y="346" width="122" height="46" rx="3" fill="#D6C7A8" stroke="#A8916A" strokeWidth="1.5" />
+            {[0, 1, 2].map((i) => <rect key={i} x={1038 + i * 38} y="352" width="30" height="34" rx="2" fill={['#C4B5FD', '#FCA5A5', '#86EFAC'][i]} stroke="#fff" strokeWidth="1.5" transform={`rotate(${[-4, 3, -2][i]} ${1053 + i * 38} 369)`} />)}
+          </g>
+          {/* reforços: um cantinho de café */}
+          <rect x="24" y="604" width="1152" height="52" rx="8" fill="url(#of-tile)" stroke="#CBD5E1" strokeWidth="2" />
+          <text x="44" y="635" fontSize="11" fontWeight="800" letterSpacing="2" fill="#7C6A4D" fontFamily="Inter, system-ui, sans-serif">REFORÇOS</text>
+          <rect x="1110" y="612" width="44" height="36" rx="5" fill="#9CA3AF" stroke="#6B7280" /><circle cx="1124" cy="630" r="6" fill="#B91C1C" /><rect x="1136" y="620" width="12" height="20" rx="2" fill="#E5E7EB" />
 
           {/* salão: as ilhas de mesas */}
           {(Object.keys(AREAS) as Area[]).filter((a) => POD_LABEL[a]).map((a) => (
