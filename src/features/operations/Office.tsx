@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { agentStatus, useAgents } from '@/features/space/bridge/agentsStore'
 import { cn } from '@/lib/utils'
+import { AgentRequest } from './AgentRequest'
 import { elapsed, JobFeed, useSeconds } from './JobFeed'
 import { AREAS, useJobs, type Area, type Job } from './jobs'
 
@@ -309,8 +310,9 @@ export const Office: React.FC = () => {
           ) : picked.space ? (
             <p className="mt-1 text-xs text-gray-600">{picked.space.project}: {picked.space.waiting ? 'esperando a sua resposta' : picked.space.now ?? 'montando a página'}</p>
           ) : (
-            <p className="mt-1 text-xs text-gray-500">Na copa, livre. Peça algo na área {AREAS[picked.key.split(':')[0] as Area]?.label ?? ''} e ele vai para a mesa.</p>
+            <p className="mt-1 text-xs text-gray-500">Na copa, livre. Peça algo abaixo e ele vai para a mesa.</p>
           )}
+          {!picked.space && !picked.job && !picked.key.includes(':extra:') && <AgentRequest who={{ area: picked.key.split(':')[0] as Area, role: picked.role, name: picked.name }} />}
         </div>
       )}
     </section>

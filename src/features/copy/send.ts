@@ -7,6 +7,7 @@ import { buildPost } from '@/features/criativos/templates'
 import type { SetSummary } from '@/features/criativos/types'
 import { parseDesignMd } from '@/features/space/brand/designMd'
 import type { SpaceNode, SpacePage } from '@/types/space'
+import { recordDelivery } from '@/features/operations/jobs'
 import { formatById } from './knowledge'
 import { htmlToMark } from './html'
 import { plainOf, type Block, type CopyDoc } from './types'
@@ -43,7 +44,21 @@ export async function sendToCriativos(doc: CopyDoc, target: SetSummary, signal?:
   if (!set) throw new Error('Não achei o conjunto de criativos.')
   const posts = plans.map((p, i) => buildPost({ name: p.name || (research ? `${doc.folderName || doc.title} ${i + 1}` : doc.title || 'Post'), format: story ? '9x16' : '4x5', caption: p.caption, slides: p.slides }, set.brand))
   await saveSet({ ...set, posts: [...set.posts, ...posts], updatedAt: Date.now() })
+  recordDelivery({ area: 'criativos', kind: posts.length > 1 ? `${posts.length} posts enviados` : 'Post enviado', label: `${doc.folderName || doc.title} → ${target.name}`, agent: 'Enviado da Copy', href: `/criativos/${target.id}${target.shared && target.projectId ? `?projeto=${target.projectId}` : ''}` })
   return { postName: posts[0].name, postNames: posts.map((p) => p.name), slides: posts.reduce((n, p) => n + p.slides.length, 0) }
+}
+
+/** Posts direto de um pedido (sem documento): o agente de criativos cria até 6 carrosséis no conjunto escolhido. */
+export async function postsFromRequest(request: string, target: SetSummary, count: number, signal?: AbortSignal): Promise<{ postNames: string[] }> {
+  const plan = await callAi<PlanResponse>('copy-slides', { name: request.slice(0, 80), kind: 'pesquisa', count, text: request }, signal)
+  const plans = (plan.posts ?? []).filter((p) => p.slides?.length).slice(0, 6)
+  if (!plans.length) throw new Error('O agente não montou os posts.')
+  const set = await loadSet(target.id, target.shared ? target.projectId : undefined)
+  if (!set) throw new Error('Não achei o conjunto de criativos.')
+  const posts = plans.map((p, i) => buildPost({ name: p.name || `Post ${i + 1}`, format: '4x5', caption: p.caption, slides: p.slides }, set.brand))
+  await saveSet({ ...set, posts: [...set.posts, ...posts], updatedAt: Date.now() })
+  recordDelivery({ area: 'criativos', kind: posts.length > 1 ? `${posts.length} posts criados` : 'Post criado', label: `${request.slice(0, 60)} → ${target.name}`, agent: 'Pedido ao agente', href: `/criativos/${target.id}${target.shared && target.projectId ? `?projeto=${target.projectId}` : ''}` })
+  return { postNames: posts.map((p) => p.name) }
 }
 
 // ---------- Projetos (landing page, site) ----------
@@ -185,5 +200,6 @@ export async function sendToProject(doc: CopyDoc, projectId: string): Promise<{ 
   const brand = project.brand?.source?.trim() ? parseDesignMd(project.brand.source).brand : null
   const result = await saveProjectDoc(projectId, { ...project, canvas: { ...project.canvas, nodes: allNodes, pages } }, { base: cloud.revision, previousPath: cloud.path, summary: summarize(allNodes, brand, pages), edited: true })
   if ('conflict' in result) throw new Error('O projeto foi alterado por outra pessoa enquanto eu enviava. Tente de novo.')
+  recordDelivery({ area: doc.format === 'site' ? 'sites' : 'landing', kind: created.length > 1 ? `${created.length} páginas enviadas` : 'Página enviada', label: `${created.map((p) => p.name).join(', ')}`.slice(0, 120), agent: 'Enviado da Copy', href: `/projetos/${projectId}` })
   return { pages: created.map((p) => p.name), sections: nodes.length }
 }

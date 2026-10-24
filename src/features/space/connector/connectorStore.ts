@@ -29,6 +29,12 @@ interface ConnectorState {
   status: Status
   error?: string
   pairing?: Pairing
+  /** A versão do conector que está aberto neste computador (do ping). */
+  version?: string
+  /** A versão do conector que o app serve para baixar. */
+  latest?: string
+  /** Pergunta de novo ao conector (versão, IAs) e ao app qual é a versão mais nova. */
+  recheck: () => Promise<void>
   /** Procura o conector com o código guardado, sem mostrar erro enquanto ele não abre. */
   probe: () => Promise<boolean>
   /** Liga com o código que o conector mostrou no terminal ("CGP-YZ9", ou "CGP-YZ9:47824" em outra porta). */
@@ -77,7 +83,7 @@ type FindError = 'closed' | 'other' | 'locked' | 'blocked' | 'asking' | 'aborted
  * conector aberto. Outro código numa porta: outro conector, e o deste código
  * pode estar na seguinte. `signal`: uma tentativa mais nova cancela esta.
  */
-async function find(code: string, from: number, signal: AbortSignal): Promise<{ port: number } | { error: FindError }> {
+async function find(code: string, from: number, signal: AbortSignal): Promise<{ port: number; version?: string } | { error: FindError }> {
   let other = false
   for (let port = from; port < from + PORT_TRIES; port++) {
     const timeout = new AbortController()
@@ -98,7 +104,7 @@ async function find(code: string, from: number, signal: AbortSignal): Promise<{ 
       clearTimeout(timer)
       signal.removeEventListener('abort', stop)
     }
-    if (response.ok) return { port }
+    if (response.ok) return { port, version: await response.json().then((j: { version?: string }) => (typeof j?.version === 'string' ? j.version : undefined)).catch(() => undefined) }
     if (response.status === 429) return { error: 'locked' }
     other = true
   }
@@ -177,7 +183,7 @@ export const useConnector = create<ConnectorState>()((set, get) => {
       const [{ startSpaceBridge }, { startSpaceChat }] = await Promise.all([import('@/features/space/bridge/client'), import('@/features/space/chat/connection')])
       stops = [startSpaceBridge(channel), startSpaceChat(channel), startCreativeLink(channel), () => channel.close()]
       linked = live
-      set({ pairing: live, error: undefined })
+      set({ pairing: live, error: undefined, version: found.version })
       return true
     } finally {
       if (current === controller) current = null
@@ -187,6 +193,31 @@ export const useConnector = create<ConnectorState>()((set, get) => {
   return {
     status: 'off',
     pairing: saved(),
+    recheck: async () => {
+      // A versão que o app serve hoje
+      try {
+        const text = await (await fetch(CONNECTOR_FILE, { cache: 'no-store' })).text()
+        const latest = /version:\s*"(\d{8,})"/.exec(text)?.[1]
+        if (latest) set({ latest })
+      } catch {
+        // sem rede: fica com o que já sabia
+      }
+      const pairing = get().pairing
+      if (!pairing) return
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), PING_TIMEOUT)
+      try {
+        const found = await find(pairing.code, linked?.port ?? pairing.port, controller.signal)
+        if ('error' in found) {
+          if (get().status === 'connected') set({ status: 'failed', error: MESSAGES[found.error] || undefined })
+          return
+        }
+        set({ version: found.version })
+        if (get().status !== 'connected') void open(pairing, false)
+      } finally {
+        clearTimeout(timer)
+      }
+    },
     probe: async () => {
       const pairing = get().pairing
       return pairing ? open(pairing, true) : false
@@ -217,7 +248,7 @@ export const useConnector = create<ConnectorState>()((set, get) => {
       stopAll()
       save(undefined)
       useChat.setState({ connected: false })
-      set({ status: 'off', error: undefined, pairing: undefined })
+      set({ status: 'off', error: undefined, pairing: undefined, version: undefined })
     },
   }
 })

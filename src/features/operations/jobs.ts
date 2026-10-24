@@ -45,7 +45,28 @@ interface State {
 
 const KEEP = 60
 
-export const useJobs = create<State>()(() => ({ jobs: [] }))
+const STORE = 'agentes-entregas'
+
+/** As entregas (trabalhos que terminaram) ficam neste navegador: voltam ao recarregar. */
+const readDone = (): Job[] => {
+  try {
+    const list = JSON.parse(localStorage.getItem(STORE) ?? '[]') as Job[]
+    return Array.isArray(list) ? list.filter((j) => j?.id && j.status !== 'running').slice(0, KEEP) : []
+  } catch {
+    return []
+  }
+}
+
+export const useJobs = create<State>()(() => ({ jobs: readDone() }))
+
+useJobs.subscribe((s, prev) => {
+  if (s.jobs === prev.jobs) return
+  try {
+    localStorage.setItem(STORE, JSON.stringify(s.jobs.filter((j) => j.status !== 'running').map((j) => ({ ...j, log: j.log?.slice(-12) })).slice(0, KEEP)))
+  } catch {
+    // sem armazenamento: vale até fechar a aba
+  }
+})
 
 const stops = new Map<string, AbortController>()
 
@@ -70,6 +91,12 @@ export function finishJob(id: string, error?: unknown) {
   useJobs.setState((s) => ({
     jobs: s.jobs.map((j) => (j.id === id ? { ...j, status: error && !stopped ? 'error' : 'done', step: error ? (stopped ? 'Parado' : 'Não terminou') : 'Pronto', error: error && !stopped ? (error instanceof Error ? error.message : String(error)) : undefined, endedAt: Date.now() } : j)),
   }))
+}
+
+/** Uma entrega que não passou por um agente aqui (um post ou uma página enviados): entra direto na lista. */
+export function recordDelivery(init: Pick<Job, 'area' | 'kind' | 'label' | 'agent'> & Partial<Pick<Job, 'href' | 'docId'>>) {
+  const at = Date.now()
+  useJobs.setState((s) => ({ jobs: [{ ...init, id: crypto.randomUUID(), step: 'Entregue', status: 'done' as const, startedAt: at, endedAt: at }, ...s.jobs].slice(0, KEEP) }))
 }
 
 /** Para o trabalho em andamento (o Claude Code é interrompido). */
