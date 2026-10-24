@@ -1,3 +1,4 @@
+import { useIdentity } from '@/features/ia/identidade'
 import { personaFor, profileNow } from '@/features/ia/perfis'
 import { create } from 'zustand'
 import type { AgentChannel } from '@/features/space/connector/channel'
@@ -114,7 +115,7 @@ function withProfile(kind: CreativeCall['kind'], request: unknown): unknown {
   if (!r || typeof r !== 'object' || r.persona !== undefined) return request
   if (kind === 'image' && typeof r.prompt === 'string') {
     const lia = profileNow('lia')
-    const style = [lia.instructions, ...lia.rules.split('\n')].map((t) => t.trim()).filter(Boolean).join('. ')
+    const style = [useIdentity.getState().identity.visual, lia.instructions, ...lia.rules.split('\n')].map((t) => t.trim()).filter(Boolean).join('. ')
     return style ? { ...r, prompt: `${r.prompt}\n\nDireção de estilo da equipe: ${style}` } : request
   }
   const ids = kind === 'edit' || kind === 'plan' || kind === 'copy-slides' ? ['dani'] : kind === 'copy-plan' ? ['nina'] : kind === 'copy' ? [COPY_PROFILE[String(r.role)], (r.doc as { format?: string } | undefined)?.format === 'lp' ? 'rafa' : ''] : []

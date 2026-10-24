@@ -1,11 +1,13 @@
 import React from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { IdentityEditor } from '@/features/ia/IdentityEditor'
 import { ProfilesEditor } from '@/features/ia/ProfilesEditor'
 import { RoutinesPanel } from '@/features/ia/RoutinesPanel'
 import { IaPorTarefa } from '@/features/operations/IaPorTarefa'
 import { cn } from '@/lib/utils'
 
 const TABS = [
+  { id: 'identidade', label: 'Identidade do estúdio' },
   { id: 'perfis', label: 'Perfis dos agentes' },
   { id: 'rotinas', label: 'Rotinas' },
   { id: 'ia', label: 'IA de cada trabalho' },
@@ -14,7 +16,7 @@ const TABS = [
 /** Onde se configura a empresa de agentes: o que cada um faz e como, o que roda sozinho e qual IA usa. */
 const AgentSetup: React.FC = () => {
   const [params, setParams] = useSearchParams()
-  const tab = TABS.find((t) => t.id === params.get('aba'))?.id ?? 'perfis'
+  const tab = TABS.find((t) => t.id === params.get('aba'))?.id ?? 'identidade'
   return (
     <div className="min-h-[calc(100vh-57px)] bg-zinc-50">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
@@ -29,7 +31,7 @@ const AgentSetup: React.FC = () => {
             </button>
           ))}
         </div>
-        <div className="mt-6">{tab === 'perfis' ? <ProfilesEditor /> : tab === 'rotinas' ? <RoutinesPanel /> : <IaPorTarefa />}</div>
+        <div className="mt-6">{tab === 'identidade' ? <IdentityEditor /> : tab === 'perfis' ? <ProfilesEditor /> : tab === 'rotinas' ? <RoutinesPanel /> : <IaPorTarefa />}</div>
       </div>
     </div>
   )

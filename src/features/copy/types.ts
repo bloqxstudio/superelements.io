@@ -21,6 +21,8 @@ export type FormatId =
   | 'whatsapp'
   | 'artigo'
   | 'pesquisa'
+  | 'tendencias'
+  | 'oportunidades'
   | 'livre'
 
 export type BlockType = 'h1' | 'h2' | 'h3' | 'p' | 'bullet' | 'number' | 'quote' | 'hook' | 'cta' | 'note' | 'divider'

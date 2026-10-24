@@ -1,6 +1,6 @@
 import { useProjectStore } from '@/features/projects/projectStore'
 import { escapeHtml, htmlToMark } from './html'
-import { formatById } from './knowledge'
+import { formatById, isResearch } from './knowledge'
 import type { CopyRequest } from './protocol'
 import { listDocs, loadDoc, saveDoc } from './storage'
 import { block, EMPTY_BRIEF, uid, type CopyDoc, type CopySummary, type FormatId } from './types'
@@ -22,11 +22,11 @@ export const folderReferences = (doc: CopyDoc) => (doc.folderId ? folderMaterial
 
 export async function folderMaterial(folderId: string, exceptId?: string): Promise<NonNullable<CopyRequest['references']>> {
   try {
-    const siblings = (await folderDocs(folderId)).filter((d) => d.id !== exceptId && d.words > 5).sort((a, b) => Number(b.format === 'pesquisa') - Number(a.format === 'pesquisa')).slice(0, 5)
+    const siblings = (await folderDocs(folderId)).filter((d) => d.id !== exceptId && d.words > 5).sort((a, b) => Number(isResearch(b.format)) - Number(isResearch(a.format))).slice(0, 5)
     const loaded = await Promise.all(siblings.map((s) => loadDoc(s.id, s.shared ? s.projectId : undefined).catch(() => undefined)))
     return loaded
       .filter((d): d is CopyDoc => !!d)
-      .map((d) => ({ kind: d.format === 'pesquisa' ? 'pesquisa da pasta' : `${formatById(d.format).label} da pasta`, label: d.title, text: d.blocks.map((b) => htmlToMark(b.html)).filter(Boolean).join('\n') }))
+      .map((d) => ({ kind: isResearch(d.format) ? 'pesquisa da pasta' : `${formatById(d.format).label} da pasta`, label: d.title, text: d.blocks.map((b) => htmlToMark(b.html)).filter(Boolean).join('\n') }))
   } catch {
     return []
   }

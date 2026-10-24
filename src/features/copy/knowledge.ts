@@ -236,6 +236,44 @@ export const FORMATS: FormatSpec[] = [
     ],
   },
   {
+    id: 'tendencias',
+    label: 'Tendências e virais',
+    group: 'Pesquisa',
+    hint: 'Dado um público: o que está em alta, o que viraliza e os modelos de campanha que funcionam.',
+    web: true,
+    sendTo: 'criativos',
+    structure:
+      'Seções em h2: "Resumo" (o que importa em 5 linhas), "O público" (quem é, onde está, o que consome), "Tendências do público" (comportamento, consumo, canais e ferramentas que crescem ou caem; cada uma com a fonte e a data), "O que está viralizando" (formatos, ganchos, estruturas de vídeo e carrossel, áudios e memes; descreva o formato com as suas palavras, o motivo de funcionar e o link), "Modelos de campanha" (cada modelo num bloco: objetivo, mecânica, estrutura passo a passo, por que funciona, exemplo público com link e como adaptar para o estúdio), "Sinais fracos" (o que começa a aparecer e ainda é cedo), "O que adaptar para nós" (5 a 8 ideias com formato e ganchos prontos) e "Próximos passos". Só afirme o que leu; marque [hipótese] o que for dedução. Redes sociais exigem login e quase nunca abrem: diga o que não conseguiu ler e use matérias, blogs, relatórios e sites públicos.',
+    skeleton: [
+      { type: 'h2', label: 'Resumo' },
+      { type: 'h2', label: 'O público' },
+      { type: 'h2', label: 'Tendências do público' },
+      { type: 'h2', label: 'O que está viralizando' },
+      { type: 'h2', label: 'Modelos de campanha' },
+      { type: 'h2', label: 'Sinais fracos' },
+      { type: 'h2', label: 'O que adaptar para nós' },
+      { type: 'h2', label: 'Próximos passos' },
+    ],
+  },
+  {
+    id: 'oportunidades',
+    label: 'Oportunidades de negócio',
+    group: 'Pesquisa',
+    hint: 'Nichos e públicos que o estúdio pode atender, com o encaixe e como validar.',
+    web: true,
+    structure:
+      'Seções em h2: "Resumo" (os 3 melhores nichos e por quê), "O que o estúdio vende e para quem" (a partir da identidade), "Nichos candidatos" (um bloco por nicho: quem é, sinais de demanda, quem já anuncia, onde o contato se perde, concorrentes e o que cobram, regras da profissão, encaixe com o nosso serviço de 0 a 5 com a justificativa), "Ranking" (os nichos em ordem, com o motivo), "Riscos" (regulação, sazonalidade, ticket baixo, concorrência), "Como abordar" (por nicho: canal, primeira mensagem em uma frase, o que mostrar) e "Como validar em 2 semanas" (testes baratos, quantos contatos, o que decide seguir ou parar). Nada de número de mercado sem fonte: marque [hipótese] e cite a fonte do que for dado. Use só o que está na identidade do estúdio sobre o que vendemos; não invente preço nem prazo.',
+    skeleton: [
+      { type: 'h2', label: 'Resumo' },
+      { type: 'h2', label: 'O que o estúdio vende e para quem' },
+      { type: 'h2', label: 'Nichos candidatos' },
+      { type: 'h2', label: 'Ranking' },
+      { type: 'h2', label: 'Riscos' },
+      { type: 'h2', label: 'Como abordar' },
+      { type: 'h2', label: 'Como validar em 2 semanas' },
+    ],
+  },
+  {
     id: 'livre',
     label: 'Documento em branco',
     group: 'Livre',
@@ -244,6 +282,19 @@ export const FORMATS: FormatSpec[] = [
     skeleton: [{ type: 'h1', label: 'Título' }, { type: 'p' }],
   },
 ]
+
+/** Documentos de pesquisa: leem a web e alimentam o resto da pasta. */
+export const isResearch = (id: string | undefined) => id === 'pesquisa' || id === 'tendencias' || id === 'oportunidades'
+
+/** O objetivo que o briefing de um documento de pesquisa novo recebe. */
+export const researchObjective = (id: string | undefined) =>
+  id === 'tendencias'
+    ? 'Mapear o que está em alta para o público, o que viraliza e os modelos de campanha que funcionam, e traduzir em ideias que o estúdio pode adaptar'
+    : id === 'oportunidades'
+      ? 'Avaliar nichos e públicos que o estúdio pode atender, com sinais de demanda, concorrência, encaixe com o nosso serviço e como validar'
+      : id === 'pesquisa'
+        ? 'Mapear dores, desejos, objeções, clientes, jornada, campanhas e posts de referência para criar conteúdo'
+        : ''
 
 export const formatById = (id: string | undefined) => FORMATS.find((f) => f.id === id) ?? FORMATS[FORMATS.length - 1]
 

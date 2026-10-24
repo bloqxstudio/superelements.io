@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Loader2, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { escapeHtml } from '@/features/copy/html'
-import { FORMATS, formatById, NICHES } from '@/features/copy/knowledge'
+import { FORMATS, formatById, isResearch, NICHES, researchObjective } from '@/features/copy/knowledge'
 import { docLink } from '@/features/copy/folder'
 import { runFolderRequest, pickEngine } from '@/features/copy/folderAgent'
 import { runCopyAgent, useCopyChat } from '@/features/copy/runner'
@@ -108,7 +108,7 @@ export const AgentRequest: React.FC<{ who: Who; compact?: boolean }> = ({ who, c
           niche: niche || undefined,
           folderId: inFolder?.[0],
           folderName: inFolder?.[1],
-          brief: { ...EMPTY_BRIEF, notes: format === 'pesquisa' ? request : '', objective: format === 'pesquisa' ? 'Mapear dores, desejos, objeções, clientes, jornada, campanhas e posts de referência para criar conteúdo' : '' },
+          brief: { ...EMPTY_BRIEF, notes: isResearch(format) ? request : '', objective: researchObjective(format) },
           blocks: spec.skeleton.map((b) => block(b.type, escapeHtml(b.text ?? ''), b.label)),
           comments: [],
           createdAt: now,

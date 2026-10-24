@@ -11,7 +11,7 @@ import { elapsed, useSeconds } from '@/features/operations/JobFeed'
 import { useRunningFor } from '@/features/operations/jobs'
 import { DocEditor } from './DocEditor'
 import { FolderPanel } from './FolderPanel'
-import { formatById } from './knowledge'
+import { formatById, isResearch } from './knowledge'
 import { joinDocLive, useCopyLive } from './live'
 import { useCopyChat } from './runner'
 import { SendDialog } from './SendDialog'
@@ -145,7 +145,7 @@ export const CopyEditorPage: React.FC = () => {
     ['agente', 'Agente', Sparkles],
     ['comentarios', 'Comentários', MessageSquare, openComments],
     ['briefing', 'Briefing', FileText],
-    ...(format.id === 'pesquisa' || (doc.sources?.length ?? 0) > 0 ? ([['fontes', 'Fontes', FileText, doc.sources?.length]] as [Tab, string, React.ComponentType<{ className?: string }>, number?][]) : []),
+    ...(isResearch(format.id) || (doc.sources?.length ?? 0) > 0 ? ([['fontes', 'Fontes', FileText, doc.sources?.length]] as [Tab, string, React.ComponentType<{ className?: string }>, number?][]) : []),
   ]
 
   return (

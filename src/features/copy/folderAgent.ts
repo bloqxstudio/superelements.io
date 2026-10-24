@@ -6,7 +6,7 @@ import type { ChatAgentId } from '@/features/space/chat/protocol'
 import { resolveIa } from '@/features/ia/porTarefa'
 import { engineInfo } from './agentStore'
 import { createInFolder, folderDocs, folderMaterial } from './folder'
-import { formatById } from './knowledge'
+import { formatById, isResearch } from './knowledge'
 import { runCopyAgent, useCopyChat, WRITE_REQUEST } from './runner'
 import type { CopyDoc, FormatId } from './types'
 
@@ -60,7 +60,7 @@ export async function runFolderRequest(base: CopyDoc, request: string, engine: C
     const worker = async () => {
       while (next < docs.length && !controller.signal.aborted) {
         const doc = docs[next++]
-        const role = doc.format === 'pesquisa' ? 'pesquisador' : 'redator'
+        const role = isResearch(doc.format) ? 'pesquisador' : 'redator'
         const message = `${WRITE_REQUEST}\n\nÂngulo deste documento: ${doc.brief.objective}`
         useCopyChat.getState().ensure(doc.id)
         useCopyChat.getState().push(doc.id, { id: crypto.randomUUID(), role: 'user', text: message, note: `Pasta · ${base.folderName ?? ''}` })

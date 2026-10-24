@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { FolderAgentBox } from './FolderAgentBox'
 import { useJobs } from '@/features/operations/jobs'
 import { createInFolder, DERIVED, docLink, folderDocs, WRITE_FIRST } from './folder'
-import { formatById } from './knowledge'
+import { formatById, isResearch } from './knowledge'
 import { useCopy } from './store'
 import type { CopySummary } from './types'
 
@@ -76,7 +76,7 @@ export const FolderPanel: React.FC = () => {
           return (
             <li key={d.id} className={cn('rounded-lg border p-2', here ? 'border-violet-300 bg-violet-50' : 'border-gray-200 bg-white')}>
               <Link to={docLink(d)} className="flex items-start gap-1.5 text-sm font-medium text-gray-900 hover:underline">
-                {d.format === 'pesquisa' ? <Microscope className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-500" /> : <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-500" />}
+                {isResearch(d.format) ? <Microscope className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-500" /> : <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-500" />}
                 <span className="min-w-0 flex-1 truncate">{d.title}</span>
               </Link>
               <p className="mt-0.5 text-[11px] text-gray-500">{f.label}{f.sendTo ? ` → ${SEND_LABEL[f.sendTo]}` : ''} · {empty ? 'vazio' : `${d.words} palavras`}</p>
@@ -94,7 +94,7 @@ export const FolderPanel: React.FC = () => {
       </ul>
 
       <div className="space-y-1.5 rounded-xl border border-dashed border-gray-300 p-2.5">
-        <p className="text-xs font-semibold text-gray-800">Criar a partir {doc.format === 'pesquisa' ? 'desta pesquisa' : 'deste assunto'}</p>
+        <p className="text-xs font-semibold text-gray-800">Criar a partir {isResearch(doc.format) ? 'desta pesquisa' : 'deste assunto'}</p>
         {DERIVED.map((d) => (
           <div key={d.id} className="flex items-start gap-2 text-sm text-gray-800">
             <span className="min-w-0 flex-1">{d.label}<span className="block text-[11px] text-gray-500">{d.hint}</span></span>

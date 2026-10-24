@@ -1465,6 +1465,7 @@ var COPY_AGENTS = [
       "Voc\xEA \xE9 um pesquisador de mercado e conte\xFAdo. Voc\xEA pesquisa na web o assunto pedido (WebSearch e WebFetch) e entrega um documento de pesquisa, em blocos, para a equipe criar conte\xFAdo a partir dele.",
       "Mapeie: quem \xE9 o cliente (perfis), as dores e desejos nas palavras dele (f\xF3runs, avalia\xE7\xF5es, coment\xE1rios, perguntas), as obje\xE7\xF5es, a jornada de decis\xE3o e o que concorrentes e refer\xEAncias publicam (campanhas, posts, formatos e \xE2ngulos). Descreva cada achado com as suas palavras e cite a fonte (t\xEDtulo e endere\xE7o).",
       "S\xF3 afirme o que leu. O que for dedu\xE7\xE3o sua marque como [hip\xF3tese]. Nunca invente n\xFAmero, estat\xEDstica, cita\xE7\xE3o, perfil ou campanha. Redes sociais que exigem login (Instagram, TikTok, LinkedIn, Facebook) quase nunca abrem: diga isso e use o que for p\xFAblico (mat\xE9rias, blogs, sites das marcas, resultados de busca).",
+      "Se o formato for Tend\xEAncias e virais: pesquise o que est\xE1 em alta para o p\xFAblico, os formatos e ganchos que viralizam e os modelos de campanha que funcionam (objetivo, mec\xE2nica, estrutura, por que funciona, exemplo p\xFAblico com link) e traduza em ideias adapt\xE1veis. Se for Oportunidades de neg\xF3cio: use a identidade do est\xFAdio para avaliar nichos que podemos atender, com sinais de demanda, concorr\xEAncia, regras da profiss\xE3o, encaixe de 0 a 5 e como validar. Siga a estrutura do formato.",
       "Termine com \xE2ngulos de conte\xFAdo (ideias de gancho com o formato de cada uma) e pr\xF3ximos passos. Devolva as fontes lidas em `sources`."
     ].join(" "),
     starters: {
@@ -1685,6 +1686,42 @@ var FORMATS = [
       { type: "h2", label: "Campanhas e posts que existem" },
       { type: "h2", label: "\xC2ngulos de conte\xFAdo" },
       { type: "h2", label: "Pr\xF3ximos passos" }
+    ]
+  },
+  {
+    id: "tendencias",
+    label: "Tend\xEAncias e virais",
+    group: "Pesquisa",
+    hint: "Dado um p\xFAblico: o que est\xE1 em alta, o que viraliza e os modelos de campanha que funcionam.",
+    web: true,
+    sendTo: "criativos",
+    structure: 'Se\xE7\xF5es em h2: "Resumo" (o que importa em 5 linhas), "O p\xFAblico" (quem \xE9, onde est\xE1, o que consome), "Tend\xEAncias do p\xFAblico" (comportamento, consumo, canais e ferramentas que crescem ou caem; cada uma com a fonte e a data), "O que est\xE1 viralizando" (formatos, ganchos, estruturas de v\xEDdeo e carrossel, \xE1udios e memes; descreva o formato com as suas palavras, o motivo de funcionar e o link), "Modelos de campanha" (cada modelo num bloco: objetivo, mec\xE2nica, estrutura passo a passo, por que funciona, exemplo p\xFAblico com link e como adaptar para o est\xFAdio), "Sinais fracos" (o que come\xE7a a aparecer e ainda \xE9 cedo), "O que adaptar para n\xF3s" (5 a 8 ideias com formato e ganchos prontos) e "Pr\xF3ximos passos". S\xF3 afirme o que leu; marque [hip\xF3tese] o que for dedu\xE7\xE3o. Redes sociais exigem login e quase nunca abrem: diga o que n\xE3o conseguiu ler e use mat\xE9rias, blogs, relat\xF3rios e sites p\xFAblicos.',
+    skeleton: [
+      { type: "h2", label: "Resumo" },
+      { type: "h2", label: "O p\xFAblico" },
+      { type: "h2", label: "Tend\xEAncias do p\xFAblico" },
+      { type: "h2", label: "O que est\xE1 viralizando" },
+      { type: "h2", label: "Modelos de campanha" },
+      { type: "h2", label: "Sinais fracos" },
+      { type: "h2", label: "O que adaptar para n\xF3s" },
+      { type: "h2", label: "Pr\xF3ximos passos" }
+    ]
+  },
+  {
+    id: "oportunidades",
+    label: "Oportunidades de neg\xF3cio",
+    group: "Pesquisa",
+    hint: "Nichos e p\xFAblicos que o est\xFAdio pode atender, com o encaixe e como validar.",
+    web: true,
+    structure: 'Se\xE7\xF5es em h2: "Resumo" (os 3 melhores nichos e por qu\xEA), "O que o est\xFAdio vende e para quem" (a partir da identidade), "Nichos candidatos" (um bloco por nicho: quem \xE9, sinais de demanda, quem j\xE1 anuncia, onde o contato se perde, concorrentes e o que cobram, regras da profiss\xE3o, encaixe com o nosso servi\xE7o de 0 a 5 com a justificativa), "Ranking" (os nichos em ordem, com o motivo), "Riscos" (regula\xE7\xE3o, sazonalidade, ticket baixo, concorr\xEAncia), "Como abordar" (por nicho: canal, primeira mensagem em uma frase, o que mostrar) e "Como validar em 2 semanas" (testes baratos, quantos contatos, o que decide seguir ou parar). Nada de n\xFAmero de mercado sem fonte: marque [hip\xF3tese] e cite a fonte do que for dado. Use s\xF3 o que est\xE1 na identidade do est\xFAdio sobre o que vendemos; n\xE3o invente pre\xE7o nem prazo.',
+    skeleton: [
+      { type: "h2", label: "Resumo" },
+      { type: "h2", label: "O que o est\xFAdio vende e para quem" },
+      { type: "h2", label: "Nichos candidatos" },
+      { type: "h2", label: "Ranking" },
+      { type: "h2", label: "Riscos" },
+      { type: "h2", label: "Como abordar" },
+      { type: "h2", label: "Como validar em 2 semanas" }
     ]
   },
   {
@@ -3215,7 +3252,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610241919", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610241938", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -3232,7 +3269,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610241919" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610241938" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);

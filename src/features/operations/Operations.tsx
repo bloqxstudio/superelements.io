@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { isResearch } from '@/features/copy/knowledge'
 import { listOpportunities } from '@/features/crm/opportunities'
 import { useRoutines } from '@/features/ia/rotinas'
 import { FileText, FolderKanban, Globe, Handshake, Images, type LucideIcon } from 'lucide-react'
@@ -69,7 +70,7 @@ export const Operations: React.FC = () => {
   const by = useMemo(() => {
     const d = docs ?? []
     const lp = d.filter((x) => x.format === 'lp')
-    const research = d.filter((x) => x.format === 'pesquisa')
+    const research = d.filter((x) => isResearch(x.format))
     return {
       copyDocs: d.filter((x) => x.format !== 'lp' && x.format !== 'site'),
       research,

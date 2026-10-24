@@ -56,8 +56,8 @@ const NewRoutine: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     add({ name: name.trim() || def.label, task, params: filled, freq, every, time, weekday, enabled: true })
     onDone()
   }
-  const needsText = def.params.some((p) => p.kind === 'long')
-  const missing = needsText && !def.params.filter((p) => p.kind === 'long').every((p) => (params[p.key] ?? '').trim())
+  const needsText = def.params.some((p) => p.kind === 'long' && !p.optional)
+  const missing = needsText && !def.params.filter((p) => p.kind === 'long' && !p.optional).every((p) => (params[p.key] ?? '').trim())
 
   return (
     <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/40 p-4">

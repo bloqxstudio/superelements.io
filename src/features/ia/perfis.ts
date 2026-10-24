@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Area } from '@/features/operations/jobs'
+import { identityText } from './identidade'
 
 /**
  * Os perfis dos agentes: o que cada um faz e como faz. O texto escrito aqui vai
@@ -95,9 +96,10 @@ export const profileOfBase = (profiles: AgentProfile[], area: Area, base: string
 
 export const isEdited = (id: string, o: Overrides) => !!o[id] && Object.keys(o[id]).length > 0
 
-/** O texto que vai junto do pedido: quem é o agente, como trabalha e as regras que valem sempre. */
+/** O texto que vai junto do pedido: a identidade do estúdio e, depois, quem é o agente, como trabalha e as regras que valem sempre. */
 export const personaOf = (p: AgentProfile): string =>
   [
+    identityText(),
     `Você é ${p.name}, ${p.role} da equipe. ${p.goal}`.trim(),
     p.instructions.trim() ? `Como você trabalha: ${p.instructions.trim()}` : '',
     p.rules.trim() ? `Regras da equipe, valem sempre:\n${p.rules.split('\n').map((r) => r.trim()).filter(Boolean).map((r) => `- ${r}`).join('\n')}` : '',

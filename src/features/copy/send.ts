@@ -44,7 +44,7 @@ const postHref = (set: Pick<SetSummary, 'id' | 'shared' | 'projectId'>, postId: 
 export async function sendToCriativos(doc: CopyDoc, target: SetSummary, signal?: AbortSignal, count = 3): Promise<{ postName: string; postNames: string[]; slides: number }> {
   const story = doc.format === 'story'
   // Uma pesquisa não é um post: o agente tira dela vários posts, um ângulo em cada
-  const research = doc.format === 'pesquisa'
+  const research = doc.format === 'pesquisa' || doc.format === 'tendencias'
   const plan = await callAi<PlanResponse>('copy-slides', { name: doc.folderName || doc.title, kind: research ? 'pesquisa' : story ? 'story' : 'post', count, text: docText(doc), engine: resolveIa('criativos') }, signal)
   const plans = (plan.posts ?? []).filter((p) => p.slides?.length).slice(0, research ? 6 : 1)
   if (!plans.length) throw new Error('O agente não montou os slides.')

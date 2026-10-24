@@ -13,7 +13,7 @@ import { JobFeed } from '@/features/operations/JobFeed'
 import { stopJob, useRunningFor } from '@/features/operations/jobs'
 import { useIa } from '@/features/ia/porTarefa'
 import { PHASE_LABEL, engineInfo, useCopyAgent } from './agentStore'
-import { formatById } from './knowledge'
+import { formatById, isResearch } from './knowledge'
 import { runCopyAgent, useCopyChat } from './runner'
 import { COPY_SKILLS } from './skills'
 import { useCopy } from './store'
@@ -86,7 +86,7 @@ export const AgentPanel: React.FC<{ pending?: Pending | null }> = ({ pending }) 
   useEffect(() => useCopyChat.getState().ensure(doc.id), [doc.id])
   useEffect(() => watchSkills(), [])
 
-  const [role, setRole] = useState<CopyAgentId>(() => saved(ROLE_KEY, ['redator', 'editor', 'pesquisador', 'estrategista'] as const) ?? (doc.format === 'pesquisa' ? 'pesquisador' : 'redator'))
+  const [role, setRole] = useState<CopyAgentId>(() => saved(ROLE_KEY, ['redator', 'editor', 'pesquisador', 'estrategista'] as const) ?? (isResearch(doc.format) ? 'pesquisador' : 'redator'))
   const { ia: engine, pick: pickEngine } = useIa('copy')
   const custom = useSkills((s) => s.custom)
   const skills = useMemo<ChatSkill[]>(() => [...custom.filter((k) => k.source === 'personal'), ...custom.filter((k) => k.source === 'global'), ...COPY_SKILLS], [custom])

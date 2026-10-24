@@ -1,6 +1,6 @@
 import { escapeHtml } from '@/features/copy/html'
 import { docLink } from '@/features/copy/folder'
-import { formatById, FORMATS, NICHES } from '@/features/copy/knowledge'
+import { formatById, FORMATS, isResearch, NICHES, researchObjective } from '@/features/copy/knowledge'
 import { runCopyAgent } from '@/features/copy/runner'
 import { postsFromRequest } from '@/features/copy/send'
 import { saveDoc } from '@/features/copy/storage'
@@ -23,7 +23,7 @@ import { resolveIa } from './porTarefa'
  * move cartão de etapa.
  */
 
-export type TaskId = 'funil' | 'prospectar' | 'abordagem' | 'pesquisa' | 'redigir' | 'posts'
+export type TaskId = 'funil' | 'prospectar' | 'abordagem' | 'pesquisa' | 'tendencias' | 'oportunidades' | 'redigir' | 'posts'
 
 export interface ParamDef {
   key: string
@@ -31,6 +31,7 @@ export interface ParamDef {
   kind: 'text' | 'long' | 'number' | 'stage' | 'niche' | 'format' | 'set'
   placeholder?: string
   default?: string
+  optional?: boolean
 }
 
 export interface TaskDef {
@@ -47,6 +48,8 @@ export const TASKS: TaskDef[] = [
   { id: 'prospectar', label: 'Pesquisar negócios do funil', hint: 'Lê o site de cada negócio de uma etapa e anota o que mostra e como abordar.', agent: 'leo', params: [{ key: 'stage', label: 'Etapa', kind: 'stage', default: 'mapeado' }, { key: 'limit', label: 'Quantos por vez', kind: 'number', default: '3' }] },
   { id: 'abordagem', label: 'Rascunhar abordagens', hint: 'Escreve o rascunho da primeira mensagem de cada cartão de uma etapa. Não envia.', agent: 'duda', params: [{ key: 'stage', label: 'Etapa', kind: 'stage', default: 'pagina' }, { key: 'limit', label: 'Quantos por vez', kind: 'number', default: '3' }] },
   { id: 'pesquisa', label: 'Fazer uma pesquisa', hint: 'Cria uma pasta na Copy e o pesquisador mapeia o tema.', agent: 'caio', params: [{ key: 'topic', label: 'Tema', kind: 'long', placeholder: 'Ex.: como donos de clínica odontológica escolhem quem faz o site' }, { key: 'niche', label: 'Nicho', kind: 'niche' }] },
+  { id: 'tendencias', label: 'Tendências, virais e campanhas', hint: 'Pesquisa o que está em alta para um público, o que viraliza e os modelos de campanha que funcionam, e sugere o que adaptar.', agent: 'caio', params: [{ key: 'topic', label: 'Público ou tema', kind: 'long', placeholder: 'Ex.: donos de clínicas odontológicas no Instagram e no WhatsApp' }, { key: 'niche', label: 'Nicho', kind: 'niche' }] },
+  { id: 'oportunidades', label: 'Oportunidades de negócio e nichos', hint: 'Avalia nichos que o estúdio pode atender, com sinais de demanda, concorrência, encaixe e como validar.', agent: 'caio', params: [{ key: 'topic', label: 'Região ou foco (opcional)', kind: 'long', optional: true, placeholder: 'Ex.: serviços de saúde e jurídicos no Rio Grande do Sul que anunciam no Google' }] },
   { id: 'redigir', label: 'Escrever um documento', hint: 'Cria um documento novo na Copy e o redator escreve.', agent: 'bia', params: [{ key: 'format', label: 'Formato', kind: 'format', default: 'post-instagram' }, { key: 'request', label: 'O que escrever', kind: 'long', placeholder: 'Ex.: um post sobre site rápido para arquitetos' }, { key: 'niche', label: 'Nicho', kind: 'niche' }] },
   { id: 'posts', label: 'Criar postagens', hint: 'A designer cria carrosséis num conjunto de criativos.', agent: 'dani', params: [{ key: 'request', label: 'Sobre o quê', kind: 'long', placeholder: 'Ex.: 3 carrosséis sobre por que o Instagram não substitui um site' }, { key: 'setId', label: 'Conjunto de criativos', kind: 'set' }, { key: 'count', label: 'Quantos posts', kind: 'number', default: '3' }] },
 ]
@@ -197,7 +200,7 @@ async function newDoc(format: FormatId, title: string, notes: string, niche: str
     niche: niche || undefined,
     folderId: folder ? uid() : undefined,
     folderName: folder || undefined,
-    brief: { ...EMPTY_BRIEF, notes: format === 'pesquisa' ? notes : '', objective: format === 'pesquisa' ? 'Mapear dores, desejos, objeções, clientes, jornada, campanhas e posts de referência para criar conteúdo' : '' },
+    brief: { ...EMPTY_BRIEF, notes: isResearch(format) ? notes : '', objective: researchObjective(format) },
     blocks: spec.skeleton.map((b) => block(b.type, escapeHtml(b.text ?? ''), b.label)),
     comments: [],
     createdAt: now,
@@ -207,14 +210,16 @@ async function newDoc(format: FormatId, title: string, notes: string, niche: str
   return doc
 }
 
-async function runCopyTask(run: TaskRun, role: 'pesquisador' | 'redator'): Promise<TaskResult> {
+async function runCopyTask(run: TaskRun, role: 'pesquisador' | 'redator', researchFormat: FormatId = 'pesquisa'): Promise<TaskResult> {
   const research = role === 'pesquisador'
-  const request = (research ? run.params.topic : run.params.request)?.trim()
+  let request = (research ? run.params.topic : run.params.request)?.trim() ?? ''
+  // Oportunidades pode rodar sem foco: o estúdio e o público vêm da identidade
+  if (researchFormat === 'oportunidades' && !request) request = 'Avalie os nichos e públicos que o estúdio pode atender hoje, a partir do que ele vende e do cliente ideal.'
   if (!request) throw new Error('A rotina está sem o texto do pedido.')
-  const format: FormatId = research ? 'pesquisa' : ((run.params.format || 'post-instagram') as FormatId)
-  const doc = await newDoc(format, `${formatById(format).label} · ${request.slice(0, 50)}`, request, run.params.niche, research ? request.slice(0, 60) : undefined)
+  const format: FormatId = research ? researchFormat : ((run.params.format || 'post-instagram') as FormatId)
+  const doc = await newDoc(format, `${formatById(format).label} · ${request.slice(0, 50)}`, request, run.params.niche, research ? (researchFormat === 'pesquisa' ? request : `${formatById(format).label}: ${request}`).slice(0, 60) : undefined)
   const r = await runCopyAgent({ message: research ? request : request, role, engine: resolveIa('copy'), web: research ? true : undefined }, run.signal, doc)
-  recordDelivery({ area: 'copy', kind: research ? 'Pesquisa da rotina' : 'Documento da rotina', label: doc.title.slice(0, 100), agent: profileNow(research ? 'caio' : 'bia').base, href: docLink(doc), docId: doc.id })
+  recordDelivery({ area: 'copy', kind: research ? (researchFormat === 'tendencias' ? 'Tendências da rotina' : researchFormat === 'oportunidades' ? 'Oportunidades da rotina' : 'Pesquisa da rotina') : 'Documento da rotina', label: doc.title.slice(0, 100), agent: profileNow(research ? 'caio' : 'bia').base, href: docLink(doc), docId: doc.id })
   return { message: `${doc.title}: ${r.reply || 'pronto'}` }
 }
 
@@ -238,6 +243,10 @@ export async function executeTask(task: TaskId, run: TaskRun): Promise<TaskResul
       return runAbordagem(run)
     case 'pesquisa':
       return runCopyTask(run, 'pesquisador')
+    case 'tendencias':
+      return runCopyTask(run, 'pesquisador', 'tendencias')
+    case 'oportunidades':
+      return runCopyTask(run, 'pesquisador', 'oportunidades')
     case 'redigir':
       return runCopyTask(run, 'redator')
     case 'posts':
