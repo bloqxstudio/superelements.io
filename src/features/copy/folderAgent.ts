@@ -3,6 +3,7 @@ import { callAi } from '@/features/criativos/link'
 import { useCreativeLink } from '@/features/criativos/link'
 import { finishJob, noteJob, patchJob, startJob } from '@/features/operations/jobs'
 import type { ChatAgentId } from '@/features/space/chat/protocol'
+import { resolveIa } from '@/features/ia/porTarefa'
 import { engineInfo } from './agentStore'
 import { createInFolder, folderDocs, folderMaterial } from './folder'
 import { formatById } from './knowledge'
@@ -22,17 +23,8 @@ interface Plan {
   docs: { format: string; title: string; angle: string }[]
 }
 
-/** O motor escolhido no painel do documento, ou o primeiro disponível. */
-export const pickEngine = (): ChatAgentId => {
-  const agents = useCreativeLink.getState().agents
-  let saved: string | null = null
-  try {
-    saved = localStorage.getItem('copy-agente-motor')
-  } catch {
-    // sem armazenamento
-  }
-  return ((saved === 'claude' || saved === 'codex') && agents.find((a) => a.id === saved)?.available ? saved : agents.find((a) => a.available)?.id) ?? 'claude'
-}
+/** O motor da Copy: o escolhido em Agentes (ou no painel do documento). */
+export const pickEngine = (): ChatAgentId => resolveIa('copy')
 
 export async function runFolderRequest(base: CopyDoc, request: string, engine: ChatAgentId = pickEngine()): Promise<number> {
   const folderId = base.folderId

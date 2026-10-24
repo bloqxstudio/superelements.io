@@ -10,6 +10,7 @@ import type { ChatSkill } from '@/features/space/chat/skills'
 import { skillIcon } from '@/features/skills/skillIcon'
 import { useSkills, watchSkills } from '@/features/skills/skillsStore'
 import { requestEdit, type EditScope } from './ai'
+import { useIa } from '@/features/ia/porTarefa'
 import { chooseImageProvider, saveImageKey, useCreativeLink, type CreativeImageProvider } from './link'
 import { agentInfo, PHASE_LABEL, useAgent, type AgentPhase } from './agentStore'
 import type { EditOp } from './edit'
@@ -184,16 +185,6 @@ async function playOps(ops: EditOp[], defaults: { postId?: string; slideId?: str
   return { set: useEditor.getState().set!, applied, skipped, focus, touched: [...touched], toGenerate }
 }
 
-const AGENT_KEY = 'criativos-agente'
-const savedAgent = (): ChatAgentId | undefined => {
-  try {
-    const v = localStorage.getItem(AGENT_KEY)
-    return v === 'codex' || v === 'claude' ? v : undefined
-  } catch {
-    return undefined
-  }
-}
-
 /** Projetos e cases já lidos nesta conversa: nas próximas mensagens não são lidos (nem baixados) de novo. */
 const resolvedCache = new Map<string, { ref: ResolvedRef; extra: { src: string; label: string }[] }>()
 
@@ -341,16 +332,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
   const stale = useCreativeLink((s) => s.stale)
   const agents = useCreativeLink((s) => s.agents)
   const legacy = useCreativeLink((s) => s.legacy)
-  const [chosen, setChosen] = useState<ChatAgentId | undefined>(savedAgent)
-  const agent: ChatAgentId = (chosen && agents.find((a) => a.id === chosen)?.available ? chosen : agents.find((a) => a.available)?.id) ?? 'claude'
-  const pickAgent = (id: ChatAgentId) => {
-    setChosen(id)
-    try {
-      localStorage.setItem(AGENT_KEY, id)
-    } catch {
-      // sem armazenamento: vale até recarregar
-    }
-  }
+  const { ia: agent, pick: pickAgent } = useIa('criativos')
   const msgs = useChat((s) => s.bySet[set.id]) ?? []
   useEffect(() => useChat.getState().ensure(set.id), [set.id])
   const lastChanged = [...msgs].reverse().find((x) => x.changed)?.id

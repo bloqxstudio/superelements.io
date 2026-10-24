@@ -11,6 +11,7 @@ import { useSkills, watchSkills } from '@/features/skills/skillsStore'
 import { COPY_AGENTS, agentById, type CopyAgentId } from './agents'
 import { JobFeed } from '@/features/operations/JobFeed'
 import { stopJob, useRunningFor } from '@/features/operations/jobs'
+import { useIa } from '@/features/ia/porTarefa'
 import { PHASE_LABEL, engineInfo, useCopyAgent } from './agentStore'
 import { formatById } from './knowledge'
 import { runCopyAgent, useCopyChat } from './runner'
@@ -29,7 +30,6 @@ import { toast } from 'sonner'
 let lastNonce = 0
 
 const ROLE_KEY = 'copy-agente-papel'
-const ENGINE_KEY = 'copy-agente-motor'
 
 const saved = <T extends string>(key: string, ok: readonly T[]): T | undefined => {
   try {
@@ -87,8 +87,7 @@ export const AgentPanel: React.FC<{ pending?: Pending | null }> = ({ pending }) 
   useEffect(() => watchSkills(), [])
 
   const [role, setRole] = useState<CopyAgentId>(() => saved(ROLE_KEY, ['redator', 'editor', 'pesquisador', 'estrategista'] as const) ?? (doc.format === 'pesquisa' ? 'pesquisador' : 'redator'))
-  const [chosen, setChosen] = useState<ChatAgentId | undefined>(() => saved(ENGINE_KEY, ['claude', 'codex'] as const))
-  const engine: ChatAgentId = (chosen && agents.find((a) => a.id === chosen)?.available ? chosen : agents.find((a) => a.available)?.id) ?? 'claude'
+  const { ia: engine, pick: pickEngine } = useIa('copy')
   const custom = useSkills((s) => s.custom)
   const skills = useMemo<ChatSkill[]>(() => [...custom.filter((k) => k.source === 'personal'), ...custom.filter((k) => k.source === 'global'), ...COPY_SKILLS], [custom])
   const [skillId, setSkillId] = useState<string | null>(null)
@@ -171,7 +170,7 @@ export const AgentPanel: React.FC<{ pending?: Pending | null }> = ({ pending }) 
             const found = agents.find((a) => a.id === id)
             const ok = !!found?.available
             return (
-              <button key={id} type="button" disabled={!ok || busy} onClick={() => pick(ENGINE_KEY, id, setChosen as never)} title={ok ? `${info.name}${found?.version ? ` ${found.version}` : ''}` : legacy ? 'Seu conector é antigo: baixe o conector.mjs de novo' : `${info.name} não foi encontrado neste computador`} className={cn('flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md text-[11px] font-semibold disabled:opacity-40', engine === id && ok ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800')}>
+              <button key={id} type="button" disabled={!ok || busy} onClick={() => pickEngine(id)} title={ok ? `${info.name}${found?.version ? ` ${found.version}` : ''}` : legacy ? 'Seu conector é antigo: baixe o conector.mjs de novo' : `${info.name} não foi encontrado neste computador`} className={cn('flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md text-[11px] font-semibold disabled:opacity-40', engine === id && ok ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800')}>
                 <span className="h-2 w-2 rounded-full" style={{ background: info.color }} />
                 {info.name}
               </button>

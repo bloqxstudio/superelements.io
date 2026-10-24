@@ -1,5 +1,6 @@
-import { ILLUSTRATION_IDS, PLAN_SCHEMA, TEMPLATE_IDS, type PlanRequest, type PlanResponse } from '../../src/features/criativos/plan.ts'
+import { ILLUSTRATION_IDS, PLAN_FORMAT_NOTE, PLAN_SCHEMA, TEMPLATE_IDS, type PlanRequest, type PlanResponse } from '../../src/features/criativos/plan.ts'
 import { askClaude } from './claude.ts'
+import { askCodex } from './codex.ts'
 
 /**
  * Plano de posts pelo Claude Code desta máquina (o mesmo do chat, sem chave de
@@ -54,4 +55,6 @@ const promptOf = (r: PlanRequest) =>
   ].join('\n')
 
 export const planPosts = (input: PlanRequest, signal?: AbortSignal): Promise<PlanResponse> =>
-  askClaude<PlanResponse>({ system: SYSTEM, schema: PLAN_SCHEMA, content: [{ type: 'text', text: promptOf(input) }], timeoutMs: TIMEOUT, signal })
+  input.engine === 'codex'
+    ? askCodex<PlanResponse>({ prompt: `${SYSTEM}\n\n${PLAN_FORMAT_NOTE}\n\n${promptOf(input)}`, timeoutMs: TIMEOUT, signal })
+    : askClaude<PlanResponse>({ system: SYSTEM, schema: PLAN_SCHEMA, content: [{ type: 'text', text: promptOf(input) }], timeoutMs: TIMEOUT, signal })

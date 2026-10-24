@@ -1,3 +1,4 @@
+import { resolveIa } from '@/features/ia/porTarefa'
 import { AV_CASES } from '@/features/avence/cases'
 import type { PlanRequest, PlanResponse, FormatKey } from './plan'
 import { buildPost } from './templates'
@@ -29,6 +30,7 @@ export async function generatePosts(form: AiForm, brand: SetBrand, signal?: Abor
     format: form.format,
     slides: form.slides,
     posts: form.posts,
+    engine: resolveIa('criativos'),
     cases: AV_CASES.filter((c) => form.cases.includes(c.slug)).map((c) => ({ slug: c.slug, name: c.name, segment: c.segment, place: c.place, summary: c.summary, stack: c.stack })),
   }
   const body = await callAi<Partial<PlanResponse>>('plan', request, signal)

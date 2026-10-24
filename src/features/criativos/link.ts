@@ -110,7 +110,8 @@ export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?:
   const track = TRACKED[kind]
   if (!track) return callAiRaw<T>(kind, request, signal, onStep)
   const label = String(track.label((request ?? {}) as Record<string, unknown>) ?? '').replace(/\s+/g, ' ').trim().slice(0, 90) || track.kind
-  const jobId = startJob({ area: 'criativos', kind: track.kind, label, agent: 'Claude Code · Criativos', color: '#D97757', step: 'Enviando o pedido', silent: true })
+  const codex = ((request ?? {}) as { engine?: string; agent?: string }).engine === 'codex' || ((request ?? {}) as { agent?: string }).agent === 'codex'
+  const jobId = startJob({ area: 'criativos', kind: track.kind, label, agent: `${codex ? 'Codex' : 'Claude Code'} · Criativos`, color: codex ? '#10A37F' : '#D97757', step: 'Enviando o pedido', silent: true })
   return callAiRaw<T>(kind, request, signal, (step, detail) => {
     patchJob(jobId, { step: detail ?? STEP_TEXT[step] })
     noteJob(jobId, detail ?? STEP_TEXT[step])

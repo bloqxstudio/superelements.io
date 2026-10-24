@@ -1,3 +1,4 @@
+import { resolveIa } from '@/features/ia/porTarefa'
 import { summarize } from '@/features/projects/projectStore'
 import { loadProjectDoc, saveProjectDoc } from '@/features/projects/storage'
 import { callAi } from '@/features/criativos/link'
@@ -44,7 +45,7 @@ export async function sendToCriativos(doc: CopyDoc, target: SetSummary, signal?:
   const story = doc.format === 'story'
   // Uma pesquisa não é um post: o agente tira dela vários posts, um ângulo em cada
   const research = doc.format === 'pesquisa'
-  const plan = await callAi<PlanResponse>('copy-slides', { name: doc.folderName || doc.title, kind: research ? 'pesquisa' : story ? 'story' : 'post', count, text: docText(doc) }, signal)
+  const plan = await callAi<PlanResponse>('copy-slides', { name: doc.folderName || doc.title, kind: research ? 'pesquisa' : story ? 'story' : 'post', count, text: docText(doc), engine: resolveIa('criativos') }, signal)
   const plans = (plan.posts ?? []).filter((p) => p.slides?.length).slice(0, research ? 6 : 1)
   if (!plans.length) throw new Error('O agente não montou os slides.')
   const set = await loadSet(target.id, target.shared ? target.projectId : undefined)
@@ -58,7 +59,7 @@ export async function sendToCriativos(doc: CopyDoc, target: SetSummary, signal?:
 
 /** Posts direto de um pedido (sem documento): o agente de criativos cria até 6 carrosséis no conjunto escolhido. */
 export async function postsFromRequest(request: string, target: SetSummary, count: number, signal?: AbortSignal): Promise<{ postNames: string[] }> {
-  const plan = await callAi<PlanResponse>('copy-slides', { name: request.slice(0, 80), kind: 'pesquisa', count, text: request }, signal)
+  const plan = await callAi<PlanResponse>('copy-slides', { name: request.slice(0, 80), kind: 'pesquisa', count, text: request, engine: resolveIa('criativos') }, signal)
   const plans = (plan.posts ?? []).filter((p) => p.slides?.length).slice(0, 6)
   if (!plans.length) throw new Error('O agente não montou os posts.')
   const set = await loadSet(target.id, target.shared ? target.projectId : undefined)

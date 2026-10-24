@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { Bot } from 'lucide-react'
+import { IaPorTarefa } from '@/features/operations/IaPorTarefa'
 import { ConnectorPanel } from '@/features/operations/ConnectorPanel'
 import { Deliveries } from '@/features/operations/Deliveries'
 import { Office } from '@/features/operations/Office'
@@ -91,6 +92,7 @@ const Agents: React.FC = () => {
           A empresa inteira operando: cada área com o que existe, o que está em produção e quem está trabalhando agora. Os agentes seguem em segundo plano mesmo se você sair da tela.
         </p>
         <ConnectorPanel />
+        <IaPorTarefa />
         <ViewToggle />
         <Deliveries />
         <h2 className="mt-10 text-sm font-semibold text-gray-900">Agentes nos projetos (Space)</h2>

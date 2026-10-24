@@ -51,12 +51,20 @@ export interface PlanRequest {
   format: FormatKey
   slides: number
   posts: number
+  /** Qual IA desta máquina faz o trabalho. */
+  engine?: 'claude' | 'codex'
   cases: { slug: string; name: string; segment: string; place?: string; summary: string; stack: string }[]
 }
 
 export interface PlanResponse {
   posts: PostPlan[]
 }
+
+/** Formato do plano para o Codex, que não tem esquema JSON: o mesmo que `PLAN_SCHEMA` pede ao Claude. */
+export const PLAN_FORMAT_NOTE = [
+  'Responda SOMENTE com um objeto JSON válido, sem texto antes ou depois e sem ```, neste formato:',
+  '{"posts": [ {"name": string, "format": "4x5"|"1x1"|"9x16", "caption": string, "slides": [ {"template": string, "label"?: string, "title"?: string, "body"?: string, "items"?: string[], "cta"?: string, "case"?: string, "view"?: "capa"|"pagina"|"celular", "illustration"?: string, "focus"?: number, "dark"?: boolean, "prompt"?: string, "number"?: string} ] } ]}',
+].join('\n')
 
 export const PLAN_SCHEMA = {
   type: 'object',

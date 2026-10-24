@@ -29,6 +29,7 @@ const planInput = (body: Partial<PlanRequest>): PlanRequest => ({
   format: FORMATS.includes(String(body.format)) ? (body.format as PlanRequest['format']) : '4x5',
   slides: Math.min(10, Math.max(1, Number(body.slides) || 5)),
   posts: Math.min(4, Math.max(1, Number(body.posts) || 1)),
+  engine: body.engine === 'codex' ? 'codex' : 'claude',
   cases: Array.isArray(body.cases) ? body.cases.slice(0, 12) : [],
 })
 
@@ -101,7 +102,7 @@ export const criativos = (): Plugin => ({
             send({ id, ok: true, data: await planFolder({ ...req, engine: req.engine === 'codex' ? 'codex' : 'claude', folder: String(req.folder ?? '').slice(0, 160), existing: (req.existing ?? []).slice(0, 60) }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
           } else if (call.kind === 'copy-slides') {
             const req = call.request as SlidesRequest
-            send({ id, ok: true, data: await copyToSlides({ name: String(req?.name ?? 'Post').slice(0, 120), kind: req?.kind === 'story' ? 'story' : req?.kind === 'pesquisa' ? 'pesquisa' : 'post', count: Number(req?.count) || undefined, text: String(req?.text ?? '') }, controller.signal) })
+            send({ id, ok: true, data: await copyToSlides({ name: String(req?.name ?? 'Post').slice(0, 120), kind: req?.kind === 'story' ? 'story' : req?.kind === 'pesquisa' ? 'pesquisa' : 'post', count: Number(req?.count) || undefined, text: String(req?.text ?? ''), engine: req?.engine === 'codex' ? 'codex' : 'claude' }, controller.signal) })
           } else if (call.kind === 'download') {
             send({ id, ok: true, data: await downloadImage(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
           } else if (call.kind === 'capture') {
