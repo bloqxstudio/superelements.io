@@ -92,7 +92,7 @@ const ZONES: { id: string; title: string; hint: string; x: number; y: number; w:
   { id: 'comercial', title: 'COMERCIAL', hint: 'Funil, prospecção e abordagens', x: 24, y: 24, w: 572, h: 300, fill: '#DBEAFE', line: '#60A5FA', ink: '#1D4ED8' },
   { id: 'tech', title: 'TECH', hint: 'Sites e páginas no Space', x: 604, y: 24, w: 572, h: 300, fill: '#DCFCE7', line: '#4ADE80', ink: '#15803D' },
   { id: 'copy', title: 'COPY', hint: 'Pesquisa, textos e landing pages', x: 24, y: 332, w: 572, h: 264, fill: '#FEF3C7', line: '#FBBF24', ink: '#B45309' },
-  { id: 'produto', title: 'PRODUTO', hint: 'Criativos: posts e carrosséis', x: 604, y: 332, w: 572, h: 264, fill: '#EDE9FE', line: '#A78BFA', ink: '#6D28D9' },
+  { id: 'marketing', title: 'MARKETING', hint: 'Criativos: posts e carrosséis', x: 604, y: 332, w: 572, h: 264, fill: '#EDE9FE', line: '#A78BFA', ink: '#6D28D9' },
 ]
 /** Nome de cada grupo de mesas dentro da área. */
 const POD_LABEL: Record<Area, string> = { comercial: '', sites: '', copy: '', landing: 'Landing pages', criativos: '' }
