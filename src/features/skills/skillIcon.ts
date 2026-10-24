@@ -1,5 +1,5 @@
 import type React from 'react'
-import { Accessibility, BookMarked, Globe, Images, Palette, Smartphone, Target, Type, Users } from 'lucide-react'
+import { Accessibility, BookMarked, FileText, Globe, Images, Palette, Smartphone, Target, Type, Users } from 'lucide-react'
 import type { ChatSkill, ChatSkillId } from '@/features/space/chat/skills'
 
 type Icon = React.ComponentType<{ className?: string }>
@@ -12,6 +12,7 @@ const BUILTIN: Record<ChatSkillId, Icon> = {
   celular: Smartphone,
   acessibilidade: Accessibility,
   referencia: Images,
+  'pagina-copy': FileText,
 }
 
 /** O ícone da padrão; as cadastradas: livro (sua) ou pessoas (da equipe). */
