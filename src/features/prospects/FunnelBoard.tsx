@@ -32,6 +32,7 @@ import {
   type OpportunityPatch,
   type Stage,
 } from './funnel'
+import { CleanupDialog } from './CleanupDialog'
 import { AdLinks, AdsBadge, Contacts } from './LeadTable'
 import { advertises } from './score'
 import { displayName, draftOffer } from './offer'
@@ -673,6 +674,7 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
   const [owner, setOwner] = useState<'todos' | 'meus' | 'ninguem' | string>('todos')
   const [niche, setNiche] = useState('todos')
   const [text, setText] = useState('')
+  const [cleaning, setCleaning] = useState(false)
 
   useEffect(() => {
     getFunnelSettings().then(setSettings).catch(() => {})
@@ -906,8 +908,14 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
             </select>
           )}
         </div>
-        <SettingsBar settings={settings} onSave={saveSettings} />
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => setCleaning(true)}>
+            <Trash2 className="h-3.5 w-3.5" /> Limpar parados
+          </Button>
+          <SettingsBar settings={settings} onSave={saveSettings} />
+        </div>
       </div>
+      <CleanupDialog open={cleaning} onClose={() => setCleaning(false)} items={items} onRemoved={(ids) => { onChange((prev) => prev.filter((o) => !ids.includes(o.id))); if (openId && ids.includes(openId)) setOpenId(null) }} />
 
       <div className="-mx-4 mt-4 overflow-x-auto px-4 pb-4 md:-mx-6 md:px-6">
         <div className="flex gap-3">
