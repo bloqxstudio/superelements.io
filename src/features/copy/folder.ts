@@ -34,6 +34,7 @@ export async function folderReferences(doc: CopyDoc): Promise<NonNullable<CopyRe
 /** Os conteúdos que uma pesquisa costuma gerar, cada um indo para o seu lugar. */
 export const DERIVED: { id: string; format: FormatId; label: string; hint: string; objective: string }[] = [
   { id: 'lp', format: 'lp', label: 'Copy da landing page', hint: 'Vai para Projetos', objective: 'Converter quem chega na página em contato (WhatsApp ou formulário), usando as dores e objeções mapeadas na pesquisa' },
+  { id: 'post', format: 'post-instagram', label: 'Posts de Instagram', hint: 'Cada post é um documento; vai para Criativos', objective: 'Um ângulo da pesquisa por post (dor, objeção, bastidor, prova), fechando com um convite claro' },
   { id: 'organico', format: 'carrossel', label: 'Conteúdo orgânico (carrossel)', hint: 'Vai para Criativos', objective: 'Educar e atrair seguidores do público certo, com ângulos tirados da pesquisa; fecha convidando a chamar' },
   { id: 'conversao', format: 'anuncio', label: 'Conteúdo de conversão (anúncios)', hint: 'Anúncios com ângulos e variações', objective: 'Levar quem já tem a dor a clicar e chamar, com promessa honesta e as objeções da pesquisa respondidas' },
   { id: 'linkedin', format: 'linkedin', label: 'Post de LinkedIn', hint: 'Vai para Criativos', objective: 'Mostrar domínio do assunto para o público profissional e abrir conversa' },
