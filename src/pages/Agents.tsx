@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { Bot } from 'lucide-react'
+import { Office } from '@/features/operations/Office'
 import { Operations } from '@/features/operations/Operations'
 import { AgentRunCard, AgentRunRow } from '@/features/agents/AgentRunCard'
 import { useTick } from '@/features/agents/useTick'
@@ -25,6 +26,37 @@ const Section: React.FC<{ title: string; hint?: string; children: React.ReactNod
  * que perguntou primeiro (é onde a pessoa entra), depois quem está
  * trabalhando, com a página sendo montada ao vivo, e por fim quem terminou.
  */
+const VIEW_KEY = 'agentes-visao'
+
+/** Escritório (os agentes nas mesas) ou painel (números por área), a escolha fica lembrada. */
+const ViewToggle: React.FC = () => {
+  const [view, setView] = React.useState<'escritorio' | 'painel'>(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === 'painel' ? 'painel' : 'escritorio'
+    } catch {
+      return 'escritorio'
+    }
+  })
+  const set = (v: 'escritorio' | 'painel') => {
+    setView(v)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      // vale até recarregar
+    }
+  }
+  return (
+    <div className="mt-6">
+      <div role="group" aria-label="Visualização" className="mb-3 inline-flex rounded-lg bg-gray-100 p-0.5 text-xs font-semibold">
+        {([['escritorio', 'Escritório'], ['painel', 'Painel']] as const).map(([id, label]) => (
+          <button key={id} type="button" aria-pressed={view === id} onClick={() => set(id)} className={cn('rounded-md px-3 py-1', view === id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800')}>{label}</button>
+        ))}
+      </div>
+      {view === 'escritorio' ? <Office /> : <Operations />}
+    </div>
+  )
+}
+
 const Agents: React.FC = () => {
   // Nomes dos projetos e o projeto para abrir o segundo plano vêm da lista da conta
   useProjectList()
@@ -56,7 +88,7 @@ const Agents: React.FC = () => {
         <p className="mt-1 max-w-2xl text-sm text-gray-500">
           A empresa inteira operando: cada área com o que existe, o que está em produção e quem está trabalhando agora. Os agentes seguem em segundo plano mesmo se você sair da tela.
         </p>
-        <div className="mt-6"><Operations /></div>
+        <ViewToggle />
         <h2 className="mt-10 text-sm font-semibold text-gray-900">Agentes nos projetos (Space)</h2>
         <p className="mt-1 max-w-2xl text-sm text-gray-500">
           Cada agente trabalha no seu projeto, todos ao mesmo tempo. Você acompanha as páginas sendo montadas, responde quando um deles pergunta e aprova antes de ir para o cliente.
