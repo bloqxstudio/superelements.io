@@ -80,12 +80,22 @@ const H = 680
 
 /** As ilhas de mesas do salão, uma por área: duas fileiras de mesas frente a frente, como no escritório da série. */
 const PODS: Record<Area, { x: number; y: number; slots: number; rows: number; cols?: number }> = {
-  criativos: { x: 330, y: 250, slots: 4, rows: 2 },
-  sites: { x: 620, y: 250, slots: 4, rows: 2 },
-  copy: { x: 210, y: 440, slots: 4, rows: 2 },
-  comercial: { x: 500, y: 520, slots: 3, rows: 1, cols: 3 },
-  landing: { x: 1000, y: 84, slots: 2, rows: 2, cols: 1 },
+  comercial: { x: 130, y: 170, slots: 3, rows: 1, cols: 3 },
+  sites: { x: 710, y: 140, slots: 6, rows: 2, cols: 3 },
+  copy: { x: 60, y: 424, slots: 4, rows: 2 },
+  landing: { x: 350, y: 424, slots: 2, rows: 1 },
+  criativos: { x: 760, y: 424, slots: 4, rows: 2 },
 }
+
+/** As quatro áreas da empresa, bem separadas: cada uma agrupa uma ou mais áreas de trabalho. */
+const ZONES: { id: string; title: string; hint: string; x: number; y: number; w: number; h: number; fill: string; line: string; ink: string }[] = [
+  { id: 'comercial', title: 'COMERCIAL', hint: 'Funil, prospecção e abordagens', x: 24, y: 24, w: 572, h: 300, fill: '#DBEAFE', line: '#60A5FA', ink: '#1D4ED8' },
+  { id: 'tech', title: 'TECH', hint: 'Sites e páginas no Space', x: 604, y: 24, w: 572, h: 300, fill: '#DCFCE7', line: '#4ADE80', ink: '#15803D' },
+  { id: 'copy', title: 'COPY', hint: 'Pesquisa, textos e landing pages', x: 24, y: 332, w: 572, h: 264, fill: '#FEF3C7', line: '#FBBF24', ink: '#B45309' },
+  { id: 'produto', title: 'PRODUTO', hint: 'Criativos: posts e carrosséis', x: 604, y: 332, w: 572, h: 264, fill: '#EDE9FE', line: '#A78BFA', ink: '#6D28D9' },
+]
+/** Nome de cada grupo de mesas dentro da área. */
+const POD_LABEL: Record<Area, string> = { comercial: '', sites: '', copy: '', landing: 'Landing pages', criativos: '' }
 const DESK = { w: 100, h: 46 }
 /** A mesa e o assento (a cadeira) de cada vaga; a segunda fileira senta do lado oposto. */
 const slotAt = (area: Area, i: number) => {
@@ -97,13 +107,8 @@ const slotAt = (area: Area, i: number) => {
   const y = p.y + row * 90
   return { x, y, row, seat: { x: x + 50, y: row === 0 ? y - 16 : y + DESK.h + 16 } }
 }
-/** Onde ficam os livres: a copa (em volta das mesas redondas) e a cozinha. */
-const BREAK = [
-  { x: 752, y: 120 }, { x: 790, y: 84 }, { x: 790, y: 160 }, { x: 826, y: 120 }, { x: 860, y: 84 },
-  { x: 860, y: 160 }, { x: 896, y: 120 }, { x: 700, y: 176 }, { x: 650, y: 170 }, { x: 800, y: 190 },
-]
-/** As cadeiras da sala de reunião (quem planeja uma pasta vai para lá). */
-const MEETING = [{ x: 392, y: 66 }, { x: 432, y: 66 }, { x: 472, y: 66 }, { x: 512, y: 66 }, { x: 392, y: 150 }, { x: 432, y: 150 }, { x: 472, y: 150 }, { x: 512, y: 150 }]
+/** Reforços (e agentes de projeto além das mesas): a faixa de baixo. */
+const BREAK = Array.from({ length: 12 }, (_, i) => ({ x: 170 + i * 82, y: 630 }))
 
 const short = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t)
 
@@ -245,13 +250,8 @@ export const Office: React.FC = () => {
   // Onde cada um está: na própria mesa (livre ou trabalhando), na reunião (planejando a pasta) ou, sem mesa, na copa
   const placed = useMemo(() => {
     let rest = 0
-    let meeting = 0
     return seats.map((s) => {
       const working = !!s.job || !!s.space
-      if (s.job?.kind === 'Pasta' && meeting < MEETING.length) {
-        const at = MEETING[meeting++]
-        return { s, at, where: 'meeting' as const, working, facing: (at.y < 100 ? 'down' : 'up') as 'down' | 'up', chip: { x: at.x, y: at.y + 24 }, bubble: { x: at.x, y: at.y - 32, below: false } }
-      }
       const custom = !working ? moved[s.key] : undefined
       if (custom) return { s, at: custom, where: 'free' as const, working, facing: 'down' as const, chip: { x: custom.x, y: custom.y + 24 }, bubble: { x: custom.x, y: custom.y - 32, below: false } }
       if (s.slot < PODS[s.area].slots) {
@@ -354,7 +354,7 @@ export const Office: React.FC = () => {
       <style>{CSS}</style>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold text-gray-900">Escritório</h2>
-        <p className="text-xs text-gray-500">{total > 0 ? `${total} ${total === 1 ? 'agente trabalhando' : 'agentes trabalhando'} agora` : 'Todos na copa: nenhum trabalho agora'}</p>
+        <p className="text-xs text-gray-500">{total > 0 ? `${total} ${total === 1 ? 'agente trabalhando' : 'agentes trabalhando'} agora` : 'Ninguém trabalhando agora'}{asking > 0 ? ` · ${asking} esperando você` : ''}</p>
       </div>
       <div ref={boxRef} className="relative mt-3 rounded-2xl bg-stone-200 shadow-[0_0_0_1px_rgb(0_0_0/0.1)]">
         <svg
@@ -396,77 +396,21 @@ export const Office: React.FC = () => {
 
           {/* a construção */}
           <rect x="6" y="6" width={W - 12} height={H - 12} rx="14" fill="#F3EFE6" stroke="#64748B" strokeWidth="8" />
-          {Array.from({ length: 10 }, (_, i) => <rect key={i} x={200 + i * 78} y={H - 10} width="46" height="7" rx="2" fill="#BAE6FD" stroke="#7DD3FC" />)}
 
-          {/* pisos */}
-          <rect x="170" y="200" width="1006" height="456" rx="4" fill="url(#of-carpet)" />
-          <rect x="24" y="24" width="146" height="632" rx="4" fill="url(#of-tile)" />
-          <rect x="180" y="24" width="150" height="166" rx="4" fill="url(#of-wood)" />
-          <rect x="340" y="24" width="232" height="166" rx="4" fill="url(#of-carpet)" />
-          <rect x="582" y="24" width="150" height="166" rx="4" fill="url(#of-wood)" />
-          <rect x="740" y="24" width="220" height="176" rx="4" fill="url(#of-tile)" />
-          <rect x="970" y="24" width="206" height="236" rx="4" fill="url(#of-carpet)" />
-          <rect x="910" y="560" width="266" height="96" rx="4" fill="#E5E7EB" />
-
-          {/* entrada e recepção */}
-          <text x="36" y="170" fontSize="10" fontWeight="800" letterSpacing="1.6" fill="#7C6A4D" fontFamily="Inter, system-ui, sans-serif">ENTRADA</text>
-          <rect x="20" y="70" width="10" height="58" rx="2" fill="#C2410C" /><path d="M24 128 a58 58 0 0 1 58 -58" fill="none" stroke="#94A3B8" strokeWidth="1" strokeDasharray="3 2" />
-          <rect x="60" y="28" width="104" height="18" rx="3" fill="#0F172A" /><text x="112" y="41" textAnchor="middle" fontSize="8.5" fontWeight="800" fill="#7DD3FC" letterSpacing="1" fontFamily="Inter, system-ui, sans-serif">AVENCE STUDIO</text>
-          <rect x="34" y="300" width="42" height="96" rx="10" fill="#94A3B8" stroke="#64748B" /><rect x="40" y="306" width="14" height="84" rx="6" fill="#CBD5E1" />
-          <rect x="94" y="332" width="30" height="30" rx="4" fill="#C08A4F" stroke="#9A6A36" />
-          <Plant x={60} y={200} r={13} /><Plant x={140} y={250} r={11} /><Plant x={150} y={630} r={12} />
-          <Glass x={36} y={560} w={118} h={86} label="Elevador" door="none" />
-          <rect x="196" y="224" width="136" height="32" rx="15" fill="#B8864B" stroke="#8F6633" /><rect x="196" y="224" width="32" height="96" rx="15" fill="#B8864B" stroke="#8F6633" /><rect x="198" y="230" width="132" height="5" rx="2.5" fill="#fff" opacity=".28" />
-          <rect x="238" y="232" width="86" height="16" rx="3" fill="#0F172A" /><text x="281" y="243" textAnchor="middle" fontSize="7.5" fontWeight="800" fill="#7DD3FC" letterSpacing="1" fontFamily="Inter, system-ui, sans-serif">RECEPÇÃO</text>
-          <text x="240" y="276" fontSize="8.5" fill="#475569" fontFamily="Inter, system-ui, sans-serif">{`${total} trabalhando`}</text><text x="240" y="288" fontSize="8.5" fill="#475569" fontFamily="Inter, system-ui, sans-serif">{`${finishedToday} prontos hoje`}</text>
-
-          {/* sala do gestor */}
-          <Glass x={180} y={24} w={150} h={166} label="Sala do gestor" />
-          <rect x="212" y="90" width="86" height="38" rx="6" fill="#4B5563" stroke="#374151" />
-          <rect x="242" y="97" width="26" height="6" rx="2" fill={asking ? '#8B5CF6' : '#0F172A'} />
-          <rect x="222" y="148" width="22" height="14" rx="7" fill="#64748B" /><rect x="264" y="148" width="22" height="14" rx="7" fill="#64748B" />
-          <g transform="translate(255,64)"><ellipse cy="3" rx="15" ry="9" fill="#000" opacity=".16" /><rect x="-14" y="-6" width="28" height="14" rx="7" fill="#111827" /><circle cy="-3" r="9" fill="#E0A982" /><path d="M-9 -3a9 9 0 0 1 18 0c-3-3-6-4-9-4s-6 1-9 4z" fill="#2B1B12" transform="rotate(180)" /></g>
-          <Chip x={255} y={84} text={asking > 0 ? `Você · ${asking} esperando` : 'Você'} hot={asking > 0} />
-          <Plant x={312} y={172} />
-
-          {/* sala de reunião */}
-          <Glass x={340} y={24} w={232} h={166} label="Sala de reunião" />
-          <rect x="372" y="86" width="168" height="44" rx="22" fill="#7C4A21" stroke="#5B3517" strokeWidth="1.5" />
-          <rect x="380" y="90" width="152" height="7" rx="3.5" fill="#fff" opacity=".18" />
-          {MEETING.map((m, i) => <circle key={i} cx={m.x} cy={m.y} r="12" fill={placed.some((p) => p.where === 'meeting' && p.at === m) ? '#475569' : '#94A3B8'} />)}
-          <rect x="556" y="44" width="10" height="72" rx="3" fill="#0F172A" /><rect x="558" y="48" width="6" height="64" rx="2" fill="#1E3A5F" />
-
-          {/* escada para o depósito e cozinha */}
-          <text x="592" y="44" fontSize="10" fontWeight="800" letterSpacing="1.6" fill="#64748B" fontFamily="Inter, system-ui, sans-serif">ESCADA</text>
-          {Array.from({ length: 9 }, (_, i) => <rect key={i} x={592} y={54 + i * 14} width="62" height="10" rx="2" fill="#D6C7A8" stroke="#B9A57F" />)}
-          <path d="M600 190 v-8 l8 4z" fill="#64748B" />
-          <rect x="672" y="40" width="54" height="118" rx="5" fill="#9CA3AF" stroke="#6B7280" /><rect x="680" y="50" width="30" height="20" rx="3" fill="#E5E7EB" /><rect x="684" y="100" width="22" height="48" rx="3" fill="#F8FAFC" stroke="#94A3B8" />
-          <text x="676" y="176" fontSize="8.5" fontWeight="800" letterSpacing="1.2" fill="#64748B" fontFamily="Inter, system-ui, sans-serif">COZINHA</text>
-
-          {/* copa */}
-          <text x="752" y="44" fontSize="10" fontWeight="800" letterSpacing="1.8" fill="#92700C" fontFamily="Inter, system-ui, sans-serif">COPA</text>
-          {[790, 860].map((cx) => <g key={cx}><circle cx={cx + 2} cy="124" r="26" fill="#000" opacity=".12" /><circle cx={cx} cy="120" r="24" fill="#C08A4F" stroke="#9A6A36" strokeWidth="2" /><circle cx={cx} cy="120" r="17" fill="none" stroke="#fff" opacity=".25" /></g>)}
-          <rect x="924" y="56" width="32" height="50" rx="5" fill="#1D4ED8" stroke="#1E3A8A" /><rect x="929" y="63" width="22" height="22" rx="2" fill="#BFDBFE" /><rect x="924" y="112" width="32" height="50" rx="5" fill="#B91C1C" stroke="#7F1D1D" /><rect x="929" y="119" width="22" height="22" rx="2" fill="#FECACA" />
-
-          {/* anexo */}
-          <Glass x={970} y={24} w={206} h={236} label="" />
-
-          {/* sala reservada, banheiros e almoxarifado */}
-          <Glass x={910} y={270} w={100} h={120} label="Reservada" tint="#FDF2F8" />
-          <rect x="926" y="318" width="68" height="28" rx="5" fill="#4B5563" stroke="#374151" /><circle cx="960" cy="366" r="9" fill="#64748B" />
-          <rect x="1024" y="270" width="70" height="56" rx="4" fill="#DBEAFE" stroke="#93C5FD" strokeWidth="2" /><rect x="1024" y="330" width="70" height="60" rx="4" fill="#FCE7F3" stroke="#F9A8D4" strokeWidth="2" />
-          <text x="1059" y="302" textAnchor="middle" fontSize="9" fontWeight="800" fill="#2563EB" fontFamily="Inter, system-ui, sans-serif">WC</text><text x="1059" y="364" textAnchor="middle" fontSize="9" fontWeight="800" fill="#DB2777" fontFamily="Inter, system-ui, sans-serif">WC</text>
-          <rect x="1110" y="290" width="52" height="38" rx="5" fill="#9CA3AF" stroke="#6B7280" /><rect x="1118" y="296" width="36" height="12" rx="2" fill="#E5E7EB" />
-          <text x="922" y="578" fontSize="10" fontWeight="800" letterSpacing="1.6" fill="#64748B" fontFamily="Inter, system-ui, sans-serif">ALMOXARIFADO</text>
-          {[0, 1, 2, 3].map((i) => <rect key={i} x={924 + i * 62} y="592" width="50" height="50" rx="3" fill="#B45309" opacity=".75" stroke="#7C2D12" />)}
-          <Plant x={890} y={640} r={13} /><Plant x={900} y={228} r={12} /><Plant x={180} y={520} r={11} />
+          {/* as quatro áreas */}
+          {ZONES.map((z) => (
+            <g key={z.id} aria-hidden>
+              <rect x={z.x} y={z.y} width={z.w} height={z.h} rx="12" fill={z.fill} opacity=".55" stroke={z.line} strokeWidth="2.5" />
+              <text x={z.x + 20} y={z.y + 36} fontSize="20" fontWeight="800" letterSpacing="3" fill={z.ink} fontFamily="Inter, system-ui, sans-serif">{z.title}</text>
+              <text x={z.x + 20} y={z.y + 56} fontSize="12" fill="#475569" fontFamily="Inter, system-ui, sans-serif">{z.hint}</text>
+            </g>
+          ))}
+          <rect x="24" y="604" width="1152" height="52" rx="12" fill="#E5E7EB" stroke="#CBD5E1" strokeWidth="2" strokeDasharray="6 5" />
+          <text x="44" y="635" fontSize="11" fontWeight="800" letterSpacing="2" fill="#64748B" fontFamily="Inter, system-ui, sans-serif">REFORÇOS</text>
 
           {/* salão: as ilhas de mesas */}
-          {(Object.keys(AREAS) as Area[]).map((a) => (
-            <g key={a} aria-hidden>
-              <rect x={PODS[a].x - 24} y={PODS[a].y - 52} width={(PODS[a].cols ?? 2) * 130 + 28} height={PODS[a].rows === 2 ? 212 : 130} rx="14" fill="#fff" opacity=".28" />
-              <text x={PODS[a].x - 8} y={PODS[a].y - 34} fontSize="10.5" fontWeight="800" letterSpacing="1.8" fill="#475569" fontFamily="Inter, system-ui, sans-serif">{AREAS[a].label.toUpperCase()}</text>
-            </g>
+          {(Object.keys(AREAS) as Area[]).filter((a) => POD_LABEL[a]).map((a) => (
+            <text key={a} x={PODS[a].x} y={PODS[a].y - 30} fontSize="10.5" fontWeight="800" letterSpacing="1.6" fill="#64748B" fontFamily="Inter, system-ui, sans-serif" aria-hidden>{POD_LABEL[a].toUpperCase()}</text>
           ))}
           {(Object.keys(AREAS) as Area[]).flatMap((a) =>
             Array.from({ length: PODS[a].slots }, (_, i) => {
