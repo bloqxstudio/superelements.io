@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FileText, FolderKanban, Globe, Images, type LucideIcon } from 'lucide-react'
+import { listOpportunities } from '@/features/crm/opportunities'
+import { useRoutines } from '@/features/ia/rotinas'
+import { FileText, FolderKanban, Globe, Handshake, Images, type LucideIcon } from 'lucide-react'
 import { listDocs } from '@/features/copy/storage'
 import type { CopySummary } from '@/features/copy/types'
 import { listSets } from '@/features/criativos/storage'
@@ -16,8 +18,8 @@ import { AREAS, useJobs, type Area, type Job } from './jobs'
  * que existe, o que está em produção agora e quem está trabalhando, ao vivo.
  */
 
-const ICON: Record<Area, LucideIcon> = { criativos: Images, copy: FileText, landing: Globe, sites: FolderKanban }
-const OPEN: Record<Area, string> = { criativos: '/criativos', copy: '/copy', landing: '/copy', sites: '/projetos' }
+const ICON: Record<Area, LucideIcon> = { criativos: Images, copy: FileText, landing: Globe, sites: FolderKanban, comercial: Handshake }
+const OPEN: Record<Area, string> = { criativos: '/criativos', copy: '/copy', landing: '/copy', sites: '/projetos', comercial: '/crm' }
 
 const Metric: React.FC<{ n: number | string; label: string; hot?: boolean }> = ({ n, label, hot }) => (
   <div>
@@ -50,6 +52,9 @@ export const Operations: React.FC = () => {
   const [sets, setSets] = useState<SetSummary[] | null>(null)
   const running = jobs.filter((j) => j.status === 'running')
   const now = useSeconds(running.length > 0)
+  const routines = useRoutines((s) => s.routines)
+  const [open, setOpen] = useState<number | null>(null)
+  useEffect(() => void listOpportunities().then((l) => setOpen(l.filter((o) => o.stage !== 'fechado' && o.stage !== 'perdido').length)).catch(() => setOpen(null)), [running.length])
 
   // Recarrega os números quando um trabalho começa ou termina
   useEffect(() => {
@@ -109,6 +114,11 @@ export const Operations: React.FC = () => {
           ))}
         </ul>
       ),
+    },
+    {
+      area: 'comercial',
+      metrics: (<><Metric n={open ?? '–'} label="cartões abertos" /><Metric n={routines.filter((r) => r.enabled).length} label="rotinas ligadas" /><Metric n={running.filter((j) => j.area === 'comercial').length} label="em produção" hot /></>),
+      jobs: jobs.filter((j) => j.area === 'comercial'),
     },
   ]
 

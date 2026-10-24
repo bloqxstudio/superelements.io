@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { AgentRequest } from './AgentRequest'
 import { openPreview } from './Preview'
 import { elapsed, JobFeed, useSeconds } from './JobFeed'
+import { profileOfBase, useProfileList } from '@/features/ia/perfis'
 import { AREAS, stopJob, useJobs, type Area, type Job } from './jobs'
 
 /**
@@ -22,6 +23,8 @@ interface Seat {
   key: string
   name: string
   role: string
+  /** O cargo de fábrica: o que o escritório usa para achar o agente, mesmo que o perfil mude o nome do cargo. */
+  base: string
   skin: string
   hair: string
   shirt: string
@@ -45,6 +48,11 @@ const ROSTER: Record<Area, { role: string; name: string; shirt: string; match: (
     { role: 'Estrategista', name: 'Nina', shirt: '#EF4444', match: (j) => /^Estrategista/.test(j.agent) },
   ],
   landing: [{ role: 'Redator de LP', name: 'Rafa', shirt: '#6366F1', match: () => true }],
+  comercial: [
+    { role: 'Prospector', name: 'Léo', shirt: '#0891B2', match: (j) => /^Prospector/.test(j.agent) },
+    { role: 'Redator de abordagem', name: 'Duda', shirt: '#DB2777', match: (j) => /^Redator de abordagem/.test(j.agent) },
+    { role: 'Analista de funil', name: 'Ana', shirt: '#65A30D', match: (j) => /^Analista de funil/.test(j.agent) },
+  ],
   sites: [{ role: 'Construtor', name: 'Gabi', shirt: '#14B8A6', match: () => true }],
 }
 
@@ -68,21 +76,23 @@ const CSS = `
 
 
 const W = 1000
-const H = 700
+const H = 820
 
 /** As ilhas de mesas do salão, uma por área: duas fileiras de mesas frente a frente, como no escritório da série. */
-const PODS: Record<Area, { x: number; y: number; slots: number; rows: number }> = {
+const PODS: Record<Area, { x: number; y: number; slots: number; rows: number; cols?: number }> = {
   copy: { x: 80, y: 280, slots: 4, rows: 2 },
   criativos: { x: 400, y: 280, slots: 4, rows: 2 },
   landing: { x: 80, y: 510, slots: 2, rows: 1 },
   sites: { x: 400, y: 500, slots: 4, rows: 2 },
+  comercial: { x: 80, y: 712, slots: 3, rows: 1, cols: 3 },
 }
 const DESK = { w: 100, h: 46 }
 /** A mesa e o assento (a cadeira) de cada vaga; a segunda fileira senta do lado oposto. */
 const slotAt = (area: Area, i: number) => {
   const p = PODS[area]
-  const col = i % 2
-  const row = Math.floor(i / 2)
+  const cols = p.cols ?? 2
+  const col = i % cols
+  const row = Math.floor(i / cols)
   const x = p.x + col * 130
   const y = p.y + row * 90
   return { x, y, row, seat: { x: x + 50, y: row === 0 ? y - 16 : y + DESK.h + 16 } }
@@ -189,6 +199,7 @@ export const Office: React.FC = () => {
   const jobs = useJobs((s) => s.jobs)
   const spaceRuns = useAgents((s) => s.agents)
   const running = jobs.filter((j) => j.status === 'running')
+  const profiles = useProfileList()
   const now = useSeconds(true)
   const [selected, setSelected] = useState<string | null>(null)
 
@@ -201,18 +212,19 @@ export const Office: React.FC = () => {
       const list: Seat[] = roster.map((r, i) => {
         const job = mine.find((j) => !used.has(j.id) && r.match(j))
         if (job) used.add(job.id)
-        return { key: `${area}:${r.role}`, name: r.name, role: r.role, skin: pick(SKINS, r.name + i), hair: pick(HAIRS, r.name), shirt: r.shirt, job }
+        const prof = profileOfBase(profiles, area, r.role)
+        return { key: `${area}:${r.role}`, name: prof?.name ?? r.name, role: prof?.role ?? r.role, base: r.role, skin: pick(SKINS, r.name + i), hair: pick(HAIRS, r.name), shirt: r.shirt, job }
       })
-      mine.filter((j) => !used.has(j.id)).forEach((job, i) => list.push({ key: `${area}:extra:${job.id}`, name: `Reforço ${i + 1}`, role: job.agent.split(' · ')[0], skin: pick(SKINS, job.id), hair: pick(HAIRS, job.id), shirt: '#64748B', job }))
+      mine.filter((j) => !used.has(j.id)).forEach((job, i) => list.push({ key: `${area}:extra:${job.id}`, name: `Reforço ${i + 1}`, role: job.agent.split(' · ')[0], base: job.agent.split(' · ')[0], skin: pick(SKINS, job.id), hair: pick(HAIRS, job.id), shirt: '#64748B', job }))
       if (area === 'sites') {
         spaceRuns.filter((a) => ['working', 'question'].includes(agentStatus(a, now))).forEach((a, i) =>
-          list.push({ key: `space:${a.key}`, name: a.agent.split(' ')[0] || 'Agente', role: 'no projeto', skin: pick(SKINS, a.key + i), hair: pick(HAIRS, a.key), shirt: '#F97316', space: { project: a.projectName ?? 'Projeto', now: a.now, since: a.startedAt, waiting: a.state === 'question', href: `/projetos/${a.projectId}` } })
+          list.push({ key: `space:${a.key}`, name: a.agent.split(' ')[0] || 'Agente', role: 'no projeto', base: 'no projeto', skin: pick(SKINS, a.key + i), hair: pick(HAIRS, a.key), shirt: '#F97316', space: { project: a.projectName ?? 'Projeto', now: a.now, since: a.startedAt, waiting: a.state === 'question', href: `/projetos/${a.projectId}` } })
         )
       }
       list.forEach((s, slot) => out.push({ ...s, area, slot }))
     })
     return out
-  }, [running, spaceRuns, now])
+  }, [running, spaceRuns, now, profiles])
 
   // Posições soltas (arrastadas) de quem está livre; quem trabalha volta para a mesa
   const [moved, setMoved] = useState<Record<string, { x: number; y: number }>>(() => {
@@ -259,7 +271,7 @@ export const Office: React.FC = () => {
   const asking = spaceRuns.filter((a) => agentStatus(a, now) === 'question').length
   const finishedToday = jobs.filter((j) => j.status === 'done' && j.endedAt && now - j.endedAt < 86_400_000).length
   const pickedAt = placed.find((p) => p.s.key === selected)
-  const mine = picked ? jobs.filter((j) => j.status !== 'running' && new RegExp(`^${picked.role}`).test(j.agent)).sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0)).slice(0, 4) : []
+  const mine = picked ? jobs.filter((j) => j.status !== 'running' && new RegExp(`^${picked.base}`).test(j.agent)).sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0)).slice(0, 4) : []
   const svgRef = useRef<SVGSVGElement>(null)
   const press = useRef<{ key: string; sx: number; sy: number; ox: number; oy: number; moved: boolean; working: boolean } | null>(null)
   const toSvg = (e: { clientX: number; clientY: number }) => {
@@ -316,8 +328,8 @@ export const Office: React.FC = () => {
           {Array.from({ length: 12 }, (_, i) => <rect key={i} x={46 + i * 78} y="3" width="46" height="7" rx="2" fill="#BAE6FD" stroke="#7DD3FC" />)}
 
           {/* pisos */}
-          <rect x="24" y="200" width="680" height="476" rx="6" fill="url(#of-carpet)" />
-          <rect x="714" y="200" width="262" height="476" rx="6" fill="url(#of-tile)" />
+          <rect x="24" y="200" width="680" height="596" rx="6" fill="url(#of-carpet)" />
+          <rect x="714" y="200" width="262" height="596" rx="6" fill="url(#of-tile)" />
           <rect x="24" y="24" width="220" height="166" rx="6" fill="url(#of-wood)" />
           <rect x="774" y="24" width="202" height="166" rx="6" fill="#E5E7EB" />
 
@@ -360,7 +372,7 @@ export const Office: React.FC = () => {
           {/* salão: as ilhas de mesas */}
           {(Object.keys(AREAS) as Area[]).map((a) => (
             <g key={a} aria-hidden>
-              <rect x={PODS[a].x - 24} y={PODS[a].y - 52} width="288" height={PODS[a].rows === 2 ? 212 : 130} rx="14" fill="#fff" opacity=".28" />
+              <rect x={PODS[a].x - 24} y={PODS[a].y - 52} width={(PODS[a].cols ?? 2) * 130 + 28} height={PODS[a].rows === 2 ? 212 : 130} rx="14" fill="#fff" opacity=".28" />
               <text x={PODS[a].x - 8} y={PODS[a].y - 52 + (PODS[a].rows === 2 ? 212 : 130) - 10} fontSize="10.5" fontWeight="800" letterSpacing="1.8" fill="#475569" fontFamily="Inter, system-ui, sans-serif">{AREAS[a].label.toUpperCase()}</text>
             </g>
           ))}
@@ -460,7 +472,8 @@ export const Office: React.FC = () => {
                       ))}
                     </ul>
                   )}
-                  {!picked.key.includes(':extra:') ? <AgentRequest compact who={{ area: picked.key.split(':')[0] as Area, role: picked.role, name: picked.name }} /> : <p className="mt-2 text-xs text-gray-500">Reforço temporário.</p>}
+                  {picked.key.startsWith('comercial:') ? <p className="mt-2 text-xs text-gray-600">{picked.name} trabalha por rotina: dá para rodar agora ou agendar em <Link to="/agentes/configurar?aba=rotinas" className="font-medium underline">Rotinas</Link>.</p> : !picked.key.includes(':extra:') ? <AgentRequest compact who={{ area: picked.key.split(':')[0] as Area, role: picked.base, name: picked.name }} /> : <p className="mt-2 text-xs text-gray-500">Reforço temporário.</p>}
+                  {!picked.key.includes(':extra:') && <Link to="/agentes/configurar?aba=perfis" className="mt-2 block text-[11px] font-medium text-gray-500 underline">Editar o perfil de {picked.name}</Link>}
                 </>
               )}
             </div>

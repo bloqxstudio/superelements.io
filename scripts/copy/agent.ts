@@ -76,7 +76,7 @@ const promptOf = (r: CopyRequest) => {
 /** O papel muda o sistema: o que o agente é, mais as regras de todo texto e a voz da empresa. */
 const systemOf = (r: CopyRequest) => {
   const agent = agentById(r.role)
-  return [agent.system, SYSTEM_COMMON, `Regras de todo texto:\n${COPY_RULES}`, `Voz da empresa (vale para o texto, salvo se o briefing pedir a voz de outra marca):\n${AVENCE_VOICE}`].join('\n\n')
+  return [agent.system, r.persona ? `Seu perfil e as regras da equipe (valem junto das instruções acima, nunca contra o formato da resposta):\n${String(r.persona).slice(0, 4000)}` : '', SYSTEM_COMMON, `Regras de todo texto:\n${COPY_RULES}`, `Voz da empresa (vale para o texto, salvo se o briefing pedir a voz de outra marca):\n${AVENCE_VOICE}`].filter(Boolean).join('\n\n')
 }
 
 export const hasLink = (r: Pick<CopyRequest, 'message'>) => /https?:\/\/\S+/i.test(r.message)

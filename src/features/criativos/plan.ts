@@ -53,6 +53,8 @@ export interface PlanRequest {
   posts: number
   /** Qual IA desta máquina faz o trabalho. */
   engine?: 'claude' | 'codex'
+  /** Perfil do agente (quem é, como trabalha, regras). */
+  persona?: string
   cases: { slug: string; name: string; segment: string; place?: string; summary: string; stack: string }[]
 }
 

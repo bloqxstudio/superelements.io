@@ -6,6 +6,7 @@ import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageRequest, typ
 import { CHAT_AGENTS } from '../../src/features/space/chat/protocol.ts'
 import { checkAgents } from '../space/chatPlugin.ts'
 import { runCopy } from '../copy/agent.ts'
+import { runAgent, type AgentRunRequest } from '../agente/run.ts'
 import { planFolder, type FolderPlanRequest } from '../copy/plan.ts'
 import { copyToSlides, type SlidesRequest } from '../copy/slides.ts'
 import { downloadImage } from './baixar.ts'
@@ -30,11 +31,13 @@ const planInput = (body: Partial<PlanRequest>): PlanRequest => ({
   slides: Math.min(10, Math.max(1, Number(body.slides) || 5)),
   posts: Math.min(4, Math.max(1, Number(body.posts) || 1)),
   engine: body.engine === 'codex' ? 'codex' : 'claude',
+  persona: typeof body.persona === 'string' ? body.persona.slice(0, 4000) : undefined,
   cases: Array.isArray(body.cases) ? body.cases.slice(0, 12) : [],
 })
 
 const editInput = (body: Partial<EditRequest>): EditRequest => ({
   agent: body.agent === 'codex' ? 'codex' : 'claude',
+  persona: typeof body.persona === 'string' ? body.persona.slice(0, 4000) : undefined,
   canGenerateImages: !!body.canGenerateImages && !!imageProvider(),
   message: String(body.message ?? '').slice(0, 4000),
   scope: ['layer', 'slide', 'post', 'set'].includes(String(body.scope)) ? (body.scope as EditRequest['scope']) : 'set',
@@ -99,10 +102,14 @@ export const criativos = (): Plugin => ({
           } else if (call.kind === 'copy-plan') {
             const req = call.request as FolderPlanRequest
             if (!String(req?.request ?? '').trim()) throw new Error('Escreva o que você quer criar na pasta.')
-            send({ id, ok: true, data: await planFolder({ ...req, engine: req.engine === 'codex' ? 'codex' : 'claude', folder: String(req.folder ?? '').slice(0, 160), existing: (req.existing ?? []).slice(0, 60) }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
+            send({ id, ok: true, data: await planFolder({ ...req, engine: req.engine === 'codex' ? 'codex' : 'claude', persona: typeof req.persona === 'string' ? req.persona : undefined, folder: String(req.folder ?? '').slice(0, 160), existing: (req.existing ?? []).slice(0, 60) }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
           } else if (call.kind === 'copy-slides') {
             const req = call.request as SlidesRequest
-            send({ id, ok: true, data: await copyToSlides({ name: String(req?.name ?? 'Post').slice(0, 120), kind: req?.kind === 'story' ? 'story' : req?.kind === 'pesquisa' ? 'pesquisa' : 'post', count: Number(req?.count) || undefined, text: String(req?.text ?? ''), engine: req?.engine === 'codex' ? 'codex' : 'claude' }, controller.signal) })
+            send({ id, ok: true, data: await copyToSlides({ name: String(req?.name ?? 'Post').slice(0, 120), kind: req?.kind === 'story' ? 'story' : req?.kind === 'pesquisa' ? 'pesquisa' : 'post', count: Number(req?.count) || undefined, text: String(req?.text ?? ''), engine: req?.engine === 'codex' ? 'codex' : 'claude', persona: typeof req?.persona === 'string' ? req.persona : undefined }, controller.signal) })
+          } else if (call.kind === 'agent') {
+            const req = call.request as Partial<AgentRunRequest>
+            if (!String(req?.prompt ?? '').trim()) throw new Error('O pedido veio vazio.')
+            send({ id, ok: true, data: await runAgent({ engine: req.engine === 'codex' ? 'codex' : 'claude', system: String(req.system ?? '').slice(0, 12000), prompt: String(req.prompt), web: !!req.web }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
           } else if (call.kind === 'download') {
             send({ id, ok: true, data: await downloadImage(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
           } else if (call.kind === 'capture') {

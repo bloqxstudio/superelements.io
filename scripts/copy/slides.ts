@@ -1,6 +1,7 @@
 import { ILLUSTRATION_IDS, PLAN_FORMAT_NOTE, PLAN_SCHEMA, TEMPLATE_IDS, type PlanResponse } from '../../src/features/criativos/plan.ts'
 import { askClaude } from '../criativos/claude.ts'
 import { askCodex } from '../criativos/codex.ts'
+import { withPersona } from '../agente/persona.ts'
 
 /**
  * Do texto aprovado ao post: o Claude Code desta máquina escolhe o modelo de
@@ -18,6 +19,8 @@ export interface SlidesRequest {
   text: string
   /** Qual IA desta máquina faz o trabalho. */
   engine?: 'claude' | 'codex'
+  /** Perfil do agente. */
+  persona?: string
 }
 
 const SYSTEM = [
@@ -37,7 +40,7 @@ const RESEARCH_SYSTEM = [
 ].join(' ')
 
 export const copyToSlides = (input: SlidesRequest, signal?: AbortSignal): Promise<PlanResponse> => {
-  const system = input.kind === 'pesquisa' ? RESEARCH_SYSTEM : SYSTEM
+  const system = withPersona(input.kind === 'pesquisa' ? RESEARCH_SYSTEM : SYSTEM, input.persona)
   const text = input.kind === 'pesquisa' ? `## Assunto\n${input.name}\n\n## Quantos posts\n${Math.min(6, Math.max(1, input.count ?? 3))}\n\n## Pesquisa\n${input.text.slice(0, 20000)}` : `## Nome do post\n${input.name}\n\n## Formato\n${input.kind === 'story' ? '9x16 (stories)' : '4x5 (feed)'}\n\n## Texto aprovado\n${input.text.slice(0, 14000)}`
   const timeoutMs = input.kind === 'pesquisa' ? 420_000 : 240_000
   if (input.engine === 'codex') return askCodex<PlanResponse>({ prompt: `${system}\n\n${PLAN_FORMAT_NOTE}\n\n${text}`, timeoutMs, signal })

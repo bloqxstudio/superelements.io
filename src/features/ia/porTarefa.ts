@@ -12,17 +12,18 @@ import type { ChatAgentId } from '@/features/space/chat/protocol'
  * gravam aqui, então ficam sempre de acordo.
  */
 
-export type IaTask = 'criativos' | 'copy' | 'sites'
+export type IaTask = 'criativos' | 'copy' | 'sites' | 'comercial'
 
 export const IA_TASKS: { id: IaTask; label: string; hint: string }[] = [
   { id: 'criativos', label: 'Criativos', hint: 'Posts e carrosséis, edição no editor e posts vindos da Copy' },
   { id: 'copy', label: 'Copy', hint: 'Pesquisas, textos e documentos das pastas' },
+  { id: 'comercial', label: 'Comercial', hint: 'Revisão do funil, pesquisa de negócios e rascunhos de abordagem' },
   { id: 'sites', label: 'Sites e páginas', hint: 'Páginas no Space, inclusive as da fila de prospecção' },
 ]
 
 const KEY = 'ia-por-tarefa'
 /** Onde cada escolha ficava antes desta tela. */
-const OLD_KEY: Record<IaTask, string> = { criativos: 'criativos-agente', copy: 'copy-agente-motor', sites: 'space-chat-agent' }
+const OLD_KEY: Record<IaTask, string> = { criativos: 'criativos-agente', copy: 'copy-agente-motor', sites: 'space-chat-agent', comercial: 'comercial-agente' }
 
 const isId = (v: unknown): v is ChatAgentId => v === 'claude' || v === 'codex'
 

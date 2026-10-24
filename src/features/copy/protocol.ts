@@ -10,6 +10,8 @@ import type { CopyAgentId } from './agents.ts'
 export interface CopyRequest {
   /** Qual IA da máquina faz o trabalho. */
   engine?: 'claude' | 'codex'
+  /** Perfil do agente (quem é, como trabalha, regras da equipe). */
+  persona?: string
   /** O papel que ela assume. */
   role: CopyAgentId
   message: string

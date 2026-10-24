@@ -1,3 +1,4 @@
+import { personaFor, profileNow } from '@/features/ia/perfis'
 import { create } from 'zustand'
 import type { AgentChannel } from '@/features/space/connector/channel'
 import { finishJob, noteJob, patchJob, startJob } from '@/features/operations/jobs'
@@ -105,8 +106,25 @@ const TRACKED: Partial<Record<CreativeCall['kind'], { kind: string; label: (r: R
 }
 const STEP_TEXT: Record<CreativeStep, string> = { start: 'Lendo o pedido', thinking: 'Pensando', reading: 'Pesquisando na web', writing: 'Escrevendo' }
 
+const COPY_PROFILE: Record<string, string> = { redator: 'bia', editor: 'teo', pesquisador: 'caio', estrategista: 'nina' }
+
+/** Junta o perfil do agente (editado em Agentes › Perfis) ao pedido: o que ele faz e como faz vale em todo trabalho. */
+function withProfile(kind: CreativeCall['kind'], request: unknown): unknown {
+  const r = request as Record<string, unknown> | undefined
+  if (!r || typeof r !== 'object' || r.persona !== undefined) return request
+  if (kind === 'image' && typeof r.prompt === 'string') {
+    const lia = profileNow('lia')
+    const style = [lia.instructions, ...lia.rules.split('\n')].map((t) => t.trim()).filter(Boolean).join('. ')
+    return style ? { ...r, prompt: `${r.prompt}\n\nDireção de estilo da equipe: ${style}` } : request
+  }
+  const ids = kind === 'edit' || kind === 'plan' || kind === 'copy-slides' ? ['dani'] : kind === 'copy-plan' ? ['nina'] : kind === 'copy' ? [COPY_PROFILE[String(r.role)], (r.doc as { format?: string } | undefined)?.format === 'lp' ? 'rafa' : ''] : []
+  const text = ids.filter(Boolean).map(personaFor).join('\n\n')
+  return text ? { ...r, persona: text } : request
+}
+
 /** Pede uma resposta à IA desta máquina. Os pedidos de criativos aparecem na tela Agentes enquanto rodam. */
-export function callAi<T>(kind: CreativeCall['kind'], request: unknown, signal?: AbortSignal, onStep?: (step: CreativeStep, detail?: string) => void): Promise<T> {
+export function callAi<T>(kind: CreativeCall['kind'], rawRequest: unknown, signal?: AbortSignal, onStep?: (step: CreativeStep, detail?: string) => void): Promise<T> {
+  const request = withProfile(kind, rawRequest)
   const track = TRACKED[kind]
   if (!track) return callAiRaw<T>(kind, request, signal, onStep)
   const label = String(track.label((request ?? {}) as Record<string, unknown>) ?? '').replace(/\s+/g, ' ').trim().slice(0, 90) || track.kind

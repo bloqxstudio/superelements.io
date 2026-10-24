@@ -1,3 +1,4 @@
+import { withPersona } from '../agente/persona.ts'
 import { FORMATS, nicheById } from '../../src/features/copy/knowledge.ts'
 import { askClaude } from '../criativos/claude.ts'
 import { askCodex } from '../criativos/codex.ts'
@@ -11,6 +12,8 @@ import { askCodex } from '../criativos/codex.ts'
 
 export interface FolderPlanRequest {
   engine?: 'claude' | 'codex'
+  /** Perfil do agente. */
+  persona?: string
   folder: string
   niche?: string
   request: string
@@ -57,6 +60,6 @@ export const planFolder = (input: FolderPlanRequest, signal?: AbortSignal, onSte
     `## Material da pasta\n${input.context.slice(0, 22000) || '(sem material: use só o pedido)'}`,
   ].join('\n\n')
   if (input.engine === 'codex')
-    return askCodex<FolderPlanResponse>({ prompt: `${SYSTEM}\n\nResponda SOMENTE com JSON: {"reply": string, "docs": [{"format": string, "title": string, "angle": string}]}\n\n${prompt}`, timeoutMs: 240_000, signal, onStep })
-  return askClaude<FolderPlanResponse>({ system: SYSTEM, schema: FOLDER_PLAN_SCHEMA, content: [{ type: 'text', text: prompt }], timeoutMs: 240_000, signal, onStep })
+    return askCodex<FolderPlanResponse>({ prompt: `${withPersona(SYSTEM, input.persona)}\n\nResponda SOMENTE com JSON: {"reply": string, "docs": [{"format": string, "title": string, "angle": string}]}\n\n${prompt}`, timeoutMs: 240_000, signal, onStep })
+  return askClaude<FolderPlanResponse>({ system: withPersona(SYSTEM, input.persona), schema: FOLDER_PLAN_SCHEMA, content: [{ type: 'text', text: prompt }], timeoutMs: 240_000, signal, onStep })
 }

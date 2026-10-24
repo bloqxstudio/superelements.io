@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useMatch } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { AppSidebar } from '@/components/AppSidebar';
 import { Logo } from '@/components/Logo';
+import { useRoutineScheduler } from '@/features/ia/rotinas';
 import { PreviewDrawer } from '@/features/operations/Preview';
 
 /**
@@ -16,6 +17,8 @@ const Layout: React.FC = () => {
   // Aberto numa prévia (iframe da tela Agentes): só o conteúdo, sem o menu
   const embedded = new URLSearchParams(search).get('embed') === '1';
   const [open, setOpen] = useState(false);
+  // As rotinas dos agentes rodam daqui (uma vez no app; a prévia embutida não dispara)
+  useRoutineScheduler(!embedded);
   const close = useCallback(() => setOpen(false), []);
 
   // Trocou de tela pelo menu do celular: ele fecha

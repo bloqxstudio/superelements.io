@@ -2,6 +2,7 @@ import { EDIT_SCHEMA, type EditRequest, type EditResponse } from '../../src/feat
 import { TEMPLATE_IDS } from '../../src/features/criativos/plan.ts'
 import { askClaude, imageBlock } from './claude.ts'
 import { askCodex } from './codex.ts'
+import { withPersona } from '../agente/persona.ts'
 
 /**
  * Edição por conversa: o Claude Code desta máquina lê o conjunto (e a imagem do
@@ -82,7 +83,7 @@ export const editCreatives = (input: EditRequest, signal?: AbortSignal, onStep?:
   if (input.agent === 'codex') {
     const images = [...(input.attachments ?? []).map((a) => a.data), ...(input.previews ?? []), ...(input.references ?? []).flatMap((r) => r.images ?? []), ...(input.image ? [input.image] : [])]
     return askCodex<EditResponse>({
-      prompt: [SYSTEM, '', FORMAT_NOTE, '', images.length ? `As ${images.length} imagens anexadas à mensagem são, na ordem: ${[...(input.attachments ?? []).map((a) => a.name), ...(input.previews ?? []).map((_, i) => `slide ${i + 1} do post`), ...(input.references ?? []).flatMap((r) => (r.images ?? []).map((__, i) => `${r.label} (${i + 1})`)), ...(input.image ? ['o slide selecionado'] : [])].join(', ')}.` : '', '', promptOf(input)].join('\n'),
+      prompt: [withPersona(SYSTEM, input.persona), '', FORMAT_NOTE, '', images.length ? `As ${images.length} imagens anexadas à mensagem são, na ordem: ${[...(input.attachments ?? []).map((a) => a.name), ...(input.previews ?? []).map((_, i) => `slide ${i + 1} do post`), ...(input.references ?? []).flatMap((r) => (r.images ?? []).map((__, i) => `${r.label} (${i + 1})`)), ...(input.image ? ['o slide selecionado'] : [])].join(', ')}.` : '', '', promptOf(input)].join('\n'),
       images,
       signal,
       onStep,
@@ -90,7 +91,7 @@ export const editCreatives = (input: EditRequest, signal?: AbortSignal, onStep?:
     })
   }
   return askClaude<EditResponse>({
-    system: SYSTEM,
+    system: withPersona(SYSTEM, input.persona),
     schema: EDIT_SCHEMA,
     content: [...(input.attachments ?? []).flatMap((a) => imageBlock(a.data)), ...(input.previews ?? []).flatMap((p) => imageBlock(p)), ...(input.references ?? []).flatMap((r) => (r.images ?? []).flatMap((x) => imageBlock(x))), ...imageBlock(input.image), { type: 'text', text: promptOf(input) }],
     timeoutMs: hasLink(input) ? 480_000 : 360_000,

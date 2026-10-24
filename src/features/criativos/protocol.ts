@@ -15,7 +15,7 @@ export const CREATIVE_EVENTS = {
 
 export interface CreativeCall {
   id: string
-  kind: 'edit' | 'plan' | 'image' | 'download' | 'capture' | 'copy' | 'copy-slides' | 'copy-plan'
+  kind: 'edit' | 'plan' | 'image' | 'download' | 'capture' | 'copy' | 'copy-slides' | 'copy-plan' | 'agent'
   request: unknown
 }
 

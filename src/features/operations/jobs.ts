@@ -10,13 +10,14 @@ import { openPreview } from './Preview'
  * trabalho (documento, conjunto de criativos…).
  */
 
-export type Area = 'criativos' | 'copy' | 'landing' | 'sites'
+export type Area = 'criativos' | 'copy' | 'landing' | 'sites' | 'comercial'
 
 export const AREAS: Record<Area, { label: string; hint: string }> = {
   criativos: { label: 'Criativos', hint: 'Posts, carrosséis e stories' },
   copy: { label: 'Copy', hint: 'Pesquisas e textos' },
   landing: { label: 'Landing pages', hint: 'Copy e páginas de captação' },
   sites: { label: 'Sites', hint: 'Projetos e páginas no Space' },
+  comercial: { label: 'Comercial', hint: 'Funil, prospecção e abordagens' },
 }
 
 export interface Job {

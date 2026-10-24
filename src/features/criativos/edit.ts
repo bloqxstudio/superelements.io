@@ -90,6 +90,8 @@ export interface EditOp {
 export interface EditRequest {
   /** Qual IA desta máquina faz o trabalho. */
   agent?: 'claude' | 'codex'
+  /** Perfil do agente (quem é, como trabalha, regras). */
+  persona?: string
   message: string
   /** Escopo da conversa: o que estava selecionado. */
   scope: 'layer' | 'slide' | 'post' | 'set'

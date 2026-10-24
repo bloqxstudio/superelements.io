@@ -6,6 +6,7 @@ import { CHAT_AGENT_IDS, CHAT_AGENTS, type ChatAgentId, type ChatConversation, t
 import { updateOpportunity } from './api'
 import type { Opportunity } from './funnel'
 import { displayName } from './offer'
+import { personaFor } from '@/features/ia/perfis'
 import { PAGE_SKILL, projectBriefing, requestText, resumeText } from './pageTask'
 
 /**
@@ -55,7 +56,7 @@ export async function startPageBuild(o: Opportunity, agent: ChatAgentId): Promis
     agent,
     text: existing ? resumeText(o) : requestText(o),
     context: { sections: [] },
-    skill: PAGE_SKILL,
+    skill: { ...PAGE_SKILL, instructions: `${PAGE_SKILL.instructions}\n\n## Seu perfil e as regras da equipe\n${personaFor('gabi')}` },
     task: { kind: 'prospect', opportunityId: o.id },
   })
   return { ...updated, lead: o.lead }

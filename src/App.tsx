@@ -12,6 +12,7 @@ import NotFound from "@/pages/NotFound";
 import Projects from "@/pages/Projects";
 import ProjectSpace from "@/pages/ProjectSpace";
 import Agents from "@/pages/Agents";
+import AgentSetup from "@/pages/AgentSetup";
 import AgentWorker from "@/pages/AgentWorker";
 import Prospects from "@/pages/Prospects";
 import Skills from "@/pages/Skills";
@@ -102,6 +103,7 @@ function App() {
                 <Route path="projetos/:projectId" element={<ProjectSpace />} />
                 {/* Os agentes trabalhando agora, cada um no seu projeto */}
                 <Route path="agentes" element={<Agents />} />
+                <Route path="agentes/configurar" element={<AgentSetup />} />
                 {/* As skills do chat dos agentes: padrão, da equipe e as suas */}
                 <Route path="skills" element={<Skills />} />
                 {/* Posts de Instagram na marca de cada projeto: editor de camadas e exportação */}
