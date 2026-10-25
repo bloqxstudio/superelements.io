@@ -305,7 +305,8 @@ interface PendingAccount {
   connected: boolean
 }
 
-const ACCOUNT_FIELDS = 'id,account_id,name,currency,timezone_name,account_status,business{name}'
+// Business metadata requires business_management; ads_read is enough for accounts and reports.
+const ACCOUNT_FIELDS = 'id,account_id,name,currency,timezone_name,account_status'
 
 /** Guarda o login por 30 minutos e devolve as contas que ele enxerga, para a pessoa escolher. */
 async function hold(ctx: Ctx, teamId: string, grant: Grant) {
