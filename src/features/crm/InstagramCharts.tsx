@@ -52,8 +52,11 @@ export const TrendChart: React.FC<{
   fromMin?: boolean
   /** Valor na dica (dinheiro); sem ele, o número com `unit` ao lado. */
   format?: (n: number) => string
+  /** Rótulos de outro eixo que não dias (`14h`); sem eles, `day` é uma data. */
+  short?: (key: string) => string
+  long?: (key: string) => string
   className?: string
-}> = ({ points, unit, label, tone = 'light', area = true, height = 240, fromMin, format, className }) => {
+}> = ({ points, unit, label, tone = 'light', area = true, height = 240, fromMin, format, short = shortDay, long = longDay, className }) => {
   const box = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
   const [active, setActive] = useState<number | null>(null)
@@ -132,7 +135,7 @@ export const TrendChart: React.FC<{
           ))}
           {labels.map((i) => (
             <text key={i} x={x(i)} y={height - 6} textAnchor={i === 0 && points.length > 1 ? 'start' : i === points.length - 1 && points.length > 1 ? 'end' : 'middle'} fontSize={11} fill={colors.axis}>
-              {shortDay(points[i].day)}
+              {short(points[i].day)}
             </text>
           ))}
           {area && fill && <path d={fill} fill={colors.fill} />}
@@ -154,7 +157,7 @@ export const TrendChart: React.FC<{
           <p className="text-sm font-semibold tabular-nums text-gray-900">
             {format ? format(current.value) : current.value.toLocaleString('pt-BR')} {unit && <span className="font-normal text-gray-500">{unit}</span>}
           </p>
-          <p className="text-xs text-gray-500">{longDay(current.day)}</p>
+          <p className="text-xs text-gray-500">{long(current.day)}</p>
         </div>
       )}
       <table className="sr-only">
@@ -162,7 +165,7 @@ export const TrendChart: React.FC<{
         <tbody>
           {points.map((p) => (
             <tr key={p.day}>
-              <th scope="row">{longDay(p.day)}</th>
+              <th scope="row">{long(p.day)}</th>
               <td>{p.value}</td>
             </tr>
           ))}

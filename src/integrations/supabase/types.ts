@@ -584,6 +584,186 @@ export type Database = {
         }
         Relationships: []
       }
+      site_trackers: {
+        Row: {
+          id: string
+          team_id: string
+          name: string
+          domain: string
+          created_by: string | null
+          created_at: string
+          last_seen_at: string | null
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          name?: string
+          domain: string
+          created_by?: string | null
+          created_at?: string
+          last_seen_at?: string | null
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          name?: string
+          domain?: string
+          created_by?: string | null
+          created_at?: string
+          last_seen_at?: string | null
+        }
+        Relationships: []
+      }
+      site_sessions: {
+        Row: {
+          id: string
+          site_id: string
+          team_id: string
+          visitor_id: string
+          visit_number: number
+          started_at: string
+          last_at: string
+          landing_path: string | null
+          exit_path: string | null
+          referrer: string | null
+          referrer_host: string | null
+          channel: string
+          source: string | null
+          medium: string | null
+          campaign: string | null
+          term: string | null
+          content: string | null
+          click_id: string | null
+          device: string | null
+          browser: string | null
+          os: string | null
+          country: string | null
+          tz: string | null
+          lang: string | null
+          screen: string | null
+          pageviews: number
+          events: number
+          active_ms: number
+          converted: boolean
+          conversions: string[]
+        }
+        Insert: {
+          id: string
+          site_id: string
+          team_id: string
+          visitor_id: string
+          visit_number?: number
+          started_at?: string
+          last_at?: string
+          landing_path?: string | null
+          exit_path?: string | null
+          referrer?: string | null
+          referrer_host?: string | null
+          channel?: string
+          source?: string | null
+          medium?: string | null
+          campaign?: string | null
+          term?: string | null
+          content?: string | null
+          click_id?: string | null
+          device?: string | null
+          browser?: string | null
+          os?: string | null
+          country?: string | null
+          tz?: string | null
+          lang?: string | null
+          screen?: string | null
+          pageviews?: number
+          events?: number
+          active_ms?: number
+          converted?: boolean
+          conversions?: string[]
+        }
+        Update: {
+          id?: string
+          site_id?: string
+          team_id?: string
+          visitor_id?: string
+          visit_number?: number
+          started_at?: string
+          last_at?: string
+          landing_path?: string | null
+          exit_path?: string | null
+          referrer?: string | null
+          referrer_host?: string | null
+          channel?: string
+          source?: string | null
+          medium?: string | null
+          campaign?: string | null
+          term?: string | null
+          content?: string | null
+          click_id?: string | null
+          device?: string | null
+          browser?: string | null
+          os?: string | null
+          country?: string | null
+          tz?: string | null
+          lang?: string | null
+          screen?: string | null
+          pageviews?: number
+          events?: number
+          active_ms?: number
+          converted?: boolean
+          conversions?: string[]
+        }
+        Relationships: []
+      }
+      site_events: {
+        Row: {
+          id: number
+          session_id: string
+          site_id: string
+          team_id: string
+          visitor_id: string
+          at: string
+          type: string
+          pv: string | null
+          name: string | null
+          path: string | null
+          title: string | null
+          data: Json
+          active_ms: number | null
+          scroll: number | null
+        }
+        Insert: {
+          id?: never
+          session_id: string
+          site_id: string
+          team_id: string
+          visitor_id: string
+          at?: string
+          type: string
+          pv?: string | null
+          name?: string | null
+          path?: string | null
+          title?: string | null
+          data?: Json
+          active_ms?: number | null
+          scroll?: number | null
+        }
+        Update: {
+          id?: never
+          session_id?: string
+          site_id?: string
+          team_id?: string
+          visitor_id?: string
+          at?: string
+          type?: string
+          pv?: string | null
+          name?: string | null
+          path?: string | null
+          title?: string | null
+          data?: Json
+          active_ms?: number | null
+          scroll?: number | null
+        }
+        Relationships: []
+      }
       crm_ad_reports: {
         Row: {
           account_id: string
@@ -2554,6 +2734,10 @@ export type Database = {
         Returns: { user_id: string; email: string; role: string; joined_at: string }[]
       }
       get_crm_invite: { Args: { p_id: string }; Returns: Json }
+      site_report: {
+        Args: { p_site: string; p_from: string; p_to: string; p_tz?: string }
+        Returns: Json
+      }
       accept_space_invite: { Args: { p_id: string }; Returns: string }
       get_page_share: { Args: { p_id: string }; Returns: Json }
       get_space_invite: { Args: { p_id: string }; Returns: Json }

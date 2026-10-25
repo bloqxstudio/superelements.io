@@ -1,1 +1,5 @@
 project_id = "nfmfcpcwyavutntnrxqq"
+
+# Visitas do site: o visitante não tem conta, então a função recebe sem JWT (ela confere o domínio do site)
+[functions.site-visitas]
+verify_jwt = false

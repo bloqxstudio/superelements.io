@@ -31,6 +31,7 @@ import CrmTeam from "@/pages/crm/Team";
 import CrmSocial from "@/pages/crm/Social";
 import CrmDiagnosis from "@/pages/crm/Diagnosis";
 import CrmInstagram from "@/pages/crm/Instagram";
+import CrmSite from "@/pages/crm/Site";
 import InstagramCallback from "@/pages/InstagramCallback";
 import AdsCallback from "@/pages/AdsCallback";
 import { CrmGate } from "@/features/crm/CrmGate";
@@ -129,6 +130,8 @@ function App() {
                 <Route path="crm/diagnostico" element={<CrmGate><CrmDiagnosis /></CrmGate>} />
                 {/* O Instagram da equipe pela API oficial da Meta: números, posts, publicar e comentários */}
                 <Route path="crm/instagram" element={<CrmGate><CrmInstagram /></CrmGate>} />
+                {/* As visitas do site da equipe, contadas pelo script visitas.js colado no WordPress */}
+                <Route path="crm/site" element={<CrmGate><CrmSite /></CrmGate>} />
                 {/* Buscas da equipe na nuvem; a varredura pesada continua no app local. */}
                 <Route path="prospeccao" element={<CrmGate><Prospects /></CrmGate>} />
               </Route>
