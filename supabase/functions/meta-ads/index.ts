@@ -305,12 +305,25 @@ interface PendingAccount {
   connected: boolean
 }
 
-const ACCOUNT_FIELDS = 'id,account_id,name,currency,timezone_name,account_status,business{name}'
+const ACCOUNT_FIELDS = 'id,account_id,name,currency,timezone_name,account_status'
+
+/**
+ * Lê com o nome do negócio dono da conta; esse campo pede a permissão
+ * `business_management`, que o login só com `ads_read` não tem: aí lê sem ele.
+ */
+async function withBusiness<T>(read: (fields: string) => Promise<T>, fields: string): Promise<T> {
+  try {
+    return await read(`${fields},business{name}`)
+  } catch (error) {
+    if (!(error instanceof HttpError) || error.code !== 'field') throw error
+    return read(fields)
+  }
+}
 
 /** Guarda o login por 30 minutos e devolve as contas que ele enxerga, para a pessoa escolher. */
 async function hold(ctx: Ctx, teamId: string, grant: Grant) {
   const me = await graph<{ name?: string }>('me', grant.token, { fields: 'name' }).catch(() => ({ name: undefined }) as { name?: string })
-  const found = await all<AdAccount>('me/adaccounts', grant.token, { fields: ACCOUNT_FIELDS, limit: 200 }, 1000)
+  const found = await withBusiness((fields) => all<AdAccount>('me/adaccounts', grant.token, { fields, limit: 200 }, 1000), ACCOUNT_FIELDS)
   if (!found.length)
     throw new HttpError(
       'Esse acesso não enxerga nenhuma conta de anúncios. Confira se quem entrou tem acesso à conta (no Gerenciador de Negócios) e se a permissão ads_read foi aceita.',
@@ -558,7 +571,7 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
     }
   }
 
-  const info = await graph<AdAccount & { disable_reason?: number }>(`act_${act}`, token, { fields: 'name,account_id,currency,timezone_name,account_status,disable_reason,business{name}' })
+  const info = await withBusiness((fields) => graph<AdAccount & { disable_reason?: number }>(`act_${act}`, token, { fields }), 'name,account_id,currency,timezone_name,account_status,disable_reason')
   const currency = info.currency || account.currency || 'BRL'
   const base: Params = { date_preset: preset }
 
