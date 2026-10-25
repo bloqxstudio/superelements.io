@@ -32,6 +32,7 @@ import CrmSocial from "@/pages/crm/Social";
 import CrmDiagnosis from "@/pages/crm/Diagnosis";
 import CrmInstagram from "@/pages/crm/Instagram";
 import InstagramCallback from "@/pages/InstagramCallback";
+import AdsCallback from "@/pages/AdsCallback";
 import { CrmGate } from "@/features/crm/CrmGate";
 import MenuzitoModel from "@/pages/MenuzitoModel";
 import MenuzitoStyleGuide from "@/pages/MenuzitoStyleGuide";
@@ -68,6 +69,8 @@ function App() {
               <Route path="/wordpress/retorno" element={<WordPressCallback />} />
               {/* Volta do login do Instagram: troca o código pelo acesso da conta da equipe */}
               <Route path="/instagram/retorno" element={<ProtectedRoute><InstagramCallback /></ProtectedRoute>} />
+              {/* Volta do login do Facebook: escolher as contas de anúncios da equipe */}
+              <Route path="/anuncios/retorno" element={<ProtectedRoute><AdsCallback /></ProtectedRoute>} />
               {/* Link de aprovação: o cliente abre sem login */}
               <Route path="/aprovar/:shareId" element={<PageApproval />} />
               {/* Convite para editar um projeto junto: mostra o convite antes do login */}

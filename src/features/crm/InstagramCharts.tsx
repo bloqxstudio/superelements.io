@@ -50,8 +50,10 @@ export const TrendChart: React.FC<{
   height?: number
   /** Eixo começa no menor valor (seguidores), não no zero. */
   fromMin?: boolean
+  /** Valor na dica (dinheiro); sem ele, o número com `unit` ao lado. */
+  format?: (n: number) => string
   className?: string
-}> = ({ points, unit, label, tone = 'light', area = true, height = 240, fromMin, className }) => {
+}> = ({ points, unit, label, tone = 'light', area = true, height = 240, fromMin, format, className }) => {
   const box = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
   const [active, setActive] = useState<number | null>(null)
@@ -150,7 +152,7 @@ export const TrendChart: React.FC<{
           style={flip ? { right: width - tipLeft + 12 } : { left: tipLeft + 12 }}
         >
           <p className="text-sm font-semibold tabular-nums text-gray-900">
-            {current.value.toLocaleString('pt-BR')} <span className="font-normal text-gray-500">{unit}</span>
+            {format ? format(current.value) : current.value.toLocaleString('pt-BR')} {unit && <span className="font-normal text-gray-500">{unit}</span>}
           </p>
           <p className="text-xs text-gray-500">{longDay(current.day)}</p>
         </div>
@@ -169,6 +171,16 @@ export const TrendChart: React.FC<{
     </div>
   )
 }
+
+/** Um número grande com o rótulo em cima e o contexto embaixo (o primeiro da fileira vem escuro). */
+export const Stat: React.FC<{ label: string; value: string; sub?: React.ReactNode; dark?: boolean; children?: React.ReactNode }> = ({ label, value, sub, dark, children }) => (
+  <div className={cn('flex min-h-[124px] flex-col rounded-xl p-4', dark ? 'bg-zinc-900 text-white' : 'bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)]')}>
+    <p className={cn('text-xs font-medium', dark ? 'text-zinc-300' : 'text-gray-500')}>{label}</p>
+    <p className={cn('mt-1 text-[28px] font-semibold leading-tight tracking-tight', dark ? 'text-white' : 'text-gray-900')}>{value}</p>
+    {sub && <p className={cn('mt-auto pt-2 text-xs', dark ? 'text-zinc-400' : 'text-gray-500')}>{sub}</p>}
+    {children}
+  </div>
+)
 
 /** Linha mínima, sem eixos, para a tendência dentro de um cartão de número. */
 export const Sparkline: React.FC<{ values: number[]; color?: string; className?: string }> = ({ values, color = 'currentColor', className }) => {

@@ -524,6 +524,90 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_ad_accounts: {
+        Row: {
+          id: string
+          team_id: string
+          ad_account_id: string
+          name: string
+          currency: string
+          timezone_name: string | null
+          account_status: number | null
+          business_name: string | null
+          connected_by: string | null
+          connected_name: string | null
+          connected_at: string
+          token_kind: string | null
+          token_expires_at: string | null
+          synced_at: string | null
+          sync_error: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          ad_account_id: string
+          name?: string
+          currency?: string
+          timezone_name?: string | null
+          account_status?: number | null
+          business_name?: string | null
+          connected_by?: string | null
+          connected_name?: string | null
+          connected_at?: string
+          token_kind?: string | null
+          token_expires_at?: string | null
+          synced_at?: string | null
+          sync_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          ad_account_id?: string
+          name?: string
+          currency?: string
+          timezone_name?: string | null
+          account_status?: number | null
+          business_name?: string | null
+          connected_by?: string | null
+          connected_name?: string | null
+          connected_at?: string
+          token_kind?: string | null
+          token_expires_at?: string | null
+          synced_at?: string | null
+          sync_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_ad_reports: {
+        Row: {
+          account_id: string
+          team_id: string
+          preset: string
+          data: Json
+          fetched_at: string
+        }
+        Insert: {
+          account_id: string
+          team_id: string
+          preset: string
+          data?: Json
+          fetched_at?: string
+        }
+        Update: {
+          account_id?: string
+          team_id?: string
+          preset?: string
+          data?: Json
+          fetched_at?: string
+        }
+        Relationships: []
+      }
       analytics_config: {
         Row: {
           connection_id: string
