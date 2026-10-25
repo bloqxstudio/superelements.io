@@ -1,10 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CircleAlert, Copy, ExternalLink, Facebook, KeyRound, Loader2, Megaphone, Plus, RefreshCw } from 'lucide-react'
+import { ChevronDown, CircleAlert, Copy, ExternalLink, Eye, Facebook, Instagram as InstagramIcon, KeyRound, ListFilter, Loader2, Megaphone, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { Chip } from '@/features/prospects/ui'
-import { BarList, Sparkline, Stat, TrendChart, type Point } from './InstagramCharts'
+import { BarList, Sparkline, TrendChart, type Point } from './InstagramCharts'
 import { compact, percent } from './instagram'
 import { nameOf, useTeamPeople } from './people'
 import { FIELD, Surface, dayLabel, plural, whenLabel } from './ui'
@@ -17,7 +30,9 @@ import {
   NoAdTablesError,
   OBJECTIVE_LABEL,
   PLATFORM_LABEL,
+  PREVIEW_FORMATS,
   PRESET_LABEL,
+  adsManagerAdUrl,
   adsManagerUrl,
   adsRedirectUri,
   adsStatus,
@@ -25,11 +40,11 @@ import {
   chooseAdAccounts,
   connectAdsWithToken,
   contactsOf,
-  costPerContact,
   cpcOf,
   cpmOf,
   ctrOf,
   disconnectAdAccount,
+  fetchAdPreview,
   fetchAdReport,
   loadAdAccounts,
   loadAdReport,
@@ -41,18 +56,36 @@ import {
   type AdCampaign,
   type AdCreative,
   type AdPreset,
+  type AdPreview,
   type AdReport,
   type AdResult,
-  type AdSlice,
   type Pending,
+  type PreviewFormat,
 } from './ads'
+import {
+  DEFAULT_TILES,
+  METRIC,
+  METRICS,
+  METRIC_GROUPS,
+  formatMetric,
+  saveChart,
+  saveTiles,
+  savedChart,
+  savedTiles,
+  viewOf,
+  type AdView,
+  type Slice,
+  type SubContext,
+} from './adsMetrics'
 
 /**
  * Aba Anúncios da tela do Instagram: as campanhas de Facebook e Instagram da
- * conta de anúncios ligada à equipe, pela API de anúncios da Meta. Investimento,
- * contatos (leads e conversas), alcance, cliques, cada campanha com o resultado
- * e o custo dele, por dia, por plataforma, o público e os anúncios que mais
- * investiram. Só leitura; mudar campanha é no Gerenciador de Anúncios.
+ * conta de anúncios ligada à equipe, pela API de anúncios da Meta. Seis
+ * destaques com a métrica que cada pessoa escolhe (nomes do Gerenciador), o
+ * gráfico por dia de qualquer métrica, o filtro de campanhas (vale para a aba
+ * inteira), cada campanha com o resultado e o custo dele, plataformas, público
+ * e os anúncios, que abrem a prévia nativa da Meta. Só leitura; mudar
+ * campanha é no Gerenciador de Anúncios.
  */
 
 const STALE = 30 * 60_000
@@ -322,17 +355,225 @@ const ResultCell: React.FC<{ result?: AdResult }> = ({ result }) =>
 const budgetLabel = (c: AdCampaign, currency: string) =>
   c.dailyBudget !== undefined ? `${money(c.dailyBudget, currency)}/dia` : c.lifetimeBudget !== undefined ? `${money(c.lifetimeBudget, currency)} no total` : undefined
 
-type CampaignFilter = 'gasto' | 'ativas' | 'todas'
+/** A lista de métricas da Meta, por grupo, para escolher uma. */
+const MetricMenuItems: React.FC<{ value: string; onChange: (key: string) => void }> = ({ value, onChange }) => (
+  <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
+    {METRIC_GROUPS.map((g, i) => (
+      <DropdownMenuGroup key={g}>
+        {i > 0 && <DropdownMenuSeparator />}
+        <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{g}</DropdownMenuLabel>
+        {METRICS.filter((m) => m.group === g).map((m) => (
+          <DropdownMenuRadioItem key={m.key} value={m.key} className="text-[13px]">
+            {m.label}
+          </DropdownMenuRadioItem>
+        ))}
+      </DropdownMenuGroup>
+    ))}
+  </DropdownMenuRadioGroup>
+)
 
-const Campaigns: React.FC<{ report: AdReport; account: AdAccount }> = ({ report, account }) => {
-  const [filter, setFilter] = useState<CampaignFilter>('gasto')
-  const cur = report.currency
-  const counts = {
-    gasto: report.campaigns.filter((c) => c.metrics.spend > 0).length,
-    ativas: report.campaigns.filter((c) => campaignStatus(c.status).live).length,
-    todas: report.campaigns.length,
+const MENU = 'max-h-[min(70vh,560px)] w-72 overflow-y-auto'
+
+/** Um destaque: o nome da métrica abre a lista para trocar (como os cartões do Google Ads). */
+const MetricTile: React.FC<{ metric: string; view: AdView; ctx: SubContext; dark?: boolean; onChange: (key: string) => void; onReset: () => void }> = ({ metric, view, ctx, dark, onChange, onReset }) => {
+  const def = METRIC[metric] ?? METRIC.spend
+  const value = def.get(view.totals)
+  const series = view.days.map((d) => def.get(d.bag)).filter((v): v is number => v !== undefined && Number.isFinite(v))
+  return (
+    <div className={cn('flex min-h-[132px] min-w-0 flex-col rounded-xl p-4', dark ? 'bg-zinc-900 text-white' : 'bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)]')}>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger
+          className={cn(
+            '-mx-1 inline-flex max-w-full items-center gap-1 self-start rounded-md px-1 py-0.5 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            dark ? 'text-zinc-300 hover:bg-white/10 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+          )}
+          title={`${def.label}: trocar a métrica`}
+        >
+          <span className="truncate">{def.short ?? def.label}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className={MENU}>
+          <MetricMenuItems value={def.key} onChange={onChange} />
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={onReset} className="text-[13px] text-gray-600">
+            Voltar os destaques ao padrão
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <p className={cn('mt-1 truncate text-[26px] font-semibold leading-tight tracking-tight tabular-nums', dark ? 'text-white' : 'text-gray-900')}>{formatMetric(def, value, ctx.currency, true)}</p>
+      {def.sub && <p className={cn('mt-auto pt-2 text-xs leading-snug', dark ? 'text-zinc-400' : 'text-gray-500')}>{def.sub(view.totals, ctx)}</p>}
+      {series.length > 1 && <Sparkline values={series} color={dark ? '#fafafa' : '#a1a1aa'} className="mt-2 h-7 w-full" />}
+    </div>
+  )
+}
+
+const Tiles: React.FC<{ view: AdView; ctx: SubContext }> = ({ view, ctx }) => {
+  const [tiles, setTiles] = useState<string[]>(savedTiles)
+  const change = (index: number, key: string) =>
+    setTiles((current) => {
+      const next = current.map((k, i) => (i === index ? key : k))
+      saveTiles(next)
+      return next
+    })
+  const reset = () => {
+    saveTiles(DEFAULT_TILES)
+    setTiles(DEFAULT_TILES)
   }
-  const list = report.campaigns.filter((c) => (filter === 'gasto' ? c.metrics.spend > 0 : filter === 'ativas' ? campaignStatus(c.status).live : true))
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      {tiles.map((key, i) => (
+        <MetricTile key={i} metric={key} view={view} ctx={ctx} dark={i === 0} onChange={(k) => change(i, k)} onReset={reset} />
+      ))}
+    </div>
+  )
+}
+
+/** O gráfico por dia, com a métrica escolhida na lista da Meta. */
+const DayChart: React.FC<{ view: AdView; currency: string }> = ({ view, currency }) => {
+  const [metric, setMetric] = useState(savedChart)
+  const def = METRIC[metric] ?? METRIC.spend
+  const percentKind = def.kind === 'percent'
+  const points: Point[] = view.days.flatMap((d) => {
+    const v = def.get(d.bag)
+    return v === undefined || !Number.isFinite(v) ? [] : [{ day: d.day, value: percentKind ? v * 100 : v }]
+  })
+  const choose = (key: string) => {
+    setMetric(key)
+    saveChart(key)
+  }
+  return (
+    <section className="min-w-0 rounded-xl bg-zinc-900 p-4 text-white md:p-5">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold">{def.label} por dia</h2>
+          <p className="text-xs text-zinc-400">{view.days.length ? `${view.days.length} dias do período` : 'Sem dias no período'}</p>
+        </div>
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger className="inline-flex h-8 max-w-full items-center gap-1.5 rounded-full px-3 text-xs font-medium text-zinc-200 ring-1 ring-inset ring-white/20 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
+            <span className="truncate">{def.short ?? def.label}</span>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className={MENU}>
+            <MetricMenuItems value={def.key} onChange={choose} />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      {points.length ? (
+        <TrendChart
+          points={points}
+          unit=""
+          format={(n) => (percentKind ? `${n.toFixed(2).replace('.', ',')}%` : formatMetric(def, n, currency))}
+          label={`${def.label} por dia`}
+          tone="dark"
+          height={260}
+        />
+      ) : (
+        <p className="flex h-[260px] items-center justify-center text-sm text-zinc-400">Nenhum dia com esse número neste período.</p>
+      )}
+    </section>
+  )
+}
+
+/** Escolher as campanhas que a aba inteira mostra (destaques, gráfico, cortes e anúncios). */
+const CampaignFilter: React.FC<{ campaigns: AdCampaign[]; selected: string[] | null; onChange: (ids: string[] | null) => void; currency: string }> = ({ campaigns, selected, onChange, currency }) => {
+  const [query, setQuery] = useState('')
+  const chosen = new Set(selected ?? [])
+  const names = campaigns.filter((c) => chosen.has(c.id)).map((c) => c.name)
+  const label = !selected ? 'Todas as campanhas' : selected.length === 1 ? (names[0] ?? '1 campanha') : `${selected.length} campanhas`
+  const list = campaigns.filter((c) => !query.trim() || c.name.toLowerCase().includes(query.trim().toLowerCase()))
+  const toggle = (id: string) => {
+    const next = new Set(chosen)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    onChange(next.size ? [...next] : null)
+  }
+  const only = (ids: string[]) => onChange(ids.length ? ids : null)
+  return (
+    <div className="flex min-w-0 items-center gap-1">
+      <DropdownMenu modal={false} onOpenChange={(open) => !open && setQuery('')}>
+        <DropdownMenuTrigger
+          className={cn(
+            'inline-flex h-9 min-w-0 max-w-[280px] items-center gap-2 rounded-full px-3.5 text-xs font-medium ring-1 ring-inset transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            selected ? 'bg-gray-900 text-white ring-gray-900' : 'bg-white text-gray-700 ring-gray-200 hover:text-gray-900'
+          )}
+        >
+          <ListFilter className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span className="truncate">{label}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-80 p-0">
+          <div className="border-b border-gray-100 p-2">
+            <label className="flex items-center gap-2 rounded-md bg-zinc-50 px-2">
+              <Search className="h-3.5 w-3.5 text-gray-400" aria-hidden />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                placeholder="Buscar campanha"
+                aria-label="Buscar campanha"
+                className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400"
+              />
+            </label>
+          </div>
+          <div className="p-1">
+            <DropdownMenuItem onSelect={() => onChange(null)} className="text-[13px]">
+              Todas as campanhas
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => only(campaigns.filter((c) => campaignStatus(c.status).live).map((c) => c.id))} className="text-[13px]">
+              Só as ativas
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => only(campaigns.filter((c) => c.metrics.spend > 0).map((c) => c.id))} className="text-[13px]">
+              Só as que investiram no período
+            </DropdownMenuItem>
+          </div>
+          <DropdownMenuSeparator className="my-0" />
+          <div className="max-h-[min(50vh,360px)] overflow-y-auto p-1">
+            {list.map((c) => {
+              const status = campaignStatus(c.status)
+              return (
+                <DropdownMenuCheckboxItem
+                  key={c.id}
+                  checked={chosen.has(c.id)}
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    toggle(c.id)
+                  }}
+                  className="items-start py-2 text-[13px]"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="line-clamp-2 text-gray-900">{c.name}</span>
+                    <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-gray-500">
+                      <span className={cn('h-1.5 w-1.5 rounded-full', status.warn ? 'bg-amber-500' : status.live ? 'bg-emerald-500' : 'bg-gray-300')} aria-hidden />
+                      {status.label}
+                      {c.metrics.spend > 0 ? ` · ${money(c.metrics.spend, currency)}` : ''}
+                    </span>
+                  </span>
+                </DropdownMenuCheckboxItem>
+              )
+            })}
+            {!list.length && <p className="px-2 py-3 text-sm text-gray-500">Nenhuma campanha com esse nome.</p>}
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {selected && (
+        <button type="button" onClick={() => onChange(null)} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Mostrar todas as campanhas" title="Mostrar todas as campanhas">
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+type CampaignListFilter = 'gasto' | 'ativas' | 'todas'
+
+const Campaigns: React.FC<{ view: AdView; account: AdAccount; currency: string; filtered: boolean; onOnly: (id: string) => void }> = ({ view, account, currency, filtered, onOnly }) => {
+  const [filter, setFilter] = useState<CampaignListFilter>('gasto')
+  const counts = {
+    gasto: view.campaigns.filter((c) => c.metrics.spend > 0).length,
+    ativas: view.campaigns.filter((c) => campaignStatus(c.status).live).length,
+    todas: view.campaigns.length,
+  }
+  const list = view.campaigns.filter((c) => (filter === 'gasto' ? c.metrics.spend > 0 : filter === 'ativas' ? campaignStatus(c.status).live : true))
   return (
     <Surface
       title="Campanhas"
@@ -343,7 +584,7 @@ const Campaigns: React.FC<{ report: AdReport; account: AdAccount }> = ({ report,
               ['gasto', 'Com investimento'],
               ['ativas', 'Ativas'],
               ['todas', 'Todas'],
-            ] as [CampaignFilter, string][]
+            ] as [CampaignListFilter, string][]
           ).map(([key, label]) => (
             <Chip key={key} active={filter === key} onClick={() => setFilter(key)} className="h-7 px-2.5 text-xs">
               {label} <span className="tabular-nums opacity-60">{counts[key]}</span>
@@ -354,48 +595,58 @@ const Campaigns: React.FC<{ report: AdReport; account: AdAccount }> = ({ report,
     >
       {list.length ? (
         <div className="-mx-1 overflow-x-auto px-1">
-          <table className="w-full min-w-[640px] text-left">
+          <table className="w-full min-w-[680px] text-left">
             <thead>
               <tr className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
                 <th className="pb-2 pr-3 font-medium">Campanha</th>
-                <th className="px-3 pb-2 text-right font-medium">Investimento</th>
-                <th className="px-3 pb-2 text-right font-medium">Resultado</th>
+                <th className="px-3 pb-2 text-right font-medium">Valor usado</th>
+                <th className="px-3 pb-2 text-right font-medium">Resultados</th>
                 <th className="px-3 pb-2 text-right font-medium">Custo por resultado</th>
                 <th className="hidden px-3 pb-2 text-right font-medium md:table-cell">Cliques no link</th>
-                <th className="pb-2 pl-3 text-right font-medium">CTR</th>
+                <th className="px-3 pb-2 text-right font-medium">CTR</th>
+                <th className="w-8 pb-2 pl-1" aria-label="Gerenciador" />
               </tr>
             </thead>
             <tbody>
               {list.map((c) => {
                 const status = campaignStatus(c.status)
-                const budget = budgetLabel(c, cur)
+                const budget = budgetLabel(c, currency)
                 return (
                   <tr key={c.id} className="border-t border-gray-100 align-top">
                     <td className="min-w-[220px] py-2.5 pr-3">
                       <div className="flex min-w-0 items-start gap-2">
                         <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', status.warn ? 'bg-amber-500' : status.live ? 'bg-emerald-500' : 'bg-gray-300')} aria-hidden />
                         <div className="min-w-0">
-                          <a
-                            href={adsManagerUrl(account.adAccountId, c.id)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="group inline-flex max-w-full items-center gap-1 text-sm text-gray-900 hover:underline"
-                            title="Abrir no Gerenciador de Anúncios"
-                          >
-                            <span className="line-clamp-2">{c.name}</span>
-                            <ExternalLink className="h-3 w-3 shrink-0 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
-                          </a>
+                          {filtered && view.campaigns.length === 1 ? (
+                            <span className="line-clamp-2 text-sm text-gray-900">{c.name}</span>
+                          ) : (
+                            <button type="button" onClick={() => onOnly(c.id)} className="line-clamp-2 text-left text-sm text-gray-900 hover:underline" title="Ver só esta campanha">
+                              {c.name}
+                            </button>
+                          )}
                           <p className="text-xs text-gray-500">{[status.label, c.objective ? (OBJECTIVE_LABEL[c.objective] ?? c.objective) : undefined, budget].filter(Boolean).join(' · ')}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-right text-sm tabular-nums text-gray-900">{money(c.metrics.spend, cur)}</td>
+                    <td className="px-3 py-2.5 text-right text-sm tabular-nums text-gray-900">{money(c.metrics.spend, currency)}</td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums">
                       <ResultCell result={c.result} />
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-gray-700">{resultCost(c.result, cur)}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-gray-700">{resultCost(c.result, currency)}</td>
                     <td className="hidden px-3 py-2.5 text-right text-sm tabular-nums text-gray-700 md:table-cell">{compact(c.metrics.linkClicks)}</td>
-                    <td className="py-2.5 pl-3 text-right text-sm tabular-nums text-gray-700">{percent(ctrOf(c.metrics))}</td>
+                    <td className="px-3 py-2.5 text-right text-sm tabular-nums text-gray-700">{percent(ctrOf(c.metrics))}</td>
+                    <td className="py-2 pl-1 text-right">
+                      <a
+                        href={adsManagerUrl(account.adAccountId, c.id)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-900"
+                        aria-label={`Abrir ${c.name} no Gerenciador de Anúncios`}
+                        title="Abrir no Gerenciador de Anúncios"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </td>
                   </tr>
                 )
               })}
@@ -403,60 +654,199 @@ const Campaigns: React.FC<{ report: AdReport; account: AdAccount }> = ({ report,
           </table>
         </div>
       ) : (
-        <p className="text-sm text-gray-500">{filter === 'gasto' ? 'Nenhuma campanha investiu neste período.' : filter === 'ativas' ? 'Nenhuma campanha ativa agora.' : 'Nenhuma campanha nesta conta.'}</p>
+        <p className="text-sm text-gray-500">{filter === 'gasto' ? 'Nenhuma campanha investiu neste período.' : filter === 'ativas' ? 'Nenhuma campanha ativa agora.' : 'Nenhuma campanha.'}</p>
       )}
+      {!filtered && list.length > 1 && <p className="mt-3 text-[11px] text-gray-400">Clique no nome de uma campanha para ver a aba só com ela.</p>}
     </Surface>
   )
 }
 
-const TopAds: React.FC<{ report: AdReport }> = ({ report }) => {
-  const cur = report.currency
+const PreviewMetric: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div className="rounded-lg bg-zinc-50 px-3 py-2">
+    <p className="text-[11px] text-gray-500">{label}</p>
+    <p className="text-sm font-semibold tabular-nums text-gray-900">{value}</p>
+  </div>
+)
+
+type PreviewState = { status: 'loading' } | { status: 'ok'; preview: AdPreview } | { status: 'error'; message: string }
+
+/** O anúncio aberto: a prévia nativa da Meta em cada formato, os números e os atalhos. */
+const AdPreviewDialog: React.FC<{ ad: AdCreative; account: AdAccount; currency: string; onClose: () => void }> = ({ ad, account, currency, onClose }) => {
+  const [format, setFormat] = useState<PreviewFormat>('INSTAGRAM_STANDARD')
+  const [states, setStates] = useState<Partial<Record<PreviewFormat, PreviewState>>>({})
+  const box = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(340)
+
+  useEffect(() => {
+    if (states[format]) return
+    setStates((s) => ({ ...s, [format]: { status: 'loading' } }))
+    fetchAdPreview(account.id, ad.id, format).then(
+      (preview) => setStates((s) => ({ ...s, [format]: { status: 'ok', preview } })),
+      (error) => setStates((s) => ({ ...s, [format]: { status: 'error', message: errorText(error) } }))
+    )
+  }, [format, states, account.id, ad.id])
+
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    setWidth(el.clientWidth)
+    const observer = new ResizeObserver(() => setWidth(el.clientWidth))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  const state = states[format]
+  const frameW = state?.status === 'ok' ? (state.preview.width ?? 540) : 540
+  const frameH = state?.status === 'ok' ? (state.preview.height ?? 690) : 690
+  const scale = Math.min(1, width / frameW)
+  const m = ad.metrics
+
   return (
-    <Surface title="Anúncios que mais investiram">
-      {report.ads.length ? (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto p-0">
+        <div className="grid md:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+          <div className="min-w-0 bg-zinc-100 p-4">
+            <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Formato da prévia">
+              {PREVIEW_FORMATS.map((f) => (
+                <Chip key={f.key} active={format === f.key} onClick={() => setFormat(f.key)} className="h-7 px-2.5 text-xs">
+                  {f.label}
+                </Chip>
+              ))}
+            </div>
+            <div ref={box} className="w-full">
+              {!state || state.status === 'loading' ? (
+                <p className="flex h-80 items-center justify-center gap-2 text-sm text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Gerando a prévia na Meta…
+                </p>
+              ) : state.status === 'error' ? (
+                <div className="flex h-80 flex-col items-center justify-center gap-3 px-4 text-center">
+                  <AdThumb ad={ad} className="h-24 w-24 rounded-lg" />
+                  <p className="text-sm text-gray-600">{state.message}</p>
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-lg bg-white" style={{ height: frameH * scale }}>
+                  <iframe
+                    key={state.preview.src}
+                    src={state.preview.src}
+                    title={`Prévia de ${ad.name}`}
+                    width={frameW}
+                    height={frameH}
+                    scrolling="no"
+                    sandbox="allow-scripts allow-same-origin allow-popups"
+                    className="origin-top-left border-0"
+                    style={{ transform: `scale(${scale})` }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="min-w-0 p-5">
+            <DialogHeader className="space-y-1 text-left">
+              <DialogTitle className="text-base">{ad.name}</DialogTitle>
+              <DialogDescription className="text-xs">{[ad.campaignName, ad.adsetName].filter(Boolean).join(' · ')}</DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <PreviewMetric label="Valor usado" value={money(m.spend, currency)} />
+              <PreviewMetric label="Resultados" value={ad.result ? `${compact(ad.result.value)} ${resultLabel(ad.result.type, ad.result.value)}` : '—'} />
+              <PreviewMetric label="Custo por resultado" value={resultCost(ad.result, currency)} />
+              <PreviewMetric label="Impressões" value={compact(m.impressions)} />
+              <PreviewMetric label="Alcance" value={compact(m.reach)} />
+              <PreviewMetric label="Cliques no link" value={compact(m.linkClicks)} />
+              <PreviewMetric label="CTR (link)" value={percent(ctrOf(m), 2)} />
+              <PreviewMetric label="CPC (link)" value={money(cpcOf(m), currency)} />
+              <PreviewMetric label="CPM" value={money(cpmOf(m), currency)} />
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {ad.previewLink && (
+                <Button variant="outline" size="sm" asChild className="gap-1.5">
+                  <a href={ad.previewLink} target="_blank" rel="noreferrer">
+                    <Eye className="h-4 w-4" /> Prévia na Meta
+                  </a>
+                </Button>
+              )}
+              {ad.permalink && (
+                <Button variant="outline" size="sm" asChild className="gap-1.5">
+                  <a href={ad.permalink} target="_blank" rel="noreferrer">
+                    <InstagramIcon className="h-4 w-4" /> Post no Instagram
+                  </a>
+                </Button>
+              )}
+              <Button variant="outline" size="sm" asChild className="gap-1.5">
+                <a href={adsManagerAdUrl(account.adAccountId, ad.id)} target="_blank" rel="noreferrer">
+                  <ExternalLink className="h-4 w-4" /> Abrir no Gerenciador
+                </a>
+              </Button>
+            </div>
+            <p className="mt-4 text-[11px] text-gray-400">A prévia é a da própria Meta; alguns formatos não valem para todo anúncio (um vídeo vertical não tem feed do Facebook, por exemplo).</p>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+const Ads: React.FC<{ view: AdView; account: AdAccount; currency: string }> = ({ view, account, currency }) => {
+  const [all, setAll] = useState(false)
+  const [open, setOpen] = useState<AdCreative | null>(null)
+  const list = all ? view.ads : view.ads.slice(0, 8)
+  return (
+    <Surface title="Anúncios" action={<span className="text-xs text-gray-400">Clique para ver o criativo</span>}>
+      {view.ads.length ? (
         <div className="-mx-1 overflow-x-auto px-1">
-          <table className="w-full min-w-[520px] text-left">
+          <table className="w-full min-w-[560px] text-left">
             <thead>
               <tr className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
                 <th className="pb-2 pr-3 font-medium">Anúncio</th>
-                <th className="px-3 pb-2 text-right font-medium">Investimento</th>
-                <th className="px-3 pb-2 text-right font-medium">Resultado</th>
+                <th className="px-3 pb-2 text-right font-medium">Valor usado</th>
+                <th className="px-3 pb-2 text-right font-medium">Resultados</th>
                 <th className="px-3 pb-2 text-right font-medium">Custo</th>
                 <th className="pb-2 pl-3 text-right font-medium">CTR</th>
               </tr>
             </thead>
             <tbody>
-              {report.ads.map((ad) => (
-                <tr key={ad.id} className="border-t border-gray-100">
+              {list.map((ad) => (
+                <tr key={ad.id} className="cursor-pointer border-t border-gray-100 transition-colors hover:bg-zinc-50" onClick={() => setOpen(ad)}>
                   <td className="min-w-[220px] py-2 pr-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      {ad.permalink ? (
-                        <a href={ad.permalink} target="_blank" rel="noreferrer" title="Ver no Instagram" className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                          <AdThumb ad={ad} className="h-11 w-11 rounded-md" />
-                        </a>
-                      ) : (
-                        <AdThumb ad={ad} className="h-11 w-11 shrink-0 rounded-md" />
-                      )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setOpen(ad)
+                      }}
+                      className="group flex min-w-0 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="relative shrink-0">
+                        <AdThumb ad={ad} className="h-11 w-11 rounded-md" />
+                        <span className="absolute inset-0 flex items-center justify-center rounded-md bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100" aria-hidden>
+                          <Eye className="h-4 w-4" />
+                        </span>
+                      </span>
                       <span className="min-w-0">
                         <span className="line-clamp-2 text-sm text-gray-900">{ad.name}</span>
                         {ad.campaignName && <span className="line-clamp-1 text-xs text-gray-500">{ad.campaignName}</span>}
                       </span>
-                    </div>
+                    </button>
                   </td>
-                  <td className="px-3 py-2 text-right text-sm tabular-nums text-gray-900">{money(ad.metrics.spend, cur)}</td>
+                  <td className="px-3 py-2 text-right text-sm tabular-nums text-gray-900">{money(ad.metrics.spend, currency)}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right text-sm tabular-nums">
                     <ResultCell result={ad.result} />
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right text-sm tabular-nums text-gray-700">{resultCost(ad.result, cur)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right text-sm tabular-nums text-gray-700">{resultCost(ad.result, currency)}</td>
                   <td className="py-2 pl-3 text-right text-sm tabular-nums text-gray-700">{percent(ctrOf(ad.metrics))}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {view.ads.length > 8 && (
+            <button type="button" onClick={() => setAll((v) => !v)} className="mt-3 text-xs font-medium text-gray-700 hover:underline">
+              {all ? 'Mostrar menos' : `Ver todos os ${view.ads.length} anúncios`}
+            </button>
+          )}
         </div>
       ) : (
-        <p className="text-sm text-gray-500">Nenhum anúncio investiu neste período.</p>
+        <p className="text-sm text-gray-500">{view.campaigns.length < 2 && view.ads.length === 0 && view.totals.spend > 0 ? 'Nenhum anúncio desta campanha está entre os 40 que mais investiram.' : 'Nenhum anúncio investiu neste período.'}</p>
       )}
+      {open && <AdPreviewDialog ad={open} account={account} currency={currency} onClose={() => setOpen(null)} />}
     </Surface>
   )
 }
@@ -464,7 +854,7 @@ const TopAds: React.FC<{ report: AdReport }> = ({ report }) => {
 type AudienceKey = 'ages' | 'genders' | 'regions'
 const AUDIENCE_LABEL: Record<AudienceKey, string> = { ages: 'Idade', genders: 'Gênero', regions: 'Regiões' }
 
-const sliceRows = (slices: AdSlice[], label: (key: string) => string) =>
+const sliceRows = (slices: Slice[], label: (key: string) => string) =>
   slices
     .filter((s) => s.metrics.spend > 0)
     .map((s) => {
@@ -472,12 +862,12 @@ const sliceRows = (slices: AdSlice[], label: (key: string) => string) =>
       return { label: label(s.key), value: s.metrics.spend, note: contacts ? plural(contacts, 'contato', 'contatos') : undefined }
     })
 
-const Audience: React.FC<{ report: AdReport }> = ({ report }) => {
-  const keys = (Object.keys(AUDIENCE_LABEL) as AudienceKey[]).filter((k) => report[k].some((s) => s.metrics.spend > 0))
+const Audience: React.FC<{ view: AdView; currency: string }> = ({ view, currency }) => {
+  const keys = (Object.keys(AUDIENCE_LABEL) as AudienceKey[]).filter((k) => view[k].some((s) => s.metrics.spend > 0))
   const [key, setKey] = useState<AudienceKey | undefined>(keys[0])
   const current = key && keys.includes(key) ? key : keys[0]
   if (!current) return <p className="text-sm text-gray-500">O público aparece quando a conta investe no período.</p>
-  const rows = sliceRows(report[current], (k) => (current === 'genders' ? (GENDER_LABEL[k] ?? k) : k))
+  const rows = sliceRows(view[current], (k) => (current === 'genders' ? (GENDER_LABEL[k] ?? k) : k))
   return (
     <div>
       <div className="mb-4 flex flex-wrap gap-1.5">
@@ -487,84 +877,39 @@ const Audience: React.FC<{ report: AdReport }> = ({ report }) => {
           </Chip>
         ))}
       </div>
-      <BarList rows={current === 'regions' ? rows.slice(0, 8) : rows} format={(n) => money(n, report.currency, true)} />
-      <p className="mt-3 text-[11px] text-gray-400">Investimento em cada grupo no período; contatos ao lado.</p>
+      <BarList rows={current === 'regions' ? rows.slice(0, 8) : rows} format={(n) => money(n, currency, true)} />
+      <p className="mt-3 text-[11px] text-gray-400">Valor usado em cada grupo no período; contatos ao lado.</p>
     </div>
   )
 }
 
-type DayMetric = 'spend' | 'contacts' | 'linkClicks' | 'reach'
-const DAY_METRIC: Record<DayMetric, { label: string; unit: string; text: string }> = {
-  spend: { label: 'Investimento', unit: '', text: 'Quanto a conta investiu em cada dia' },
-  contacts: { label: 'Contatos', unit: 'contatos', text: 'Leads e conversas iniciadas em cada dia' },
-  linkClicks: { label: 'Cliques no link', unit: 'cliques', text: 'Cliques que levaram ao site ou ao WhatsApp' },
-  reach: { label: 'Alcance', unit: 'pessoas', text: 'Pessoas diferentes alcançadas em cada dia' },
-}
-
-const Overview: React.FC<{ report: AdReport; account: AdAccount }> = ({ report, account }) => {
-  const [metric, setMetric] = useState<DayMetric>('spend')
+const Overview: React.FC<{ report: AdReport; account: AdAccount; selected: string[] | null; onSelect: (ids: string[] | null) => void }> = ({ report, account, selected, onSelect }) => {
   const cur = report.currency
-  const t = report.totals
-  const contacts = contactsOf(t)
-  const dayCount = report.days.length || 1
-  const points: Point[] = report.days.map((d) => ({ day: d.day, value: d[metric] }))
-  const platforms = sliceRows(report.platforms, (k) => PLATFORM_LABEL[k] ?? k)
+  const view = useMemo(() => viewOf(report, selected), [report, selected])
+  const ctx: SubContext = { currency: cur, days: view.days.length || 1, approximateReach: view.approximateReach }
+  const platforms = sliceRows(view.platforms, (k) => PLATFORM_LABEL[k] ?? k)
+
+  if (selected && !view.campaigns.length)
+    return (
+      <Surface>
+        <p className="text-sm text-gray-600">As campanhas escolhidas não aparecem neste período.</p>
+        <Button size="sm" variant="outline" className="mt-3" onClick={() => onSelect(null)}>
+          Mostrar todas as campanhas
+        </Button>
+      </Surface>
+    )
 
   return (
     <div className="grid grid-cols-1 gap-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <Stat dark label="Investimento" value={money(t.spend, cur, true)} sub={`${money(t.spend / dayCount, cur)} por dia em média`}>
-          {report.days.length > 1 && <Sparkline values={report.days.map((d) => d.spend)} color="#fafafa" className="mt-2 h-8 w-full" />}
-        </Stat>
-        <Stat
-          label="Contatos"
-          value={compact(contacts)}
-          sub={contacts ? `${money(costPerContact(t), cur)} por contato · ${plural(t.leads, 'lead', 'leads')}, ${plural(t.conversations, 'conversa', 'conversas')}` : 'leads e conversas iniciadas'}
-        />
-        <Stat label="Alcance" value={compact(t.reach)} sub={t.frequency ? `${t.frequency.toFixed(1).replace('.', ',')} vezes por pessoa` : 'pessoas diferentes'} />
-        <Stat label="Cliques no link" value={compact(t.linkClicks)} sub={`CTR ${percent(ctrOf(t))} · ${money(cpcOf(t), cur)} por clique`} />
-        <Stat label="Impressões" value={compact(t.impressions)} sub={`${money(cpmOf(t), cur)} a cada mil`} />
-      </div>
+      <Tiles view={view} ctx={ctx} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <section className="rounded-xl bg-zinc-900 p-4 text-white md:p-5">
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold">{DAY_METRIC[metric].label} por dia</h2>
-              <p className="text-xs text-zinc-400">{DAY_METRIC[metric].text}</p>
-            </div>
-            <div className="flex flex-wrap gap-1" role="group" aria-label="O que mostrar">
-              {(Object.keys(DAY_METRIC) as DayMetric[]).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  aria-pressed={metric === k}
-                  onClick={() => setMetric(k)}
-                  className={cn('h-7 rounded-full px-2.5 text-xs font-medium transition-colors', metric === k ? 'bg-white text-zinc-900' : 'text-zinc-300 ring-1 ring-inset ring-white/15 hover:text-white')}
-                >
-                  {DAY_METRIC[k].label}
-                </button>
-              ))}
-            </div>
-          </div>
-          {points.length ? (
-            <TrendChart
-              points={points}
-              unit={DAY_METRIC[metric].unit}
-              format={metric === 'spend' ? (n) => money(n, cur) : undefined}
-              label={`${DAY_METRIC[metric].label} por dia`}
-              tone="dark"
-              height={260}
-            />
-          ) : (
-            <p className="flex h-[260px] items-center justify-center text-sm text-zinc-400">Nenhum dia com anúncio rodando neste período.</p>
-          )}
-        </section>
+        <DayChart view={view} currency={cur} />
         <Surface title="Onde os anúncios rodaram">
           {platforms.length ? (
             <>
               <BarList rows={platforms} format={(n) => money(n, cur, true)} />
-              <p className="mt-3 text-[11px] text-gray-400">Investimento por plataforma; contatos ao lado.</p>
+              <p className="mt-3 text-[11px] text-gray-400">Valor usado por plataforma; contatos ao lado.</p>
             </>
           ) : (
             <p className="text-sm text-gray-500">Sem investimento neste período.</p>
@@ -572,12 +917,12 @@ const Overview: React.FC<{ report: AdReport; account: AdAccount }> = ({ report, 
         </Surface>
       </div>
 
-      <Campaigns report={report} account={account} />
+      <Campaigns view={view} account={account} currency={cur} filtered={!!selected} onOnly={(id) => onSelect([id])} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <TopAds report={report} />
+        <Ads view={view} account={account} currency={cur} />
         <Surface title="Público">
-          <Audience report={report} />
+          <Audience view={view} currency={cur} />
         </Surface>
       </div>
     </div>
@@ -599,7 +944,10 @@ const AccountArea: React.FC<{
   const [refreshing, setRefreshing] = useState(false)
   const [adding, setAdding] = useState(false)
   const [confirmOff, setConfirmOff] = useState(false)
+  const [selected, setSelected] = useState<string[] | null>(null)
   const autoRefreshed = useRef(new Set<string>())
+
+  useEffect(() => setSelected(null), [account.id])
 
   const refresh = useCallback(
     async (quiet = false) => {
@@ -738,6 +1086,7 @@ const AccountArea: React.FC<{
             </button>
           ))}
         </div>
+        {report && <CampaignFilter campaigns={report.campaigns} selected={selected} onChange={setSelected} currency={report.currency} />}
         {report?.since && report.until && (
           <p className="text-xs text-gray-500">
             {dayLabel(`${report.since}T12:00:00`)} a {dayLabel(`${report.until}T12:00:00`)}
@@ -758,7 +1107,7 @@ const AccountArea: React.FC<{
         </Surface>
       ) : (
         <div className={cn('transition-opacity', refreshing && 'opacity-70')}>
-          <Overview report={report} account={account} />
+          <Overview report={report} account={account} selected={selected} onSelect={setSelected} />
         </div>
       )}
 

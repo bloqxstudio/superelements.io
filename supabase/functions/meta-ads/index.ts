@@ -13,7 +13,10 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
  * o acesso não expira; sem ela, o token de usuário vale 60 dias.
  *
  * O token fica só aqui no servidor (`crm_ad_tokens`, sem acesso do
- * navegador). Cada relatório é gravado em `crm_ad_reports`; a tela lê de lá.
+ * navegador). Cada relatório é gravado em `crm_ad_reports` com os números da
+ * conta e de cada campanha (por dia, plataforma, público e região), para a
+ * tela filtrar campanhas sem nova leitura. `preview` devolve o quadro de
+ * prévia nativo da Meta de um anúncio desta conta.
  * Conectar e ler é de quem é da equipe; desconectar, do gestor.
  *
  * Segredos (Supabase › Edge Functions › Secrets): `META_APP_ID` e
@@ -404,6 +407,7 @@ interface InsightRow {
   objective?: string
   ad_id?: string
   ad_name?: string
+  adset_name?: string
   spend?: string
   impressions?: string
   reach?: string
@@ -433,13 +437,38 @@ interface Metrics {
   linkClicks: number
   leads: number
   conversations: number
-  actions?: Record<string, number>
+  actions: Record<string, number>
 }
 
 const LEAD_TYPES = ['onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead']
 const CONVERSATION = 'onsite_conversion.messaging_conversation_started_7d'
 
-function metricsOf(row: InsightRow | undefined, withActions = false): Metrics {
+// Ações guardadas nos números por dia e nos cortes (plataforma, público, região); o total e as campanhas guardam todas
+const KEPT = new Set([
+  'lead',
+  ...LEAD_TYPES,
+  CONVERSATION,
+  'onsite_conversion.messaging_first_reply',
+  'link_click',
+  'landing_page_view',
+  'post_engagement',
+  'page_engagement',
+  'post_reaction',
+  'comment',
+  'onsite_conversion.post_save',
+  'video_view',
+  'like',
+  'purchase',
+  'omni_purchase',
+  'offsite_conversion.fb_pixel_purchase',
+  'complete_registration',
+  'offsite_conversion.fb_pixel_complete_registration',
+  'contact',
+  'offsite_conversion.fb_pixel_contact',
+  'schedule',
+])
+
+function metricsOf(row: InsightRow | undefined): Metrics {
   const actions: Record<string, number> = {}
   for (const a of row?.actions ?? []) {
     const v = num(a.value)
@@ -456,22 +485,12 @@ function metricsOf(row: InsightRow | undefined, withActions = false): Metrics {
     linkClicks: num(row?.inline_link_clicks) ?? actions.link_click ?? 0,
     leads,
     conversations: actions[CONVERSATION] ?? 0,
-    ...(withActions ? { actions } : {}),
+    actions,
   }
 }
 
-function add(a: Metrics, b: Metrics): Metrics {
-  return {
-    spend: a.spend + b.spend,
-    impressions: a.impressions + b.impressions,
-    clicks: a.clicks + b.clicks,
-    linkClicks: a.linkClicks + b.linkClicks,
-    leads: a.leads + b.leads,
-    conversations: a.conversations + b.conversations,
-  }
-}
-
-const EMPTY: Metrics = { spend: 0, impressions: 0, clicks: 0, linkClicks: 0, leads: 0, conversations: 0 }
+/** Só as ações que a tela usa, para os números por dia e os cortes não pesarem. */
+const lean = (m: Metrics): Metrics => ({ ...m, actions: Object.fromEntries(Object.entries(m.actions).filter(([type]) => KEPT.has(type))) })
 
 interface Result {
   /** Tipo da ação da Meta (`lead`, `link_click`…) ou `reach` */
@@ -507,13 +526,17 @@ function resultOf(row: InsightRow, metrics: Metrics, objective: string | undefin
   }
   if (objective && BY_REACH.has(objective) && metrics.reach) return { type: 'reach', value: metrics.reach, cost: metrics.spend / metrics.reach }
   for (const type of objective ? (BY_OBJECTIVE[objective] ?? []) : []) {
-    const v = metrics.actions?.[type]
+    const v = metrics.actions[type]
     if (v) return { type, value: v, cost: metrics.spend / v }
   }
   return undefined
 }
 
+/** O resultado de um pedaço (um dia) da campanha, pelo tipo de resultado que ela tem no período. */
+const resultIn = (m: Metrics, type: string | undefined) => (!type ? undefined : type === 'reach' ? m.reach : m.actions[type])
+
 const BASE_FIELDS = 'spend,impressions,reach,frequency,clicks,inline_link_clicks,actions'
+const CUT_FIELDS = 'campaign_id,spend,impressions,clicks,inline_link_clicks,actions'
 const RESULT_FIELDS = 'results,cost_per_result'
 
 /** Insights da conta; tenta com `results` (resultado como no Gerenciador) e, se a Meta recusar o campo, sem ele. */
@@ -542,8 +565,37 @@ interface CampaignRow {
   stop_time?: string
 }
 
+interface CreativeInfo {
+  preview_shareable_link?: string
+  creative?: { thumbnail_url?: string; image_url?: string; instagram_permalink_url?: string }
+}
+
+/** Miniatura e links de cada anúncio; se a Meta recusar um campo, pede menos. */
+async function creativesOf(token: string, ids: string[]): Promise<Record<string, CreativeInfo>> {
+  const tries = [
+    'preview_shareable_link,creative{thumbnail_url,image_url,instagram_permalink_url}',
+    'creative{thumbnail_url,image_url,instagram_permalink_url}',
+    'creative{thumbnail_url,image_url}',
+    'creative{thumbnail_url}',
+  ]
+  let failure: unknown
+  for (const fields of tries) {
+    try {
+      return await graph<Record<string, CreativeInfo>>('', token, { ids: ids.join(','), fields })
+    } catch (error) {
+      if (error instanceof HttpError && (error.code === 'token' || error.code === 'rate')) throw error
+      console.warn('[meta-ads] criativos', fields, error)
+      failure = error
+    }
+  }
+  throw failure
+}
+
 // Moedas sem centavos na Meta (o orçamento vem no valor cheio)
 const NO_CENTS = new Set(['CLP', 'COP', 'CRC', 'HUF', 'ISK', 'IDR', 'JPY', 'KRW', 'PYG', 'TWD', 'VND'])
+
+/** Formato dos relatórios: a tela relê os guardados num formato antigo. */
+const REPORT_VERSION = 2
 
 async function report(ctx: Ctx, account: AccountRow, token: string, preset: Preset) {
   const act = account.ad_account_id
@@ -563,33 +615,34 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
   const currency = info.currency || account.currency || 'BRL'
   const base: Params = { date_preset: preset }
 
-  const [totalsRows, dayRows, campaignRows, campaignList] = await Promise.all([
+  // A conta inteira (o alcance não soma entre campanhas) e cada campanha, no total e por dia
+  const [totalsRows, dayRows, campaignRows, campaignList, campaignDayRows] = await Promise.all([
     insights(token, act, { ...base, level: 'account' }, missing),
-    insights(token, act, { ...base, level: 'account', time_increment: 1, fields: 'spend,impressions,reach,clicks,inline_link_clicks,actions' }, missing),
+    insights(token, act, { ...base, level: 'account', time_increment: 1 }, missing),
     insights(token, act, { ...base, level: 'campaign', fields: `campaign_id,campaign_name,objective,${BASE_FIELDS}` }, missing, true),
     optional('campanhas', () => all<CampaignRow>(`act_${act}/campaigns`, token, { fields: 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,start_time,stop_time', limit: 200 }, 500), [] as CampaignRow[]),
+    optional('dias por campanha', () => insights(token, act, { ...base, level: 'campaign', time_increment: 1, fields: `campaign_id,${BASE_FIELDS}` }, missing), [] as InsightRow[]),
   ])
 
+  // Os cortes vêm por campanha, para o filtro de campanhas da tela somar só as escolhidas
   const [platformRows, ageRows, regionRows, adRows] = await Promise.all([
-    optional('plataformas', () => insights(token, act, { ...base, level: 'account', breakdowns: 'publisher_platform', fields: 'spend,impressions,reach,clicks,inline_link_clicks,actions' }, missing), [] as InsightRow[]),
-    optional('público', () => insights(token, act, { ...base, level: 'account', breakdowns: 'age,gender', fields: 'spend,impressions,clicks,inline_link_clicks,actions' }, missing), [] as InsightRow[]),
-    optional('regiões', () => insights(token, act, { ...base, level: 'account', breakdowns: 'region', fields: 'spend,impressions,clicks,inline_link_clicks,actions' }, missing), [] as InsightRow[]),
-    optional('anúncios', () => insights(token, act, { ...base, level: 'ad', fields: `ad_id,ad_name,campaign_id,campaign_name,objective,${BASE_FIELDS}` }, missing, true), [] as InsightRow[]),
+    optional('plataformas', () => insights(token, act, { ...base, level: 'campaign', breakdowns: 'publisher_platform', fields: CUT_FIELDS }, missing), [] as InsightRow[]),
+    optional('público', () => insights(token, act, { ...base, level: 'campaign', breakdowns: 'age,gender', fields: CUT_FIELDS }, missing), [] as InsightRow[]),
+    optional('regiões', () => insights(token, act, { ...base, level: 'campaign', breakdowns: 'region', fields: CUT_FIELDS }, missing), [] as InsightRow[]),
+    optional('anúncios', () => insights(token, act, { ...base, level: 'ad', fields: `ad_id,ad_name,adset_name,campaign_id,campaign_name,objective,${BASE_FIELDS}` }, missing, true), [] as InsightRow[]),
   ])
 
   const totalsRow = totalsRows[0]
-  const totals = metricsOf(totalsRow, true)
+  const totals = metricsOf(totalsRow)
 
   const days = dayRows
     .filter((r) => r.date_start)
-    .map((r) => {
-      const m = metricsOf(r)
-      return { day: r.date_start!, spend: m.spend, impressions: m.impressions, reach: m.reach ?? 0, linkClicks: m.linkClicks, contacts: m.leads + m.conversations }
-    })
+    .map((r) => ({ day: r.date_start!, metrics: lean(metricsOf(r)) }))
     .sort((a, b) => a.day.localeCompare(b.day))
 
   // Campanhas: as que gastaram no período e as ativas mesmo sem gasto
   const offset = NO_CENTS.has(currency) ? 1 : 100
+  const budget = (value: string | undefined) => (num(value) !== undefined ? num(value)! / offset : undefined)
   const listed = new Map(campaignList.map((c) => [c.id, c]))
   const seen = new Set<string>()
   const campaigns = campaignRows
@@ -597,14 +650,14 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
     .map((r) => {
       seen.add(r.campaign_id!)
       const meta = listed.get(r.campaign_id!)
-      const metrics = metricsOf(r, true)
+      const metrics = metricsOf(r)
       return {
         id: r.campaign_id!,
         name: r.campaign_name || meta?.name || r.campaign_id!,
         objective: r.objective || meta?.objective,
         status: meta?.effective_status || meta?.status,
-        dailyBudget: num(meta?.daily_budget) !== undefined ? num(meta?.daily_budget)! / offset : undefined,
-        lifetimeBudget: num(meta?.lifetime_budget) !== undefined ? num(meta?.lifetime_budget)! / offset : undefined,
+        dailyBudget: budget(meta?.daily_budget),
+        lifetimeBudget: budget(meta?.lifetime_budget),
         start: meta?.start_time,
         stop: meta?.stop_time,
         metrics,
@@ -618,69 +671,55 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
       name: c.name,
       objective: c.objective,
       status: c.effective_status,
-      dailyBudget: num(c.daily_budget) !== undefined ? num(c.daily_budget)! / offset : undefined,
-      lifetimeBudget: num(c.lifetime_budget) !== undefined ? num(c.lifetime_budget)! / offset : undefined,
+      dailyBudget: budget(c.daily_budget),
+      lifetimeBudget: budget(c.lifetime_budget),
       start: c.start_time,
       stop: c.stop_time,
-      metrics: { ...EMPTY, actions: {} },
+      metrics: metricsOf(undefined),
       result: undefined,
     })
   }
   campaigns.sort((a, b) => b.metrics.spend - a.metrics.spend || a.name.localeCompare(b.name))
 
-  const platforms = platformRows
-    .filter((r) => r.publisher_platform)
-    .map((r) => ({ key: r.publisher_platform!, metrics: metricsOf(r) }))
-    .sort((a, b) => b.metrics.spend - a.metrics.spend)
+  const resultType = new Map(campaigns.map((c) => [c.id, c.result?.type]))
+  const campaignDays = campaignDayRows
+    .filter((r) => r.campaign_id && r.date_start)
+    .map((r) => {
+      const metrics = metricsOf(r)
+      return { campaignId: r.campaign_id!, day: r.date_start!, metrics: lean(metrics), result: resultIn(metrics, resultType.get(r.campaign_id!)) }
+    })
 
-  // Idade e gênero vêm cruzados: soma por idade e por gênero (o alcance não soma, fica de fora)
-  const group = (rows: InsightRow[], key: (r: InsightRow) => string | undefined) => {
-    const map = new Map<string, Metrics>()
-    for (const r of rows) {
-      const k = key(r)
-      if (!k) continue
-      map.set(k, add(map.get(k) ?? EMPTY, metricsOf(r)))
-    }
-    return [...map.entries()].map(([k, metrics]) => ({ key: k, metrics }))
-  }
-  const ages = group(ageRows, (r) => r.age).sort((a, b) => a.key.localeCompare(b.key))
-  const genders = group(ageRows, (r) => r.gender).sort((a, b) => b.metrics.spend - a.metrics.spend)
-  const regions = group(regionRows, (r) => r.region)
-    .sort((a, b) => b.metrics.spend - a.metrics.spend)
-    .slice(0, 12)
+  const cut = (rows: InsightRow[], key: (r: InsightRow) => string | undefined) =>
+    rows.filter((r) => r.campaign_id && key(r)).map((r) => ({ campaignId: r.campaign_id!, key: key(r)!, metrics: lean(metricsOf(r)) }))
+  const platforms = cut(platformRows, (r) => r.publisher_platform)
+  const audience = ageRows.filter((r) => r.campaign_id).map((r) => ({ campaignId: r.campaign_id!, age: r.age ?? 'Unknown', gender: r.gender ?? 'unknown', metrics: lean(metricsOf(r)) }))
+  const regions = cut(regionRows, (r) => r.region)
 
-  // Os anúncios que mais gastaram, com a miniatura do criativo
+  // Os anúncios que mais gastaram, com a miniatura e os atalhos do criativo
   const topAds = adRows
     .filter((r) => r.ad_id && (num(r.spend) ?? 0) > 0)
     .sort((a, b) => (num(b.spend) ?? 0) - (num(a.spend) ?? 0))
-    .slice(0, 12)
-  const creatives = topAds.length
-    ? await optional(
-        'criativos',
-        () =>
-          graph<Record<string, { creative?: { thumbnail_url?: string; image_url?: string; instagram_permalink_url?: string } }>>('', token, {
-            ids: topAds.map((r) => r.ad_id).join(','),
-            fields: 'creative{thumbnail_url,image_url,instagram_permalink_url}',
-          }),
-        {} as Record<string, { creative?: { thumbnail_url?: string; image_url?: string; instagram_permalink_url?: string } }>
-      )
-    : {}
+    .slice(0, 40)
+  const creatives = topAds.length ? await optional('criativos', () => creativesOf(token, topAds.map((r) => r.ad_id!)), {} as Record<string, CreativeInfo>) : {}
   const ads = topAds.map((r) => {
-    const metrics = metricsOf(r, true)
-    const creative = creatives[r.ad_id!]?.creative
+    const metrics = metricsOf(r)
+    const found = creatives[r.ad_id!]
     return {
       id: r.ad_id!,
       name: r.ad_name || r.ad_id!,
+      adsetName: r.adset_name,
       campaignId: r.campaign_id,
       campaignName: r.campaign_name,
-      thumbnail: creative?.image_url || creative?.thumbnail_url,
-      permalink: creative?.instagram_permalink_url,
-      metrics,
+      thumbnail: found?.creative?.image_url || found?.creative?.thumbnail_url,
+      permalink: found?.creative?.instagram_permalink_url,
+      previewLink: found?.preview_shareable_link,
+      metrics: lean(metrics),
       result: resultOf(r, metrics, r.objective),
     }
   })
 
   const data = {
+    version: REPORT_VERSION,
     preset,
     since: totalsRow?.date_start ?? days[0]?.day ?? null,
     until: totalsRow?.date_stop ?? days[days.length - 1]?.day ?? null,
@@ -690,9 +729,9 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
     totals,
     days,
     campaigns,
+    campaignDays,
     platforms,
-    ages,
-    genders,
+    audience,
     regions,
     ads,
     missing: [...missing],
@@ -708,7 +747,6 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
         currency,
         timezone_name: info.timezone_name ?? null,
         account_status: info.account_status ?? null,
-        business_name: info.business?.name ?? null,
         synced_at: now,
         sync_error: null,
       })
@@ -716,6 +754,27 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
   ]
   for (const { error } of await Promise.all(writes)) if (error) throw dbError(error)
   return { ...data, fetchedAt: now }
+}
+
+// ---------- prévia do anúncio ----------
+
+/** Os formatos de prévia que a tela oferece (`ad_format` da Meta). */
+const PREVIEW_FORMATS = new Set(['INSTAGRAM_STANDARD', 'INSTAGRAM_STORY', 'INSTAGRAM_REELS', 'MOBILE_FEED_STANDARD', 'FACEBOOK_STORY_MOBILE', 'FACEBOOK_REELS_MOBILE'])
+
+const attribute = (html: string, name: string) => new RegExp(`${name}="([^"]*)"`).exec(html)?.[1]?.replace(/&amp;/g, '&')
+
+/** A prévia nativa da Meta (o mesmo quadro do Gerenciador), só de anúncio desta conta. */
+async function preview(account: AccountRow, token: string, body: Record<string, unknown>) {
+  const adId = typeof body.adId === 'string' && /^\d{1,40}$/.test(body.adId) ? body.adId : ''
+  if (!adId) throw new HttpError('Anúncio inválido.')
+  const format = typeof body.format === 'string' && PREVIEW_FORMATS.has(body.format) ? body.format : 'INSTAGRAM_STANDARD'
+  const ad = await graph<{ account_id?: string }>(adId, token, { fields: 'account_id' })
+  if (ad.account_id !== account.ad_account_id) throw new HttpError('Esse anúncio não é desta conta de anúncios.', 403, 'forbidden')
+  const { data } = await graph<{ data?: { body?: string }[] }>(`${adId}/previews`, token, { ad_format: format })
+  const html = data?.[0]?.body ?? ''
+  const src = attribute(html, 'src')
+  if (!src || !/^https:\/\/([a-z0-9-]+\.)*facebook\.com\//.test(src)) throw new HttpError('A Meta não gerou a prévia nesse formato.', 404, 'no_preview')
+  return { src, width: num(attribute(html, 'width')) ?? null, height: num(attribute(html, 'height')) ?? null }
 }
 
 // ---------- entrada ----------
@@ -790,6 +849,17 @@ Deno.serve(async (req) => {
         const token = await tokenOf(ctx, account)
         try {
           return json(await report(ctx, account, token, preset))
+        } catch (error) {
+          if (error instanceof HttpError && error.code === 'token') await markBroken(ctx, account.id)
+          throw error
+        }
+      }
+
+      case 'preview': {
+        const account = await accountOf(ctx, body.accountId)
+        const token = await tokenOf(ctx, account)
+        try {
+          return json(await preview(account, token, body))
         } catch (error) {
           if (error instanceof HttpError && error.code === 'token') await markBroken(ctx, account.id)
           throw error

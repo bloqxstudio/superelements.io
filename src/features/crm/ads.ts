@@ -51,32 +51,54 @@ export interface AdCampaign {
   result?: AdResult
 }
 
+/** Um dia da conta inteira (o alcance do dia é exato só aqui). */
 export interface AdDay {
   day: string
-  spend: number
-  impressions: number
-  reach: number
-  linkClicks: number
-  contacts: number
+  metrics: AdMetrics
 }
 
-export interface AdSlice {
+/** Um dia de uma campanha, com o resultado dela naquele dia. */
+export interface AdCampaignDay {
+  campaignId: string
+  day: string
+  metrics: AdMetrics
+  result?: number
+}
+
+/** Um pedaço de uma campanha: plataforma ou região. */
+export interface AdCut {
+  campaignId: string
   key: string
+  metrics: AdMetrics
+}
+
+export interface AdAudienceRow {
+  campaignId: string
+  age: string
+  gender: string
   metrics: AdMetrics
 }
 
 export interface AdCreative {
   id: string
   name: string
+  adsetName?: string
   campaignId?: string
   campaignName?: string
   thumbnail?: string
+  /** Post do Instagram do anúncio */
   permalink?: string
+  /** Prévia da Meta para abrir no navegador */
+  previewLink?: string
   metrics: AdMetrics
   result?: AdResult
 }
 
+/** Formato dos relatórios que esta tela lê (o da função `meta-ads`); outro formato é relido. */
+export const AD_REPORT_VERSION = 2
+
 export interface AdReport {
+  version: number
   preset: AdPreset
   since: string | null
   until: string | null
@@ -86,10 +108,10 @@ export interface AdReport {
   totals: AdMetrics
   days: AdDay[]
   campaigns: AdCampaign[]
-  platforms: AdSlice[]
-  ages: AdSlice[]
-  genders: AdSlice[]
-  regions: AdSlice[]
+  campaignDays: AdCampaignDay[]
+  platforms: AdCut[]
+  audience: AdAudienceRow[]
+  regions: AdCut[]
   ads: AdCreative[]
   /** Partes que a Meta não devolveu nesta leitura */
   missing: string[]
@@ -155,12 +177,14 @@ export async function loadAdAccounts(teamId: string): Promise<AdAccount[]> {
   }))
 }
 
-/** O último relatório guardado do período, se houver. */
+/** O último relatório guardado do período, se houver (num formato antigo, conta como não haver: a tela relê). */
 export async function loadAdReport(accountId: string, preset: AdPreset): Promise<AdReport | null> {
   const { data, error } = await supabase.from('crm_ad_reports').select('data, fetched_at').eq('account_id', accountId).eq('preset', preset).maybeSingle()
   if (error) throw new Error(error.message)
   if (!data) return null
-  return { ...(data.data as unknown as Omit<AdReport, 'fetchedAt'>), fetchedAt: Date.parse(data.fetched_at) }
+  const saved = data.data as unknown as Omit<AdReport, 'fetchedAt'>
+  if (saved?.version !== AD_REPORT_VERSION) return null
+  return { ...saved, fetchedAt: Date.parse(data.fetched_at) }
 }
 
 async function call<T>(action: string, body: Record<string, unknown> = {}): Promise<T> {
@@ -224,6 +248,24 @@ export const fetchAdReport = (accountId: string, preset: AdPreset) =>
   call<Omit<AdReport, 'fetchedAt'> & { fetchedAt: string }>('report', { accountId, preset }).then((r): AdReport => ({ ...r, fetchedAt: Date.parse(r.fetchedAt) }))
 
 export const disconnectAdAccount = (accountId: string) => call<{ ok: true }>('disconnect', { accountId })
+
+/** Formatos da prévia nativa da Meta (`ad_format`). */
+export const PREVIEW_FORMATS = [
+  { key: 'INSTAGRAM_STANDARD', label: 'Feed do Instagram' },
+  { key: 'INSTAGRAM_STORY', label: 'Stories' },
+  { key: 'INSTAGRAM_REELS', label: 'Reels' },
+  { key: 'MOBILE_FEED_STANDARD', label: 'Feed do Facebook' },
+] as const
+export type PreviewFormat = (typeof PREVIEW_FORMATS)[number]['key']
+
+export interface AdPreview {
+  /** Endereço do quadro de prévia da Meta */
+  src: string
+  width: number | null
+  height: number | null
+}
+
+export const fetchAdPreview = (accountId: string, adId: string, format: PreviewFormat) => call<AdPreview>('preview', { accountId, adId, format })
 
 // ---------- números ----------
 
@@ -370,6 +412,7 @@ export const GENDER_LABEL: Record<string, string> = { female: 'Mulheres', male: 
 export const MISSING_LABEL: Record<string, string> = {
   results: 'o resultado do Gerenciador (calculado pelo objetivo)',
   campanhas: 'a lista de campanhas',
+  'dias por campanha': 'os dias de cada campanha',
   plataformas: 'as plataformas',
   público: 'idade e gênero',
   regiões: 'as regiões',
@@ -378,5 +421,7 @@ export const MISSING_LABEL: Record<string, string> = {
 }
 
 /** Abre a conta (e a campanha) no Gerenciador de Anúncios. */
+export const adsManagerAdUrl = (adAccountId: string, adId: string) => `https://adsmanager.facebook.com/adsmanager/manage/ads?act=${adAccountId}&selected_ad_ids=${adId}`
+
 export const adsManagerUrl = (adAccountId: string, campaignId?: string) =>
   `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${adAccountId}${campaignId ? `&selected_campaign_ids=${campaignId}` : ''}`
