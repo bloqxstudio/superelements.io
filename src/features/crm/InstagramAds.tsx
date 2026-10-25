@@ -931,6 +931,32 @@ const Overview: React.FC<{ report: AdReport; account: AdAccount; selected: strin
 
 // ---------- a aba ----------
 
+/** Uma falha ao desenhar os números fica dentro da aba (o resto do app segue de pé) e oferece ler de novo. */
+class AdsGuard extends React.Component<{ children: React.ReactNode; onRetry: () => void }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('[anúncios] falha ao mostrar o relatório', error)
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <Surface>
+        <p className="text-sm text-gray-700">Não consegui mostrar este relatório.</p>
+        <p className="mt-1 text-xs text-gray-500">{this.state.error.message}</p>
+        <Button size="sm" variant="outline" className="mt-3 gap-1.5" onClick={this.props.onRetry}>
+          <RefreshCw className="h-4 w-4" /> Ler de novo
+        </Button>
+      </Surface>
+    )
+  }
+}
+
 const AccountArea: React.FC<{
   account: AdAccount
   accounts: AdAccount[]
@@ -945,9 +971,11 @@ const AccountArea: React.FC<{
   const [adding, setAdding] = useState(false)
   const [confirmOff, setConfirmOff] = useState(false)
   const [selected, setSelected] = useState<string[] | null>(null)
+  const [failure, setFailure] = useState<string | null>(null)
   const autoRefreshed = useRef(new Set<string>())
 
   useEffect(() => setSelected(null), [account.id])
+  useEffect(() => setFailure(null), [account.id, preset])
 
   const refresh = useCallback(
     async (quiet = false) => {
@@ -955,11 +983,13 @@ const AccountArea: React.FC<{
       try {
         const next = await fetchAdReport(account.id, preset)
         setReport(next)
+        setFailure(null)
         await onReload()
         if (!quiet) toast.success('Anúncios atualizados', { description: next.missing.length ? `A Meta não devolveu ${next.missing.map((m) => MISSING_LABEL[m] ?? m).join(', ')}.` : undefined })
       } catch (error) {
         if (error instanceof AdsError && error.code === 'token') await onReload()
         if (!quiet || !(error instanceof AdsError && error.code === 'unavailable')) toast.error(errorText(error))
+        setFailure(errorText(error))
         setReport((r) => (r === undefined ? null : r))
       } finally {
         setRefreshing(false)
@@ -1101,13 +1131,16 @@ const AccountArea: React.FC<{
       ) : report === null ? (
         <Surface>
           <p className="text-sm text-gray-600">Ainda não há leitura deste período.</p>
+          {failure && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">{failure}</p>}
           <Button size="sm" className="mt-3 gap-1.5" onClick={() => void refresh()} disabled={broken}>
             <RefreshCw className="h-4 w-4" /> Ler agora
           </Button>
         </Surface>
       ) : (
         <div className={cn('transition-opacity', refreshing && 'opacity-70')}>
-          <Overview report={report} account={account} selected={selected} onSelect={setSelected} />
+          <AdsGuard key={`${report.fetchedAt}:${preset}`} onRetry={() => void refresh()}>
+            <Overview report={report} account={account} selected={selected} onSelect={setSelected} />
+          </AdsGuard>
         </div>
       )}
 

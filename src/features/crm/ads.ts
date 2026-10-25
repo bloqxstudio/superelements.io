@@ -177,14 +177,53 @@ export async function loadAdAccounts(teamId: string): Promise<AdAccount[]> {
   }))
 }
 
+const metricsOf = (m: Partial<AdMetrics> | undefined): AdMetrics => ({
+  spend: m?.spend ?? 0,
+  impressions: m?.impressions ?? 0,
+  reach: m?.reach,
+  frequency: m?.frequency,
+  clicks: m?.clicks ?? 0,
+  linkClicks: m?.linkClicks ?? 0,
+  leads: m?.leads ?? 0,
+  conversations: m?.conversations ?? 0,
+  actions: m?.actions ?? {},
+})
+
+const listOf = <T extends { metrics?: Partial<AdMetrics> }>(value: unknown): T[] =>
+  Array.isArray(value) ? (value as T[]).map((row) => ({ ...row, metrics: metricsOf(row.metrics) })) : []
+
+/** O relatório como a tela lê, com toda lista e número presentes; `null` num formato que esta tela não lê. */
+function asReport(raw: unknown, fetchedAt: number): AdReport | null {
+  const r = raw as Partial<AdReport> | null
+  if (!r || r.version !== AD_REPORT_VERSION) return null
+  return {
+    ...r,
+    version: AD_REPORT_VERSION,
+    preset: r.preset ?? 'last_30d',
+    since: r.since ?? null,
+    until: r.until ?? null,
+    currency: r.currency || 'BRL',
+    accountStatus: r.accountStatus ?? null,
+    disableReason: r.disableReason ?? null,
+    totals: metricsOf(r.totals),
+    days: listOf<AdDay>(r.days),
+    campaigns: listOf<AdCampaign>(r.campaigns),
+    campaignDays: listOf<AdCampaignDay>(r.campaignDays),
+    platforms: listOf<AdCut>(r.platforms),
+    audience: listOf<AdAudienceRow>(r.audience),
+    regions: listOf<AdCut>(r.regions),
+    ads: listOf<AdCreative>(r.ads),
+    missing: Array.isArray(r.missing) ? r.missing : [],
+    fetchedAt,
+  }
+}
+
 /** O último relatório guardado do período, se houver (num formato antigo, conta como não haver: a tela relê). */
 export async function loadAdReport(accountId: string, preset: AdPreset): Promise<AdReport | null> {
   const { data, error } = await supabase.from('crm_ad_reports').select('data, fetched_at').eq('account_id', accountId).eq('preset', preset).maybeSingle()
   if (error) throw new Error(error.message)
   if (!data) return null
-  const saved = data.data as unknown as Omit<AdReport, 'fetchedAt'>
-  if (saved?.version !== AD_REPORT_VERSION) return null
-  return { ...saved, fetchedAt: Date.parse(data.fetched_at) }
+  return asReport(data.data, Date.parse(data.fetched_at))
 }
 
 async function call<T>(action: string, body: Record<string, unknown> = {}): Promise<T> {
@@ -244,8 +283,13 @@ export const connectAdsWithToken = (teamId: string, token: string) => call<Pendi
 
 export const chooseAdAccounts = (pendingId: string, accountIds: string[]) => call<{ accounts: { id: string; name: string }[] }>('choose', { pendingId, accountIds })
 
-export const fetchAdReport = (accountId: string, preset: AdPreset) =>
-  call<Omit<AdReport, 'fetchedAt'> & { fetchedAt: string }>('report', { accountId, preset }).then((r): AdReport => ({ ...r, fetchedAt: Date.parse(r.fetchedAt) }))
+/** Lê a Meta agora. A função publicada numa versão anterior devolve outro formato: a tela pede para publicá-la de novo. */
+export async function fetchAdReport(accountId: string, preset: AdPreset): Promise<AdReport> {
+  const raw = await call<{ fetchedAt?: string }>('report', { accountId, preset })
+  const report = asReport(raw, raw.fetchedAt ? Date.parse(raw.fetchedAt) : Date.now())
+  if (!report) throw new AdsError('A função meta-ads publicada no Supabase é a versão anterior. Publique de novo a função meta-ads e clique em Atualizar.', 'outdated')
+  return report
+}
 
 export const disconnectAdAccount = (accountId: string) => call<{ ok: true }>('disconnect', { accountId })
 
