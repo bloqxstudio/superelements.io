@@ -7,9 +7,11 @@
  *
  * Manda para a função `site-visitas` cada página vista (com o tempo em uso e
  * até onde a pessoa rolou), os cliques em WhatsApp, telefone, e-mail, botões
- * e links, o começo e o envio de formulários e os eventos do dataLayer. A
- * pessoa é um número aleatório guardado no navegador dela; nada de IP, de
- * cookie de terceiros ou do que se digita nos formulários.
+ * e links, o começo e o envio de formulários e os eventos do dataLayer, com o
+ * que o navegador diz do aparelho (tela, modelo, conexão) e os identificadores
+ * do anúncio que vierem no link. A pessoa é um número aleatório guardado no
+ * navegador dela; a função acha a cidade pelo IP sem guardá-lo; nada de cookie
+ * de terceiros ou do que se digita nos formulários.
  *
  * `?visitas=off` no endereço do site deixa de contar este navegador (a
  * equipe); `?visitas=on` volta a contar; `?visitas=debug` mostra no console o
@@ -104,7 +106,8 @@
   function campaign() {
     var q = {}
     var any = false
-    ;['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].forEach(function (key) {
+    // utm_* e os identificadores que o link do anúncio pode trazer ({{campaign.id}}, {{ad.id}}, {{placement}} na Meta)
+    ;['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id', 'campaign_id', 'adset_id', 'ad_id', 'placement', 'site_source'].forEach(function (key) {
       var value = params.get(key)
       if (value) {
         q[key] = value.slice(0, 200)
@@ -169,7 +172,26 @@
     sw: screen.width,
     sh: screen.height,
     tp: navigator.maxTouchPoints || 0,
+    vw: window.innerWidth,
+    vh: window.innerHeight,
+    dpr: window.devicePixelRatio || 1,
   }
+  try {
+    var connection = navigator.connection
+    if (connection && connection.effectiveType) context.ct = connection.effectiveType
+    if (window.matchMedia) context.cs = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    // O modelo do celular (Android no Chrome) e a versão do sistema chegam depois, junto dos próximos envios
+    var hints = navigator.userAgentData
+    if (hints && hints.getHighEntropyValues) {
+      hints
+        .getHighEntropyValues(['model', 'platformVersion'])
+        .then(function (values) {
+          if (values.model) context.model = String(values.model).slice(0, 60)
+          if (values.platformVersion) context.pfv = String(values.platformVersion).slice(0, 20)
+        })
+        .catch(function () {})
+    }
+  } catch (e) {}
 
   function flush() {
     clearTimeout(timer)

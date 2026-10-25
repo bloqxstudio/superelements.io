@@ -646,6 +646,14 @@ export type Database = {
           active_ms: number
           converted: boolean
           conversions: string[]
+          city: string | null
+          region: string | null
+          region_name: string | null
+          lat: number | null
+          lon: number | null
+          geo_radius: number | null
+          network: string | null
+          details: Json
         }
         Insert: {
           id: string
@@ -678,6 +686,14 @@ export type Database = {
           active_ms?: number
           converted?: boolean
           conversions?: string[]
+          city?: string | null
+          region?: string | null
+          region_name?: string | null
+          lat?: number | null
+          lon?: number | null
+          geo_radius?: number | null
+          network?: string | null
+          details?: Json
         }
         Update: {
           id?: string
@@ -710,6 +726,14 @@ export type Database = {
           active_ms?: number
           converted?: boolean
           conversions?: string[]
+          city?: string | null
+          region?: string | null
+          region_name?: string | null
+          lat?: number | null
+          lon?: number | null
+          geo_radius?: number | null
+          network?: string | null
+          details?: Json
         }
         Relationships: []
       }

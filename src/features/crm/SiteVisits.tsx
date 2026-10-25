@@ -1,19 +1,20 @@
-import React, { useCallback, useEffect, useState } from 'react'
-import { ArrowRight, CircleHelp, ExternalLink, FileText, Loader2, Mail, MessageCircle, Monitor, MousePointerClick, Phone, Smartphone, Tablet, Trash2, X, Zap } from 'lucide-react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowRight, CircleHelp, ExternalLink, FileText, Loader2, Mail, MapPin, Megaphone, MessageCircle, Monitor, MousePointerClick, Phone, Smartphone, Tablet, Trash2, X, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import {
   CONTACT_EVENTS,
-  LIVE_MS,
   SESSIONS_PAGE,
   contactLabel,
-  countryLabel,
   duration,
   eventLabel,
+  isLiveSession as isLive,
   loadSessionEvents,
   loadSessions,
   pathLabel,
+  periodRange,
+  placeLabel,
   removeSession,
   tzLabel,
   type SessionFilter,
@@ -21,20 +22,22 @@ import {
   type SitePeriod,
   type SiteSession,
 } from '@/features/crm/site'
+import { SessionAd } from '@/features/crm/SiteAds'
+import type { MetaView } from '@/features/crm/siteMeta'
 import { FIELD, plural, whenLabel } from '@/features/crm/ui'
 import { Chip } from '@/features/prospects/ui'
 import { cn } from '@/lib/utils'
 
 /**
  * As visitas uma a uma (aba Visitas do painel Site): a lista com origem,
- * aparelho, páginas, tempo e contato, e o painel de uma visita com a jornada
- * inteira (cada página, cada clique, cada formulário) e as outras visitas da
- * mesma pessoa.
+ * lugar, aparelho, páginas, tempo e contato, e o painel de uma visita com a
+ * jornada inteira (cada página, cada clique, cada formulário), o resumo da
+ * pessoa (todas as visitas dela), o anúncio de onde veio com o perfil de quem
+ * clica nele, e as outras visitas. Ao vivo: o que a Realtime manda entra na
+ * lista na hora.
  */
 
 const DEVICE_ICON: Record<string, React.ElementType> = { Celular: Smartphone, Tablet, Computador: Monitor }
-
-const isLive = (s: SiteSession) => Date.now() - s.lastAt < LIVE_MS
 
 /** O site de onde veio já está no nome da origem? (`l.instagram.com` em Instagram, `chatgpt.com` em IAs) */
 const sourceInChannel = (source: string, channel: string) => {
@@ -52,6 +55,12 @@ function originText(s: Pick<SiteSession, 'channel' | 'source' | 'medium' | 'camp
   if (detail) parts.push(detail)
   else if (s.medium && s.medium !== 'cpc') parts.push(s.medium)
   return parts.join(' · ')
+}
+
+/** `Samsung SM-A546E · Android 14` ou `Celular · iOS 17.5 · Safari` */
+function deviceText(s: SiteSession) {
+  const os = s.os && s.details.osv ? `${s.os} ${s.details.osv}` : s.os
+  return [s.details.model ?? s.device, os, s.browser].filter(Boolean).join(' · ')
 }
 
 const ContactBadges: React.FC<{ names: string[] }> = ({ names }) =>
@@ -73,6 +82,7 @@ const LiveDot: React.FC = () => (
 
 const SessionRow: React.FC<{ session: SiteSession; onOpen: () => void }> = ({ session: s, onOpen }) => {
   const Device = DEVICE_ICON[s.device ?? ''] ?? Monitor
+  const where = s.city || s.region || s.country ? placeLabel(s) : undefined
   return (
     <li>
       <button
@@ -89,9 +99,15 @@ const SessionRow: React.FC<{ session: SiteSession; onOpen: () => void }> = ({ se
         </span>
         <span className="order-3 col-span-2 min-w-0 md:order-none md:col-span-1">
           <span className="block truncate text-sm text-gray-800">{originText(s)}</span>
+          {s.channel === 'Meta Ads' && s.content && (
+            <span className="flex items-center gap-1 truncate text-xs text-blue-700">
+              <Megaphone className="h-3 w-3 shrink-0" aria-hidden />
+              <span className="truncate">{s.content}</span>
+            </span>
+          )}
           <span className="flex items-center gap-1.5 truncate text-xs text-gray-500">
             <Device className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            {[s.device, s.browser, s.country ? countryLabel(s.country) : undefined].filter(Boolean).join(' · ')}
+            <span className="truncate">{[s.details.model ?? s.device, s.browser, where].filter(Boolean).join(' · ')}</span>
           </span>
         </span>
         <span className="order-4 col-span-2 min-w-0 md:order-none md:col-span-1">
@@ -117,17 +133,23 @@ const SessionRow: React.FC<{ session: SiteSession; onOpen: () => void }> = ({ se
   )
 }
 
+type Extra = Pick<SessionFilter, 'region' | 'city' | 'campaign'>
+
 export const VisitsList: React.FC<{
   siteId: string
   period: SitePeriod
   channels: string[]
   manager: boolean
+  meta?: MetaView
+  /** A última visita que a Realtime mandou (nova ou mudada) */
+  incoming?: SiteSession
   initial?: Partial<SessionFilter>
   onFilterChange?: (filter: Partial<SessionFilter>) => void
-}> = ({ siteId, period, channels, manager, initial, onFilterChange }) => {
+}> = ({ siteId, period, channels, manager, meta, incoming, initial, onFilterChange }) => {
   const [mode, setMode] = useState<'todas' | 'contato' | 'agora'>(initial?.live ? 'agora' : initial?.converted ? 'contato' : 'todas')
   const [channel, setChannel] = useState(initial?.channel ?? '')
   const [path, setPath] = useState(initial?.path ?? '')
+  const [extra, setExtra] = useState<Extra>({ region: initial?.region, city: initial?.city, campaign: initial?.campaign })
   const [sessions, setSessions] = useState<SiteSession[] | null>(null)
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
@@ -138,9 +160,10 @@ export const VisitsList: React.FC<{
     setMode(initial?.live ? 'agora' : initial?.converted ? 'contato' : 'todas')
     setChannel(initial?.channel ?? '')
     setPath(initial?.path ?? '')
+    setExtra({ region: initial?.region, city: initial?.city, campaign: initial?.campaign })
   }, [initial])
 
-  const filter: SessionFilter = { period, live: mode === 'agora', converted: mode === 'contato', channel: channel || undefined, path: path || undefined }
+  const filter: SessionFilter = { period, live: mode === 'agora', converted: mode === 'contato', channel: channel || undefined, path: path || undefined, ...extra }
   const key = JSON.stringify(filter)
 
   const load = useCallback(
@@ -161,7 +184,7 @@ export const VisitsList: React.FC<{
     })
   }, [load])
 
-  // No site agora: a lista se atualiza sozinha
+  // No site agora: a lista se atualiza sozinha (a Realtime adianta; isto tira quem saiu)
   useEffect(() => {
     if (mode !== 'agora') return
     const timer = window.setInterval(() => {
@@ -170,14 +193,43 @@ export const VisitsList: React.FC<{
     return () => window.clearInterval(timer)
   }, [mode, load])
 
-  const change = (next: Partial<{ mode: typeof mode; channel: string; path: string }>) => {
+  // Ao vivo: a visita que mudou troca de lugar na lista; a nova entra no topo quando cabe no filtro
+  const listRef = useRef(sessions)
+  listRef.current = sessions
+  useEffect(() => {
+    const current = listRef.current
+    if (!incoming || !current) return
+    const f = JSON.parse(key) as SessionFilter
+    setOpen((open) => (open?.id === incoming.id ? incoming : open))
+    if (current.some((s) => s.id === incoming.id)) {
+      setSessions(current.map((s) => (s.id === incoming.id ? incoming : s)))
+      return
+    }
+    const fits =
+        (f.live ? isLive(incoming) : incoming.startedAt >= periodRange(period).from.getTime()) &&
+        (!f.converted || incoming.converted) &&
+        (!f.channel || incoming.channel === f.channel) &&
+        (!f.region || incoming.region === f.region) &&
+        (!f.city || incoming.city === f.city) &&
+        (!f.campaign || incoming.campaign === f.campaign) &&
+        (!f.path || incoming.landing === f.path || incoming.exit === f.path)
+    if (!fits) return
+    setSessions([incoming, ...current])
+    setTotal((t) => t + 1)
+    // Só a visita nova muda a lista; a troca de filtro relê do banco
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incoming])
+
+  const change = (next: Partial<{ mode: typeof mode; channel: string; path: string; extra: Extra }>) => {
     const m = next.mode ?? mode
     const c = next.channel ?? channel
     const p = next.path ?? path
+    const x = next.extra ?? extra
     if (next.mode !== undefined) setMode(m)
     if (next.channel !== undefined) setChannel(c)
     if (next.path !== undefined) setPath(p)
-    onFilterChange?.({ live: m === 'agora', converted: m === 'contato', channel: c || undefined, path: p || undefined })
+    if (next.extra !== undefined) setExtra(x)
+    onFilterChange?.({ live: m === 'agora', converted: m === 'contato', channel: c || undefined, path: p || undefined, ...x })
   }
 
   const more = async () => {
@@ -190,6 +242,16 @@ export const VisitsList: React.FC<{
       setLoadingMore(false)
     }
   }
+
+  const removable = [
+    path && { key: 'path', label: `Passou por ${pathLabel(path)}`, clear: () => change({ path: '' }) },
+    (extra.city || extra.region) && {
+      key: 'place',
+      label: `Em ${[extra.city, extra.region].filter(Boolean).join(', ')}`,
+      clear: () => change({ extra: { ...extra, city: undefined, region: undefined } }),
+    },
+    extra.campaign && { key: 'campaign', label: `Campanha ${extra.campaign}`, clear: () => change({ extra: { ...extra, campaign: undefined } }) },
+  ].filter(Boolean) as { key: string; label: string; clear: () => void }[]
 
   return (
     <div className="grid gap-4">
@@ -213,14 +275,14 @@ export const VisitsList: React.FC<{
             ))}
           </select>
         )}
-        {path && (
-          <span className="inline-flex h-8 items-center gap-1 rounded-full bg-zinc-900 pl-3 pr-1 text-sm text-white">
-            Passou por {pathLabel(path)}
-            <button type="button" onClick={() => change({ path: '' })} aria-label="Tirar o filtro de página" className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-white/15">
+        {removable.map((r) => (
+          <span key={r.key} className="inline-flex h-8 max-w-full items-center gap-1 rounded-full bg-zinc-900 pl-3 pr-1 text-sm text-white">
+            <span className="truncate">{r.label}</span>
+            <button type="button" onClick={r.clear} aria-label="Tirar o filtro" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-white/15">
               <X className="h-3.5 w-3.5" />
             </button>
           </span>
-        )}
+        ))}
         {sessions && <span className="ml-auto text-xs tabular-nums text-gray-500">{plural(total, 'visita', 'visitas')}</span>}
       </div>
 
@@ -260,6 +322,7 @@ export const VisitsList: React.FC<{
           siteId={siteId}
           session={open}
           manager={manager}
+          meta={meta}
           onOpen={setOpen}
           onClose={() => setOpen(null)}
           onRemoved={() => {
@@ -335,18 +398,71 @@ const Fact: React.FC<{ label: string; children: React.ReactNode }> = ({ label, c
   </div>
 )
 
+const Sub: React.FC<{ children: React.ReactNode; title?: string }> = ({ children, title }) => (
+  <span className="block truncate text-xs text-gray-500" title={title}>
+    {children}
+  </span>
+)
+
 const CLICK_ID_LABEL: Record<string, string> = { gclid: 'clique de anúncio do Google', gbraid: 'clique de anúncio do Google', wbraid: 'clique de anúncio do Google', fbclid: 'link do Facebook ou Instagram', msclkid: 'anúncio da Microsoft', ttclid: 'anúncio do TikTok', li_fat_id: 'anúncio do LinkedIn' }
+
+const NET_LABEL: Record<string, string> = { '4g': '4G ou melhor', '3g': '3G', '2g': '2G', 'slow-2g': '2G lenta' }
+
+const dateLabel = (at: number) => new Date(at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+
+/** Todas as visitas da pessoa (deste navegador): desde quando, quantas, quanto tempo, por onde chegou e que contato fez */
+const PersonSummary: React.FC<{ visits: SiteSession[] }> = ({ visits }) => {
+  const first = visits.reduce((a, b) => (b.startedAt < a.startedAt ? b : a))
+  const active = visits.reduce((sum, v) => sum + v.activeMs, 0)
+  const pages = visits.reduce((sum, v) => sum + v.pageviews, 0)
+  const channels = [...new Set(visits.map((v) => v.channel))]
+  const contacts = [...new Set(visits.flatMap((v) => v.conversions))]
+  const firstContact = visits
+    .filter((v) => v.converted)
+    .sort((a, b) => a.startedAt - b.startedAt)[0]
+  const places = [...new Set(visits.filter((v) => v.city || v.region).map((v) => placeLabel(v)))]
+  const devices = [...new Set(visits.map((v) => v.details.model ?? v.device).filter(Boolean))]
+  return (
+    <div className="rounded-lg bg-zinc-50 p-3">
+      <h3 className="mb-2 text-sm font-semibold text-gray-900">Esta pessoa</h3>
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Fact label="Primeira visita">
+          {dateLabel(first.startedAt)}
+          <Sub>{first.channel}</Sub>
+        </Fact>
+        <Fact label="Visitas">
+          {visits.length}
+          <Sub>{plural(pages, 'página', 'páginas')}</Sub>
+        </Fact>
+        <Fact label="Tempo no site">
+          {duration(active)}
+          <Sub>somando as visitas</Sub>
+        </Fact>
+        <Fact label="Contato">
+          {contacts.length ? contacts.map(contactLabel).join(', ') : 'Ainda não'}
+          {firstContact && <Sub>na {firstContact.visitNumber}ª visita</Sub>}
+        </Fact>
+      </dl>
+      {(channels.length > 1 || places.length > 1 || devices.length > 1) && (
+        <p className="mt-2 text-xs text-gray-500">
+          {[channels.length > 1 && `Chegou por ${channels.join(', ')}`, places.length > 1 && `esteve em ${places.join(', ')}`, devices.length > 1 && `usou ${devices.join(', ')}`].filter(Boolean).join(' · ')}
+        </p>
+      )}
+    </div>
+  )
+}
 
 export const VisitPanel: React.FC<{
   siteId: string
   session: SiteSession
   manager: boolean
+  meta?: MetaView
   onOpen: (s: SiteSession) => void
   onClose: () => void
   onRemoved: () => void
-}> = ({ siteId, session: s, manager, onOpen, onClose, onRemoved }) => {
+}> = ({ siteId, session: s, manager, meta, onOpen, onClose, onRemoved }) => {
   const [events, setEvents] = useState<SiteEvent[] | null>(null)
-  const [others, setOthers] = useState<SiteSession[]>([])
+  const [visits, setVisits] = useState<SiteSession[] | null>(null)
   const [confirm, setConfirm] = useState(false)
 
   useEffect(() => {
@@ -358,10 +474,14 @@ export const VisitPanel: React.FC<{
         toast.error(e instanceof Error ? e.message : String(e))
         setEvents([])
       })
+    // `lastAt` relê a jornada quando a visita muda ao vivo
+  }, [s.id, s.lastAt])
+
+  useEffect(() => {
     loadSessions(siteId, { visitorId: s.visitorId })
-      .then((r) => setOthers(r.sessions.filter((o) => o.id !== s.id)))
-      .catch(() => setOthers([]))
-  }, [siteId, s.id, s.visitorId])
+      .then((r) => setVisits(r.sessions))
+      .catch(() => setVisits([]))
+  }, [siteId, s.visitorId])
 
   const remove = async () => {
     try {
@@ -375,6 +495,9 @@ export const VisitPanel: React.FC<{
 
   const Device = DEVICE_ICON[s.device ?? ''] ?? Monitor
   const start = events?.[0]?.at ?? s.startedAt
+  const others = (visits ?? []).filter((o) => o.id !== s.id)
+  const all = visits && visits.some((v) => v.id === s.id) ? visits.map((v) => (v.id === s.id ? s : v)) : [s, ...others]
+  const d = s.details
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -394,33 +517,43 @@ export const VisitPanel: React.FC<{
         <dl className="grid grid-cols-1 gap-3 rounded-lg bg-zinc-50 p-3 sm:grid-cols-2">
           <Fact label="De onde veio">
             {originText(s)}
-            {s.referrer && (
-              <span className="block truncate text-xs text-gray-500" title={s.referrer}>
-                {s.referrer}
-              </span>
-            )}
-            {s.clickId && <span className="block text-xs text-gray-500">Pelo {CLICK_ID_LABEL[s.clickId] ?? s.clickId}</span>}
-            {(s.medium || s.term || s.content) && (
-              <span className="block text-xs text-gray-500">{[s.medium && `meio ${s.medium}`, s.term && `termo ${s.term}`, s.content && `conteúdo ${s.content}`].filter(Boolean).join(' · ')}</span>
-            )}
-          </Fact>
-          <Fact label="Aparelho">
-            <span className="flex items-center gap-1.5">
-              <Device className="h-3.5 w-3.5 text-gray-500" aria-hidden />
-              {[s.device, s.os, s.browser].filter(Boolean).join(' · ') || 'Não identificado'}
-            </span>
-            {s.screen && <span className="block text-xs text-gray-500">Tela {s.screen.replace('x', ' × ')}</span>}
+            {s.referrer && <Sub title={s.referrer}>{s.referrer}</Sub>}
+            {s.clickId && <Sub>Pelo {CLICK_ID_LABEL[s.clickId] ?? s.clickId}</Sub>}
+            {(s.medium || s.term || s.content) && <Sub>{[s.medium && `meio ${s.medium}`, s.term && `termo ${s.term}`, s.content && `conteúdo ${s.content}`].filter(Boolean).join(' · ')}</Sub>}
           </Fact>
           <Fact label="Onde">
-            {countryLabel(s.country)}
-            <span className="block text-xs text-gray-500">{[s.tz && `fuso de ${tzLabel(s.tz)}`, s.lang].filter(Boolean).join(' · ')}</span>
+            <span className="flex items-center gap-1.5">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-gray-500" aria-hidden />
+              {placeLabel(s, true)}
+            </span>
+            {s.city && <Sub>{s.geoRadius ? `pelo IP, num raio de ~${s.geoRadius} km` : 'pelo IP'}</Sub>}
+            {s.network && <Sub title={s.network}>Internet: {s.network}</Sub>}
+            <Sub>{[s.tz && `fuso de ${tzLabel(s.tz)}`, s.lang].filter(Boolean).join(' · ')}</Sub>
+          </Fact>
+          <Fact label="Aparelho">
+            <span className="flex items-start gap-1.5">
+              <Device className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-500" aria-hidden />
+              <span className="min-w-0">{deviceText(s) || 'Não identificado'}</span>
+            </span>
+            {(s.screen || d.vw) && (
+              <Sub>
+                {[s.screen && `tela ${s.screen.replace('x', ' × ')}`, d.vw && d.vh && `vê ${d.vw} × ${d.vh}`, d.dpr && d.dpr > 1 && `densidade ${String(d.dpr).replace('.', ',')}x`].filter(Boolean).join(' · ')}
+              </Sub>
+            )}
+            {(d.net || d.theme || d.bv) && (
+              <Sub>{[d.bv && s.browser && `${s.browser} ${d.bv}`, d.net && `conexão ${NET_LABEL[d.net] ?? d.net}`, d.theme === 'dark' && 'tema escuro'].filter(Boolean).join(' · ')}</Sub>
+            )}
           </Fact>
           <Fact label="Entrou e saiu">
             {pathLabel(s.landing)}
             {s.exit && s.exit !== s.landing && <span className="text-gray-500"> → {pathLabel(s.exit)}</span>}
-            <span className="block text-xs text-gray-500">última atividade {whenLabel(s.lastAt)}</span>
+            <Sub>última atividade {whenLabel(s.lastAt)}</Sub>
           </Fact>
         </dl>
+
+        <SessionAd session={s} meta={meta} />
+
+        {visits && all.length > 1 && <PersonSummary visits={all} />}
 
         <div>
           <h3 className="mb-2 text-sm font-semibold text-gray-900">O que fez</h3>

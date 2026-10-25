@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { isLocalAppUrl, publicAppUrl } from '@/features/approval/shares'
 
@@ -7,7 +8,8 @@ import { isLocalAppUrl, publicAppUrl } from '@/features/approval/shares'
  * WordPress, manda páginas vistas e eventos para a função `site-visitas`, que
  * grava em `site_sessions` (uma visita) e `site_events` (páginas e eventos);
  * daqui se leem essas tabelas e o relatório do período (`site_report`).
- * Migração `20261025180000_site_visitas.sql`.
+ * Migrações `20261025180000_site_visitas.sql` e `20261025230000_site_visitas_mapa.sql`
+ * (cidade, estado, detalhes do aparelho, visitas por anúncio e a Realtime).
  */
 
 export const VISITAS_ENDPOINT = `${(import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, '') || 'https://nfmfcpcwyavutntnrxqq.supabase.co'}/functions/v1/site-visitas`
@@ -67,6 +69,34 @@ export interface SiteReport {
   /** `dow` 1 (segunda) a 7 (domingo), `hour` 0 a 23, no fuso de quem abre a tela */
   hours: { dow: number; hour: number; sessions: number }[]
   notFound: { path: string; views: number }[]
+  /** Por país e estado; `meta`: as visitas que vieram de anúncio da Meta */
+  regions: { country: string; region: string; name: string | null; sessions: number; visitors: number; converted: number; meta: number }[]
+  cities: { country: string; region: string | null; city: string; lat: number; lon: number; sessions: number; visitors: number; converted: number }[]
+  /** Por campanha, conjunto (`utm_term`) e anúncio (`utm_content`), como o link da Meta manda */
+  ads: SiteAdRow[]
+  /** O relatório já vem com estados, cidades e anúncios (migração do mapa aplicada) */
+  mapReady: boolean
+}
+
+export interface SiteAdRow {
+  channel: string
+  source: string | null
+  medium: string | null
+  campaign: string | null
+  adset: string | null
+  ad: string | null
+  campaignId: string | null
+  adId: string | null
+  sessions: number
+  visitors: number
+  converted: number
+  activeMs: number | null
+  bounces: number
+  /** Visitas que enviaram um formulário */
+  forms: number
+  /** Visitas com `lead_qualificado` / `lead_nao_qualificado` no dataLayer (a página Proposta) */
+  qualified: number
+  unqualified: number
 }
 
 export interface Cut {
@@ -98,11 +128,47 @@ export interface SiteSession {
   tz?: string
   lang?: string
   screen?: string
+  /** Pelo IP, na primeira página (sem guardar o IP) */
+  city?: string
+  /** Sigla do estado (`RS`) */
+  region?: string
+  regionName?: string
+  lat?: number
+  lon?: number
+  /** Raio de incerteza da localização, em km */
+  geoRadius?: number
+  /** Provedor de internet */
+  network?: string
+  details: SessionDetails
   pageviews: number
   events: number
   activeMs: number
   converted: boolean
   conversions: string[]
+}
+
+/** O que o navegador contou do aparelho e o que veio no link do anúncio */
+export interface SessionDetails {
+  /** `Samsung SM-A546E` (Chrome no Android) */
+  model?: string
+  /** Versão do sistema (`17.5`, `14`, `11`) */
+  osv?: string
+  /** Versão principal do navegador */
+  bv?: string
+  /** Área visível da página */
+  vw?: number
+  vh?: number
+  dpr?: number
+  /** Conexão (`4g`, `3g`…) */
+  net?: string
+  theme?: 'dark' | 'light'
+  campaignId?: string
+  adsetId?: string
+  adId?: string
+  /** `Instagram_Stories`, `Facebook_Mobile_Feed`… ({{placement}} da Meta) */
+  placement?: string
+  /** `ig`, `fb`, `msg`, `an` ({{site_source_name}} da Meta) */
+  siteSource?: string
 }
 
 export interface SiteEvent {
@@ -173,15 +239,39 @@ export const snippetOf = (tracker: SiteTracker) => `<script defer src="${visitas
 
 /** A função `site-visitas` está publicada e aberta para o site? */
 export async function checkEndpoint(): Promise<'ok' | 'missing' | 'jwt' | 'error'> {
-  try {
-    const response = await fetch(VISITAS_ENDPOINT, { method: 'GET', cache: 'no-store' })
-    if (response.ok) return 'ok'
-    if (response.status === 404) return 'missing'
-    if (response.status === 401) return 'jwt'
-    return 'error'
-  } catch {
-    return 'error'
-  }
+  return (await endpointInfo()).status
+}
+
+export interface EndpointInfo {
+  status: 'ok' | 'missing' | 'jwt' | 'error'
+  /** 2 em diante: grava cidade, estado e os detalhes do aparelho */
+  version?: number
+  /** Os segredos da MaxMind estão na função (a cidade sai do IP) */
+  geo?: boolean
+}
+
+let endpointCache: Promise<EndpointInfo> | undefined
+export function endpointInfo(): Promise<EndpointInfo> {
+  endpointCache ??= (async (): Promise<EndpointInfo> => {
+    try {
+      const response = await fetch(VISITAS_ENDPOINT, { method: 'GET', cache: 'no-store' })
+      if (response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { version?: number; geo?: boolean }
+        return { status: 'ok', version: body.version, geo: body.geo }
+      }
+      if (response.status === 404) return { status: 'missing' }
+      if (response.status === 401) return { status: 'jwt' }
+      return { status: 'error' }
+    } catch {
+      return { status: 'error' }
+    }
+  })()
+  const current = endpointCache
+  // Um erro não fica guardado: a próxima pergunta tenta de novo
+  void current.then((info) => {
+    if (info.status !== 'ok' && endpointCache === current) endpointCache = undefined
+  })
+  return current
 }
 
 // ---------- período e relatório ----------
@@ -218,6 +308,11 @@ const listOf = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]
 
 export async function loadReport(siteId: string, period: SitePeriod): Promise<SiteReport> {
   const { from, to } = periodRange(period)
+  return loadReportRange(siteId, from, to)
+}
+
+/** O relatório entre duas datas (o cruzamento com a Meta usa os dias do relatório dela). */
+export async function loadReportRange(siteId: string, from: Date, to: Date): Promise<SiteReport> {
   const { data, error } = await supabase.rpc('site_report', { p_site: siteId, p_from: from.toISOString(), p_to: to.toISOString(), p_tz: localTz() })
   if (error) fail(error)
   const r = (data ?? {}) as Record<string, unknown>
@@ -241,6 +336,10 @@ export async function loadReport(siteId: string, period: SitePeriod): Promise<Si
     langs: listOf(r.langs),
     hours: listOf(r.hours),
     notFound: listOf(r.notFound),
+    regions: listOf(r.regions),
+    cities: listOf<SiteReport['cities'][number]>(r.cities).map((c) => ({ ...c, lat: Number(c.lat), lon: Number(c.lon) })),
+    ads: listOf(r.ads),
+    mapReady: Array.isArray(r.ads),
   }
 }
 
@@ -285,6 +384,14 @@ type SessionRow = {
   tz: string | null
   lang: string | null
   screen: string | null
+  city?: string | null
+  region?: string | null
+  region_name?: string | null
+  lat?: number | null
+  lon?: number | null
+  geo_radius?: number | null
+  network?: string | null
+  details?: unknown
   pageviews: number
   events: number
   active_ms: number
@@ -316,6 +423,14 @@ const sessionOf = (r: SessionRow): SiteSession => ({
   tz: opt(r.tz),
   lang: opt(r.lang),
   screen: opt(r.screen),
+  city: opt(r.city),
+  region: opt(r.region),
+  regionName: opt(r.region_name),
+  lat: opt(r.lat),
+  lon: opt(r.lon),
+  geoRadius: opt(r.geo_radius),
+  network: opt(r.network),
+  details: r.details && typeof r.details === 'object' && !Array.isArray(r.details) ? (r.details as SessionDetails) : {},
   pageviews: r.pageviews,
   events: r.events,
   activeMs: r.active_ms,
@@ -336,7 +451,14 @@ export interface SessionFilter {
   visitorId?: string
   /** Visitas que passaram por esta página (entrada ou saída) */
   path?: string
+  /** Sigla do estado (`RS`) */
+  region?: string
+  city?: string
+  /** O `utm_campaign` da visita (o nome da campanha no link do anúncio) */
+  campaign?: string
 }
+
+export const isLiveSession = (s: Pick<SiteSession, 'lastAt'>) => Date.now() - s.lastAt < LIVE_MS
 
 export async function loadSessions(siteId: string, filter: SessionFilter, page = 0): Promise<{ sessions: SiteSession[]; total: number }> {
   let query = supabase.from('site_sessions').select('*', { count: 'exact' }).eq('site_id', siteId)
@@ -348,6 +470,9 @@ export async function loadSessions(siteId: string, filter: SessionFilter, page =
   if (filter.channel) query = query.eq('channel', filter.channel)
   if (filter.converted) query = query.eq('converted', true)
   if (filter.visitorId) query = query.eq('visitor_id', filter.visitorId)
+  if (filter.region) query = query.eq('region', filter.region)
+  if (filter.city) query = query.eq('city', filter.city)
+  if (filter.campaign) query = query.eq('campaign', filter.campaign)
   if (filter.path) {
     const quoted = `"${filter.path.replace(/["\\]/g, '\\$&')}"`
     query = query.or(`landing_path.eq.${quoted},exit_path.eq.${quoted}`)
@@ -357,6 +482,32 @@ export async function loadSessions(siteId: string, filter: SessionFilter, page =
     .range(page * SESSIONS_PAGE, page * SESSIONS_PAGE + SESSIONS_PAGE - 1)
   if (error) fail(error)
   return { sessions: ((data ?? []) as SessionRow[]).map(sessionOf), total: count ?? 0 }
+}
+
+/**
+ * As visitas ao vivo: cada página vista, clique ou tempo que chega muda a
+ * linha da visita, e a Realtime do Supabase avisa na hora (só as da equipe,
+ * pela regra de leitura). Sem a migração do mapa (ou sem Realtime), não chega
+ * nada e a tela segue lendo de tempos em tempos.
+ */
+export function useSiteFeed(siteId: string | undefined, onSession: (session: SiteSession) => void) {
+  const latest = useRef(onSession)
+  latest.current = onSession
+  useEffect(() => {
+    if (!siteId) return
+    const deliver = (row: unknown) => {
+      const r = row as SessionRow | null
+      if (r?.id && r.started_at) latest.current(sessionOf(r))
+    }
+    const channel = supabase
+      .channel(`site-visitas-${siteId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'site_sessions', filter: `site_id=eq.${siteId}` }, (payload) => deliver(payload.new))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'site_sessions', filter: `site_id=eq.${siteId}` }, (payload) => deliver(payload.new))
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [siteId])
 }
 
 /** Quantas pessoas estão no site agora. */
@@ -448,6 +599,15 @@ export const countryLabel = (code: string | null | undefined) => {
   } catch {
     return code
   }
+}
+
+/** `São Leopoldo, RS`; sem cidade, o estado; sem estado, o país */
+export function placeLabel(s: Pick<SiteSession, 'city' | 'region' | 'regionName' | 'country'>, withCountry = false) {
+  const foreign = !!s.country && s.country !== 'BR'
+  const region = s.country === 'BR' ? (s.region ?? s.regionName) : (s.regionName ?? s.region)
+  const parts: (string | undefined)[] = s.city ? [s.city, region] : [region]
+  if (withCountry || foreign || !parts.some(Boolean)) parts.push(s.country ? countryLabel(s.country) : undefined)
+  return parts.filter(Boolean).join(', ') || 'Não identificado'
 }
 
 /** `America/Sao_Paulo` vira `Sao Paulo` */

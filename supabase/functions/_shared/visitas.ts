@@ -137,6 +137,34 @@ export function osOf(ua: string, touch = 0) {
   return 'Outro'
 }
 
+/** `17.5` no iPhone, `14` no Android, `11` no Windows (pela versão que o navegador conta, `pfv`) */
+export function osVersionOf(ua: string, platformVersion?: string) {
+  const ios = /(?:iPhone|CPU) OS (\d+)[_.](\d+)/.exec(ua)
+  if (ios) return `${ios[1]}.${ios[2]}`
+  const android = /Android (\d+(?:\.\d+)?)/.exec(ua)
+  // O Chrome no Android fixa "Android 10" no User-Agent; a versão real vem do navegador
+  if (android) return platformVersion && /^\d+/.test(platformVersion) && android[1] === '10' ? platformVersion.split('.')[0] : android[1]
+  if (/Windows NT 10/.test(ua) && platformVersion) return Number(platformVersion.split('.')[0]) >= 13 ? '11' : '10'
+  if (/Windows NT 6\.1/.test(ua)) return '7'
+  return undefined
+}
+
+/** A versão principal do navegador (`131`) */
+export function browserVersionOf(ua: string) {
+  const match = /(?:Edg(?:e|A|iOS)?|OPR|SamsungBrowser|CriOS|FxiOS|Firefox|Chrome)\/(\d+)/.exec(ua) ?? /Version\/(\d+(?:\.\d+)?).*Safari/.exec(ua)
+  return match?.[1]
+}
+
+/** `SM-A546E` vira `Samsung SM-A546E`; os outros modelos ficam como o aparelho diz */
+export function modelLabel(model: string | undefined) {
+  const m = model?.trim()
+  if (!m || m === 'K' || m.length < 2) return undefined
+  if (/^SM-/i.test(m)) return `Samsung ${m}`
+  if (/^moto\b/i.test(m)) return `Motorola ${m}`
+  if (/^(Redmi|POCO|M\d{4}[A-Z]|2\d{3}[A-Z0-9]{4,})/i.test(m)) return `Xiaomi ${m}`
+  return m
+}
+
 const TZ_COUNTRY: Record<string, string> = {
   'Europe/Lisbon': 'PT', 'Atlantic/Azores': 'PT', 'Atlantic/Madeira': 'PT', 'America/Montevideo': 'UY', 'America/Asuncion': 'PY',
   'America/Santiago': 'CL', 'America/Bogota': 'CO', 'America/Lima': 'PE', 'America/Caracas': 'VE', 'America/La_Paz': 'BO',

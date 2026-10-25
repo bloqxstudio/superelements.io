@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ArrowDownRight, ArrowUpRight, ExternalLink, Globe, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
@@ -6,31 +6,39 @@ import { Button } from '@/components/ui/button'
 import { BarList, Sparkline, Stat, TrendChart } from '@/features/crm/InstagramCharts'
 import { compact, percent } from '@/features/crm/instagram'
 import { useCrm } from '@/features/crm/crmStore'
+import { MetaCross } from '@/features/crm/SiteAds'
+import { SiteMap } from '@/features/crm/SiteMap'
 import { ServerSteps, SiteSetup, SiteStart } from '@/features/crm/SiteSetup'
-import { VisitsList } from '@/features/crm/SiteVisits'
+import { VisitPanel, VisitsList } from '@/features/crm/SiteVisits'
 import {
   CONTACT_EVENTS,
   NoSiteTablesError,
   PERIOD_LABEL,
   SITE_PERIODS,
   contactLabel,
-  countLive,
   countryLabel,
   dailySeries,
   duration,
+  endpointInfo,
   eventLabel,
+  isLiveSession,
   loadReport,
+  loadSessions,
   loadTrackers,
   pathLabel,
   shareOf,
   tzLabel,
+  useSiteFeed,
   type Cut,
+  type EndpointInfo,
   type SessionFilter,
   type SitePeriod,
   type SiteReport,
+  type SiteSession,
   type SiteTotals,
   type SiteTracker,
 } from '@/features/crm/site'
+import { useMetaAds, type MetaState } from '@/features/crm/siteMeta'
 import { FIELD, Page, Surface, whenLabel } from '@/features/crm/ui'
 import { Chip } from '@/features/prospects/ui'
 import { cn } from '@/lib/utils'
@@ -40,9 +48,11 @@ import { cn } from '@/lib/utils'
  * próprio colado uma vez no WordPress (sem Google Analytics). Visão geral
  * com visitantes, visitas, contatos (WhatsApp, ligação, e-mail, formulário),
  * tempo em uso, rejeição, visitas por dia, de onde vêm, o que fizeram, os
- * botões mais clicados, as páginas, aparelhos, lugares e horários; a aba
- * Visitas mostra cada visita com a jornada inteira; Instalação tem o código
- * e os passos. Quem está no site agora aparece no topo e se atualiza sozinho.
+ * botões mais clicados, as páginas, aparelhos, lugares e horários, o mapa
+ * (estados, cidades e quem está no site agora) e os anúncios da Meta ao lado
+ * das visitas que eles trouxeram; a aba Visitas mostra cada visita com a
+ * jornada inteira e o anúncio de onde veio; Instalação tem o código e os
+ * passos. As visitas chegam ao vivo pela Realtime (e por leitura a cada 20 s).
  */
 
 type Tab = 'geral' | 'visitas' | 'instalacao'
@@ -192,13 +202,18 @@ const Hours: React.FC<{ hours: SiteReport['hours'] }> = ({ hours }) => {
 
 // ---------- visão geral ----------
 
-const Overview: React.FC<{ report: SiteReport; period: SitePeriod; tracker: SiteTracker; onVisits: (filter: Partial<SessionFilter>) => void; onSetup: () => void }> = ({
-  report,
-  period,
-  tracker,
-  onVisits,
-  onSetup,
-}) => {
+const Overview: React.FC<{
+  report: SiteReport
+  period: SitePeriod
+  tracker: SiteTracker
+  live: SiteSession[]
+  metaState: MetaState
+  onMetaRefresh: () => void
+  endpoint?: EndpointInfo
+  onVisits: (filter: Partial<SessionFilter>) => void
+  onOpenSession: (session: SiteSession) => void
+  onSetup: () => void
+}> = ({ report, period, tracker, live, metaState, onMetaRefresh, endpoint, onVisits, onOpenSession, onSetup }) => {
   const [metric, setMetric] = useState<Metric>('visitors')
   const t = report.totals
   const p = report.previous
@@ -339,6 +354,10 @@ const Overview: React.FC<{ report: SiteReport; period: SitePeriod; tracker: Site
           />
         </Surface>
       </div>
+
+      <SiteMap report={report} live={live} meta={metaState.status === 'ready' ? metaState.meta : undefined} endpoint={endpoint} onVisits={onVisits} onOpenSession={onOpenSession} />
+
+      <MetaCross siteId={tracker.id} state={metaState} onRefresh={onMetaRefresh} onVisits={onVisits} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <Surface title="Contatos" action={t.converted > 0 && <button type="button" onClick={() => onVisits({ converted: true })} className="text-xs font-medium text-gray-600 hover:text-gray-900">Ver as visitas</button>}>
@@ -516,8 +535,13 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
   const [period, setPeriod] = useState<SitePeriod>(7)
   const [report, setReport] = useState<SiteReport | null>(null)
   const [loading, setLoading] = useState(false)
-  const [live, setLive] = useState<number | null>(null)
+  const [liveSessions, setLiveSessions] = useState<SiteSession[] | null>(null)
+  const [incoming, setIncoming] = useState<SiteSession>()
+  const [opened, setOpened] = useState<SiteSession | null>(null)
+  const [endpoint, setEndpoint] = useState<EndpointInfo>()
   const [visitsFilter, setVisitsFilter] = useState<Partial<SessionFilter>>({})
+  const { state: metaState, refresh: refreshMeta } = useMetaAds(tracker.teamId, period)
+  const reloadTimer = useRef<number>()
 
   const setTab = useCallback(
     (next: Tab) =>
@@ -556,12 +580,14 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
     return () => window.clearInterval(timer)
   }, [load])
 
+  // Quem está no site agora: lido a cada 20 s (tira quem saiu) e adiantado pela Realtime
   useEffect(() => {
     let stop = false
+    setLiveSessions(null)
     const poll = () => {
       if (!visible()) return
-      countLive(tracker.id)
-        .then((n) => !stop && setLive(n))
+      loadSessions(tracker.id, { live: true })
+        .then((r) => !stop && setLiveSessions(r.sessions))
         .catch(() => undefined)
     }
     poll()
@@ -571,6 +597,27 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
       window.clearInterval(timer)
     }
   }, [tracker.id])
+
+  useEffect(() => {
+    void endpointInfo().then(setEndpoint)
+  }, [])
+
+  useSiteFeed(tracker.id, (session) => {
+    setIncoming(session)
+    setOpened((current) => (current?.id === session.id ? session : current))
+    setLiveSessions((current) => {
+      const list = current ?? []
+      return list.some((s) => s.id === session.id) ? list.map((s) => (s.id === session.id ? session : s)) : [session, ...list]
+    })
+    // Os números da visão geral acompanham, sem reler a cada clique
+    reloadTimer.current ??= window.setTimeout(() => {
+      reloadTimer.current = undefined
+      if (visible()) void load(true)
+    }, 10_000)
+  })
+  useEffect(() => () => window.clearTimeout(reloadTimer.current), [])
+
+  const live = liveSessions ? liveSessions.filter(isLiveSession).length : null
 
   const openVisits = (filter: Partial<SessionFilter>) => {
     setVisitsFilter(filter)
@@ -666,6 +713,8 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
           period={period}
           channels={report?.channels.map((c) => c.channel) ?? []}
           manager={manager}
+          meta={metaState.status === 'ready' ? metaState.meta : undefined}
+          incoming={incoming}
           initial={visitsFilter}
           onFilterChange={setVisitsFilter}
         />
@@ -675,8 +724,31 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
         </p>
       ) : (
         <div className={cn('transition-opacity', loading && 'opacity-70')}>
-          <Overview report={report} period={period} tracker={tracker} onVisits={openVisits} onSetup={() => setTab('instalacao')} />
+          <Overview
+            report={report}
+            period={period}
+            tracker={tracker}
+            live={liveSessions ?? []}
+            metaState={metaState}
+            onMetaRefresh={() => void refreshMeta()}
+            endpoint={endpoint}
+            onVisits={openVisits}
+            onOpenSession={setOpened}
+            onSetup={() => setTab('instalacao')}
+          />
         </div>
+      )}
+
+      {opened && tab !== 'visitas' && (
+        <VisitPanel
+          siteId={tracker.id}
+          session={opened}
+          manager={manager}
+          meta={metaState.status === 'ready' ? metaState.meta : undefined}
+          onOpen={setOpened}
+          onClose={() => setOpened(null)}
+          onRemoved={() => setOpened(null)}
+        />
       )}
     </div>
   )

@@ -18,14 +18,29 @@ const copy = (text: string, what = 'Copiado') =>
     () => toast.error('Não consegui copiar')
   )
 
-const MIGRATION = '20261025180000_site_visitas.sql'
+const MIGRATIONS = ['20261025180000_site_visitas.sql', '20261025230000_site_visitas_mapa.sql']
 const DEPLOY = 'supabase functions deploy site-visitas --no-verify-jwt'
+const GEO_SECRETS = 'supabase secrets set MAXMIND_ACCOUNT_ID=… MAXMIND_LICENSE_KEY=…'
 
 /** O que só quem cuida do Supabase faz, uma vez. */
 export const ServerSteps: React.FC<{ className?: string }> = ({ className }) => (
   <ol className={cn('grid list-decimal gap-2 pl-5 text-sm text-gray-700 marker:text-gray-400', className)}>
     <li>
-      Aplicar a migração <code className="rounded bg-zinc-100 px-1 text-xs">supabase/migrations/{MIGRATION}</code>.
+      Aplicar as migrações{' '}
+      {MIGRATIONS.map((m, i) => (
+        <span key={m}>
+          {i > 0 && ' e '}
+          <code className="rounded bg-zinc-100 px-1 text-xs">supabase/migrations/{m}</code>
+        </span>
+      ))}
+      .
+    </li>
+    <li>
+      Para o mapa (cidade e estado de cada visita): uma conta grátis no GeoLite da MaxMind (até 1.000 consultas por dia, uma por visita), uma chave de licença e os segredos{' '}
+      <button type="button" onClick={() => void copy(GEO_SECRETS, 'Comando copiado')} className="inline-flex items-center gap-1 rounded bg-zinc-100 px-1 font-mono text-xs text-gray-800 hover:bg-zinc-200">
+        {GEO_SECRETS} <Copy className="h-3 w-3" aria-hidden />
+      </button>
+      . O IP de quem visita vai à MaxMind para achar a cidade e não é guardado.
     </li>
     <li>
       Publicar a função sem verificação de login (quem visita o site não tem conta):{' '}
