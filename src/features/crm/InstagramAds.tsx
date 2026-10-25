@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, CircleAlert, Copy, ExternalLink, Eye, Facebook, Instagram as InstagramIcon, KeyRound, ListFilter, Loader2, Megaphone, Plus, RefreshCw, Search, X } from 'lucide-react'
+import { ChevronDown, CircleAlert, Copy, ExternalLink, Eye, Facebook, Info, Instagram as InstagramIcon, KeyRound, ListFilter, Loader2, Megaphone, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { Chip } from '@/features/prospects/ui'
-import { BarList, Sparkline, TrendChart, type Point } from './InstagramCharts'
+import { BarList, Sparkline, TrendChart, shortDay, type Point } from './InstagramCharts'
 import { compact, percent } from './instagram'
 import { nameOf, useTeamPeople } from './people'
 import { FIELD, Surface, dayLabel, plural, whenLabel } from './ui'
@@ -446,7 +446,13 @@ const DayChart: React.FC<{ view: AdView; currency: string }> = ({ view, currency
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">{def.label} por dia</h2>
-          <p className="text-xs text-zinc-400">{view.days.length ? `${view.days.length} dias do período` : 'Sem dias no período'}</p>
+          <p className="text-xs text-zinc-400">
+            {!view.days.length
+              ? 'Sem dias no período'
+              : view.days.length < view.periodDays
+                ? `Desde ${shortDay(view.days[0].day)}, o primeiro dia com anúncio`
+                : `${view.days.length} dias do período`}
+          </p>
         </div>
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger className="inline-flex h-8 max-w-full items-center gap-1.5 rounded-full px-3 text-xs font-medium text-zinc-200 ring-1 ring-inset ring-white/20 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
@@ -883,10 +889,35 @@ const Audience: React.FC<{ view: AdView; currency: string }> = ({ view, currency
   )
 }
 
+/** Quando os anúncios não rodaram o período todo: em quantos dias, o primeiro e o último. */
+const RanDays: React.FC<{ view: AdView }> = ({ view }) => {
+  const ran = view.ranDays
+  if (!ran.length || ran.length >= view.periodDays) return null
+  const first = shortDay(ran[0])
+  const last = shortDay(ran[ran.length - 1])
+  return (
+    <p className="flex items-start gap-2 rounded-xl bg-white px-4 py-3 text-xs leading-relaxed text-gray-600 ring-1 ring-inset ring-gray-200">
+      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden />
+      <span>
+        {ran.length === 1 ? (
+          <>
+            Os anúncios rodaram em só 1 dos {view.periodDays} dias do período, <strong className="font-semibold text-gray-900">{first}</strong>.
+          </>
+        ) : (
+          <>
+            Os anúncios rodaram em <strong className="font-semibold text-gray-900">{ran.length} dos {view.periodDays} dias</strong> do período: o primeiro foi {first} e o último {last}. A média por
+            dia conta só esses dias e o gráfico começa no primeiro.
+          </>
+        )}
+      </span>
+    </p>
+  )
+}
+
 const Overview: React.FC<{ report: AdReport; account: AdAccount; selected: string[] | null; onSelect: (ids: string[] | null) => void }> = ({ report, account, selected, onSelect }) => {
   const cur = report.currency
   const view = useMemo(() => viewOf(report, selected), [report, selected])
-  const ctx: SubContext = { currency: cur, days: view.days.length || 1, approximateReach: view.approximateReach }
+  const ctx: SubContext = { currency: cur, ranDays: view.ranDays.length, periodDays: view.periodDays, approximateReach: view.approximateReach }
   const platforms = sliceRows(view.platforms, (k) => PLATFORM_LABEL[k] ?? k)
 
   if (selected && !view.campaigns.length)
@@ -901,6 +932,7 @@ const Overview: React.FC<{ report: AdReport; account: AdAccount; selected: strin
 
   return (
     <div className="grid grid-cols-1 gap-4">
+      <RanDays view={view} />
       <Tiles view={view} ctx={ctx} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">

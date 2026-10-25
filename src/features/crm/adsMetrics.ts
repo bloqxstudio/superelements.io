@@ -59,7 +59,10 @@ export interface MetricDef {
 
 export interface SubContext {
   currency: string
-  days: number
+  /** Dias em que os anúncios rodaram (com valor usado ou impressões) */
+  ranDays: number
+  /** Dias do período inteiro */
+  periodDays: number
   /** Alcance somado de mais de uma campanha */
   approximateReach: boolean
 }
@@ -75,7 +78,15 @@ export const METRICS: MetricDef[] = [
     group: 'Desempenho',
     kind: 'money',
     get: (b) => b.spend,
-    sub: (b, c) => `${money(b.spend / Math.max(1, c.days), c.currency)} por dia em média`,
+    // A média conta só os dias em que os anúncios rodaram, não o período inteiro
+    sub: (b, c) =>
+      !c.ranDays
+        ? 'nenhum dia com anúncio'
+        : c.ranDays === c.periodDays
+          ? `${money(b.spend / c.ranDays, c.currency)} por dia em média`
+          : c.ranDays === 1
+            ? 'tudo num único dia com anúncio'
+            : `${money(b.spend / c.ranDays, c.currency)} por dia nos ${c.ranDays} dias com anúncio`,
   },
   {
     key: 'results',
@@ -211,7 +222,12 @@ export interface Slice {
 
 export interface AdView {
   totals: Bag
+  /** Do primeiro dia com anúncio ao fim do período (antes dele a linha seria só zero) */
   days: { day: string; bag: Bag }[]
+  /** Dias do período inteiro, com ou sem anúncio */
+  periodDays: number
+  /** Os dias em que os anúncios rodaram: com valor usado ou impressões */
+  ranDays: string[]
   campaigns: AdCampaign[]
   platforms: Slice[]
   ages: Slice[]
@@ -261,7 +277,7 @@ export function viewOf(report: AdReport, selected: string[] | null): AdView {
   }
   // Sem os dias por campanha (a Meta não devolveu), o total da conta por dia
   const useAccount = !chosen && !report.campaignDays.length
-  const days = dayRange(report.since, report.until, [...accountDays.keys(), ...byDay.keys()]).map((day) => {
+  const period = dayRange(report.since, report.until, [...accountDays.keys(), ...byDay.keys()]).map((day) => {
     const entry = byDay.get(day)
     const metrics = useAccount ? (accountDays.get(day) ?? zero()) : sumMetrics(entry?.list ?? [])
     if (!chosen) {
@@ -271,11 +287,16 @@ export function viewOf(report: AdReport, selected: string[] | null): AdView {
     }
     return { day, bag: { ...metrics, actions: metrics.actions ?? {}, results: entry?.results ?? 0, resultType } }
   })
+  // Um dia sem gasto nem impressão pode ter resultado (a Meta atribui conversões atrasadas), mas não rodou
+  const ranDays = period.filter((d) => d.bag.spend > 0 || d.bag.impressions > 0).map((d) => d.day)
+  const first = ranDays.length ? period.findIndex((d) => d.day === ranDays[0]) : 0
 
   const live = campaigns.filter((c) => c.metrics.impressions > 0)
   return {
     totals,
-    days,
+    days: period.slice(first),
+    periodDays: period.length,
+    ranDays,
     campaigns,
     platforms: group(report.platforms.filter((r) => pick(r.campaignId)), (r) => r.key, (r) => r.metrics),
     ages: group(report.audience.filter((r) => pick(r.campaignId)), (r) => r.age, (r) => r.metrics).sort((a, b) => a.key.localeCompare(b.key)),
