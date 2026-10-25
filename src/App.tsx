@@ -30,6 +30,8 @@ import CrmClientDetail from "@/pages/crm/ClientDetail";
 import CrmTeam from "@/pages/crm/Team";
 import CrmSocial from "@/pages/crm/Social";
 import CrmDiagnosis from "@/pages/crm/Diagnosis";
+import CrmInstagram from "@/pages/crm/Instagram";
+import InstagramCallback from "@/pages/InstagramCallback";
 import { CrmGate } from "@/features/crm/CrmGate";
 import MenuzitoModel from "@/pages/MenuzitoModel";
 import MenuzitoStyleGuide from "@/pages/MenuzitoStyleGuide";
@@ -64,6 +66,8 @@ function App() {
               <Route path="/login" element={<Auth />} />
               {/* Volta da aprovação no WordPress; sem login no caminho para não perder a senha da URL */}
               <Route path="/wordpress/retorno" element={<WordPressCallback />} />
+              {/* Volta do login do Instagram: troca o código pelo acesso da conta da equipe */}
+              <Route path="/instagram/retorno" element={<ProtectedRoute><InstagramCallback /></ProtectedRoute>} />
               {/* Link de aprovação: o cliente abre sem login */}
               <Route path="/aprovar/:shareId" element={<PageApproval />} />
               {/* Convite para editar um projeto junto: mostra o convite antes do login */}
@@ -120,6 +124,8 @@ function App() {
                 {/* Social selling: a fila do dia nas redes; quem segue e envia é a pessoa */}
                 <Route path="crm/social" element={<CrmGate><CrmSocial /></CrmGate>} />
                 <Route path="crm/diagnostico" element={<CrmGate><CrmDiagnosis /></CrmGate>} />
+                {/* O Instagram da equipe pela API oficial da Meta: números, posts, publicar e comentários */}
+                <Route path="crm/instagram" element={<CrmGate><CrmInstagram /></CrmGate>} />
                 {/* Buscas da equipe na nuvem; a varredura pesada continua no app local. */}
                 <Route path="prospeccao" element={<CrmGate><Prospects /></CrmGate>} />
               </Route>

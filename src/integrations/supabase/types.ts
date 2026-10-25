@@ -368,6 +368,162 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_instagram_accounts: {
+        Row: {
+          id: string
+          team_id: string
+          ig_user_id: string
+          username: string
+          name: string | null
+          account_type: string | null
+          profile_picture_url: string | null
+          biography: string | null
+          website: string | null
+          followers_count: number | null
+          follows_count: number | null
+          media_count: number | null
+          totals: Json
+          audience: Json
+          publish_quota: Json | null
+          missing: string[]
+          connected_by: string | null
+          connected_at: string
+          token_expires_at: string | null
+          synced_at: string | null
+          sync_error: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          ig_user_id: string
+          username?: string
+          name?: string | null
+          account_type?: string | null
+          profile_picture_url?: string | null
+          biography?: string | null
+          website?: string | null
+          followers_count?: number | null
+          follows_count?: number | null
+          media_count?: number | null
+          totals?: Json
+          audience?: Json
+          publish_quota?: Json | null
+          missing?: string[]
+          connected_by?: string | null
+          connected_at?: string
+          token_expires_at?: string | null
+          synced_at?: string | null
+          sync_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          ig_user_id?: string
+          username?: string
+          name?: string | null
+          account_type?: string | null
+          profile_picture_url?: string | null
+          biography?: string | null
+          website?: string | null
+          followers_count?: number | null
+          follows_count?: number | null
+          media_count?: number | null
+          totals?: Json
+          audience?: Json
+          publish_quota?: Json | null
+          missing?: string[]
+          connected_by?: string | null
+          connected_at?: string
+          token_expires_at?: string | null
+          synced_at?: string | null
+          sync_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_instagram_daily: {
+        Row: {
+          account_id: string
+          team_id: string
+          day: string
+          reach: number | null
+          followers: number | null
+        }
+        Insert: {
+          account_id: string
+          team_id: string
+          day: string
+          reach?: number | null
+          followers?: number | null
+        }
+        Update: {
+          account_id?: string
+          team_id?: string
+          day?: string
+          reach?: number | null
+          followers?: number | null
+        }
+        Relationships: []
+      }
+      crm_instagram_media: {
+        Row: {
+          account_id: string
+          team_id: string
+          media_id: string
+          media_type: string
+          product_type: string | null
+          caption: string | null
+          permalink: string | null
+          thumbnail_url: string | null
+          media_url: string | null
+          posted_at: string
+          like_count: number | null
+          comments_count: number | null
+          insights: Json
+          published_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          team_id: string
+          media_id: string
+          media_type: string
+          product_type?: string | null
+          caption?: string | null
+          permalink?: string | null
+          thumbnail_url?: string | null
+          media_url?: string | null
+          posted_at: string
+          like_count?: number | null
+          comments_count?: number | null
+          insights?: Json
+          published_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          team_id?: string
+          media_id?: string
+          media_type?: string
+          product_type?: string | null
+          caption?: string | null
+          permalink?: string | null
+          thumbnail_url?: string | null
+          media_url?: string | null
+          posted_at?: string
+          like_count?: number | null
+          comments_count?: number | null
+          insights?: Json
+          published_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       analytics_config: {
         Row: {
           connection_id: string
