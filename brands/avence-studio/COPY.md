@@ -74,3 +74,10 @@ Voz: direta, calma, concreta; mostra o trabalho. A velocidade aparece no process
 9. **CNPJ e razão social** para o rodapé; **política de privacidade** (o formulário coleta nome e WhatsApp).
 10. **Prazo típico** (se o studio quiser dar um número na pergunta "Quanto tempo leva?").
 11. **Quem atende**: o site não mostra pessoas; se o studio quiser, entra uma faixa curta com nome e foto.
+12. **Página "Proposta (anúncios)"** (2026-10-22), antes de rodar as campanhas:
+    - a conversão do Google Ads (o `send_to` "AW-…/…" em `LP_CONVERSION`, ou um gatilho no Tag Manager para o evento `lead_qualificado`) e a tag do Google no site;
+    - o pixel da Meta no site (o evento Lead só dispara se ele estiver lá); se o pixel tiver um evento automático de formulário, desligar, ou ele conta também o lead não qualificado;
+    - o e-mail que recebe os leads (hoje vai para o administrador do WordPress, como o Contato);
+    - a política de privacidade: a página diz "Usamos estes dados só para responder ao seu pedido", e o studio precisa confirmar essa promessa;
+    - os limites do filtro (`LP_RULES` em `src/features/avence/proposta.ts`): loja virtual e investimento até R$ 500 reprovam sozinhos; não anunciar, negócio ainda não aberto, outra pessoa decide e "só pesquisando" tiram 25 pontos cada, e dois reprovam;
+    - "Se preferir, a gente chama você no número que você deixou": a equipe precisa chamar quem foi qualificado e não clicou no WhatsApp.
