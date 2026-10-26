@@ -447,9 +447,9 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
 
   useEffect(() => watchSkills(), [])
 
-  // Escopo: o que está escolhido, ou o que a pessoa trocou (sempre dentro do que existe)
-  const natural: EditScope = row ? 'post' : layer ? 'layer' : slide ? 'slide' : 'post'
-  const options: EditScope[] = [...(layer && !row ? (['layer'] as const) : []), ...(slide && !row ? (['slide'] as const) : []), 'post', 'set']
+  // Escopo: o que está escolhido, ou o que a pessoa trocou (sempre dentro do que existe). Conjunto sem post: o pedido é criar
+  const natural: EditScope = !post ? 'set' : row ? 'post' : layer ? 'layer' : slide ? 'slide' : 'post'
+  const options: EditScope[] = post ? [...(layer && !row ? (['layer'] as const) : []), ...(slide && !row ? (['slide'] as const) : []), 'post', 'set'] : ['set']
   const scope: EditScope = forced && options.includes(forced) ? forced : natural
   useEffect(() => setForced(null), [layer?.id, slide?.id, row])
 
@@ -479,13 +479,13 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
     if (scope === 'layer') return `${layer?.name ?? 'Componente'} · slide ${(post?.slides.findIndex((s) => s.id === slide?.id) ?? 0) + 1}`
     if (scope === 'slide') return `Slide ${(post?.slides.findIndex((s) => s.id === slide?.id) ?? 0) + 1}`
     if (scope === 'post') return `${post?.name ?? 'Post'} · ${post?.slides.length ?? 0} cards`
-    return 'Todos os posts'
+    return set.posts.length ? 'Todos os posts' : 'Conjunto vazio'
   }
 
   const send = async (override?: string) => {
     const refsNow = useRefs.getState().refs
     const message = (override ?? text).trim() || (files.length ? 'Faça posts com base nesta referência.' : refsNow.length ? 'Use o que marquei como referência.' : '')
-    if (!message || busy || !post || available !== true) return
+    if (!message || busy || available !== true) return
     const push = useChat.getState().push
     const sent = files
     // O que é novo nesta mensagem; o que já foi antes continua valendo, sem enviar de novo
@@ -497,7 +497,7 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
     setText('')
     setBusy(true)
     control.current = new AbortController()
-    useAgent.getState().begin({ scope, postId: post.id, slideId: slide?.id, layerId: scope === 'layer' ? layer?.id : undefined }, scopeName(), agent)
+    useAgent.getState().begin({ scope, postId: post?.id, slideId: slide?.id, layerId: scope === 'layer' ? layer?.id : undefined }, scopeName(), agent)
     try {
       // Os prints entram no conjunto: assim a IA (e você) podem pôr um deles num slide. Só sobem na primeira vez
       const attachments: { name: string; src: string; data: string }[] = []
@@ -624,7 +624,11 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
         {msgs.length === 0 && (
           <div className="space-y-3 text-sm text-gray-600">
             <p className="flex items-center gap-1.5 font-semibold text-gray-900"><Sparkles className="h-4 w-4 text-violet-600" /> Fale com os criativos</p>
-            <p>Escolha um componente, um slide ou um post no canvas e diga o que mudar. <b>Cole um print</b> (Ctrl/⌘+V) para a IA fazer posts com base nele, em qualquer formato.</p>
+            {set.posts.length ? (
+              <p>Escolha um componente, um slide ou um post no canvas e diga o que mudar. <b>Cole um print</b> (Ctrl/⌘+V) para a IA fazer posts com base nele, em qualquer formato.</p>
+            ) : (
+              <p>O conjunto ainda não tem post: diga o que criar (assunto, formato, quantos slides) e a IA monta do zero. <b>Cole um print</b> (Ctrl/⌘+V) para ela seguir o layout dele.</p>
+            )}
             <div className="space-y-1.5">
               {(skill?.starters.length ? skill.starters : SUGGESTIONS[scope]).map((s) => (
                 <button key={s} type="button" onClick={() => void send(s)} disabled={busy} className="block w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-left text-xs text-gray-700 hover:border-violet-300 hover:bg-violet-50">

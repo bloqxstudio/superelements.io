@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarClock, Check, ChevronLeft, ChevronRight, CircleAlert, ExternalLink, Loader2, Pencil, Play, RefreshCw, Send, Settings2, Sparkles, Square, Trash2, Undo2 } from 'lucide-react'
+import { CalendarClock, Check, ChevronLeft, ChevronRight, CircleAlert, ExternalLink, Loader2, Paintbrush, Pencil, Play, RefreshCw, Send, Settings2, Sparkles, Square, Trash2, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -23,6 +23,7 @@ import {
   nowSlot,
   publishNow,
   rescheduleStory,
+  restyleStory,
   runRedo,
   runWeek,
   stopWeek,
@@ -556,6 +557,17 @@ const StoryPanel: React.FC<{
               {redoing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} {story.status === 'ideia' ? 'Montar as telas' : 'Refazer'}
             </Button>
           )}
+          {story.plan?.slides?.length && (story.status === 'criativo' || (story.status === 'falhou' && !story.frames.length)) ? (
+            <Button
+              variant="outline"
+              onClick={() => void act('remontar', () => restyleStory(story), 'Telas remontadas na linguagem do conjunto')}
+              disabled={!!busy || redoing}
+              className="gap-1.5"
+              title="Mesmo roteiro e mesmos textos, montados de novo na linguagem que o conjunto usa agora (sem IA)"
+            >
+              {busy === 'remontar' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paintbrush className="h-4 w-4" />} Remontar
+            </Button>
+          ) : null}
           {story.status === 'descartado' && story.postId && (
             <Button variant="outline" onClick={() => void act('voltar', () => updateStory(story.id, { status: 'criativo' }), 'Voltou para aprovação')} disabled={!!busy}>
               Voltar para aprovação

@@ -1,6 +1,7 @@
 import { mix } from '@/features/space/brand/color'
 import { paletteOf, type Palette } from './brand'
 import { alpha } from './color'
+import { EDITORIAL, type SlideAt } from './editorial'
 import { measureText, widestLine } from './render'
 import { caseBySlug, caseImage, ILLUSTRATIONS } from './library'
 import type { CaseView, SlideSpec, TemplateId } from './plan'
@@ -430,8 +431,10 @@ export const TEMPLATES: SlideTemplate[] = [
   { id: 'viral-fecho', name: 'Viral · salve e siga', hint: 'Fecho que pede salvar, enviar e seguir.' },
 ]
 
-export const buildSlide = (spec: SlideSpec | TemplateId, brand: SetBrand, format: FormatId): Slide => {
+/** Um slide do modelo, na linguagem do conjunto (`brand.look`). `at` diz a posição no post e o assunto da série (a editorial mostra os dois). */
+export const buildSlide = (spec: SlideSpec | TemplateId, brand: SetBrand, format: FormatId, at?: SlideAt): Slide => {
   const s: SlideSpec = typeof spec === 'string' ? { template: spec } : spec
+  if (brand.look === 'editorial') return (EDITORIAL[s.template] ?? EDITORIAL.manifesto)(brand, format, s, at)
   return (BUILDERS[s.template] ?? BUILDERS.manifesto)(brand, format, s)
 }
 
@@ -452,10 +455,10 @@ export const POST_MODELS: PostModel[] = [
   { id: 'quadrado', name: 'Carrossel quadrado', hint: 'Três lâminas 1:1.', format: '1x1', slides: [{ template: 'manifesto' }, { template: 'case-janela', case: 'contplan' }, { template: 'cta' }] },
 ]
 
-export const buildPost = (model: Pick<PostModel, 'name' | 'format' | 'slides'> & { caption?: string }, brand: SetBrand): Post => ({
+export const buildPost = (model: Pick<PostModel, 'name' | 'format' | 'slides'> & { caption?: string }, brand: SetBrand, opts: { series?: string } = {}): Post => ({
   id: uid(),
   name: model.name,
   format: model.format,
   caption: model.caption,
-  slides: model.slides.map((s) => buildSlide(s, brand, model.format)),
+  slides: model.slides.map((s, index) => buildSlide(s, brand, model.format, { index, total: model.slides.length, series: opts.series })),
 })

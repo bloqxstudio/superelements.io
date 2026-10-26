@@ -545,7 +545,8 @@ export const CreativeEditor: React.FC = () => {
     )
 
   const addSlide = (templateId: string) => {
-    const next = buildSlide(templateId as TemplateId, set.brand, format)
+    const count = post?.slides.length ?? 0
+    const next = buildSlide(templateId as TemplateId, set.brand, format, { index: count, total: count + 1 })
     editPost((p) => ({ ...p, slides: [...p.slides, next] }))
     useEditor.getState().selectSlide(next.id)
     setMenu(null)
@@ -555,7 +556,7 @@ export const CreativeEditor: React.FC = () => {
   const addSlideTo = (postId: string, templateId: string) => {
     const target = set.posts.find((p) => p.id === postId)
     if (!target) return
-    const next = buildSlide(templateId as TemplateId, set.brand, target.format)
+    const next = buildSlide(templateId as TemplateId, set.brand, target.format, { index: target.slides.length, total: target.slides.length + 1 })
     useEditor.getState().edit((s) => ({ ...s, posts: s.posts.map((p) => (p.id === postId ? { ...p, slides: [...p.slides, next] } : p)) }))
     useEditor.getState().selectPost(postId)
     useEditor.getState().selectSlide(next.id)
@@ -818,6 +819,17 @@ export const CreativeEditor: React.FC = () => {
                 ))}
               </div>
               <p className="text-xs">Títulos em <b>{set.brand.headingFont}</b>, texto em <b>{set.brand.bodyFont}</b>.</p>
+              <Field label="Linguagem dos modelos">
+                <select
+                  className={cn(inputClass, 'h-8 text-xs')}
+                  value={set.brand.look ?? 'classica'}
+                  onChange={(e) => useEditor.getState().edit((s) => ({ ...s, brand: { ...s.brand, look: e.target.value === 'editorial' ? 'editorial' : undefined } }))}
+                >
+                  <option value="editorial">Editorial (direção criativa)</option>
+                  <option value="classica">Clássica (anéis e pontos)</option>
+                </select>
+              </Field>
+              <p className="text-[11px] leading-snug text-gray-500">Vale para os slides e posts que os modelos e a IA montarem daqui em diante; os que já existem ficam como estão.</p>
               <Field label="Legenda do post">
                 <textarea
                   className={cn(inputClass, 'h-40 py-1.5 text-xs leading-snug')}

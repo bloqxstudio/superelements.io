@@ -11,6 +11,8 @@ export function setBrandFrom(brand: Brand | null, fallbackName: string): SetBran
     bodyFont: brand?.fonts.body?.family ?? brand?.fonts.heading?.family ?? 'Inter',
     logoOnLight: brand?.logo?.onLight ?? brand?.logo?.symbol,
     logoOnDark: brand?.logo?.onDark ?? brand?.logo?.symbolOnDark,
+    // Conjuntos novos já nascem na linguagem da direção criativa (26/10/2026)
+    look: 'editorial',
   }
 }
 

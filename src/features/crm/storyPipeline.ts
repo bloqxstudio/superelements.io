@@ -8,7 +8,7 @@ import { callAiQuiet, useCreativeLink, type CreativeStep } from '@/features/cria
 import type { PlanResponse, PostPlan, SlideSpec } from '@/features/criativos/plan'
 import { loadSet, saveSet } from '@/features/criativos/storage'
 import { buildPost, buildSlide } from '@/features/criativos/templates'
-import { sizeOf, type CreativeSet, type Post, type SetAsset } from '@/features/criativos/types'
+import { sizeOf, type CreativeSet, type ImageLayer, type Post, type SetAsset } from '@/features/criativos/types'
 import { personaFor, profileNow } from '@/features/ia/perfis'
 import { resolveIa } from '@/features/ia/porTarefa'
 import { announce, finishJob, noteJob, patchJob, recordDelivery, startJob, type Area } from '@/features/operations/jobs'
@@ -210,11 +210,34 @@ function briefOf(s: Story, settings: StorySettings, extra?: string) {
     ...(idea.frames ?? []).map((f, i) => `${i + 1}. ${f.text}${f.visual ? ` [mostra: ${f.visual}]` : ''}`),
     idea.cta && `Convite da última tela: ${idea.cta}`,
     idea.case && `Case: ${idea.case}`,
+    settings.photos && !idea.case
+      ? 'Direção visual: a abertura precisa ser fotográfica, colorida e com um gesto ou objeto isolado que sustente a ideia. A imagem ocupa a maior área; use no mínimo uma e no máximo duas fotos na sequência. Evite montar todas as telas como texto sobre fundo preto ou branco.'
+      : '',
     s.review?.ok === false && s.review.note ? `Nota do Editor (corrija isto): ${s.review.note}` : '',
     extra?.trim() ? `Pedido da equipe para refazer: ${extra.trim()}` : '',
   ]
     .filter(Boolean)
     .join('\n')
+}
+
+/**
+ * A direção criativa da Avence pede imagem em grande área e uma ideia visual
+ * reconhecível em três segundos. A Designer ainda pode devolver apenas telas
+ * tipográficas; nesse caso a esteira transforma a abertura em foto, sem mexer
+ * na copy.
+ */
+const ensureVisualOpening = (slides: SlideSpec[], story: Story, settings: StorySettings): SlideSpec[] => {
+  if (!settings.photos || story.idea.case || !slides.length || slides.some((s) => s.template === 'viral-capa' || s.template === 'viral-foto')) return slides
+  const subject = story.idea.frames?.[0]?.visual || story.idea.angle || story.idea.hook || story.title
+  const prompt = [
+    'Fotografia editorial vertical 9:16 para a Avence Studio.',
+    `Cena: ${subject}.`,
+    `Ideia: ${story.idea.hook || story.title}.`,
+    'Um gesto ou objeto principal isolado, enquadramento assimétrico, luz natural quente e espaço negativo para o título.',
+    'Paleta creme com azul cobalto #2b3cf0 e um pequeno acento coral; colorida, humana e tátil.',
+    "Sem texto legível, sem logo, sem marca d'água, sem rosto conhecido e sem aparência genérica de banco de imagens.",
+  ].join(' ')
+  return slides.map((s, i) => (i === 0 ? { ...s, template: 'viral-capa', prompt, dark: true } : s))
 }
 
 /** Relê o conjunto e grava só este post e as imagens novas (outra pessoa pode ter mexido no conjunto enquanto a IA trabalhava). */
@@ -236,9 +259,15 @@ async function mergePost(settings: Pick<StorySettings, 'setId' | 'setProjectId'>
 
 const shortDay = (at: number) => new Date(at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
 
+const storyPostName = (story: Story) => `Story · ${shortDay(story.publishAt)} · ${story.title}`.slice(0, 120)
+
+/** O pilar do story: na linguagem editorial ele é o assunto da série, no canto do topo. */
+const pillarOf = (story: Story, settings: StorySettings) => settings.pillars.find((p) => p.id === story.pillar)?.label ?? story.pillar
+
 /** Dani monta a sequência no conjunto; Lia gera as fotos. O story fica "Para aprovar". */
 async function buildCreative(story: Story, settings: StorySettings, engine: ChatAgentId, signal: AbortSignal, extra?: string): Promise<{ story: Story; photosFailed: number }> {
   const frames = Math.min(10, Math.max(1, story.idea.frames?.length ?? 1))
+  const series = pillarOf(story, settings)
   const job = agentJob('dani', 'criativos', 'Stories', story.title, engine, signal)
   let post: Post
   let spec: PostPlan
@@ -251,7 +280,7 @@ async function buildCreative(story: Story, settings: StorySettings, engine: Chat
     )
     const first = plan.posts?.find((p) => p.slides?.length)
     if (!first) throw new Error('A Designer não montou as telas.')
-    const slides = first.slides.slice(0, 10).map((s, i): SlideSpec => {
+    const slides = ensureVisualOpening(first.slides.slice(0, 10).map((s, i): SlideSpec => {
       // O número grande cabe em poucos caracteres ("02", "5 s"): um texto ali encavala no título
       const n = s.number?.trim()
       const short = n && n.length <= 4 ? n : undefined
@@ -263,12 +292,12 @@ async function buildCreative(story: Story, settings: StorySettings, engine: Chat
             : { ...s, number: short }
       const fixed = { ...numbered, case: s.case && KNOWN_CASES.has(s.case) ? s.case : story.idea.case ?? AV_CASES[0].slug }
       return settings.photos ? fixed : noPhoto(fixed)
-    })
+    }), story, settings)
     spec = { name: story.title, format: '9x16', caption: '', slides }
     job.step('writing', 'Montando as telas no conjunto')
     const set = await loadSet(settings.setId!, settings.setProjectId)
     if (!set) throw new Error('Não consegui abrir o conjunto de criativos dos stories.')
-    post = { ...buildPost({ name: `Story · ${shortDay(story.publishAt)} · ${story.title}`.slice(0, 120), format: '9x16', slides }, set.brand), id: story.postId ?? Math.random().toString(36).slice(2, 10) }
+    post = { ...buildPost({ name: storyPostName(story), format: '9x16', slides }, set.brand, { series }), id: story.postId ?? Math.random().toString(36).slice(2, 10) }
     await mergePost(settings, post)
     job.done()
   } catch (error) {
@@ -308,7 +337,7 @@ async function buildCreative(story: Story, settings: StorySettings, engine: Chat
         slides: post.slides.map((sl, i) => {
           if (!bad.has(sl.id) || !spec.slides[i] || !set) return sl
           spec.slides[i] = noPhoto(spec.slides[i])
-          return { ...buildSlide(spec.slides[i], set.brand, '9x16'), id: sl.id }
+          return { ...buildSlide(spec.slides[i], set.brand, '9x16', { index: i, total: spec.slides.length, series }), id: sl.id }
         }),
       }
       photosFailed = bad.size
@@ -421,6 +450,31 @@ export async function redoStory(story: Story, note: string, signal: AbortSignal)
   await needSet({ ...settings, setId: story.setId ?? settings.setId, setProjectId: story.setProjectId ?? settings.setProjectId })
   const out = await buildCreative(story, { ...settings, setId: story.setId ?? settings.setId, setProjectId: story.setProjectId ?? settings.setProjectId }, resolveIa('stories'), signal, note)
   return out.story
+}
+
+/**
+ * Remonta as telas com o roteiro que a Designer já escreveu (`plan`), na
+ * linguagem que o conjunto usa agora: sem IA, na hora. Serve quando a
+ * identidade muda (ou o post sumiu do conjunto). As fotos já geradas voltam
+ * para as mesmas telas; a tela que pedia foto e não tem vira uma sem foto.
+ */
+export async function restyleStory(story: Story): Promise<Story> {
+  if (story.status !== 'criativo' && !(story.status === 'falhou' && !story.frames.length)) throw new Error('Desaprove o story antes de remontar.')
+  if (!story.plan?.slides?.length) throw new Error('Este story ainda não tem as telas planejadas: use Refazer.')
+  const settings = await loadStorySettings(story.teamId)
+  const where = { setId: story.setId ?? settings.setId, setProjectId: story.setProjectId ?? settings.setProjectId }
+  const set = await needSet({ ...settings, ...where })
+  const old = set.posts.find((p) => p.id === story.postId)
+  const photos = story.plan.slides.map((_, i) => old?.slides[i]?.layers.find((l): l is ImageLayer => l.type === 'image' && !!l.prompt && !!l.src)?.src)
+  const slides = story.plan.slides.map((s, i) => (s.template === 'viral-capa' || s.template === 'viral-foto') && !photos[i] ? noPhoto(s) : s)
+  const built = buildPost({ name: old?.name ?? storyPostName(story), format: '9x16', slides }, set.brand, { series: pillarOf(story, settings) })
+  const post: Post = {
+    ...built,
+    id: story.postId ?? built.id,
+    slides: built.slides.map((sl, i) => (photos[i] ? { ...sl, layers: sl.layers.map((l) => (l.type === 'image' && l.prompt && !l.src ? { ...l, src: photos[i]! } : l)) } : sl)),
+  }
+  await mergePost(where, post)
+  return updateStory(story.id, { status: 'criativo', plan: { ...story.plan, slides }, postId: post.id, setId: where.setId, setProjectId: where.setProjectId ?? null, error: null })
 }
 
 // ---------- aprovar e o resto da mão da equipe ----------

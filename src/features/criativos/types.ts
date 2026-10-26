@@ -167,6 +167,12 @@ export interface SetBrand {
   /** Logo para fundo claro / escuro. */
   logoOnLight?: string
   logoOnDark?: string
+  /**
+   * Linguagem dos modelos: a editorial (direção criativa de 26/10/2026: metadados
+   * no topo, logo pequeno embaixo, sem anéis nem pontos) ou, sem o campo, a
+   * clássica (anéis finos, grade de pontos, quadrado girado).
+   */
+  look?: 'editorial'
 }
 
 export interface SetAsset {
