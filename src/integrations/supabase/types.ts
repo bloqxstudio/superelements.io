@@ -2599,6 +2599,7 @@ export type Database = {
       }
       space_projects: {
         Row: {
+          archived_at: string | null
           context: string
           created_at: string
           doc_path: string | null
@@ -2610,6 +2611,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           context?: string
           created_at?: string
           doc_path?: string | null
@@ -2621,6 +2623,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           context?: string
           created_at?: string
           doc_path?: string | null

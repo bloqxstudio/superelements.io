@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Eye, LogOut, MoreHorizontal, Pencil, Trash2, Users } from 'lucide-react'
+import { Archive, ArchiveRestore, Eye, LogOut, MoreHorizontal, Pencil, Trash2, Users } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -117,16 +117,19 @@ const AgentBadge: React.FC<{ projectId: string }> = ({ projectId }) => {
 interface ProjectCardProps {
   project: Project
   onEdit: () => void
+  /** Arquiva (ou, já arquivado, desarquiva). */
+  onArchive: () => void
   /** Dono: exclui o projeto. */
   onDelete: () => void
   /** Quem entrou por convite: sai do projeto. */
   onLeave: () => void
 }
 
-export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDelete, onLeave }) => (
+export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onArchive, onDelete, onLeave }) => (
   <article
     className={cn(
       'group relative overflow-hidden rounded-xl transition-shadow duration-200',
+      project.archivedAt && 'opacity-70',
       ISLAND_SURFACE,
       'hover:shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_2px_4px_-1px_rgb(0_0_0/0.08),0_12px_24px_-6px_rgb(0_0_0/0.14)]'
     )}
@@ -173,6 +176,10 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDel
         <DropdownMenuItem onSelect={onEdit}>
           <Pencil className="mr-2 h-3.5 w-3.5" />
           Editar detalhes
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onArchive}>
+          {project.archivedAt ? <ArchiveRestore className="mr-2 h-3.5 w-3.5" /> : <Archive className="mr-2 h-3.5 w-3.5" />}
+          {project.archivedAt ? 'Desarquivar' : 'Arquivar'}
         </DropdownMenuItem>
         {/* Admin vendo o projeto de outra conta: edita, mas excluir e sair não são dele */}
         {project.role !== 'admin' && <DropdownMenuSeparator />}

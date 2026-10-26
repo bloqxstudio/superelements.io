@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CircleAlert, CloudUpload, FolderPlus, Plus } from 'lucide-react'
+import { Archive, CircleAlert, CloudUpload, FolderPlus, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -59,7 +59,7 @@ const Projects: React.FC = () => {
   const navigate = useNavigate()
   // Voltar à lista relê da conta: outro aparelho pode ter mudado
   const status = useProjectList({ refresh: true })
-  const { projects, create, update, remove, leave } = useProjectStore()
+  const { projects, create, update, remove, leave, archive } = useProjectStore()
   // Sem projeto, o diálogo cria um novo; o projeto fica enquanto o diálogo fecha
   const [dialog, setDialog] = useState<{ open: boolean; project?: Project }>({ open: false })
   const [deleting, setDeleting] = useState<Project | null>(null)
@@ -75,18 +75,33 @@ const Projects: React.FC = () => {
 
   const sorted = useMemo(() => [...projects].sort((a, b) => b.updatedAt - a.updatedAt), [projects])
   // A conta admin também vê os projetos das outras contas (migração 20261006180000): ficam numa parte separada
-  const mine = useMemo(() => sorted.filter((p) => p.role !== 'admin'), [sorted])
-  const others = useMemo(() => sorted.filter((p) => p.role === 'admin'), [sorted])
+  const active = useMemo(() => sorted.filter((p) => !p.archivedAt), [sorted])
+  const mine = useMemo(() => active.filter((p) => p.role !== 'admin'), [active])
+  const others = useMemo(() => active.filter((p) => p.role === 'admin'), [active])
+  const archived = useMemo(() => sorted.filter((p) => p.archivedAt), [sorted])
+  const [showArchived, setShowArchived] = useState(false)
   const ready = status === 'ready'
   const card = (project: Project) => (
     <ProjectCard
       key={project.id}
       project={project}
       onEdit={() => setDialog({ open: true, project })}
+      onArchive={() => toggleArchive(project)}
       onDelete={() => setDeleting(project)}
       onLeave={() => setLeaving(project)}
     />
   )
+
+  const toggleArchive = async (project: Project) => {
+    const archiving = !project.archivedAt
+    try {
+      await archive(project.id, archiving)
+      toast.success(archiving ? `${project.name} arquivado` : `${project.name} voltou para a lista`)
+    } catch (error) {
+      console.error('[projetos] falha ao arquivar', error)
+      toast.error(`Não foi possível ${archiving ? 'arquivar' : 'desarquivar'} ${project.name}`, { description: 'Confira a internet e tente de novo.' })
+    }
+  }
 
   const submit = async (fields: { name: string; context: string }) => {
     if (dialog.project) {
@@ -191,6 +206,22 @@ const Projects: React.FC = () => {
               Você vê e edita estes projetos porque é admin, como os que a equipe cria pela Prospecção. Publicar, conectar o WordPress e convidar pessoas continuam com quem criou.
             </p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{others.map(card)}</div>
+          </section>
+        )}
+
+        {ready && archived.length > 0 && (
+          <section className="mt-12" aria-labelledby="projetos-arquivados">
+            <button
+              type="button"
+              onClick={() => setShowArchived((v) => !v)}
+              aria-expanded={showArchived}
+              className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Archive className="h-4 w-4 text-gray-500" aria-hidden />
+              <span id="projetos-arquivados">Arquivados ({archived.length})</span>
+              <span className="text-xs font-normal text-gray-500">{showArchived ? 'esconder' : 'mostrar'}</span>
+            </button>
+            {showArchived && <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{archived.map(card)}</div>}
           </section>
         )}
 

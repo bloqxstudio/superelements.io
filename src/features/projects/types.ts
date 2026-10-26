@@ -33,6 +33,8 @@ export interface Project {
   /** Briefing do cliente (negócio, público, tom, ofertas) para usar depois. */
   context: string
   createdAt: number
+  /** Quando foi arquivado; sem valor, o projeto está ativo. */
+  archivedAt?: number
   /** Última mudança no conteúdo; mexer só no zoom não conta. */
   updatedAt: number
   summary: ProjectSummary

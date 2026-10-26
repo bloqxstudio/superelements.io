@@ -85,7 +85,7 @@ async function removeFolder(folder: string) {
 
 // Lista de projetos
 
-const LIST_COLUMNS = 'id, owner_id, name, context, summary, created_at, updated_at'
+const LIST_COLUMNS = 'id, owner_id, name, context, summary, created_at, updated_at, archived_at'
 
 interface ProjectRow {
   id: string
@@ -95,6 +95,7 @@ interface ProjectRow {
   summary: Json
   created_at: string
   updated_at: string
+  archived_at: string | null
 }
 
 const toProject = (row: ProjectRow, userId: string, memberOf?: Set<string>): Project => {
@@ -107,6 +108,7 @@ const toProject = (row: ProjectRow, userId: string, memberOf?: Set<string>): Pro
     context: row.context,
     createdAt: Date.parse(row.created_at),
     updatedAt: Date.parse(row.updated_at),
+    archivedAt: row.archived_at ? Date.parse(row.archived_at) : undefined,
     summary: { sections: 0, colors: [], ...(row.summary as object) } as ProjectSummary,
   }
 }
@@ -147,6 +149,15 @@ export async function updateProject(id: string, fields: Pick<Project, 'name' | '
   const { error } = await supabase
     .from('space_projects')
     .update({ name: fields.name, context: fields.context, updated_at: iso(fields.updatedAt) })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** Arquiva ou desarquiva; não é edição, então `updated_at` fica como está. */
+export async function setProjectArchived(id: string, archivedAt: number | undefined) {
+  const { error } = await supabase
+    .from('space_projects')
+    .update({ archived_at: archivedAt === undefined ? null : iso(archivedAt) })
     .eq('id', id)
   if (error) throw error
 }

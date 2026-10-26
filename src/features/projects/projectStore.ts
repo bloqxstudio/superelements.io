@@ -7,7 +7,7 @@ import type { SpaceNode, SpacePage } from '@/types/space'
 import { revokeApplicationPassword } from '@/features/wordpress/connect'
 import { removePerson } from './access'
 import { forgetBrowserProject } from './browserDb'
-import { deleteProject, insertProject, listProjects, loadWordPressConnection, updateProject } from './storage'
+import { deleteProject, insertProject, listProjects, loadWordPressConnection, setProjectArchived, updateProject } from './storage'
 import type { Project, ProjectSummary } from './types'
 
 export type ListStatus = 'loading' | 'ready' | 'error'
@@ -21,6 +21,8 @@ interface ProjectState {
   load: (userId: string) => Promise<void>
   create: (fields: { name: string; context?: string }) => Promise<Project>
   update: (id: string, fields: Partial<Pick<Project, 'name' | 'context'>>) => Promise<void>
+  /** Tira o projeto da lista principal (ou volta com ele), sem apagar nada. */
+  archive: (id: string, archived: boolean) => Promise<void>
   /** Apaga da conta o projeto, o canvas, a marca e a conexão com o WordPress (revogada no site). Só o dono. */
   remove: (id: string) => Promise<void>
   /** Quem entrou por convite deixa o projeto; ele continua com o dono. */
@@ -118,6 +120,19 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       const current = get().projects.find((p) => p.id === id)
       if (current) set({ projects: replace(get().projects, { ...current, name: before.name, context: before.context }) })
       toast.error('Não foi possível salvar o nome e o contexto', { description: 'Confira a internet e tente de novo.' })
+    }
+  },
+
+  archive: async (id, archived) => {
+    const before = get().projects.find((p) => p.id === id)
+    if (!before) return
+    set({ projects: replace(get().projects, { ...before, archivedAt: archived ? Date.now() : undefined }) })
+    try {
+      await setProjectArchived(id, archived ? Date.now() : undefined)
+    } catch (error) {
+      const current = get().projects.find((p) => p.id === id)
+      if (current) set({ projects: replace(get().projects, { ...current, archivedAt: before.archivedAt }) })
+      throw error
     }
   },
 
