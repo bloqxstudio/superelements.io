@@ -10,6 +10,12 @@ import type { DbAuth } from './auth.ts'
  * enviadas pelo celular) vão para `onMessage`, e `send` envia a da equipe.
  */
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const between = (min: number, max: number) => min + Math.random() * (max - min)
+
+/** WHATSAPP_HUMANIZAR=0 envia na hora, sem o "digitando…" */
+const HUMANIZE = process.env.WHATSAPP_HUMANIZAR !== '0'
+
 /** O nome do aparelho no celular, em Aparelhos conectados */
 const BROWSER: [string, string, string] = ['Avence CRM', 'Chrome', '1.0.0']
 
@@ -297,6 +303,17 @@ export function openSession(o: Options): Session {
     },
     send: async (jid, text) => {
       if (!sock || !isOpen || ended) throw new Error('O WhatsApp não está conectado agora.')
+      if (HUMANIZE) {
+        // Como uma pessoa: abre a conversa, "digita" no ritmo do tamanho do texto (com variação) e só então envia
+        const socket = sock
+        await socket.presenceSubscribe(jid).catch(() => undefined)
+        await sleep(between(500, 1500))
+        await socket.sendPresenceUpdate('composing', jid).catch(() => undefined)
+        await sleep(Math.min(12_000, Math.max(1500, text.length * between(55, 95))))
+        await socket.sendPresenceUpdate('paused', jid).catch(() => undefined)
+        await sleep(between(250, 700))
+        if (!isOpen || ended) throw new Error('O WhatsApp caiu antes de enviar.')
+      }
       const sent = await sock.sendMessage(jid, { text })
       if (!sent?.key.id) throw new Error('O WhatsApp não confirmou o envio.')
       return sent.key.id

@@ -199,6 +199,8 @@ async function flush() {
         // O WhatsApp conhece o número de outro jeito (o 9 do celular): a conversa passa para o endereço certo
         if (target !== chatJid) await moveChat(teamId, chatJid, target, row.id as string)
         const waId = await session.send(target, row.body as string)
+        // Mensagens para várias pessoas em seguida não saem coladas: uma pausa irregular entre elas
+        if (data.length > 1 && process.env.WHATSAPP_HUMANIZAR !== '0') await new Promise((resolve) => setTimeout(resolve, 2000 + Math.random() * 5000))
         const { error: setError } = await db.from('crm_whatsapp_messages').update({ wa_id: waId, ts: new Date().toISOString() }).eq('id', row.id)
         // A cópia do próprio envio chegou antes pelo WhatsApp: fica ela
         if (setError) await db.from('crm_whatsapp_messages').delete().eq('id', row.id)
