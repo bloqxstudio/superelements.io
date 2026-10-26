@@ -691,10 +691,11 @@ export const StoriesArea: React.FC<{ teamId: string; accounts: IgAccount[] }> = 
   }, [teamId, accounts])
 
   useStoryFeed(teamId, () => void reload())
-  // A esteira que terminou (aqui ou na rotina) mostra o que fez
+  // A esteira (aqui ou na rotina) ou o "Refazer" que terminou mostra o que fez, mesmo sem a Realtime
+  const redoing = useStoryRun((s) => s.redoing)
   useEffect(() => {
-    if (!running) void reload()
-  }, [running, reload])
+    if (!running && !redoing) void reload()
+  }, [running, redoing, reload])
 
   const visible = useMemo(() => (stories ?? []).filter((s) => showDiscarded || s.status !== 'descartado'), [stories, showDiscarded])
   const { previews } = useStoryPreviews(visible, 180)
