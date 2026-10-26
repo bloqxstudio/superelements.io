@@ -15,6 +15,12 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
  * `INSTAGRAM_APP_SECRET`, do app da Meta (Instagram › Configuração da API com
  * login pelo Instagram). Sem eles, ainda dá para colar um token gerado no
  * painel da Meta.
+ *
+ * Stories programados (`crm_stories`): o `pg_cron` chama a ação
+ * `run_scheduled` sem login, com o cabeçalho `x-cron-secret` igual ao segredo
+ * `STORIES_CRON_SECRET`; por isso a função é publicada com `--no-verify-jwt`
+ * (as outras ações conferem a pessoa logada aqui dentro). `dryRun: true`
+ * devolve o que sairia, sem chamar a Meta.
  */
 
 const VERSION = 'v26.0'
@@ -660,11 +666,202 @@ async function comments(token: string, mediaId: string) {
   }
 }
 
+// ---------- stories programados (o cron) ----------
+
+/** Uma tela de um story programado; o servidor grava o post e os números. */
+interface StoryFrame {
+  path: string
+  mediaId?: string
+  permalink?: string
+  publishedAt?: string
+  insights?: Record<string, number>
+}
+
+interface StoryRow {
+  id: string
+  team_id: string
+  account_id: string | null
+  publish_at: string
+  status: string
+  title: string
+  frames: StoryFrame[]
+  attempts: number
+  approved_by: string | null
+}
+
+const STORY_MAX_ATTEMPTS = 3
+/** Passou disso do horário sem nenhuma tela no ar: não publica fora de hora. */
+const STORY_LATE_MS = 3 * 3_600_000
+/** Tempo de uma chamada para começar telas novas (a função tem cerca de 150 s; o resto fica para o próximo minuto). */
+const STORY_BUDGET_MS = 95_000
+
+const asFrames = (value: unknown): StoryFrame[] => (Array.isArray(value) ? value.filter((f) => f && typeof f.path === 'string') : [])
+
+/** As idas e vindas de uma navegação por um story (avançar, voltar, sair, passar para o próximo perfil). */
+async function storyNavigation(token: string, mediaId: string) {
+  try {
+    const res = await ig<{ data: Insight[] }>(`${metaId(mediaId, 'story')}/insights`, token, { params: { metric: 'navigation', breakdown: 'story_navigation_action_type' } })
+    const split = breakdownOf(res.data?.[0])
+    return Object.fromEntries(Object.entries(split).map(([key, value]) => [`navigation_${key.toLowerCase()}`, value]))
+  } catch (error) {
+    if (error instanceof HttpError && (error.code === 'token' || error.code === 'rate')) throw error
+    return {}
+  }
+}
+
+/**
+ * Publica um story reservado: as telas que ainda não estão no ar, na ordem,
+ * gravando cada uma assim que sai (uma nova tentativa continua de onde parou).
+ * Limite da Meta ou pausa pedida: volta para a fila daqui a 30 minutos.
+ */
+async function publishStory(admin: SupabaseClient, row: StoryRow, started: number) {
+  const frames = asFrames(row.frames).map((f) => ({ ...f }))
+  const save = async (patch: Record<string, unknown>) => {
+    const { error } = await admin.from('crm_stories').update(patch).eq('id', row.id)
+    if (error) console.error('[instagram] story', row.id, error.message)
+  }
+  const fail = (error: string) => save({ status: 'falhou', frames, error, next_try_at: null })
+  const anyOut = frames.some((f) => f.mediaId)
+
+  if (!frames.length) return fail('O story não tem telas para publicar. Aprove de novo.').then(() => 'falhou')
+  if (row.attempts > STORY_MAX_ATTEMPTS) return fail('Não saiu depois de 3 tentativas. Confira e tente de novo.').then(() => 'falhou')
+  if (!anyOut && Date.now() - Date.parse(row.publish_at) > STORY_LATE_MS) return fail('Passou do horário: o servidor ficou parado e o story não saiu. Escolha outro horário ou publique agora.').then(() => 'falhou')
+  if (!row.account_id) return fail('Escolha a conta do Instagram e aprove de novo.').then(() => 'falhou')
+
+  const { data: accountData, error: accountError } = await admin.from('crm_instagram_accounts').select('id, team_id, ig_user_id, username, sync_error').eq('id', row.account_id).maybeSingle()
+  if (accountError) throw dbError(accountError)
+  const account = accountData as (AccountRow & { sync_error: string | null }) | null
+  if (!account || account.team_id !== row.team_id) return fail('A conta do Instagram não está mais ligada à equipe.').then(() => 'falhou')
+  if (account.sync_error === 'token') return fail('A conexão com o Instagram caiu. Conecte a conta de novo e tente outra vez.').then(() => 'falhou')
+  if (!row.approved_by) return fail('O story está sem aprovação. Aprove de novo.').then(() => 'falhou')
+  const { data: member } = await admin.from('crm_team_members').select('user_id').eq('team_id', row.team_id).eq('user_id', row.approved_by).maybeSingle()
+  if (!member) return fail('Quem aprovou não está mais na equipe. Aprove de novo.').then(() => 'falhou')
+
+  // Publica em nome de quem aprovou (o post entra na lista com o nome dele)
+  const ctx: Ctx = { user: admin, admin, userId: row.approved_by }
+  try {
+    const token = await tokenOf(ctx, account)
+    for (const frame of frames) {
+      if (frame.mediaId) continue
+      if (Date.now() - started > STORY_BUDGET_MS) {
+        // Sem tempo para a próxima tela nesta chamada: o próximo minuto continua
+        await save({ status: 'agendado', frames, attempts: Math.max(0, row.attempts - 1), next_try_at: null })
+        return 'continua'
+      }
+      const result = await guarded(ctx, account, () => publish(ctx, account, token, { kind: 'story', files: [{ path: frame.path, type: 'image' }] }))
+      if (result.status !== 'published') throw new HttpError('O Instagram ainda está processando a tela.', 409, 'processing')
+      frame.mediaId = result.mediaId
+      if (result.permalink) frame.permalink = result.permalink
+      frame.publishedAt = new Date().toISOString()
+      await save({ frames })
+    }
+    await save({ status: 'publicado', frames, error: null, next_try_at: null, published_at: new Date().toISOString() })
+    return 'publicado'
+  } catch (error) {
+    const code = error instanceof HttpError ? error.code : 'error'
+    const message = error instanceof Error ? error.message : String(error)
+    if (code === 'quota' || code === 'rate') {
+      // Não conta como tentativa: a Meta só pediu para esperar
+      await save({ status: 'agendado', frames, attempts: Math.max(0, row.attempts - 1), next_try_at: new Date(Date.now() + 30 * 60_000).toISOString(), error: message })
+      return 'espera'
+    }
+    if (code === 'token' || code === 'permission' || row.attempts >= STORY_MAX_ATTEMPTS) {
+      await fail(message)
+      return 'falhou'
+    }
+    await save({ status: 'agendado', frames, next_try_at: new Date(Date.now() + 5 * 60_000).toISOString(), error: message })
+    return 'tenta de novo'
+  }
+}
+
+/**
+ * Os números de cada tela dos stories publicados há 20 a 23 horas, antes de a
+ * Meta apagar o story: grava na linha (`frames[].insights`) e nos posts.
+ */
+async function readStoryNumbers(admin: SupabaseClient, started: number) {
+  const now = Date.now()
+  const { data, error } = await admin
+    .from('crm_stories')
+    .select('id, team_id, account_id, publish_at, status, title, frames, attempts, approved_by')
+    .eq('status', 'publicado')
+    .is('insights_at', null)
+    .lt('publish_at', new Date(now - 20 * 3_600_000).toISOString())
+    .gt('publish_at', new Date(now - 23.5 * 3_600_000).toISOString())
+    .order('publish_at', { ascending: true })
+    .limit(5)
+  if (error) throw dbError(error)
+  let read = 0
+  for (const row of (data ?? []) as StoryRow[]) {
+    if (Date.now() - started > STORY_BUDGET_MS + 20_000) break
+    if (!row.account_id) continue
+    const { data: accountData } = await admin.from('crm_instagram_accounts').select('id, team_id, ig_user_id, username').eq('id', row.account_id).maybeSingle()
+    const account = accountData as AccountRow | null
+    if (!account || account.team_id !== row.team_id) continue
+    const ctx: Ctx = { user: admin, admin, userId: row.approved_by ?? '' }
+    try {
+      const token = await tokenOf(ctx, account)
+      const frames = asFrames(row.frames).map((f) => ({ ...f }))
+      for (const frame of frames) {
+        if (!frame.mediaId) continue
+        const media: MediaItem = { id: frame.mediaId, media_type: 'IMAGE', media_product_type: 'STORY', timestamp: frame.publishedAt ?? row.publish_at }
+        frame.insights = { ...(await mediaInsights(token, media)), ...(await storyNavigation(token, frame.mediaId)) }
+        await admin.from('crm_instagram_media').update({ insights: frame.insights, updated_at: new Date().toISOString() }).eq('account_id', account.id).eq('media_id', frame.mediaId)
+      }
+      await admin.from('crm_stories').update({ frames, insights_at: new Date().toISOString() }).eq('id', row.id)
+      read++
+    } catch (error) {
+      console.warn('[instagram] números do story', row.id, error instanceof Error ? error.message : error)
+      if (error instanceof HttpError && error.code === 'token') await markBroken(ctx, account.id)
+    }
+  }
+  return read
+}
+
+/** O que o cron pede a cada minuto: publicar o que venceu e ler os números do que está para sumir. */
+async function runScheduled(admin: SupabaseClient, dryRun: boolean) {
+  const started = Date.now()
+  if (dryRun) {
+    const { data, error } = await admin
+      .from('crm_stories')
+      .select('id, team_id, publish_at, title, frames, attempts, next_try_at')
+      .eq('status', 'agendado')
+      .lte('publish_at', new Date().toISOString())
+      .order('publish_at', { ascending: true })
+      .limit(20)
+    if (error) throw dbError(error)
+    const due = ((data ?? []) as (StoryRow & { next_try_at: string | null })[]).filter((r) => !r.next_try_at || Date.parse(r.next_try_at) <= Date.now())
+    return { dryRun: true, due: due.map((r) => ({ id: r.id, title: r.title, publishAt: r.publish_at, frames: asFrames(r.frames).length, attempts: r.attempts })) }
+  }
+  const { data, error } = await admin.rpc('crm_claim_stories', { p_max: 2 })
+  if (error) throw dbError(error)
+  const results: { id: string; title: string; result: string }[] = []
+  for (const row of (data ?? []) as StoryRow[]) results.push({ id: row.id, title: row.title, result: await publishStory(admin, row, started) })
+  const numbers = await readStoryNumbers(admin, started)
+  return { stories: results, numbers }
+}
+
 // ---------- entrada ----------
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Use POST.' }, 405)
+
+  // O cron (pg_cron + pg_net) não tem login: entra só com o segredo combinado
+  if (req.headers.has('x-cron-secret')) {
+    const expected = Deno.env.get('STORIES_CRON_SECRET') ?? ''
+    const given = req.headers.get('x-cron-secret') ?? ''
+    if (!expected || !sameText(given, expected)) return json({ error: 'Segredo do cron inválido.', code: 'auth' }, 401)
+    try {
+      const body = ((await req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>
+      if (body.action !== 'run_scheduled') return json({ error: 'Ação desconhecida.' }, 400)
+      const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
+      return json(await runScheduled(admin, body.dryRun === true))
+    } catch (error) {
+      console.error('[instagram] cron', error)
+      if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status)
+      return json({ error: error instanceof Error ? error.message : String(error), code: 'error' }, 500)
+    }
+  }
 
   try {
     const url = Deno.env.get('SUPABASE_URL')!

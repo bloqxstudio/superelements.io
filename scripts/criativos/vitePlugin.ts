@@ -1,6 +1,7 @@
 import type { Plugin } from 'vite'
 import type { EditRequest } from '../../src/features/criativos/edit.ts'
 import type { PlanRequest } from '../../src/features/criativos/plan.ts'
+import type { StoryPlanRequest } from '../../src/features/crm/storyPlan.ts'
 import type { CopyRequest } from '../../src/features/copy/protocol.ts'
 import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageRequest, type CreativeCall, type CreativeProgress, type CreativeResult } from '../../src/features/criativos/protocol.ts'
 import { CHAT_AGENTS } from '../../src/features/space/chat/protocol.ts'
@@ -14,6 +15,7 @@ import { capturePage, findBrowser } from './captura.ts'
 import { generateImage, hasKey, imageProvider, imageProviders, saveImageKey } from './imagem.ts'
 import { editCreatives } from './edit.ts'
 import { planPosts } from './plan.ts'
+import { planStories } from './stories.ts'
 
 /**
  * A IA dos criativos, no mesmo canal do chat do Space: o websocket do Vite no
@@ -33,6 +35,27 @@ const planInput = (body: Partial<PlanRequest>): PlanRequest => ({
   engine: body.engine === 'codex' ? 'codex' : 'claude',
   persona: typeof body.persona === 'string' ? body.persona.slice(0, 4000) : undefined,
   cases: Array.isArray(body.cases) ? body.cases.slice(0, 12) : [],
+  story: body.story === true,
+  photos: body.photos === true,
+})
+
+const text = (value: unknown, max: number) => String(value ?? '').slice(0, max)
+
+const storyPlanInput = (body: Partial<StoryPlanRequest>): StoryPlanRequest => ({
+  engine: body.engine === 'codex' ? 'codex' : 'claude',
+  persona: typeof body.persona === 'string' ? body.persona.slice(0, 4000) : undefined,
+  web: body.web === true,
+  slots: Array.isArray(body.slots) ? body.slots.slice(0, 21).map((s) => ({ ref: text(s?.ref, 60), when: text(s?.when, 80) })).filter((s) => s.ref) : [],
+  framesMax: Math.min(10, Math.max(1, Number(body.framesMax) || 4)),
+  pillars: Array.isArray(body.pillars) ? body.pillars.slice(0, 12).map((p) => ({ id: text(p?.id, 40), label: text(p?.label, 80), hint: text(p?.hint, 400) })) : [],
+  brief: text(body.brief, 4000),
+  photos: body.photos === true,
+  cases: Array.isArray(body.cases) ? body.cases.slice(0, 12).map((c) => ({ slug: text(c?.slug, 60), name: text(c?.name, 120), segment: text(c?.segment, 160), place: c?.place ? text(c.place, 80) : undefined, summary: text(c?.summary, 600) })) : [],
+  history: Array.isArray(body.history)
+    ? body.history.slice(0, 40).map((h) => ({ when: text(h?.when, 80), pillar: text(h?.pillar, 40), title: text(h?.title, 160), hook: text(h?.hook, 200), frames: Number(h?.frames) || 0, numbers: h?.numbers ? text(h.numbers, 300) : undefined }))
+    : [],
+  planned: Array.isArray(body.planned) ? body.planned.slice(0, 40).map((p) => ({ when: text(p?.when, 80), pillar: text(p?.pillar, 40), title: text(p?.title, 160) })) : [],
+  research: body.research ? text(body.research, 12_000) : undefined,
 })
 
 const editInput = (body: Partial<EditRequest>): EditRequest => ({
@@ -89,7 +112,11 @@ export const criativos = (): Plugin => ({
             if (!input.message.trim()) throw new Error('Escreva o que quer mudar.')
             send({ id, ok: true, data: await editCreatives(input, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
           } else if (call.kind === 'plan') {
-            send({ id, ok: true, data: await planPosts(planInput(call.request as Partial<PlanRequest>), controller.signal) })
+            send({ id, ok: true, data: await planPosts(planInput(call.request as Partial<PlanRequest>), controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
+          } else if (call.kind === 'story-plan') {
+            const input = storyPlanInput(call.request as Partial<StoryPlanRequest>)
+            if (!input.slots.length) throw new Error('A semana não tem horário livre.')
+            send({ id, ok: true, data: await planStories(input, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
           } else if (call.kind === 'image') {
             const req = call.request as Partial<CreativeImageRequest>
             const ratio = req.ratio === 'portrait' || req.ratio === 'landscape' ? req.ratio : 'square'

@@ -21,6 +21,11 @@ interface Ctx {
   w: number
   h: number
   m: number
+  /** Margem de cima e de baixo do texto: no story, as faixas que o Instagram cobre (barra de progresso e perfil em cima, resposta embaixo). */
+  top: number
+  bottom: number
+  /** 9:16: cada slide é uma tela de story (tocar, não arrastar). */
+  story: boolean
   dark: boolean
   /** Destaque que lê bem no fundo atual. */
   hi: string
@@ -28,10 +33,14 @@ interface Ctx {
   soft: string
 }
 
+/** Faixas do story sem texto: cerca de 13% em cima e 16% embaixo de 1920 px. */
+export const STORY_SAFE = { top: 250, bottom: 300 }
+
 const ctxOf = (brand: SetBrand, format: FormatId, dark: boolean): Ctx => {
   const p = paletteOf(brand)
   const { width: w, height: h } = sizeOf(format)
-  return { brand, p, w, h, m: 84, dark, hi: dark ? mix(p.accent, '#ffffff', 0.5) : p.accent, fg: dark ? p.paper : p.ink, soft: dark ? 'rgba(255,255,255,0.62)' : p.muted }
+  const story = h / w > 1.7
+  return { brand, p, w, h, m: 84, top: story ? STORY_SAFE.top : 84, bottom: story ? STORY_SAFE.bottom : 84, story, dark, hi: dark ? mix(p.accent, '#ffffff', 0.5) : p.accent, fg: dark ? p.paper : p.ink, soft: dark ? 'rgba(255,255,255,0.62)' : p.muted }
 }
 
 const text = (c: Ctx, name: string, t: string, o: Partial<TextLayer> & Pick<TextLayer, 'x' | 'y' | 'w' | 'size'>): TextLayer => ({
@@ -78,9 +87,9 @@ const square = (c: Ctx, x: number, y: number, size: number): Layer => rect('Quad
 const header = (c: Ctx, tag?: string): Layer[] => {
   const src = c.dark ? c.brand.logoOnDark ?? c.brand.logoOnLight : c.brand.logoOnLight ?? c.brand.logoOnDark
   const mark: Layer = src
-    ? image('Logo', src, { x: c.m, y: c.m - 4, w: 210, h: 60, fit: 'contain' })
-    : text(c, 'Logo', c.brand.name, { x: c.m, y: c.m, w: 500, size: 36, weight: 600, font: c.brand.headingFont, letterSpacing: -0.04 })
-  return tag ? [mark, label(c, tag, { x: c.w - c.m - 560, y: c.m + 8, w: 560, align: 'right' })] : [mark]
+    ? image('Logo', src, { x: c.m, y: c.top - 4, w: 210, h: 60, fit: 'contain' })
+    : text(c, 'Logo', c.brand.name, { x: c.m, y: c.top, w: 500, size: 36, weight: 600, font: c.brand.headingFont, letterSpacing: -0.04 })
+  return tag ? [mark, label(c, tag, { x: c.w - c.m - 560, y: c.top + 8, w: 560, align: 'right' })] : [mark]
 }
 
 const slide = (background: string, layers: Layer[]): Slide => ({ id: uid(), background, layers })
@@ -92,7 +101,7 @@ type Build = (brand: SetBrand, format: FormatId, spec: SlideSpec) => Slide
 const caseOf = (spec: SlideSpec) => caseBySlug(spec.case ?? '') ?? caseBySlug('processbase')!
 
 const caseFoot = (c: Ctx, name: string, place?: string): Layer =>
-  text(c, 'Rodapé', `${name}${place ? ` · ${place}` : ''}`, { x: c.m, y: c.h - c.m - 30, w: c.w - c.m * 2, size: 28, weight: 500, color: c.soft })
+  text(c, 'Rodapé', `${name}${place ? ` · ${place}` : ''}`, { x: c.m, y: c.h - c.bottom - (c.story ? 40 : 30), w: c.w - c.m * 2, size: 28, weight: 500, color: c.soft })
 
 /** Escurece a base da imagem com um degradê, para o título ler sobre a foto. */
 const scrim = (c: Ctx, from: number, color: string): Layer[] => {
@@ -102,9 +111,9 @@ const scrim = (c: Ctx, from: number, color: string): Layer[] => {
 
 const scene = (spec: SlideSpec, fallback: string) => (spec.prompt?.trim() ? spec.prompt.trim() : `Editorial photograph, cinematic natural light, no text, no logos. Subject: ${fallback}`)
 
-/** Contador discreto do carrossel e a chamada para arrastar. */
-const swipe = (c: Ctx, cue = 'Arraste'): Layer[] => [
-  text(c, 'Arraste', `${cue} →`.trim(), { x: c.w - c.m - 360, y: c.h - c.m - 26, w: 360, size: 26, weight: 600, letterSpacing: 0.12, upper: true, align: 'right', color: c.soft }),
+/** Contador discreto do carrossel e a chamada para arrastar (story não arrasta: o Instagram já mostra as telas). */
+const swipe = (c: Ctx, cue = 'Arraste'): Layer[] => c.story ? [] : [
+  text(c, 'Arraste', `${cue} →`.trim(), { x: c.w - c.m - 360, y: c.h - c.bottom - 26, w: 360, size: 26, weight: 600, letterSpacing: 0.12, upper: true, align: 'right', color: c.soft }),
 ]
 
 const BUILDERS: Record<TemplateId, Build> = {
@@ -113,7 +122,7 @@ const BUILDERS: Record<TemplateId, Build> = {
   'viral-capa': (brand, format, spec) => {
     const c = ctxOf(brand, format, true)
     const tall = c.h > 1500
-    const bottom = c.h - c.m - 96
+    const bottom = c.h - c.bottom - (c.story ? 24 : 96)
     const body = spec.body ? fit(text(c, 'Apoio', spec.body, { x: c.m, y: 0, w: c.w - c.m * 2, size: 34, weight: 500, lineHeight: 1.28, color: 'rgba(255,255,255,0.8)' }), 2, 0.8) : undefined
     const bodyBox = body ? { ...body, y: bottom - heightOf(body) } : undefined
     const head = title(c, spec.title ?? 'Como a marca *conquistou* todo mundo', { x: c.m, y: 0, w: c.w - c.m * 2, size: tall ? 148 : 124, weight: 800, lineHeight: 0.96, letterSpacing: -0.028, color: '#ffffff', emphasisColor: c.hi, maxLines: 5 })
@@ -122,8 +131,8 @@ const BUILDERS: Record<TemplateId, Build> = {
       image('Foto de capa', '', { x: 0, y: 0, w: c.w, h: c.h, prompt: scene(spec, spec.title ?? 'a person at work, candid portrait') }),
       ...scrim(c, 0.28, c.p.ink),
       rect('Degradê do topo', { x: 0, y: 0, w: c.w, h: Math.round(c.h * 0.18), fill: alpha(c.p.ink, 0.55), fill2: alpha(c.p.ink, 0), angle: 180 }),
-      rect('Selo', { x: c.m, y: c.m, w: 16, h: 16, fill: c.p.accent }),
-      text(c, 'Rótulo', spec.label ?? 'Análise', { x: c.m + 34, y: c.m - 6, w: c.w - c.m * 2 - 34, size: 26, weight: 700, letterSpacing: 0.16, upper: true, color: '#ffffff' }),
+      rect('Selo', { x: c.m, y: c.top, w: 16, h: 16, fill: c.p.accent }),
+      text(c, 'Rótulo', spec.label ?? 'Análise', { x: c.m + 34, y: c.top - 6, w: c.w - c.m * 2 - 34, size: 26, weight: 700, letterSpacing: 0.16, upper: true, color: '#ffffff' }),
       headBox,
       ...(bodyBox ? [bodyBox] : []),
       ...swipe(c),
@@ -132,7 +141,7 @@ const BUILDERS: Record<TemplateId, Build> = {
 
   'viral-foto': (brand, format, spec) => {
     const c = ctxOf(brand, format, spec.dark ?? false)
-    const limit = c.h - c.m - 96
+    const limit = c.h - c.bottom - (c.story ? 24 : 96)
     const numH = 150
     const head0 = title(c, spec.title ?? 'O detalhe que *ninguém* percebeu', { x: c.m, y: 0, w: c.w - c.m * 2, size: c.h > 1500 ? 84 : 74, weight: 800, lineHeight: 1, letterSpacing: -0.022, maxLines: 3 })
     const body0 = fit(text(c, 'Apoio', spec.body ?? 'Uma frase curta que explica o ponto e faz a pessoa querer ver o próximo slide.', { x: c.m, y: 0, w: c.w - c.m * 2, size: 34, weight: 400, lineHeight: 1.3, color: c.soft }), 3, 0.78)
@@ -159,11 +168,11 @@ const BUILDERS: Record<TemplateId, Build> = {
     const head = title(c, spec.title ?? 'das pessoas decidem *em segundos*', { x: c.m, y: numY + numSize + 92, w: c.w - c.m * 2, size: tall ? 96 : 84, weight: 800, lineHeight: 1, letterSpacing: -0.022, maxLines: 4 })
     return slide(bg(c), [
       ...backdrop(c, [[c.w - 460, -220, 800]]),
-      text(c, 'Rótulo', spec.label ?? 'O número', { x: c.m, y: c.m, w: c.w - c.m * 2, size: 26, weight: 700, letterSpacing: 0.16, upper: true, color: c.hi }),
+      text(c, 'Rótulo', spec.label ?? 'O número', { x: c.m, y: c.top, w: c.w - c.m * 2, size: 26, weight: 700, letterSpacing: 0.16, upper: true, color: c.hi }),
       text(c, 'Dado', spec.number ?? '73%', { x: c.m - 8, y: numY, w: c.w - c.m * 2 + 16, size: numSize, weight: 800, letterSpacing: -0.045, lineHeight: 0.95, color: c.hi, font: c.brand.headingFont }),
       rect('Linha', { x: c.m, y: numY + numSize + 36, w: 140, h: 10, fill: c.fg }),
       head,
-      ...(spec.body ? [text(c, 'Fonte', spec.body, { x: c.m, y: c.h - c.m - 70, w: c.w - c.m * 2 - 360, size: 26, weight: 500, color: c.soft })] : []),
+      ...(spec.body ? [text(c, 'Fonte', spec.body, { x: c.m, y: c.h - c.bottom - 70, w: c.w - c.m * 2 - 360, size: 26, weight: 500, color: c.soft })] : []),
       ...swipe(c),
     ])
   },
@@ -189,15 +198,15 @@ const BUILDERS: Record<TemplateId, Build> = {
     const top = c.h * 0.5
     return slide(bg(c), [
       ...backdrop(c, [[-260, c.h - 560, 700]]),
-      text(c, 'Rótulo', spec.label ?? 'Gostou?', { x: c.m, y: c.m, w: c.w - c.m * 2, size: 26, weight: 700, letterSpacing: 0.16, upper: true, color: c.hi }),
+      text(c, 'Rótulo', spec.label ?? 'Gostou?', { x: c.m, y: c.top, w: c.w - c.m * 2, size: 26, weight: 700, letterSpacing: 0.16, upper: true, color: c.hi }),
       title(c, spec.title ?? 'Isso vale *ouro*. Não deixe passar.', { x: c.m, y: c.h * 0.16, w: c.w - c.m * 2, size: c.h > 1500 ? 128 : 108, weight: 800, lineHeight: 0.98, letterSpacing: -0.028 }),
       ...rows.slice(0, 4).flatMap((r, i): Layer[] => [
         rect(`Linha ${i + 1}`, { x: c.m, y: top + i * 130, w: c.w - c.m * 2, h: 2, fill: c.fg, opacity: 0.16 }),
         rect(`Ponto ${i + 1}`, { x: c.m, y: top + i * 130 + 48, w: 22, h: 22, fill: c.hi }),
         text(c, `Item ${i + 1}`, r, { x: c.m + 56, y: top + i * 130 + 34, w: c.w - c.m * 2 - 56, size: 46, weight: 600, letterSpacing: -0.02 }),
       ]),
-      text(c, 'Contato', spec.body ?? '@seuperfil', { x: c.m, y: c.h - c.m - 40, w: c.w - c.m * 2 - 120, size: 36, weight: 700, color: c.hi }),
-      square(c, c.w - c.m - 70, c.h - c.m - 70, 48),
+      text(c, 'Contato', spec.body ?? '@seuperfil', { x: c.m, y: c.h - c.bottom - 40, w: c.w - c.m * 2 - 120, size: 36, weight: 700, color: c.hi }),
+      square(c, c.w - c.m - 70, c.h - c.bottom - 70, 48),
     ])
   },
 
@@ -208,8 +217,8 @@ const BUILDERS: Record<TemplateId, Build> = {
       ...backdrop(c, [[c.w - 420, -160, 760], [-260, c.h - 520, 640]]),
       ...header(c, spec.label ?? 'Avence Studio'),
       title(c, spec.title ?? 'Sites com *acabamento* de estúdio.', { x: c.m, y: c.h * (tall ? 0.3 : 0.27), w: c.w - c.m * 2, size: tall ? 150 : 132 }),
-      text(c, 'Apoio', spec.body ?? 'Identidade, texto e movimento trabalhando juntos.', { x: c.m, y: c.h - c.m - 190, w: c.w - c.m * 2 - 220, size: 38, color: c.soft, lineHeight: 1.3 }),
-      square(c, c.w - c.m - 70, c.h - c.m - 70, 48),
+      text(c, 'Apoio', spec.body ?? 'Identidade, texto e movimento trabalhando juntos.', { x: c.m, y: c.h - c.bottom - 190, w: c.w - c.m * 2 - 220, size: 38, color: c.soft, lineHeight: 1.3 }),
+      square(c, c.w - c.m - 70, c.h - c.bottom - 70, 48),
     ])
   },
 
@@ -223,8 +232,8 @@ const BUILDERS: Record<TemplateId, Build> = {
     return slide(bg(c), [
       ...backdrop(c, [[c.w - 360, -200, 560]]),
       ...header(c, spec.label ?? `Case · ${k.segment}`),
-      title(c, spec.title ?? `${k.name}, *em tela cheia*.`, { x: c.m, y: c.m + 120, w: winW, size: c.h > 1500 ? 108 : 92 }),
-      image('Tela do case', img.src, { x: c.m, y: c.h - c.m - 60 - winH, w: winW, h: winH, frame: 'browser', focusY: spec.focus ?? 0 }),
+      title(c, spec.title ?? `${k.name}, *em tela cheia*.`, { x: c.m, y: c.top + 120, w: winW, size: c.h > 1500 ? 108 : 92 }),
+      image('Tela do case', img.src, { x: c.m, y: c.h - c.bottom - 60 - winH, w: winW, h: winH, frame: 'browser', focusY: spec.focus ?? 0 }),
       caseFoot(c, k.name, k.place),
     ])
   },
@@ -238,11 +247,11 @@ const BUILDERS: Record<TemplateId, Build> = {
     const winH = Math.round(winW * 0.7)
     const phW = Math.round(c.w * 0.3)
     const phH = Math.round(phW * 2.05)
-    const baseY = c.h - c.m - 60
+    const baseY = c.h - c.bottom - 60
     return slide(bg(c), [
       ...backdrop(c, [[-280, c.h * 0.3, 700]]),
       ...header(c, spec.label ?? 'Computador e celular'),
-      title(c, spec.title ?? `${k.name} nas *duas telas*.`, { x: c.m, y: c.m + 120, w: c.w - c.m * 2, size: c.h > 1500 ? 104 : 88 }),
+      title(c, spec.title ?? `${k.name} nas *duas telas*.`, { x: c.m, y: c.top + 120, w: c.w - c.m * 2, size: c.h > 1500 ? 104 : 88 }),
       image('Tela do computador', page.src, { x: c.m, y: baseY - winH - phH * 0.18, w: winW, h: winH, frame: 'browser', focusY: spec.focus ?? 0 }),
       image('Tela do celular', phone.src, { x: c.w - c.m - phW, y: baseY - phH, w: phW, h: phH, frame: 'phone', focusY: spec.focus ?? 0 }),
       caseFoot(c, k.name, k.place),
@@ -253,13 +262,13 @@ const BUILDERS: Record<TemplateId, Build> = {
     const c = ctxOf(brand, format, spec.dark ?? false)
     const k = caseOf(spec)
     const cover = caseImage(k, 'capa')
-    const imgH = Math.round(c.h * 0.52)
+    const imgH = Math.round(c.h * (c.story ? 0.42 : 0.52))
     return slide(bg(c), [
       image('Capa do case', cover.src, { x: 0, y: 0, w: c.w, h: imgH, focusY: 0 }),
       label(c, spec.label ?? k.segment, { x: c.m, y: imgH + 70, w: c.w - c.m * 2 }),
       title(c, spec.title ?? `${k.name}.`, { x: c.m, y: imgH + 120, w: c.w - c.m * 2, size: 140 }),
-      text(c, 'Apoio', spec.body ?? k.summary, { x: c.m, y: c.h - c.m - 150, w: c.w - c.m * 2 - 100, size: 32, color: c.soft, lineHeight: 1.3 }),
-      square(c, c.w - c.m - 56, c.h - c.m - 56, 36),
+      text(c, 'Apoio', spec.body ?? k.summary, { x: c.m, y: c.h - c.bottom - 150, w: c.w - c.m * 2 - 100, size: 32, color: c.soft, lineHeight: 1.3 }),
+      square(c, c.w - c.m - 56, c.h - c.bottom - 56, 36),
     ])
   },
 
@@ -271,9 +280,9 @@ const BUILDERS: Record<TemplateId, Build> = {
     return slide(bg(c), [
       ...backdrop(c, [[c.w - 300, c.h * 0.5, 600]]),
       ...header(c, spec.label),
-      title(c, spec.title ?? 'Seu site tem *poucos segundos*.', { x: c.m, y: c.m + 120, w: c.w - c.m * 2, size: c.h > 1500 ? 112 : 96 }),
-      image('Ilustração', art.src, { x: c.m, y: c.h - c.m - 150 - artH, w: artW, h: artH, fit: 'contain' }),
-      text(c, 'Apoio', spec.body ?? '', { x: c.m, y: c.h - c.m - 120, w: c.w - c.m * 2, size: 34, color: c.soft, lineHeight: 1.3 }),
+      title(c, spec.title ?? 'Seu site tem *poucos segundos*.', { x: c.m, y: c.top + 120, w: c.w - c.m * 2, size: c.h > 1500 ? 112 : 96 }),
+      image('Ilustração', art.src, { x: c.m, y: c.h - c.bottom - 150 - artH, w: artW, h: artH, fit: 'contain' }),
+      text(c, 'Apoio', spec.body ?? '', { x: c.m, y: c.h - c.bottom - 120, w: c.w - c.m * 2, size: 34, color: c.soft, lineHeight: 1.3 }),
     ])
   },
 
@@ -281,11 +290,11 @@ const BUILDERS: Record<TemplateId, Build> = {
     const c = ctxOf(brand, format, spec.dark ?? false)
     const rows = spec.items?.length ? spec.items : ['O site não aparece quando procuram.', 'Quem chega no celular desiste.', 'O WhatsApp quase não toca.']
     const top = c.h * 0.4
-    const step = Math.min(200, (c.h - top - c.m - 40) / rows.length)
+    const step = Math.min(200, (c.h - top - c.bottom - 40) / rows.length)
     return slide(bg(c), [
       ...backdrop(c, [[c.w - 380, -240, 620]]),
       ...header(c, spec.label ?? 'Soa familiar?'),
-      title(c, spec.title ?? 'Seu site *faz isso*?', { x: c.m, y: c.m + 120, w: c.w - c.m * 2, size: c.h > 1500 ? 120 : 104 }),
+      title(c, spec.title ?? 'Seu site *faz isso*?', { x: c.m, y: c.top + 120, w: c.w - c.m * 2, size: c.h > 1500 ? 120 : 104 }),
       ...rows.slice(0, 4).flatMap((r, i): Layer[] => [
         rect(`Linha ${i + 1}`, { x: c.m, y: top + i * step, w: c.w - c.m * 2, h: 2, fill: c.fg, opacity: 0.16 }),
         rect(`Ponto ${i + 1}`, { x: c.m, y: top + i * step + 62, w: 22, h: 22, fill: c.hi }),
@@ -303,8 +312,8 @@ const BUILDERS: Record<TemplateId, Build> = {
       title(c, spec.title ?? 'Veja o site do seu negócio *antes* de fechar.', { x: c.m, y, w: c.w - c.m * 2, size: c.h > 1500 ? 128 : 112 }),
       rect('Botão', { x: c.m, y: y + 520, w: 520, h: 104, fill: c.p.accent }),
       text(c, 'Botão', spec.cta ?? 'Peça uma prévia', { x: c.m + 44, y: y + 520 + 30, w: 440, size: 38, weight: 600, color: c.p.onAccent }),
-      text(c, 'Contato', spec.body ?? '@avencestudio', { x: c.m, y: c.h - c.m - 40, w: c.w - c.m * 2, size: 34, color: c.soft }),
-      square(c, c.w - c.m - 70, c.h - c.m - 70, 48),
+      text(c, 'Contato', spec.body ?? '@avencestudio', { x: c.m, y: c.h - c.bottom - 40, w: c.w - c.m * 2, size: 34, color: c.soft }),
+      square(c, c.w - c.m - 70, c.h - c.bottom - 70, 48),
     ])
   },
 }

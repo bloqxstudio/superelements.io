@@ -56,6 +56,10 @@ export interface PlanRequest {
   /** Perfil do agente (quem é, como trabalha, regras). */
   persona?: string
   cases: { slug: string; name: string; segment: string; place?: string; summary: string; stack: string }[]
+  /** Sequência de stories (9:16): cada slide é uma tela, sem link nem legenda (a pauta da semana). */
+  story?: boolean
+  /** Libera os modelos com foto gerada (viral-capa, viral-foto), com a cena em `prompt`. */
+  photos?: boolean
 }
 
 export interface PlanResponse {

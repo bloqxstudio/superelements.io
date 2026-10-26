@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { publicAppUrl } from '@/features/approval/shares'
 import { EMPHASIS_FONT, loadFont, loadImage, slideToBlob, type ImageMap } from '@/features/criativos/render'
 import { assetUrl } from '@/features/criativos/storage'
-import { sizeOf, type CreativeSet, type Post } from '@/features/criativos/types'
+import { sizeOf, type CreativeSet, type Post, type Slide } from '@/features/criativos/types'
 
 /**
  * O Instagram da equipe (`/crm/instagram`): a conta conectada pela API oficial
@@ -430,11 +430,11 @@ export async function publishPost(input: { teamId: string; accountId: string; ki
 
 // ---------- a partir do Criativos ----------
 
-/** Os slides de um post do Criativos em JPEG, no tamanho real, como o editor baixa. */
-export async function renderCreative(set: CreativeSet, post: Post): Promise<Blob[]> {
+/** As fontes carregadas e as imagens dos slides prontas para o canvas (a exportação e as miniaturas dos stories). */
+export async function creativeImages(set: CreativeSet, slides: Slide[]): Promise<ImageMap> {
   const fonts = new Set<string>([set.brand.headingFont, set.brand.bodyFont, EMPHASIS_FONT])
   const sources = new Set<string>()
-  for (const slide of post.slides)
+  for (const slide of slides)
     for (const layer of slide.layers) {
       if (layer.type === 'text') fonts.add(layer.font)
       if (layer.type === 'image' && layer.src) sources.add(layer.src)
@@ -456,6 +456,12 @@ export async function renderCreative(set: CreativeSet, post: Post): Promise<Blob
       }
     })
   )
+  return images
+}
+
+/** Os slides de um post do Criativos em JPEG, no tamanho real, como o editor baixa. */
+export async function renderCreative(set: CreativeSet, post: Post): Promise<Blob[]> {
+  const images = await creativeImages(set, post.slides)
   return Promise.all(post.slides.map((slide) => slideToBlob(slide, post.format, images, 'jpg')))
 }
 

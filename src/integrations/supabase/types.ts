@@ -812,6 +812,135 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_story_settings: {
+        Row: {
+          team_id: string
+          account_id: string | null
+          set_id: string | null
+          set_project_id: string | null
+          days: number[]
+          times: string[]
+          frames_max: number
+          pillars: Json
+          brief: string
+          photos: boolean
+          web: boolean
+          updated_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          team_id: string
+          account_id?: string | null
+          set_id?: string | null
+          set_project_id?: string | null
+          days?: number[]
+          times?: string[]
+          frames_max?: number
+          pillars?: Json
+          brief?: string
+          photos?: boolean
+          web?: boolean
+          updated_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          team_id?: string
+          account_id?: string | null
+          set_id?: string | null
+          set_project_id?: string | null
+          days?: number[]
+          times?: string[]
+          frames_max?: number
+          pillars?: Json
+          brief?: string
+          photos?: boolean
+          web?: boolean
+          updated_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_stories: {
+        Row: {
+          id: string
+          team_id: string
+          account_id: string | null
+          publish_at: string
+          status: string
+          pillar: string
+          title: string
+          idea: Json
+          plan: Json | null
+          review: Json | null
+          set_id: string | null
+          set_project_id: string | null
+          post_id: string | null
+          frames: Json
+          attempts: number
+          next_try_at: string | null
+          error: string | null
+          approved_by: string | null
+          approved_at: string | null
+          published_at: string | null
+          insights_at: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          account_id?: string | null
+          publish_at: string
+          status?: string
+          pillar?: string
+          title?: string
+          idea?: Json
+          plan?: Json | null
+          review?: Json | null
+          set_id?: string | null
+          set_project_id?: string | null
+          post_id?: string | null
+          frames?: Json
+          attempts?: number
+          next_try_at?: string | null
+          error?: string | null
+          approved_by?: string | null
+          approved_at?: string | null
+          published_at?: string | null
+          insights_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          account_id?: string | null
+          publish_at?: string
+          status?: string
+          pillar?: string
+          title?: string
+          idea?: Json
+          plan?: Json | null
+          review?: Json | null
+          set_id?: string | null
+          set_project_id?: string | null
+          post_id?: string | null
+          frames?: Json
+          attempts?: number
+          next_try_at?: string | null
+          error?: string | null
+          approved_by?: string | null
+          approved_at?: string | null
+          published_at?: string | null
+          insights_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       analytics_config: {
         Row: {
           connection_id: string

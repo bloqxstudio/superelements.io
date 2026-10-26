@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CircleAlert, Copy, Instagram as InstagramIcon, KeyRound, Loader2, Megaphone, Plus, RefreshCw, Send } from 'lucide-react'
+import { CalendarClock, CircleAlert, Copy, Instagram as InstagramIcon, KeyRound, Loader2, Megaphone, Plus, RefreshCw, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { AdsArea } from '@/features/crm/InstagramAds'
@@ -8,6 +8,7 @@ import { useCrm } from '@/features/crm/crmStore'
 import { BarList, Sparkline, Stat, TrendChart, shortDay } from '@/features/crm/InstagramCharts'
 import { PostPanel } from '@/features/crm/InstagramPost'
 import { PublishDialog } from '@/features/crm/InstagramPublish'
+import { StoriesArea } from '@/features/crm/InstagramStories'
 import { FORMAT_ICON, MediaThumb } from '@/features/crm/InstagramThumb'
 import {
   FORMAT_LABEL,
@@ -45,12 +46,15 @@ import { cn } from '@/lib/utils'
  * melhores posts, o alcance por formato e o público; a grade de posts com os
  * números de cada um e os comentários; e publicar sem abrir o app. Os números
  * vêm das tabelas que a função `instagram` grava; a tela pede uma leitura nova
- * quando a última tem mais de 30 minutos. A aba Anúncios (`?aba=anuncios`)
- * mostra as campanhas da conta de anúncios (`InstagramAds.tsx`).
+ * quando a última tem mais de 30 minutos. A aba Stories (`?aba=stories`) é a
+ * semana de stories programados (`InstagramStories.tsx`); a aba Anúncios
+ * (`?aba=anuncios`) mostra as campanhas da conta de anúncios (`InstagramAds.tsx`).
  */
 
 type Period = 7 | 30
 type Tab = 'geral' | 'posts'
+/** As abas da tela: o perfil, os stories programados e os anúncios. */
+type Area = 'perfil' | 'stories' | 'anuncios'
 type SortKey = 'recentes' | 'alcance' | 'interacoes' | 'salvos' | 'taxa'
 
 const STALE = 30 * 60_000
@@ -692,13 +696,13 @@ const InstagramPage: React.FC = () => {
   }, [reload])
 
   const account = accounts?.find((a) => a.id === selected) ?? accounts?.[0]
-  const ads = params.get('aba') === 'anuncios'
-  const showAds = (on: boolean) =>
+  const area: Area = params.get('aba') === 'anuncios' ? 'anuncios' : params.get('aba') === 'stories' ? 'stories' : 'perfil'
+  const showArea = (to: Area) =>
     setParams(
       (current) => {
         const next = new URLSearchParams(current)
-        if (on) next.set('aba', 'anuncios')
-        else next.delete('aba')
+        if (to === 'perfil') next.delete('aba')
+        else next.set('aba', to)
         next.delete('conta')
         return next
       },
@@ -710,27 +714,30 @@ const InstagramPage: React.FC = () => {
       <div className="mb-6 flex items-center gap-1 border-b border-gray-200" role="tablist" aria-label="Instagram">
         {(
           [
-            [false, 'Perfil', InstagramIcon],
-            [true, 'Anúncios', Megaphone],
-          ] as [boolean, string, React.ElementType][]
+            ['perfil', 'Perfil', InstagramIcon],
+            ['stories', 'Stories', CalendarClock],
+            ['anuncios', 'Anúncios', Megaphone],
+          ] as [Area, string, React.ElementType][]
         ).map(([value, label, Icon]) => (
           <button
             key={label}
             type="button"
             role="tab"
-            aria-selected={ads === value}
-            onClick={() => showAds(value)}
+            aria-selected={area === value}
+            onClick={() => showArea(value)}
             className={cn(
               '-mb-px inline-flex h-10 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              ads === value ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-900'
+              area === value ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-900'
             )}
           >
             <Icon className="h-4 w-4" aria-hidden /> {label}
           </button>
         ))}
       </div>
-      {ads && team ? (
+      {area === 'anuncios' && team ? (
         <AdsArea teamId={team.id} manager={manager} initialAccount={params.get('conta') ?? undefined} />
+      ) : area === 'stories' && team && accounts !== null && error !== 'sem-tabelas' && !error && accounts.length > 0 ? (
+        <StoriesArea teamId={team.id} accounts={accounts} />
       ) : !team || accounts === null ? (
         <p className="flex items-center gap-2 text-sm text-gray-500">
           <Loader2 className="h-4 w-4 animate-spin" /> Abrindo o Instagram da equipe…

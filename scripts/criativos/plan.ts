@@ -31,8 +31,47 @@ const MODELS = [
   '- cta: chamada final com botão (title, cta, body com o contato, label).',
 ].join('\n')
 
-const promptOf = (r: PlanRequest) =>
+const STORY_MODELS = [
+  '- viral-frase: uma ideia em letras grandes, com rótulo e uma frase de apoio (label, title, body, dark).',
+  '- viral-dado: um número enorme (number) e o que ele quer dizer (title); body diz de onde vem o número. Só número que está no roteiro.',
+].join('\n')
+
+const PHOTO_MODELS = [
+  '- viral-capa: foto gerada em tela cheia com título pesado embaixo (prompt, title, body, label). Boa para abrir.',
+  '- viral-foto: foto gerada em cima, número pequeno e título embaixo (prompt, number, title, body, dark).',
+].join('\n')
+
+/** Sequência de stories da pauta: segue o roteiro tela a tela; sem link, sem legenda, com o texto longe das faixas do Instagram. */
+const storyPromptOf = (r: PlanRequest) =>
   [
+    '## Roteiro do story (aprovado pela Estrategista: siga a ordem e as palavras)',
+    r.brief.trim(),
+    '',
+    `## Pedido: 1 sequência de stories com ${r.slides} ${r.slides === 1 ? 'tela' : 'telas'}, formato 9:16. Cada slide é uma tela, na ordem do roteiro.`,
+    '',
+    '## Cases do estúdio (os únicos fatos que você pode usar; `slug` identifica o case)',
+    r.cases.map((c) => `- slug ${c.slug}: ${c.name}, ${c.segment}${c.place ? `, ${c.place}` : ''}. ${c.summary} (${c.stack})`).join('\n') || '(nenhum)',
+    '',
+    '## Modelos de tela disponíveis',
+    MODELS,
+    STORY_MODELS,
+    ...(r.photos ? [PHOTO_MODELS] : []),
+    `Ilustrações: ${ILLUSTRATION_IDS.join(', ')}.`,
+    '',
+    '## Como montar',
+    '- Uma tela por item do roteiro, na mesma ordem. Mantenha as palavras do roteiro; só encurte o que passar do limite do campo.',
+    '- Escolha o modelo pelo que o roteiro diz que a tela mostra: "dado grande" → viral-dado; "frase" → viral-frase ou manifesto; "lista" → lista; "case" → case-duo, case-janela ou case-capa com o slug do roteiro; "ilustração" → ilustracao' +
+      (r.photos ? '; "foto: <cena>" → viral-capa (na primeira tela) ou viral-foto, com a cena em `prompt`, em inglês, sem texto nem rosto conhecido dentro' : '; não use viral-capa nem viral-foto e não preencha `prompt`') +
+      '.',
+    '- A última tela é o convite: modelo cta, com o convite do roteiro no `title`, o botão em `cta` com até 4 palavras ("Responda SIM", "Me chama no Direct"; nunca "clique no link") e `body` com @avencestudio.',
+    '- Story não tem arrastar nem link: não escreva "arraste", "link na bio" nem "clique". Não use viral-fecho.',
+    '- Alterne fundo escuro e claro (dark true/false) para dar ritmo, sem trocar a cada tela.',
+    `- Modelos válidos: ${TEMPLATE_IDS.filter((t) => t !== 'viral-fecho' && (r.photos || (t !== 'viral-capa' && t !== 'viral-foto'))).join(', ')}.`,
+    '- caption: "" (story não tem legenda). name: o nome curto da sequência.',
+  ].join('\n')
+
+const promptOf = (r: PlanRequest) =>
+  r.story ? storyPromptOf(r) : [
     '## Briefing',
     r.brief.trim() || 'Apresentar os cases do estúdio.',
     '',
@@ -55,7 +94,10 @@ const promptOf = (r: PlanRequest) =>
     '- name: nome curto do post, para a lista interna.',
   ].join('\n')
 
-export const planPosts = (input: PlanRequest, signal?: AbortSignal): Promise<PlanResponse> =>
-  input.engine === 'codex'
-    ? askCodex<PlanResponse>({ prompt: `${withPersona(SYSTEM, input.persona)}\n\n${PLAN_FORMAT_NOTE}\n\n${promptOf(input)}`, timeoutMs: TIMEOUT, signal })
-    : askClaude<PlanResponse>({ system: withPersona(SYSTEM, input.persona), schema: PLAN_SCHEMA, content: [{ type: 'text', text: promptOf(input) }], timeoutMs: TIMEOUT, signal })
+// Os passos vão para a tela: sem eles, a aba acha que a IA sumiu depois de 45 s
+export const planPosts = (input: PlanRequest, signal?: AbortSignal, onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing', detail?: string) => void): Promise<PlanResponse> => {
+  const timeoutMs = input.story ? 300_000 : TIMEOUT
+  return input.engine === 'codex'
+    ? askCodex<PlanResponse>({ prompt: `${withPersona(SYSTEM, input.persona)}\n\n${PLAN_FORMAT_NOTE}\n\n${promptOf(input)}`, timeoutMs, signal, onStep })
+    : askClaude<PlanResponse>({ system: withPersona(SYSTEM, input.persona), schema: PLAN_SCHEMA, content: [{ type: 'text', text: promptOf(input) }], timeoutMs, signal, onStep })
+}

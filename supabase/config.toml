@@ -3,3 +3,7 @@ project_id = "nfmfcpcwyavutntnrxqq"
 # Visitas do site: o visitante não tem conta, então a função recebe sem JWT (ela confere o domínio do site)
 [functions.site-visitas]
 verify_jwt = false
+
+# Instagram: o cron dos stories programados chama sem login (com o segredo x-cron-secret); as outras ações conferem a pessoa logada dentro da função
+[functions.instagram]
+verify_jwt = false

@@ -118,7 +118,7 @@ function withProfile(kind: CreativeCall['kind'], request: unknown): unknown {
     const style = [useIdentity.getState().identity.visual, lia.instructions, ...lia.rules.split('\n')].map((t) => t.trim()).filter(Boolean).join('. ')
     return style ? { ...r, prompt: `${r.prompt}\n\nDireção de estilo da equipe: ${style}` } : request
   }
-  const ids = kind === 'edit' || kind === 'plan' || kind === 'copy-slides' ? ['dani'] : kind === 'copy-plan' ? ['nina'] : kind === 'copy' ? [COPY_PROFILE[String(r.role)], (r.doc as { format?: string } | undefined)?.format === 'lp' ? 'rafa' : ''] : []
+  const ids = kind === 'edit' || kind === 'plan' || kind === 'copy-slides' ? ['dani'] : kind === 'copy-plan' || kind === 'story-plan' ? ['nina'] : kind === 'copy' ? [COPY_PROFILE[String(r.role)], (r.doc as { format?: string } | undefined)?.format === 'lp' ? 'rafa' : ''] : []
   const text = ids.filter(Boolean).map(personaFor).join('\n\n')
   return text ? { ...r, persona: text } : request
 }
@@ -146,6 +146,10 @@ export function callAi<T>(kind: CreativeCall['kind'], rawRequest: unknown, signa
     }
   )
 }
+
+/** Como `callAi`, com o perfil do agente, mas sem o job automático: quem chama mostra o trabalho com o nome do agente certo (a esteira dos stories). */
+export const callAiQuiet = <T>(kind: CreativeCall['kind'], rawRequest: unknown, signal?: AbortSignal, onStep?: (step: CreativeStep, detail?: string) => void): Promise<T> =>
+  callAiRaw<T>(kind, withProfile(kind, rawRequest), signal, onStep)
 
 function callAiRaw<T>(kind: CreativeCall['kind'], request: unknown, signal?: AbortSignal, onStep?: (step: CreativeStep, detail?: string) => void): Promise<T> {
   const { channel, connected, stale } = useCreativeLink.getState()

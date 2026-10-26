@@ -9,6 +9,9 @@ import { addActivity } from '@/features/crm/clients'
 import { listOpportunities } from '@/features/crm/opportunities'
 import { callAi } from '@/features/criativos/link'
 import { listSets } from '@/features/criativos/storage'
+import { crmContext } from '@/features/crm/crmStore'
+import { runWeek } from '@/features/crm/storyPipeline'
+import { addWeeks, weekLabel, weekStart } from '@/features/crm/stories'
 import { finishJob, noteJob, patchJob, recordDelivery, startJob } from '@/features/operations/jobs'
 import { displayName } from '@/features/prospects/offer'
 import { STAGE_LABEL, STAGES, type Opportunity, type Stage } from '@/features/prospects/funnel'
@@ -23,7 +26,7 @@ import { resolveIa } from './porTarefa'
  * move cartão de etapa.
  */
 
-export type TaskId = 'funil' | 'prospectar' | 'abordagem' | 'pesquisa' | 'tendencias' | 'oportunidades' | 'redigir' | 'posts'
+export type TaskId = 'funil' | 'prospectar' | 'abordagem' | 'pesquisa' | 'tendencias' | 'oportunidades' | 'redigir' | 'posts' | 'stories'
 
 export interface ParamDef {
   key: string
@@ -52,6 +55,7 @@ export const TASKS: TaskDef[] = [
   { id: 'oportunidades', label: 'Oportunidades de negócio e nichos', hint: 'Avalia nichos que o estúdio pode atender, com sinais de demanda, concorrência, encaixe e como validar.', agent: 'caio', params: [{ key: 'topic', label: 'Região ou foco (opcional)', kind: 'long', optional: true, placeholder: 'Ex.: serviços de saúde e jurídicos no Rio Grande do Sul que anunciam no Google' }] },
   { id: 'redigir', label: 'Escrever um documento', hint: 'Cria um documento novo na Copy e o redator escreve.', agent: 'bia', params: [{ key: 'format', label: 'Formato', kind: 'format', default: 'post-instagram' }, { key: 'request', label: 'O que escrever', kind: 'long', placeholder: 'Ex.: um post sobre site rápido para arquitetos' }, { key: 'niche', label: 'Nicho', kind: 'niche' }] },
   { id: 'posts', label: 'Criar postagens', hint: 'A designer cria carrosséis num conjunto de criativos.', agent: 'dani', params: [{ key: 'request', label: 'Sobre o quê', kind: 'long', placeholder: 'Ex.: 3 carrosséis sobre por que o Instagram não substitui um site' }, { key: 'setId', label: 'Conjunto de criativos', kind: 'set' }, { key: 'count', label: 'Quantos posts', kind: 'number', default: '3' }] },
+  { id: 'stories', label: 'Programar stories da semana', hint: 'Estrategista, Editor, Designer e Ilustradora montam os stories dos horários livres desta semana e da próxima, com os ajustes de Instagram › Stories. Ficam para a equipe aprovar: nada vai ao ar sem aprovação.', agent: 'nina', params: [] },
 ]
 
 export const taskById = (id: TaskId) => TASKS.find((t) => t.id === id)!
@@ -233,6 +237,18 @@ async function runPosts(run: TaskRun): Promise<TaskResult> {
   return { message: `${r.postNames.length} posts criados em ${target.name}.` }
 }
 
+/** A semana atual (só os horários que ainda vêm) e a próxima. */
+async function runStories(): Promise<TaskResult> {
+  const { team } = await crmContext()
+  const now = weekStart()
+  const out: string[] = []
+  for (const week of [now, addWeeks(now, 1)]) {
+    const result = await runWeek(team.id, week, true)
+    if (result) out.push(`Semana de ${weekLabel(week)}: ${result.message}`)
+  }
+  return { message: out.join('\n') || 'A esteira dos stories já estava rodando.' }
+}
+
 export async function executeTask(task: TaskId, run: TaskRun): Promise<TaskResult> {
   switch (task) {
     case 'funil':
@@ -251,5 +267,7 @@ export async function executeTask(task: TaskId, run: TaskRun): Promise<TaskResul
       return runCopyTask(run, 'redator')
     case 'posts':
       return runPosts(run)
+    case 'stories':
+      return runStories()
   }
 }

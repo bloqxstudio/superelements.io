@@ -1,10 +1,10 @@
 import { toast } from 'sonner'
 import type { ChatAgentId } from '@/features/space/chat/protocol'
 import { useAgent } from './agentStore'
-import { requestImage } from './link'
+import { callAiQuiet, imageProviderChoice, requestImage, useCreativeLink, type CreativeImageProvider } from './link'
 import { uploadAsset } from './storage'
 import { useEditor } from './store'
-import type { ImageLayer, Layer } from './types'
+import type { CreativeSet, ImageLayer, Layer } from './types'
 
 /**
  * Gera as imagens das camadas que têm `prompt` e ainda não têm `src`: pede à
@@ -60,6 +60,59 @@ export async function generateAll(list: { slideId: string; layerId: string; prom
   }
   await Promise.all([worker(), worker()])
   return done
+}
+
+export interface MissingImage {
+  postId: string
+  slideId: string
+  layerId: string
+}
+
+/**
+ * Fora do editor (a esteira dos stories): gera as imagens das camadas com
+ * `prompt` e sem `src` dos posts escolhidos, sobe cada uma para o conjunto e
+ * devolve o conjunto com elas, sem salvar. `provider` é o serviço preferido
+ * (o Codex), se estiver pronto neste computador. Uma por vez: a esteira já
+ * roda um story de cada vez, e as APIs limitam o ritmo.
+ */
+export async function fillSetImages(
+  set: CreativeSet,
+  postIds: string[],
+  opts: { signal: AbortSignal; provider?: CreativeImageProvider; onImage?: (done: number, total: number) => void }
+): Promise<{ set: CreativeSet; failed: MissingImage[] }> {
+  const wanted = new Set(postIds)
+  const todo: (MissingImage & { prompt: string; ratio: 'square' | 'portrait' | 'landscape' })[] = []
+  for (const post of set.posts) {
+    if (!wanted.has(post.id)) continue
+    for (const slide of post.slides)
+      for (const layer of slide.layers) if (layer.type === 'image' && !layer.src && layer.prompt?.trim()) todo.push({ postId: post.id, slideId: slide.id, layerId: layer.id, prompt: layer.prompt.trim(), ratio: ratioOf(layer.w, layer.h) })
+  }
+  const { providers } = useCreativeLink.getState()
+  const provider = opts.provider && providers.includes(opts.provider) ? opts.provider : imageProviderChoice()
+  let current = set
+  const failed: MissingImage[] = []
+  for (const [i, item] of todo.entries()) {
+    if (opts.signal.aborted) throw new DOMException('Parou', 'AbortError')
+    try {
+      const result = await callAiQuiet<{ data: string }>('image', { prompt: `${item.prompt}${NO_TEXT}`, ratio: item.ratio, provider }, opts.signal)
+      const blob = await (await fetch(result.data)).blob()
+      const asset = await uploadAsset(current, blob, 'imagem-gerada.png')
+      current = {
+        ...current,
+        assets: [...current.assets, asset],
+        posts: current.posts.map((p) =>
+          p.id !== item.postId
+            ? p
+            : { ...p, slides: p.slides.map((sl) => (sl.id !== item.slideId ? sl : { ...sl, layers: sl.layers.map((l) => (l.id === item.layerId ? ({ ...l, src: `asset:${asset.id}`, genFailed: false } as Layer) : l)) })) }
+        ),
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') throw err
+      failed.push({ postId: item.postId, slideId: item.slideId, layerId: item.layerId })
+    }
+    opts.onImage?.(i + 1, todo.length)
+  }
+  return { set: current, failed }
 }
 
 /** Sem chave de imagens: os blocos "Gerando…" passam a dizer que a imagem não foi gerada, em vez de esperar para sempre. */
