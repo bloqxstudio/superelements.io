@@ -107,6 +107,13 @@ export async function sendMessage(teamId: string, jid: string, text: string) {
   if (error) throw fail(error)
 }
 
+/** Começa uma conversa com um número novo (DDD + número) e devolve o endereço da conversa. */
+export async function startChat(teamId: string, phone: string, text: string): Promise<string> {
+  const { data, error } = await db.rpc('crm_whatsapp_new_chat', { p_team: teamId, p_phone: phone, p_text: text })
+  if (error) throw error.code === '22023' ? new InboxError(error.message) : fail(error)
+  return data as string
+}
+
 export async function markRead(teamId: string, jid: string) {
   const { error } = await db.rpc('crm_whatsapp_read', { p_team: teamId, p_jid: jid })
   if (error) throw fail(error)

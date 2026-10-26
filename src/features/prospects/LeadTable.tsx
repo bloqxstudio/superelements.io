@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ChevronDown, ExternalLink, Instagram, Mail, MapPin, MessageCircle, Phone } from 'lucide-react'
+import { callPath } from '@/features/crm/call'
 import { cn } from '@/lib/utils'
 import { STAGE_LABEL, type Stage } from './funnel'
 import { adLibraryLinks, advertises } from './score'
@@ -9,10 +11,14 @@ import { PlatformBadge, ScorePill, SURFACE } from './ui'
 const href = (url: string) => (/^https?:/i.test(url) ? url : `https://${url}`)
 const digits = (phone: string) => phone.replace(/\D/g, '')
 
-const ContactLine: React.FC<{ icon: React.ElementType; label: string; to?: string }> = ({ icon: Icon, label, to }) => (
+const ContactLine: React.FC<{ icon: React.ElementType; label: string; to?: string; internal?: string }> = ({ icon: Icon, label, to, internal }) => (
   <li className="flex min-w-0 items-center gap-1.5">
     <Icon className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden />
-    {to ? (
+    {internal ? (
+      <Link to={internal} className="truncate font-medium text-emerald-700 underline-offset-2 hover:underline">
+        {label}
+      </Link>
+    ) : to ? (
       <a href={to} target={to.startsWith('http') ? '_blank' : undefined} rel="noreferrer" className="truncate text-gray-700 underline-offset-2 hover:text-gray-900 hover:underline">
         {label}
       </a>
@@ -47,11 +53,14 @@ export const AdLinks: React.FC<{ lead: Lead }> = ({ lead }) => {
   )
 }
 
-export const Contacts: React.FC<{ lead: Lead; all?: boolean }> =({ lead, all }) => {
+/** `clientId` e `opportunityId`: quando a empresa já está no CRM, a mensagem enviada fica na ficha dela. */
+export const Contacts: React.FC<{ lead: Lead; all?: boolean; clientId?: string; opportunityId?: string }> = ({ lead, all, clientId, opportunityId }) => {
   const scan = lead.scan
   const phone = lead.phone || scan?.phones[0]
   const emails = [...new Set([lead.email, ...(scan?.emails ?? [])].filter(Boolean) as string[])]
+  const callable = scan?.whatsapp || phone
   const lines = [
+    callable && <ContactLine key="call" icon={MessageCircle} label="Chamar no WhatsApp" internal={callPath({ phone: scan?.whatsapp || phone, name: lead.name, clientId, opportunityId })} />,
     scan?.whatsapp && <ContactLine key="wa" icon={MessageCircle} label={scan.whatsapp} to={`https://wa.me/55${digits(scan.whatsapp)}`} />,
     phone && phone !== scan?.whatsapp && <ContactLine key="tel" icon={Phone} label={phone} to={`tel:+55${digits(phone)}`} />,
     ...(all ? emails : emails.slice(0, 1)).map((email) => <ContactLine key={email} icon={Mail} label={email} to={`mailto:${email}`} />),

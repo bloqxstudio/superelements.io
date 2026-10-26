@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Loader2, RefreshCw, Send } from 'lucide-react'
+import { ArrowLeft, Loader2, Plus, RefreshCw, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { addActivity } from '@/features/crm/clients'
+import type { CallTarget } from '@/features/crm/call'
 import { Surface } from '@/features/crm/ui'
 import { cn } from '@/lib/utils'
 import {
@@ -11,6 +13,7 @@ import {
   loadMessages,
   markRead,
   sendMessage,
+  startChat,
   useInboxFeed,
   type WaChat,
   type WaMessage,
@@ -35,10 +38,18 @@ const listTime = (at: number) => {
 
 const dayTitle = (at: number) => new Date(at).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
 
-export const WhatsAppInbox: React.FC<{ teamId: string }> = ({ teamId }) => {
+export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCallDone?: () => void }> = ({ teamId, call, onCallDone }) => {
   const [chats, setChats] = useState<WaChat[]>()
   const [failure, setFailure] = useState<InboxError>()
   const [openJid, setOpenJid] = useState<string>()
+  // Vindo de "Chamar": já abre a nova conversa com o número e o texto
+  const [composing, setComposing] = useState(!!call)
+  useEffect(() => {
+    if (call) {
+      setComposing(true)
+      setOpenJid(undefined)
+    }
+  }, [call])
 
   const load = useCallback(async () => {
     try {
@@ -87,7 +98,14 @@ export const WhatsAppInbox: React.FC<{ teamId: string }> = ({ teamId }) => {
 
   return (
     <div className="grid h-[640px] overflow-hidden rounded-xl border border-gray-200 bg-white md:grid-cols-[320px_1fr]">
-      <ul className={cn('overflow-y-auto border-gray-200 md:border-r', chat && 'hidden md:block')}>
+      <div className={cn('flex min-h-0 flex-col border-gray-200 md:border-r', (chat || composing) && 'hidden md:flex')}>
+      <div className="border-b border-gray-200 p-3">
+        <Button size="sm" variant="outline" className="w-full" onClick={() => { setComposing(true); setOpenJid(undefined) }}>
+          <Plus className="h-4 w-4" aria-hidden />
+          Nova conversa
+        </Button>
+      </div>
+      <ul className="min-h-0 flex-1 overflow-y-auto">
         {chats.length === 0 && (
           <li className="p-4 text-sm text-gray-500">
             Nenhuma conversa ainda. As mensagens novas, recebidas ou enviadas pelo celular, aparecem aqui a partir de agora.
@@ -120,12 +138,93 @@ export const WhatsAppInbox: React.FC<{ teamId: string }> = ({ teamId }) => {
           </li>
         ))}
       </ul>
-      {chat ? (
+      </div>
+      {composing ? (
+        <NewChat
+          key={call?.phone ?? 'novo'}
+          teamId={teamId}
+          call={call}
+          onCancel={() => {
+            setComposing(false)
+            onCallDone?.()
+          }}
+          onSent={(jid) => {
+            onCallDone?.()
+            setComposing(false)
+            setOpenJid(jid)
+            void load()
+          }}
+        />
+      ) : chat ? (
         <Conversation key={chat.jid} teamId={teamId} chat={chat} onBack={() => setOpenJid(undefined)} />
       ) : (
         <div className="hidden items-center justify-center p-6 text-sm text-gray-400 md:flex">Escolha uma conversa</div>
       )}
     </div>
+  )
+}
+
+const NewChat: React.FC<{ teamId: string; call?: CallTarget; onCancel: () => void; onSent: (jid: string) => void }> = ({ teamId, call, onCancel, onSent }) => {
+  const [phone, setPhone] = useState(call?.phone ?? '')
+  const [text, setText] = useState(call?.text ?? '')
+  const [sending, setSending] = useState(false)
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!phone.trim() || !text.trim() || sending) return
+    setSending(true)
+    try {
+      const jid = await startChat(teamId, phone, text.trim())
+      // Chamou alguém do CRM: fica na linha do tempo do cliente
+      if (call?.clientId) await addActivity(call.clientId, 'whatsapp', text.trim(), call.opportunityId).catch((error) => console.error('[whatsapp] nota não gravada', error))
+      onSent(jid)
+    } catch (error) {
+      toast.error(errorText(error))
+      setSending(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-3 p-4">
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="ghost" size="sm" className="md:hidden" onClick={onCancel} aria-label="Voltar às conversas">
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+        </Button>
+        <p className="text-sm font-semibold text-gray-900">{call?.name ? `Chamar ${call.name}` : 'Nova conversa'}</p>
+      </div>
+      <label className="text-sm text-gray-700">
+        Número com DDD
+        <input
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          inputMode="tel"
+          autoFocus
+          placeholder="51 99999-9999"
+          className="mt-1 block h-9 w-full max-w-xs rounded-lg border border-gray-300 px-3 text-sm focus:border-emerald-500 focus:outline-none"
+        />
+        <span className="mt-1 block text-xs text-gray-500">Sem o código do país, é um número do Brasil (+55). Para outro país, digite com o código.</span>
+      </label>
+      <label className="text-sm text-gray-700">
+        Mensagem
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={4}
+          placeholder="Escreva a primeira mensagem"
+          className="mt-1 block w-full max-w-xl resize-y rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+        />
+      </label>
+      <p className="max-w-xl text-xs text-gray-500">O WhatsApp pode restringir números que mandam mensagem para quem não espera. Escreva para quem já tem relação com a empresa.</p>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={!phone.trim() || !text.trim() || sending}>
+          {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
+          Enviar
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          Cancelar
+        </Button>
+      </div>
+    </form>
   )
 }
 

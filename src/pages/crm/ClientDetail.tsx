@@ -22,6 +22,7 @@ import {
   type ContactDraft,
   type TeamPerson,
 } from '@/features/crm/types'
+import { callPath } from '@/features/crm/call'
 import { AutoField, FIELD, Page, StatusBadge, Surface, dayLabel, instagramUrl, siteUrl, whatsappUrl, whenLabel } from '@/features/crm/ui'
 import { DEFAULT_SETTINGS, STAGE_LABEL, STAGES, money, valueOf, type Opportunity, type Stage } from '@/features/prospects/funnel'
 import { PlatformBadge, ScorePill } from '@/features/prospects/ui'
@@ -504,6 +505,11 @@ const ClientDetail: React.FC = () => {
           <p className="mt-1 text-sm text-gray-500">{[client.segment, client.city].filter(Boolean).join(' · ') || 'Sem segmento e cidade'}</p>
           {links.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
+              {(client.whatsapp || client.phone) && (
+                <Link to={callPath({ phone: client.whatsapp ?? client.phone, name: client.name, clientId: client.id })} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-emerald-600 px-3 text-xs font-medium text-white hover:bg-emerald-700">
+                  <MessageCircle className="h-3.5 w-3.5" aria-hidden /> Chamar
+                </Link>
+              )}
               {links.map(({ href, icon: Icon, label }) => (
                 <a key={label} href={href} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-full bg-white px-3 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-200 hover:bg-gray-50">
                   <Icon className="h-3.5 w-3.5" aria-hidden /> {label}

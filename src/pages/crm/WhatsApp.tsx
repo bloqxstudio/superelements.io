@@ -1,6 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Loader2, MessageCircle, RefreshCw } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
+import { useAuth } from '@/contexts/AuthContext'
+import { openingText } from '@/features/crm/call'
+import { personLabel } from '@/features/crm/people'
 import { Button } from '@/components/ui/button'
 import { useCrm } from '@/features/crm/crmStore'
 import { WhatsAppInbox } from '@/features/crm/WhatsAppInbox'
@@ -33,6 +37,21 @@ const timeLabel = (at: number) => new Date(at).toLocaleTimeString('pt-BR', { hou
 
 export default function CrmWhatsApp() {
   const team = useCrm((s) => s.team)
+  const { user } = useAuth()
+  const [params, setParams] = useSearchParams()
+  // "Chamar" em outra tela: o número, o nome e o cliente chegam pelo endereço
+  const call = useMemo(() => {
+    const phone = params.get('numero')
+    if (!phone) return undefined
+    return {
+      phone,
+      name: params.get('nome') ?? undefined,
+      clientId: params.get('cliente') ?? undefined,
+      opportunityId: params.get('oportunidade') ?? undefined,
+      text: params.get('texto') ?? openingText(personLabel(user?.email)),
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params])
   const manager = canManage(team?.role)
   // undefined: lendo; null: nunca conectado
   const [number, setNumber] = useState<WaNumber | null>()
@@ -132,9 +151,14 @@ export default function CrmWhatsApp() {
           </Surface>
         )}
       </div>
+      {call && number && number.status !== 'connected' && (
+        <p className="mt-4 max-w-2xl rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Para chamar {call.name ?? 'esse número'}, o WhatsApp da equipe precisa estar conectado.
+        </p>
+      )}
       {number?.status === 'connected' && !failure && (
         <div className="mt-6">
-          <WhatsAppInbox teamId={team.id} />
+          <WhatsAppInbox teamId={team.id} call={call} onCallDone={() => setParams({}, { replace: true })} />
         </div>
       )}
     </Page>

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '@/contexts/AuthContext'
+import { callPath } from '@/features/crm/call'
 import { useComments, type OpportunityComment } from '@/features/crm/comments'
 import { useCrm } from '@/features/crm/crmStore'
 import { OpportunityComments } from '@/features/crm/OpportunityComments'
@@ -269,9 +270,9 @@ const Card: React.FC<{
       {build && <BuildBar item={item} {...build} />}
       <div className="mt-2.5 flex items-center gap-2 border-t border-gray-100 pt-2">
         {wa ? (
-          <a href={`https://wa.me/55${digits(wa)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900" aria-label={`WhatsApp de ${lead.name}`}>
-            <MessageCircle className="h-3.5 w-3.5" aria-hidden /> WhatsApp
-          </a>
+          <Link to={callPath({ phone: wa, name: lead.name, clientId: item.clientId, opportunityId: item.id })} className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900" aria-label={`Chamar ${lead.name} no WhatsApp`}>
+            <MessageCircle className="h-3.5 w-3.5" aria-hidden /> Chamar
+          </Link>
         ) : (
           <span className="text-xs text-gray-400">Sem WhatsApp</span>
         )}
@@ -539,7 +540,7 @@ const Panel: React.FC<{
             <section>
               <p className="text-xs font-medium text-gray-700">Contato</p>
               <div className="mt-1.5">
-                <Contacts lead={lead} all />
+                <Contacts lead={lead} all clientId={item.clientId} opportunityId={item.id} />
               </div>
               {lead.mapsUrl && (
                 <a href={lead.mapsUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-gray-600 underline-offset-2 hover:underline">

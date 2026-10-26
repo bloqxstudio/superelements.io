@@ -89,6 +89,17 @@ async function store(teamId: string, m: StoredMessage) {
 }
 let warnedInbox = false
 
+/** Passa a mensagem para a conversa do endereço certo e tira a antiga se ficou vazia */
+async function moveChat(teamId: string, from: string, to: string, messageId: string) {
+  const { data: old } = await db.from('crm_whatsapp_chats').select('last_text, last_from_me, last_at').eq('team_id', teamId).eq('jid', from).maybeSingle()
+  await db
+    .from('crm_whatsapp_chats')
+    .upsert({ team_id: teamId, jid: to, phone: to.split('@')[0], last_text: old?.last_text ?? '', last_from_me: true, last_at: old?.last_at ?? new Date().toISOString() }, { onConflict: 'team_id,jid', ignoreDuplicates: true })
+  await db.from('crm_whatsapp_messages').update({ chat_jid: to }).eq('id', messageId)
+  const { count } = await db.from('crm_whatsapp_messages').select('id', { count: 'exact', head: true }).eq('team_id', teamId).eq('chat_jid', from)
+  if (!count) await db.from('crm_whatsapp_chats').delete().eq('team_id', teamId).eq('jid', from)
+}
+
 /** Envia o que a equipe escreveu na tela (mensagens em fila) pelos números conectados */
 async function flush() {
   for (const [teamId, session] of sessions) {
@@ -106,7 +117,12 @@ async function flush() {
       const { data: claimed } = await db.from('crm_whatsapp_messages').update({ status: 'sent' }).eq('id', row.id).eq('status', 'queued').select('id')
       if (!claimed?.length) continue
       try {
-        const waId = await session.send(row.chat_jid as string, row.body as string)
+        const chatJid = row.chat_jid as string
+        const target = await session.resolve(chatJid)
+        if (!target) throw new Error('Esse número não tem WhatsApp.')
+        // O WhatsApp conhece o número de outro jeito (o 9 do celular): a conversa passa para o endereço certo
+        if (target !== chatJid) await moveChat(teamId, chatJid, target, row.id as string)
+        const waId = await session.send(target, row.body as string)
         const { error: setError } = await db.from('crm_whatsapp_messages').update({ wa_id: waId, ts: new Date().toISOString() }).eq('id', row.id)
         // A cópia do próprio envio chegou antes pelo WhatsApp: fica ela
         if (setError) await db.from('crm_whatsapp_messages').delete().eq('id', row.id)

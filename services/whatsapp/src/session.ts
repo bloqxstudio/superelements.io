@@ -37,6 +37,8 @@ export interface StoredMessage {
 export interface Session {
   /** Está com a conexão aberta (dá para enviar) */
   readonly open: boolean
+  /** Confere se o número tem WhatsApp e devolve o endereço certo (com o 9 do Brasil, por exemplo) */
+  resolve: (jid: string) => Promise<string | undefined>
   /** Envia texto e devolve o id da mensagem no WhatsApp */
   send: (jid: string, text: string) => Promise<string>
   /** Saindo: tirando o aparelho do celular */
@@ -256,6 +258,12 @@ export function openSession(o: Options): Session {
   return {
     get open() {
       return isOpen && !ended
+    },
+    resolve: async (jid) => {
+      if (!sock || !isOpen || ended) throw new Error('O WhatsApp não está conectado agora.')
+      if (!jid.endsWith('@s.whatsapp.net')) return jid
+      const found = await sock.onWhatsApp(jid)
+      return found?.find((r) => r.exists)?.jid
     },
     send: async (jid, text) => {
       if (!sock || !isOpen || ended) throw new Error('O WhatsApp não está conectado agora.')
