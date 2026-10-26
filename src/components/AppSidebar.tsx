@@ -1,7 +1,7 @@
 import { useJobs } from '@/features/operations/jobs'
 import React, { useEffect } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { Bot, Building2, FolderKanban, Globe, Images, Instagram, PenLine, KanbanSquare, LogOut, Radar, ScanSearch, Send, Users, Wand2, X } from 'lucide-react'
+import { Bot, Building2, FolderKanban, Globe, Images, Instagram, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCrm } from '@/features/crm/crmStore'
@@ -159,6 +159,7 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         {crm && (
           <Section title="CRM">
             <OportunidadesItem />
+            <Item to="/crm/whatsapp" icon={MessageCircle} label="WhatsApp" />
             <Item to="/crm/clientes" icon={Building2} label="Clientes" />
             <Item to="/crm/social" icon={Send} label="Social" />
             <InstagramItem />

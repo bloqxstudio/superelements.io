@@ -32,6 +32,7 @@ import CrmSocial from "@/pages/crm/Social";
 import CrmDiagnosis from "@/pages/crm/Diagnosis";
 import CrmInstagram from "@/pages/crm/Instagram";
 import CrmSite from "@/pages/crm/Site";
+import CrmWhatsApp from "@/pages/crm/WhatsApp";
 import InstagramCallback from "@/pages/InstagramCallback";
 import AdsCallback from "@/pages/AdsCallback";
 import { CrmGate } from "@/features/crm/CrmGate";
@@ -132,6 +133,8 @@ function App() {
                 <Route path="crm/instagram" element={<CrmGate><CrmInstagram /></CrmGate>} />
                 {/* As visitas do site da equipe, contadas pelo script visitas.js colado no WordPress */}
                 <Route path="crm/site" element={<CrmGate><CrmSite /></CrmGate>} />
+                {/* O número de WhatsApp da equipe conectado pelo QR code (serviço services/whatsapp) */}
+                <Route path="crm/whatsapp" element={<CrmGate><CrmWhatsApp /></CrmGate>} />
                 {/* Buscas da equipe na nuvem; a varredura pesada continua no app local. */}
                 <Route path="prospeccao" element={<CrmGate><Prospects /></CrmGate>} />
               </Route>

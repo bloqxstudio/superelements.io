@@ -13,7 +13,8 @@
     "sections:upload": "node scripts/upload-section-pack.mjs",
     "prospectar": "node scripts/prospects/prospectar.ts",
     "prospectar:subir": "node scripts/prospects/upload.ts",
-    "conector": "node scripts/connector/build.mjs"
+    "conector": "node scripts/connector/build.mjs",
+    "whatsapp": "npm --prefix services/whatsapp start"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",

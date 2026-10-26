@@ -812,6 +812,51 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_whatsapp_numbers: {
+        Row: {
+          team_id: string
+          wanted: boolean
+          status: string
+          qr: string | null
+          phone: string | null
+          profile_name: string | null
+          error: string | null
+          requested_at: string | null
+          requested_by: string | null
+          seen_at: string | null
+          connected_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          team_id: string
+          wanted?: boolean
+          status?: string
+          qr?: string | null
+          phone?: string | null
+          profile_name?: string | null
+          error?: string | null
+          requested_at?: string | null
+          requested_by?: string | null
+          seen_at?: string | null
+          connected_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          team_id?: string
+          wanted?: boolean
+          status?: string
+          qr?: string | null
+          phone?: string | null
+          profile_name?: string | null
+          error?: string | null
+          requested_at?: string | null
+          requested_by?: string | null
+          seen_at?: string | null
+          connected_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_story_settings: {
         Row: {
           team_id: string
@@ -2886,6 +2931,8 @@ export type Database = {
         Args: { p_team: string }
         Returns: { user_id: string; email: string; role: string; joined_at: string }[]
       }
+      crm_whatsapp_connect: { Args: { p_team: string }; Returns: undefined }
+      crm_whatsapp_disconnect: { Args: { p_team: string }; Returns: undefined }
       get_crm_invite: { Args: { p_id: string }; Returns: Json }
       site_report: {
         Args: { p_site: string; p_from: string; p_to: string; p_tz?: string }
