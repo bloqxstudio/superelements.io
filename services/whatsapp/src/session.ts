@@ -1,4 +1,4 @@
-import makeWASocket, { DisconnectReason, fetchLatestWaWebVersion, jidDecode, makeCacheableSignalKeyStore, type ConnectionState, type WASocket, type WAVersion } from 'baileys'
+import makeWASocket, { DisconnectReason, fetchLatestWaWebVersion, jidDecode, makeCacheableSignalKeyStore, type ConnectionState, type WAMessage, type WASocket, type WAVersion } from 'baileys'
 import type { Logger } from 'pino'
 import QRCode from 'qrcode'
 import type { DbAuth } from './auth.ts'
@@ -6,8 +6,8 @@ import type { DbAuth } from './auth.ts'
 /**
  * A conexão de um número: abre o WhatsApp como aparelho conectado, põe o QR
  * code na linha da equipe até o celular ler, e daí em diante mantém o número
- * conectado (reconecta sozinho se a rede cair). Por enquanto é só isso: as
- * mensagens não são lidas nem guardadas.
+ * conectado (reconecta sozinho se a rede cair). As mensagens (recebidas e as
+ * enviadas pelo celular) vão para `onMessage`, e `send` envia a da equipe.
  */
 
 /** O nome do aparelho no celular, em Aparelhos conectados */
@@ -23,7 +23,22 @@ export interface NumberPatch {
   connected_at?: string
 }
 
+/** Uma mensagem de conversa individual, já no formato que o CRM guarda */
+export interface StoredMessage {
+  jid: string
+  name?: string
+  waId: string
+  fromMe: boolean
+  body: string
+  kind: string
+  at: Date
+}
+
 export interface Session {
+  /** Está com a conexão aberta (dá para enviar) */
+  readonly open: boolean
+  /** Envia texto e devolve o id da mensagem no WhatsApp */
+  send: (jid: string, text: string) => Promise<string>
   /** Saindo: tirando o aparelho do celular */
   readonly leaving: boolean
   /** Tira o aparelho do celular e apaga a sessão */
@@ -40,6 +55,8 @@ interface Options {
   log: Logger
   /** Desconectaram com o serviço desligado: só tirar o aparelho do celular */
   logoutOnly?: boolean
+  /** Chegou (ou o celular enviou) uma mensagem */
+  onMessage: (message: StoredMessage) => Promise<void>
   onEnd: () => void
 }
 
@@ -50,6 +67,38 @@ async function waVersion() {
   const latest = await fetchLatestWaWebVersion().catch(() => undefined)
   if (latest && !latest.error) known = { version: latest.version, at: Date.now() }
   return latest?.version
+}
+
+/** Texto e tipo de uma mensagem; mídia vira um rótulo (a mídia em si não é guardada) */
+function describe(message: WAMessage): { body: string; kind: string } | undefined {
+  let m = message.message
+  if (!m) return undefined
+  m = m.ephemeralMessage?.message ?? m.viewOnceMessage?.message ?? m.documentWithCaptionMessage?.message ?? m
+  const text = m.conversation ?? m.extendedTextMessage?.text
+  if (text) return { body: text, kind: 'text' }
+  const media: [keyof typeof m, string, string][] = [
+    ['imageMessage', 'image', 'Foto'],
+    ['videoMessage', 'video', 'Vídeo'],
+    ['audioMessage', 'audio', 'Áudio'],
+    ['documentMessage', 'document', 'Documento'],
+    ['stickerMessage', 'sticker', 'Figurinha'],
+  ]
+  for (const [field, kind, label] of media) {
+    const part = m[field] as { caption?: string | null; fileName?: string | null } | null | undefined
+    if (part) return { body: [`[${label}]`, part.caption ?? part.fileName].filter(Boolean).join(' '), kind }
+  }
+  // Reações, enquetes, chamadas, protocolo… não viram mensagem
+  if (m.reactionMessage || m.protocolMessage || m.senderKeyDistributionMessage) return undefined
+  return { body: '[Mensagem de um tipo que o CRM ainda não mostra]', kind: 'other' }
+}
+
+/** A conversa individual da mensagem (número, não o id interno @lid quando o número é conhecido) */
+function chatOf(message: WAMessage): string | undefined {
+  const { remoteJid, remoteJidAlt } = message.key
+  if (!remoteJid) return undefined
+  const jid = remoteJid.endsWith('@lid') && remoteJidAlt ? remoteJidAlt : remoteJid
+  // Só conversas individuais: grupos, status e canais ficam de fora
+  return jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid') ? jid : undefined
 }
 
 const statusOf = (error: unknown) => (error as { output?: { statusCode?: number } } | undefined)?.output?.statusCode
@@ -104,6 +153,19 @@ export function openSession(o: Options): Session {
     socket.ev.on('creds.update', () => {
       if (!ended) void o.auth.saveCreds().catch((error) => say(`não gravou as chaves: ${error.message ?? error}`))
     })
+    socket.ev.on('messages.upsert', ({ messages }) => {
+      if (leaving || ended) return
+      for (const message of messages) {
+        const jid = chatOf(message)
+        const content = describe(message)
+        const waId = message.key.id
+        if (!jid || !content || !waId) continue
+        const at = new Date((Number(message.messageTimestamp) || Date.now() / 1000) * 1000)
+        void o
+          .onMessage({ jid, name: message.pushName ?? undefined, waId, fromMe: !!message.key.fromMe, ...content, at })
+          .catch((error) => say(`não guardou a mensagem: ${error.message ?? error}`))
+      }
+    })
     socket.ev.on('connection.update', (update) => void onUpdate(socket, update).catch((error) => say(`erro na conexão: ${error.message ?? error}`)))
   }
 
@@ -114,6 +176,8 @@ export function openSession(o: Options): Session {
       say('QR code novo')
       await o.report({ status: 'connecting', qr: await QRCode.toDataURL(update.qr, { margin: 1, width: 320 }), error: null })
     }
+
+    if (update.connection) isOpen = update.connection === 'open'
 
     if (update.connection === 'open') {
       failures = 0
@@ -168,6 +232,8 @@ export function openSession(o: Options): Session {
     }
   }
 
+  let isOpen = false
+
   const logout = async () => {
     if (ended) return
     leaving = true
@@ -188,6 +254,15 @@ export function openSession(o: Options): Session {
   setImmediate(() => void connect().catch(retry))
 
   return {
+    get open() {
+      return isOpen && !ended
+    },
+    send: async (jid, text) => {
+      if (!sock || !isOpen || ended) throw new Error('O WhatsApp não está conectado agora.')
+      const sent = await sock.sendMessage(jid, { text })
+      if (!sent?.key.id) throw new Error('O WhatsApp não confirmou o envio.')
+      return sent.key.id
+    },
     get leaving() {
       return leaving
     },

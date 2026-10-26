@@ -3,6 +3,7 @@ import { AlertTriangle, Loader2, MessageCircle, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useCrm } from '@/features/crm/crmStore'
+import { WhatsAppInbox } from '@/features/crm/WhatsAppInbox'
 import { canManage } from '@/features/crm/types'
 import { Page, PageHeader, Surface, dayLabel } from '@/features/crm/ui'
 import { cn } from '@/lib/utils'
@@ -87,7 +88,7 @@ export default function CrmWhatsApp() {
   if (!team) return null
 
   return (
-    <Page>
+    <Page wide>
       <PageHeader title="WhatsApp" text="O número da empresa conectado ao CRM como mais um aparelho, pelo QR code. Ele continua funcionando no celular." />
       <div className="mt-6 max-w-2xl">
         {failure ? (
@@ -131,6 +132,11 @@ export default function CrmWhatsApp() {
           </Surface>
         )}
       </div>
+      {number?.status === 'connected' && !failure && (
+        <div className="mt-6">
+          <WhatsAppInbox teamId={team.id} />
+        </div>
+      )}
     </Page>
   )
 }

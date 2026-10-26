@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { createClient } from '@supabase/supabase-js'
 import pino from 'pino'
 import { dbAuthState } from './auth.ts'
-import { openSession, type NumberPatch, type Session } from './session.ts'
+import { openSession, type NumberPatch, type Session, type StoredMessage } from './session.ts'
 
 /**
  * O serviço do WhatsApp da equipe (CRM › WhatsApp). Conecta o número de cada
@@ -69,6 +69,56 @@ const reporter = (teamId: string) => async (patch: NumberPatch) => {
   if (error) console.error(`[${teamId.slice(0, 8)}] não gravou o estado: ${error.message}`)
 }
 
+/** Guarda a mensagem e atualiza a conversa (mensagem repetida não faz nada) */
+async function store(teamId: string, m: StoredMessage) {
+  const { error } = await db.rpc('crm_whatsapp_store', {
+    p_team: teamId,
+    p_jid: m.jid,
+    p_name: m.name ?? null,
+    p_wa_id: m.waId,
+    p_from_me: m.fromMe,
+    p_body: m.body,
+    p_kind: m.kind,
+    p_ts: m.at.toISOString(),
+  })
+  if (error) {
+    if (!isMissingTable(error) && error.code !== 'PGRST202') throw error
+    if (!warnedInbox) console.error('Falta a migração 20261026180000_crm_whatsapp_messages.sql: as mensagens não estão sendo guardadas.')
+    warnedInbox = true
+  }
+}
+let warnedInbox = false
+
+/** Envia o que a equipe escreveu na tela (mensagens em fila) pelos números conectados */
+async function flush() {
+  for (const [teamId, session] of sessions) {
+    if (!session.open || session.leaving) continue
+    const { data, error } = await db
+      .from('crm_whatsapp_messages')
+      .select('id, chat_jid, body')
+      .eq('team_id', teamId)
+      .eq('status', 'queued')
+      .order('ts')
+      .limit(10)
+    if (error || !data?.length) continue
+    for (const row of data) {
+      // Reserva antes de enviar: se o serviço cair no meio, a mensagem não sai duas vezes
+      const { data: claimed } = await db.from('crm_whatsapp_messages').update({ status: 'sent' }).eq('id', row.id).eq('status', 'queued').select('id')
+      if (!claimed?.length) continue
+      try {
+        const waId = await session.send(row.chat_jid as string, row.body as string)
+        const { error: setError } = await db.from('crm_whatsapp_messages').update({ wa_id: waId, ts: new Date().toISOString() }).eq('id', row.id)
+        // A cópia do próprio envio chegou antes pelo WhatsApp: fica ela
+        if (setError) await db.from('crm_whatsapp_messages').delete().eq('id', row.id)
+      } catch (sendError) {
+        const message = sendError instanceof Error ? sendError.message : String(sendError)
+        console.error(`[${teamId.slice(0, 8)}] não enviou: ${message}`)
+        await db.from('crm_whatsapp_messages').update({ status: 'failed', error: message }).eq('id', row.id)
+      }
+    }
+  }
+}
+
 async function start(teamId: string, logoutOnly: boolean) {
   starting.add(teamId)
   try {
@@ -80,6 +130,7 @@ async function start(teamId: string, logoutOnly: boolean) {
       report,
       log: log.child({ team: teamId }),
       logoutOnly,
+      onMessage: (message) => store(teamId, message),
       onEnd: () => {
         if (sessions.get(teamId) === session) sessions.delete(teamId)
       },
@@ -127,6 +178,17 @@ function serve() {
         busy = false
       })
   }, LOOP)
+
+  let flushing = false
+  setInterval(() => {
+    if (flushing) return
+    flushing = true
+    flush()
+      .catch((error) => console.error('Falha ao enviar a fila:', error))
+      .finally(() => {
+        flushing = false
+      })
+  }, 1500)
 
   // Sinal de vida na linha de cada número ligado: a tela avisa quando o serviço some
   setInterval(async () => {
