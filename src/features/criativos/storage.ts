@@ -37,13 +37,23 @@ const isNotFound = (error: unknown) => {
   return e?.statusCode === '404' || status === 404 || status === 400 || e?.name === 'StorageUnknownError' || /not.?found/i.test(e?.message ?? '')
 }
 
+/**
+ * Lê o que está gravado agora. O `set.json` e o `index.json` são regravados no
+ * mesmo caminho, e o download simples vinha de um cache (do navegador ou do
+ * Storage) com a versão de antes: a esteira dos stories lia o conjunto vazio,
+ * não achava o post para pôr a foto e, ao gravar, podia apagar o que outra
+ * etapa acabara de salvar. Um endereço assinado novo, sem cache, lê a versão atual.
+ */
 async function readJson<T>(path: string): Promise<T | undefined> {
-  const { data, error } = await bucket().download(path)
-  if (error) {
-    if (isNotFound(error)) return undefined
+  const { data, error } = await bucket().createSignedUrl(path, 60)
+  if (error || !data?.signedUrl) {
+    if (!error || isNotFound(error)) return undefined
     throw error
   }
-  return JSON.parse(await data.text()) as T
+  const response = await fetch(`${data.signedUrl}&v=${Date.now()}`, { cache: 'no-store' })
+  if (response.status === 400 || response.status === 404) return undefined
+  if (!response.ok) throw new Error(`Não consegui ler ${path.split('/').slice(-2).join('/')} (${response.status}).`)
+  return (await response.json()) as T
 }
 
 async function writeJson(path: string, value: unknown) {

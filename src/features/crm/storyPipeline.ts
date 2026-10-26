@@ -278,7 +278,10 @@ async function buildCreative(story: Story, settings: StorySettings, engine: Chat
       const set = await loadSet(settings.setId!, settings.setProjectId)
       if (!set) throw new Error('Não consegui abrir o conjunto de criativos dos stories.')
       const before = new Set(set.assets.map((a) => a.id))
-      const out = await fillSetImages(set, [post.id], { signal: lia.signal, provider: engine === 'codex' ? 'codex' : undefined, onImage: (done, total) => lia.step('writing', `Foto ${done} de ${total}`) })
+      // O post que a Dani acabou de montar entra como está, mesmo que a leitura do conjunto venha atrasada
+      const current = post
+      const withPost = { ...set, posts: set.posts.some((p) => p.id === current.id) ? set.posts.map((p) => (p.id === current.id ? current : p)) : [...set.posts, current] }
+      const out = await fillSetImages(withPost, [post.id], { signal: lia.signal, provider: engine === 'codex' ? 'codex' : undefined, onImage: (done, total) => lia.step('writing', `Foto ${done} de ${total}`) })
       post = out.set.posts.find((p) => p.id === post.id) ?? post
       assets = out.set.assets.filter((a) => !before.has(a.id))
       failed = out.failed
