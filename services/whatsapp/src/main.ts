@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { createClient } from '@supabase/supabase-js'
 import pino from 'pino'
 import { dbAuthState } from './auth.ts'
@@ -16,14 +17,18 @@ import { openSession, type NumberPatch, type Session } from './session.ts'
  * ar) e só sai para a internet: não recebe conexões, então roda atrás de
  * qualquer rede. Uma cópia só: duas com o mesmo número se derrubam.
  *
- *   npm run whatsapp            (na raiz; lê SUPABASE_SERVICE_ROLE_KEY do .env.local)
+ *   bash services/whatsapp/instalar-mac.sh   (Mac que fica ligado: instala e deixa rodando sempre)
+ *   npm run whatsapp                         (na raiz, para testar; lê SUPABASE_SERVICE_ROLE_KEY do .env.local)
  *   docker build -t whatsapp services/whatsapp && docker run -e SUPABASE_URL=… -e SUPABASE_SERVICE_ROLE_KEY=… whatsapp
+ *
+ * `--check` só confere a chave e a tabela e sai (0 certo, 2 falta a migração, 1 outro erro).
  */
 
-// Rodando do repositório: as chaves do .env.local (e o endereço do .env)
-for (const file of ['.env.local', '.env']) {
+// Rodando do repositório: a chave do .env.local desta pasta (o instalador grava ali) ou da raiz, e o
+// endereço do .env da raiz. O que vem primeiro vale.
+for (const file of ['../.env.local', '../../../.env.local', '../../../.env']) {
   try {
-    process.loadEnvFile(new URL(`../../../${file}`, import.meta.url))
+    process.loadEnvFile(new URL(file, import.meta.url))
   } catch {
     // Sem o arquivo: as variáveis vêm do ambiente (Docker, servidor)
   }
@@ -43,6 +48,17 @@ const log = pino({ level: process.env.LOG_LEVEL ?? 'warn' })
 const LOOP = 2000
 const BEAT = 15_000
 const TABLE = 'crm_whatsapp_numbers'
+
+const isMissingTable = (error: { code?: string }) => error.code === '42P01' || error.code === 'PGRST205'
+
+/** `--check`: só confere a chave e a tabela. Sai sozinho (sem process.exit, que no Windows quebra com conexões abertas). */
+async function check() {
+  const { error } = await db.from(TABLE).select('team_id', { head: true, count: 'exact' })
+  if (!error) console.log(`Supabase certo (${new URL(url!).host}): chave aceita e a tabela do WhatsApp existe.`)
+  else if (isMissingTable(error)) console.log(`A chave foi aceita (${new URL(url!).host}), mas falta a migração 20261026150000_crm_whatsapp.sql.`)
+  else console.error(`O Supabase recusou: ${error.message || error.code || 'sem resposta'}`)
+  process.exitCode = !error ? 0 : isMissingTable(error) ? 2 : 1
+}
 
 const sessions = new Map<string, Session>()
 const starting = new Set<string>()
@@ -81,7 +97,7 @@ let missingTable = false
 async function reconcile() {
   const { data, error } = await db.from(TABLE).select('team_id, wanted, status')
   if (error) {
-    if (!missingTable) console.error(error.code === '42P01' || error.code === 'PGRST205' ? 'Falta a migração 20261026150000_crm_whatsapp.sql no Supabase.' : `Não deu para ler os números: ${error.message}`)
+    if (!missingTable) console.error(isMissingTable(error) ? 'Falta a migração 20261026150000_crm_whatsapp.sql no Supabase.' : `Não deu para ler os números: ${error.message}`)
     missingTable = true
     return
   }
@@ -97,32 +113,40 @@ async function reconcile() {
   }
 }
 
-let busy = false
-setInterval(() => {
-  if (busy) return
-  busy = true
-  reconcile()
-    .catch((error) => console.error('Falha ao ler os pedidos:', error))
-    .finally(() => {
-      busy = false
-    })
-}, LOOP)
+function serve() {
+  // No Mac: não dormir enquanto o serviço roda (o caffeinate sai sozinho quando este processo acaba)
+  if (process.platform === 'darwin') spawn('/usr/bin/caffeinate', ['-is', '-w', String(process.pid)], { stdio: 'ignore' }).on('error', () => undefined)
 
-// Sinal de vida na linha de cada número ligado: a tela avisa quando o serviço some
-setInterval(async () => {
-  const ids = [...sessions.keys()]
-  if (!ids.length) return
-  const at = new Date().toISOString()
-  const { error } = await db.from(TABLE).update({ seen_at: at }).in('team_id', ids)
-  if (error) console.error('Não gravou o sinal de vida:', error.message)
-}, BEAT)
+  let busy = false
+  setInterval(() => {
+    if (busy) return
+    busy = true
+    reconcile()
+      .catch((error) => console.error('Falha ao ler os pedidos:', error))
+      .finally(() => {
+        busy = false
+      })
+  }, LOOP)
 
-const stop = () => {
-  for (const session of sessions.values()) session.close()
-  setTimeout(() => process.exit(0), 300)
+  // Sinal de vida na linha de cada número ligado: a tela avisa quando o serviço some
+  setInterval(async () => {
+    const ids = [...sessions.keys()]
+    if (!ids.length) return
+    const at = new Date().toISOString()
+    const { error } = await db.from(TABLE).update({ seen_at: at }).in('team_id', ids)
+    if (error) console.error('Não gravou o sinal de vida:', error.message)
+  }, BEAT)
+
+  const stop = () => {
+    for (const session of sessions.values()) session.close()
+    setTimeout(() => process.exit(0), 300)
+  }
+  process.on('SIGINT', stop)
+  process.on('SIGTERM', stop)
+  process.on('unhandledRejection', (error) => console.error('Erro sem tratamento:', error))
+
+  console.log(`${new Date().toLocaleString('pt-BR')}  Serviço do WhatsApp ligado (${new URL(url!).host}). Esperando pedidos de conexão em CRM › WhatsApp.`)
 }
-process.on('SIGINT', stop)
-process.on('SIGTERM', stop)
-process.on('unhandledRejection', (error) => console.error('Erro sem tratamento:', error))
 
-console.log(`Serviço do WhatsApp ligado (${new URL(url).host}). Esperando pedidos de conexão em CRM › WhatsApp.`)
+if (process.argv.includes('--check')) await check()
+else serve()
