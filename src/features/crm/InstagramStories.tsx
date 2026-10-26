@@ -20,6 +20,7 @@ import { nameOf, useTeamPeople } from './people'
 import {
   approveStory,
   discardStory,
+  nowSlot,
   publishNow,
   rescheduleStory,
   runRedo,
@@ -702,6 +703,15 @@ export const StoriesArea: React.FC<{ teamId: string; accounts: IgAccount[] }> = 
   const flagged = toApprove.filter((s) => s.review?.ok === false)
   const slots = settings ? weekSlots(settings, week) : []
   const thisWeek = weekStart()
+  // A semana ainda tem horário para montar (a partir de 30 minutos daqui)
+  const future = slots.some((at) => at > Date.now() + 30 * 60_000)
+
+  /** Um story só, para daqui a uns 20 minutos: a tela vai para a semana dele e mostra a esteira trabalhando. */
+  const storyNow = () => {
+    const at = nowSlot()
+    setWeek(weekStart(at))
+    void runWeek(teamId, weekStart(at), false, at)
+  }
 
   const approveWeek = async () => {
     if (!settings) return
@@ -761,6 +771,11 @@ export const StoriesArea: React.FC<{ teamId: string; accounts: IgAccount[] }> = 
             Esta semana
           </button>
         )}
+        {settings && !future && !running && (
+          <button type="button" onClick={() => setWeek(addWeeks(week, 1))} className="text-xs text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline">
+            Os horários desta semana já passaram: ver a próxima →
+          </button>
+        )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setEditing((v) => !v)} className="gap-1.5">
             <Settings2 className="h-4 w-4" /> Ajustes
@@ -775,9 +790,14 @@ export const StoriesArea: React.FC<{ teamId: string; accounts: IgAccount[] }> = 
               <Square className="h-3.5 w-3.5" /> Parar
             </Button>
           ) : (
-            <Button size="sm" onClick={() => void runWeek(teamId, week)} disabled={!settings?.setId || addWeeks(week, 1) < Date.now()} className="gap-1.5">
-              <Play className="h-4 w-4" /> Montar a semana
-            </Button>
+            <>
+              <Button size="sm" variant="outline" onClick={storyNow} disabled={!settings?.setId} className="gap-1.5" title="Uma sequência para daqui a uns 20 minutos, com a esteira inteira; depois de aprovar, Publicar agora leva no próximo minuto">
+                <Sparkles className="h-4 w-4" /> Um story agora
+              </Button>
+              <Button size="sm" onClick={() => void runWeek(teamId, week)} disabled={!settings?.setId || !future} title={future ? undefined : 'Os horários desta semana já passaram'} className="gap-1.5">
+                <Play className="h-4 w-4" /> Montar a semana
+              </Button>
+            </>
           )}
         </div>
       </div>

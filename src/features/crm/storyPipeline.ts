@@ -331,23 +331,28 @@ const needAi = () => {
   if (link.stale) throw new Error('O conector está desatualizado: baixe o conector.mjs de novo e abra-o.')
 }
 
+/** O horário de um story "agora": daqui a 20 minutos, no próximo múltiplo de 5 (tempo de montar e aprovar; "Publicar agora" adianta). */
+export const nowSlot = (from = Date.now()) => Math.ceil((from + 20 * 60_000) / 300_000) * 300_000
+
 /**
  * Monta a semana que começa em `start` (segunda 00:00): pauta para os
  * horários livres (a partir de 30 minutos daqui), revisão, criativos e fotos.
  * Os stories que estavam em "Ideia" (uma rodada que parou) entram junto.
+ * Com `at`, monta um story só, naquele horário (o "Um story agora").
  */
-export async function buildWeek(teamId: string, start: number, signal: AbortSignal, onStep?: (text: string) => void): Promise<WeekResult> {
+export async function buildWeek(teamId: string, start: number, signal: AbortSignal, onStep?: (text: string) => void, at?: number): Promise<WeekResult> {
   needAi()
   const settings = await loadStorySettings(teamId)
-  if (!settings.days.length || !settings.times.length) throw new Error('Escolha os dias e os horários nos ajustes dos stories.')
+  if (at === undefined && (!settings.days.length || !settings.times.length)) throw new Error('Escolha os dias e os horários nos ajustes dos stories.')
   if (!settings.accountId) throw new Error('Escolha a conta do Instagram nos ajustes dos stories.')
   await needSet(settings)
   const engine = resolveIa('stories')
   const current = (await listStories(teamId, start, addWeeks(start, 1))).filter((s) => s.status !== 'descartado')
   const soon = Date.now() + 30 * 60_000
-  const free = weekSlots(settings, start).filter((at) => at > soon && !current.some((s) => sameSlot(s.publishAt, at)))
+  const slots = at !== undefined ? [at] : weekSlots(settings, start)
+  const free = at !== undefined ? slots : slots.filter((s) => s > soon && !current.some((x) => sameSlot(x.publishAt, s)))
 
-  let ideas = current.filter((s) => s.status === 'ideia')
+  let ideas = at !== undefined ? [] : current.filter((s) => s.status === 'ideia')
   let planned = 0
   if (free.length) {
     onStep?.(`${profileNow('nina').name} está escrevendo a pauta`)
@@ -355,7 +360,10 @@ export async function buildWeek(teamId: string, start: number, signal: AbortSign
     planned = fresh.length
     ideas = [...ideas, ...fresh].sort((a, b) => a.publishAt - b.publishAt)
   }
-  if (!ideas.length) return { planned: 0, built: 0, failed: 0, photosFailed: 0, message: free.length ? 'Nenhuma ideia nova.' : 'Todos os horários da semana já estão na pauta.' }
+  if (!ideas.length) {
+    const passed = !slots.some((s) => s > soon)
+    return { planned: 0, built: 0, failed: 0, photosFailed: 0, message: passed ? 'Os horários desta semana já passaram. Monte a próxima semana ou use "Um story agora".' : 'Todos os horários da semana já estão na pauta.' }
+  }
 
   if (signal.aborted) throw abortError()
   onStep?.(`${profileNow('teo').name} está revisando`)
@@ -486,8 +494,8 @@ interface RunState {
 export const useStoryRun = create<RunState>()(() => ({}))
 let controller: AbortController | null = null
 
-/** Monta a semana com o andamento na tela (e um só de cada vez no app). */
-export async function runWeek(teamId: string, week: number, quiet = false): Promise<WeekResult | undefined> {
+/** Monta a semana (ou, com `at`, um story só naquele horário) com o andamento na tela, e um só de cada vez no app. */
+export async function runWeek(teamId: string, week: number, quiet = false, at?: number): Promise<WeekResult | undefined> {
   if (useStoryRun.getState().running) {
     if (!quiet) toast.info('A esteira já está montando uma semana.')
     return undefined
@@ -495,7 +503,7 @@ export async function runWeek(teamId: string, week: number, quiet = false): Prom
   controller = new AbortController()
   useStoryRun.setState({ running: { teamId, week, step: 'Começando', startedAt: Date.now() } })
   try {
-    const result = await buildWeek(teamId, week, controller.signal, (step) => useStoryRun.setState((s) => (s.running ? { running: { ...s.running, step } } : s)))
+    const result = await buildWeek(teamId, week, controller.signal, (step) => useStoryRun.setState((s) => (s.running ? { running: { ...s.running, step } } : s)), at)
     useStoryRun.setState({ last: { week, message: result.message, at: Date.now() } })
     if (!quiet) toast.success(result.message)
     return result
