@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { createClient } from '@supabase/supabase-js'
 import pino from 'pino'
 import { dbAuthState } from './auth.ts'
+import { answer, samePhone } from './comandos.ts'
 import { openSession, type NumberPatch, type Session, type StoredMessage } from './session.ts'
 
 /**
@@ -91,6 +92,41 @@ async function store(teamId: string, m: StoredMessage) {
   if (m.media) await saveMedia(teamId, m).catch((mediaError) => console.error(`[${teamId.slice(0, 8)}] não guardou a mídia: ${mediaError instanceof Error ? mediaError.message : mediaError}`))
 }
 let warnedInbox = false
+
+// ---------- comandos por WhatsApp (ver comandos.ts) ----------
+
+const handled = new Set<string>()
+let warnedCommanders = false
+let warnedLid = false
+
+/**
+ * Pergunta de quem está em `crm_whatsapp_commanders`: responde na mesma conversa, pela fila de envio.
+ * Só texto recebido agora, de um número da lista; qualquer outro é cliente e passa direto.
+ */
+async function command(teamId: string, m: StoredMessage) {
+  if (m.fromMe || m.kind !== 'text' || !m.body.trim()) return
+  if (Date.now() - m.at.getTime() > 2 * 60_000 || handled.has(m.waId)) return
+  const { data, error } = await db.from('crm_whatsapp_commanders').select('phone').eq('team_id', teamId)
+  if (error) {
+    if (!warnedCommanders && !isMissingTable(error)) console.error(`Comandos: ${error.message}`)
+    if (!warnedCommanders && isMissingTable(error)) console.error('Falta a migração 20261026230000_crm_whatsapp_commanders.sql: os comandos por WhatsApp estão desligados.')
+    warnedCommanders = true
+    return
+  }
+  const phone = m.jid.split('@')[0]
+  if (m.jid.endsWith('@lid')) {
+    // O WhatsApp só deu um id interno, sem o número: não dá para saber quem é
+    if (!warnedLid && data?.length) console.error('Mensagem de um id interno (@lid) sem número: não dá para conferir se é de quem manda comandos.')
+    warnedLid = true
+    return
+  }
+  if (!data?.some((c) => samePhone(c.phone as string, phone))) return
+  handled.add(m.waId)
+  if (handled.size > 500) handled.delete(handled.values().next().value!)
+  const reply = await answer(db, teamId, m.body)
+  const { error: sendError } = await db.rpc('crm_whatsapp_enqueue_reply', { p_team: teamId, p_jid: m.jid, p_text: reply })
+  if (sendError) console.error(`[${teamId.slice(0, 8)}] não enfileirou a resposta: ${sendError.message}`)
+}
 
 const BUCKET = 'crm-whatsapp'
 /** Arquivos maiores que isso ficam só no celular (o bucket aceita até 25 MB) */
@@ -224,7 +260,11 @@ async function start(teamId: string, logoutOnly: boolean) {
       report,
       log: log.child({ team: teamId }),
       logoutOnly,
-      onMessage: (message) => store(teamId, message),
+      onMessage: async (message) => {
+        await store(teamId, message)
+        // Um comando com defeito não pode derrubar a guarda das mensagens
+        await command(teamId, message).catch((commandError) => console.error(`[${teamId.slice(0, 8)}] comando: ${commandError instanceof Error ? commandError.message : commandError}`))
+      },
       onEnd: () => {
         if (sessions.get(teamId) === session) sessions.delete(teamId)
       },
