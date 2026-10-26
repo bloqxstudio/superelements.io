@@ -5,6 +5,8 @@ import { Bot, Building2, FolderKanban, Globe, Images, Instagram, PenLine, Kanban
 import { Logo } from '@/components/Logo'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCrm } from '@/features/crm/crmStore'
+import { useMenuBadges, useMenuFeed } from '@/features/crm/menuBadges'
+import { plural } from '@/features/crm/ui'
 import { AGENT_COLOR } from '@/features/agents/agentStatus'
 import { useTick } from '@/features/agents/useTick'
 import { agentStatus, useAgents } from '@/features/space/bridge/agentsStore'
@@ -64,6 +66,52 @@ const AgentsItem: React.FC = () => {
   )
 }
 
+/** "+3": o que chegou desde a última vez que a pessoa abriu a tela. */
+const NewBadge: React.FC<{ count: number; label: string }> = ({ count, label }) =>
+  count > 0 ? (
+    <span className="rounded-full bg-violet-600 px-1.5 text-[11px] font-semibold tabular-nums text-white" title={label}>
+      <span aria-hidden>+{count > 99 ? 99 : count}</span>
+      <span className="sr-only">, {label}</span>
+    </span>
+  ) : null
+
+const OportunidadesItem: React.FC = () => {
+  const count = useMenuBadges((s) => s.opportunities)
+  return (
+    <Item to="/crm" end icon={KanbanSquare} label="Oportunidades">
+      <NewBadge count={count} label={plural(count, 'novidade no funil', 'novidades no funil')} />
+    </Item>
+  )
+}
+
+const InstagramItem: React.FC = () => {
+  const count = useMenuBadges((s) => s.followers)
+  return (
+    <Item to="/crm/instagram" icon={Instagram} label="Instagram">
+      <NewBadge count={count} label={plural(count, 'seguidor novo', 'seguidores novos')} />
+    </Item>
+  )
+}
+
+/** Site: quem está no site agora (verde, pulsando) e os contatos novos. */
+const SiteItem: React.FC = () => {
+  const live = useMenuBadges((s) => s.live)
+  const contacts = useMenuBadges((s) => s.contacts)
+  const liveLabel = live === 1 ? '1 pessoa no site agora' : `${live} pessoas no site agora`
+  return (
+    <Item to="/crm/site" icon={Globe} label="Site">
+      {live > 0 && (
+        <span className="flex items-center gap-1 rounded-full bg-emerald-500 px-1.5 text-[11px] font-semibold tabular-nums text-white" title={liveLabel}>
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-white motion-safe:animate-pulse" />
+          <span aria-hidden>{live}</span>
+          <span className="sr-only">, {liveLabel}</span>
+        </span>
+      )}
+      <NewBadge count={contacts} label={plural(contacts, 'contato novo pelo site', 'contatos novos pelo site')} />
+    </Item>
+  )
+}
+
 const TeamSwitch: React.FC = () => {
   const { teams, team, select } = useCrm()
   if (!team) return null
@@ -110,11 +158,11 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         </Section>
         {crm && (
           <Section title="CRM">
-            <Item to="/crm" end icon={KanbanSquare} label="Oportunidades" />
+            <OportunidadesItem />
             <Item to="/crm/clientes" icon={Building2} label="Clientes" />
             <Item to="/crm/social" icon={Send} label="Social" />
-            <Item to="/crm/instagram" icon={Instagram} label="Instagram" />
-            <Item to="/crm/site" icon={Globe} label="Site" />
+            <InstagramItem />
+            <SiteItem />
             <Item to="/prospeccao" icon={Radar} label="Prospecção" />
             <Item to="/crm/diagnostico" icon={ScanSearch} label="Diagnóstico" />
             <Item to="/crm/equipe" icon={Users} label="Equipe" />
@@ -149,6 +197,8 @@ export const AppSidebar: React.FC<{ open: boolean; onClose: () => void }> = ({ o
   useEffect(() => {
     if (user) void load(user.id)
   }, [user, load])
+  // Os avisos ao lado dos nomes (seguidores, quem está no site, contatos): uma busca só para os dois menus
+  useMenuFeed()
 
   useEffect(() => {
     if (!open) return

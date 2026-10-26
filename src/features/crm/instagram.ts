@@ -278,6 +278,9 @@ export const connectWithToken = (teamId: string, token: string) => call<Connecte
 
 export const syncAccount = (accountId: string) => call<{ posts: number; missing: string[] }>('sync', { accountId })
 
+/** Só os seguidores (uma chamada à Meta): o aviso do menu. */
+export const refreshProfile = (accountId: string) => call<{ followers: number | null }>('profile', { accountId })
+
 export const disconnectAccount = (accountId: string) => call<{ ok: true }>('disconnect', { accountId })
 
 export interface IgComment {

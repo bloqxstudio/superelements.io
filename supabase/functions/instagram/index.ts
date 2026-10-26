@@ -528,6 +528,25 @@ async function sync(ctx: Ctx, account: AccountRow, token: string) {
   return { posts: rows.length, missing }
 }
 
+/**
+ * Só os números do perfil, numa chamada: o menu pergunta de tempos em tempos
+ * para avisar seguidor novo sem a leitura inteira (`sync`), que fica para a tela.
+ */
+async function refreshProfile(ctx: Ctx, account: AccountRow, token: string) {
+  const p = await ig<Profile>('me', token, { params: { fields: 'followers_count,follows_count,media_count' } })
+  const columns: Record<string, number> = {}
+  if (typeof p.followers_count === 'number') columns.followers_count = p.followers_count
+  if (typeof p.follows_count === 'number') columns.follows_count = p.follows_count
+  if (typeof p.media_count === 'number') columns.media_count = p.media_count
+  if (Object.keys(columns).length) {
+    const writes: PromiseLike<{ error: { code?: string; message?: string } | null }>[] = [ctx.admin.from('crm_instagram_accounts').update(columns).eq('id', account.id)]
+    if (columns.followers_count !== undefined)
+      writes.push(ctx.admin.from('crm_instagram_daily').upsert({ account_id: account.id, team_id: account.team_id, day: spDay(), followers: columns.followers_count }, { onConflict: 'account_id,day' }))
+    for (const { error } of await Promise.all(writes)) if (error) throw dbError(error)
+  }
+  return { followers: p.followers_count ?? null }
+}
+
 // ---------- conectar ----------
 
 async function saveConnection(ctx: Ctx, teamId: string, grant: Grant) {
@@ -929,6 +948,12 @@ Deno.serve(async (req) => {
         const account = await accountOf(ctx, body.accountId)
         const token = await tokenOf(ctx, account)
         return json(await guarded(ctx, account, () => sync(ctx, account, token)))
+      }
+
+      case 'profile': {
+        const account = await accountOf(ctx, body.accountId)
+        const token = await tokenOf(ctx, account)
+        return json(await guarded(ctx, account, () => refreshProfile(ctx, account, token)))
       }
 
       case 'publish': {
