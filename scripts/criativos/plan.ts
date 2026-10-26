@@ -33,12 +33,12 @@ const MODELS = [
 
 const STORY_MODELS = [
   '- viral-frase: uma ideia em letras grandes, com rótulo e uma frase de apoio (label, title, body, dark).',
-  '- viral-dado: um número enorme (number) e o que ele quer dizer (title); body diz de onde vem o número. Só número que está no roteiro.',
+  '- viral-dado: um número enorme (number, até 4 caracteres: "73%", "5 s") e o que ele quer dizer (title); body diz de onde vem o número. Só número que está no roteiro.',
 ].join('\n')
 
 const PHOTO_MODELS = [
   '- viral-capa: foto gerada em tela cheia com título pesado embaixo (prompt, title, body, label). Boa para abrir.',
-  '- viral-foto: foto gerada em cima, número pequeno e título embaixo (prompt, number, title, body, dark).',
+  '- viral-foto: foto gerada em cima, número da tela e título embaixo (prompt, number com 2 dígitos como "02", title, body, dark).',
 ].join('\n')
 
 /** Sequência de stories da pauta: segue o roteiro tela a tela; sem link, sem legenda, com o texto longe das faixas do Instagram. */

@@ -2987,11 +2987,11 @@ var MODELS = [
 ].join("\n");
 var STORY_MODELS = [
   "- viral-frase: uma ideia em letras grandes, com r\xF3tulo e uma frase de apoio (label, title, body, dark).",
-  "- viral-dado: um n\xFAmero enorme (number) e o que ele quer dizer (title); body diz de onde vem o n\xFAmero. S\xF3 n\xFAmero que est\xE1 no roteiro."
+  '- viral-dado: um n\xFAmero enorme (number, at\xE9 4 caracteres: "73%", "5 s") e o que ele quer dizer (title); body diz de onde vem o n\xFAmero. S\xF3 n\xFAmero que est\xE1 no roteiro.'
 ].join("\n");
 var PHOTO_MODELS = [
   "- viral-capa: foto gerada em tela cheia com t\xEDtulo pesado embaixo (prompt, title, body, label). Boa para abrir.",
-  "- viral-foto: foto gerada em cima, n\xFAmero pequeno e t\xEDtulo embaixo (prompt, number, title, body, dark)."
+  '- viral-foto: foto gerada em cima, n\xFAmero da tela e t\xEDtulo embaixo (prompt, number com 2 d\xEDgitos como "02", title, body, dark).'
 ].join("\n");
 var storyPromptOf = (r) => [
   "## Roteiro do story (aprovado pela Estrategista: siga a ordem e as palavras)",
@@ -3405,7 +3405,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610260134", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610260212", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -3422,7 +3422,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610260134" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610260212" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);

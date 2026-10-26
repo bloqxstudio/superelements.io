@@ -251,8 +251,17 @@ async function buildCreative(story: Story, settings: StorySettings, engine: Chat
     )
     const first = plan.posts?.find((p) => p.slides?.length)
     if (!first) throw new Error('A Designer não montou as telas.')
-    const slides = first.slides.slice(0, 10).map((s): SlideSpec => {
-      const fixed = { ...s, case: s.case && KNOWN_CASES.has(s.case) ? s.case : story.idea.case ?? AV_CASES[0].slug }
+    const slides = first.slides.slice(0, 10).map((s, i): SlideSpec => {
+      // O número grande cabe em poucos caracteres ("02", "5 s"): um texto ali encavala no título
+      const n = s.number?.trim()
+      const short = n && n.length <= 4 ? n : undefined
+      const numbered: SlideSpec =
+        s.template === 'viral-dado' && !short
+          ? { ...s, template: 'viral-frase', number: undefined }
+          : s.template === 'viral-foto'
+            ? { ...s, number: short ?? String(i + 1).padStart(2, '0') }
+            : { ...s, number: short }
+      const fixed = { ...numbered, case: s.case && KNOWN_CASES.has(s.case) ? s.case : story.idea.case ?? AV_CASES[0].slug }
       return settings.photos ? fixed : noPhoto(fixed)
     })
     spec = { name: story.title, format: '9x16', caption: '', slides }
