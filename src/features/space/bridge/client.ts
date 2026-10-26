@@ -15,13 +15,14 @@ import { DEFAULT_PAGE_NAME, nextPagePosition, pageContent, pageOf, pageSections,
 import { componentUses, elementComponent, siteFrameSections, textsOf, walk } from '@/features/space/components/components'
 import { insertComponent } from '@/features/space/editor/actions'
 import { isFromSite, renderKit } from '@/features/space/renderKit'
-import { authorizationUrl, completeConnection, profileUrl } from '@/features/wordpress/connect'
+import { authorizationUrl, completeConnection, profileUrl, refreshConnection } from '@/features/wordpress/connect'
 import { componentKind, PageConflictError, publishComponent, publishPage, restoreLastBackup, type PageStatus, type PageTemplate } from '@/features/wordpress/publish'
 import { componentConditions, inlineReason, listSiteParts, pagesUsing, partsSupport } from '@/features/wordpress/siteParts'
 import { importSiteGlobal, listSiteGlobals, markSynced, resolveTemplates } from '@/features/wordpress/siteImport'
 import { discoverSite, unsupportedReason } from '@/features/wordpress/rest'
 import { detectSeo, pageSeoFields } from '@/features/wordpress/seo'
 import { fetchSiteKit, fetchSitePage, listSitePages } from '@/features/wordpress/site'
+import { saveSiteIcon } from '@/features/wordpress/siteIcon'
 import { getSiteKit, useSiteKitStore } from '@/features/wordpress/siteKitStore'
 import type { WordPressConnection } from '@/features/wordpress/types'
 import { getActiveWordPress, useWordPressSession } from '@/features/wordpress/useWordPressConnection'
@@ -809,12 +810,13 @@ const pageLinks = () => useSpaceStore.getState().pages.map((p) => ({ pageId: p.i
  * WordPress do cliente. `status` mostra a conexão e as páginas ligadas;
  * `connect` sem senha devolve o link de aprovação no WordPress, e com o
  * usuário e a senha de aplicação grava a conexão; `pages` lista o site;
- * `import` traz páginas do site para o canvas, como o diálogo Importar.
+ * `import` traz páginas do site para o canvas, como o diálogo Importar;
+ * `icon` troca o ícone do site (favicon), como Trocar ícone no diálogo.
  */
-async function wordpress(params: { action?: 'status' | 'connect' | 'pages' | 'import' | 'globals' | 'importGlobals'; site?: string; user?: string; password?: string; ids?: number[] }, ctx: CallContext) {
+async function wordpress(params: { action?: 'status' | 'connect' | 'pages' | 'import' | 'globals' | 'importGlobals' | 'icon'; site?: string; user?: string; password?: string; ids?: number[]; image?: string }, ctx: CallContext) {
   const id = requireProject()
   const connectionInfo = (c: WordPressConnection | null) =>
-    c && { site: c.site.name, siteUrl: c.site.siteUrl, user: c.user.name, roles: c.user.roles, can: c.can, connectedAt: c.connectedAt, checkedAt: c.checkedAt }
+    c && { site: c.site.name, siteUrl: c.site.siteUrl, icon: c.site.iconUrl ?? null, user: c.user.name, roles: c.user.roles, can: c.can, connectedAt: c.connectedAt, checkedAt: c.checkedAt }
 
   if (params.action === 'connect') {
     if (!params.site?.trim()) throw new Error('Diga o endereço do site')
@@ -829,6 +831,18 @@ async function wordpress(params: { action?: 'status' | 'connect' | 'pages' | 'im
     await completeConnection(id, site, params.user, params.password)
     await useWordPressSession.getState().open(id)
     return { connection: connectionInfo(getActiveWordPress()) }
+  }
+
+  if (params.action === 'icon') {
+    const connection = (await wpConnection())!
+    if (!params.image?.startsWith('data:image/')) throw new Error('Mande a imagem do ícone (PNG quadrado, 512 px)')
+    if (connection.can.manageOptions === false) throw new Error(`Só um administrador do WordPress pode trocar o ícone do site, e ${connection.user.name} não é. Conecte com um usuário administrador.`)
+    const media = await saveSiteIcon(connection, params.image)
+    // Relê o site para o ícone novo aparecer no diálogo e no botão do header
+    await refreshConnection(id, connection).catch(() => undefined)
+    await useWordPressSession.getState().open(id)
+    note(ctx, 'done', `Troquei o ícone do site em ${connection.site.name}`)
+    return { site: connection.site.name, media, connection: connectionInfo(getActiveWordPress()) }
   }
 
   if (params.action === 'pages') {

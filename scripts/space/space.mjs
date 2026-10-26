@@ -99,6 +99,7 @@ Com o cliente e o site (falam com a conta e com o WordPress; cada um é um passo
                                   viram o componente daquele modelo, com o conteúdo verdadeiro)
   wp globals | wp import-global <id>...
                                   cabeçalho e rodapé do Theme Builder do site; trazer como componente (ligado ao mesmo modelo)
+  wp icon <arquivo.png>           troca o ícone do site (favicon): PNG quadrado de 512 px; precisa de administrador
   details --page <nome> [--title --slug --seo-title --description --keyword]
                                   título e endereço da página; SEO vale no site todo, com o título da página dinâmico
   publish --page <nome> [--live] [--layout canvas|tema] [--overwrite] --yes
@@ -1098,12 +1099,28 @@ const printConnection = (c) => {
   const can = [c.can.editPages && 'editar páginas', c.can.publishPages && 'publicar', c.can.uploadFiles && 'enviar mídia', c.can.unfilteredHtml && 'HTML sem filtro', c.can.manageOptions && 'configurações'].filter(Boolean)
   console.log(`WordPress: ${c.site} (${c.siteUrl}) · usuário ${c.user} [${c.roles.join(', ') || 'sem papel'}] · pode: ${can.join(', ') || 'nada'} · conferido em ${when(c.checkedAt)}`)
   if (c.can.unfilteredHtml === false) console.log('   aviso: sem HTML sem filtro, o WordPress tira os scripts dos widgets HTML ao gravar (o GSAP das seções não roda).')
+  console.log(`   ícone do site: ${c.icon || 'nenhum'}`)
 }
 
 async function cmdWp() {
   await readyStatus()
   const action = positional[0] ?? 'status'
-  if (!['status', 'connect', 'pages', 'import', 'globals', 'import-global'].includes(action)) fail(`Ação desconhecida: wp ${action}. Use wp, wp connect, wp pages, wp import, wp globals ou wp import-global`)
+  if (!['status', 'connect', 'pages', 'import', 'globals', 'import-global', 'icon'].includes(action)) fail(`Ação desconhecida: wp ${action}. Use wp, wp connect, wp pages, wp import, wp globals, wp import-global ou wp icon`)
+
+  if (action === 'icon') {
+    const file = positional[1]
+    if (!file) fail('Diga o arquivo do ícone: wp icon <arquivo.png> (quadrado, 512 px)')
+    const full = path.resolve(ROOT, file)
+    const type = IMAGE_TYPES[path.extname(full).toLowerCase()]
+    if (!type) fail('O ícone precisa ser PNG, JPG, WebP ou GIF (o WordPress recusa SVG)')
+    if (!existsSync(full)) fail(`O arquivo ${file} não existe`)
+    if (statSync(full).size > MAX_LOCAL_IMAGE) fail(`${file} passa de 8 MB`)
+    const result = await call('wordpress', { action, image: `data:${type};base64,${readFileSync(full).toString('base64')}` })
+    if (flags.json) return console.log(JSON.stringify(result, null, 2))
+    console.log(`✔ Ícone do site trocado em ${result.site} (mídia ${result.media.id}: ${result.media.url})`)
+    console.log('   O navegador guarda o ícone antigo: pode levar um tempo para aparecer na aba.')
+    return
+  }
 
   if (action === 'globals') {
     const result = await call('wordpress', { action: 'globals' })

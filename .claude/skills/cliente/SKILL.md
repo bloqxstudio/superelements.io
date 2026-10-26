@@ -89,6 +89,7 @@ Escreva no painel do Claude no canvas (`space say "…"`) ao entrar, antes de ca
 | `invite` / `invite create [--label "…"]` / `invite cancel <id>` | Pessoas e convites do projeto / convidar alguém para editar junto / cancelar |
 | `wp` / `wp connect <site> [--user … --password "…"]` | Conexão com o WordPress e páginas ligadas / conectar (link de aprovação, depois a senha) |
 | `wp pages` / `wp import <id>…` | Páginas do site / trazer páginas do site para o canvas |
+| `wp icon <arquivo.png>` | Trocar o ícone do site (favicon): PNG quadrado de 512 px, precisa de administrador; passo combinado |
 | `details --page <nome> [--title --slug --seo-title --description --keyword]` | Título, endereço e SEO que vão junto ao publicar |
 | `publish --page <nome> [--live] [--layout canvas\|tema] [--overwrite] --yes` | Publicar no WordPress; sem `--yes` só mostra o que faria |
 | `publish --component <componente> [--update-existing] [--overwrite] --yes` | Publicar o componente como modelo do Elementor Pro (cabeçalho e rodapé no Theme Builder, seção salva, Global Widget); muda todas as páginas do site |
