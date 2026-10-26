@@ -85,9 +85,85 @@ async function store(teamId: string, m: StoredMessage) {
     if (!isMissingTable(error) && error.code !== 'PGRST202') throw error
     if (!warnedInbox) console.error('Falta a migração 20261026180000_crm_whatsapp_messages.sql: as mensagens não estão sendo guardadas.')
     warnedInbox = true
+    return
   }
+  // A mensagem já está guardada; a mídia vem depois e não atrasa nem derruba o resto
+  if (m.media) await saveMedia(teamId, m).catch((mediaError) => console.error(`[${teamId.slice(0, 8)}] não guardou a mídia: ${mediaError instanceof Error ? mediaError.message : mediaError}`))
 }
 let warnedInbox = false
+
+const BUCKET = 'crm-whatsapp'
+/** Arquivos maiores que isso ficam só no celular (o bucket aceita até 25 MB) */
+const MAX_MEDIA = 20 * 1024 * 1024
+const EXTENSIONS: Record<string, string> = {
+  'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+  'video/mp4': 'mp4', 'video/3gpp': '3gp', 'video/quicktime': 'mov',
+  'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/webm': 'webm',
+  'application/pdf': 'pdf',
+}
+const safe = (text: string) => text.replace(/[^A-Za-z0-9._-]/g, '_')
+let warnedMedia = false
+
+const mediaWarning = (message: string) => {
+  if (!warnedMedia) console.error(`Mídias do WhatsApp: ${message}. Falta a migração 20261026220000_crm_whatsapp_media.sql?`)
+  warnedMedia = true
+}
+
+/** Baixa a mídia da mensagem, guarda no bucket e liga o arquivo à mensagem */
+async function saveMedia(teamId: string, m: StoredMessage) {
+  const media = m.media
+  if (!media || (media.size && media.size > MAX_MEDIA)) return
+  const buffer = await media.download()
+  if (buffer.length > MAX_MEDIA) return
+  const mime = (media.mime ?? 'application/octet-stream').split(';')[0]
+  const fromName = media.name?.match(/\.([A-Za-z0-9]{1,6})$/)?.[1]
+  const path = `${teamId}/${safe(m.jid)}/${safe(m.waId)}.${EXTENSIONS[mime] ?? fromName ?? 'bin'}`
+  const { error } = await db.storage.from(BUCKET).upload(path, buffer, { contentType: mime, upsert: true, cacheControl: '31536000' })
+  if (error) return mediaWarning(error.message)
+  const { error: linkError } = await db.from('crm_whatsapp_messages').update({ media_path: path, media_mime: mime, media_name: media.name ?? null }).eq('team_id', teamId).eq('wa_id', m.waId)
+  if (linkError) mediaWarning(linkError.message)
+}
+
+let warnedPhotos = false
+
+/** Foto de perfil das conversas que ainda não têm (e a cada 7 dias): poucas por vez */
+async function refreshPhotos() {
+  for (const [teamId, session] of sessions) {
+    if (!session.open || session.leaving) continue
+    const stale = new Date(Date.now() - 7 * 86_400_000).toISOString()
+    const { data, error } = await db
+      .from('crm_whatsapp_chats')
+      .select('jid')
+      .eq('team_id', teamId)
+      .or(`photo_checked_at.is.null,photo_checked_at.lt.${stale}`)
+      .limit(3)
+    if (error) {
+      if (!warnedPhotos) console.error(`Fotos de perfil: ${error.message}. Falta a migração 20261026220000_crm_whatsapp_media.sql?`)
+      warnedPhotos = true
+      continue
+    }
+    for (const row of data ?? []) {
+      const jid = row.jid as string
+      const patch: Record<string, unknown> = { photo_checked_at: new Date().toISOString() }
+      try {
+        const url = await session.photoUrl(jid)
+        if (url) {
+          const response = await fetch(url)
+          if (response.ok) {
+            const path = `${teamId}/avatars/${safe(jid)}.jpg`
+            const { error: uploadError } = await db.storage.from(BUCKET).upload(path, Buffer.from(await response.arrayBuffer()), { contentType: 'image/jpeg', upsert: true, cacheControl: '3600' })
+            if (!uploadError) patch.photo_path = path
+          }
+        }
+      } catch (photoError) {
+        // Sem conexão agora: tenta de novo na próxima volta
+        console.error(`[${teamId.slice(0, 8)}] foto de perfil: ${photoError instanceof Error ? photoError.message : photoError}`)
+        continue
+      }
+      await db.from('crm_whatsapp_chats').update(patch).eq('team_id', teamId).eq('jid', jid)
+    }
+  }
+}
 
 /** Passa a mensagem para a conversa do endereço certo e tira a antiga se ficou vazia */
 async function moveChat(teamId: string, from: string, to: string, messageId: string) {
@@ -205,6 +281,17 @@ function serve() {
         flushing = false
       })
   }, 1500)
+
+  let photos = false
+  setInterval(() => {
+    if (photos) return
+    photos = true
+    refreshPhotos()
+      .catch((error) => console.error('Falha nas fotos de perfil:', error))
+      .finally(() => {
+        photos = false
+      })
+  }, 15_000)
 
   // Sinal de vida na linha de cada número ligado: a tela avisa quando o serviço some
   setInterval(async () => {

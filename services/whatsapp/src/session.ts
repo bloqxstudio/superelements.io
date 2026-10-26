@@ -1,4 +1,4 @@
-import makeWASocket, { DisconnectReason, fetchLatestWaWebVersion, jidDecode, makeCacheableSignalKeyStore, type ConnectionState, type WAMessage, type WASocket, type WAVersion } from 'baileys'
+import makeWASocket, { DisconnectReason, downloadMediaMessage, fetchLatestWaWebVersion, jidDecode, makeCacheableSignalKeyStore, type ConnectionState, type WAMessage, type WASocket, type WAVersion } from 'baileys'
 import type { Logger } from 'pino'
 import QRCode from 'qrcode'
 import type { DbAuth } from './auth.ts'
@@ -32,11 +32,15 @@ export interface StoredMessage {
   body: string
   kind: string
   at: Date
+  /** Foto, vídeo, áudio, documento ou figurinha: o arquivo baixa sob demanda */
+  media?: { mime?: string; name?: string; size: number; download: () => Promise<Buffer> }
 }
 
 export interface Session {
   /** Está com a conexão aberta (dá para enviar) */
   readonly open: boolean
+  /** O endereço da foto de perfil (vence em poucas horas); vazio quando a pessoa não tem ou não deixa ver */
+  photoUrl: (jid: string) => Promise<string | undefined>
   /** Confere se o número tem WhatsApp e devolve o endereço certo (com o 9 do Brasil, por exemplo) */
   resolve: (jid: string) => Promise<string | undefined>
   /** Envia texto e devolve o id da mensagem no WhatsApp */
@@ -71,21 +75,37 @@ async function waVersion() {
   return latest?.version
 }
 
-/** Texto e tipo de uma mensagem; mídia vira um rótulo (a mídia em si não é guardada) */
-function describe(message: WAMessage): { body: string; kind: string } | undefined {
-  let m = message.message
+const MEDIA_FIELDS = [
+  ['imageMessage', 'image', 'Foto'],
+  ['videoMessage', 'video', 'Vídeo'],
+  ['audioMessage', 'audio', 'Áudio'],
+  ['documentMessage', 'document', 'Documento'],
+  ['stickerMessage', 'sticker', 'Figurinha'],
+] as const
+
+const unwrap = (message: WAMessage) => {
+  const m = message.message
+  return m ? (m.ephemeralMessage?.message ?? m.viewOnceMessage?.message ?? m.documentWithCaptionMessage?.message ?? m) : undefined
+}
+
+/** A mídia da mensagem (tipo do arquivo, nome e tamanho), se tiver */
+function mediaOf(message: WAMessage) {
+  const m = unwrap(message)
   if (!m) return undefined
-  m = m.ephemeralMessage?.message ?? m.viewOnceMessage?.message ?? m.documentWithCaptionMessage?.message ?? m
+  for (const [field] of MEDIA_FIELDS) {
+    const part = m[field] as { mimetype?: string | null; fileName?: string | null; fileLength?: unknown } | null | undefined
+    if (part) return { mime: part.mimetype ?? undefined, name: part.fileName ?? undefined, size: Number(part.fileLength ?? 0) }
+  }
+  return undefined
+}
+
+/** Texto e tipo de uma mensagem; a legenda e um rótulo ficam no texto (o arquivo vai à parte) */
+function describe(message: WAMessage): { body: string; kind: string } | undefined {
+  const m = unwrap(message)
+  if (!m) return undefined
   const text = m.conversation ?? m.extendedTextMessage?.text
   if (text) return { body: text, kind: 'text' }
-  const media: [keyof typeof m, string, string][] = [
-    ['imageMessage', 'image', 'Foto'],
-    ['videoMessage', 'video', 'Vídeo'],
-    ['audioMessage', 'audio', 'Áudio'],
-    ['documentMessage', 'document', 'Documento'],
-    ['stickerMessage', 'sticker', 'Figurinha'],
-  ]
-  for (const [field, kind, label] of media) {
+  for (const [field, kind, label] of MEDIA_FIELDS) {
     const part = m[field] as { caption?: string | null; fileName?: string | null } | null | undefined
     if (part) return { body: [`[${label}]`, part.caption ?? part.fileName].filter(Boolean).join(' '), kind }
   }
@@ -163,8 +183,13 @@ export function openSession(o: Options): Session {
         const waId = message.key.id
         if (!jid || !content || !waId) continue
         const at = new Date((Number(message.messageTimestamp) || Date.now() / 1000) * 1000)
+        const found = mediaOf(message)
+        const media = found && {
+          ...found,
+          download: () => downloadMediaMessage(message, 'buffer', {}, { logger: o.log, reuploadRequest: socket.updateMediaMessage }),
+        }
         void o
-          .onMessage({ jid, name: message.pushName ?? undefined, waId, fromMe: !!message.key.fromMe, ...content, at })
+          .onMessage({ jid, name: message.pushName ?? undefined, waId, fromMe: !!message.key.fromMe, ...content, at, media })
           .catch((error) => say(`não guardou a mensagem: ${error.message ?? error}`))
       }
     })
@@ -258,6 +283,11 @@ export function openSession(o: Options): Session {
   return {
     get open() {
       return isOpen && !ended
+    },
+    photoUrl: async (jid) => {
+      if (!sock || !isOpen || ended) throw new Error('O WhatsApp não está conectado agora.')
+      // Sem foto (ou escondida): o WhatsApp responde com erro, e isso não é falha nossa
+      return sock.profilePictureUrl(jid, 'image', 10_000).catch(() => undefined)
     },
     resolve: async (jid) => {
       if (!sock || !isOpen || ended) throw new Error('O WhatsApp não está conectado agora.')

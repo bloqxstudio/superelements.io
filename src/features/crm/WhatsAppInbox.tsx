@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Loader2, Plus, RefreshCw, Send } from 'lucide-react'
+import { ArrowLeft, FileText, Loader2, Plus, RefreshCw, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { addActivity } from '@/features/crm/clients'
@@ -15,6 +15,7 @@ import {
   sendMessage,
   startChat,
   useInboxFeed,
+  useMediaUrl,
   type WaChat,
   type WaMessage,
 } from '@/features/crm/whatsappChats'
@@ -118,9 +119,7 @@ export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCall
               onClick={() => setOpenJid(c.jid)}
               className={cn('flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3 text-left hover:bg-gray-50', c.jid === openJid && 'bg-gray-50')}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-xs font-semibold text-emerald-700" aria-hidden>
-                {chatTitle(c).replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase() || '#'}
-              </span>
+              <ChatAvatar chat={c} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline justify-between gap-2">
                   <span className={cn('truncate text-sm', c.unread ? 'font-semibold text-gray-900' : 'font-medium text-gray-800')}>{chatTitle(c)}</span>
@@ -161,6 +160,43 @@ export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCall
         <div className="hidden items-center justify-center p-6 text-sm text-gray-400 md:flex">Escolha uma conversa</div>
       )}
     </div>
+  )
+}
+
+/** A foto de perfil da conversa; sem foto, as iniciais */
+const ChatAvatar: React.FC<{ chat: WaChat; size?: number }> = ({ chat, size = 36 }) => {
+  const url = useMediaUrl(chat.photoPath)
+  const initials = chatTitle(chat).replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase() || '#'
+  return url ? (
+    <img src={url} alt="" width={size} height={size} loading="lazy" className="shrink-0 rounded-full bg-gray-100 object-cover" style={{ width: size, height: size }} />
+  ) : (
+    <span className="flex shrink-0 items-center justify-center rounded-full bg-emerald-50 text-xs font-semibold text-emerald-700" style={{ width: size, height: size }} aria-hidden>
+      {initials}
+    </span>
+  )
+}
+
+const LABEL = /^\[(Foto|Vídeo|Áudio|Documento|Figurinha)\]\s?/
+
+/** O arquivo de uma mensagem: foto, figurinha, vídeo e áudio tocam ali mesmo; documento abre em outra aba. */
+const MessageMedia: React.FC<{ message: WaMessage }> = ({ message }) => {
+  const url = useMediaUrl(message.mediaPath)
+  const mime = message.mediaMime ?? ''
+  if (!message.mediaPath) return null
+  if (!url) return <div className="flex h-24 w-40 items-center justify-center rounded-lg bg-black/5"><Loader2 className="h-4 w-4 animate-spin text-gray-400" aria-hidden /></div>
+  if (message.kind === 'sticker' || mime.startsWith('image/'))
+    return (
+      <a href={url} target="_blank" rel="noreferrer">
+        <img src={url} alt={message.mediaName ?? 'Imagem da conversa'} loading="lazy" className={cn('rounded-lg object-cover', message.kind === 'sticker' ? 'h-28 w-28 object-contain' : 'max-h-72 max-w-full')} />
+      </a>
+    )
+  if (mime.startsWith('video/')) return <video src={url} controls preload="metadata" className="max-h-72 max-w-full rounded-lg" />
+  if (mime.startsWith('audio/')) return <audio src={url} controls preload="none" className="h-10 w-60 max-w-full" />
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg bg-black/5 px-3 py-2 text-sm underline-offset-2 hover:underline">
+      <FileText className="h-4 w-4 shrink-0" aria-hidden />
+      <span className="truncate">{message.mediaName ?? 'Documento'}</span>
+    </a>
   )
 }
 
@@ -286,6 +322,7 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void 
         <Button variant="ghost" size="sm" className="md:hidden" onClick={onBack} aria-label="Voltar às conversas">
           <ArrowLeft className="h-4 w-4" aria-hidden />
         </Button>
+        <ChatAvatar chat={chat} size={40} />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-gray-900">{chatTitle(chat)}</p>
           {chat.phone && !chat.jid.endsWith('@lid') && <p className="truncate text-xs text-gray-500">+{chat.phone}</p>}
@@ -302,7 +339,10 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void 
               {header && <p className="py-2 text-center text-[11px] capitalize text-gray-400">{dayTitle(m.at)}</p>}
               <div className={cn('flex', m.fromMe ? 'justify-end' : 'justify-start')}>
                 <div className={cn('max-w-[78%] rounded-2xl px-3 py-1.5 text-sm', m.fromMe ? 'bg-emerald-100 text-emerald-950' : 'bg-white text-gray-900 ring-1 ring-gray-200')}>
-                  <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                  {m.mediaPath && <MessageMedia message={m} />}
+                  {(!m.mediaPath || m.body.replace(LABEL, '').trim()) && (
+                    <p className={cn('whitespace-pre-wrap break-words', m.mediaPath && 'mt-1')}>{m.mediaPath ? m.body.replace(LABEL, '') : m.body}</p>
+                  )}
                   <p className={cn('mt-0.5 text-right text-[10px]', m.status === 'failed' ? 'text-red-600' : 'text-gray-400')}>
                     {m.status === 'failed' ? `Não enviou${m.error ? `: ${m.error}` : ''}` : m.status === 'queued' ? 'Enviando…' : clock(m.at)}
                   </p>

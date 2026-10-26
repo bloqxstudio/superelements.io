@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
 
@@ -21,6 +21,8 @@ export interface WaChat {
   lastFromMe: boolean
   lastAt: number
   unread: number
+  /** A foto de perfil guardada pelo serviço (caminho no bucket) */
+  photoPath?: string
 }
 
 export interface WaMessage {
@@ -32,6 +34,10 @@ export interface WaMessage {
   status: 'queued' | 'sent' | 'failed'
   error?: string
   at: number
+  /** O arquivo da mensagem (foto, vídeo, áudio, documento) guardado pelo serviço */
+  mediaPath?: string
+  mediaMime?: string
+  mediaName?: string
 }
 
 interface ChatRow {
@@ -42,6 +48,7 @@ interface ChatRow {
   last_from_me: boolean
   last_at: string
   unread: number
+  photo_path?: string | null
 }
 
 interface MessageRow {
@@ -53,6 +60,9 @@ interface MessageRow {
   status: 'queued' | 'sent' | 'failed'
   error: string | null
   ts: string
+  media_path?: string | null
+  media_mime?: string | null
+  media_name?: string | null
 }
 
 const toChat = (r: ChatRow): WaChat => ({
@@ -63,6 +73,7 @@ const toChat = (r: ChatRow): WaChat => ({
   lastFromMe: r.last_from_me,
   lastAt: Date.parse(r.last_at),
   unread: r.unread,
+  photoPath: r.photo_path ?? undefined,
 })
 
 const toMessage = (r: MessageRow): WaMessage => ({
@@ -74,6 +85,9 @@ const toMessage = (r: MessageRow): WaMessage => ({
   status: r.status,
   error: r.error ?? undefined,
   at: Date.parse(r.ts),
+  mediaPath: r.media_path ?? undefined,
+  mediaMime: r.media_mime ?? undefined,
+  mediaName: r.media_name ?? undefined,
 })
 
 /** `no_tables` quando falta a migração das mensagens */
@@ -140,4 +154,44 @@ export function useInboxFeed(teamId: string | undefined, onChange: () => void) {
       void db.removeChannel(channel)
     }
   }, [teamId])
+}
+
+const MEDIA_BUCKET = 'crm-whatsapp'
+const SIGNED_FOR = 3600
+const signed = new Map<string, { url: string; until: number }>()
+const signing = new Map<string, Promise<string | undefined>>()
+
+/** Link temporário (1 h) de um arquivo do bucket do WhatsApp; guardado por 50 min para não pedir de novo. */
+async function signedUrl(path: string): Promise<string | undefined> {
+  const hit = signed.get(path)
+  if (hit && hit.until > Date.now()) return hit.url
+  const pending = signing.get(path)
+  if (pending) return pending
+  const request = supabase.storage
+    .from(MEDIA_BUCKET)
+    .createSignedUrl(path, SIGNED_FOR)
+    .then(({ data }) => {
+      if (data?.signedUrl) signed.set(path, { url: data.signedUrl, until: Date.now() + (SIGNED_FOR - 600) * 1000 })
+      return data?.signedUrl
+    })
+    .finally(() => signing.delete(path))
+  signing.set(path, request)
+  return request
+}
+
+/** O link de um arquivo guardado (foto de perfil ou mídia); vazio enquanto carrega ou se não existir. */
+export function useMediaUrl(path: string | undefined): string | undefined {
+  const [url, setUrl] = useState<string | undefined>(() => (path ? signed.get(path)?.url : undefined))
+  useEffect(() => {
+    if (!path) {
+      setUrl(undefined)
+      return
+    }
+    let alive = true
+    void signedUrl(path).then((value) => alive && setUrl(value))
+    return () => {
+      alive = false
+    }
+  }, [path])
+  return url
 }
