@@ -28,6 +28,7 @@ $fn$;
 revoke all on function public.can_write_crm_whatsapp_out(text) from public;
 grant execute on function public.can_write_crm_whatsapp_out(text) to authenticated;
 
+drop policy if exists "Equipe sobe arquivos para enviar no WhatsApp" on storage.objects;
 create policy "Equipe sobe arquivos para enviar no WhatsApp" on storage.objects
   for insert to authenticated
   with check (bucket_id = 'crm-whatsapp' and public.can_write_crm_whatsapp_out(name));

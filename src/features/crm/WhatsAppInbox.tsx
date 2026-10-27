@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, FileText, Loader2, Paperclip, Plus, RefreshCw, Send } from 'lucide-react'
+import { ArrowLeft, FileText, Loader2, Paperclip, Plus, RefreshCw, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { addActivity } from '@/features/crm/clients'
@@ -271,6 +271,15 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void 
   const [sending, setSending] = useState(false)
   const end = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
+  // Arquivo colado ou arrastado: espera aqui, com prévia, até a pessoa enviar
+  const [pending, setPending] = useState<File>()
+  const [pendingUrl, setPendingUrl] = useState<string>()
+  useEffect(() => {
+    if (!pending || !/^(image|video)\//.test(pending.type)) return setPendingUrl(undefined)
+    const url = URL.createObjectURL(pending)
+    setPendingUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [pending])
 
   const load = useCallback(async () => {
     try {
@@ -304,6 +313,11 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     const value = text.trim()
+    if (pending) {
+      const file = pending
+      setPending(undefined)
+      return void attach(file)
+    }
     if (!value || sending) return
     setSending(true)
     try {
@@ -370,6 +384,21 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void 
         })}
         <div ref={end} />
       </div>
+      {pending && (
+        <div className="flex items-center gap-3 border-t border-gray-200 bg-white px-3 py-2">
+          {pendingUrl && pending.type.startsWith('image/') ? (
+            <img src={pendingUrl} alt="" className="h-16 w-16 rounded-lg object-cover" />
+          ) : pendingUrl ? (
+            <video src={pendingUrl} muted className="h-16 w-16 rounded-lg object-cover" />
+          ) : (
+            <FileText className="h-8 w-8 text-gray-400" aria-hidden />
+          )}
+          <p className="min-w-0 flex-1 truncate text-sm text-gray-700">{pending.name}<span className="block text-xs text-gray-500">Escreva uma legenda, se quiser, e envie.</span></p>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setPending(undefined)} aria-label="Tirar o anexo">
+            <X className="h-4 w-4" aria-hidden />
+          </Button>
+        </div>
+      )}
       <form onSubmit={submit} className="flex items-end gap-2 border-t border-gray-200 p-3">
         <input
           ref={picker}
@@ -388,6 +417,13 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void 
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onPaste={(e) => {
+            // Print ou imagem copiada: entra como anexo, sem precisar salvar o arquivo
+            const file = Array.from(e.clipboardData.files).find((f) => /^(image|video)\//.test(f.type)) ?? e.clipboardData.files[0]
+            if (!file) return
+            e.preventDefault()
+            setPending(file.name && file.name !== 'image.png' ? file : new File([file], `imagem-${Date.now()}.${(file.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: file.type }))
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
@@ -398,7 +434,7 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void 
           placeholder="Escreva uma mensagem"
           className="max-h-32 min-h-9 flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
         />
-        <Button type="submit" size="sm" disabled={!text.trim() || sending} aria-label="Enviar">
+        <Button type="submit" size="sm" disabled={(!text.trim() && !pending) || sending} aria-label="Enviar">
           {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
         </Button>
       </form>
