@@ -25,7 +25,7 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 
 const VERSION = 'v26.0'
 const GRAPH = `https://graph.instagram.com/${VERSION}`
-const SCOPES = ['instagram_business_basic', 'instagram_business_manage_insights', 'instagram_business_content_publish', 'instagram_business_manage_comments']
+const SCOPES = ['instagram_business_basic', 'instagram_business_manage_insights', 'instagram_business_content_publish', 'instagram_business_manage_comments', 'instagram_business_manage_messages']
 const BUCKET = 'space-projects'
 const DAY = 86_400
 
@@ -685,6 +685,175 @@ async function comments(token: string, mediaId: string) {
   }
 }
 
+// ---------- caixa de entrada (comentários e DMs) ----------
+
+interface InboxComment {
+  id: string
+  text?: string
+  username?: string
+  timestamp: string
+  like_count?: number
+  hidden?: boolean
+  from?: { id?: string }
+  parent_id?: string
+  replies?: { data?: InboxComment[] }
+}
+
+const INBOX_COMMENT_FIELDS = 'id,text,username,timestamp,like_count,hidden,from{id}'
+
+/** Comentários dos posts mais recentes (e as respostas) gravados na caixa. */
+async function syncComments(ctx: Ctx, account: AccountRow, token: string) {
+  const { data: posts, error } = await ctx.admin
+    .from('crm_instagram_media')
+    .select('media_id')
+    .eq('account_id', account.id)
+    .neq('product_type', 'STORY')
+    .order('posted_at', { ascending: false })
+    .limit(15)
+  if (error) throw dbError(error)
+  const own = account.username.toLowerCase()
+  const rows: Record<string, unknown>[] = []
+  for (const post of (posts ?? []) as { media_id: string }[]) {
+    let list: InboxComment[] = []
+    try {
+      list = (await ig<{ data?: InboxComment[] }>(`${post.media_id}/comments`, token, { params: { fields: `${INBOX_COMMENT_FIELDS},replies{${INBOX_COMMENT_FIELDS}}`, limit: 50 } })).data ?? []
+    } catch (e) {
+      if (e instanceof HttpError && (e.code === 'token' || e.code === 'rate' || e.code === 'permission')) throw e
+      continue
+    }
+    for (const c of list) {
+      const replies = c.replies?.data ?? []
+      const answered = replies.some((r) => (r.username ?? '').toLowerCase() === own)
+      const mine = (c.username ?? '').toLowerCase() === own
+      rows.push(commentRow(account, post.media_id, c, undefined, mine, answered || mine))
+      for (const r of replies) rows.push(commentRow(account, post.media_id, r, c.id, (r.username ?? '').toLowerCase() === own, true))
+    }
+  }
+  for (let i = 0; i < rows.length; i += 200) {
+    const { error: upsertError } = await ctx.admin.from('crm_instagram_comments').upsert(rows.slice(i, i + 200), { onConflict: 'account_id,comment_id' })
+    if (upsertError) throw dbError(upsertError)
+  }
+  return rows.length
+}
+
+const commentRow = (account: AccountRow, mediaId: string, c: InboxComment, parent: string | undefined, own: boolean, replied: boolean) => ({
+  account_id: account.id,
+  team_id: account.team_id,
+  comment_id: c.id,
+  media_id: mediaId,
+  parent_id: parent ?? null,
+  username: c.username ?? null,
+  from_id: c.from?.id ?? null,
+  body: c.text ?? '',
+  ts: c.timestamp,
+  like_count: c.like_count ?? 0,
+  hidden: c.hidden === true,
+  own,
+  replied,
+})
+
+interface Conversation {
+  id: string
+  updated_time?: string
+  participants?: { data?: { id: string; username?: string; name?: string }[] }
+  messages?: { data?: { id: string; message?: string; created_time: string; from?: { id?: string; username?: string }; attachments?: { data?: { mime_type?: string; image_data?: unknown; video_data?: unknown }[] } }[] }
+}
+
+/** As conversas do direct com as últimas mensagens de cada uma. */
+async function syncDms(ctx: Ctx, account: AccountRow, token: string) {
+  const data = await ig<{ data?: Conversation[] }>('me/conversations', token, {
+    params: { platform: 'instagram', fields: 'id,updated_time,participants,messages.limit(25){id,message,created_time,from,attachments}', limit: 25 },
+  })
+  const { data: existing } = await ctx.admin.from('crm_instagram_threads').select('participant_id, last_at, unread').eq('account_id', account.id)
+  const seen = new Map(((existing ?? []) as { participant_id: string; last_at: string; unread: number }[]).map((t) => [t.participant_id, t]))
+  let count = 0
+  for (const conv of data.data ?? []) {
+    const other = (conv.participants?.data ?? []).find((p) => p.id !== account.ig_user_id && (p.username ?? '').toLowerCase() !== account.username.toLowerCase())
+    if (!other) continue
+    const messages = [...(conv.messages?.data ?? [])].sort((a, b) => Date.parse(a.created_time) - Date.parse(b.created_time))
+    if (!messages.length) continue
+    const last = messages[messages.length - 1]
+    const fromMe = (m: { from?: { id?: string; username?: string } }) => m.from?.id === account.ig_user_id || (m.from?.username ?? '').toLowerCase() === account.username.toLowerCase()
+    const before = seen.get(other.id)
+    // Não lido: as mensagens da pessoa depois da última leitura (a conversa nova conta as últimas dela, no máximo 5)
+    const since = before ? Date.parse(before.last_at) : 0
+    const fresh = messages.filter((m) => !fromMe(m) && Date.parse(m.created_time) > since).length
+    const unread = fromMe(last) ? 0 : before ? before.unread + fresh : Math.min(fresh, 5)
+    const { error: tError } = await ctx.admin.from('crm_instagram_threads').upsert(
+      {
+        account_id: account.id,
+        team_id: account.team_id,
+        participant_id: other.id,
+        username: other.username ?? null,
+        name: other.name ?? null,
+        last_text: last.message || (last.attachments?.data?.length ? 'Anexo' : ''),
+        last_from_me: fromMe(last),
+        last_at: last.created_time,
+        unread,
+      },
+      { onConflict: 'account_id,participant_id' }
+    )
+    if (tError) throw dbError(tError)
+    const rows = messages.map((m) => ({
+      account_id: account.id,
+      team_id: account.team_id,
+      mid: m.id,
+      participant_id: other.id,
+      from_me: fromMe(m),
+      body: m.message ?? '',
+      attachment: m.attachments?.data?.[0] ? (m.attachments.data[0].mime_type ?? 'anexo') : null,
+      ts: m.created_time,
+    }))
+    const { error: mError } = await ctx.admin.from('crm_instagram_dms').upsert(rows, { onConflict: 'account_id,mid', ignoreDuplicates: true })
+    if (mError) throw dbError(mError)
+    count += rows.length
+  }
+  return count
+}
+
+/** Lê a caixa inteira; o que a Meta recusar (permissão de mensagens) volta em `missing`. */
+async function syncInbox(ctx: Ctx, account: AccountRow, token: string) {
+  const missing: string[] = []
+  let comments = 0
+  let messages = 0
+  try {
+    comments = await syncComments(ctx, account, token)
+  } catch (error) {
+    if (error instanceof HttpError && (error.code === 'token' || error.code === 'rate')) throw error
+    console.warn('[instagram] comentários', error instanceof Error ? error.message : error)
+    missing.push('comentários')
+  }
+  try {
+    messages = await syncDms(ctx, account, token)
+  } catch (error) {
+    if (error instanceof HttpError && (error.code === 'token' || error.code === 'rate')) throw error
+    console.warn('[instagram] DMs', error instanceof Error ? error.message : error)
+    missing.push(error instanceof HttpError && error.code === 'permission' ? 'mensagens (conecte a conta de novo para liberar)' : 'mensagens')
+  }
+  return { comments, messages, missing }
+}
+
+/** Manda uma DM para quem escreveu (a Meta só aceita até 24 h depois da última mensagem dela). */
+async function sendDm(ctx: Ctx, account: AccountRow, token: string, recipient: Record<string, string>, text: string, participantId?: string) {
+  const sent = await ig<{ message_id?: string; recipient_id?: string }>(`${account.ig_user_id}/messages`, token, {
+    method: 'POST',
+    params: { recipient: JSON.stringify(recipient), message: JSON.stringify({ text }) },
+  })
+  const to = participantId ?? sent.recipient_id
+  if (to && sent.message_id) {
+    const at = new Date().toISOString()
+    await ctx.admin.from('crm_instagram_threads').upsert(
+      { account_id: account.id, team_id: account.team_id, participant_id: to, last_text: text, last_from_me: true, last_at: at, unread: 0 },
+      { onConflict: 'account_id,participant_id' }
+    )
+    await ctx.admin.from('crm_instagram_dms').upsert(
+      { account_id: account.id, team_id: account.team_id, mid: sent.message_id, participant_id: to, from_me: true, body: text, ts: at, sent_by: ctx.userId },
+      { onConflict: 'account_id,mid', ignoreDuplicates: true }
+    )
+  }
+  return sent
+}
+
 // ---------- stories programados (o cron) ----------
 
 /** Uma tela de um story programado; o servidor grava o post e os números. */
@@ -981,7 +1150,9 @@ Deno.serve(async (req) => {
         const message = typeof body.message === 'string' ? body.message.trim().slice(0, 2200) : ''
         if (!message) throw new HttpError('Escreva a resposta.')
         const target = metaId(body.commentId, 'comentário')
-        return json(await guarded(ctx, account, () => ig<{ id: string }>(`${target}/replies`, token, { method: 'POST', params: { message } })))
+        const sent = await guarded(ctx, account, () => ig<{ id: string }>(`${target}/replies`, token, { method: 'POST', params: { message } }))
+        await ctx.admin.from('crm_instagram_comments').update({ replied: true }).eq('account_id', account.id).eq('comment_id', target)
+        return json(sent)
       }
 
       case 'hide': {
@@ -996,6 +1167,30 @@ Deno.serve(async (req) => {
         const token = await tokenOf(ctx, account)
         const target = metaId(body.commentId, 'comentário')
         return json(await guarded(ctx, account, () => ig<{ success: boolean }>(target, token, { method: 'DELETE' })))
+      }
+
+      case 'inbox_sync': {
+        const account = await accountOf(ctx, body.accountId)
+        const token = await tokenOf(ctx, account)
+        return json(await guarded(ctx, account, () => syncInbox(ctx, account, token)))
+      }
+
+      case 'dm_send': {
+        const account = await accountOf(ctx, body.accountId)
+        const token = await tokenOf(ctx, account)
+        const text = typeof body.text === 'string' ? body.text.trim().slice(0, 1000) : ''
+        if (!text) throw new HttpError('Escreva a mensagem.')
+        const to = metaId(body.participantId, 'pessoa')
+        return json(await guarded(ctx, account, () => sendDm(ctx, account, token, { id: to }, text, to)))
+      }
+
+      case 'comment_dm': {
+        const account = await accountOf(ctx, body.accountId)
+        const token = await tokenOf(ctx, account)
+        const text = typeof body.text === 'string' ? body.text.trim().slice(0, 1000) : ''
+        if (!text) throw new HttpError('Escreva a mensagem.')
+        const target = metaId(body.commentId, 'comentário')
+        return json(await guarded(ctx, account, () => sendDm(ctx, account, token, { comment_id: target }, text)))
       }
 
       case 'disconnect': {

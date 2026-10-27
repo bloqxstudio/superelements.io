@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CalendarClock, CircleAlert, Copy, Instagram as InstagramIcon, KeyRound, Loader2, Megaphone, Plus, RefreshCw, Send } from 'lucide-react'
+import { CalendarClock, CircleAlert, Copy, Inbox, Instagram as InstagramIcon, KeyRound, Loader2, Megaphone, Plus, RefreshCw, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { AdsArea } from '@/features/crm/InstagramAds'
 import { useCrm } from '@/features/crm/crmStore'
 import { BarList, Sparkline, Stat, TrendChart, shortDay } from '@/features/crm/InstagramCharts'
+import { InboxArea } from '@/features/crm/InstagramInbox'
 import { PostPanel } from '@/features/crm/InstagramPost'
 import { PublishDialog } from '@/features/crm/InstagramPublish'
 import { StoriesArea } from '@/features/crm/InstagramStories'
@@ -54,7 +55,7 @@ import { cn } from '@/lib/utils'
 type Period = 7 | 30
 type Tab = 'geral' | 'posts'
 /** As abas da tela: o perfil, os stories programados e os anúncios. */
-type Area = 'perfil' | 'stories' | 'anuncios'
+type Area = 'perfil' | 'caixa' | 'stories' | 'anuncios'
 type SortKey = 'recentes' | 'alcance' | 'interacoes' | 'salvos' | 'taxa'
 
 const STALE = 30 * 60_000
@@ -696,7 +697,7 @@ const InstagramPage: React.FC = () => {
   }, [reload])
 
   const account = accounts?.find((a) => a.id === selected) ?? accounts?.[0]
-  const area: Area = params.get('aba') === 'anuncios' ? 'anuncios' : params.get('aba') === 'stories' ? 'stories' : 'perfil'
+  const area: Area = params.get('aba') === 'anuncios' ? 'anuncios' : params.get('aba') === 'stories' ? 'stories' : params.get('aba') === 'caixa' ? 'caixa' : 'perfil'
   const showArea = (to: Area) =>
     setParams(
       (current) => {
@@ -715,6 +716,7 @@ const InstagramPage: React.FC = () => {
         {(
           [
             ['perfil', 'Perfil', InstagramIcon],
+            ['caixa', 'Caixa', Inbox],
             ['stories', 'Stories', CalendarClock],
             ['anuncios', 'Anúncios', Megaphone],
           ] as [Area, string, React.ElementType][]
@@ -736,6 +738,8 @@ const InstagramPage: React.FC = () => {
       </div>
       {area === 'anuncios' && team ? (
         <AdsArea teamId={team.id} manager={manager} initialAccount={params.get('conta') ?? undefined} />
+      ) : area === 'caixa' && team && account && !error ? (
+        <InboxArea account={account} />
       ) : area === 'stories' && team && accounts !== null && error !== 'sem-tabelas' && !error && accounts.length > 0 ? (
         <StoriesArea teamId={team.id} accounts={accounts} />
       ) : !team || accounts === null ? (

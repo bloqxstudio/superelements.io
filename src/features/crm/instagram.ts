@@ -232,7 +232,7 @@ export class InstagramError extends Error {
   }
 }
 
-async function call<T>(action: string, body: Record<string, unknown> = {}): Promise<T> {
+export async function call<T>(action: string, body: Record<string, unknown> = {}): Promise<T> {
   let result: { data: unknown; error: unknown }
   try {
     result = await supabase.functions.invoke('instagram', { body: { action, ...body } })
