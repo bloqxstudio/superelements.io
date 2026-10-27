@@ -250,7 +250,7 @@ export function useMenuFeed() {
       setInterval(() => {
         if (visible()) void run()
       }, ms)
-    const timers = [every(refreshWhatsapp, 30_000), every(refreshSite, SITE_EVERY), every(refreshCrm, CRM_EVERY), every(refreshInstagram, IG_EVERY)]
+    const timers = [every(refreshWhatsapp, 10_000), every(refreshSite, SITE_EVERY), every(refreshCrm, CRM_EVERY), every(refreshInstagram, IG_EVERY)]
     const onVisible = () => {
       if (!visible()) return
       void refreshWhatsapp()

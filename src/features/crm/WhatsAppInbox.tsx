@@ -77,7 +77,7 @@ export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCall
   useEffect(() => {
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') void load()
-    }, 20_000)
+    }, 8_000)
     return () => clearInterval(timer)
   }, [load])
 
