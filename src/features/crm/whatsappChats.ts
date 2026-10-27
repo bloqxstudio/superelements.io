@@ -23,6 +23,8 @@ export interface WaChat {
   unread: number
   /** A foto de perfil guardada pelo serviço (caminho no bucket) */
   photoPath?: string
+  /** Etiquetas da equipe (Quente, Frio…) */
+  tags: string[]
 }
 
 export interface WaMessage {
@@ -49,6 +51,7 @@ interface ChatRow {
   last_at: string
   unread: number
   photo_path?: string | null
+  tags?: string[] | null
 }
 
 interface MessageRow {
@@ -74,6 +77,7 @@ const toChat = (r: ChatRow): WaChat => ({
   lastAt: Date.parse(r.last_at),
   unread: r.unread,
   photoPath: r.photo_path ?? undefined,
+  tags: r.tags ?? [],
 })
 
 const toMessage = (r: MessageRow): WaMessage => ({
@@ -212,4 +216,20 @@ export function useMediaUrl(path: string | undefined): string | undefined {
     }
   }, [path])
   return url
+}
+
+/** Etiquetas prontas, com a cor de cada uma; qualquer outro texto é uma etiqueta própria (cinza). */
+export const PRESET_TAGS: { name: string; chip: string }[] = [
+  { name: 'Quente', chip: 'bg-red-100 text-red-800' },
+  { name: 'Morno', chip: 'bg-amber-100 text-amber-800' },
+  { name: 'Frio', chip: 'bg-sky-100 text-sky-800' },
+  { name: 'Cliente', chip: 'bg-emerald-100 text-emerald-800' },
+  { name: 'Perdido', chip: 'bg-gray-200 text-gray-700' },
+]
+
+export const tagChip = (tag: string) => PRESET_TAGS.find((t) => t.name.toLowerCase() === tag.toLowerCase())?.chip ?? 'bg-violet-100 text-violet-800'
+
+export async function setTags(teamId: string, jid: string, tags: string[]) {
+  const { error } = await db.rpc('crm_whatsapp_set_tags', { p_team: teamId, p_jid: jid, p_tags: tags })
+  if (error) throw error.code === 'PGRST202' || /does not exist/i.test(error.message) ? new InboxError('Aplique a migração 20261027140000_crm_whatsapp_tags.sql no Supabase.') : fail(error)
 }

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, FileText, Loader2, Paperclip, Plus, RefreshCw, Send, X } from 'lucide-react'
+import { ArrowLeft, FileText, Loader2, Paperclip, Plus, RefreshCw, Send, Tag, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { addActivity } from '@/features/crm/clients'
@@ -11,10 +11,13 @@ import {
   chatTitle,
   loadChats,
   loadMessages,
+  PRESET_TAGS,
   markRead,
   sendFile,
   sendMessage,
+  setTags,
   startChat,
+  tagChip,
   useInboxFeed,
   useMediaUrl,
   type WaChat,
@@ -44,6 +47,7 @@ export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCall
   const [chats, setChats] = useState<WaChat[]>()
   const [failure, setFailure] = useState<InboxError>()
   const [openJid, setOpenJid] = useState<string>()
+  const [tagFilter, setTagFilter] = useState<string>()
   // Vindo de "Chamar": já abre a nova conversa com o número e o texto
   const [composing, setComposing] = useState(!!call)
   useEffect(() => {
@@ -97,6 +101,8 @@ export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCall
     )
 
   const chat = chats.find((c) => c.jid === openJid)
+  const allTags = Array.from(new Set(chats.flatMap((c) => c.tags)))
+  const shown = tagFilter ? chats.filter((c) => c.tags.includes(tagFilter)) : chats
 
   return (
     <div className="grid h-[640px] overflow-hidden rounded-xl border border-gray-200 bg-white md:grid-cols-[320px_1fr]">
@@ -107,13 +113,25 @@ export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCall
           Nova conversa
         </Button>
       </div>
+      {allTags.length > 0 && (
+        <div className="flex flex-wrap gap-1 border-b border-gray-200 px-3 py-2">
+          <button type="button" onClick={() => setTagFilter(undefined)} className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', !tagFilter ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600')}>
+            Todas
+          </button>
+          {allTags.map((t) => (
+            <button key={t} type="button" onClick={() => setTagFilter(tagFilter === t ? undefined : t)} className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', tagChip(t), tagFilter === t && 'ring-2 ring-gray-900')}>
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
       <ul className="min-h-0 flex-1 overflow-y-auto">
         {chats.length === 0 && (
           <li className="p-4 text-sm text-gray-500">
             Nenhuma conversa ainda. As mensagens novas, recebidas ou enviadas pelo celular, aparecem aqui a partir de agora.
           </li>
         )}
-        {chats.map((c) => (
+        {shown.map((c) => (
           <li key={c.jid}>
             <button
               type="button"
@@ -131,6 +149,13 @@ export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCall
                     {c.lastFromMe && 'Você: '}
                     {c.lastText}
                   </span>
+                  {c.tags.length > 0 && (
+                    <span className="flex shrink-0 gap-1">
+                      {c.tags.slice(0, 2).map((t) => (
+                        <span key={t} className={cn('rounded-full px-1.5 text-[10px] font-medium', tagChip(t))}>{t}</span>
+                      ))}
+                    </span>
+                  )}
                   {c.unread > 0 && <span className="shrink-0 rounded-full bg-emerald-600 px-1.5 text-[11px] font-semibold text-white">{c.unread}</span>}
                 </span>
               </span>
@@ -156,7 +181,7 @@ export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCall
           }}
         />
       ) : chat ? (
-        <Conversation key={chat.jid} teamId={teamId} chat={chat} onBack={() => setOpenJid(undefined)} />
+        <Conversation key={chat.jid} teamId={teamId} chat={chat} onBack={() => setOpenJid(undefined)} onChanged={() => void load()} />
       ) : (
         <div className="hidden items-center justify-center p-6 text-sm text-gray-400 md:flex">Escolha uma conversa</div>
       )}
@@ -174,6 +199,69 @@ const ChatAvatar: React.FC<{ chat: WaChat; size?: number }> = ({ chat, size = 36
     <span className="flex shrink-0 items-center justify-center rounded-full bg-emerald-50 text-xs font-semibold text-emerald-700" style={{ width: size, height: size }} aria-hidden>
       {initials}
     </span>
+  )
+}
+
+/** As etiquetas da conversa: as marcadas, e um menu para marcar (Quente, Morno, Frio…) ou criar uma. */
+const TagPicker: React.FC<{ teamId: string; chat: WaChat; onChanged: () => void }> = ({ teamId, chat, onChanged }) => {
+  const [open, setOpen] = useState(false)
+  const [custom, setCustom] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const apply = async (tags: string[]) => {
+    setBusy(true)
+    try {
+      await setTags(teamId, chat.jid, tags)
+      onChanged()
+    } catch (error) {
+      toast.error(errorText(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const toggle = (name: string) => {
+    const has = chat.tags.some((t) => t.toLowerCase() === name.toLowerCase())
+    void apply(has ? chat.tags.filter((t) => t.toLowerCase() !== name.toLowerCase()) : [...chat.tags, name])
+  }
+
+  return (
+    <div className="relative ml-auto flex min-w-0 items-center gap-1.5">
+      {chat.tags.map((t) => (
+        <span key={t} className={cn('hidden rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline', tagChip(t))}>{t}</span>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label="Etiquetas da conversa">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Tag className="h-4 w-4" aria-hidden />}
+      </Button>
+      {open && (
+        <>
+          <button type="button" className="fixed inset-0 z-10 cursor-default" aria-label="Fechar" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-lg border border-gray-200 bg-white p-2 shadow-lg">
+            {[...PRESET_TAGS.map((t) => t.name), ...chat.tags.filter((t) => !PRESET_TAGS.some((p) => p.name.toLowerCase() === t.toLowerCase()))].map((name) => {
+              const on = chat.tags.some((t) => t.toLowerCase() === name.toLowerCase())
+              return (
+                <button key={name} type="button" onClick={() => toggle(name)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-gray-50">
+                  <span className={cn('flex h-4 w-4 items-center justify-center rounded border text-[10px]', on ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300')}>{on && '✓'}</span>
+                  <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', tagChip(name))}>{name}</span>
+                </button>
+              )
+            })}
+            <form
+              className="mt-1 flex gap-1 border-t border-gray-100 pt-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const value = custom.trim()
+                if (!value) return
+                setCustom('')
+                if (!chat.tags.some((t) => t.toLowerCase() === value.toLowerCase())) void apply([...chat.tags, value])
+              }}
+            >
+              <input value={custom} onChange={(e) => setCustom(e.target.value)} maxLength={24} placeholder="Nova etiqueta" className="h-8 min-w-0 flex-1 rounded-md border border-gray-300 px-2 text-xs focus:border-emerald-500 focus:outline-none" />
+              <Button type="submit" size="sm" disabled={!custom.trim()}>Criar</Button>
+            </form>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -265,7 +353,7 @@ const NewChat: React.FC<{ teamId: string; call?: CallTarget; onCancel: () => voi
   )
 }
 
-const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void }> = ({ teamId, chat, onBack }) => {
+const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void; onChanged: () => void }> = ({ teamId, chat, onBack, onChanged }) => {
   const [messages, setMessages] = useState<WaMessage[]>()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
@@ -358,6 +446,7 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void 
           <p className="truncate text-sm font-semibold text-gray-900">{chatTitle(chat)}</p>
           {chat.phone && !chat.jid.endsWith('@lid') && <p className="truncate text-xs text-gray-500">+{chat.phone}</p>}
         </div>
+        <TagPicker teamId={teamId} chat={chat} onChanged={onChanged} />
       </div>
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto bg-gray-50 px-4 py-3">
         {!messages && <Loader2 className="mx-auto h-4 w-4 animate-spin text-gray-400" aria-hidden />}

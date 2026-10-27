@@ -93,6 +93,22 @@ const InstagramItem: React.FC = () => {
   )
 }
 
+/** WhatsApp: mensagens não lidas (verde, como no próprio WhatsApp); some quando a conversa é aberta. */
+const WhatsAppItem: React.FC = () => {
+  const count = useMenuBadges((s) => s.whatsapp)
+  const label = plural(count, 'mensagem não lida', 'mensagens não lidas')
+  return (
+    <Item to="/crm/whatsapp" icon={MessageCircle} label="WhatsApp">
+      {count > 0 && (
+        <span className="rounded-full bg-emerald-600 px-1.5 text-[11px] font-semibold tabular-nums text-white" title={`${count} ${label}`}>
+          <span aria-hidden>{count > 99 ? '99+' : count}</span>
+          <span className="sr-only">, {count} {label}</span>
+        </span>
+      )}
+    </Item>
+  )
+}
+
 /** Site: quem está no site agora (verde, pulsando) e os contatos novos. */
 const SiteItem: React.FC = () => {
   const live = useMenuBadges((s) => s.live)
@@ -159,7 +175,7 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         {crm && (
           <Section title="CRM">
             <OportunidadesItem />
-            <Item to="/crm/whatsapp" icon={MessageCircle} label="WhatsApp" />
+            <WhatsAppItem />
             <Item to="/crm/fluxos" icon={Workflow} label="Fluxos" />
             <Item to="/crm/clientes" icon={Building2} label="Clientes" />
             <Item to="/crm/social" icon={Send} label="Social" />

@@ -24,14 +24,16 @@ export interface MenuBadges {
   contacts: number
   /** Cartões novos e comentários de outras pessoas desde a última visita às Oportunidades */
   opportunities: number
+  /** Mensagens do WhatsApp ainda não lidas */
+  whatsapp: number
 }
 
-const EMPTY: MenuBadges = { followers: 0, live: 0, contacts: 0, opportunities: 0 }
+const EMPTY: MenuBadges = { followers: 0, live: 0, contacts: 0, opportunities: 0, whatsapp: 0 }
 
 export const useMenuBadges = create<MenuBadges>(() => EMPTY)
 
 /** Há o que ver (o ponto no botão do menu, no celular). */
-export const hasNews = (b: MenuBadges) => b.followers > 0 || b.live > 0 || b.contacts > 0 || b.opportunities > 0
+export const hasNews = (b: MenuBadges) => b.followers > 0 || b.live > 0 || b.contacts > 0 || b.opportunities > 0 || b.whatsapp > 0
 
 type Area = 'instagram' | 'site' | 'oportunidades'
 
@@ -194,6 +196,20 @@ export function useMenuFeed() {
       useMenuBadges.setState({ opportunities: here('oportunidades') ? 0 : news })
     }
 
+    // ---------- WhatsApp: mensagens não lidas (abrir a conversa zera no servidor) ----------
+    let waOff = false
+    const refreshWhatsapp = async () => {
+      if (waOff) return
+      const { data, error } = await supabase.from('crm_whatsapp_chats' as never).select('unread').eq('team_id', teamId).gt('unread', 0).limit(500)
+      if (error) {
+        waOff = missingTable(error)
+        return
+      }
+      if (!alive) return
+      useMenuBadges.setState({ whatsapp: ((data ?? []) as { unread: number }[]).reduce((sum, c) => sum + c.unread, 0) })
+    }
+
+    void refreshWhatsapp()
     void refreshInstagram()
     void refreshSite()
     void refreshCrm()
@@ -211,6 +227,7 @@ export function useMenuFeed() {
     }
     const siteSoon = debounce(refreshSite, 2000)
     const crmSoon = debounce(refreshCrm, 800)
+    const waSoon = debounce(refreshWhatsapp, 500)
     // Um canal por tabela: sem a migração de uma, o canal dela falha sozinho
     const channels = [
       supabase
@@ -221,6 +238,10 @@ export function useMenuFeed() {
         .channel(`menu-crm-${teamId}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_activities', filter: `team_id=eq.${teamId}` }, crmSoon)
         .subscribe(),
+      supabase
+        .channel(`menu-whatsapp-${teamId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_whatsapp_chats', filter: `team_id=eq.${teamId}` }, waSoon)
+        .subscribe(),
     ]
 
     // E de tempos em tempos: quem sai do site não avisa, e sem Realtime é só isso
@@ -229,9 +250,10 @@ export function useMenuFeed() {
       setInterval(() => {
         if (visible()) void run()
       }, ms)
-    const timers = [every(refreshSite, SITE_EVERY), every(refreshCrm, CRM_EVERY), every(refreshInstagram, IG_EVERY)]
+    const timers = [every(refreshWhatsapp, 30_000), every(refreshSite, SITE_EVERY), every(refreshCrm, CRM_EVERY), every(refreshInstagram, IG_EVERY)]
     const onVisible = () => {
       if (!visible()) return
+      void refreshWhatsapp()
       void refreshSite()
       void refreshCrm()
       void refreshInstagram()
@@ -253,6 +275,7 @@ export function useMenuFeed() {
       mark.current = null
       siteSoon.cancel()
       crmSoon.cancel()
+      waSoon.cancel()
       timers.forEach(clearInterval)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('storage', onStorage)
