@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import pino from 'pino'
 import { dbAuthState } from './auth.ts'
 import { answer, samePhone } from './comandos.ts'
-import { openSession, type NumberPatch, type Session, type StoredMessage } from './session.ts'
+import { openSession, type NumberPatch, type OutFile, type Session, type StoredMessage } from './session.ts'
 
 /**
  * O serviço do WhatsApp da equipe (CRM › WhatsApp). Conecta o número de cada
@@ -218,7 +218,7 @@ async function flush() {
     if (!session.open || session.leaving) continue
     const { data, error } = await db
       .from('crm_whatsapp_messages')
-      .select('id, chat_jid, body')
+      .select('id, chat_jid, body, kind, media_path, media_mime, media_name')
       .eq('team_id', teamId)
       .eq('status', 'queued')
       .order('ts')
@@ -234,7 +234,15 @@ async function flush() {
         if (!target) throw new Error('Esse número não tem WhatsApp.')
         // O WhatsApp conhece o número de outro jeito (o 9 do celular): a conversa passa para o endereço certo
         if (target !== chatJid) await moveChat(teamId, chatJid, target, row.id as string)
-        const waId = await session.send(target, row.body as string)
+        let file: OutFile | undefined
+        if (row.media_path) {
+          const { data: blob, error: downloadError } = await db.storage.from(BUCKET).download(row.media_path as string)
+          if (downloadError || !blob) throw new Error('Não achei o arquivo para enviar.')
+          file = { buffer: Buffer.from(await blob.arrayBuffer()), mime: (row.media_mime as string) || 'application/octet-stream', name: (row.media_name as string) || undefined, kind: row.kind as OutFile['kind'] }
+        }
+        // Na legenda não vai o rótulo "[Vídeo]" que a tela mostra
+        const caption = file ? (row.body as string).replace(/^\[(Foto|Vídeo|Áudio|Documento)\]\s?/, '') : (row.body as string)
+        const waId = await session.send(target, caption, file)
         // Mensagens para várias pessoas em seguida não saem coladas: uma pausa irregular entre elas
         if (data.length > 1 && process.env.WHATSAPP_HUMANIZAR !== '0') await new Promise((resolve) => setTimeout(resolve, 2000 + Math.random() * 5000))
         const { error: setError } = await db.from('crm_whatsapp_messages').update({ wa_id: waId, ts: new Date().toISOString() }).eq('id', row.id)

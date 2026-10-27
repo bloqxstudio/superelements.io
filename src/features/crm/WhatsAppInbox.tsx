@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, FileText, Loader2, Plus, RefreshCw, Send } from 'lucide-react'
+import { ArrowLeft, FileText, Loader2, Paperclip, Plus, RefreshCw, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { addActivity } from '@/features/crm/clients'
@@ -12,6 +12,7 @@ import {
   loadChats,
   loadMessages,
   markRead,
+  sendFile,
   sendMessage,
   startChat,
   useInboxFeed,
@@ -269,6 +270,7 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void 
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const end = useRef<HTMLDivElement>(null)
+  const picker = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     try {
@@ -306,6 +308,21 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void 
     setSending(true)
     try {
       await sendMessage(teamId, chat.jid, value)
+      setText('')
+      await load()
+    } catch (error) {
+      toast.error(errorText(error))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // Vídeo, foto, áudio ou documento: o texto do campo vai de legenda
+  const attach = async (file: File | undefined) => {
+    if (!file || sending) return
+    setSending(true)
+    try {
+      await sendFile(teamId, chat.jid, file, text.trim())
       setText('')
       await load()
     } catch (error) {
@@ -354,6 +371,20 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void 
         <div ref={end} />
       </div>
       <form onSubmit={submit} className="flex items-end gap-2 border-t border-gray-200 p-3">
+        <input
+          ref={picker}
+          type="file"
+          hidden
+          accept="video/*,image/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.zip"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ''
+            void attach(file)
+          }}
+        />
+        <Button type="button" variant="ghost" size="sm" disabled={sending} onClick={() => picker.current?.click()} aria-label="Enviar vídeo, foto ou arquivo" title="Enviar vídeo, foto ou arquivo (até 25 MB)">
+          <Paperclip className="h-4 w-4" aria-hidden />
+        </Button>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}

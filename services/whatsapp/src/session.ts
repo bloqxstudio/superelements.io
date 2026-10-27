@@ -42,6 +42,14 @@ export interface StoredMessage {
   media?: { mime?: string; name?: string; size: number; download: () => Promise<Buffer> }
 }
 
+/** Arquivo a enviar: vídeo, foto, áudio ou documento */
+export interface OutFile {
+  buffer: Buffer
+  mime: string
+  name?: string
+  kind: 'image' | 'video' | 'audio' | 'document'
+}
+
 export interface Session {
   /** Está com a conexão aberta (dá para enviar) */
   readonly open: boolean
@@ -49,8 +57,8 @@ export interface Session {
   photoUrl: (jid: string) => Promise<string | undefined>
   /** Confere se o número tem WhatsApp e devolve o endereço certo (com o 9 do Brasil, por exemplo) */
   resolve: (jid: string) => Promise<string | undefined>
-  /** Envia texto e devolve o id da mensagem no WhatsApp */
-  send: (jid: string, text: string) => Promise<string>
+  /** Envia texto (ou o arquivo, com o texto de legenda) e devolve o id da mensagem no WhatsApp */
+  send: (jid: string, text: string, file?: OutFile) => Promise<string>
   /** Saindo: tirando o aparelho do celular */
   readonly leaving: boolean
   /** Tira o aparelho do celular e apaga a sessão */
@@ -301,7 +309,7 @@ export function openSession(o: Options): Session {
       const found = await sock.onWhatsApp(jid)
       return found?.find((r) => r.exists)?.jid
     },
-    send: async (jid, text) => {
+    send: async (jid, text, file) => {
       if (!sock || !isOpen || ended) throw new Error('O WhatsApp não está conectado agora.')
       if (HUMANIZE) {
         // Como uma pessoa: abre a conversa, "digita" no ritmo do tamanho do texto (com variação) e só então envia
@@ -314,7 +322,16 @@ export function openSession(o: Options): Session {
         await sleep(between(250, 700))
         if (!isOpen || ended) throw new Error('O WhatsApp caiu antes de enviar.')
       }
-      const sent = await sock.sendMessage(jid, { text })
+      const content = !file
+        ? { text }
+        : file.kind === 'video'
+          ? { video: file.buffer, mimetype: file.mime, caption: text || undefined }
+          : file.kind === 'image'
+            ? { image: file.buffer, mimetype: file.mime, caption: text || undefined }
+            : file.kind === 'audio'
+              ? { audio: file.buffer, mimetype: file.mime }
+              : { document: file.buffer, mimetype: file.mime, fileName: file.name ?? 'arquivo', caption: text || undefined }
+      const sent = await sock.sendMessage(jid, content)
       if (!sent?.key.id) throw new Error('O WhatsApp não confirmou o envio.')
       return sent.key.id
     },
