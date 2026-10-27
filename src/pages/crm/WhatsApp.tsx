@@ -156,7 +156,7 @@ export default function CrmWhatsApp() {
           Para chamar {call.name ?? 'esse número'}, o WhatsApp da equipe precisa estar conectado.
         </p>
       )}
-      {number && !failure && (number.status === 'connected' || !!number.phone) && (
+      {number && !failure && (
         <div className="mt-6">
           {number.status !== 'connected' && (
             <p className="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
