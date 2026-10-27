@@ -38,6 +38,7 @@ const STORY_MODELS = [
 
 const PHOTO_MODELS = [
   '- viral-capa: foto gerada em tela cheia com título pesado embaixo (prompt, title, body, label). Boa para abrir.',
+  '- foto-manchete: foto gerada em tela cheia com a manchete no alto e uma frase embaixo (prompt com a cena, em inglês e sem texto, title, body). Boa para arquitetura, produto e lugar.',
   '- viral-foto: foto gerada em cima, número da tela e título embaixo (prompt, number com 2 dígitos como "02", title, body, dark).',
 ].join('\n')
 
@@ -66,7 +67,7 @@ const storyPromptOf = (r: PlanRequest) =>
     '- A última tela é o convite: modelo cta, com o convite do roteiro no `title`, o botão em `cta` com até 4 palavras ("Responda SIM", "Me chama no Direct"; nunca "clique no link") e `body` com @avencestudio.',
     '- Story não tem arrastar nem link: não escreva "arraste", "link na bio" nem "clique". Não use viral-fecho.',
     '- Alterne fundo escuro e claro (dark true/false) para dar ritmo, sem trocar a cada tela.',
-    `- Modelos válidos: ${TEMPLATE_IDS.filter((t) => t !== 'viral-fecho' && (r.photos || (t !== 'viral-capa' && t !== 'viral-foto'))).join(', ')}.`,
+    `- Modelos válidos: ${TEMPLATE_IDS.filter((t) => t !== 'viral-fecho' && (r.photos || (t !== 'viral-capa' && t !== 'viral-foto' && t !== 'foto-manchete'))).join(', ')}.`,
     '- caption: "" (story não tem legenda). name: o nome curto da sequência.',
   ].join('\n')
 

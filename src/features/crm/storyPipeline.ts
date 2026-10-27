@@ -195,7 +195,7 @@ async function reviewIdeas(ideas: Story[], engine: ChatAgentId, signal: AbortSig
 // ---------- 3 e 4. o criativo e as fotos ----------
 
 /** Foto que não saiu: a tela vira uma sem foto, com o mesmo texto (capa vira manifesto; foto vira frase). */
-const noPhoto = (s: SlideSpec): SlideSpec => ({ ...s, prompt: undefined, template: s.template === 'viral-capa' ? 'manifesto' : s.template === 'viral-foto' ? 'viral-frase' : s.template })
+const noPhoto = (s: SlideSpec): SlideSpec => ({ ...s, prompt: undefined, template: s.template === 'viral-capa' || s.template === 'foto-manchete' ? 'manifesto' : s.template === 'viral-foto' ? 'viral-frase' : s.template })
 
 /** O roteiro da Estrategista, como a Designer recebe. */
 function briefOf(s: Story, settings: StorySettings, extra?: string) {
@@ -466,7 +466,7 @@ export async function restyleStory(story: Story): Promise<Story> {
   const set = await needSet({ ...settings, ...where })
   const old = set.posts.find((p) => p.id === story.postId)
   const photos = story.plan.slides.map((_, i) => old?.slides[i]?.layers.find((l): l is ImageLayer => l.type === 'image' && !!l.prompt && !!l.src)?.src)
-  const slides = story.plan.slides.map((s, i) => (s.template === 'viral-capa' || s.template === 'viral-foto') && !photos[i] ? noPhoto(s) : s)
+  const slides = story.plan.slides.map((s, i) => (s.template === 'viral-capa' || s.template === 'viral-foto' || s.template === 'foto-manchete') && !photos[i] ? noPhoto(s) : s)
   const built = buildPost({ name: old?.name ?? storyPostName(story), format: '9x16', slides }, set.brand, { series: pillarOf(story, settings) })
   const post: Post = {
     ...built,

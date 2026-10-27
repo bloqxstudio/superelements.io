@@ -118,6 +118,21 @@ const swipe = (c: Ctx, cue = 'Arraste'): Layer[] => c.story ? [] : [
 ]
 
 const BUILDERS: Record<TemplateId, Build> = {
+  // Foto em tela cheia com a manchete no alto, sobre o céu ou o espaço livre da imagem; rodapé com a frase do serviço
+  'foto-manchete': (brand, format, spec) => {
+    const c = ctxOf(brand, format, true)
+    const head = title(c, spec.title ?? 'Seu projeto é *exclusivo*, seu site também deveria ser.', { x: c.m, y: c.top + (c.story ? 130 : 96), w: Math.min(c.w - c.m * 2, c.story ? 900 : 780), size: c.story ? 104 : 80, letterSpacing: -0.04, lineHeight: 1.05, maxLines: 4 })
+    const foot = c.h - c.bottom - (c.story ? 20 : 0)
+    return slide(c.p.ink, [
+      image('Foto', spec.photo ?? '', { x: 0, y: 0, w: c.w, h: c.h, ...(spec.photo ? {} : { prompt: scene(spec, spec.title ?? 'a contemporary house, natural light, calm') }) }),
+      rect('Véu do topo', { x: 0, y: 0, w: c.w, h: Math.round(c.h * 0.52), fill: alpha(c.p.ink, 0.36), fill2: alpha(c.p.ink, 0), angle: 180 }),
+      rect('Véu da base', { x: 0, y: Math.round(c.h * 0.82), w: c.w, h: c.h - Math.round(c.h * 0.82), fill: alpha(c.p.ink, 0), fill2: alpha(c.p.ink, 0.32), angle: 180 }),
+      ...header(c),
+      head,
+      ...(spec.body ? [rect('Selo', { x: c.m, y: foot - 22, w: 10, h: 10, fill: c.hi }), text(c, 'Rodapé', spec.body, { x: c.m + 26, y: foot - 36, w: c.w - c.m * 2 - 26, size: c.story ? 32 : 26, weight: 400, letterSpacing: -0.01, color: c.fg })] : []),
+    ])
+  },
+
   // Carrossel viral: foto grande, título pesado, número e dado em destaque
 
   'viral-capa': (brand, format, spec) => {
@@ -429,6 +444,7 @@ export const TEMPLATES: SlideTemplate[] = [
   { id: 'viral-dado', name: 'Viral · dado em destaque', hint: 'Um número enorme e o que ele significa.' },
   { id: 'viral-frase', name: 'Viral · frase', hint: 'Um insight em letras grandes.' },
   { id: 'viral-fecho', name: 'Viral · salve e siga', hint: 'Fecho que pede salvar, enviar e seguir.' },
+  { id: 'foto-manchete', name: 'Foto e manchete', hint: 'Foto em tela cheia, manchete no alto e a frase do serviço embaixo.' },
 ]
 
 /** Um slide do modelo, na linguagem do conjunto (`brand.look`). `at` diz a posição no post e o assunto da série (a editorial mostra os dois). */

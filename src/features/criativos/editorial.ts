@@ -185,6 +185,22 @@ const scene = (spec: SlideSpec, fallback: string) =>
 type Build = (brand: SetBrand, format: FormatId, spec: SlideSpec, at?: SlideAt) => Slide
 
 export const EDITORIAL: Record<TemplateId, Build> = {
+  // Foto em tela cheia: manchete no alto (sobre o céu ou o espaço livre), frase do serviço e o logo embaixo
+  'foto-manchete': (brand, format, spec, at) => {
+    const c = edOf(brand, format, true, at)
+    const wide = c.w - c.m * 2
+    const head = title(c, spec.title ?? 'Seu projeto é *exclusivo*, seu site também deveria ser.', { x: c.m, y: c.y0, w: Math.round(wide * 0.84), size: c.story ? 112 : 84, maxLines: 4 })
+    return slide(c, [
+      image('Foto', spec.photo ?? '', { x: 0, y: 0, w: c.w, h: c.h, ...(spec.photo ? {} : { prompt: scene(spec, spec.title ?? 'a contemporary house, natural light, calm') }) }),
+      rect('Véu do topo', { x: 0, y: 0, w: c.w, h: Math.round(c.h * 0.5), fill: alpha(c.p.ink, 0.4), fill2: alpha(c.p.ink, 0), angle: 180 }),
+      rect('Véu da base', { x: 0, y: Math.round(c.h * 0.8), w: c.w, h: c.h - Math.round(c.h * 0.8), fill: alpha(c.p.ink, 0), fill2: alpha(c.p.ink, 0.4), angle: 180 }),
+      ...metaRow(c, 'rgba(255, 255, 255, 0.82)'),
+      head,
+      ...(spec.body ? [text(c, 'Apoio', spec.body, { x: c.m, y: c.foot - (c.story ? 64 : 58), w: wide, size: c.story ? 32 : 28, color: 'rgba(255, 255, 255, 0.88)' })] : []),
+      ...footRow(c, true),
+    ])
+  },
+
   // Abre ou fecha uma ideia: rótulo e título grande no alto, a frase de apoio embaixo, perto do logo
   manifesto: (brand, format, spec, at) => {
     const c = edOf(brand, format, spec.dark ?? true, at)

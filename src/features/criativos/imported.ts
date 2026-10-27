@@ -55,6 +55,14 @@ interface Model {
 
 const MODELS: Model[] = [
   {
+    name: 'Arquitetos · seu projeto é exclusivo',
+    format: '4x5',
+    caption: 'Você pensa na luz, nos materiais e em como cada espaço vai ser vivido. Na hora de apresentar seu escritório, esse cuidado também pode aparecer. A gente cria design e sites para dar aos seus projetos espaço, clareza e uma presença à altura do seu trabalho. Hoje, seu site transmite o que você gostaria que alguém sentisse ao conhecer seu escritório? Se quiser conversar sobre isso, me chama no direct.',
+    slides: [
+      { template: 'foto-manchete', title: 'Seu projeto é exclusivo, seu site também deveria ser.', body: 'Design e sites para arquitetos.', photo: '/criativos/arquitetura/base-limpa.jpg' },
+    ],
+  },
+  {
     name: 'ProcessBase · carrossel',
     format: '4x5',
     caption: 'Um método, um site que explica. A ProcessBase precisava mostrar o Método Base com clareza e levar a conversa ao diagnóstico. A Avence fez o site, em WordPress e Elementor. Quer um site assim para o seu negócio? Chame no Direct @avencestudio.',

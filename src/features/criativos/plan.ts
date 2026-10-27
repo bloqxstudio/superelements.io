@@ -5,7 +5,7 @@
  * `@/`: o servidor de desenvolvimento (Node) lê este arquivo também.
  */
 
-export const TEMPLATE_IDS = ['manifesto', 'case-janela', 'case-duo', 'case-capa', 'ilustracao', 'lista', 'cta', 'viral-capa', 'viral-foto', 'viral-dado', 'viral-frase', 'viral-fecho'] as const
+export const TEMPLATE_IDS = ['manifesto', 'case-janela', 'case-duo', 'case-capa', 'ilustracao', 'lista', 'cta', 'viral-capa', 'viral-foto', 'viral-dado', 'viral-frase', 'viral-fecho', 'foto-manchete'] as const
 export type TemplateId = (typeof TEMPLATE_IDS)[number]
 export type CaseView = 'capa' | 'pagina' | 'celular'
 export const ILLUSTRATION_IDS = ['site-parado', 'clique-conversa', 'previa-site', 'antes-depois', 'camadas-wordpress'] as const
@@ -35,6 +35,8 @@ export interface SlideSpec {
   dark?: boolean
   /** Modelos viral-*: a cena da imagem a gerar (em inglês), sem texto dentro. */
   prompt?: string
+  /** foto-manchete: endereço de uma foto pronta (ex.: /criativos/arquitetura/base-limpa.jpg). Sem ela, a cena em `prompt` vira a foto. */
+  photo?: string
   /** viral-dado e viral-foto: o número grande ("73%", "2\u00ba", "02"). */
   number?: string
 }

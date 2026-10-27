@@ -37,7 +37,7 @@ export function docText(doc: CopyDoc): string {
 /** O endereço de um post entregue: abre só ele. */
 /** Slides sem foto gerada: as fotos precisam de um serviço de imagem, então o que dependia delas vira texto (capa vira manifesto, foto vira frase). */
 const withoutPhotos = (slides: PlanResponse['posts'][number]['slides']) =>
-  slides.map((s) => ({ ...s, prompt: undefined, template: s.template === 'viral-capa' ? 'manifesto' : s.template === 'viral-foto' ? 'viral-frase' : s.template }))
+  slides.map((s) => ({ ...s, prompt: undefined, template: s.template === 'viral-capa' || s.template === 'foto-manchete' ? 'manifesto' : s.template === 'viral-foto' ? 'viral-frase' : s.template }))
 
 const postHref = (set: Pick<SetSummary, 'id' | 'shared' | 'projectId'>, postId: string) => `/criativos/${set.id}?${set.shared && set.projectId ? `projeto=${set.projectId}&` : ''}post=${postId}`
 
