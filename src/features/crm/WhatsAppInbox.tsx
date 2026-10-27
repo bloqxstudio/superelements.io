@@ -43,7 +43,7 @@ const listTime = (at: number) => {
 
 const dayTitle = (at: number) => new Date(at).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
 
-export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCallDone?: () => void }> = ({ teamId, call, onCallDone }) => {
+export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCallDone?: () => void; offline?: boolean }> = ({ teamId, call, onCallDone, offline }) => {
   const [chats, setChats] = useState<WaChat[]>()
   const [failure, setFailure] = useState<InboxError>()
   const [openJid, setOpenJid] = useState<string>()
@@ -108,7 +108,7 @@ export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCall
     <div className="grid h-[640px] overflow-hidden rounded-xl border border-gray-200 bg-white md:grid-cols-[320px_1fr]">
       <div className={cn('flex min-h-0 flex-col border-gray-200 md:border-r', (chat || composing) && 'hidden md:flex')}>
       <div className="border-b border-gray-200 p-3">
-        <Button size="sm" variant="outline" className="w-full" onClick={() => { setComposing(true); setOpenJid(undefined) }}>
+        <Button size="sm" variant="outline" className="w-full" disabled={offline} onClick={() => { setComposing(true); setOpenJid(undefined) }}>
           <Plus className="h-4 w-4" aria-hidden />
           Nova conversa
         </Button>
@@ -164,7 +164,7 @@ export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCall
         ))}
       </ul>
       </div>
-      {composing ? (
+      {composing && !offline ? (
         <NewChat
           key={call?.phone ?? 'novo'}
           teamId={teamId}
@@ -181,7 +181,7 @@ export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCall
           }}
         />
       ) : chat ? (
-        <Conversation key={chat.jid} teamId={teamId} chat={chat} onBack={() => setOpenJid(undefined)} onChanged={() => void load()} />
+        <Conversation key={chat.jid} teamId={teamId} chat={chat} offline={offline} onBack={() => setOpenJid(undefined)} onChanged={() => void load()} />
       ) : (
         <div className="hidden items-center justify-center p-6 text-sm text-gray-400 md:flex">Escolha uma conversa</div>
       )}
@@ -353,7 +353,7 @@ const NewChat: React.FC<{ teamId: string; call?: CallTarget; onCancel: () => voi
   )
 }
 
-const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void; onChanged: () => void }> = ({ teamId, chat, onBack, onChanged }) => {
+const Conversation: React.FC<{ teamId: string; chat: WaChat; offline?: boolean; onBack: () => void; onChanged: () => void }> = ({ teamId, chat, offline, onBack, onChanged }) => {
   const [messages, setMessages] = useState<WaMessage[]>()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
@@ -488,6 +488,9 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void;
           </Button>
         </div>
       )}
+      {offline ? (
+        <p className="border-t border-gray-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">WhatsApp desconectado: dá para ler o histórico, mas não enviar até reconectar.</p>
+      ) : (
       <form onSubmit={submit} className="flex items-end gap-2 border-t border-gray-200 p-3">
         <input
           ref={picker}
@@ -527,6 +530,7 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; onBack: () => void;
           {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
         </Button>
       </form>
+      )}
     </div>
   )
 }

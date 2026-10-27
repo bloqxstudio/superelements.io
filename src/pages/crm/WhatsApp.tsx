@@ -156,9 +156,15 @@ export default function CrmWhatsApp() {
           Para chamar {call.name ?? 'esse número'}, o WhatsApp da equipe precisa estar conectado.
         </p>
       )}
-      {number?.status === 'connected' && !failure && (
+      {number && !failure && (number.status === 'connected' || !!number.phone) && (
         <div className="mt-6">
-          <WhatsAppInbox teamId={team.id} call={call} onCallDone={() => setParams({}, { replace: true })} />
+          {number.status !== 'connected' && (
+            <p className="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+              WhatsApp desconectado. Abaixo está o histórico já recebido e enviado; reconecte acima para voltar a enviar.
+            </p>
+          )}
+          <WhatsAppInbox teamId={team.id} offline={number.status !== 'connected'} call={call} onCallDone={() => setParams({}, { replace: true })} />
         </div>
       )}
     </Page>
