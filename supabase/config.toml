@@ -7,3 +7,7 @@ verify_jwt = false
 # Instagram: o cron dos stories programados chama sem login (com o segredo x-cron-secret); as outras ações conferem a pessoa logada dentro da função
 [functions.instagram]
 verify_jwt = false
+
+# Eventos da Meta: assinatura HMAC do corpo, sem sessão de usuário.
+[functions.instagram-webhook]
+verify_jwt = false

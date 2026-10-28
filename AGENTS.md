@@ -566,3 +566,22 @@ Falha de conversão deve marcar o envio como falho, sem enviar o original como a
 `npm test --prefix services/whatsapp` verifica WebM, MP4 e OGG sintéticos, os timestamps,
 o formato Opus mono e a integridade da criptografia usada no envio, sem mensagens reais.
 A reprodução no celular ainda exige confirmar com um novo envio pela plataforma.
+
+## Recebimento de DMs por webhook (2026-10-28)
+
+A Caixa conserva a consulta periódica à API. O endpoint `instagram-webhook` também
+recebe eventos `messages`: valida `X-Hub-Signature-256` sobre o corpo bruto com
+`INSTAGRAM_APP_SECRET` ou `META_APP_SECRET`, e grava pelo RPC exclusivo de serviço
+`crm_instagram_receive_dm` (migração `20261028172000_crm_instagram_webhook.sql`).
+O RPC respeita o módulo Instagram da equipe, deduplica por mensagem, serializa
+a conversa e não deixa evento antigo substituir a prévia recente. Testes em
+`scripts/tests/instagram-webhook.test.mjs`. Não registrar conteúdo de DMs nem segredos.
+Novas conexões com a permissão de mensagens assinam `subscribed_apps/messages`.
+A conta avencestudio já teve essa assinatura confirmada pela Meta.
+A URL é `https://nfmfcpcwyavutntnrxqq.supabase.co/functions/v1/instagram-webhook`.
+O desafio GET exige `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` no Supabase. O token atual
+do CLI não possui `edge_functions_secrets_write`: configurar pelo painel ou
+corrigir o escopo com autorização; não colocar o token de verificação no Git.
+Estado observado no painel da Meta: app não publicado, verificação da empresa
+em análise e App Review não enviado. O painel informa que webhooks exigem app
+publicado. Não afirmar funcionamento real antes de uma mensagem chegar pela Meta.

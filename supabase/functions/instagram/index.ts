@@ -564,6 +564,14 @@ async function refreshProfile(ctx: Ctx, account: AccountRow, token: string) {
 
 // ---------- conectar ----------
 
+/** A autorização do login não assina eventos: cada conta precisa da própria assinatura. */
+async function subscribeMessages(account: AccountRow, token: string) {
+  const result = await ig<{ success?: boolean }>(`${account.ig_user_id}/subscribed_apps`, token, {
+    method: 'POST', params: { subscribed_fields: 'messages' },
+  })
+  if (!result.success) throw new HttpError('A Meta não confirmou o recebimento automático das mensagens.', 502, 'webhook')
+}
+
 async function saveConnection(ctx: Ctx, teamId: string, grant: Grant) {
   const profile = await ig<Profile>('me', grant.token, { params: { fields: PROFILE_FIELDS } })
   if (profile.account_type && !['BUSINESS', 'MEDIA_CREATOR'].includes(profile.account_type))
@@ -590,13 +598,18 @@ async function saveConnection(ctx: Ctx, teamId: string, grant: Grant) {
     .from('crm_instagram_tokens')
     .upsert({ account_id: account.id, access_token: grant.token, permissions: grant.permissions, issued_at: new Date().toISOString(), expires_at: grant.expiresAt }, { onConflict: 'account_id' })
   if (saved.error) throw dbError(saved.error)
+  let webhookError: string | undefined
+  if (grant.permissions.includes('instagram_business_manage_messages')) {
+    try { await subscribeMessages(account, grant.token) }
+    catch (error) { webhookError = error instanceof Error ? error.message : 'Não foi possível ativar as mensagens automáticas.' }
+  }
   let synced: { posts: number; missing: string[] } | { error: string }
   try {
     synced = await sync(ctx, account, grant.token)
   } catch (error) {
     synced = { error: error instanceof Error ? error.message : String(error) }
   }
-  return { accountId: account.id, username: account.username, sync: synced }
+  return { accountId: account.id, username: account.username, sync: synced, webhookError }
 }
 
 // ---------- publicar ----------
