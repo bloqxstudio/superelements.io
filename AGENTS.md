@@ -556,3 +556,13 @@ SQL em `supabase/migrations/`. O histórico SQL e o baseline foram preservados e
 plano remoto foi conferido sem novas pendências; não apagar nem reaplicar esse histórico.
 A limpeza tirou arquivos apenas do índice, preservando as cópias locais. Não reescrever
 o histórico Git para reduzir seu tamanho sem uma decisão específica sobre isso.
+
+## Compatibilidade das mensagens de voz (2026-10-28)
+
+O áudio OGG enviado apresentava tempo inicial negativo em uma gravação real. A conversão
+em `services/whatsapp/src/voz.ts` normaliza timestamps com `-avoid_negative_ts make_zero`,
+conforme a recomendação do Baileys para reprodução nos celulares. Não remover essa opção.
+Falha de conversão deve marcar o envio como falho, sem enviar o original como alternativa.
+`npm test --prefix services/whatsapp` verifica WebM, MP4 e OGG sintéticos, os timestamps,
+o formato Opus mono e a integridade da criptografia usada no envio, sem mensagens reais.
+A reprodução no celular ainda exige confirmar com um novo envio pela plataforma.

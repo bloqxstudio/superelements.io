@@ -43,10 +43,11 @@ export interface StoredMessage {
   media?: { mime?: string; name?: string; size: number; download: () => Promise<Buffer> }
 }
 
-/** A gravação vira OGG/Opus e sai como mensagem de voz; sem conversão, como áudio comum (não toca como voz) */
+/** Só envia voz depois de converter para OGG/Opus compatível com os celulares. */
 async function voiceContent(file: OutFile) {
   const voice = await toVoice(file.buffer)
-  return voice ? { audio: voice.ogg, mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds: voice.seconds, waveform: voice.waveform } : { audio: file.buffer, mimetype: file.mime }
+  if (!voice) throw new Error('Não foi possível preparar a mensagem de voz. Grave novamente ou confira o FFmpeg do serviço.')
+  return { audio: voice.ogg, mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds: voice.seconds, waveform: voice.waveform }
 }
 
 /** Arquivo a enviar: vídeo, foto, áudio ou documento */

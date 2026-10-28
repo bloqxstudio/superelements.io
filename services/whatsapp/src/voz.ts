@@ -20,7 +20,7 @@ function ffmpeg(args: string[], input: Buffer): Promise<Buffer | undefined> {
     child.stderr.on('data', (chunk: Buffer) => console.error(`ffmpeg: ${chunk.toString().trim()}`))
     child.on('error', (error) => {
       clearTimeout(timer)
-      console.error(`ffmpeg não rodou (${error.message}): a mensagem de voz vai como áudio comum.`)
+      console.error(`ffmpeg não rodou (${error.message}): a mensagem de voz não será enviada.`)
       resolve(undefined)
     })
     child.on('close', (code) => {
@@ -43,7 +43,7 @@ export interface Voice {
 
 /** OGG/Opus mono 48 kHz com a duração e a forma de onda (o app do celular manda as duas) */
 export async function toVoice(input: Buffer): Promise<Voice | undefined> {
-  const ogg = await ffmpeg(['-c:a', 'libopus', '-b:a', '32k', '-ar', '48000', '-ac', '1', '-application', 'voip', '-f', 'ogg', 'pipe:1'], input)
+  const ogg = await ffmpeg(['-c:a', 'libopus', '-b:a', '32k', '-ar', '48000', '-ac', '1', '-application', 'voip', '-avoid_negative_ts', 'make_zero', '-f', 'ogg', 'pipe:1'], input)
   if (!ogg) return undefined
   // As amostras vêm do próprio OGG, então a duração e as barras são do que será enviado
   const pcm = await ffmpeg(['-f', 's16le', '-ac', '1', '-ar', '8000', 'pipe:1'], ogg)
