@@ -35,7 +35,7 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
   const [questions, setQuestions] = useState<ClientQuestion[]>([])
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([])
   const [missing, setMissing] = useState(false)
-  const [draft, setDraft] = useState({ phone: '', name: '', accountId: '', topics: ['site', 'anuncios'] as AccessTopic[] })
+  const [draft, setDraft] = useState({ phone: '', name: '', accountId: '', topics: ['site', 'anuncios'] as AccessTopic[], reports: false })
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -58,7 +58,7 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
   useEffect(() => {
     if (!admin) return
     listAccounts()
-      .then((all) => setAccounts(all.filter((a) => !a.isHome).map((a) => ({ id: a.id, name: a.name }))))
+      .then((all) => setAccounts(all.map((a) => ({ id: a.id, name: a.isHome ? `${a.name} (conta da casa)` : a.name }))))
       .catch(() => undefined)
   }, [admin])
 
@@ -71,8 +71,8 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
     if (!draft.topics.length) return toast.error('Libere pelo menos um assunto')
     setBusy(true)
     try {
-      await saveContact(teamId, { phone, accountId: draft.accountId, name: draft.name, topics: draft.topics, enabled: true })
-      setDraft({ phone: '', name: '', accountId: draft.accountId, topics: draft.topics })
+      await saveContact(teamId, { phone, accountId: draft.accountId, name: draft.name, topics: draft.topics, enabled: true, reports: draft.reports })
+      setDraft({ phone: '', name: '', accountId: draft.accountId, topics: draft.topics, reports: draft.reports })
       await load()
     } catch (error) {
       toast.error('Não foi possível cadastrar', { description: message(error) })
@@ -112,7 +112,7 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
   return (
     <Surface title="Clientes no WhatsApp">
       <p className="text-sm text-gray-600">
-        Quem estiver aqui pode escrever para este número e ver os dados da própria conta (só leitura). Quem não está não recebe resposta. O serviço nunca puxa conversa: só responde a quem escreve primeiro.
+        Quem estiver aqui pode escrever para este número e ver os dados da própria conta, inclusive a conta da casa (só leitura), e, se marcado, receber o relatório agendado. Quem não está não recebe resposta. O serviço nunca puxa conversa: só responde a quem escreve primeiro, e o relatório só chega a quem já escreveu uma vez.
       </p>
       {contacts === undefined ? (
         <p className="mt-4 flex items-center gap-2 text-sm text-gray-500">
@@ -147,6 +147,10 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
                   })}
                 </div>
               </div>
+              <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                <input type="checkbox" checked={c.reports} disabled={!admin} onChange={(e) => void change(c, { reports: e.target.checked })} />
+                Recebe relatório
+              </label>
               <Switch checked={c.enabled} disabled={!admin} onCheckedChange={(enabled) => void change(c, { enabled })} aria-label={`Número de ${c.name || c.phone} ligado`} />
               {admin && (
                 <Button variant="ghost" size="icon" onClick={() => void remove(c)} aria-label="Remover número">
@@ -181,6 +185,10 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
               </label>
             ))}
           </div>
+          <label className="flex items-center gap-1.5 text-sm text-gray-700 sm:col-span-2">
+            <input type="checkbox" checked={draft.reports} onChange={(e) => setDraft({ ...draft, reports: e.target.checked })} />
+            Recebe o relatório agendado (diário e semanal) com os dados da conta
+          </label>
           <Button className="sm:col-span-2 sm:justify-self-start" size="sm" onClick={() => void add()} disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
             Cadastrar número

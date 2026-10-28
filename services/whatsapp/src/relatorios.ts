@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { anuncios, funil, periodOf, readOnly, site } from './comandos.ts'
+import { clientReport, type ClientContact, type Topic } from './clientes.ts'
+import { anuncios, funil, periodOf, readOnly, samePhone, site } from './comandos.ts'
 
 /**
  * Relatórios internos: o resumo do dia ou da semana (site, anúncios, funil) vai só
@@ -51,22 +52,32 @@ export async function runReports(db: Db, teamIds: string[]) {
     if (!isDue(config)) continue
     const teamId = row.team_id as string
     const { data: commanders } = await db.from('crm_whatsapp_commanders').select('phone').eq('team_id', teamId)
-    if (!commanders?.length) continue
+    // Números cadastrados que pediram o relatório (clientes e gente da conta da casa que não é comandante)
+    const { data: registered } = await db.from('crm_whatsapp_client_contacts').select('phone, account_id, name, topics').eq('team_id', teamId).eq('enabled', true).eq('reports', true)
+    const contacts = (registered ?? []).filter((c) => !commanders?.some((m) => samePhone(m.phone as string, c.phone as string)))
+    if (!commanders?.length && !contacts.length) continue
     // Reserva antes de montar: uma nova tentativa ou outra cópia do serviço não repete
     const { data: claimed, error: claimError } = await db.rpc('crm_whatsapp_claim_report', { p_team: teamId, p_kind: config.kind, p_today: today })
     if (claimError || !claimed) continue
-    const text = await buildReport(db, teamId, config.kind)
-    for (const { phone } of commanders) {
-      // Só para uma conversa que o comandante já abriu: o relatório nunca inicia contato com número novo
-      const jid = `${phone}@s.whatsapp.net`
-      const { data: chats } = await db.from('crm_whatsapp_chats').select('jid').eq('team_id', teamId).like('jid', `%${String(phone).slice(-8)}@s.whatsapp.net`).limit(1)
+    const send = async (phone: string, text: string) => {
+      // Só para uma conversa que a pessoa já abriu: o relatório nunca inicia contato com número novo
+      const { data: chats } = await db.from('crm_whatsapp_chats').select('jid').eq('team_id', teamId).like('jid', `%${phone.slice(-8)}@s.whatsapp.net`).limit(1)
       const target = chats?.[0]?.jid as string | undefined
       if (!target) {
-        console.error(`[${teamId.slice(0, 8)}] relatório: ${jid} ainda não escreveu para o número da equipe; mande um "oi" a ele uma vez.`)
-        continue
+        console.error(`[${teamId.slice(0, 8)}] relatório: …${phone.slice(-4)} ainda não escreveu para o número da equipe; peça um "oi" uma vez.`)
+        return
       }
       const { error: sendError } = await db.rpc('crm_whatsapp_enqueue_reply', { p_team: teamId, p_jid: target, p_text: text })
       if (sendError) console.error(`[${teamId.slice(0, 8)}] relatório não enfileirado: ${sendError.message}`)
+    }
+    if (commanders?.length) {
+      const text = await buildReport(db, teamId, config.kind)
+      for (const { phone } of commanders) await send(String(phone), text)
+    }
+    for (const c of contacts) {
+      const contact: ClientContact = { phone: c.phone as string, accountId: c.account_id as string, name: (c.name as string) ?? '', topics: (c.topics as Topic[]) ?? [] }
+      const text = await clientReport(db, contact, config.kind)
+      if (text) await send(contact.phone, text.slice(0, 3500))
     }
   }
 }

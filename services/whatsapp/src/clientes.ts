@@ -108,8 +108,10 @@ async function caixa(db: Db, accountId: string): Promise<string> {
   return ['*Caixa do Instagram*', `• Comentários em aberto (30 dias): ${int(comments ?? 0)}`, `• Mensagens diretas não lidas: ${int(unread)}`].join('\n')
 }
 
-async function projetos(db: Db, accountId: string): Promise<string> {
-  const { data, error } = await db.from('space_projects').select('name, updated_at').eq('team_id', accountId).order('updated_at', { ascending: false }).limit(10)
+async function projetos(db: Db, accountId: string, isHome: boolean): Promise<string> {
+  // Os projetos sem conta (todos os antigos) são da conta da casa
+  const query = db.from('space_projects').select('name, updated_at')
+  const { data, error } = await (isHome ? query.or(`team_id.eq.${accountId},team_id.is.null`) : query.eq('team_id', accountId)).order('updated_at', { ascending: false }).limit(10)
   if (error) return `Não consegui ler: ${error.message}`
   if (!data?.length) return 'Ainda não há projetos na sua conta.'
   const ago = (iso: string) => {
@@ -119,19 +121,19 @@ async function projetos(db: Db, accountId: string): Promise<string> {
   return ['*Projetos*', ...data.map((p) => `• ${p.name}: atualizado ${ago(p.updated_at as string)}`)].join('\n')
 }
 
-const read = (db: Db, topic: Topic, accountId: string, period: Period): Promise<string> =>
+const read = (db: Db, topic: Topic, accountId: string, period: Period, isHome = false): Promise<string> =>
   topic === 'site' ? site(db, accountId, period)
   : topic === 'anuncios' ? anuncios(db, accountId, period)
   : topic === 'funil' ? funil(db, accountId)
   : topic === 'instagram' ? instagram(db, accountId, period)
   : topic === 'posts' ? posts(db, accountId)
   : topic === 'caixa' ? caixa(db, accountId)
-  : projetos(db, accountId)
+  : projetos(db, accountId, isHome)
 
 /** A resposta ao que o cliente escreveu e o assunto atendido (para o registro) */
 export async function answerClient(rawDb: Db, contact: ClientContact, rawText: string): Promise<{ reply: string; topic?: Topic }> {
   const db = readOnly(rawDb)
-  const { data: account } = await rawDb.from('crm_teams').select('name, status, modules').eq('id', contact.accountId).maybeSingle()
+  const { data: account } = await rawDb.from('crm_teams').select('name, status, modules, is_home').eq('id', contact.accountId).maybeSingle()
   if (!account) return { reply: 'Não achei a sua conta. Fale com a Avence.' }
   if (account.status === 'pausada') return { reply: 'A sua conta está pausada. Fale com a Avence.' }
   const modules = (account.modules ?? {}) as Record<string, boolean>
@@ -158,10 +160,34 @@ export async function answerClient(rawDb: Db, contact: ClientContact, rawText: s
 
   const period = periodOf(text)
   try {
-    const raw = await read(db, topic, contact.accountId, period)
+    const raw = await read(db, topic, contact.accountId, period, account.is_home === true)
     return { reply: clean(raw), topic }
   } catch (error) {
     console.error(`cliente ${contact.phone.slice(-4)}: ${error instanceof Error ? error.message : error}`)
     return { reply: GENERIC_ERROR, topic }
   }
+}
+
+/** O resumo agendado de um número cadastrado: os assuntos liberados dele, com os dados da conta dele */
+export async function clientReport(rawDb: Db, contact: ClientContact, kind: 'diario' | 'semanal'): Promise<string | undefined> {
+  const db = readOnly(rawDb)
+  const { data: account } = await rawDb.from('crm_teams').select('name, status, modules, is_home').eq('id', contact.accountId).maybeSingle()
+  if (!account || account.status === 'pausada') return undefined
+  const modules = (account.modules ?? {}) as Record<string, boolean>
+  const topics = contact.topics.filter((t) => modules[MODULE[t]] !== false)
+  if (!topics.length) return undefined
+  const days = (daily: string, weekly: string) => periodOf(kind === 'diario' ? daily : weekly)
+  const parts: string[] = []
+  for (const topic of topics) {
+    // Site olha o dia anterior no diário; anúncios e Instagram olham a semana (o mês no semanal)
+    const period = topic === 'site' ? days('ontem', '7') : days('7', '30')
+    try {
+      parts.push(clean(await read(db, topic, contact.accountId, period, account.is_home === true)))
+    } catch (error) {
+      console.error(`relatório ${contact.phone.slice(-4)} ${topic}: ${error instanceof Error ? error.message : error}`)
+    }
+  }
+  if (!parts.length) return undefined
+  const first = contact.name.split(' ')[0]
+  return [`*${kind === 'diario' ? 'Resumo do dia' : 'Resumo da semana'}* · ${account.name}${first ? ` · ${first}` : ''}`, ...parts].join('\n\n')
 }
