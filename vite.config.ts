@@ -1,7 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
 import { spaceBridge } from "./scripts/space/vitePlugin";
 import { spaceChat } from "./scripts/space/chatPlugin";
 import { prospecting } from "./scripts/prospects/vitePlugin";
@@ -47,8 +46,6 @@ export default defineConfig(({ command, mode }) => ({
   },
   plugins: [
     react(),
-    mode === 'development' &&
-    componentTagger(),
     // Claude no Space: o scripts/space/space.mjs fala com o canvas aberto (só no dev)
     spaceBridge(),
     // Chat com os agentes dentro do canvas: roda o Claude Code ou o Codex nesta máquina (só no dev)

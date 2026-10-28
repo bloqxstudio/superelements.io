@@ -56,3 +56,39 @@ dist-ssr
 # Estado local do Supabase CLI (credenciais ficam no Keychain)
 /supabase/.temp/
 /supabase/.branches/
+
+# Configuração local, credenciais e ferramentas deste computador
+/.env
+/.env.*
+!/.env.example
+/.codex/
+
+# Temporários, runtimes baixados e perfis de navegador
+/.tmp/
+/.tmp-*/
+/tmp/
+/work/
+/outputs/
+__pycache__/
+*.py[cod]
+*.tsbuildinfo
+/coverage/
+/playwright-report/
+/test-results/
+
+# npm é o gerenciador do app; evitar locks concorrentes
+/bun.lock
+/bun.lockb
+
+# Renderizações e capturas: manter fontes/textos, não o material gerado
+/artifacts/**/*.png
+/artifacts/**/*.jpg
+/artifacts/**/*.jpeg
+/artifacts/**/*.webp
+/artifacts/**/*.gif
+/artifacts/**/*.mp4
+/artifacts/**/*.mov
+/artifacts/**/*.webm
+
+# Cópia local do vídeo servido por public/sp3.mp4
+/sp3.mp4

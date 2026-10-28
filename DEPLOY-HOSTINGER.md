@@ -1,83 +1,26 @@
-# Deploy na Hostinger
+# Publicação do SuperElements na Hostinger
 
-## Instruções de Deploy
+O ambiente `app.avencestudio.com` é um Web App ligado ao GitHub `bloqxstudio/superelements.io`, branch `main`. Esse fluxo foi confirmado no painel em 28/10/2026.
 
-### 1. Build do Projeto
-```bash
+## Antes do envio
+
+```sh
+npm ci
+npm test
+npm run repo:check
 npm run build
 ```
 
-### 2. Upload dos Arquivos
-Faça upload de **todos os arquivos da pasta `dist/`** para o diretório `public_html` da sua hospedagem na Hostinger.
+Revise o diff, preserve alterações de outras sessões e envie somente os arquivos da mudança. Use npm e o `package-lock.json` do app; o serviço de WhatsApp tem dependências e execução próprias.
 
-Estrutura no servidor:
-```
-public_html/
-├── .htaccess          (importante!)
-├── index.html
-├── assets/
-│   ├── index-*.css
-│   ├── index-*.js
-│   ├── react-vendor-*.js
-│   └── ui-vendor-*.js
-├── favicon.ico
-├── robots.txt
-└── outros arquivos...
-```
+## Publicação
 
-### 3. Verificações Importantes
+Um push para `main` dispara a publicação do app. No hPanel, abra Websites → app.avencestudio.com → Deployments, confira o commit e aguarde Completed/Current. Depois verifique o domínio e o recurso alterado. Se o deploy falhar, consulte os logs e mantenha a versão anterior até corrigir a causa.
 
-#### ✅ Arquivo .htaccess
-O arquivo `.htaccess` já está configurado e será copiado automaticamente para a pasta `dist/` durante o build. Ele contém:
-- Redirecionamento de rotas para React Router
-- Redirecionamento HTTP para HTTPS
-- Headers de segurança
-- Compressão de arquivos
-- Cache do navegador
+Não faça upload manual para `public_html` nem use as instruções antigas de publicação pelo Lovable. O diretório `dist/` é resultado do build e fica fora do Git.
 
-#### ✅ Permissões
-Certifique-se de que o arquivo `.htaccess` tem as permissões corretas (644).
+## Supabase e serviço local
 
-### 4. Testando o Deploy
+Commit e deploy da interface não executam SQL nem publicam Edge Functions. Para isso, siga `OPERACAO.md`, revise `db:plan` e publique somente as funções afetadas. Atualizações de `services/whatsapp` também exigem atualizar o serviço no Mac; não iniciar uma segunda instância.
 
-Após o upload, acesse:
-- `https://seudominio.com` - deve carregar a aplicação
-- `https://seudominio.com/qualquer-rota` - deve funcionar (React Router)
-
-### 5. Troubleshooting
-
-#### Erro: "Root element not found"
-✅ **RESOLVIDO** - O arquivo `.htaccess` agora redireciona corretamente todas as rotas para `index.html`
-
-#### Erro 404 em rotas
-Verifique se:
-1. O arquivo `.htaccess` foi enviado para o servidor
-2. O módulo `mod_rewrite` está habilitado no Apache da Hostinger (geralmente está)
-
-#### Cache antigo
-Limpe o cache do navegador com `Ctrl + Shift + R` (Windows/Linux) ou `Cmd + Shift + R` (Mac)
-
-### 6. Atualizações Futuras
-
-Para atualizar a aplicação:
-1. Execute `npm run build`
-2. Faça upload dos arquivos da pasta `dist/` substituindo os antigos
-3. Limpe o cache do navegador
-
-### 7. Variáveis de Ambiente
-
-Se você usar variáveis de ambiente (`.env`), certifique-se de:
-1. Prefixar com `VITE_` (ex: `VITE_API_URL`)
-2. As variáveis são incorporadas no build, não são lidas no servidor
-
-## Configurações Removidas
-
-- ❌ `vercel.json` - Removido (específico da Vercel)
-- ✅ `.htaccess` - Adicionado (para Hostinger/Apache)
-
-## Suporte
-
-Em caso de problemas, verifique:
-1. Logs de erro do navegador (F12 > Console)
-2. Painel de controle da Hostinger
-3. Arquivo `.htaccess` está presente e com permissões corretas
+Variáveis `VITE_*` são públicas e incorporadas ao bundle. Não colocar nelas tokens de serviço ou senhas. Segredos do servidor são configurados no Supabase, e a credencial administrativa do terminal fica no Keychain.

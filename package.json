@@ -19,7 +19,9 @@
     "db:plan": "node scripts/supabase.mjs plan",
     "db:migrate": "node scripts/supabase.mjs migrate",
     "db:query": "node scripts/supabase.mjs query",
-    "functions:deploy": "node scripts/supabase.mjs deploy"
+    "functions:deploy": "node scripts/supabase.mjs deploy",
+    "test": "node --test scripts/tests/*.test.mjs",
+    "repo:check": "node scripts/check-repository.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",
@@ -55,7 +57,6 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
-    "lovable-tagger": "^1.1.7",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.11",
     "typescript": "^5.5.3",

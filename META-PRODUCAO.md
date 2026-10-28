@@ -66,3 +66,9 @@ como IP TECNOLOGIA LTDA, Envio pendente, mas o fluxo volta ao desafio vazio
 “Ajuda-nos a confirmar que és tu”. Não houve confirmação de identidade nem envio
 final da verificação empresarial. `Publish` continua desabilitado; Access
 verification ainda depende da empresa verificada.
+
+### Decisão posterior do usuário
+
+O usuário escolheu “Manter todos os pedidos”. A confirmação de retirada foi
+cancelada na Meta; todos os pedidos existentes permanecem no rascunho. Essa
+decisão substitui a proposta anterior de reduzir a lista da revisão.

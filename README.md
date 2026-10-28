@@ -1,73 +1,66 @@
-# Welcome to your Lovable project
+# SuperElements
 
-## Project info
+Aplicação da Avence Studio para projetos de sites, criação de conteúdo e CRM por conta de empresa. O app usa React, TypeScript e Vite, com autenticação, banco e funções no Supabase. O serviço local de WhatsApp fica separado da interface.
 
-**URL**: https://lovable.dev/projects/a8aaade1-2006-42ae-89cf-bc9ec326aea8
+Produção: https://app.avencestudio.com
 
-## How can I edit this code?
+## Desenvolvimento
 
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/a8aaade1-2006-42ae-89cf-bc9ec326aea8) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+Use Node.js 22.18 ou mais recente e npm. O arquivo de dependências reproduzíveis do app é `package-lock.json`.
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+npm ci
+cp .env.example .env
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+O servidor abre somente em `localhost` (porta padrão 8080). O login automático de desenvolvimento, quando configurado, usa `DEV_AUTH_EMAIL` e `DEV_AUTH_PASSWORD` em um arquivo local; essas credenciais nunca devem receber o prefixo `VITE_`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+A configuração pública do Supabase está em `.env.example` e no cliente do app. Chaves públicas não dão acesso administrativo: o banco aplica as políticas por usuário e empresa. Chaves de serviço, tokens, senhas e configurações pessoais ficam fora do Git. Consulte `OPERACAO.md` para a credencial do terminal no Keychain.
 
-**Use GitHub Codespaces**
+## Organização
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+| Pasta | Conteúdo versionado |
+| --- | --- |
+| `src/` | Interface e regras do app. |
+| `public/` | Arquivos servidos pelo app: marcas, imagens, fontes, vídeos usados e páginas públicas. |
+| `supabase/functions/` | Funções do servidor. |
+| `supabase/migrations/` | Histórico SQL do banco; necessário para evolução e rastreabilidade. |
+| `scripts/` | Ferramentas de desenvolvimento e operação. |
+| `scripts/tests/` | Testes automatizados reproduzíveis, mantidos no Git. |
+| `services/whatsapp/` | Serviço independente, com seu próprio `package-lock.json`. |
+| `brands/` | Diretrizes e conteúdo de marcas e projetos. |
+| `docs/site-imports/` | Notas históricas de importação de sites; não são migrações do banco. |
+| `artifacts/` | Fontes de produções, scripts, HTML e textos; capturas e vídeos gerados ficam locais. |
 
-## What technologies are used for this project?
+A pasta `public/lovable-uploads/` contém um arquivo histórico que pode estar referenciado em projetos salvos. O caminho foi preservado por compatibilidade; não existe dependência nem integração ativa com o Lovable. O tagger e as instruções antigas de publicação pelo Lovable foram removidos.
 
-This project is built with:
+## O que fica fora dos commits
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+O `.gitignore` separa configurações locais, builds, dependências baixadas, perfis de navegador, cache, relatórios de teste e mídia gerada em `artifacts/`. As cópias locais existentes foram preservadas. Para novos arquivos temporários, use `tmp/` ou `.tmp/`; para capturas e renders, use `artifacts/`.
 
-## How can I deploy this project?
+Não ignore testes só por serem testes: mantenha o código e os fixtures necessários para reproduzir um problema. Ignore os resultados da execução. Arquivos em `public/` podem ser parte do produto e não devem ser removidos só por serem imagens ou vídeos.
 
-Simply open [Lovable](https://lovable.dev/projects/a8aaade1-2006-42ae-89cf-bc9ec326aea8) and click on Share -> Publish.
+## Verificação antes de publicar
 
-## Can I connect a custom domain to my Lovable project?
+```sh
+npm test
+npm run repo:check
+npm run build
+```
 
-Yes, you can!
+`repo:check` confere os arquivos do índice Git, inclusive os preparados para commit. O lint geral (`npm run lint`) e o typecheck do projeto ainda têm pendências anteriores à limpeza; não são apresentados como aprovados por esses três comandos.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Banco e publicação
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+```sh
+npm run db:plan
+npm run db:migrate
+npm run functions:deploy -- instagram
+```
+
+Consulte `OPERACAO.md` antes de executar alterações. O histórico antigo usa o baseline em `supabase/migration-baseline.json`; não apague nem altere migrações aplicadas, não execute `db push --include-all` contra ele e escreva uma nova migração para mudanças novas. Nenhum dado do banco é apagado por uma limpeza do Git.
+
+O app publica na Hostinger a partir de pushes para `main` em `bloqxstudio/superelements.io`. Confirme o commit em Deployments e verifique o domínio depois do deploy. Migrações e funções do Supabase são publicações separadas. O estado da integração Meta está em `META-PRODUCAO.md`.
+
+Leia `AGENTS.md` para as decisões e restrições de cada área do produto.

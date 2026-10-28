@@ -154,7 +154,6 @@ const RichText: React.FC<{ text: string; caret?: boolean }> = ({ text, caret }) 
         const heading = /^#{1,4}\s+/.test(lines[0] ?? '')
         return (
           <p key={i} className={heading ? 'font-semibold text-gray-900' : undefined}>
-            {/* span e não Fragment: o lovable-tagger põe atributos em todo elemento JSX, e o Fragment não aceita */}
             {lines.map((l, j) => (
               <span key={j}>
                 {j > 0 && <br />}

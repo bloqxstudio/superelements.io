@@ -1,6 +1,6 @@
 # LS · Leo Scherer — textos
 
-Fonte: https://leoscherer.com.br/ (home, lida em 2026-10-02) e a página de produto `/produto/iphone-16-128gb-branco-seminovo/`. A importação fiel de 2026-09-28 está em `migrations/leoscherer/MIGRATION.md`.
+Fonte: https://leoscherer.com.br/ (home, lida em 2026-10-02) e a página de produto `/produto/iphone-16-128gb-branco-seminovo/`. A importação fiel de 2026-09-28 está em `docs/site-imports/leoscherer/MIGRATION.md`.
 
 Tudo abaixo é do site do cliente. O que a nova versão reescreveu está marcado; o resto é o texto dele, com acento e pontuação corrigidos.
 

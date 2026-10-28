@@ -2,7 +2,7 @@
  * Conteúdo da Inpel lido da API pública do site (controle.inpel.com.br/api)
  * em 2026-09-27: itens visíveis, na ordem em que o site mostra. Caminhos de
  * imagem são relativos a public/inpel/assets. Gerado a partir do levantamento
- * registrado em migrations/inpel; ao atualizar, conferir a ordem com o site.
+ * registrado em docs/site-imports/inpel; ao atualizar, conferir a ordem com o site.
  */
 
 import { INPEL_CONTACT } from './tokens'

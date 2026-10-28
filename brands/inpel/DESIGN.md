@@ -86,7 +86,7 @@ photos:
 
 # Inpel — DESIGN.md
 
-Referência da identidade visual da **Inpel Transmissões Mecânicas** como ela está publicada em inpel.com.br. Os valores foram lidos dos estilos calculados do site, não estimados de captura. O conteúdo do site (textos, produtos, posts) vem da API pública e está em `src/features/inpel/content.ts`; a migração está registrada em `migrations/inpel/`.
+Referência da identidade visual da **Inpel Transmissões Mecânicas** como ela está publicada em inpel.com.br. Os valores foram lidos dos estilos calculados do site, não estimados de captura. O conteúdo do site (textos, produtos, posts) vem da API pública e está em `src/features/inpel/content.ts`; a migração está registrada em `docs/site-imports/inpel/`.
 
 ## 1. Atmosfera
 

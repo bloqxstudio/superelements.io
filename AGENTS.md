@@ -80,7 +80,7 @@ This repository contains multiple explicit brand scopes. Do not blend them.
 
 ### MSA — Marketing sem Agência model
 
-Scope: `/msa-style-guide`, `/msa-elementor-preview`, `src/features/msa/**`, `src/features/space/msaTemplate.ts`, `brands/marketing-sem-agencia/**`, `public/brands/marketing-sem-agencia/**` and `migrations/msa/**`.
+Scope: `/msa-style-guide`, `/msa-elementor-preview`, `src/features/msa/**`, `src/features/space/msaTemplate.ts`, `brands/marketing-sem-agencia/**`, `public/brands/marketing-sem-agencia/**` and `docs/site-imports/msa/**`.
 
 - Source: `https://marketingsemagencia.com.br/`; public founder context: `https://www.instagram.com/hzanotti/`. The public spelling is **Henrique Zanotti**; the user-written “Zanote” remains an explicit confirmation item.
 - Sources of truth: `brands/marketing-sem-agencia/DESIGN.md` and `brands/marketing-sem-agencia/COPY.md`. Keep facts, brand claims, interpretations and open evidence gaps distinct.
@@ -175,7 +175,7 @@ Scope: `/uglycash-modelo`, `/uglycash-style-guide`, `src/features/uglycash/**`, 
 
 ### Zelo model
 
-Scope: `/zelo-style-guide`, `/zelo-elementor-preview`, `src/features/zelo/**`, `src/features/space/zeloTemplate.ts`, `public/zelo/**` and `migrations/zelo/**`.
+Scope: `/zelo-style-guide`, `/zelo-elementor-preview`, `src/features/zelo/**`, `src/features/space/zeloTemplate.ts`, `public/zelo/**` and `docs/site-imports/zelo/**`.
 
 - Source: https://zelosistemas.com.br/ (home, `/contato`, `/privacidade`). Default dark theme only.
 - Fonts: Plus Jakarta Sans 800 (hero), Nunito (UI and headings), Figtree (body), Spline Sans Mono (numbers, labels). The source root is `font-size: 80%`, so every value is already converted to px (1rem = 12.8px).
@@ -209,9 +209,9 @@ Scope: `/processbase-elementor-preview`, `src/features/processbase/**`, `src/fea
 
 ### Inpel model
 
-Scope: `/inpel-elementor-preview`, `src/features/inpel/**`, `src/features/space/inpelTemplate.ts`, `brands/inpel/**`, `public/inpel/**` and `migrations/inpel/**`.
+Scope: `/inpel-elementor-preview`, `src/features/inpel/**`, `src/features/space/inpelTemplate.ts`, `brands/inpel/**`, `public/inpel/**` and `docs/site-imports/inpel/**`.
 
-- Source: https://www.inpel.com.br/ (Vue app on the Bootstrap 3 "Electro" theme). Texts, products and posts come from its public API into `src/features/inpel/content.ts`; do not retype them from screenshots. Record in `migrations/inpel/`.
+- Source: https://www.inpel.com.br/ (Vue app on the Bootstrap 3 "Electro" theme). Texts, products and posts come from its public API into `src/features/inpel/content.ts`; do not retype them from screenshots. Record in `docs/site-imports/inpel/`.
 - Font: Montserrat 400/500/700 only (the source asks for 800 but never loads it).
 - Core colors: red `#D10024` (hover `#A8001D`), ink `#2B2D42`, body `#333333`, muted `#8D99AE`, line `#E4E7ED`, mist `#FBFBFC`, bar `#1E1F29`, footer `#15161D`, footer text `#B9BABC`. One red only; no gradients.
 - Content is 1140px with 15px gutters; sections have 30px top and bottom; grids use a 30px gutter. The header switches to the mobile bar below 992px with custom CSS, like Bootstrap.
@@ -219,7 +219,7 @@ Scope: `/inpel-elementor-preview`, `src/features/inpel/**`, `src/features/space/
 - Cards: 1px `#E4E7ED` outline that becomes a 2px red outline on hover. No other shadows.
 - Motion stays at the source level: 0.2s color and underline on links, 1.1 zoom on highlight photos, all behind `prefers-reduced-motion`.
 - Templates are native Elementor trees built with `src/features/inpel/elementor.ts`. Zero HTML widgets: the mobile menu is a nested accordion, the search is `search-form`, the rating is a radio group drawn as stars.
-- The import is faithful on purpose, errors included (see "Improvements found" in `migrations/inpel/MIGRATION.md`). Fix them as improvements, one at a time, and update the record.
+- The import is faithful on purpose, errors included (see "Improvements found" in `docs/site-imports/inpel/MIGRATION.md`). Fix them as improvements, one at a time, and update the record.
 
 ### Caramelo Pet model (petshop example)
 
@@ -252,7 +252,7 @@ Scope: `src/features/junior/**`, `src/features/space/juniorTemplate.ts`, `brands
 
 ### Leo Scherer model
 
-Scope: `/leoscherer-style-guide`, `/leoscherer-elementor-preview`, `/leoscherer-redesign`, `/leoscherer-redesign-proposta`, `src/features/leoscherer/**`, `src/features/space/leoschererTemplate.ts`, `src/pages/LeoSchererRedesign*`, `public/leoscherer/**`, `migrations/leoscherer/**`, `brands/leo-scherer/**`, `public/brands/leo-scherer/**` and the "Leo Scherer" project in the Space.
+Scope: `/leoscherer-style-guide`, `/leoscherer-elementor-preview`, `/leoscherer-redesign`, `/leoscherer-redesign-proposta`, `src/features/leoscherer/**`, `src/features/space/leoschererTemplate.ts`, `src/pages/LeoSchererRedesign*`, `public/leoscherer/**`, `docs/site-imports/leoscherer/**`, `brands/leo-scherer/**`, `public/brands/leo-scherer/**` and the "Leo Scherer" project in the Space.
 
 New version in the Space (2026-10-02, "Home" page; "Site atual (importado)" is the faithful reference): same brand and logo, organized as an Apple-standard editorial showcase. Sources of truth: `brands/leo-scherer/DESIGN.md` and `brands/leo-scherer/COPY.md` (site and Instagram facts, open items). Builders: `src/features/leoscherer/redesign.ts` and `story.ts`; section build files in `.space/leo-scherer/build/home/`.
 
@@ -537,3 +537,22 @@ cadastrados na Meta. A limpeza dos pedidos antigos do App Review aguarda autoriz
 específica após bloqueio da revisão automática; ver `META-PRODUCAO.md`. Não confundir autorização de testadores com acesso a clientes reais.
 API de DMs ainda devolve vazio, mesmo com o escopo e testadores aceitos: não declarar
 resolvido nem atribuir causa sem evidência. Preservar a separação de dados por conta.
+
+Decisão explícita do usuário em 2026-10-28: **manter todos os pedidos do App Review**.
+A retirada preparada foi cancelada na Meta. Não limpar solicitações legadas da revisão.
+
+## Higiene do repositório (2026-10-28)
+
+O usuário pediu separar testes, temporários e resíduos do Lovable para limpar o GitHub.
+Use npm e `package-lock.json`; Lovable e seus taggers não fazem parte da ferramenta.
+`npm test` executa os testes reproduzíveis em `scripts/tests/`; `npm run repo:check`
+impede temporários, configuração local e mídia gerada no índice. Não remover testes
+úteis para limpar resultados de testes. Capturas e renders em `artifacts/`, runtimes,
+perfis de navegador, `.env` e `.codex/` ficam locais e ignorados; as fontes de produção
+e os assets servidos por `public/` continuam no Git. O único arquivo histórico em
+`public/lovable-uploads/` foi preservado por compatibilidade com projetos salvos.
+As notas de importação de sites estão em `docs/site-imports/`, separadas das migrações
+SQL em `supabase/migrations/`. O histórico SQL e o baseline foram preservados e o
+plano remoto foi conferido sem novas pendências; não apagar nem reaplicar esse histórico.
+A limpeza tirou arquivos apenas do índice, preservando as cópias locais. Não reescrever
+o histórico Git para reduzir seu tamanho sem uma decisão específica sobre isso.
