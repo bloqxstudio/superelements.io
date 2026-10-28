@@ -529,10 +529,11 @@ Scope: `brands/planta-e-obra/**` and the "Planta & Obra" project in the Space (p
 ## Meta para contas de clientes (2026-10-28)
 
 O usuário pediu produção na Meta e funcionamento para contas de clientes. Estado e próximos
-passos em `META-PRODUCAO.md`. Função Instagram v11 já publicada; interface compilada,
-aguardando login na Hostinger para publicar. App Meta continua não publicado: faltam
-cadastro público, verificação empresarial, acesso de provedor e App Review. Verificação
-empresarial parou na validação “Ajuda-nos a confirmar que és tu”. Rascunhos de privacidade
-aguardam aprovação. Não confundir autorização de testadores com acesso a clientes reais.
+passos em `META-PRODUCAO.md`. Função Instagram v11 e interface já publicadas (commit `97f8760`, deploy Hostinger
+Completed/Current); o app publica pushes da main pelo GitHub. App Meta continua não publicado: faltam
+verificação empresarial, acesso de provedor e App Review; cadastro público concluído. Verificação
+empresarial parou na validação “Ajuda-nos a confirmar que és tu”. Textos de privacidade e exclusão aprovados pelo usuário, publicados e
+cadastrados na Meta. A limpeza dos pedidos antigos do App Review aguarda autorização
+específica após bloqueio da revisão automática; ver `META-PRODUCAO.md`. Não confundir autorização de testadores com acesso a clientes reais.
 API de DMs ainda devolve vazio, mesmo com o escopo e testadores aceitos: não declarar
 resolvido nem atribuir causa sem evidência. Preservar a separação de dados por conta.

@@ -10,7 +10,7 @@ Confirmar dados com os documentos aceitos pela Meta antes de concluir a verifica
 ## Estado real
 
 - App da Meta não publicado. O botão Publish está desabilitado.
-- Cadastro básico: faltam ícone 1024×1024, categoria e URL de privacidade; preparar também instruções de exclusão de dados.
+- Cadastro básico salvo na Meta: ícone oficial 1024×1024, categoria Serviços e produtividade, e-mail de suporte e URLs de privacidade e exclusão. As duas páginas estão públicas e foram verificadas sem login.
 - Empresa ainda não verificada. Fluxo iniciado no Centro de Segurança, Brasil → Empresa privada → CNPJ/nome → endereço → telefone/site. A Meta interrompeu com “Ajuda-nos a confirmar que és tu”; aguarda validação do usuário. Nada foi enviado como verificação concluída.
 - Verificação como provedor de tecnologia (Access verification), exigida no painel para dados de outras empresas, depende da verificação empresarial.
 - Solicitar somente os acessos avançados necessários no App Review, demonstrando cada recurso por vídeo com conta de teste e instruções reproduzíveis. Não remover casos de uso existentes sem conferir dependências.
@@ -28,9 +28,9 @@ Função `instagram` publicada v11, ACTIVE, no projeto `nfmfcpcwyavutntnrxqq`, m
 - Interface: seletor de perfil na Caixa, componentes reiniciados ao mudar de conta/conversa, prevenção de leituras sobrepostas, erros de atualização em segundo plano visíveis e seleção do perfil recém-conectado após OAuth.
 - Conversas longas exibem as 300 mensagens mais recentes em ordem cronológica, em vez das primeiras 300.
 
-Interface compilada com sucesso e validada no navegador local, mas **ainda não publicada na Hostinger**. O painel abriu sem sessão e foi solicitado login ao usuário. O fluxo antigo de publicação está em `DEPLOY-HOSTINGER.md`; confirmar o diretório específico de `app.avencestudio.com` antes de qualquer upload. Não sobrepor a raiz de outro site.
+Interface publicada na Hostinger pelo commit `97f8760492851a8fb7c9da0de5239397de6b79cc` na `main`. Deploy marcado Completed/Current; verificada a seleção de conta e os novos estados da Caixa em `https://app.avencestudio.com/crm/instagram?aba=caixa`. Hostinger está conectado ao GitHub e publica os pushes; não usar upload para `public_html`.
 
-Sem migração nova nesta rodada; `db:status` não indicou novas pendências. Rascunhos de privacidade e exclusão foram preparados na conversa e aguardam aprovação antes de publicação/cadastro na Meta.
+Sem migração nova nesta rodada; `db:status` não indicou novas pendências. Textos de privacidade e exclusão aprovados explicitamente pelo usuário em 28/10/2026, publicados em `/privacidade.html` e `/exclusao-de-dados.html` e cadastrados no app Meta. Não há termos de serviço publicados neste trabalho.
 
 ## Validação
 
@@ -43,3 +43,26 @@ Sem migração nova nesta rodada; `db:status` não indicou novas pendências. Ra
 ## Critério para liberar contas de clientes
 
 Uma conta profissional de outra empresa, sem papel de testador, precisa conseguir autorizar via OAuth, escolher o perfil correto no seu ambiente, carregar métricas e conteúdo autorizados, receber uma DM real e permitir uma resposta dentro da janela de 24h. Verificar que um usuário de outra conta não consegue ler nem operar seus dados, que revogação pede reconexão e que desconexão atua somente no perfil selecionado. Não anunciar “qualquer conta” ou DMs funcionando antes desse teste e das aprovações da Meta. Contas pessoais não são suportadas por esta integração oficial.
+
+## App Review e pendências atuais
+
+A submissão `3199354583609162` está em Not submitted. Há pedidos antigos de recursos
+que o código não usa (arrecadação, catálogos, WhatsApp oficial, Messenger/Páginas,
+criação de anúncios/MCP, branded content e Instagram Login antigo). Foi preparado
+o fluxo para retirar somente do rascunho da revisão; o aviso da Meta diz que isso
+não remove permissões do app e permite re-adicionar pelo caso de uso. A revisão
+automática bloqueou a confirmação por falta de autorização específica; foi pedida
+a aprovação ao usuário. Nenhum desses pedidos deve ser removido antes da resposta.
+
+Permissões efetivamente pedidas no código: Instagram Login moderno (basic,
+manage_insights, content_publish, manage_comments, manage_messages); anúncios
+`ads_read` (não usa business_management, nem escreve campanhas). No rascunho atual
+ainda faltam os três pedidos Instagram de insights, publicação e comentários.
+Preparar os pedidos corretos e evidência real por recurso; não enviar submissão
+com demonstração de DMs vazias como se a função estivesse operando.
+
+O Centro de Segurança foi recarregado e retomado uma vez. A empresa já aparece
+como IP TECNOLOGIA LTDA, Envio pendente, mas o fluxo volta ao desafio vazio
+“Ajuda-nos a confirmar que és tu”. Não houve confirmação de identidade nem envio
+final da verificação empresarial. `Publish` continua desabilitado; Access
+verification ainda depende da empresa verificada.
