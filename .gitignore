@@ -52,3 +52,7 @@ dist-ssr
 /artifacts/criativos-arquitetos/comercial-e-processbase/
 /artifacts/criativos-arquitetos/posts-feed-cases/
 /artifacts/criativos-arquitetos/criativos-arquitetos-avence/
+
+# Estado local do Supabase CLI (credenciais ficam no Keychain)
+/supabase/.temp/
+/supabase/.branches/

@@ -16,6 +16,7 @@ import {
   type InboxComment,
   type InboxDm,
   type InboxThread,
+  type InboxSyncResult,
 } from '@/features/crm/igInbox'
 import { FIELD, Surface, plural, whenLabel } from '@/features/crm/ui'
 import { Chip } from '@/features/prospects/ui'
@@ -321,7 +322,7 @@ const MessagesBox: React.FC<{ account: IgAccount; threads: InboxThread[]; onChan
   if (!threads.length) {
     return (
       <Surface>
-        <p className="text-sm text-gray-600">Nenhuma conversa lida ainda. Toque em Atualizar; se continuar vazio, conecte a conta de novo para liberar a permissão de mensagens.</p>
+        <p className="text-sm text-gray-600">Nenhuma conversa disponível nesta conta. Atualize para buscar as mensagens que o Instagram liberar.</p>
       </Surface>
     )
   }
@@ -352,7 +353,7 @@ const MessagesBox: React.FC<{ account: IgAccount; threads: InboxThread[]; onChan
         ))}
       </ul>
       <div className="rounded-xl bg-white p-4 ring-1 ring-inset ring-gray-200">
-        {thread ? <Conversation account={account} thread={thread} onSent={onChanged} /> : <p className="text-sm text-gray-500">Escolha uma conversa.</p>}
+        {thread ? <Conversation key={`${account.id}:${thread.participantId}`} account={account} thread={thread} onSent={onChanged} /> : <p className="text-sm text-gray-500">Escolha uma conversa.</p>}
       </div>
     </div>
   )
@@ -366,6 +367,8 @@ export const InboxArea: React.FC<{ account: IgAccount }> = ({ account }) => {
   const [threads, setThreads] = useState<InboxThread[] | null>(null)
   const [media, setMedia] = useState<Map<string, IgMedia>>(new Map())
   const [syncing, setSyncing] = useState(false)
+  const [diagnostic, setDiagnostic] = useState<InboxSyncResult>()
+  const syncInFlight = useRef(false)
   const [warning, setWarning] = useState<string[]>([])
   const [error, setError] = useState<string>()
   const broken = account.syncError === 'token'
@@ -385,15 +388,19 @@ export const InboxArea: React.FC<{ account: IgAccount }> = ({ account }) => {
 
   const sync = useCallback(
     async (quiet = false) => {
-      if (broken) return
+      if (broken || syncInFlight.current) return
+      syncInFlight.current = true
       setSyncing(true)
       try {
         const result = await syncInbox(account.id)
-        setWarning(result.missing)
+        setWarning(result.missing.filter((item) => item !== 'mensagens' || !result.messagesState))
+        setDiagnostic(result)
         await reload()
       } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
         if (!quiet) fail(e)
       } finally {
+        syncInFlight.current = false
         setSyncing(false)
       }
     },
@@ -435,6 +442,16 @@ export const InboxArea: React.FC<{ account: IgAccount }> = ({ account }) => {
 
       {broken && <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-600/20">A conexão com o Instagram caiu. Conecte de novo na aba Perfil para ler a caixa.</p>}
       {warning.length > 0 && <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-600/20">A Meta não devolveu: {warning.join(', ')}.</p>}
+      {box === 'mensagens' && diagnostic?.messagesState === 'permission' && (
+        <p role="status" className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-600/20">O acesso às mensagens não foi autorizado. Na aba Perfil, conecte a conta novamente e permita gerenciar mensagens.</p>
+      )}
+      {box === 'mensagens' && diagnostic?.messagesState === 'empty' && (
+        <p role="status" className="text-sm text-gray-600">O Instagram não retornou conversas nesta leitura. Se há mensagens no aplicativo, confira se o acesso às mensagens está habilitado em Ferramentas conectadas. Contas de clientes também dependem da liberação do app pela Meta.</p>
+      )}
+      {box === 'mensagens' && diagnostic?.messagesState === 'unavailable' && (
+        <p role="alert" className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">Não foi possível consultar as mensagens no Instagram. Tente Atualizar em alguns instantes.</p>
+      )}
+      {diagnostic?.hasMore && <p role="status" className="text-xs text-gray-500">Esta leitura trouxe até 100 conversas recentes. O histórico completo ainda não está disponível nesta caixa.</p>}
       {error && <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800 ring-1 ring-inset ring-rose-600/20">{error}</p>}
 
       {comments === null || threads === null ? (

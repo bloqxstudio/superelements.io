@@ -39,7 +39,7 @@ const InstagramCallback: React.FC = () => {
       if (next.kind === 'connected') {
         const failed = 'error' in next.result.sync
         toast.success(`@${next.result.username} conectado`, { description: failed ? 'A primeira leitura falhou; tente Atualizar na tela.' : 'Os números já estão na tela.' })
-        navigate('/crm/instagram', { replace: true })
+        navigate(`/crm/instagram?instagram=${encodeURIComponent(next.result.accountId)}`, { replace: true })
       } else if (next.kind === 'denied') {
         toast.error('O acesso foi recusado na tela do Instagram')
         navigate('/crm/instagram', { replace: true })

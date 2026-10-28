@@ -261,7 +261,7 @@ export const instagramStatus = () => call<{ configured: boolean; version: string
 export const redirectUri = () => `${publicAppUrl()}${CALLBACK_PATH}`
 
 export async function startConnect(teamId: string) {
-  const { url } = await call<{ url: string }>('auth_url', { teamId, redirectUri: redirectUri() })
+  const { url } = await call<{ url: string }>('auth_url', { teamId })
   window.location.assign(url)
 }
 

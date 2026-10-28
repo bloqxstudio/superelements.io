@@ -1,5 +1,20 @@
 # Project instructions
 
+## Operação local do SuperElements (Mac dedicado, 2026-10-28)
+
+O usuário pediu que este computador opere exclusivamente o SuperElements e que o agente
+faça o trabalho de GitHub, SQL, migrações e Edge Functions pelo terminal, sem depender
+do painel web a cada mudança. Use o checkout `/Users/igorpinheiro/ShipStudio/superelements-io`,
+o GitHub `bloqxstudio/superelements.io` e o Supabase `nfmfcpcwyavutntnrxqq`.
+Siga `OPERACAO.md`. Há atalhos `npm run db:status`, `db:plan`, `db:migrate`, `db:query`
+e `functions:deploy -- <nomes>`. A credencial do CLI fica no Keychain; nunca copiar segredos
+para arquivos versionados nem variáveis VITE_*. Preserve `verify_jwt` do config.
+Dentro do trabalho autorizado, execute e verifique as migrações e os deploys necessários;
+não deixe essas etapas manuais para o usuário só porque requerem publicação.
+Git commit/push, banco, funções e hospedagem do app são etapas separadas: informe o estado
+real de cada uma. Não reaplique migrações antigas sem comparar o histórico remoto.
+
+
 ## Working on a client page
 
 Each Space project is a client. When the user asks to analyze or change a page, or to create, change or reorder a section, the deliverable is that change made in the project's page in the Space canvas (through `scripts/space/space.mjs`), not a new template. Follow `.claude/skills/cliente/SKILL.md`.
@@ -510,3 +525,14 @@ Scope: `brands/planta-e-obra/**` and the "Planta & Obra" project in the Space (p
 - Motion (`build/motion.ts`, GSAP 3.13 + ScrollTrigger + Lenis from jsDelivr, one behavior-only widget, first child of the header): hero intro (photo settles from 1.12, letters rise one by one), photo parallax, words of the statement light up with the scroll, covers shrink to 92% and darken as the next one covers them, rows draw their rule while each title and then its text light up word by word (the user asked for the statement's reveal on the differentials, to show less at once), gallery and construction use a tall section with a CSS-sticky stage instead of the ScrollTrigger pin (the pin jolted on release, 2026-10-13), each section asks for its photos two screens ahead (the gallery's off-screen slides too) and each photo fades in once decoded, bars fill and numbers count once, `.po-rise` blocks rise 28px once. CSS alone is the final composition; reduced motion, the Elementor editor and non-scrolling pages (Space thumbnails) run nothing.
 - Brand in the Space: the Norte DESIGN.md is saved but **off** (2026-10-13), because turning it on would restyle the old Home; applying it changes 0 settings in the 10 Luiza sections (`build/brandcheck.ts`). The old Home got the old brand's few tweaks written into its own settings, so it looks the same with the brand off. Turning the Norte brand on is the user's call, together with redoing the Home in the new system.
 - Open items: rights to the renders and photos (theirs, on their site), the office phone (the site footer says (51) 3559-2412, Google and the WhatsApp link say 3592-2412; the page uses 3592-2412), the form's destination e-mail, the date of the 87% figure (the page shows it next to the Maio/26 photo), and a vector logo.
+
+## Meta para contas de clientes (2026-10-28)
+
+O usuário pediu produção na Meta e funcionamento para contas de clientes. Estado e próximos
+passos em `META-PRODUCAO.md`. Função Instagram v11 já publicada; interface compilada,
+aguardando login na Hostinger para publicar. App Meta continua não publicado: faltam
+cadastro público, verificação empresarial, acesso de provedor e App Review. Verificação
+empresarial parou na validação “Ajuda-nos a confirmar que és tu”. Rascunhos de privacidade
+aguardam aprovação. Não confundir autorização de testadores com acesso a clientes reais.
+API de DMs ainda devolve vazio, mesmo com o escopo e testadores aceitos: não declarar
+resolvido nem atribuir causa sem evidência. Preservar a separação de dados por conta.

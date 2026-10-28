@@ -128,13 +128,23 @@ export async function loadThreads(accountId: string): Promise<InboxThread[]> {
 }
 
 export async function loadDms(accountId: string, participantId: string): Promise<InboxDm[]> {
-  const { data, error } = await db.from('crm_instagram_dms').select('*').eq('account_id', accountId).eq('participant_id', participantId).order('ts', { ascending: true }).limit(300)
+  const { data, error } = await db.from('crm_instagram_dms').select('*').eq('account_id', accountId).eq('participant_id', participantId).order('ts', { ascending: false }).limit(300)
   if (error) throw error
-  return ((data ?? []) as DmRow[]).map(toDm)
+  return ((data ?? []) as DmRow[]).reverse().map(toDm)
 }
 
 /** Lê a Meta e grava na caixa; `missing` diz o que ela recusou (ex.: mensagens sem a permissão nova). */
-export const syncInbox = (accountId: string) => call<{ comments: number; messages: number; missing: string[] }>('inbox_sync', { accountId })
+export interface InboxSyncResult {
+  comments: number
+  messages: number
+  missing: string[]
+  messagesState?: 'available' | 'empty' | 'permission' | 'unavailable'
+  messagesPermission?: boolean | null
+  hasMore?: boolean
+  checkedAt?: string
+}
+
+export const syncInbox = (accountId: string) => call<InboxSyncResult>('inbox_sync', { accountId })
 
 export const sendDm = (accountId: string, participantId: string, text: string) => call<{ message_id?: string }>('dm_send', { accountId, participantId, text })
 

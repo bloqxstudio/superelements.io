@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
+import { readPages, type GraphPage } from './paging.ts'
 
 /**
  * O Instagram da equipe pela API oficial da Meta (Instagram API com login
@@ -159,8 +160,8 @@ function checkRedirect(value: unknown) {
   } catch {
     throw new HttpError('Endereço de volta inválido.')
   }
-  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
-  if ((url.protocol !== 'https:' && !local) || url.pathname !== '/instagram/retorno' || url.search || url.hash) throw new HttpError('Endereço de volta inválido.')
+  const allowed = (Deno.env.get('INSTAGRAM_REDIRECT_URIS') || 'https://app.avencestudio.com/instagram/retorno').split(',').map((value) => value.trim())
+  if (url.protocol !== 'https:' || url.pathname !== '/instagram/retorno' || url.search || url.hash || !allowed.includes(url.toString())) throw new HttpError('Use o endereço publicado da plataforma para conectar o Instagram.', 400, 'redirect')
   return url.toString()
 }
 
@@ -255,7 +256,9 @@ async function accountOf(ctx: Ctx, accountId: unknown): Promise<AccountRow> {
   const { data, error } = await ctx.user.from('crm_instagram_accounts').select('id, team_id, ig_user_id, username').eq('id', accountId).maybeSingle()
   if (error) throw dbError(error)
   if (!data) throw new HttpError('Essa conta do Instagram não está ligada à sua equipe.', 404, 'not_found')
-  return data as AccountRow
+  const account = data as AccountRow
+  await requireModule(ctx, account.team_id)
+  return account
 }
 
 interface TokenRow {
@@ -773,10 +776,11 @@ interface Conversation {
 
 /** As conversas do direct com as últimas mensagens de cada uma. */
 async function syncDms(ctx: Ctx, account: AccountRow, token: string) {
-  const data = await ig<{ data?: Conversation[] }>('me/conversations', token, {
-    params: { platform: 'instagram', fields: 'id,updated_time,participants,messages.limit(25){id,message,created_time,from,attachments}', limit: 25 },
-  })
-  const { data: existing } = await ctx.admin.from('crm_instagram_threads').select('participant_id, last_at, unread').eq('account_id', account.id)
+  const data = await readPages<Conversation>((after) => ig<GraphPage<Conversation>>(`${account.ig_user_id}/conversations`, token, {
+    params: { platform: 'instagram', fields: 'id,updated_time,participants,messages.limit(25){id,message,created_time,from,attachments}', limit: 25, after },
+  }))
+  const { data: existing, error: readError } = await ctx.admin.from('crm_instagram_threads').select('participant_id, last_at, unread').eq('account_id', account.id)
+  if (readError) throw dbError(readError)
   const seen = new Map(((existing ?? []) as { participant_id: string; last_at: string; unread: number }[]).map((t) => [t.participant_id, t]))
   let count = 0
   for (const conv of data.data ?? []) {
@@ -820,29 +824,39 @@ async function syncDms(ctx: Ctx, account: AccountRow, token: string) {
     if (mError) throw dbError(mError)
     count += rows.length
   }
-  return count
+  return { count, conversations: data.data.length, hasMore: data.hasMore }
 }
 
 /** Lê a caixa inteira; o que a Meta recusar (permissão de mensagens) volta em `missing`. */
 async function syncInbox(ctx: Ctx, account: AccountRow, token: string) {
+  const { data: grant, error } = await ctx.admin.from('crm_instagram_tokens').select('permissions').eq('account_id', account.id).single()
+  if (error) throw dbError(error)
+  // Older manually entered tokens have no recorded scopes; try the API instead of claiming denial.
+  const permissions = Array.isArray(grant?.permissions) ? grant.permissions as string[] : []
+  const hasMessages = permissions.length ? permissions.includes('instagram_business_manage_messages') : null
   const missing: string[] = []
-  let comments = 0
-  let messages = 0
-  try {
-    comments = await syncComments(ctx, account, token)
-  } catch (error) {
-    if (error instanceof HttpError && (error.code === 'token' || error.code === 'rate')) throw error
-    console.warn('[instagram] comentários', error instanceof Error ? error.message : error)
-    missing.push('comentários')
+  const results = await Promise.allSettled([
+    syncComments(ctx, account, token),
+    hasMessages === false ? Promise.reject(new HttpError('Autorize as mensagens ao reconectar o Instagram.', 403, 'permission')) : syncDms(ctx, account, token),
+  ])
+  for (const result of results) {
+    if (result.status === 'rejected' && result.reason instanceof HttpError && ['token', 'rate', 'db'].includes(result.reason.code)) throw result.reason
   }
-  try {
-    messages = await syncDms(ctx, account, token)
-  } catch (error) {
-    if (error instanceof HttpError && (error.code === 'token' || error.code === 'rate')) throw error
-    console.warn('[instagram] DMs', error instanceof Error ? error.message : error)
-    missing.push(error instanceof HttpError && error.code === 'permission' ? 'mensagens (conecte a conta de novo para liberar)' : 'mensagens')
+  const [comments, dms] = results
+  if (comments.status === 'rejected') missing.push('comentários')
+  if (dms.status === 'rejected') missing.push('mensagens')
+  const messagesState = dms.status === 'fulfilled'
+    ? (dms.value.conversations ? 'available' : 'empty')
+    : (dms.reason instanceof HttpError && dms.reason.code === 'permission' ? 'permission' : 'unavailable')
+  return {
+    comments: comments.status === 'fulfilled' ? comments.value : 0,
+    messages: dms.status === 'fulfilled' ? dms.value.count : 0,
+    messagesState,
+    messagesPermission: hasMessages,
+    hasMore: dms.status === 'fulfilled' && dms.value.hasMore,
+    checkedAt: new Date().toISOString(),
+    missing,
   }
-  return { comments, messages, missing }
 }
 
 /** Manda uma DM para quem escreveu (a Meta só aceita até 24 h depois da última mensagem dela). */
@@ -1085,7 +1099,7 @@ Deno.serve(async (req) => {
       case 'auth_url': {
         needsApp()
         const teamId = await requireRole(ctx, body.teamId, true)
-        const redirectUri = checkRedirect(body.redirectUri)
+        const redirectUri = checkRedirect(body.redirectUri ?? (Deno.env.get('INSTAGRAM_REDIRECT_URIS') || 'https://app.avencestudio.com/instagram/retorno').split(',')[0].trim())
         const state = await packState({ t: teamId, u: ctx.userId, r: redirectUri, e: Date.now() + 15 * 60_000, n: crypto.randomUUID() }, secret)
         const auth = new URL('https://www.instagram.com/oauth/authorize')
         auth.search = new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, response_type: 'code', scope: SCOPES.join(','), state }).toString()

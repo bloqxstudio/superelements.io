@@ -102,7 +102,7 @@ const SetupGuide: React.FC<{ reason?: string }> = ({ reason }) => (
           </button>
         </span>
       </li>
-      <li>Em Funções do app, adicione a conta do Instagram como testadora e aceite o convite no Instagram (Configurações › Apps e sites). Com o app em desenvolvimento, só as contas da equipe funcionam, e é o que basta aqui.</li>
+      <li>Em Funções do app, adicione a conta do Instagram como testadora e aceite o convite no Instagram (Configurações › Apps e sites). Em desenvolvimento, o acesso é restrito aos testadores. Para contas de clientes, a Meta exige publicar o app e aprovar as permissões e verificações da empresa.</li>
       <li>
         No Supabase: aplique a migração <code className="text-xs">20261024120000_crm_instagram.sql</code>, guarde os segredos <code className="text-xs">INSTAGRAM_APP_ID</code> e <code className="text-xs">INSTAGRAM_APP_SECRET</code> em Edge Functions › Secrets e publique a função <code className="text-xs">instagram</code>.
       </li>
@@ -696,7 +696,7 @@ const InstagramPage: React.FC = () => {
     void reload()
   }, [reload])
 
-  const account = accounts?.find((a) => a.id === selected) ?? accounts?.[0]
+  const account = accounts?.find((a) => a.id === (selected ?? params.get('instagram'))) ?? accounts?.[0]
   const area: Area = params.get('aba') === 'anuncios' ? 'anuncios' : params.get('aba') === 'stories' ? 'stories' : params.get('aba') === 'caixa' ? 'caixa' : 'perfil'
   const showArea = (to: Area) =>
     setParams(
@@ -739,7 +739,15 @@ const InstagramPage: React.FC = () => {
       {area === 'anuncios' && team ? (
         <AdsArea teamId={team.id} manager={manager} initialAccount={params.get('conta') ?? undefined} />
       ) : area === 'caixa' && team && account && !error ? (
-        <InboxArea account={account} />
+        <div className="grid gap-4">
+          <label className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+            Conta do Instagram
+            <select aria-label="Conta do Instagram" value={account.id} onChange={(event) => setSelected(event.target.value)} className={cn(FIELD, 'h-9 w-auto min-w-40')}>
+              {accounts.map((item) => <option key={item.id} value={item.id}>@{item.username}</option>)}
+            </select>
+          </label>
+          <InboxArea key={account.id} account={account} />
+        </div>
       ) : area === 'stories' && team && accounts !== null && error !== 'sem-tabelas' && !error && accounts.length > 0 ? (
         <StoriesArea teamId={team.id} accounts={accounts} />
       ) : !team || accounts === null ? (
@@ -759,7 +767,7 @@ const InstagramPage: React.FC = () => {
           <p className="text-sm text-rose-700">{error}</p>
         </Surface>
       ) : account ? (
-        <Dashboard account={account} accounts={accounts} manager={manager} onSelect={setSelected} onReload={reload} />
+        <Dashboard key={account.id} account={account} accounts={accounts} manager={manager} onSelect={setSelected} onReload={reload} />
       ) : (
         <>
           <div className="mb-6">

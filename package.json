@@ -14,7 +14,12 @@
     "prospectar": "node scripts/prospects/prospectar.ts",
     "prospectar:subir": "node scripts/prospects/upload.ts",
     "conector": "node scripts/connector/build.mjs",
-    "whatsapp": "npm --prefix services/whatsapp start"
+    "whatsapp": "npm --prefix services/whatsapp start",
+    "db:status": "node scripts/supabase.mjs status",
+    "db:plan": "node scripts/supabase.mjs plan",
+    "db:migrate": "node scripts/supabase.mjs migrate",
+    "db:query": "node scripts/supabase.mjs query",
+    "functions:deploy": "node scripts/supabase.mjs deploy"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",
