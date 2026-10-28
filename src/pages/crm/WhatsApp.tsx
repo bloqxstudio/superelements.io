@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Loader2, MessageCircle, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Loader2, MessageCircle, RefreshCw, Settings } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
@@ -107,9 +107,46 @@ export default function CrmWhatsApp() {
 
   if (!team) return null
 
+  // Sem `?aba=`: quem ainda precisa conectar (ou está lendo o QR code) cai nas configurações, o resto nas conversas
+  const needsSetup = number === null || (!!number && number.status !== 'connected' && number.wanted)
+  const tab: 'conversas' | 'config' = params.get('aba') === 'config' ? 'config' : params.get('aba') === 'conversas' ? 'conversas' : needsSetup || !!failure ? 'config' : 'conversas'
+  const showTab = (to: typeof tab) =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.set('aba', to)
+        return next
+      },
+      { replace: true }
+    )
+
   return (
     <Page wide>
       <PageHeader title="WhatsApp" text="O número da empresa conectado ao CRM como mais um aparelho, pelo QR code. Ele continua funcionando no celular." />
+      <div className="mt-4 flex items-center gap-1 border-b border-gray-200" role="tablist" aria-label="WhatsApp">
+        {(
+          [
+            ['conversas', 'Conversas', MessageCircle],
+            ['config', 'Configurações', Settings],
+          ] as [typeof tab, string, React.ElementType][]
+        ).map(([value, label, Icon]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={tab === value}
+            onClick={() => showTab(value)}
+            className={cn(
+              '-mb-px inline-flex h-10 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              tab === value ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-900'
+            )}
+          >
+            <Icon className="h-4 w-4" aria-hidden /> {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'config' && (
+        <>
       <div className="mt-6 max-w-2xl">
         {failure ? (
           <Surface title={failure.code === 'no_tables' ? 'Falta preparar o WhatsApp' : 'Não deu para ler o WhatsApp'}>
@@ -157,17 +194,25 @@ export default function CrmWhatsApp() {
           <WhatsAppAccess teamId={team.id} />
         </div>
       )}
-      {call && number && number.status !== 'connected' && (
+        </>
+      )}
+      {tab === 'conversas' && call && number && number.status !== 'connected' && (
         <p className="mt-4 max-w-2xl rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
           Para chamar {call.name ?? 'esse número'}, o WhatsApp da equipe precisa estar conectado.
         </p>
       )}
-      {number && !failure && (
+      {tab === 'conversas' && number && !failure && (
         <div className="mt-6">
           {number.status !== 'connected' && (
             <p className="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
-              WhatsApp desconectado. Abaixo está o histórico já recebido e enviado; reconecte acima para voltar a enviar.
+              <span>
+                WhatsApp desconectado. Abaixo está o histórico já recebido e enviado; reconecte em{' '}
+                <button type="button" className="font-medium underline" onClick={() => showTab('config')}>
+                  Configurações
+                </button>{' '}
+                para voltar a enviar.
+              </span>
             </p>
           )}
           <WhatsAppInbox teamId={team.id} offline={number.status !== 'connected'} call={call} onCallDone={() => setParams({}, { replace: true })} />
