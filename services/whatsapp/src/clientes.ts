@@ -19,6 +19,9 @@ export interface ClientContact {
   topics: Topic[]
 }
 
+/** Todos os assuntos: o comandante da equipe vê todos, sem depender do cadastro */
+export const ALL_TOPICS: Topic[] = ['site', 'anuncios', 'funil', 'instagram', 'posts', 'caixa', 'projetos']
+
 /** Cada assunto depende de um módulo da conta (`src/features/crm/modules.ts`) */
 const MODULE: Record<Topic, string> = { site: 'site', anuncios: 'instagram', funil: 'crm', instagram: 'instagram', posts: 'instagram', caixa: 'instagram', projetos: 'projetos' }
 const LABEL: Record<Topic, string> = {
@@ -35,9 +38,9 @@ const WORDS: [Topic, RegExp][] = [
   ['posts', /(post|reel|story|stories|publicac)/],
   ['caixa', /(comentario|mensagem|direct|\bdm\b|caixa)/],
   ['instagram', /(instagram|seguidor|alcance|perfil)/],
-  ['anuncios', /(anuncio|gast|custo|invest|campanha|meta ads|google ads)/],
+  ['anuncios', /(anuncio|marketing|gast|custo|invest|campanha|meta ads|google ads)/],
   ['site', /(site|acesso|visita|visitante|online|trafego)/],
-  ['funil', /(funil|oportunidade|lead|venda|fechad)/],
+  ['funil', /(funil|oportunidade|card|prospec|lead|venda|fechad)/],
   ['projetos', /(projeto|andamento|pagina|status)/],
 ]
 
@@ -108,27 +111,30 @@ async function caixa(db: Db, accountId: string): Promise<string> {
   return ['*Caixa do Instagram*', `• Comentários em aberto (30 dias): ${int(comments ?? 0)}`, `• Mensagens diretas não lidas: ${int(unread)}`].join('\n')
 }
 
-async function projetos(db: Db, accountId: string, isHome: boolean): Promise<string> {
+async function projetos(db: Db, accountId: string, isHome: boolean, text = ''): Promise<string> {
   // Os projetos sem conta (todos os antigos) são da conta da casa
   const query = db.from('space_projects').select('name, updated_at')
   const { data, error } = await (isHome ? query.or(`team_id.eq.${accountId},team_id.is.null`) : query.eq('team_id', accountId)).order('updated_at', { ascending: false }).limit(10)
   if (error) return `Não consegui ler: ${error.message}`
   if (!data?.length) return 'Ainda não há projetos na sua conta.'
+  // "projetos zena": só os que têm o nome
+  const word = norm(text).replace(/\b(projetos?|status|como|esta|andamento|me|diga|qual|quais|do|da|de|o|a|\d+)\b/g, '').trim()
+  const found = word ? data.filter((p) => norm(p.name as string).includes(word)) : []
   const ago = (iso: string) => {
     const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000))
     return minutes < 60 ? `há ${minutes} min` : minutes < 1440 ? `há ${Math.round(minutes / 60)} h` : `há ${Math.round(minutes / 1440)} d`
   }
-  return ['*Projetos*', ...data.map((p) => `• ${p.name}: atualizado ${ago(p.updated_at as string)}`)].join('\n')
+  return [found.length ? `*Projetos com "${word}"*` : '*Projetos*', ...(found.length ? found : data).map((p) => `• ${p.name}: atualizado ${ago(p.updated_at as string)}`)].join('\n')
 }
 
-const read = (db: Db, topic: Topic, accountId: string, period: Period, isHome = false): Promise<string> =>
+const read = (db: Db, topic: Topic, accountId: string, period: Period, isHome = false, text = ''): Promise<string> =>
   topic === 'site' ? site(db, accountId, period)
   : topic === 'anuncios' ? anuncios(db, accountId, period)
   : topic === 'funil' ? funil(db, accountId)
   : topic === 'instagram' ? instagram(db, accountId, period)
   : topic === 'posts' ? posts(db, accountId)
   : topic === 'caixa' ? caixa(db, accountId)
-  : projetos(db, accountId, isHome)
+  : projetos(db, accountId, isHome, text)
 
 /** A resposta ao que o cliente escreveu e o assunto atendido (para o registro) */
 export async function answerClient(rawDb: Db, contact: ClientContact, rawText: string): Promise<{ reply: string; topic?: Topic }> {
@@ -160,7 +166,7 @@ export async function answerClient(rawDb: Db, contact: ClientContact, rawText: s
 
   const period = periodOf(text)
   try {
-    const raw = await read(db, topic, contact.accountId, period, account.is_home === true)
+    const raw = await read(db, topic, contact.accountId, period, account.is_home === true, text)
     return { reply: clean(raw), topic }
   } catch (error) {
     console.error(`cliente ${contact.phone.slice(-4)}: ${error instanceof Error ? error.message : error}`)

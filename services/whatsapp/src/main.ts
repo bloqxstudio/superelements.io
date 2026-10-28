@@ -2,8 +2,8 @@ import { spawn } from 'node:child_process'
 import { createClient } from '@supabase/supabase-js'
 import pino from 'pino'
 import { dbAuthState } from './auth.ts'
-import { answer, samePhone } from './comandos.ts'
-import { answerClient, type ClientContact, type Topic } from './clientes.ts'
+import { samePhone } from './comandos.ts'
+import { ALL_TOPICS, answerClient, type ClientContact, type Topic } from './clientes.ts'
 import { runReports } from './relatorios.ts'
 import { openSession, type NumberPatch, type OutFile, type Session, type StoredMessage } from './session.ts'
 
@@ -116,7 +116,7 @@ async function command(teamId: string, m: StoredMessage) {
   if (m.fromMe || m.kind !== 'text' || !m.body.trim()) return
   if (Date.now() - m.at.getTime() > 2 * 60_000 || handled.has(m.waId)) return
   const [{ data, error }, { data: clients, error: clientsError }] = await Promise.all([
-    db.from('crm_whatsapp_commanders').select('phone').eq('team_id', teamId),
+    db.from('crm_whatsapp_commanders').select('phone, name').eq('team_id', teamId),
     db.from('crm_whatsapp_client_contacts').select('phone, account_id, name, topics').eq('team_id', teamId).eq('enabled', true),
   ])
   if (error) {
@@ -136,7 +136,8 @@ async function command(teamId: string, m: StoredMessage) {
     warnedLid = true
     return
   }
-  const isCommander = data?.some((c) => samePhone(c.phone as string, phone))
+  const commander = data?.find((c) => samePhone(c.phone as string, phone))
+  const isCommander = !!commander
   const client = isCommander ? undefined : clients?.find((c) => samePhone(c.phone as string, phone))
   if (!isCommander && !client) return
   handled.add(m.waId)
@@ -151,7 +152,9 @@ async function command(teamId: string, m: StoredMessage) {
   if (recent.length === limit) {
     reply = `Limite de ${limit} perguntas por hora atingido. Volto a responder daqui a pouco.`
   } else if (isCommander) {
-    reply = (await answer(db, teamId, m.body)).slice(0, MAX_REPLY)
+    // O comandante vê todos os assuntos da conta da casa, sem depender das marcações do cadastro
+    const self: ClientContact = { phone, accountId: teamId, name: (commander?.name as string) ?? '', topics: ALL_TOPICS }
+    reply = (await answerClient(db, self, m.body)).reply.slice(0, MAX_REPLY)
   } else {
     const contact: ClientContact = { phone: client!.phone as string, accountId: client!.account_id as string, name: (client!.name as string) ?? '', topics: (client!.topics as Topic[]) ?? [] }
     const result = await answerClient(db, contact, m.body)
