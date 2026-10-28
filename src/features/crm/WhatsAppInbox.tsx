@@ -6,6 +6,7 @@ import { addActivity } from '@/features/crm/clients'
 import type { CallTarget } from '@/features/crm/call'
 import { Surface } from '@/features/crm/ui'
 import { cn } from '@/lib/utils'
+import { VoiceRecorder } from '@/features/crm/VoiceRecorder'
 import {
   InboxError,
   chatTitle,
@@ -359,6 +360,7 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; offline?: boolean; 
   const [sending, setSending] = useState(false)
   const end = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
+  const [recording, setRecording] = useState(false)
   // Arquivo colado ou arrastado: espera aqui, com prévia, até a pessoa enviar
   const [pending, setPending] = useState<File>()
   const [pendingUrl, setPendingUrl] = useState<string>()
@@ -420,12 +422,13 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; offline?: boolean; 
   }
 
   // Vídeo, foto, áudio ou documento: o texto do campo vai de legenda
-  const attach = async (file: File | undefined) => {
+  const attach = async (file: File | undefined, voice = false) => {
     if (!file || sending) return
     setSending(true)
     try {
-      await sendFile(teamId, chat.jid, file, text.trim())
-      setText('')
+      // A mensagem de voz vai sem legenda, e o texto que a pessoa já digitou fica no campo
+      await sendFile(teamId, chat.jid, file, voice ? '' : text.trim(), voice)
+      if (!voice) setText('')
       await load()
     } catch (error) {
       toast.error(errorText(error))
@@ -503,9 +506,11 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; offline?: boolean; 
             void attach(file)
           }}
         />
+        {!recording && (
         <Button type="button" variant="ghost" size="sm" disabled={sending} onClick={() => picker.current?.click()} aria-label="Enviar vídeo, foto ou arquivo" title="Enviar vídeo, foto ou arquivo (até 25 MB)">
           <Paperclip className="h-4 w-4" aria-hidden />
         </Button>
+        )}
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -524,11 +529,15 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; offline?: boolean; 
           }}
           rows={1}
           placeholder="Escreva uma mensagem"
-          className="max-h-32 min-h-9 flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+          className={cn('max-h-32 min-h-9 flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none', recording && 'hidden')}
         />
-        <Button type="submit" size="sm" disabled={(!text.trim() && !pending) || sending} aria-label="Enviar">
-          {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
-        </Button>
+        {/* Sem texto nem anexo, o botão ao lado do campo grava voz; com texto, envia */}
+        {!text.trim() && !pending && <VoiceRecorder disabled={sending} onActive={setRecording} onVoice={(file) => void attach(file, true)} />}
+        {(text.trim() || pending) && (
+          <Button type="submit" size="sm" disabled={sending} aria-label="Enviar">
+            {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
+          </Button>
+        )}
       </form>
       )}
     </div>

@@ -2,6 +2,7 @@ import makeWASocket, { DisconnectReason, downloadMediaMessage, fetchLatestWaWebV
 import type { Logger } from 'pino'
 import QRCode from 'qrcode'
 import type { DbAuth } from './auth.ts'
+import { toVoice } from './voz.ts'
 
 /**
  * A conexão de um número: abre o WhatsApp como aparelho conectado, põe o QR
@@ -42,12 +43,19 @@ export interface StoredMessage {
   media?: { mime?: string; name?: string; size: number; download: () => Promise<Buffer> }
 }
 
+/** A gravação vira OGG/Opus e sai como mensagem de voz; sem conversão, como áudio comum (não toca como voz) */
+async function voiceContent(file: OutFile) {
+  const ogg = await toVoice(file.buffer)
+  return ogg ? { audio: ogg, mimetype: 'audio/ogg; codecs=opus', ptt: true } : { audio: file.buffer, mimetype: file.mime }
+}
+
 /** Arquivo a enviar: vídeo, foto, áudio ou documento */
 export interface OutFile {
   buffer: Buffer
   mime: string
   name?: string
-  kind: 'image' | 'video' | 'audio' | 'document'
+  /** `voice`: áudio gravado na plataforma, enviado como mensagem de voz */
+  kind: 'image' | 'video' | 'audio' | 'voice' | 'document'
 }
 
 export interface Session {
@@ -328,8 +336,10 @@ export function openSession(o: Options): Session {
           ? { video: file.buffer, mimetype: file.mime, caption: text || undefined }
           : file.kind === 'image'
             ? { image: file.buffer, mimetype: file.mime, caption: text || undefined }
-            : file.kind === 'audio'
-              ? { audio: file.buffer, mimetype: file.mime }
+            : file.kind === 'voice'
+              ? await voiceContent(file)
+              : file.kind === 'audio'
+                ? { audio: file.buffer, mimetype: file.mime }
               : { document: file.buffer, mimetype: file.mime, fileName: file.name ?? 'arquivo', caption: text || undefined }
       const sent = await sock.sendMessage(jid, content)
       if (!sent?.key.id) throw new Error('O WhatsApp não confirmou o envio.')

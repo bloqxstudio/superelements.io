@@ -131,15 +131,15 @@ export const MAX_SEND_BYTES = 25 * 1024 * 1024
 const kindOf = (mime: string): 'image' | 'video' | 'audio' | 'document' =>
   mime.startsWith('video/') ? 'video' : mime.startsWith('image/') ? 'image' : mime.startsWith('audio/') ? 'audio' : 'document'
 
-/** Sobe o arquivo e põe na fila: o serviço envia como vídeo, foto, áudio ou documento, com a legenda. */
-export async function sendFile(teamId: string, jid: string, file: File, caption: string) {
+/** Sobe o arquivo e põe na fila: o serviço envia como vídeo, foto, áudio ou documento, com a legenda (`voice`: mensagem de voz). */
+export async function sendFile(teamId: string, jid: string, file: File, caption: string, voice = false) {
   if (file.size > MAX_SEND_BYTES) throw new InboxError('O arquivo passa de 25 MB. Comprima o vídeo ou mande um link.')
   const ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6) || 'bin'
   const path = `${teamId}/saida/${crypto.randomUUID()}.${ext}`
   const mime = file.type || 'application/octet-stream'
   const { error: upError } = await db.storage.from('crm-whatsapp').upload(path, file, { contentType: mime, cacheControl: '31536000' })
   if (upError) throw new InboxError(/policy|row-level|not found/i.test(upError.message) ? 'Aplique a migração 20261027120000_crm_whatsapp_send_media.sql no Supabase.' : upError.message)
-  const { error } = await db.rpc('crm_whatsapp_send_media', { p_team: teamId, p_jid: jid, p_caption: caption, p_path: path, p_mime: mime, p_name: file.name, p_kind: kindOf(mime) })
+  const { error } = await db.rpc('crm_whatsapp_send_media', { p_team: teamId, p_jid: jid, p_caption: caption, p_path: path, p_mime: mime, p_name: file.name, p_kind: voice ? 'voice' : kindOf(mime) })
   if (error) throw fail(error)
 }
 

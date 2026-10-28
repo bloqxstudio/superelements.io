@@ -55,6 +55,20 @@ node_ok "$NODE" || fail "O Node em $NODE é antigo ($("$NODE" -v)). Atualize par
 export PATH="$(dirname "$NODE"):$PATH"
 echo "Node $("$NODE" -v) em $NODE"
 
+# O ffmpeg converte a mensagem de voz gravada na plataforma (sem ele a voz vai como áudio comum, sem a bolinha de voz)
+if ! command -v ffmpeg >/dev/null 2>&1 && [ ! -x /opt/homebrew/bin/ffmpeg ] && [ ! -x /usr/local/bin/ffmpeg ]; then
+  BREW="$(command -v brew 2>/dev/null || true)"
+  for p in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [ -z "$BREW" ] && [ -x "$p" ]; then BREW="$p"; fi
+  done
+  if [ -n "$BREW" ]; then
+    echo "Instalando o ffmpeg pelo Homebrew (mensagens de voz)…"
+    "$BREW" install ffmpeg || echo "Não deu para instalar o ffmpeg: a voz vai como áudio comum até instalar (brew install ffmpeg)."
+  else
+    echo "Sem Homebrew: instale o ffmpeg para as mensagens de voz tocarem como voz (brew install ffmpeg)."
+  fi
+fi
+
 # ---------- 2. Dependências ----------
 step "2/5  Dependências"
 cd "$DIR"
