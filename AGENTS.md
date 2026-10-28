@@ -580,8 +580,11 @@ Novas conexões com a permissão de mensagens assinam `subscribed_apps/messages`
 A conta avencestudio já teve essa assinatura confirmada pela Meta.
 A URL é `https://nfmfcpcwyavutntnrxqq.supabase.co/functions/v1/instagram-webhook`.
 O desafio GET exige `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` no Supabase. O token atual
-do CLI não possui `edge_functions_secrets_write`: configurar pelo painel ou
-corrigir o escopo com autorização; não colocar o token de verificação no Git.
+do CLI não possui `edge_functions_secrets_write`: o segredo foi configurado pelo
+painel do Supabase. Não colocar o token de verificação no Git. Callback cadastrado
+e validado na Meta; o teste oficial de messages v26.0 retornou sucesso em 28/10
+às 17:26. O parser aceita os envelopes messaging e changes/messages/value e
+timestamps em milissegundos ou em segundos (inclusive texto).
 Estado observado no painel da Meta: app não publicado, verificação da empresa
 em análise e App Review não enviado. O painel informa que webhooks exigem app
 publicado. Não afirmar funcionamento real antes de uma mensagem chegar pela Meta.

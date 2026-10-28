@@ -44,3 +44,13 @@ test('falha de persistência pede reentrega em vez de perder mensagem', async ()
   const handler = webhookHandler({ verifyToken: 'verify-test', secrets: [secret], store: async () => { throw Error('offline') } })
   assert.equal((await handler(signed(JSON.stringify(event)))).status, 503)
 })
+
+// Envelope e timestamp em segundos aparecem no exemplo oficial do painel da Meta.
+test('aceita messages em changes/value com timestamp textual em segundos', () => {
+  const value = structuredClone(event.entry[0].messaging[0])
+  value.timestamp = String(timestamp / 1000)
+  const payload = { object: 'instagram', entry: [{ id: '123', changes: [{ field: 'messages', value }] }] }
+  assert.deepEqual(messagesOf(payload), messagesOf(event))
+  payload.entry[0].changes[0].field = 'comments'
+  assert.deepEqual(messagesOf(payload), [])
+})

@@ -25,8 +25,13 @@ export function messagesOf(payload: unknown): IncomingDm[] {
   if (root.object !== 'instagram' || !Array.isArray(root.entry)) return []
   const rows: IncomingDm[] = []
   for (const entry of root.entry) {
-    if (!id(entry?.id) || !Array.isArray(entry.messaging)) continue
-    for (const event of entry.messaging) {
+    if (!id(entry?.id)) continue
+    // A Meta usa messaging e também o envelope changes/field/value exibido no painel de testes.
+    const events = [
+      ...(Array.isArray(entry.messaging) ? entry.messaging : []),
+      ...(Array.isArray(entry.changes) ? entry.changes.filter((change: { field?: string }) => change?.field === 'messages').map((change: { value?: unknown }) => change.value) : []),
+    ]
+    for (const event of events) {
       const message = event?.message
       if (!message || typeof message.mid !== 'string' || message.mid.length > 1024 || !message.mid) continue
       if (!id(event.sender?.id) || !id(event.recipient?.id)) continue
@@ -34,10 +39,12 @@ export function messagesOf(payload: unknown): IncomingDm[] {
       if (!fromMe && event.recipient.id !== entry.id) continue
       const participant = fromMe ? event.recipient.id : event.sender.id
       if (participant === entry.id || message.is_deleted || message.is_unsupported) continue
-      if (typeof event.timestamp !== 'number' || !Number.isFinite(event.timestamp) || event.timestamp <= 0 || event.timestamp > Date.now() + 300_000) continue
+      const numericTime = typeof event.timestamp === 'number' ? event.timestamp : typeof event.timestamp === 'string' && /^\d{10,16}$/.test(event.timestamp) ? Number(event.timestamp) : NaN
+      const timestamp = numericTime < 100_000_000_000 ? numericTime * 1000 : numericTime
+      if (!Number.isFinite(timestamp) || timestamp <= 0 || timestamp > Date.now() + 300_000) continue
       const attachment = Array.isArray(message.attachments) && typeof message.attachments[0]?.type === 'string' ? message.attachments[0].type.slice(0, 100) : null
       if (typeof message.text !== 'string' && !attachment) continue
-      rows.push({ account: entry.id, participant, mid: message.mid, fromMe, body: typeof message.text === 'string' ? message.text : '', attachment, at: new Date(event.timestamp).toISOString() })
+      rows.push({ account: entry.id, participant, mid: message.mid, fromMe, body: typeof message.text === 'string' ? message.text : '', attachment, at: new Date(timestamp).toISOString() })
     }
   }
   return rows
