@@ -7,7 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  * Quem não está na lista nunca chega até aqui.
  */
 
-const norm = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+export const norm = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 const digits = (text: string) => text.replace(/\D/g, '')
 
 /** Compara pelos 8 últimos dígitos: o WhatsApp ora tem o 9 do celular, ora não */
@@ -31,7 +31,39 @@ const dayStart = (daysAgo: number) => {
 
 type Db = SupabaseClient
 
-interface Period {
+const WRITES = new Set(['insert', 'update', 'upsert', 'delete'])
+const READ_RPC = new Set(['site_report'])
+
+/**
+ * Guard-rail: o que responde a um comando só lê. Escrita em tabela, RPC fora da lista e
+ * storage/auth falham aqui, mesmo que uma mudança futura tente.
+ */
+export function readOnly(db: Db): Db {
+  return new Proxy(db, {
+    get(target, prop, receiver) {
+      if (prop === 'from') {
+        return (table: string) =>
+          new Proxy(target.from(table), {
+            get(builder, method) {
+              if (typeof method === 'string' && WRITES.has(method)) throw new Error(`Comando só lê: ${method} em ${table} bloqueado.`)
+              const value = Reflect.get(builder, method)
+              return typeof value === 'function' ? value.bind(builder) : value
+            },
+          })
+      }
+      if (prop === 'rpc') {
+        return (name: string, args?: object) => {
+          if (!READ_RPC.has(name)) throw new Error(`Comando só lê: rpc ${name} bloqueada.`)
+          return target.rpc(name, args)
+        }
+      }
+      if (prop === 'storage' || prop === 'auth' || prop === 'functions') throw new Error(`Comando só lê: ${String(prop)} bloqueado.`)
+      return Reflect.get(target, prop, receiver)
+    },
+  })
+}
+
+export interface Period {
   label: string
   from: Date
   to: Date
@@ -39,7 +71,7 @@ interface Period {
 }
 
 /** "hoje", "ontem", "7", "30", "mês"… (sem nada, 7 dias) */
-function periodOf(text: string): Period {
+export function periodOf(text: string): Period {
   const now = new Date()
   if (/\bhoje\b/.test(text)) return { label: 'hoje', from: dayStart(0), to: now, preset: 'last_7d' }
   if (/\bontem\b/.test(text)) return { label: 'ontem', from: dayStart(1), to: dayStart(0), preset: 'last_7d' }
@@ -77,7 +109,7 @@ const STAGE_LABEL: Record<string, string> = {
 }
 const STAGE_ORDER = Object.keys(STAGE_LABEL)
 
-async function funil(db: Db, teamId: string): Promise<string> {
+export async function funil(db: Db, teamId: string): Promise<string> {
   const { data, error } = await db.from('crm_opportunities').select('stage, offer, updated_at, closed_at').eq('team_id', teamId)
   if (error) return `Não consegui ler o funil: ${error.message}`
   const rows = data ?? []
@@ -102,7 +134,7 @@ interface AdTotals {
   reach?: number
 }
 
-async function anuncios(db: Db, teamId: string, period: Period): Promise<string> {
+export async function anuncios(db: Db, teamId: string, period: Period): Promise<string> {
   const { data: accounts, error } = await db.from('crm_ad_accounts').select('id, name, currency').eq('team_id', teamId)
   if (error) return `Não consegui ler os anúncios: ${error.message}`
   if (!accounts?.length) return 'Nenhuma conta de anúncios conectada (CRM › Instagram › Anúncios).'
@@ -142,7 +174,7 @@ interface SiteTotals {
   bounces?: number
 }
 
-async function site(db: Db, teamId: string, period: Period): Promise<string> {
+export async function site(db: Db, teamId: string, period: Period): Promise<string> {
   const { data: trackers, error } = await db.from('site_trackers').select('id, name, domain').eq('team_id', teamId)
   if (error) return `Não consegui ler o site: ${error.message}`
   if (!trackers?.length) return 'Nenhum site registrado (CRM › Site).'
@@ -210,7 +242,8 @@ async function projetos(db: Db, teamId: string, text: string): Promise<string> {
 // ---------- entrada ----------
 
 /** A resposta ao que a pessoa escreveu, ou `undefined` quando não é um pedido que eu entenda */
-export async function answer(db: Db, teamId: string, rawText: string): Promise<string> {
+export async function answer(rawDb: Db, teamId: string, rawText: string): Promise<string> {
+  const db = readOnly(rawDb)
   const text = norm(rawText)
   const period = periodOf(text)
   try {

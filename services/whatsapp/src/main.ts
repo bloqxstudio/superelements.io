@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import pino from 'pino'
 import { dbAuthState } from './auth.ts'
 import { answer, samePhone } from './comandos.ts'
+import { answerClient, type ClientContact, type Topic } from './clientes.ts'
+import { runReports } from './relatorios.ts'
 import { openSession, type NumberPatch, type OutFile, type Session, type StoredMessage } from './session.ts'
 
 /**
@@ -99,6 +101,13 @@ const handled = new Set<string>()
 let warnedCommanders = false
 let warnedLid = false
 
+/** Guard-rails: no máximo 20 respostas por hora por comandante e 3.500 caracteres por resposta */
+const MAX_PER_HOUR = 20
+const MAX_PER_HOUR_CLIENT = 10
+const MAX_REPLY = 3500
+let warnedClients = false
+const asked = new Map<string, number[]>()
+
 /**
  * Pergunta de quem está em `crm_whatsapp_commanders`: responde na mesma conversa, pela fila de envio.
  * Só texto recebido agora, de um número da lista; qualquer outro é cliente e passa direto.
@@ -106,24 +115,50 @@ let warnedLid = false
 async function command(teamId: string, m: StoredMessage) {
   if (m.fromMe || m.kind !== 'text' || !m.body.trim()) return
   if (Date.now() - m.at.getTime() > 2 * 60_000 || handled.has(m.waId)) return
-  const { data, error } = await db.from('crm_whatsapp_commanders').select('phone').eq('team_id', teamId)
+  const [{ data, error }, { data: clients, error: clientsError }] = await Promise.all([
+    db.from('crm_whatsapp_commanders').select('phone').eq('team_id', teamId),
+    db.from('crm_whatsapp_client_contacts').select('phone, account_id, name, topics').eq('team_id', teamId).eq('enabled', true),
+  ])
   if (error) {
     if (!warnedCommanders && !isMissingTable(error)) console.error(`Comandos: ${error.message}`)
     if (!warnedCommanders && isMissingTable(error)) console.error('Falta a migração 20261026230000_crm_whatsapp_commanders.sql: os comandos por WhatsApp estão desligados.')
     warnedCommanders = true
     return
   }
+  if (clientsError && !isMissingTable(clientsError) && !warnedClients) {
+    console.error(`Clientes: ${clientsError.message}`)
+    warnedClients = true
+  }
   const phone = m.jid.split('@')[0]
   if (m.jid.endsWith('@lid')) {
     // O WhatsApp só deu um id interno, sem o número: não dá para saber quem é
-    if (!warnedLid && data?.length) console.error('Mensagem de um id interno (@lid) sem número: não dá para conferir se é de quem manda comandos.')
+    if (!warnedLid && (data?.length || clients?.length)) console.error('Mensagem de um id interno (@lid) sem número: não dá para conferir se é de quem manda comandos ou de um cliente.')
     warnedLid = true
     return
   }
-  if (!data?.some((c) => samePhone(c.phone as string, phone))) return
+  const isCommander = data?.some((c) => samePhone(c.phone as string, phone))
+  const client = isCommander ? undefined : clients?.find((c) => samePhone(c.phone as string, phone))
+  if (!isCommander && !client) return
   handled.add(m.waId)
   if (handled.size > 500) handled.delete(handled.values().next().value!)
-  const reply = await answer(db, teamId, m.body)
+  const key = `${teamId}:${phone.slice(-8)}`
+  const limit = isCommander ? MAX_PER_HOUR : MAX_PER_HOUR_CLIENT
+  const recent = (asked.get(key) ?? []).filter((t) => Date.now() - t < 3_600_000)
+  asked.set(key, [...recent, Date.now()])
+  // Passou do limite: um aviso uma vez e silêncio até a hora virar
+  if (recent.length > limit) return
+  let reply: string
+  if (recent.length === limit) {
+    reply = `Limite de ${limit} perguntas por hora atingido. Volto a responder daqui a pouco.`
+  } else if (isCommander) {
+    reply = (await answer(db, teamId, m.body)).slice(0, MAX_REPLY)
+  } else {
+    const contact: ClientContact = { phone: client!.phone as string, accountId: client!.account_id as string, name: (client!.name as string) ?? '', topics: (client!.topics as Topic[]) ?? [] }
+    const result = await answerClient(db, contact, m.body)
+    reply = result.reply.slice(0, MAX_REPLY)
+    const { error: logError } = await db.from('crm_whatsapp_client_log').insert({ team_id: teamId, account_id: contact.accountId, phone: contact.phone, question: m.body.slice(0, 300), topic: result.topic ?? null, answered: !!result.topic })
+    if (logError && !isMissingTable(logError)) console.error(`[${teamId.slice(0, 8)}] não registrou a pergunta: ${logError.message}`)
+  }
   const { error: sendError } = await db.rpc('crm_whatsapp_enqueue_reply', { p_team: teamId, p_jid: m.jid, p_text: reply })
   if (sendError) console.error(`[${teamId.slice(0, 8)}] não enfileirou a resposta: ${sendError.message}`)
 }
@@ -342,6 +377,18 @@ function serve() {
         photos = false
       })
   }, 15_000)
+
+  // Relatórios internos agendados (só para quem manda comandos, ver relatorios.ts)
+  let reporting = false
+  setInterval(() => {
+    if (reporting) return
+    reporting = true
+    runReports(db, [...sessions.entries()].filter(([, session]) => session.open && !session.leaving).map(([teamId]) => teamId))
+      .catch((error) => console.error('Falha nos relatórios:', error))
+      .finally(() => {
+        reporting = false
+      })
+  }, 60_000)
 
   // Sinal de vida na linha de cada número ligado: a tela avisa quando o serviço some
   setInterval(async () => {

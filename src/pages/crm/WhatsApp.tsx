@@ -7,6 +7,7 @@ import { openingText } from '@/features/crm/call'
 import { personLabel } from '@/features/crm/people'
 import { Button } from '@/components/ui/button'
 import { useCrm } from '@/features/crm/crmStore'
+import { WhatsAppAccess } from '@/features/crm/WhatsAppAccess'
 import { WhatsAppInbox } from '@/features/crm/WhatsAppInbox'
 import { canManage } from '@/features/crm/types'
 import { Page, PageHeader, Surface, dayLabel } from '@/features/crm/ui'
@@ -151,6 +152,11 @@ export default function CrmWhatsApp() {
           </Surface>
         )}
       </div>
+      {team.isHome && manager && (
+        <div className="mt-6 max-w-2xl">
+          <WhatsAppAccess teamId={team.id} />
+        </div>
+      )}
       {call && number && number.status !== 'connected' && (
         <p className="mt-4 max-w-2xl rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
           Para chamar {call.name ?? 'esse número'}, o WhatsApp da equipe precisa estar conectado.
