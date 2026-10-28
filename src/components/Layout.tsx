@@ -6,6 +6,7 @@ import { Logo } from '@/components/Logo';
 import { hasNews, useMenuBadges } from '@/features/crm/menuBadges';
 import { useRoutineScheduler } from '@/features/ia/rotinas';
 import { PreviewDrawer } from '@/features/operations/Preview';
+import { GuardedOutlet } from '@/features/crm/GuardedOutlet';
 
 /**
  * Telas da conta: menu lateral com Produção e CRM (no celular, uma barra com
@@ -27,7 +28,7 @@ const Layout: React.FC = () => {
   // Trocou de tela pelo menu do celular: ele fecha
   useEffect(() => setOpen(false), [pathname]);
 
-  if (inProject || embedded) return <Outlet />;
+  if (inProject || embedded) return <GuardedOutlet />;
 
   return (
     <div className="min-h-screen w-full bg-zinc-50">
@@ -50,7 +51,7 @@ const Layout: React.FC = () => {
         </header>
 
         <main className="min-w-0 flex-1">
-          <Outlet />
+          <GuardedOutlet />
         </main>
         <PreviewDrawer />
       </div>

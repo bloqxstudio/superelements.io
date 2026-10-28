@@ -255,11 +255,23 @@ const uuid = (value: unknown, what: string) => {
   return value
 }
 
+/** Anúncios fazem parte do módulo Instagram: precisa estar ligado na conta. */
+async function requireModule(ctx: Ctx, teamId: string) {
+  const { data, error } = await ctx.user.rpc('crm_module_on', { p_team: teamId, p_module: 'instagram' })
+  // Sem a migração das contas a função não existe: nada é restrito
+  if (error) {
+    if (error.code === '42883' || error.code === 'PGRST202') return
+    throw dbError(error)
+  }
+  if (data === false) throw new HttpError('O módulo Instagram e Anúncios está desligado para esta conta.', 403, 'module_off')
+}
+
 async function requireRole(ctx: Ctx, teamId: unknown, manager: boolean) {
   const team = uuid(teamId, 'Equipe')
   const { data, error } = await ctx.user.rpc(manager ? 'is_crm_manager' : 'is_crm_member', { p_team: team })
   if (error) throw dbError(error)
   if (!data) throw new HttpError(manager ? 'Só quem gerencia a equipe desconecta uma conta de anúncios.' : 'Você não é desta equipe.', 403, 'forbidden')
+  await requireModule(ctx, team)
   return team
 }
 

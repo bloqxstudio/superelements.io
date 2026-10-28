@@ -13,6 +13,7 @@ import {
   listPeople,
   removePerson,
   renameTeam,
+  updateAccountProfile,
   setPersonRole,
   teamInviteUrl,
 } from '@/features/crm/teams'
@@ -97,6 +98,7 @@ const Team: React.FC = () => {
   const navigate = useNavigate()
   const team = useCrm((s) => s.team)
   const rename = useCrm((s) => s.rename)
+  const setProfile = useCrm((s) => s.setProfile)
   const load = useCrm((s) => s.load)
   const [people, setPeople] = useState<TeamPerson[] | null>(null)
   const [invites, setInvites] = useState<TeamInvite[]>([])
@@ -129,6 +131,16 @@ const Team: React.FC = () => {
       rename(name.trim())
     } catch (error) {
       toast.error('Não foi possível renomear', { description: error instanceof Error ? error.message : undefined })
+    }
+  }
+
+  const saveProfile = async (patch: Partial<typeof team.profile>) => {
+    const next = { ...team.profile, ...patch }
+    try {
+      await updateAccountProfile(team.id, team.name, next)
+      setProfile(next)
+    } catch (error) {
+      toast.error('Não foi possível salvar o cadastro', { description: error instanceof Error ? error.message : undefined })
     }
   }
 
@@ -192,6 +204,19 @@ const Team: React.FC = () => {
         <div className="grid content-start gap-4">
           <Surface title="Empresa">
             <AutoField label="Nome da equipe" value={team.name} disabled={!manager} onSave={(v) => void saveName(v)} />
+          </Surface>
+
+          <Surface title="Cadastro da conta">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <AutoField label="Segmento" value={team.profile.segment} disabled={!manager} onSave={(v) => void saveProfile({ segment: v })} />
+              <AutoField label="Site" type="url" value={team.profile.website} disabled={!manager} onSave={(v) => void saveProfile({ website: v })} />
+              <AutoField label="Pessoa de contato" value={team.profile.contactName} disabled={!manager} onSave={(v) => void saveProfile({ contactName: v })} />
+              <AutoField label="E-mail do contato" type="email" value={team.profile.contactEmail} disabled={!manager} onSave={(v) => void saveProfile({ contactEmail: v })} />
+              <AutoField label="Telefone ou WhatsApp" type="tel" value={team.profile.contactPhone} disabled={!manager} onSave={(v) => void saveProfile({ contactPhone: v })} />
+            </div>
+            <div className="mt-3">
+              <AutoField label="Anotações" type="area" rows={3} value={team.profile.notes} disabled={!manager} onSave={(v) => void saveProfile({ notes: v })} />
+            </div>
           </Surface>
 
           <Surface title={people ? `Pessoas (${people.length})` : 'Pessoas'}>

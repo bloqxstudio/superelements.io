@@ -7,6 +7,7 @@ import type { SpaceNode, SpacePage } from '@/types/space'
 import { revokeApplicationPassword } from '@/features/wordpress/connect'
 import { removePerson } from './access'
 import { forgetBrowserProject } from './browserDb'
+import { useCrm } from '@/features/crm/crmStore'
 import { deleteProject, insertProject, listProjects, loadWordPressConnection, setProjectArchived, updateProject } from './storage'
 import type { Project, ProjectSummary } from './types'
 
@@ -15,6 +16,8 @@ export type ListStatus = 'loading' | 'ready' | 'error'
 interface ProjectState {
   /** Conta da lista carregada. */
   userId?: string
+  /** A conta aberta quando a lista foi lida; trocar de conta esvazia a lista. */
+  accountId?: string
   status: ListStatus
   projects: Project[]
   /** Lê a lista da conta; trocar de conta esvazia a lista antes. */
@@ -74,11 +77,13 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   projects: [],
 
   load: async (userId) => {
-    if (get().userId !== userId) set({ userId, projects: [], status: 'loading' })
+    const crm = useCrm.getState()
+    const account = crm.status === 'ready' && crm.team ? crm.team : undefined
+    if (get().userId !== userId || get().accountId !== account?.id) set({ userId, accountId: account?.id, projects: [], status: 'loading' })
     else if (get().status === 'error') set({ status: 'loading' })
     try {
-      const listed = await listProjects()
-      if (get().userId !== userId) return
+      const listed = await listProjects(account ? { id: account.id, isHome: account.isHome, memberOf: crm.teams.map((t) => t.id) } : undefined)
+      if (get().userId !== userId || get().accountId !== account?.id) return
       // O projeto que acabou de ser fechado pode ainda estar subindo: o card daqui é mais novo
       const local = new Map(get().projects.map((p) => [p.id, p]))
       const projects = listed.map((p) => {
@@ -94,9 +99,12 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
 
   create: async ({ name, context = '' }) => {
     const now = Date.now()
+    const crm = useCrm.getState()
     const project: Project = {
       id: crypto.randomUUID(),
       role: 'owner',
+      // O projeto novo nasce na conta aberta (a conta da casa guarda os sem conta, como os de antes)
+      teamId: crm.status === 'ready' && crm.team && !crm.team.isHome ? crm.team.id : undefined,
       name: name.trim() || 'Projeto sem nome',
       context,
       createdAt: now,

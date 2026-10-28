@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client'
 import { currentUserId } from '@/features/projects/storage'
+import { personalFolder } from '@/features/crm/accountScope'
 import type { CreativeSet, SetAsset, SetSummary } from './types'
 
 /**
@@ -15,7 +16,7 @@ const owners = new Map<string, string>()
 
 /** Pasta dos conjuntos: a do projeto (compartilhada com a equipe) ou a da conta. */
 const folderOf = async (projectId?: string) => {
-  if (!projectId) return `${await currentUserId()}/criativos`
+  if (!projectId) return `${personalFolder(await currentUserId())}/criativos`
   let owner = owners.get(projectId)
   if (!owner) {
     const { data, error } = await supabase.from('space_projects').select('owner_id').eq('id', projectId).maybeSingle()

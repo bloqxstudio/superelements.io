@@ -28,6 +28,7 @@ import CrmOpportunities from "@/pages/crm/Opportunities";
 import CrmClients from "@/pages/crm/Clients";
 import CrmClientDetail from "@/pages/crm/ClientDetail";
 import CrmTeam from "@/pages/crm/Team";
+import CrmAccounts from "@/pages/crm/Accounts";
 import CrmSocial from "@/pages/crm/Social";
 import CrmDiagnosis from "@/pages/crm/Diagnosis";
 import CrmInstagram from "@/pages/crm/Instagram";
@@ -127,6 +128,8 @@ function App() {
                 <Route path="crm/clientes" element={<CrmGate><CrmClients /></CrmGate>} />
                 <Route path="crm/clientes/:clientId" element={<CrmGate><CrmClientDetail /></CrmGate>} />
                 <Route path="crm/equipe" element={<CrmGate><CrmTeam /></CrmGate>} />
+                {/* As contas (empresas-cliente) e os módulos de cada uma; só o admin da plataforma */}
+                <Route path="contas" element={<CrmAccounts />} />
                 {/* Social selling: a fila do dia nas redes; quem segue e envia é a pessoa */}
                 <Route path="crm/social" element={<CrmGate><CrmSocial /></CrmGate>} />
                 <Route path="crm/diagnostico" element={<CrmGate><CrmDiagnosis /></CrmGate>} />

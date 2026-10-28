@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '@/integrations/supabase/client'
 import { listMyTeams } from './teams'
-import type { Pipeline, Team } from './types'
+import type { AccountProfile, Pipeline, Team } from './types'
 
 /**
  * A equipe aberta no CRM e o funil dela. Quem é de mais de uma equipe escolhe
@@ -52,6 +52,7 @@ interface CrmState {
   select: (teamId: string) => Promise<void>
   setPipeline: (pipeline: Pipeline) => void
   rename: (name: string) => void
+  setProfile: (profile: AccountProfile) => void
 }
 
 let loading: Promise<void> | null = null
@@ -95,6 +96,12 @@ export const useCrm = create<CrmState>((set, get) => ({
     set((s) => ({
       team: s.team ? { ...s.team, name } : s.team,
       teams: s.teams.map((t) => (t.id === s.team?.id ? { ...t, name } : t)),
+    })),
+
+  setProfile: (profile) =>
+    set((s) => ({
+      team: s.team ? { ...s.team, profile } : s.team,
+      teams: s.teams.map((t) => (t.id === s.team?.id ? { ...t, profile } : t)),
     })),
 }))
 

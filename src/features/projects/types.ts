@@ -29,6 +29,8 @@ export interface Project {
   id: string
   /** Sem papel, o projeto é de quem está na conta (os criados antes do compartilhamento). */
   role?: ProjectRole
+  /** A conta (empresa-cliente) do projeto; sem valor, ele é da conta da casa (Avence). */
+  teamId?: string
   name: string
   /** Briefing do cliente (negócio, público, tom, ofertas) para usar depois. */
   context: string

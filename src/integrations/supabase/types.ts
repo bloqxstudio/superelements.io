@@ -21,6 +21,15 @@ export type Database = {
           created_by: string | null
           created_at: string
           updated_at: string
+          segment: string
+          website: string
+          contact_name: string
+          contact_email: string
+          contact_phone: string
+          notes: string
+          status: string
+          modules: Json
+          is_home: boolean
         }
         Insert: {
           id?: string
@@ -28,6 +37,15 @@ export type Database = {
           created_by?: string | null
           created_at?: string
           updated_at?: string
+          segment?: string
+          website?: string
+          contact_name?: string
+          contact_email?: string
+          contact_phone?: string
+          notes?: string
+          status?: string
+          modules?: Json
+          is_home?: boolean
         }
         Update: {
           id?: string
@@ -35,6 +53,15 @@ export type Database = {
           created_by?: string | null
           created_at?: string
           updated_at?: string
+          segment?: string
+          website?: string
+          contact_name?: string
+          contact_email?: string
+          contact_phone?: string
+          notes?: string
+          status?: string
+          modules?: Json
+          is_home?: boolean
         }
         Relationships: []
       }
@@ -2608,6 +2635,7 @@ export type Database = {
           owner_id: string
           revision: number
           summary: Json
+          team_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2620,6 +2648,7 @@ export type Database = {
           owner_id?: string
           revision?: number
           summary?: Json
+          team_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2632,6 +2661,7 @@ export type Database = {
           owner_id?: string
           revision?: number
           summary?: Json
+          team_id?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -2929,6 +2959,22 @@ export type Database = {
     }
     Functions: {
       accept_crm_invite: { Args: { p_id: string }; Returns: string }
+      create_crm_account: {
+        Args: { p_name: string; p_segment?: string; p_website?: string; p_contact_name?: string; p_contact_email?: string; p_contact_phone?: string; p_modules?: Json }
+        Returns: string
+      }
+      crm_set_modules: { Args: { p_team: string; p_modules: Json }; Returns: Json }
+      crm_set_account_status: { Args: { p_team: string; p_status: string }; Returns: undefined }
+      crm_support_access: { Args: { p_team: string }; Returns: undefined }
+      crm_accounts_overview: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string; name: string; segment: string; website: string; contact_name: string; contact_email: string; contact_phone: string
+          notes: string; status: string; modules: Json; is_home: boolean; created_at: string; members: number; i_am_member: boolean
+        }[]
+      }
+      crm_module_on: { Args: { p_team: string; p_module: string }; Returns: boolean }
+      crm_is_platform_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
       create_crm_team: { Args: { p_name: string }; Returns: string }
       crm_team_people: {
         Args: { p_team: string }

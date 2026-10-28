@@ -85,11 +85,12 @@ async function removeFolder(folder: string) {
 
 // Lista de projetos
 
-const LIST_COLUMNS = 'id, owner_id, name, context, summary, created_at, updated_at, archived_at'
+const LIST_COLUMNS = 'id, owner_id, team_id, name, context, summary, created_at, updated_at, archived_at'
 
 interface ProjectRow {
   id: string
   owner_id: string
+  team_id: string | null
   name: string
   context: string
   summary: Json
@@ -98,12 +99,13 @@ interface ProjectRow {
   archived_at: string | null
 }
 
-const toProject = (row: ProjectRow, userId: string, memberOf?: Set<string>): Project => {
+const toProject = (row: ProjectRow, userId: string, memberOf?: Set<string>, teams?: Set<string>): Project => {
   owners.set(row.id, row.owner_id)
   return {
     id: row.id,
     // Nem dono nem convidado: a conta admin vendo o projeto de outra pessoa
-    role: row.owner_id === userId ? 'owner' : !memberOf || memberOf.has(row.id) ? 'editor' : 'admin',
+    role: row.owner_id === userId ? 'owner' : !memberOf || memberOf.has(row.id) || (row.team_id && teams?.has(row.team_id)) ? 'editor' : 'admin',
+    teamId: row.team_id ?? undefined,
     name: row.name,
     context: row.context,
     createdAt: Date.parse(row.created_at),
@@ -117,7 +119,7 @@ const toProject = (row: ProjectRow, userId: string, memberOf?: Set<string>): Pro
  * Os projetos da conta e os compartilhados com ela; para a conta admin, também
  * os das outras contas (papel 'admin'), que ficam na tela Admin.
  */
-export async function listProjects(): Promise<Project[]> {
+export async function listProjects(account?: { id: string; isHome: boolean; memberOf?: string[] }): Promise<Project[]> {
   const userId = await currentUserId()
   const [projects, memberships] = await Promise.all([
     supabase.from('space_projects').select(LIST_COLUMNS).order('updated_at', { ascending: false }),
@@ -126,7 +128,10 @@ export async function listProjects(): Promise<Project[]> {
   if (projects.error) throw projects.error
   // Sem a lista dos convites, todo projeto alheio conta como compartilhado (o que valia antes)
   const memberOf = memberships.error ? undefined : new Set(memberships.data.map((m) => m.project_id))
-  return projects.data.map((row) => toProject(row, userId, memberOf))
+  const teams = new Set(account?.memberOf ?? [])
+  // Com uma conta aberta, a lista é só dela: os projetos sem conta (os de antes) ficam na conta da casa
+  const rows = account ? projects.data.filter((row) => (row.team_id ? row.team_id === account.id : account.isHome)) : projects.data
+  return rows.map((row) => toProject(row, userId, memberOf, teams))
 }
 
 /** Dono de cada projeto, para a tela Admin. */
@@ -136,6 +141,7 @@ export async function insertProject(project: Project) {
   owners.set(project.id, await currentUserId())
   const { error } = await supabase.from('space_projects').insert({
     id: project.id,
+    team_id: project.teamId ?? null,
     name: project.name,
     context: project.context,
     summary: project.summary as unknown as Json,

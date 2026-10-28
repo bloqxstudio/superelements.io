@@ -229,11 +229,23 @@ const dbError = (error: { code?: string; message?: string }) =>
     ? new HttpError('As tabelas do Instagram ainda não existem: aplique a migração 20261024120000_crm_instagram.sql.', 503, 'no_tables')
     : new HttpError(error.message ?? 'Falha no banco.', 500, 'db')
 
+/** O módulo do Instagram precisa estar ligado na conta (a Avence liga e desliga em Contas). */
+async function requireModule(ctx: Ctx, teamId: string) {
+  const { data, error } = await ctx.user.rpc('crm_module_on', { p_team: teamId, p_module: 'instagram' })
+  // Sem a migração das contas a função não existe: nada é restrito
+  if (error) {
+    if (error.code === '42883' || error.code === 'PGRST202') return
+    throw dbError(error)
+  }
+  if (data === false) throw new HttpError('O módulo Instagram está desligado para esta conta.', 403, 'module_off')
+}
+
 async function requireRole(ctx: Ctx, teamId: unknown, manager: boolean) {
   if (typeof teamId !== 'string' || !/^[0-9a-f-]{36}$/.test(teamId)) throw new HttpError('Equipe inválida.')
   const { data, error } = await ctx.user.rpc(manager ? 'is_crm_manager' : 'is_crm_member', { p_team: teamId })
   if (error) throw dbError(error)
   if (!data) throw new HttpError(manager ? 'Só quem gerencia a equipe conecta ou desconecta o Instagram.' : 'Você não é desta equipe.', 403, 'forbidden')
+  await requireModule(ctx, teamId)
   return teamId
 }
 

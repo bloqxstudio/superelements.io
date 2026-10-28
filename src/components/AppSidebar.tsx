@@ -1,10 +1,12 @@
 import { useJobs } from '@/features/operations/jobs'
 import React, { useEffect } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { Bot, Building2, FolderKanban, Globe, Images, Instagram, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
+import { Bot, Building2, Building, FolderKanban, Globe, Images, Instagram, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { useAuth } from '@/contexts/AuthContext'
+import { AccountSwitcher } from '@/features/crm/AccountSwitcher'
 import { useCrm } from '@/features/crm/crmStore'
+import { moduleOn, type ModuleId } from '@/features/crm/modules'
 import { useMenuBadges, useMenuFeed } from '@/features/crm/menuBadges'
 import { plural } from '@/features/crm/ui'
 import { AGENT_COLOR } from '@/features/agents/agentStatus'
@@ -128,28 +130,14 @@ const SiteItem: React.FC = () => {
   )
 }
 
-const TeamSwitch: React.FC = () => {
-  const { teams, team, select } = useCrm()
-  if (!team) return null
-  if (teams.length < 2) return <p className="truncate px-2.5 text-xs text-gray-500">Equipe {team.name}</p>
-  return (
-    <label className="block px-2.5">
-      <span className="sr-only">Equipe aberta no CRM</span>
-      <select value={team.id} onChange={(e) => void select(e.target.value)} className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-700">
-        {teams.map((t) => (
-          <option key={t.id} value={t.id}>
-            Equipe {t.name}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
-}
-
 const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const { user, profile, signOut } = useAuth()
-  const { teams, status } = useCrm()
-  const crm = teams.length > 0 || profile?.role === 'admin'
+  const { teams, team } = useCrm()
+  const platformAdmin = profile?.role === 'admin'
+  const crm = teams.length > 0 || platformAdmin
+  // Módulos ligados na conta aberta (a Avence liga e desliga em Contas)
+  const on = (id: ModuleId) => moduleOn(team, id)
+  const producao = on('projetos') || on('agentes') || on('copy') || on('criativos') || on('skills')
 
   return (
     <>
@@ -164,32 +152,42 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         )}
       </div>
 
+      <div className="shrink-0 px-3 pt-3">
+        <AccountSwitcher />
+      </div>
+
       <nav aria-label="Navegação" className="flex-1 overflow-y-auto px-3 py-4">
-        <Section title="Produção">
-          <Item to="/" end icon={FolderKanban} label="Projetos" />
-          <AgentsItem />
-          <Item to="/copy" icon={PenLine} label="Copy" />
-          <Item to="/criativos" icon={Images} label="Criativos" />
-          <Item to="/skills" icon={Wand2} label="Skills" />
-        </Section>
+        {producao && (
+          <Section title="Produção">
+            {on('projetos') && <Item to="/" end icon={FolderKanban} label="Projetos" />}
+            {on('agentes') && <AgentsItem />}
+            {on('copy') && <Item to="/copy" icon={PenLine} label="Copy" />}
+            {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" />}
+            {on('skills') && <Item to="/skills" icon={Wand2} label="Skills" />}
+          </Section>
+        )}
         {crm && (
           <Section title="CRM">
-            <OportunidadesItem />
-            <WhatsAppItem />
-            <Item to="/crm/fluxos" icon={Workflow} label="Fluxos" />
-            <Item to="/crm/clientes" icon={Building2} label="Clientes" />
-            <Item to="/crm/social" icon={Send} label="Social" />
-            <InstagramItem />
-            <SiteItem />
-            <Item to="/prospeccao" icon={Radar} label="Prospecção" />
-            <Item to="/crm/diagnostico" icon={ScanSearch} label="Diagnóstico" />
+            {on('crm') && <OportunidadesItem />}
+            {on('whatsapp') && <WhatsAppItem />}
+            {on('whatsapp') && <Item to="/crm/fluxos" icon={Workflow} label="Fluxos" />}
+            {on('crm') && <Item to="/crm/clientes" icon={Building2} label="Clientes" />}
+            {on('crm') && <Item to="/crm/social" icon={Send} label="Social" />}
+            {on('instagram') && <InstagramItem />}
+            {on('site') && <SiteItem />}
+            {on('crm') && <Item to="/prospeccao" icon={Radar} label="Prospecção" />}
+            {on('crm') && <Item to="/crm/diagnostico" icon={ScanSearch} label="Diagnóstico" />}
             <Item to="/crm/equipe" icon={Users} label="Equipe" />
+          </Section>
+        )}
+        {platformAdmin && (
+          <Section title="Plataforma">
+            <Item to="/contas" icon={Building} label="Contas e módulos" />
           </Section>
         )}
       </nav>
 
       <div className="shrink-0 space-y-2 border-t border-gray-100 px-3 py-3">
-        {status === 'ready' && <TeamSwitch />}
         {user && (
           <div className="flex items-center gap-2 px-1">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white" aria-hidden>

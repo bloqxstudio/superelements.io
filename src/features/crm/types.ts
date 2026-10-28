@@ -24,6 +24,36 @@ export interface Team {
   id: string
   name: string
   role: TeamRole
+  /** Ativa ou pausada pela Avence (uma conta pausada fica sem módulos, só a Equipe segue). */
+  status: 'ativa' | 'pausada'
+  /** `{ instagram: false }` desliga; o que não está na lista fica ligado. */
+  modules: Record<string, boolean>
+  /** A conta da própria Avence: dos projetos antigos e de quem ainda não tem conta. */
+  isHome: boolean
+  profile: AccountProfile
+}
+
+/** Cadastro básico de uma conta (empresa-cliente). */
+export interface AccountProfile {
+  segment: string
+  website: string
+  contactName: string
+  contactEmail: string
+  contactPhone: string
+  notes: string
+}
+
+/** Uma conta no painel "Contas" da plataforma. */
+export interface AccountOverview extends AccountProfile {
+  id: string
+  name: string
+  status: 'ativa' | 'pausada'
+  modules: Record<string, boolean>
+  isHome: boolean
+  createdAt: number
+  members: number
+  /** Quem olha já está dentro da conta (sem isso, "Entrar" dá acesso de suporte). */
+  iAmMember: boolean
 }
 
 export interface TeamPerson {

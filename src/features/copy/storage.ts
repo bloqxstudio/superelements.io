@@ -1,4 +1,5 @@
 import { currentUserId } from '@/features/projects/storage'
+import { personalFolder } from '@/features/crm/accountScope'
 import { supabase } from '@/integrations/supabase/client'
 import { wordsOf, type CopyDoc, type CopySummary } from './types'
 
@@ -35,7 +36,7 @@ async function writeJson(path: string, value: unknown) {
 const owners = new Map<string, string>()
 
 const folderOf = async (projectId?: string) => {
-  if (!projectId) return `${await currentUserId()}/copy`
+  if (!projectId) return `${personalFolder(await currentUserId())}/copy`
   let owner = owners.get(projectId)
   if (!owner) {
     const { data, error } = await supabase.from('space_projects').select('owner_id').eq('id', projectId).maybeSingle()
