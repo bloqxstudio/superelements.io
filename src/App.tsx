@@ -32,6 +32,7 @@ import CrmAccounts from "@/pages/crm/Accounts";
 import CrmSocial from "@/pages/crm/Social";
 import CrmDiagnosis from "@/pages/crm/Diagnosis";
 import CrmInstagram from "@/pages/crm/Instagram";
+import CrmAnuncios from "@/pages/crm/Anuncios";
 import CrmSite from "@/pages/crm/Site";
 import CrmWhatsApp from "@/pages/crm/WhatsApp";
 import CrmFlows from "@/pages/crm/Flows";
@@ -135,6 +136,7 @@ function App() {
                 <Route path="crm/diagnostico" element={<CrmGate><CrmDiagnosis /></CrmGate>} />
                 {/* O Instagram da equipe pela API oficial da Meta: números, posts, publicar e comentários */}
                 <Route path="crm/instagram" element={<CrmGate><CrmInstagram /></CrmGate>} />
+                <Route path="crm/anuncios" element={<CrmGate><CrmAnuncios /></CrmGate>} />
                 {/* As visitas do site da equipe, contadas pelo script visitas.js colado no WordPress */}
                 <Route path="crm/site" element={<CrmGate><CrmSite /></CrmGate>} />
                 {/* O número de WhatsApp da equipe conectado pelo QR code (serviço services/whatsapp) */}

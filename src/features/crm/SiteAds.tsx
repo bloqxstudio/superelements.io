@@ -265,7 +265,7 @@ export const MetaCross: React.FC<{
           <RefreshCw className={cn('h-3.5 w-3.5', state.refreshing && 'animate-spin')} />
         </button>
       )}
-      <Link to="/crm/instagram?aba=anuncios" className="inline-flex items-center gap-1 font-medium text-gray-600 hover:text-gray-900">
+      <Link to="/crm/anuncios" className="inline-flex items-center gap-1 font-medium text-gray-600 hover:text-gray-900">
         Anúncios <ExternalLink className="h-3 w-3" />
       </Link>
     </span>

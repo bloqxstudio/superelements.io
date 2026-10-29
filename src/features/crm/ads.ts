@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { publicAppUrl } from '@/features/approval/shares'
 
 /**
- * Os anúncios da equipe (aba Anúncios de `/crm/instagram`): as contas de
+ * Os anúncios da equipe (tela `/crm/anuncios`): as contas de
  * anúncios da Meta ligadas à equipe e o relatório de cada período
  * (investimento, contatos, campanhas, plataformas, público, anúncios). Quem
  * fala com a Meta é a função `meta-ads` do Supabase (o token fica só lá);

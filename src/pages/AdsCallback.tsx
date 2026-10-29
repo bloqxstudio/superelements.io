@@ -28,7 +28,7 @@ function handleReturn(): Promise<Outcome> {
   )
 }
 
-const BACK = '/crm/instagram?aba=anuncios'
+const BACK = '/crm/anuncios'
 
 const AdsCallback: React.FC = () => {
   const navigate = useNavigate()

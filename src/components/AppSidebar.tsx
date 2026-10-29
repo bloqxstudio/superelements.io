@@ -1,7 +1,7 @@
 import { useJobs } from '@/features/operations/jobs'
 import React, { useEffect } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { Bot, Building2, Building, FolderKanban, Globe, Images, Instagram, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
+import { Bot, Building2, Building, FolderKanban, Globe, Images, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { useAuth } from '@/contexts/AuthContext'
 import { AccountSwitcher } from '@/features/crm/AccountSwitcher'
@@ -174,6 +174,7 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
             {on('crm') && <Item to="/crm/clientes" icon={Building2} label="Clientes" />}
             {on('crm') && <Item to="/crm/social" icon={Send} label="Social" />}
             {on('instagram') && <InstagramItem />}
+            {on('instagram') && <Item to="/crm/anuncios" icon={Megaphone} label="Anúncios" />}
             {on('site') && <SiteItem />}
             {on('crm') && <Item to="/prospeccao" icon={Radar} label="Prospecção" />}
             {on('crm') && <Item to="/crm/diagnostico" icon={ScanSearch} label="Diagnóstico" />}
