@@ -921,8 +921,9 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
       </div>
       <CleanupDialog open={cleaning} onClose={() => setCleaning(false)} items={items} onRemoved={(ids) => { onChange((prev) => prev.filter((o) => !ids.includes(o.id))); if (openId && ids.includes(openId)) setOpenId(null) }} />
 
-      <div className="-mx-4 mt-4 overflow-x-auto px-4 pb-4 md:-mx-6 md:px-6">
-        <div className="flex gap-3">
+      {/* O quadro tem a altura da tela: a barra horizontal fica à vista e cada coluna rola por dentro */}
+      <div className="-mx-4 mt-4 h-[calc(100dvh-17.5rem)] min-h-[26rem] overflow-x-auto overscroll-x-contain px-4 pb-2 md:-mx-6 md:px-6">
+        <div className="flex h-full gap-3">
           {STAGES.map((stage) => {
             const cards = visible.filter((o) => o.stage === stage.id)
             const columnValue = total(cards)
@@ -949,9 +950,9 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
                     void move(id, stage.id)
                   }
                 }}
-                className={cn(SURFACE, 'flex w-72 shrink-0 flex-col p-2.5 transition-colors', target ? 'bg-violet-50 ring-2 ring-violet-400' : 'bg-gray-50/80')}
+                className={cn(SURFACE, 'flex h-full w-64 shrink-0 flex-col p-2.5 transition-colors', target ? 'bg-violet-50 ring-2 ring-violet-400' : 'bg-gray-50/80')}
               >
-                <header className="px-1 pb-2" title={stage.hint}>
+                <header className="shrink-0 px-1 pb-2" title={stage.hint}>
                   <div className="flex items-baseline justify-between gap-2">
                     <h2 className="text-sm font-semibold text-gray-900">{stage.label}</h2>
                     <span className="text-xs tabular-nums text-gray-500">
@@ -959,10 +960,10 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
                       {columnValue > 0 && ` · ${money(columnValue)}`}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-[11px] leading-snug text-gray-500">{stage.hint}</p>
+                  <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-gray-500">{stage.hint}</p>
                   {stage.id === 'selecionado' && <AgentStrip />}
                 </header>
-                <div className="min-h-16 flex-1 space-y-2">
+                <div className="min-h-16 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-0.5">
                   {cards.map((item) => (
                     <Card
                       key={item.id}
