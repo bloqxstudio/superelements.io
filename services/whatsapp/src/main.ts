@@ -148,14 +148,22 @@ async function command(teamId: string, m: StoredMessage) {
   batch.messages.push(m)
   clearTimeout(batch.timer)
   pending.set(key, batch)
-  const wait = Math.max(0, Math.min(BATCH_QUIET, batch.first + BATCH_MAX - Date.now()))
-  batch.timer = setTimeout(() => {
+  void sessions.get(teamId)?.watch(m.jid)
+  typingNow.delete(m.jid)
+  const fire = () => {
+    // Quem ainda está digitando espera: responder no meio do texto atrapalha (no máximo 60 s)
+    const typing = Date.now() - (typingNow.get(m.jid) ?? 0) < TYPING_STALE
+    if (typing && Date.now() - batch.first < TYPING_MAX) {
+      batch.timer = setTimeout(fire, 1500)
+      return
+    }
     pending.delete(key)
     // Uma resposta por vez por pessoa: se a anterior ainda está sendo feita, esta espera e já a enxerga no histórico
     const turn = (turns.get(key) ?? Promise.resolve()).then(() => respond(teamId, who, batch.messages)).catch((e) => console.error(`[${teamId.slice(0, 8)}] resposta: ${e instanceof Error ? e.message : e}`))
     turns.set(key, turn)
     void turn.finally(() => turns.get(key) === turn && turns.delete(key))
-  }, wait)
+  }
+  batch.timer = setTimeout(fire, Math.max(0, Math.min(BATCH_QUIET, batch.first + BATCH_MAX - Date.now())))
 }
 
 interface Who {
@@ -170,6 +178,10 @@ interface Batch {
 /** Espera 3 s de silêncio (no máximo 15 s desde a primeira) antes de responder */
 const BATCH_QUIET = 3000
 const BATCH_MAX = 15_000
+/** "Digitando…" que o WhatsApp avisou (jid → quando); vale por 10 s sem novo aviso */
+const typingNow = new Map<string, number>()
+const TYPING_STALE = 10_000
+const TYPING_MAX = 60_000
 const pending = new Map<string, Batch>()
 const turns = new Map<string, Promise<unknown>>()
 
@@ -356,6 +368,7 @@ async function start(teamId: string, logoutOnly: boolean) {
         // Um comando com defeito não pode derrubar a guarda das mensagens
         await command(teamId, message).catch((commandError) => console.error(`[${teamId.slice(0, 8)}] comando: ${commandError instanceof Error ? commandError.message : commandError}`))
       },
+      onTyping: (jid, typing) => (typing ? typingNow.set(jid, Date.now()) : typingNow.delete(jid)),
       onEnd: () => {
         if (sessions.get(teamId) === session) sessions.delete(teamId)
       },

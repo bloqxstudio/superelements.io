@@ -68,6 +68,8 @@ export interface Session {
   resolve: (jid: string) => Promise<string | undefined>
   /** Envia texto (ou o arquivo, com o texto de legenda) e devolve o id da mensagem no WhatsApp */
   send: (jid: string, text: string, file?: OutFile) => Promise<string>
+  /** Passa a receber "digitando…" desta pessoa (vai para `onTyping`) */
+  watch: (jid: string) => Promise<void>
   /** Saindo: tirando o aparelho do celular */
   readonly leaving: boolean
   /** Tira o aparelho do celular e apaga a sessão */
@@ -86,6 +88,8 @@ interface Options {
   logoutOnly?: boolean
   /** Chegou (ou o celular enviou) uma mensagem */
   onMessage: (message: StoredMessage) => Promise<void>
+  /** A pessoa começou ou parou de digitar */
+  onTyping?: (jid: string, typing: boolean) => void
   onEnd: () => void
 }
 
@@ -216,6 +220,11 @@ export function openSession(o: Options): Session {
           .catch((error) => say(`não guardou a mensagem: ${error.message ?? error}`))
       }
     })
+    socket.ev.on('presence.update', ({ id, presences }) => {
+      if (leaving || ended) return
+      const states = Object.values(presences ?? {}).map((p) => p.lastKnownPresence)
+      if (states.length) o.onTyping?.(id, states.includes('composing') || states.includes('recording'))
+    })
     socket.ev.on('connection.update', (update) => void onUpdate(socket, update).catch((error) => say(`erro na conexão: ${error.message ?? error}`)))
   }
 
@@ -311,6 +320,10 @@ export function openSession(o: Options): Session {
       if (!sock || !isOpen || ended) throw new Error('O WhatsApp não está conectado agora.')
       // Sem foto (ou escondida): o WhatsApp responde com erro, e isso não é falha nossa
       return sock.profilePictureUrl(jid, 'image', 10_000).catch(() => undefined)
+    },
+    watch: async (jid) => {
+      if (!sock || !isOpen || ended) return
+      await sock.presenceSubscribe(jid).catch(() => undefined)
     },
     resolve: async (jid) => {
       if (!sock || !isOpen || ended) throw new Error('O WhatsApp não está conectado agora.')
