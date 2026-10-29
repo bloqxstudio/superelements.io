@@ -48,7 +48,10 @@ export interface LeadOrigin {
 export const PRESET_LABEL: Record<string, string> = { last_7d: 'últimos 7 dias', last_30d: 'últimos 30 dias', last_90d: 'últimos 90 dias', this_month: 'este mês' }
 export const CAMPAIGN_STATUS: Record<string, string> = { ACTIVE: 'Ativa', PAUSED: 'Pausada', ARCHIVED: 'Arquivada', DELETED: 'Apagada' }
 
-export const hookUrl = (token: string) => `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lead-webhook?key=${token}`
+// O build publicado pode não ter VITE_SUPABASE_URL (o cliente do Supabase tem o endereço fixo): o projeto é este
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, '') || 'https://nfmfcpcwyavutntnrxqq.supabase.co'
+
+export const hookUrl = (token: string) => `${SUPABASE_URL}/functions/v1/lead-webhook?key=${token}`
 
 export async function loadHook(teamId: string, rotate = false): Promise<{ token: string; enabled: boolean }> {
   const { data, error } = await db.rpc('crm_lead_hook', { p_team: teamId, p_rotate: rotate })
