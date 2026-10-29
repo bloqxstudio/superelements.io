@@ -9,8 +9,8 @@ import type { Period } from './comandos.ts'
 
 type Db = SupabaseClient
 
-export type ChartKind = 'site_dia' | 'site_hora' | 'origens' | 'anuncios_dia'
-export const CHART_KINDS: ChartKind[] = ['site_dia', 'site_hora', 'origens', 'anuncios_dia']
+export type ChartKind = 'site_dia' | 'site_hora' | 'origens' | 'anuncios_dia' | 'estados'
+export const CHART_KINDS: ChartKind[] = ['site_dia', 'site_hora', 'origens', 'anuncios_dia', 'estados']
 
 const PAPER = '#F3F1EC'
 const INK = '#111111'
@@ -107,6 +107,7 @@ interface SiteReport {
   days?: { day: string; sessions: number; converted: number }[]
   hours?: { dow: number; hour: number; sessions: number }[]
   channels?: { channel: string; sessions: number; converted: number }[]
+  regions?: { name: string; region: string; sessions: number; converted: number }[]
 }
 
 async function siteReport(db: Db, teamId: string, period: Period): Promise<SiteReport | undefined> {
@@ -145,6 +146,11 @@ export async function makeChart(db: Db, teamId: string, kind: ChartKind, period:
     for (const h of report.hours ?? []) byHour[h.hour] += h.sessions
     if (!byHour.some(Boolean)) return undefined
     return png({ title: 'Visitas por hora', subtitle: when(period), bars: byHour.map((v, i) => ({ label: `${i}h`, value: v })), total: `${int(visits)} visitas` })
+  }
+  if (kind === 'estados') {
+    const regions = (report.regions ?? []).filter((r) => r.name || r.region).slice(0, 8)
+    if (!regions.length) return undefined
+    return png({ title: 'Visitas por estado', subtitle: `${when(period)} · em azul, quem chamou`, bars: regions.map((r) => ({ label: r.name || r.region, value: r.sessions, accent: r.converted })), total: `${int(visits)} visitas`, horizontal: true })
   }
   const channels = (report.channels ?? []).slice(0, 6)
   if (!channels.length) return undefined

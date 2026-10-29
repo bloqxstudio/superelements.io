@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { anuncios, funil, norm, periodOf, readOnly, site, type Period } from './comandos.ts'
+import { anunciosDetalhe, instagramDetalhe, siteDetalhe } from './detalhes.ts'
 import { CHART_KINDS, makeChart, type ChartKind } from './graficos.ts'
 import { aiEnabled, answerAi, findClaude, planAi, type AiContext, type Turn } from './ia.ts'
 
@@ -138,6 +139,13 @@ const read = (db: Db, topic: Topic, accountId: string, period: Period, isHome = 
   : topic === 'caixa' ? caixa(db, accountId)
   : projetos(db, accountId, isHome, text)
 
+/** O resumo e, na conversa, também tudo o que as telas do produto mostram desse assunto (estados, campanhas, páginas…) */
+async function readDetail(db: Db, topic: Topic, accountId: string, period: Period, isHome: boolean, text: string): Promise<string> {
+  const base = await read(db, topic, accountId, period, isHome, text)
+  const extra = topic === 'site' ? await siteDetalhe(db, accountId, period) : topic === 'anuncios' ? await anunciosDetalhe(db, accountId, period) : topic === 'instagram' ? await instagramDetalhe(db, accountId) : ''
+  return extra ? `${base}\n\n${extra}` : base
+}
+
 const SP_OFFSET = '-03:00'
 const spDate = (text: string, fallback: Date) => {
   const d = new Date(`${text.slice(0, 16)}:00${SP_OFFSET}`)
@@ -188,18 +196,18 @@ export async function answerClient(rawDb: Db, contact: ClientContact, rawText: s
       try {
         const period = periodBetween(from, to > from ? to : now)
         if (q.topic === (plan.chart === 'anuncios_dia' ? 'anuncios' : 'site')) chartPeriod ??= period
-        parts.push(clean(await read(db, q.topic as Topic, contact.accountId, period, account.is_home === true, q.search ?? '')))
+        parts.push(clean(await readDetail(db, q.topic as Topic, contact.accountId, period, account.is_home === true, q.search ?? '')))
       } catch (error) {
         console.error(`consulta ${q.topic}: ${error instanceof Error ? error.message : error}`)
       }
     }
-    const reply = await answerAi(ctx, parts.join('\n\n'))
     // Gráfico em imagem, quando a conversa pediu e o assunto está liberado; sem dados, só o texto
     let image: Buffer | undefined
     const kind = plan.chart as ChartKind
     if (CHART_KINDS.includes(kind) && chartPeriod && allowed.includes(kind === 'anuncios_dia' ? 'anuncios' : 'site')) {
       image = await makeChart(db, contact.accountId, kind, chartPeriod).catch((e) => (console.error(`gráfico ${kind}: ${e instanceof Error ? e.message : e}`), undefined))
     }
+    const reply = await answerAi(ctx, parts.join('\n\n'), !!image)
     return { reply, topic: queries[0].topic as Topic, ai: true, image }
   } catch (error) {
     console.error(`ia ${contact.phone.slice(-4)}: ${error instanceof Error ? error.message : error}`)

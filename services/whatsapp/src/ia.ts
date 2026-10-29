@@ -92,12 +92,12 @@ const PLAN_SCHEMA = {
       },
     },
     reply: { type: 'string' },
-    chart: { type: 'string', enum: ['none', 'site_dia', 'site_hora', 'origens', 'anuncios_dia'] },
+    chart: { type: 'string', enum: ['none', 'site_dia', 'site_hora', 'origens', 'anuncios_dia', 'estados'] },
   },
 }
 
 /** Os assuntos que existem: `topic` de cada consulta é um destes */
-export const PLAN_TOPICS = 'site (visitas, contatos, origens, quem está online), anuncios (gasto, resultados, custo), funil (cards de venda por etapa), instagram (seguidores, alcance), posts (melhores posts de 30 dias), caixa (comentários e mensagens em aberto), projetos (andamento dos projetos)'
+export const PLAN_TOPICS = 'site (visitas, contatos, origens, estados e cidades, campanhas e anúncios que trouxeram visitas, páginas mais vistas, cliques, aparelhos, horários, quem está online), anuncios (gasto, resultados, custo, campanhas, anúncios, estados e público), funil (cards de venda por etapa), instagram (seguidores, alcance, curtidas, salvamentos, interações), posts (melhores posts de 30 dias), caixa (comentários e mensagens em aberto), projetos (andamento dos projetos)'
 
 /**
  * Etapa 1: que dados a conversa pede. `from`/`to` são o período exato (ex.: "hoje pela manhã" =
@@ -105,7 +105,7 @@ export const PLAN_TOPICS = 'site (visitas, contatos, origens, quem está online)
  */
 export const planAi = (c: AiContext): Promise<{ queries: DataQuery[]; reply: string; chart: string }> =>
   run(
-    `${BASE} Nesta etapa você decide o que consultar. Se a mensagem (no contexto da conversa) pede números ou fatos da conta, liste em "queries" cada consulta: topic (um de: ${PLAN_TOPICS}), from e to (horário de São Paulo, AAAA-MM-DDTHH:mm, o período EXATO que a pessoa quer: "hoje de manhã" = hoje 00:00 até 12:00, "ontem" = ontem 00:00 até hoje 00:00, sem período dito = últimos 7 dias; para "agora" ou "online" use os últimos 10 minutos) e, só para projetos, search com o nome. Só use assuntos da lista "Você pode falar sobre". Deixe "reply" vazio. Em "chart" escolha um gráfico só quando uma imagem ajuda mais que o número (a pessoa pede gráfico/imagem/visualização, ou compara dias, horas ou origens): site_dia (visitas por dia), site_hora (visitas por hora), origens (de onde vieram as visitas), anuncios_dia (gasto por dia); senão "none". O gráfico usa o período da consulta de site ou anúncios correspondente, então inclua essa consulta. Se não precisa de dado (cumprimento, dúvida do que você faz, agradecimento, pedido que só a equipe resolve), deixe "queries" vazio e escreva em "reply" a resposta final da conversa (chart "none").`,
+    `${BASE} Nesta etapa você decide o que consultar. Se a mensagem (no contexto da conversa) pede números ou fatos da conta, liste em "queries" cada consulta: topic (um de: ${PLAN_TOPICS}), from e to (horário de São Paulo, AAAA-MM-DDTHH:mm, o período EXATO que a pessoa quer: "hoje de manhã" = hoje 00:00 até 12:00, "ontem" = ontem 00:00 até hoje 00:00, sem período dito = últimos 7 dias; para "agora" ou "online" use os últimos 10 minutos) e, só para projetos, search com o nome. Só use assuntos da lista "Você pode falar sobre". Deixe "reply" vazio. Em "chart" escolha um gráfico só quando uma imagem ajuda mais que o número (a pessoa pede gráfico/imagem/visualização, ou compara dias, horas ou origens): site_dia (visitas por dia), site_hora (visitas por hora), origens (de onde vieram as visitas), estados (visitas por estado), anuncios_dia (gasto por dia); senão "none". O gráfico usa o período da consulta de site ou anúncios correspondente, então inclua essa consulta. Se não precisa de dado (cumprimento, dúvida do que você faz, agradecimento, pedido que só a equipe resolve), deixe "queries" vazio e escreva em "reply" a resposta final da conversa (chart "none").`,
     talk(c),
     PLAN_SCHEMA
   ).then((r) => {
@@ -114,8 +114,8 @@ export const planAi = (c: AiContext): Promise<{ queries: DataQuery[]; reply: str
   })
 
 /** Etapa 2: a resposta final, com os dados lidos */
-export const answerAi = (c: AiContext, data: string): Promise<string> =>
-  run(`${BASE} Responda usando SOMENTE os dados abaixo, pegando só o que a pessoa perguntou (curto!); se algo que a pessoa quer não está neles, diga isso com naturalidade. Diga o período a que os números se referem quando for importante.`, `${talk(c)}\n\n## Dados lidos agora\n${data.slice(0, 8000) || '(nenhum)'}`).then((r) => String(r).trim())
+export const answerAi = (c: AiContext, data: string, withChart = false): Promise<string> =>
+  run(`${BASE}${withChart ? ' Um gráfico em imagem vai junto com a sua mensagem: não diga que não consegue mandar imagem; apenas escreva a legenda curta dele.' : ''} Responda usando SOMENTE os dados abaixo, pegando só o que a pessoa perguntou (curto!); se algo que a pessoa quer não está neles, diga isso com naturalidade. Diga o período a que os números se referem quando for importante.`, `${talk(c)}\n\n## Dados lidos agora\n${data.slice(0, 14000) || '(nenhum)'}${withChart ? '\n\n## Anexo\nA imagem do gráfico JÁ está anexada a esta resposta e vai junto. Sua mensagem é a legenda dela: diga o destaque em uma frase e NÃO diga que não consegue mandar imagem.' : ''}`).then((r) => String(r).trim())
 
 // Um pedido por vez: cada um abre um processo do Claude Code
 let chain: Promise<unknown> = Promise.resolve()
