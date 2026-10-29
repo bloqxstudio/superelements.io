@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { anuncios, funil, norm, periodOf, readOnly, site, type Period } from './comandos.ts'
+import { aiEnabled, askAi, findClaude } from './ia.ts'
 
 /**
  * Central de relacionamento: quem está em `crm_whatsapp_client_contacts` escreve para o
@@ -137,7 +138,7 @@ const read = (db: Db, topic: Topic, accountId: string, period: Period, isHome = 
   : projetos(db, accountId, isHome, text)
 
 /** A resposta ao que o cliente escreveu e o assunto atendido (para o registro) */
-export async function answerClient(rawDb: Db, contact: ClientContact, rawText: string): Promise<{ reply: string; topic?: Topic }> {
+export async function answerClient(rawDb: Db, contact: ClientContact, rawText: string, history: { fromMe: boolean; text: string }[] = []): Promise<{ reply: string; topic?: Topic; ai?: boolean }> {
   const db = readOnly(rawDb)
   const { data: account } = await rawDb.from('crm_teams').select('name, status, modules, is_home').eq('id', contact.accountId).maybeSingle()
   if (!account) return { reply: 'Não achei a sua conta. Fale com a Avence.' }
@@ -162,7 +163,28 @@ export async function answerClient(rawDb: Db, contact: ClientContact, rawText: s
     topic = WORDS.find(([, re]) => re.test(text))?.[0]
     if (topic && !allowed.includes(topic)) return { reply: `Esse assunto não está liberado para o seu número.\n\n${menu}` }
   }
-  if (!topic) return { reply: menu }
+  if (!topic) {
+    // Sem número nem palavra de assunto: a IA do computador responde com os dados liberados para a pessoa.
+    // Número solto ("9") e falha da IA caem no menu.
+    if (!byNumber && aiEnabled() && findClaude()) {
+      try {
+        const period = periodOf(text)
+        const parts: string[] = []
+        for (const t of allowed) {
+          try {
+            parts.push(clean(await read(db, t, contact.accountId, period, account.is_home === true, text)))
+          } catch {
+            // Um assunto que falha não derruba a resposta
+          }
+        }
+        const reply = await askAi({ accountName: account.name as string, firstName: first, question: rawText, data: parts.join('\n\n'), history })
+        return { reply, ai: true }
+      } catch (error) {
+        console.error(`ia ${contact.phone.slice(-4)}: ${error instanceof Error ? error.message : error}`)
+      }
+    }
+    return { reply: menu }
+  }
 
   const period = periodOf(text)
   try {

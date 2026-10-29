@@ -148,18 +148,21 @@ async function command(teamId: string, m: StoredMessage) {
   asked.set(key, [...recent, Date.now()])
   // Passou do limite: um aviso uma vez e silêncio até a hora virar
   if (recent.length > limit) return
+  // Últimas mensagens da conversa (antes desta), para a IA entender o contexto
+  const { data: past } = await db.from('crm_whatsapp_messages').select('from_me, body, kind').eq('team_id', teamId).eq('chat_jid', m.jid).order('ts', { ascending: false }).limit(7)
+  const history = (past ?? []).slice(1).reverse().filter((p) => p.kind === 'text' && p.body).map((p) => ({ fromMe: p.from_me as boolean, text: p.body as string }))
   let reply: string
   if (recent.length === limit) {
     reply = `Limite de ${limit} perguntas por hora atingido. Volto a responder daqui a pouco.`
   } else if (isCommander) {
     // O comandante vê todos os assuntos da conta da casa, sem depender das marcações do cadastro
     const self: ClientContact = { phone, accountId: teamId, name: (commander?.name as string) ?? '', topics: ALL_TOPICS }
-    reply = (await answerClient(db, self, m.body)).reply.slice(0, MAX_REPLY)
+    reply = (await answerClient(db, self, m.body, history)).reply.slice(0, MAX_REPLY)
   } else {
     const contact: ClientContact = { phone: client!.phone as string, accountId: client!.account_id as string, name: (client!.name as string) ?? '', topics: (client!.topics as Topic[]) ?? [] }
-    const result = await answerClient(db, contact, m.body)
+    const result = await answerClient(db, contact, m.body, history)
     reply = result.reply.slice(0, MAX_REPLY)
-    const { error: logError } = await db.from('crm_whatsapp_client_log').insert({ team_id: teamId, account_id: contact.accountId, phone: contact.phone, question: m.body.slice(0, 300), topic: result.topic ?? null, answered: !!result.topic })
+    const { error: logError } = await db.from('crm_whatsapp_client_log').insert({ team_id: teamId, account_id: contact.accountId, phone: contact.phone, question: m.body.slice(0, 300), topic: result.topic ?? (result.ai ? 'ia' : null), answered: !!result.topic || !!result.ai })
     if (logError && !isMissingTable(logError)) console.error(`[${teamId.slice(0, 8)}] não registrou a pergunta: ${logError.message}`)
   }
   const { error: sendError } = await db.rpc('crm_whatsapp_enqueue_reply', { p_team: teamId, p_jid: m.jid, p_text: reply })
