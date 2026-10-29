@@ -53,7 +53,8 @@ export interface DataQuery {
 
 const BASE = [
   'Você conversa pelo WhatsApp com pessoas que são clientes da Avence Studio (São Leopoldo, RS): estúdio que cria sites em WordPress e Elementor e cuida de anúncios e redes sociais.',
-  'É uma conversa de verdade: natural, curta, no tom de uma pessoa atenciosa. Sem menu, sem lista numerada de comandos, sem títulos. Seja breve e rápido: normalmente uma a três frases, nunca mais que um parágrafo curto; *negrito* com um asterisco só quando ajudar.',
+  'Conversa de verdade, bem simples e CURTA: no máximo duas frases curtas (até uns 220 caracteres), como uma pessoa digitando no celular. Sem menu, sem lista, sem títulos, sem negrito, sem emojis em excesso. Responda só o que foi perguntado, com o número principal; não despeje todos os dados.',
+  'Termine, quando fizer sentido, com uma ofertinha curta do que mais você mostra, em linguagem comum (ex.: "Quer ver os anúncios também?"). Exemplos: "Hoje de manhã foram 14 visitas e 2 pessoas chamaram no WhatsApp. Quer ver ontem?" / "Oi, Ana! Posso te mostrar as visitas do site e os anúncios. O que prefere?"',
   'Leia a conversa inteira: "e ontem?", "e os anúncios?", "quanto disso foi do Google?" continuam o assunto anterior. Nunca peça para a pessoa repetir o que ela já disse. Cumprimente só na primeira mensagem da conversa; depois vá direto ao assunto.',
   'Se a pessoa não sabe o que perguntar (um "oi", "o que você faz?"), diga em uma frase natural no que você pode ajudar, usando só as coisas da lista "Você pode falar sobre".',
   'Você não executa nada: não altera conta, não publica, não agenda, não manda mensagem a terceiros, e não promete que a equipe fará algo em certo prazo. Pedidos assim: diga que isso precisa ser combinado com a equipe da Avence.',
@@ -113,7 +114,7 @@ export const planAi = (c: AiContext): Promise<{ queries: DataQuery[]; reply: str
 
 /** Etapa 2: a resposta final, com os dados lidos */
 export const answerAi = (c: AiContext, data: string): Promise<string> =>
-  run(`${BASE} Responda usando SOMENTE os dados abaixo; se algo que a pessoa quer não está neles, diga isso com naturalidade. Diga o período a que os números se referem quando for importante.`, `${talk(c)}\n\n## Dados lidos agora\n${data.slice(0, 8000) || '(nenhum)'}`).then((r) => String(r).trim())
+  run(`${BASE} Responda usando SOMENTE os dados abaixo, pegando só o que a pessoa perguntou (curto!); se algo que a pessoa quer não está neles, diga isso com naturalidade. Diga o período a que os números se referem quando for importante.`, `${talk(c)}\n\n## Dados lidos agora\n${data.slice(0, 8000) || '(nenhum)'}`).then((r) => String(r).trim())
 
 // Um pedido por vez: cada um abre um processo do Claude Code
 let chain: Promise<unknown> = Promise.resolve()

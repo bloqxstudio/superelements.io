@@ -101,8 +101,8 @@ const handled = new Set<string>()
 let warnedCommanders = false
 let warnedLid = false
 
-/** Guard-rail: no máximo 3.500 caracteres por resposta (sem limite de respostas por hora, a pedido do usuário) */
-const MAX_REPLY = 3500
+/** Guard-rail: no máximo 600 caracteres por resposta (sem limite de respostas por hora, a pedido do usuário) */
+const MAX_REPLY = 600
 let warnedClients = false
 
 /**
