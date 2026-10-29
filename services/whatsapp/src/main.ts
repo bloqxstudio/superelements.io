@@ -101,12 +101,9 @@ const handled = new Set<string>()
 let warnedCommanders = false
 let warnedLid = false
 
-/** Guard-rails: no máximo 20 respostas por hora por comandante e 3.500 caracteres por resposta */
-const MAX_PER_HOUR = 20
-const MAX_PER_HOUR_CLIENT = 10
+/** Guard-rail: no máximo 3.500 caracteres por resposta (sem limite de respostas por hora, a pedido do usuário) */
 const MAX_REPLY = 3500
 let warnedClients = false
-const asked = new Map<string, number[]>()
 
 /**
  * Pergunta de quem está em `crm_whatsapp_commanders`: responde na mesma conversa, pela fila de envio.
@@ -155,7 +152,7 @@ async function command(teamId: string, m: StoredMessage) {
   batch.timer = setTimeout(() => {
     pending.delete(key)
     // Uma resposta por vez por pessoa: se a anterior ainda está sendo feita, esta espera e já a enxerga no histórico
-    const turn = (turns.get(key) ?? Promise.resolve()).then(() => respond(teamId, key, who, batch.messages)).catch((e) => console.error(`[${teamId.slice(0, 8)}] resposta: ${e instanceof Error ? e.message : e}`))
+    const turn = (turns.get(key) ?? Promise.resolve()).then(() => respond(teamId, who, batch.messages)).catch((e) => console.error(`[${teamId.slice(0, 8)}] resposta: ${e instanceof Error ? e.message : e}`))
     turns.set(key, turn)
     void turn.finally(() => turns.get(key) === turn && turns.delete(key))
   }, wait)
@@ -170,28 +167,21 @@ interface Batch {
   first: number
   timer: NodeJS.Timeout | undefined
 }
-/** Espera 5 s de silêncio (no máximo 15 s desde a primeira) antes de responder */
-const BATCH_QUIET = 5000
+/** Espera 3 s de silêncio (no máximo 15 s desde a primeira) antes de responder */
+const BATCH_QUIET = 3000
 const BATCH_MAX = 15_000
 const pending = new Map<string, Batch>()
 const turns = new Map<string, Promise<unknown>>()
 
 /** Responde a uma ou mais mensagens seguidas de uma só vez */
-async function respond(teamId: string, key: string, who: Who, messages: StoredMessage[]) {
+async function respond(teamId: string, who: Who, messages: StoredMessage[]) {
   const m = messages[0]
   const text = messages.map((x) => x.body.trim()).join('\n')
-  const limit = who.isCommander ? MAX_PER_HOUR : MAX_PER_HOUR_CLIENT
-  const recent = (asked.get(key) ?? []).filter((t) => Date.now() - t < 3_600_000)
-  asked.set(key, [...recent, Date.now()])
-  // Passou do limite: um aviso uma vez e silêncio até a hora virar
-  if (recent.length > limit) return
   // Conversa anterior a este grupo de mensagens, para a IA entender o contexto
   const { data: past } = await db.from('crm_whatsapp_messages').select('from_me, body, kind, ts').eq('team_id', teamId).eq('chat_jid', m.jid).lt('ts', m.at.toISOString()).order('ts', { ascending: false }).limit(15)
   const history = (past ?? []).reverse().filter((p) => p.kind === 'text' && p.body).map((p) => ({ fromMe: p.from_me as boolean, text: p.body as string, at: new Date(p.ts as string) }))
   let reply: string
-  if (recent.length === limit) {
-    reply = `Limite de ${limit} perguntas por hora atingido. Volto a responder daqui a pouco.`
-  } else if (who.isCommander) {
+  if (who.isCommander) {
     reply = (await answerClient(db, who.contact, text, history)).reply.slice(0, MAX_REPLY)
   } else {
     const result = await answerClient(db, who.contact, text, history)

@@ -11,10 +11,10 @@ import path from 'node:path'
  * leitura) da conta de quem escreve. Devolve só texto; quem envia é o serviço.
  * Duas etapas por mensagem: `planAi` decide que dados e que período a conversa pede
  * (ou já responde, se não precisa de dado) e `answerAi` responde com os dados lidos.
- * `WHATSAPP_IA=off` desliga; `WHATSAPP_IA_MODEL` troca o modelo (padrão `sonnet`).
+ * `WHATSAPP_IA=off` desliga; `WHATSAPP_IA_MODEL` troca o modelo (padrão `haiku`, o mais rápido).
  */
 
-const MODEL = process.env.WHATSAPP_IA_MODEL?.trim() || 'sonnet'
+const MODEL = process.env.WHATSAPP_IA_MODEL?.trim() || 'haiku'
 const TIMEOUT = 90_000
 
 export const aiEnabled = () => process.env.WHATSAPP_IA?.trim().toLowerCase() !== 'off'
@@ -53,7 +53,7 @@ export interface DataQuery {
 
 const BASE = [
   'Você conversa pelo WhatsApp com pessoas que são clientes da Avence Studio (São Leopoldo, RS): estúdio que cria sites em WordPress e Elementor e cuida de anúncios e redes sociais.',
-  'É uma conversa de verdade: natural, curta, no tom de uma pessoa atenciosa. Sem menu, sem lista numerada de comandos, sem títulos. Um ou dois parágrafos curtos; *negrito* com um asterisco só quando ajudar.',
+  'É uma conversa de verdade: natural, curta, no tom de uma pessoa atenciosa. Sem menu, sem lista numerada de comandos, sem títulos. Seja breve e rápido: normalmente uma a três frases, nunca mais que um parágrafo curto; *negrito* com um asterisco só quando ajudar.',
   'Leia a conversa inteira: "e ontem?", "e os anúncios?", "quanto disso foi do Google?" continuam o assunto anterior. Nunca peça para a pessoa repetir o que ela já disse. Cumprimente só na primeira mensagem da conversa; depois vá direto ao assunto.',
   'Se a pessoa não sabe o que perguntar (um "oi", "o que você faz?"), diga em uma frase natural no que você pode ajudar, usando só as coisas da lista "Você pode falar sobre".',
   'Você não executa nada: não altera conta, não publica, não agenda, não manda mensagem a terceiros, e não promete que a equipe fará algo em certo prazo. Pedidos assim: diga que isso precisa ser combinado com a equipe da Avence.',
