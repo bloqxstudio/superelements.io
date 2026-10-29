@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { callPath } from '@/features/crm/call'
 import { useComments, type OpportunityComment } from '@/features/crm/comments'
 import { useCrm } from '@/features/crm/crmStore'
+import { LeadOriginCard } from '@/features/crm/LeadOriginCard'
 import { OpportunityComments } from '@/features/crm/OpportunityComments'
 import { nameOf, personLabel, useTeamPeople } from '@/features/crm/people'
 import type { TeamPerson, TeamRole } from '@/features/crm/types'
@@ -457,7 +458,7 @@ const Panel: React.FC<{
   onCommentDeleted: (id: string) => void
   onRemove: () => void
 }> = ({ item, settings, projectId, people, role, comments, onClose, onPatch, onAssign, onCommentSaved, onCommentDeleted, onRemove }) => {
-  const [tab, setTab] = useState<'venda' | 'empresa' | 'comentarios'>('venda')
+  const [tab, setTab] = useState<'venda' | 'empresa' | 'comentarios'>(item.origin ? 'empresa' : 'venda')
   const [confirm, setConfirm] = useState(false)
   const lead = item.lead
   const scan = lead.scan
@@ -525,7 +526,7 @@ const Panel: React.FC<{
           </>
         ) : (
           <>
-            <div className="flex items-start gap-3">
+            {!item.origin && <div className="flex items-start gap-3">
               <ScorePill score={lead.score} temperature={lead.temperature} />
               <div className="min-w-0 space-y-1">
                 <PlatformBadge platform={scan?.platform ?? 'sem-site'} />
@@ -535,7 +536,9 @@ const Panel: React.FC<{
                   </a>
                 )}
               </div>
-            </div>
+            </div>}
+
+            {item.origin && <LeadOriginCard origin={item.origin} />}
 
             <section>
               <p className="text-xs font-medium text-gray-700">Contato</p>
@@ -550,14 +553,14 @@ const Panel: React.FC<{
               <AdLinks lead={lead} />
             </section>
 
-            <section>
+            {!item.origin && <section>
               <p className="text-xs font-medium text-gray-700">Por que é oportunidade</p>
               <ul className="mt-1 space-y-0.5 text-xs text-gray-600">
                 {lead.reasons.map((reason) => (
                   <li key={reason}>{reason}</li>
                 ))}
               </ul>
-            </section>
+            </section>}
 
             <div className="space-y-1.5">
               <Field label="Projeto no Space" value={item.projectName} placeholder="Nome do projeto" onSave={(v) => onPatch({ projectName: v })} />

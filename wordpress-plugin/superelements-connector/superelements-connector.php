@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Superelements Connector
  * Description: Deixa a plataforma Superelements gravar o SEO do Yoast em páginas e publicar o cabeçalho, o rodapé e os componentes do site como modelos do Elementor, pela API do WordPress.
- * Version: 0.3.0
+ * Version: 0.4.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: Superelements
@@ -17,13 +17,18 @@
  * Theme Builder do Elementor Pro, com a condição de exibição (site inteiro,
  * menos as páginas que ficam sem): a condição é gravada pelo próprio Theme
  * Builder, que refaz o cache dele. A API do WordPress não expõe nada disso.
+ *
+ * 0.4: o botão "Entrar no WordPress" da plataforma pede um link de entrada de uso
+ * único (60 segundos) para quem já está autenticado pela senha de aplicação, e o
+ * site guarda de onde cada visita veio (UTM, gclid, fbclid) para preencher os
+ * campos ocultos do formulário que manda o lead ao CRM.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const SUPERELEMENTS_CONNECTOR_VERSION = '0.3.0';
+const SUPERELEMENTS_CONNECTOR_VERSION = '0.4.0';
 
 add_action(
 	'init',
@@ -317,4 +322,102 @@ add_action(
 			)
 		);
 	}
+);
+
+
+/**
+ * Entrar no painel sem digitar a senha: a plataforma, já autenticada pela senha de
+ * aplicação, pede um link; ele vale uma vez, por 60 segundos, e só abre o painel
+ * para o mesmo usuário que pediu.
+ */
+add_action(
+	'rest_api_init',
+	function () {
+		register_rest_route(
+			'superelements/v1',
+			'/login',
+			array(
+				'methods'             => 'POST',
+				'permission_callback' => function () {
+					return is_user_logged_in() && current_user_can( 'edit_posts' );
+				},
+				'callback'            => function ( WP_REST_Request $request ) {
+					$to = superelements_admin_path( (string) $request->get_param( 'redirect' ) );
+					$token = wp_generate_password( 40, false, false );
+					set_transient(
+						'superelements_login_' . hash( 'sha256', $token ),
+						array(
+							'user' => get_current_user_id(),
+							'to'   => $to,
+						),
+						60
+					);
+					return array( 'url' => add_query_arg( 'superelements_login', $token, home_url( '/' ) ) );
+				},
+			)
+		);
+	}
+);
+
+/** Só caminhos dentro do wp-admin: nada de endereço de fora nem subir de pasta. */
+function superelements_admin_path( $path ) {
+	$path = ltrim( (string) $path, '/' );
+	if ( '' === $path || ! preg_match( '/^[A-Za-z0-9_\-.\/?=&%#]+$/', $path ) || false !== strpos( $path, '..' ) ) {
+		return '';
+	}
+	return $path;
+}
+
+add_action(
+	'init',
+	function () {
+		if ( empty( $_GET['superelements_login'] ) || ! is_string( $_GET['superelements_login'] ) ) {
+			return;
+		}
+		nocache_headers();
+		header( 'Referrer-Policy: no-referrer' );
+		$key  = 'superelements_login_' . hash( 'sha256', wp_unslash( $_GET['superelements_login'] ) );
+		$data = get_transient( $key );
+		// Uso único: apaga antes de qualquer coisa
+		delete_transient( $key );
+		$user = is_array( $data ) ? get_user_by( 'id', (int) $data['user'] ) : false;
+		if ( ! $user ) {
+			wp_safe_redirect( wp_login_url() );
+			exit;
+		}
+		wp_set_current_user( $user->ID );
+		wp_set_auth_cookie( $user->ID, false, is_ssl() );
+		do_action( 'wp_login', $user->user_login, $user );
+		wp_safe_redirect( admin_url( $data['to'] ) );
+		exit;
+	},
+	1
+);
+
+/**
+ * De onde cada visita veio: guarda UTM, ids de clique e a origem no navegador e preenche os campos
+ * ocultos de mesmo nome dos formulários do Elementor ao enviar. Sem cookie: fica no localStorage, por 30 dias.
+ */
+add_action(
+	'wp_footer',
+	function () {
+		if ( is_admin() || is_customize_preview() ) {
+			return;
+		}
+		?>
+<script>
+(function(){try{
+var K='superelements_origem',KEYS=['utm_source','utm_medium','utm_campaign','utm_content','utm_term','utm_id','gclid','gbraid','wbraid','fbclid','campaign_id','adset_id','ad_id','placement'];
+var s={};try{s=JSON.parse(localStorage.getItem(K)||'{}')}catch(e){}
+if(s.at&&Date.now()-s.at>2592e6)s={};
+var q=new URLSearchParams(location.search),n={},got=false;
+KEYS.forEach(function(k){var v=q.get(k);if(v){n[k]=v;got=true}});
+if(got||!s.at){if(got)s=n;s.referrer=document.referrer||'';s.at=Date.now();try{localStorage.setItem(K,JSON.stringify(s))}catch(e){}}
+function fill(){document.querySelectorAll('form input').forEach(function(i){var m=/^form_fields\[(.+)\]$/.exec(i.name||'');var k=m?m[1]:i.name;if(k&&s[k]!==undefined&&s[k]!==''&&!i.value)i.value=s[k]})}
+fill();document.addEventListener('DOMContentLoaded',fill);document.addEventListener('submit',fill,true);
+}catch(e){}})();
+</script>
+		<?php
+	},
+	99
 );

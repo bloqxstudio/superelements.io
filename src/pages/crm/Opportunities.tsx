@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { CircleAlert, Loader2, Plus, Radar } from 'lucide-react'
+import { CircleAlert, Loader2, Plug, Plus, Radar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useCrm } from '@/features/crm/crmStore'
 import { useOpportunityFeed } from '@/features/crm/live'
+import { LeadHookDialog } from '@/features/crm/LeadHookDialog'
 import { NewClientDialog } from '@/features/crm/NewClientDialog'
 import { listOpportunities } from '@/features/crm/opportunities'
 import { Page, PageHeader } from '@/features/crm/ui'
@@ -25,6 +26,8 @@ const Opportunities: React.FC = () => {
   const [items, setItems] = useState<Opportunity[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [hooking, setHooking] = useState(false)
+  const manager = team?.role === 'owner' || team?.role === 'admin'
   // Vindo da ficha do cliente (?oportunidade=): abre o cartão
   const [params] = useSearchParams()
   const initialOpen = params.get('oportunidade') ?? undefined
@@ -58,6 +61,11 @@ const Opportunities: React.FC = () => {
           </>
         }
       >
+        {manager && (
+          <Button variant="outline" onClick={() => setHooking(true)} className="gap-1.5">
+            <Plug className="h-4 w-4" /> Receber leads
+          </Button>
+        )}
         <Button variant="outline" asChild className="gap-1.5">
           <Link to="/prospeccao">
             <Radar className="h-4 w-4" /> Buscar empresas
@@ -85,6 +93,7 @@ const Opportunities: React.FC = () => {
         <Funnel items={items} onChange={setList} initialOpen={initialOpen} />
       )}
 
+      {team && <LeadHookDialog open={hooking} onOpenChange={setHooking} teamId={team.id} />}
       <NewClientDialog
         open={adding}
         onOpenChange={setAdding}

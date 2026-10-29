@@ -4,6 +4,7 @@ import pino from 'pino'
 import { dbAuthState } from './auth.ts'
 import { samePhone } from './comandos.ts'
 import { ALL_TOPICS, answerClient, type ClientContact, type Topic } from './clientes.ts'
+import { runLeadAlerts } from './leads.ts'
 import { runReports } from './relatorios.ts'
 import { openSession, type NumberPatch, type OutFile, type Session, type StoredMessage } from './session.ts'
 
@@ -458,6 +459,19 @@ function serve() {
         reporting = false
       })
   }, 60_000)
+
+  // Avisos de lead novo (cartão do contato) para quem está marcado em "Recebe leads", ver leads.ts
+  let alerting = false
+  setInterval(() => {
+    if (alerting) return
+    alerting = true
+    const open = [...sessions.entries()].filter(([, session]) => session.open && !session.leaving).map(([teamId]) => teamId)
+    runLeadAlerts(db, open, async (teamId, jid, text) => !(await db.rpc('crm_whatsapp_enqueue_reply', { p_team: teamId, p_jid: jid, p_text: text })).error)
+      .catch((error) => console.error('Falha nos avisos de lead:', error))
+      .finally(() => {
+        alerting = false
+      })
+  }, 10_000)
 
   // Sinal de vida na linha de cada número ligado: a tela avisa quando o serviço some
   setInterval(async () => {

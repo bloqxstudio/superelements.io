@@ -11,3 +11,7 @@ verify_jwt = false
 # Eventos da Meta: assinatura HMAC do corpo, sem sessão de usuário.
 [functions.instagram-webhook]
 verify_jwt = false
+
+# Leads por webhook: o site não tem login, a chave da conta (?key=) autoriza
+[functions.lead-webhook]
+verify_jwt = false

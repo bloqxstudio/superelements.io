@@ -14,7 +14,7 @@ import type { Client } from './types'
 
 const CLIENT_COLUMNS = 'id, name, segment, city, address, phone, whatsapp, email, website, domain, instagram, lead, prospect_key, source, status'
 
-export const OPPORTUNITY_SELECT = `id, team_id, pipeline_id, client_id, key, stage, offer, brief, build, project_id, project_name, video, next_step, next_date, notes, search_id, region, owner_id, history, closed_at, created_at, updated_at, client:crm_clients(${CLIENT_COLUMNS})`
+export const OPPORTUNITY_SELECT = `id, team_id, pipeline_id, client_id, key, stage, offer, brief, build, project_id, project_name, video, next_step, next_date, notes, search_id, region, owner_id, origin, history, closed_at, created_at, updated_at, client:crm_clients(${CLIENT_COLUMNS})`
 
 interface ClientRow {
   id: string
@@ -53,6 +53,7 @@ interface OpportunityRow {
   search_id: string | null
   region: string
   owner_id: string | null
+  origin: Json | null
   history: Json
   created_at: string
   updated_at: string
@@ -125,6 +126,7 @@ export const toOpportunity = (row: OpportunityRow): Opportunity => ({
   brief: or(row.brief) as unknown as Opportunity['brief'],
   build: or(row.build) as unknown as Opportunity['build'],
   ownerId: or(row.owner_id),
+  origin: or(row.origin) as unknown as Opportunity['origin'],
   history: (Array.isArray(row.history) ? row.history : []) as unknown as Opportunity['history'],
   createdAt: row.created_at,
   updatedAt: row.updated_at,

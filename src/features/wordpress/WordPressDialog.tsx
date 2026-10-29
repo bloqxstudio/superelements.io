@@ -17,6 +17,8 @@ import {
 } from './connect'
 import { discoverSite, siteCandidates, unsupportedReason, type WordPressSite } from './rest'
 import { SiteIconPanel } from './SiteIconPanel'
+import { LeadFormsPanel } from './LeadFormsPanel'
+import { CONNECTOR_ZIP, openAdmin } from './autologin'
 import type { WordPressConnection } from './types'
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
@@ -141,6 +143,24 @@ const ConnectedView: React.FC<{
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [entering, setEntering] = useState(false)
+
+  /** Abre o painel já logado (Connector 0.4); sem ele, abre o painel comum */
+  const enter = async () => {
+    setEntering(true)
+    try {
+      if ((await openAdmin(connection)) === 'manual') {
+        toast.info('Abri o painel comum: o WordPress vai pedir o login', {
+          description: 'Para entrar sem senha, instale o plugin Superelements Connector 0.4 no site.',
+          action: { label: 'Baixar plugin', onClick: () => window.open(CONNECTOR_ZIP, '_blank', 'noopener') },
+        })
+      }
+    } catch (error) {
+      toast.error(errorText(error))
+    } finally {
+      setEntering(false)
+    }
+  }
 
   const recheck = async () => {
     setRefreshing(true)
@@ -234,6 +254,8 @@ const ConnectedView: React.FC<{
 
       {refreshError && <p className="text-sm text-destructive">{refreshError}</p>}
 
+      <LeadFormsPanel connection={connection} />
+
       <p className="text-xs text-muted-foreground">
         A senha de aplicação fica guardada no projeto, na sua conta. Desconectar apaga a senha daqui e do WordPress.
       </p>
@@ -257,11 +279,9 @@ const ConnectedView: React.FC<{
             Desconectar
           </Button>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
-            <Button variant="outline" asChild>
-              <a href={adminUrl(site)} target="_blank" rel="noopener noreferrer">
-                Painel do WordPress
-                <ExternalLink aria-hidden />
-              </a>
+            <Button type="button" variant="outline" disabled={entering} onClick={enter}>
+              {entering ? <Loader2 className="animate-spin" aria-hidden /> : <ExternalLink aria-hidden />}
+              Entrar no WordPress
             </Button>
             <Button type="button" onClick={onClose}>
               Fechar

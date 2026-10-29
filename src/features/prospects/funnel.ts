@@ -1,3 +1,4 @@
+import type { LeadOrigin } from '../crm/leadOrigin.ts'
 import type { Lead } from './types.ts'
 
 /**
@@ -7,9 +8,10 @@ import type { Lead } from './types.ts'
  * tela (`/crm`) e para o terminal (`scripts/prospects/funnelStore.ts`).
  */
 
-export type Stage = 'mapeado' | 'selecionado' | 'pagina' | 'contatado' | 'conversa' | 'proposta' | 'fechado' | 'perdido'
+export type Stage = 'novo' | 'mapeado' | 'selecionado' | 'pagina' | 'contatado' | 'conversa' | 'proposta' | 'fechado' | 'perdido'
 
 export const STAGES: { id: Stage; label: string; hint: string }[] = [
+  { id: 'novo', label: 'Novo lead', hint: 'Chegou pelo webhook do site e ainda não foi atendido.' },
   { id: 'mapeado', label: 'Mapeado', hint: 'Veio da busca e ainda não foi escolhido.' },
   { id: 'selecionado', label: 'Fila da página', hint: 'Escolhido para ganhar uma versão nova no Space. O ▶ do cartão cria a página com a IA conectada.' },
   { id: 'pagina', label: 'Página pronta', hint: 'Versão nova no Space e vídeo para o primeiro contato.' },
@@ -60,6 +62,8 @@ export interface Opportunity {
   build?: PageBuild
   /** Quem da equipe está atendendo este cliente (id da conta). */
   ownerId?: string
+  /** De onde veio o lead que entrou pelo webhook (canal, campanha, página, campos). */
+  origin?: LeadOrigin
   history: { at: string; stage: Stage }[]
   createdAt: string
   updatedAt: string
@@ -130,7 +134,7 @@ export interface FunnelSettings {
 export const DEFAULT_SETTINGS: FunnelSettings = { price: 1000, monthly: 0, months: 12 }
 
 /** Etapas em que a oportunidade está viva (da fila da página até a proposta). */
-export const OPEN_STAGES: Stage[] = ['selecionado', 'pagina', 'contatado', 'conversa', 'proposta']
+export const OPEN_STAGES: Stage[] = ['novo', 'selecionado', 'pagina', 'contatado', 'conversa', 'proposta']
 
 /** Valor da oportunidade: o serviço mais o plano mensal dos primeiros meses. */
 export const valueOf = (o: Pick<Opportunity, 'offer'>, settings: FunnelSettings) => {

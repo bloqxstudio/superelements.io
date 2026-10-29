@@ -56,6 +56,7 @@ const EMPTY: ClientContact = {
   topics: ['site', 'anuncios'],
   enabled: true,
   reports: false,
+  leads: false,
   reportKind: 'semanal',
   reportHour: 9,
   reportWeekday: 1,
@@ -238,7 +239,20 @@ const ClientDialog: React.FC<{
           </section>
 
           <section className="grid gap-3">
-            <SectionTitle n={3}>Relatório automático</SectionTitle>
+            <SectionTitle n={3}>Leads novos</SectionTitle>
+            <div className="rounded-xl border border-gray-200">
+              <label className="flex cursor-pointer items-center justify-between gap-4 px-4 py-3">
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-gray-900">Receber cada lead novo no WhatsApp</span>
+                  <span className="block text-[11px] leading-snug text-gray-500">O cartão do contato (dados, origem e campanha) quando um lead entra pelo webhook do site. Só chega numa conversa que a pessoa já abriu com o número.</span>
+                </span>
+                <Switch checked={form.leads} onCheckedChange={(leads) => patch({ leads })} aria-label="Receber leads novos no WhatsApp" />
+              </label>
+            </div>
+          </section>
+
+          <section className="grid gap-3">
+            <SectionTitle n={4}>Relatório automático</SectionTitle>
             <div className="rounded-xl border border-gray-200">
               <label className="flex cursor-pointer items-center justify-between gap-4 px-4 py-3">
                 <span className="min-w-0">
@@ -429,6 +443,7 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
                       <CalendarClock className="h-3 w-3" aria-hidden />
                       {c.reports ? scheduleText(c) : 'Sem relatório'}
                     </span>
+                    {c.leads && <span className="rounded-md bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-800 ring-1 ring-inset ring-violet-600/15">Recebe leads</span>}
                   </div>
                 </div>
                 {admin ? (
