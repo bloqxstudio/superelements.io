@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -12,7 +12,7 @@ import { pathToFileURL } from 'node:url'
  */
 
 const isWindows = process.platform === 'win32'
-const MAX_HEIGHT = 14000
+const MAX_HEIGHT = 40000
 
 /** O navegador instalado: variável de ambiente, locais conhecidos e o PATH. */
 export function findBrowser(): string | undefined {
@@ -34,14 +34,23 @@ export function findBrowser(): string | undefined {
   return undefined
 }
 
-const run = (bin: string, args: string[], signal?: AbortSignal) =>
-  new Promise<string>((resolve, reject) => {
-    const child = execFile(bin, args, { timeout: 90_000, maxBuffer: 80 * 1024 * 1024, windowsHide: true, signal }, (error, stdout) => (error && !stdout ? reject(error) : resolve(String(stdout))))
-    child.stdin?.end()
-  })
-
-/** Mede a altura da página dentro do documento (depois de carregar as fontes e as imagens). */
-const MEASURE = `<script>(function(){function m(){var b=0;[].slice.call(document.body.children).forEach(function(el){if(el.tagName==='SCRIPT'||el.tagName==='STYLE')return;var r=el.getBoundingClientRect();if(r.height>0)b=Math.max(b,r.bottom+window.scrollY)});if(!b)b=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);document.documentElement.setAttribute('data-se-h',String(Math.ceil(b)))}addEventListener('load',function(){setTimeout(m,500);setTimeout(m,2000);setTimeout(m,5000)})})()</script>`
+async function openCdp(url: string) {
+  const ws = new WebSocket(url)
+  await new Promise<void>((resolve, reject) => { ws.onopen = () => resolve(); ws.onerror = () => reject(new Error('Falha ao conectar à captura.')) })
+  let id = 0
+  const pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void }>()
+  ws.onmessage = event => {
+    const result = JSON.parse(String(event.data))
+    const call = pending.get(result.id)
+    if (!call) return
+    pending.delete(result.id)
+    result.error ? call.reject(new Error(result.error.message)) : call.resolve(result.result)
+  }
+  return {
+    send: (method: string, params: Record<string, unknown> = {}): Promise<any> => new Promise((resolve, reject) => { const next = ++id; pending.set(next, { resolve, reject }); ws.send(JSON.stringify({ id: next, method, params })) }),
+    close: () => ws.close(),
+  }
+}
 
 export async function capturePage(html: string, width: number, signal?: AbortSignal): Promise<{ data: string; width: number; height: number }> {
   const bin = findBrowser()
@@ -50,17 +59,41 @@ export async function capturePage(html: string, width: number, signal?: AbortSig
   const dir = mkdtempSync(path.join(os.tmpdir(), 'se-captura-'))
   try {
     const file = path.join(dir, 'pagina.html')
-    writeFileSync(file, html.includes('</body>') ? html.replace('</body>', `${MEASURE}</body>`) : `${html}${MEASURE}`)
+    writeFileSync(file, html)
     const url = pathToFileURL(file).href
-    // Perfil próprio e limpo: não briga com o navegador que a pessoa já tem aberto
-    const base = ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--force-device-scale-factor=1', `--user-data-dir=${path.join(dir, 'perfil')}`, '--virtual-time-budget=12000', '--run-all-compositor-stages-before-draw']
-    const dom = await run(bin, [...base, `--window-size=${w},900`, '--dump-dom', url], signal)
-    const measured = Number(/data-se-h="(\d+)"/.exec(dom)?.[1] ?? 0)
-    const height = Math.min(MAX_HEIGHT, Math.max(600, measured || 1800))
-    const out = path.join(dir, 'pagina.png')
-    await run(bin, [...base, `--window-size=${w},${height}`, `--screenshot=${out}`, url], signal)
-    if (!existsSync(out)) throw new Error('O navegador não gerou a imagem da página.')
-    return { data: `data:image/png;base64,${readFileSync(out).toString('base64')}`, width: w, height }
+    // Viewport fixo: aumentar a janela para a altura da página estica os blocos em vh.
+    const child = spawn(bin, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${path.join(dir, 'perfil')}`, '--hide-scrollbars', '--no-first-run', '--no-default-browser-check', '--force-color-profile=srgb', 'about:blank'], { stdio: 'ignore' })
+    const stop = () => child.kill()
+    signal?.addEventListener('abort', stop, { once: true })
+    let tab: Awaited<ReturnType<typeof openCdp>> | undefined
+    try {
+      const portFile = path.join(dir, 'perfil', 'DevToolsActivePort')
+      for (let i = 0; i < 100 && !existsSync(portFile); i++) { signal?.throwIfAborted(); await new Promise(r => setTimeout(r, 100)) }
+      if (!existsSync(portFile)) throw new Error('O navegador da captura não iniciou.')
+      const port = readFileSync(portFile, 'utf8').split('\n')[0]
+      const pages = await fetch(`http://127.0.0.1:${port}/json/list`).then(r => r.json()) as { type: string; webSocketDebuggerUrl: string }[]
+      const page = pages.find(p => p.type === 'page')
+      if (!page) throw new Error('A captura não abriu a página.')
+      tab = await openCdp(page.webSocketDebuggerUrl)
+      await tab.send('Page.enable')
+      await tab.send('Emulation.setDeviceMetricsOverride', { width: w, height: 900, deviceScaleFactor: 1, mobile: false })
+      await tab.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] })
+      await tab.send('Page.navigate', { url })
+      const evaluate = async (expression: string) => {
+        const result = await tab!.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
+        if (result.exceptionDetails) throw new Error('Falha ao preparar a captura da página.')
+        return result.result.value
+      }
+      for (let i = 0; i < 150; i++) { signal?.throwIfAborted(); if (await evaluate('document.readyState === "complete"')) break; await new Promise(r => setTimeout(r, 100)) }
+      await evaluate(`Promise.race([(async()=>{await document.fonts.ready; await Promise.all([...document.images].map(async i=>{i.loading='eager';try{await i.decode()}catch{}}));return true})(),new Promise(r=>setTimeout(()=>r(true),20000))])`)
+      const height = Math.min(MAX_HEIGHT, Math.max(600, await evaluate('Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)')))
+      const shot = await tab.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { x: 0, y: 0, width: w, height, scale: 1 } })
+      return { data: `data:image/png;base64,${shot.data}`, width: w, height }
+    } finally {
+      tab?.close()
+      signal?.removeEventListener('abort', stop)
+      child.kill()
+    }
   } finally {
     setTimeout(() => {
       try {

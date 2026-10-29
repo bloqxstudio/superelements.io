@@ -35,7 +35,10 @@ export function htmlFromDoc(doc: ProjectDoc, pageId: string): { html: string; na
   const landing = buildLandingPage(sections, doc.canvas.nodes, doc.canvas.connections ?? [], brand)
   if (!landing.elements.length) throw new Error(`A página "${page.name}" não tem seções para mostrar.`)
   const kit = renderKit(brand, doc.site ?? null, sections.some(isFromSite))
-  return { html: renderElementorDocument(landing.elements, { title: page.name, kit, motion: 'static' }).document, name: page.name }
+  const document = renderElementorDocument(landing.elements, { title: page.name, kit, motion: 'static' }).document
+  // A captura abre um arquivo temporário: assets do produto precisam da origem HTTP.
+  const html = document.replace('<head>', `<head><base href="${location.origin}/">`).replace(/loading=["']lazy["']/g, 'loading="eager"')
+  return { html, name: page.name }
 }
 
 /** A página do projeto da conta como documento HTML completo. */

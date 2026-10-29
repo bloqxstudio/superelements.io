@@ -1175,9 +1175,72 @@ function component(
   throw new Error(`Ação desconhecida: ${action}`)
 }
 
+/** Acesso por código às mesmas operações do editor de Criativos. */
+let creativeImport: { state: string; postId?: string; error?: string } | undefined
+async function creatives(params: { action?: string; setId?: string; projectId?: string; pageId?: string; projectName?: string; postId?: string; index?: number }) {
+  const { useEditor } = await import('@/features/criativos/store')
+  const state = useEditor.getState()
+  if (!state.set || (params.setId && state.set.id !== params.setId)) throw new Error('Abra o conjunto de Criativos solicitado no produto.')
+  if (params.action === 'sideways') {
+    if (creativeImport?.state === 'running') throw new Error('A importação já está em andamento.')
+    if (!params.projectId || !params.pageId || !params.projectName) throw new Error('Informe projeto, página e nome do case.')
+    const { importPageSideways } = await import('@/features/criativos/pageImport')
+    creativeImport = { state: 'running' }
+    const run = async () => {
+      if (!params.postId) return importPageSideways(params.projectId!, params.pageId!, params.projectName!)
+      const { capturePageShot } = await import('@/features/criativos/pageImport')
+      const { sidewaysSlides } = await import('@/features/criativos/templates')
+      const shot = await capturePageShot(params.projectId!, params.pageId!, params.projectName!)
+      const current = useEditor.getState().set!
+      const post = current.posts.find(p => p.id === params.postId)
+      if (!post) throw new Error('Post não encontrado.')
+      const slides = sidewaysSlides(current.brand, post.format, { src: `asset:${shot.asset.id}`, imgW: shot.asset.width, imgH: shot.asset.height, title: params.projectName!, sub: shot.name, label: current.brand.name })
+      useEditor.getState().edit(s => ({ ...s, posts: s.posts.map(p => p.id === post.id ? { ...p, slides } : p) }))
+      return { ...post, slides }
+    }
+    void run().then(async post => {
+      await useEditor.getState().ensureAssets()
+      await useEditor.getState().flush()
+      creativeImport = { state: 'saved', postId: post.id }
+    }).catch(error => { creativeImport = { state: 'error', error: String(error) } })
+    return creativeImport
+  }
+  if (params.action === 'select') {
+    if (!params.postId || !state.set.posts.some(p => p.id === params.postId)) throw new Error('Post não encontrado.')
+    state.selectPost(params.postId)
+    return { postId: params.postId }
+  }
+  if (params.action === 'export') {
+    const post = state.set.posts.find(p => p.id === (params.postId ?? state.postId))
+    const slide = post?.slides[params.index ?? 0]
+    if (!post || !slide) throw new Error('Post ou slide não encontrado.')
+    await state.ensureAssets()
+    const { slideToBlob } = await import('@/features/criativos/render')
+    const blob = await slideToBlob(slide, post.format, useEditor.getState().images, 'png')
+    const data = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(blob) })
+    return { data, postId: post.id, slideId: slide.id }
+  }
+  return { set: state.set, postId: state.postId, slideId: state.slideId, saving: state.saving, importing: creativeImport }
+}
+
+async function projectImage(params: { data?: string; action?: 'audit' }) {
+  const projectId = requireProject()
+  if (params.action === 'audit') {
+    const { loadProjectDoc } = await import('@/features/projects/storage')
+    const saved = await loadProjectDoc(projectId)
+    if (!saved?.doc) throw new Error('Documento não encontrado no banco.')
+    const sections = saved.doc.canvas.nodes.filter(n => n.type === 'section')
+    const json = sections.map(n => JSON.stringify(n.data)).join('\n')
+    return { revision: saved.revision, sections: sections.length, embeddedImages: (json.match(/data:image\/[^;]+;base64,/g) ?? []).length, localImages: [...new Set(json.match(/\/(?:brands|sections)\/[^\s"'<>?()\\]+\.(?:webp|png|jpe?g|svg)/g) ?? [])], sync: useProjectSync.getState().status }
+  }
+  if (!/^data:image\/(webp|png|jpeg|svg\+xml);base64,/.test(params.data ?? '')) throw new Error('Envie uma imagem em data URL.')
+  const { uploadProjectImage } = await import('@/features/projects/assets')
+  return uploadProjectImage(projectId, await fetch(params.data!).then(r => r.blob()))
+}
+
 const METHODS: Record<string, (params: never, ctx: CallContext) => unknown> = {
-  status, pull, apply, focus, say, work, plan, render, view, projects, open, create, brand,
-  brief, approval, invite, wordpress, details, publish, restore, component, componentPlan, prospect,
+  status, pull, apply, focus, say, work, plan, render, view, projects, open, create, brand, creatives,
+  brief, approval, invite, wordpress, details, publish, restore, component, componentPlan, prospect, projectImage,
 }
 
 // ---------- projetos em segundo plano (só na tela de uma pessoa) ----------

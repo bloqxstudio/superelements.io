@@ -1,0 +1,20 @@
+{
+  "tool": "image_gen.imagegen (integrated)",
+  "date": "2026-10-28",
+  "fictionalProject": "Horizonte · Avence Case Arquitetura",
+  "assets": [
+    {
+      "file": "horizonte-chegada-v2.webp",
+      "reference": "public/brands/avence-studio/criativos/arquitetura/casa-chegada.webp",
+      "prompt": "Use case: lighting-weather. Create a landscape 3:2 editorial architectural photograph variation of this fictional Brazilian modernist house for the Horizonte architecture portfolio website. Preserve the building's exact material language: strong cantilevered board-formed concrete slab, warm vertical wood brises, black framed full height glazing, stone wall, broad pale stone stair, subtropical landscaping. Photograph from farther back to show the architecture across a wide composition, soft late afternoon light, restrained natural colors and realistic material texture. Remove car and person, no vehicles, no lettering, logos or watermark. This is a coherent alternative view of the same house, not a different building. Save the resulting image and return its file path."
+    },
+    {
+      "file": "horizonte-croqui-v1.webp",
+      "prompt": "Use case: photorealistic-natural. Asset: landscape 3:2 editorial photograph for a fictional Brazilian architecture studio called Horizonte, website section From sketch to built space. Close oblique overhead view of an architect's working table beside a window: cream paper with careful pencil perspective studies of a low modernist Brazilian concrete house with cantilevered roof, tracing paper floor plans, a small physical basswood architectural model, a steel scale ruler and a few samples of natural wood and pale travertine. Only the hands of an architect drawing, no visible faces. Soft side daylight, warm ivory, charcoal and natural wood palette, meticulous believable drawing and realistic materials, sober architectural magazine quality. The drawing is clearly a conceptual sketch, not a construction document. No readable text, numbers, labels, logos, watermarks or unrelated objects. No collage, no frame."
+    },
+    {
+      "file": "horizonte-materiais-v1.webp",
+      "prompt": "Use case: photorealistic-natural. Asset: landscape 3:2 editorial image for the same fictional contemporary Brazilian architecture studio Horizonte. A quiet close interior architectural detail showing the precise junction of a board-formed exposed concrete ceiling, a warm natural oak vertical slatted screen, black slender window frame and pale limestone floor, with a softly focused planted courtyard beyond. Restrained warm natural palette, tactile material surfaces, soft raking morning daylight, strong architectural composition, precise credible construction details. This should belong to a low minimalist concrete and wood house with full-height glazing and a large cantilevered slab. No people, cars, furniture clutter, words, logos or watermark. Photorealistic editorial architectural photography, not a collage."
+    }
+  ]
+}

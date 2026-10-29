@@ -533,6 +533,8 @@ export function spaceBridge(): Plugin {
         const host = address.address === '127.0.0.1' ? '127.0.0.1' : 'localhost'
         state = { url: `http://${host}:${address.port}`, token, pid: process.pid, startedAt: new Date().toISOString() }
         current = { url: state.url, token }
+        mkdirSync(path.dirname(stateFile), { recursive: true })
+        writeFileSync(path.join(path.dirname(stateFile), `bridge-${address.port}.json`), JSON.stringify(state, null, 2))
         claim()
       })
       // Ao reiniciar, o servidor novo pode gravar antes de o velho fechar: só apaga o arquivo se ainda for deste

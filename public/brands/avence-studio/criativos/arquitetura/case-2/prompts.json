@@ -1,0 +1,57 @@
+{
+  "tool": "image_gen.imagegen",
+  "images": [
+    {
+      "key": "hero-casa-areia",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Wide landscape architectural editorial photograph of a fictional contemporary Brazilian residence Casa Areia: pale warm lime plaster monolithic volumes, light travertine terraces, deep recessed oak entrance, one mature olive tree and restrained subtropical garden. Frontal wide composition, early morning soft light. No concrete cantilever, no black steel glazing, no people, no cars. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    },
+    {
+      "key": "hero-interior-areia",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Wide landscape architectural editorial photograph from inside fictional Casa Areia: a pale limestone double height living room with a large oak pivot screen opening toward a lush planted patio, low linen sofa, one sculptural wooden chair. Quiet morning light, precise composition, warm lime plaster walls. Distinct indoor composition, no people. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    },
+    {
+      "key": "estudio",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Wide editorial photograph of a small refined architecture studio: long oak drafting table, cream paper drawings and a small white architectural model, sample shelves along warm lime plaster walls, garden view through a tall window. No people, no computer screens, no words, no staged coffee accessories. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    },
+    {
+      "key": "projeto-areia",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Editorial architectural photograph of fictional Casa Areia seen diagonally from its private garden: low white lime plaster volumes and long pale stone water basin, timber shutters, grasses, wide clouded sky. Afternoon diffuse light. The architectural garden-facing elevation, not its entrance. No people, no vehicles. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    },
+    {
+      "key": "projeto-patio-oliva",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Architectural editorial photograph of fictional Pátio Oliva, a modest refined courtyard house: thick sand colored rammed earth walls, a deep rectangular porch with wooden slats, central mature olive tree in a gravel court, soft overcast light. Tactile earthy material palette. Distinct asymmetric courtyard composition, no people. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    },
+    {
+      "key": "projeto-casa-brisa",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Architectural editorial photograph of fictional Casa Brisa: lightweight pale timber coastal pavilion raised slightly over native dune grasses, slender wooden posts, roof of warm timber, distant ocean glimpsed beyond. Soft coastal morning, wide natural composition, believable contemporary Brazilian architecture, no people, no boats, no cars. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    },
+    {
+      "key": "processo-maquete",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Editorial close architectural photograph of a single conceptual physical scale model made of ivory card and basswood, a courtyard house with thick walls and a central planted void, on a clean warm gray architect table. Soft side daylight, top oblique camera angle, realistic small material texture and precise hand built joints. No text, no ruler marks, no people. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    },
+    {
+      "key": "processo-materiais",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Architectural material palette photographed directly overhead: one large pale travertine slab sample, a slim natural oak strip, a small matte ivory lime plaster swatch, warm linen fabric and translucent textured glass aligned on a warm gray worktable. Beautiful tactile real surfaces, sober asymmetry, soft daylight, no tools, no text, no people. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    },
+    {
+      "key": "processo-render",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Photorealistic architectural visualization of a new fictional minimalist garden pavilion: ivory plaster curved wall framing an open square roof oculus, pale stone floor, slender oak bench and garden beyond. Diffuse sky light, careful physically realistic materials and restrained natural colors. Clear architectural perspective, no people, no text. This is an illustrative concept render. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    },
+    {
+      "key": "processo-detalhe",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Tight architectural editorial photograph of the construction junction between pale lime plaster wall, an inset natural oak window frame, and honed limestone sill. A sliver of an olive garden visible outside, soft raking sunlight reveals subtle plaster texture. Precise plausible minimalist detail, no text, no people. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    },
+    {
+      "key": "caderno-luz",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Architectural editorial photograph looking upward into a quiet pale lime plaster stairwell: circular roof oculus casts a clean beam of sunlight across a curved wall and a simple oak handrail. Sculptural geometry, real textures, subtle natural shadows, minimalist Brazilian residential interior, no people, no text. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    },
+    {
+      "key": "caderno-patio",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Architectural editorial photograph from floor level inside an intimate planted courtyard: slender native tree, dense ferns, light gravel, thick pale sandstone walls and a shaded recessed timber window. Late afternoon sunlight, human scale, balanced careful composition. No people, no furniture, no unrelated objects. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    },
+    {
+      "key": "caderno-escada",
+      "prompt": "Use case: photorealistic-natural. Asset for the second fictional architecture website case in a commercial design proposal. Create one landscape 3:2 image, high quality restrained architectural magazine photography. Editorial architectural photograph of a floating pale travertine stair meeting a warm ivory wall, precise step edges and a slim oak handrail, a soft garden reflection in textured glass. Vertical emphasis within a landscape image, tactile material detail, quiet morning light. No people, no text. No logos, watermarks, signage, readable writing, collage or border. Natural realistic materials, no excessive orange grading. This image must stand alone as one photograph."
+    }
+  ]
+}
