@@ -198,6 +198,13 @@ async function queueImage(teamId: string, jid: string, caption: string, png: Buf
   return true
 }
 
+/** Relatórios agendados: foto com legenda quando há gráfico, senão texto */
+const deliverReport = async (teamId: string, jid: string, text: string, image?: Buffer) => {
+  if (image && (await queueImage(teamId, jid, text, image))) return true
+  const { error } = await db.rpc('crm_whatsapp_enqueue_reply', { p_team: teamId, p_jid: jid, p_text: text })
+  return !error
+}
+
 /** Responde a uma ou mais mensagens seguidas de uma só vez */
 async function respond(teamId: string, who: Who, messages: StoredMessage[]) {
   const m = messages[0]
@@ -444,7 +451,7 @@ function serve() {
   setInterval(() => {
     if (reporting) return
     reporting = true
-    runReports(db, [...sessions.entries()].filter(([, session]) => session.open && !session.leaving).map(([teamId]) => teamId))
+    runReports(db, [...sessions.entries()].filter(([, session]) => session.open && !session.leaving).map(([teamId]) => teamId), deliverReport)
       .catch((error) => console.error('Falha nos relatórios:', error))
       .finally(() => {
         reporting = false

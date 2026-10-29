@@ -9,6 +9,8 @@ import { FIELD, Surface, whenLabel } from '@/features/crm/ui'
 import {
   ACCESS_TOPICS,
   NO_TABLE,
+  REPORT_KINDS,
+  WEEKDAYS,
   cleanPhone,
   listContacts,
   listQuestions,
@@ -28,6 +30,47 @@ import { formatPhone } from '@/features/crm/whatsapp'
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
+type Schedule = Pick<ClientContact, 'reportKind' | 'reportHour' | 'reportWeekday' | 'reportMonthday'>
+
+/** Quando o relatório sai: todo dia, toda semana (dia) ou todo mês (dia), numa hora cheia de São Paulo */
+const ReportSchedule: React.FC<{ value: Schedule; disabled?: boolean; onChange: (patch: Partial<Schedule>) => void }> = ({ value, disabled, onChange }) => (
+  <span className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
+    <select className={`${FIELD} h-8 w-auto`} value={value.reportKind} disabled={disabled} onChange={(e) => onChange({ reportKind: e.target.value as Schedule['reportKind'] })} aria-label="Frequência do relatório">
+      {REPORT_KINDS.map((k) => (
+        <option key={k.id} value={k.id}>
+          {k.label}
+        </option>
+      ))}
+    </select>
+    {value.reportKind === 'semanal' && (
+      <select className={`${FIELD} h-8 w-auto`} value={value.reportWeekday} disabled={disabled} onChange={(e) => onChange({ reportWeekday: Number(e.target.value) })} aria-label="Dia da semana">
+        {WEEKDAYS.map((d, i) => (
+          <option key={d} value={i}>
+            {d}
+          </option>
+        ))}
+      </select>
+    )}
+    {value.reportKind === 'mensal' && (
+      <select className={`${FIELD} h-8 w-auto`} value={value.reportMonthday} disabled={disabled} onChange={(e) => onChange({ reportMonthday: Number(e.target.value) })} aria-label="Dia do mês">
+        {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+          <option key={d} value={d}>
+            dia {d}
+          </option>
+        ))}
+      </select>
+    )}
+    <span>às</span>
+    <select className={`${FIELD} h-8 w-auto`} value={value.reportHour} disabled={disabled} onChange={(e) => onChange({ reportHour: Number(e.target.value) })} aria-label="Hora do relatório">
+      {Array.from({ length: 24 }, (_, h) => h).map((h) => (
+        <option key={h} value={h}>
+          {String(h).padStart(2, '0')}h
+        </option>
+      ))}
+    </select>
+  </span>
+)
+
 export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
   const { profile } = useAuth()
   const admin = profile?.role === 'admin'
@@ -35,7 +78,7 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
   const [questions, setQuestions] = useState<ClientQuestion[]>([])
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([])
   const [missing, setMissing] = useState(false)
-  const [draft, setDraft] = useState({ phone: '', name: '', accountId: '', topics: ['site', 'anuncios'] as AccessTopic[], reports: false })
+  const [draft, setDraft] = useState({ phone: '', name: '', accountId: '', topics: ['site', 'anuncios'] as AccessTopic[], reports: false, reportKind: 'semanal' as ClientContact['reportKind'], reportHour: 9, reportWeekday: 1, reportMonthday: 1 })
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -71,8 +114,8 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
     if (!draft.topics.length) return toast.error('Libere pelo menos um assunto')
     setBusy(true)
     try {
-      await saveContact(teamId, { phone, accountId: draft.accountId, name: draft.name, topics: draft.topics, enabled: true, reports: draft.reports })
-      setDraft({ phone: '', name: '', accountId: draft.accountId, topics: draft.topics, reports: draft.reports })
+      await saveContact(teamId, { phone, accountId: draft.accountId, name: draft.name, topics: draft.topics, enabled: true, reports: draft.reports, reportKind: draft.reportKind, reportHour: draft.reportHour, reportWeekday: draft.reportWeekday, reportMonthday: draft.reportMonthday })
+      setDraft({ ...draft, phone: '', name: '' })
       await load()
     } catch (error) {
       toast.error('Não foi possível cadastrar', { description: message(error) })
@@ -151,6 +194,7 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
                 <input type="checkbox" checked={c.reports} disabled={!admin} onChange={(e) => void change(c, { reports: e.target.checked })} />
                 Recebe relatório
               </label>
+              {c.reports && <ReportSchedule value={c} disabled={!admin} onChange={(patch) => void change(c, patch)} />}
               <Switch checked={c.enabled} disabled={!admin} onCheckedChange={(enabled) => void change(c, { enabled })} aria-label={`Número de ${c.name || c.phone} ligado`} />
               {admin && (
                 <Button variant="ghost" size="icon" onClick={() => void remove(c)} aria-label="Remover número">
@@ -187,8 +231,13 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
           </div>
           <label className="flex items-center gap-1.5 text-sm text-gray-700 sm:col-span-2">
             <input type="checkbox" checked={draft.reports} onChange={(e) => setDraft({ ...draft, reports: e.target.checked })} />
-            Recebe o relatório agendado (diário e semanal) com os dados da conta
+            Recebe o relatório agendado (texto curto e gráfico) com os dados da conta
           </label>
+          {draft.reports && (
+            <div className="sm:col-span-2">
+              <ReportSchedule value={draft} onChange={(patch) => setDraft({ ...draft, ...patch })} />
+            </div>
+          )}
           <Button className="sm:col-span-2 sm:justify-self-start" size="sm" onClick={() => void add()} disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
             Cadastrar número

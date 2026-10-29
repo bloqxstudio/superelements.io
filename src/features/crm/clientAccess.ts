@@ -29,9 +29,24 @@ export interface ClientContact {
   name: string
   topics: AccessTopic[]
   enabled: boolean
-  /** Recebe o resumo agendado (diário e semanal) com os dados da conta */
+  /** Recebe o relatório agendado (texto curto e gráfico) com os dados da conta */
   reports: boolean
+  reportKind: ReportKind
+  /** Hora cheia em São Paulo */
+  reportHour: number
+  /** Só no semanal: 0 domingo … 6 sábado */
+  reportWeekday: number
+  /** Só no mensal: 1 a 28 */
+  reportMonthday: number
 }
+
+export type ReportKind = 'diario' | 'semanal' | 'mensal'
+export const REPORT_KINDS: { id: ReportKind; label: string }[] = [
+  { id: 'diario', label: 'Todo dia' },
+  { id: 'semanal', label: 'Toda semana' },
+  { id: 'mensal', label: 'Todo mês' },
+]
+export const WEEKDAYS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
 
 export interface ClientQuestion {
   id: string
@@ -49,9 +64,9 @@ export const NO_TABLE = 'no_tables'
 const fail = (error: { code?: string; message: string }) => new Error(missing(error) ? NO_TABLE : error.message)
 
 export async function listContacts(teamId: string): Promise<ClientContact[]> {
-  const { data, error } = await db.from('crm_whatsapp_client_contacts').select('phone, account_id, name, topics, enabled, reports').eq('team_id', teamId).order('created_at')
+  const { data, error } = await db.from('crm_whatsapp_client_contacts').select('phone, account_id, name, topics, enabled, reports, report_kind, report_hour, report_weekday, report_monthday').eq('team_id', teamId).order('created_at')
   if (error) throw fail(error)
-  return (data ?? []).map((r) => ({ phone: r.phone, accountId: r.account_id, name: r.name, topics: r.topics, enabled: r.enabled, reports: r.reports ?? false }))
+  return (data ?? []).map((r) => ({ phone: r.phone, accountId: r.account_id, name: r.name, topics: r.topics, enabled: r.enabled, reports: r.reports ?? false, reportKind: r.report_kind ?? 'semanal', reportHour: r.report_hour ?? 9, reportWeekday: r.report_weekday ?? 1, reportMonthday: r.report_monthday ?? 1 }))
 }
 
 export async function listQuestions(teamId: string): Promise<ClientQuestion[]> {
@@ -70,7 +85,7 @@ export function cleanPhone(text: string): string | undefined {
 export async function saveContact(teamId: string, contact: ClientContact) {
   const { error } = await db
     .from('crm_whatsapp_client_contacts')
-    .upsert({ team_id: teamId, phone: contact.phone, account_id: contact.accountId, name: contact.name.trim(), topics: contact.topics, enabled: contact.enabled, reports: contact.reports }, { onConflict: 'team_id,phone' })
+    .upsert({ team_id: teamId, phone: contact.phone, account_id: contact.accountId, name: contact.name.trim(), topics: contact.topics, enabled: contact.enabled, reports: contact.reports, report_kind: contact.reportKind, report_hour: contact.reportHour, report_weekday: contact.reportWeekday, report_monthday: contact.reportMonthday }, { onConflict: 'team_id,phone' })
   if (error) throw fail(error)
 }
 

@@ -230,3 +230,53 @@ export async function clientReport(rawDb: Db, contact: ClientContact, kind: 'dia
   const first = contact.name.split(' ')[0]
   return [`*${kind === 'diario' ? 'Resumo do dia' : 'Resumo da semana'}* · ${account.name}${first ? ` · ${first}` : ''}`, ...parts].join('\n\n')
 }
+
+export type ReportKind = 'diario' | 'semanal' | 'mensal'
+
+const REPORT_NAME: Record<ReportKind, string> = { diario: 'o resumo de ontem', semanal: 'o resumo da última semana', mensal: 'o resumo do mês' }
+
+/**
+ * O relatório agendado de um cliente: 2 ou 3 frases escritas pela IA com os dados da conta dele
+ * (comparando com o período anterior) e um gráfico quadrado do site (ou do gasto, sem site).
+ * Sem IA, cai no resumo de texto de `clientReport`.
+ */
+export async function clientReportMessage(rawDb: Db, contact: ClientContact, kind: ReportKind): Promise<{ text: string; image?: Buffer } | undefined> {
+  const fallback = async () => {
+    const text = await clientReport(rawDb, contact, kind === 'mensal' ? 'semanal' : kind)
+    return text ? { text: text.slice(0, 3500) } : undefined
+  }
+  if (!aiEnabled() || !findClaude()) return fallback()
+  const db = readOnly(rawDb)
+  const { data: account } = await rawDb.from('crm_teams').select('name, status, modules, is_home').eq('id', contact.accountId).maybeSingle()
+  if (!account || account.status === 'pausada') return undefined
+  const modules = (account.modules ?? {}) as Record<string, boolean>
+  const topics = contact.topics.filter((t) => modules[MODULE[t]] !== false)
+  if (!topics.length) return undefined
+  const word = kind === 'diario' ? ['ontem', '7', '7'] : kind === 'semanal' ? ['7', '7', '7'] : ['mês', 'mês', 'mês']
+  try {
+    const parts: string[] = []
+    for (const topic of topics) {
+      const text = topic === 'site' ? word[0] : topic === 'anuncios' ? word[1] : word[2]
+      try {
+        parts.push(clean(await read(db, topic, contact.accountId, periodOf(text), account.is_home === true)))
+      } catch (error) {
+        console.error(`relatório ${contact.phone.slice(-4)} ${topic}: ${error instanceof Error ? error.message : error}`)
+      }
+    }
+    if (!parts.length) return fallback()
+    const ctx: AiContext = {
+      accountName: account.name as string,
+      firstName: contact.name.split(' ')[0] ?? '',
+      abilities: topics.map((t) => LABEL[t]),
+      history: [],
+      question: `Escreva ${REPORT_NAME[kind]} para o cliente, que vai receber sem ter pedido: cumprimente pelo nome, diga o que mais importa em 2 ou 3 frases curtas com os números (compare com o período anterior quando os dados trouxerem) e feche dizendo que ele pode responder para ver mais.`,
+    }
+    const text = (await answerAi(ctx, parts.join('\n\n'))).slice(0, 900)
+    const chartKind: ChartKind | undefined = topics.includes('site') ? 'site_dia' : topics.includes('anuncios') ? 'anuncios_dia' : undefined
+    const image = chartKind ? await makeChart(db, contact.accountId, chartKind, chartKind === 'site_dia' && kind === 'mensal' ? periodOf('mês') : periodOf(chartKind === 'site_dia' ? '7' : kind === 'mensal' ? 'mês' : '7')).catch(() => undefined) : undefined
+    return { text, image }
+  } catch (error) {
+    console.error(`relatório IA ${contact.phone.slice(-4)}: ${error instanceof Error ? error.message : error}`)
+    return fallback()
+  }
+}

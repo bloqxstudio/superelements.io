@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { clientReport, type ClientContact, type Topic } from './clientes.ts'
+import { clientReportMessage, type ClientContact, type ReportKind, type Topic } from './clientes.ts'
 import { anuncios, funil, periodOf, readOnly, samePhone, site } from './comandos.ts'
 
 /**
@@ -37,9 +37,13 @@ export async function buildReport(rawDb: Db, teamId: string, kind: ReportConfig[
 
 let warned = false
 
+/** Entrega no WhatsApp: texto, ou foto com o texto de legenda */
+export type Deliver = (teamId: string, jid: string, text: string, image?: Buffer) => Promise<boolean>
+
 /** Uma passada (chame a cada minuto): manda os relatórios que chegaram na hora e ainda não saíram hoje */
-export async function runReports(db: Db, teamIds: string[]) {
+export async function runReports(db: Db, teamIds: string[], deliver: Deliver) {
   if (!teamIds.length) return
+  await runContactReports(db, teamIds, deliver).catch((error) => console.error(`Relatórios de clientes: ${error instanceof Error ? error.message : error}`))
   const { data, error } = await db.from('crm_whatsapp_reports').select('team_id, kind, hour, weekday').in('team_id', teamIds).eq('enabled', true)
   if (error) {
     if (!warned) console.error(error.code === '42P01' || error.code === 'PGRST205' ? 'Falta a migração 20261028100000_crm_whatsapp_reports.sql: os relatórios por WhatsApp estão desligados.' : `Relatórios: ${error.message}`)
@@ -52,10 +56,7 @@ export async function runReports(db: Db, teamIds: string[]) {
     if (!isDue(config)) continue
     const teamId = row.team_id as string
     const { data: commanders } = await db.from('crm_whatsapp_commanders').select('phone').eq('team_id', teamId)
-    // Números cadastrados que pediram o relatório (clientes e gente da conta da casa que não é comandante)
-    const { data: registered } = await db.from('crm_whatsapp_client_contacts').select('phone, account_id, name, topics').eq('team_id', teamId).eq('enabled', true).eq('reports', true)
-    const contacts = (registered ?? []).filter((c) => !commanders?.some((m) => samePhone(m.phone as string, c.phone as string)))
-    if (!commanders?.length && !contacts.length) continue
+    if (!commanders?.length) continue
     // Reserva antes de montar: uma nova tentativa ou outra cópia do serviço não repete
     const { data: claimed, error: claimError } = await db.rpc('crm_whatsapp_claim_report', { p_team: teamId, p_kind: config.kind, p_today: today })
     if (claimError || !claimed) continue
@@ -74,10 +75,44 @@ export async function runReports(db: Db, teamIds: string[]) {
       const text = await buildReport(db, teamId, config.kind)
       for (const { phone } of commanders) await send(String(phone), text)
     }
-    for (const c of contacts) {
-      const contact: ClientContact = { phone: c.phone as string, accountId: c.account_id as string, name: (c.name as string) ?? '', topics: (c.topics as Topic[]) ?? [] }
-      const text = await clientReport(db, contact, config.kind)
-      if (text) await send(contact.phone, text.slice(0, 3500))
-    }
+  }
+}
+
+const isDueContact = (c: { report_kind: string; report_hour: number; report_weekday: number; report_monthday: number }, now = spNow()) =>
+  now.getUTCHours() >= c.report_hour && (c.report_kind === 'diario' || (c.report_kind === 'semanal' ? now.getUTCDay() === c.report_weekday : now.getUTCDate() === c.report_monthday))
+
+/**
+ * O relatório de cada número de cliente, no horário que ele escolheu (diário, semanal ou mensal): texto curto da IA
+ * com os dados da conta dele e um gráfico. Nunca inicia conversa: só numa conversa que a pessoa já abriu, uma vez por dia,
+ * e quem é comandante recebe o relatório interno, não este.
+ */
+async function runContactReports(db: Db, teamIds: string[], deliver: Deliver) {
+  const { data, error } = await db
+    .from('crm_whatsapp_client_contacts')
+    .select('team_id, phone, account_id, name, topics, report_kind, report_hour, report_weekday, report_monthday')
+    .in('team_id', teamIds)
+    .eq('enabled', true)
+    .eq('reports', true)
+  if (error) {
+    if (!(error.code === '42703' || error.code === '42P01' || error.code === 'PGRST205')) console.error(`Relatórios de clientes: ${error.message}`)
+    return
+  }
+  const today = spNow().toISOString().slice(0, 10)
+  for (const c of data ?? []) {
+    if (!isDueContact(c as never)) continue
+    const teamId = c.team_id as string
+    const phone = c.phone as string
+    const { data: commanders } = await db.from('crm_whatsapp_commanders').select('phone').eq('team_id', teamId)
+    if (commanders?.some((m) => samePhone(m.phone as string, phone))) continue
+    const { data: chats } = await db.from('crm_whatsapp_chats').select('jid').eq('team_id', teamId).like('jid', `%${phone.slice(-8)}@s.whatsapp.net`).limit(1)
+    const target = chats?.[0]?.jid as string | undefined
+    if (!target) continue
+    // Reserva antes de montar: uma nova tentativa ou outra cópia do serviço não repete
+    const { data: claimed, error: claimError } = await db.rpc('crm_whatsapp_claim_contact_report', { p_team: teamId, p_phone: phone, p_today: today })
+    if (claimError || !claimed) continue
+    const contact: ClientContact = { phone, accountId: c.account_id as string, name: (c.name as string) ?? '', topics: (c.topics as Topic[]) ?? [] }
+    const report = await clientReportMessage(db, contact, c.report_kind as ReportKind)
+    if (!report) continue
+    if (!(await deliver(teamId, target, report.text, report.image))) console.error(`[${teamId.slice(0, 8)}] relatório …${phone.slice(-4)} não enfileirado`)
   }
 }
