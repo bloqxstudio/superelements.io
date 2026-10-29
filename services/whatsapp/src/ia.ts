@@ -71,7 +71,7 @@ const talk = (c: AiContext) =>
     '## Conversa até aqui',
     c.history.length ? c.history.map((m) => `${m.fromMe ? 'Avence' : 'Cliente'}${m.at ? ` (${m.at.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })})` : ''}: ${m.text.slice(0, 400)}`).join('\n') : '(primeira mensagem)',
     '',
-    '## Mensagem para responder agora',
+    '## Mensagem para responder agora (se tiver várias linhas, são mensagens seguidas: responda tudo de uma vez, numa resposta só)',
     c.question.slice(0, 1000),
   ].join('\n')
 

@@ -142,27 +142,61 @@ async function command(teamId: string, m: StoredMessage) {
   if (!isCommander && !client) return
   handled.add(m.waId)
   if (handled.size > 500) handled.delete(handled.values().next().value!)
+  // Mensagens seguidas da mesma pessoa viram uma resposta só: espera ela parar de escrever
   const key = `${teamId}:${phone.slice(-8)}`
-  const limit = isCommander ? MAX_PER_HOUR : MAX_PER_HOUR_CLIENT
+  const who: Who = isCommander
+    ? { isCommander: true, contact: { phone, accountId: teamId, name: (commander?.name as string) ?? '', topics: ALL_TOPICS } }
+    : { isCommander: false, contact: { phone: client!.phone as string, accountId: client!.account_id as string, name: (client!.name as string) ?? '', topics: (client!.topics as Topic[]) ?? [] } }
+  const batch = pending.get(key) ?? { messages: [], first: Date.now(), timer: undefined as NodeJS.Timeout | undefined }
+  batch.messages.push(m)
+  clearTimeout(batch.timer)
+  pending.set(key, batch)
+  const wait = Math.max(0, Math.min(BATCH_QUIET, batch.first + BATCH_MAX - Date.now()))
+  batch.timer = setTimeout(() => {
+    pending.delete(key)
+    // Uma resposta por vez por pessoa: se a anterior ainda está sendo feita, esta espera e já a enxerga no histórico
+    const turn = (turns.get(key) ?? Promise.resolve()).then(() => respond(teamId, key, who, batch.messages)).catch((e) => console.error(`[${teamId.slice(0, 8)}] resposta: ${e instanceof Error ? e.message : e}`))
+    turns.set(key, turn)
+    void turn.finally(() => turns.get(key) === turn && turns.delete(key))
+  }, wait)
+}
+
+interface Who {
+  isCommander: boolean
+  contact: ClientContact
+}
+interface Batch {
+  messages: StoredMessage[]
+  first: number
+  timer: NodeJS.Timeout | undefined
+}
+/** Espera 5 s de silêncio (no máximo 15 s desde a primeira) antes de responder */
+const BATCH_QUIET = 5000
+const BATCH_MAX = 15_000
+const pending = new Map<string, Batch>()
+const turns = new Map<string, Promise<unknown>>()
+
+/** Responde a uma ou mais mensagens seguidas de uma só vez */
+async function respond(teamId: string, key: string, who: Who, messages: StoredMessage[]) {
+  const m = messages[0]
+  const text = messages.map((x) => x.body.trim()).join('\n')
+  const limit = who.isCommander ? MAX_PER_HOUR : MAX_PER_HOUR_CLIENT
   const recent = (asked.get(key) ?? []).filter((t) => Date.now() - t < 3_600_000)
   asked.set(key, [...recent, Date.now()])
   // Passou do limite: um aviso uma vez e silêncio até a hora virar
   if (recent.length > limit) return
-  // Últimas mensagens da conversa (antes desta), para a IA entender o contexto
-  const { data: past } = await db.from('crm_whatsapp_messages').select('from_me, body, kind, ts').eq('team_id', teamId).eq('chat_jid', m.jid).order('ts', { ascending: false }).limit(15)
-  const history = (past ?? []).slice(1).reverse().filter((p) => p.kind === 'text' && p.body).map((p) => ({ fromMe: p.from_me as boolean, text: p.body as string, at: new Date(p.ts as string) }))
+  // Conversa anterior a este grupo de mensagens, para a IA entender o contexto
+  const { data: past } = await db.from('crm_whatsapp_messages').select('from_me, body, kind, ts').eq('team_id', teamId).eq('chat_jid', m.jid).lt('ts', m.at.toISOString()).order('ts', { ascending: false }).limit(15)
+  const history = (past ?? []).reverse().filter((p) => p.kind === 'text' && p.body).map((p) => ({ fromMe: p.from_me as boolean, text: p.body as string, at: new Date(p.ts as string) }))
   let reply: string
   if (recent.length === limit) {
     reply = `Limite de ${limit} perguntas por hora atingido. Volto a responder daqui a pouco.`
-  } else if (isCommander) {
-    // O comandante vê todos os assuntos da conta da casa, sem depender das marcações do cadastro
-    const self: ClientContact = { phone, accountId: teamId, name: (commander?.name as string) ?? '', topics: ALL_TOPICS }
-    reply = (await answerClient(db, self, m.body, history)).reply.slice(0, MAX_REPLY)
+  } else if (who.isCommander) {
+    reply = (await answerClient(db, who.contact, text, history)).reply.slice(0, MAX_REPLY)
   } else {
-    const contact: ClientContact = { phone: client!.phone as string, accountId: client!.account_id as string, name: (client!.name as string) ?? '', topics: (client!.topics as Topic[]) ?? [] }
-    const result = await answerClient(db, contact, m.body, history)
+    const result = await answerClient(db, who.contact, text, history)
     reply = result.reply.slice(0, MAX_REPLY)
-    const { error: logError } = await db.from('crm_whatsapp_client_log').insert({ team_id: teamId, account_id: contact.accountId, phone: contact.phone, question: m.body.slice(0, 300), topic: result.topic ?? (result.ai ? 'ia' : null), answered: !!result.topic || !!result.ai })
+    const { error: logError } = await db.from('crm_whatsapp_client_log').insert({ team_id: teamId, account_id: who.contact.accountId, phone: who.contact.phone, question: text.slice(0, 300), topic: result.topic ?? (result.ai ? 'ia' : null), answered: !!result.topic || !!result.ai })
     if (logError && !isMissingTable(logError)) console.error(`[${teamId.slice(0, 8)}] não registrou a pergunta: ${logError.message}`)
   }
   const { error: sendError } = await db.rpc('crm_whatsapp_enqueue_reply', { p_team: teamId, p_jid: m.jid, p_text: reply })
