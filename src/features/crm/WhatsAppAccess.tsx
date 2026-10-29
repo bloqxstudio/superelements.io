@@ -28,6 +28,9 @@ import { formatPhone } from '@/features/crm/whatsapp'
  * da plataforma; os gestores da Avence veem a lista e as últimas perguntas.
  */
 
+/** Campo pequeno, do tamanho do conteúdo (o FIELD ocupa a linha toda) */
+const SMALL_FIELD = `${FIELD.replace('w-full ', '')} h-8 w-auto py-0`
+
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
 type Schedule = Pick<ClientContact, 'reportKind' | 'reportHour' | 'reportWeekday' | 'reportMonthday'>
@@ -35,7 +38,7 @@ type Schedule = Pick<ClientContact, 'reportKind' | 'reportHour' | 'reportWeekday
 /** Quando o relatório sai: todo dia, toda semana (dia) ou todo mês (dia), numa hora cheia de São Paulo */
 const ReportSchedule: React.FC<{ value: Schedule; disabled?: boolean; onChange: (patch: Partial<Schedule>) => void }> = ({ value, disabled, onChange }) => (
   <span className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
-    <select className={`${FIELD} h-8 w-auto`} value={value.reportKind} disabled={disabled} onChange={(e) => onChange({ reportKind: e.target.value as Schedule['reportKind'] })} aria-label="Frequência do relatório">
+    <select className={SMALL_FIELD} value={value.reportKind} disabled={disabled} onChange={(e) => onChange({ reportKind: e.target.value as Schedule['reportKind'] })} aria-label="Frequência do relatório">
       {REPORT_KINDS.map((k) => (
         <option key={k.id} value={k.id}>
           {k.label}
@@ -43,7 +46,7 @@ const ReportSchedule: React.FC<{ value: Schedule; disabled?: boolean; onChange: 
       ))}
     </select>
     {value.reportKind === 'semanal' && (
-      <select className={`${FIELD} h-8 w-auto`} value={value.reportWeekday} disabled={disabled} onChange={(e) => onChange({ reportWeekday: Number(e.target.value) })} aria-label="Dia da semana">
+      <select className={SMALL_FIELD} value={value.reportWeekday} disabled={disabled} onChange={(e) => onChange({ reportWeekday: Number(e.target.value) })} aria-label="Dia da semana">
         {WEEKDAYS.map((d, i) => (
           <option key={d} value={i}>
             {d}
@@ -52,7 +55,7 @@ const ReportSchedule: React.FC<{ value: Schedule; disabled?: boolean; onChange: 
       </select>
     )}
     {value.reportKind === 'mensal' && (
-      <select className={`${FIELD} h-8 w-auto`} value={value.reportMonthday} disabled={disabled} onChange={(e) => onChange({ reportMonthday: Number(e.target.value) })} aria-label="Dia do mês">
+      <select className={SMALL_FIELD} value={value.reportMonthday} disabled={disabled} onChange={(e) => onChange({ reportMonthday: Number(e.target.value) })} aria-label="Dia do mês">
         {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
           <option key={d} value={d}>
             dia {d}
@@ -61,7 +64,7 @@ const ReportSchedule: React.FC<{ value: Schedule; disabled?: boolean; onChange: 
       </select>
     )}
     <span>às</span>
-    <select className={`${FIELD} h-8 w-auto`} value={value.reportHour} disabled={disabled} onChange={(e) => onChange({ reportHour: Number(e.target.value) })} aria-label="Hora do relatório">
+    <select className={SMALL_FIELD} value={value.reportHour} disabled={disabled} onChange={(e) => onChange({ reportHour: Number(e.target.value) })} aria-label="Hora do relatório">
       {Array.from({ length: 24 }, (_, h) => h).map((h) => (
         <option key={h} value={h}>
           {String(h).padStart(2, '0')}h

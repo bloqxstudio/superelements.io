@@ -133,9 +133,10 @@ async function command(teamId: string, m: StoredMessage) {
     warnedLid = true
     return
   }
-  const commander = data?.find((c) => samePhone(c.phone as string, phone))
+  // Quem está no cadastro de clientes vale pelo cadastro (conta e assuntos liberados), mesmo se também for comandante
+  const client = clients?.find((c) => samePhone(c.phone as string, phone))
+  const commander = client ? undefined : data?.find((c) => samePhone(c.phone as string, phone))
   const isCommander = !!commander
-  const client = isCommander ? undefined : clients?.find((c) => samePhone(c.phone as string, phone))
   if (!isCommander && !client) return
   handled.add(m.waId)
   if (handled.size > 500) handled.delete(handled.values().next().value!)
