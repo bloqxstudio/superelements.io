@@ -79,7 +79,7 @@ const talk = (c: AiContext) =>
 const PLAN_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['queries', 'reply'],
+  required: ['queries', 'reply', 'chart'],
   properties: {
     queries: {
       type: 'array',
@@ -92,6 +92,7 @@ const PLAN_SCHEMA = {
       },
     },
     reply: { type: 'string' },
+    chart: { type: 'string', enum: ['none', 'site_dia', 'site_hora', 'origens', 'anuncios_dia'] },
   },
 }
 
@@ -102,14 +103,14 @@ export const PLAN_TOPICS = 'site (visitas, contatos, origens, quem está online)
  * Etapa 1: que dados a conversa pede. `from`/`to` são o período exato (ex.: "hoje pela manhã" =
  * hoje 00:00 até hoje 12:00). Sem dado necessário, `queries` vem vazio e `reply` já é a resposta.
  */
-export const planAi = (c: AiContext): Promise<{ queries: DataQuery[]; reply: string }> =>
+export const planAi = (c: AiContext): Promise<{ queries: DataQuery[]; reply: string; chart: string }> =>
   run(
-    `${BASE} Nesta etapa você decide o que consultar. Se a mensagem (no contexto da conversa) pede números ou fatos da conta, liste em "queries" cada consulta: topic (um de: ${PLAN_TOPICS}), from e to (horário de São Paulo, AAAA-MM-DDTHH:mm, o período EXATO que a pessoa quer: "hoje de manhã" = hoje 00:00 até 12:00, "ontem" = ontem 00:00 até hoje 00:00, sem período dito = últimos 7 dias; para "agora" ou "online" use os últimos 10 minutos) e, só para projetos, search com o nome. Só use assuntos da lista "Você pode falar sobre". Deixe "reply" vazio. Se não precisa de dado (cumprimento, dúvida do que você faz, agradecimento, pedido que só a equipe resolve), deixe "queries" vazio e escreva em "reply" a resposta final da conversa.`,
+    `${BASE} Nesta etapa você decide o que consultar. Se a mensagem (no contexto da conversa) pede números ou fatos da conta, liste em "queries" cada consulta: topic (um de: ${PLAN_TOPICS}), from e to (horário de São Paulo, AAAA-MM-DDTHH:mm, o período EXATO que a pessoa quer: "hoje de manhã" = hoje 00:00 até 12:00, "ontem" = ontem 00:00 até hoje 00:00, sem período dito = últimos 7 dias; para "agora" ou "online" use os últimos 10 minutos) e, só para projetos, search com o nome. Só use assuntos da lista "Você pode falar sobre". Deixe "reply" vazio. Em "chart" escolha um gráfico só quando uma imagem ajuda mais que o número (a pessoa pede gráfico/imagem/visualização, ou compara dias, horas ou origens): site_dia (visitas por dia), site_hora (visitas por hora), origens (de onde vieram as visitas), anuncios_dia (gasto por dia); senão "none". O gráfico usa o período da consulta de site ou anúncios correspondente, então inclua essa consulta. Se não precisa de dado (cumprimento, dúvida do que você faz, agradecimento, pedido que só a equipe resolve), deixe "queries" vazio e escreva em "reply" a resposta final da conversa (chart "none").`,
     talk(c),
     PLAN_SCHEMA
   ).then((r) => {
-    const out = r as { queries?: DataQuery[]; reply?: string }
-    return { queries: Array.isArray(out.queries) ? out.queries : [], reply: (out.reply ?? '').trim() }
+    const out = r as { queries?: DataQuery[]; reply?: string; chart?: string }
+    return { queries: Array.isArray(out.queries) ? out.queries : [], reply: (out.reply ?? '').trim(), chart: out.chart ?? 'none' }
   })
 
 /** Etapa 2: a resposta final, com os dados lidos */

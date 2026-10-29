@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { anuncios, funil, norm, periodOf, readOnly, site, type Period } from './comandos.ts'
+import { CHART_KINDS, makeChart, type ChartKind } from './graficos.ts'
 import { aiEnabled, answerAi, findClaude, planAi, type AiContext, type Turn } from './ia.ts'
 
 /**
@@ -160,7 +161,7 @@ const TOPICS = Object.keys(NUMBER) as Topic[]
  * exato), lê os dados da PRÓPRIA conta (só leitura, só os assuntos liberados) e responde em linguagem natural.
  * Sem menu nem palavras-chave. Se a IA não estiver disponível, uma frase simples (nunca um menu).
  */
-export async function answerClient(rawDb: Db, contact: ClientContact, rawText: string, history: Turn[] = []): Promise<{ reply: string; topic?: Topic; ai?: boolean }> {
+export async function answerClient(rawDb: Db, contact: ClientContact, rawText: string, history: Turn[] = []): Promise<{ reply: string; topic?: Topic; ai?: boolean; image?: Buffer }> {
   const db = readOnly(rawDb)
   const { data: account } = await rawDb.from('crm_teams').select('name, status, modules, is_home').eq('id', contact.accountId).maybeSingle()
   if (!account) return { reply: 'Não achei a sua conta. Fale com a Avence.' }
@@ -179,17 +180,27 @@ export async function answerClient(rawDb: Db, contact: ClientContact, rawText: s
       return { reply: await answerAi(ctx, ''), ai: true }
     }
     const parts: string[] = []
+    let chartPeriod: Period | undefined
     for (const q of queries) {
       const now = new Date()
       const to = new Date(Math.min(spDate(q.to, now).getTime(), now.getTime()))
       const from = spDate(q.from, new Date(to.getTime() - 7 * 86_400_000))
       try {
-        parts.push(clean(await read(db, q.topic as Topic, contact.accountId, periodBetween(from, to > from ? to : now), account.is_home === true, q.search ?? '')))
+        const period = periodBetween(from, to > from ? to : now)
+        if (q.topic === (plan.chart === 'anuncios_dia' ? 'anuncios' : 'site')) chartPeriod ??= period
+        parts.push(clean(await read(db, q.topic as Topic, contact.accountId, period, account.is_home === true, q.search ?? '')))
       } catch (error) {
         console.error(`consulta ${q.topic}: ${error instanceof Error ? error.message : error}`)
       }
     }
-    return { reply: await answerAi(ctx, parts.join('\n\n')), topic: queries[0].topic as Topic, ai: true }
+    const reply = await answerAi(ctx, parts.join('\n\n'))
+    // Gráfico em imagem, quando a conversa pediu e o assunto está liberado; sem dados, só o texto
+    let image: Buffer | undefined
+    const kind = plan.chart as ChartKind
+    if (CHART_KINDS.includes(kind) && chartPeriod && allowed.includes(kind === 'anuncios_dia' ? 'anuncios' : 'site')) {
+      image = await makeChart(db, contact.accountId, kind, chartPeriod).catch((e) => (console.error(`gráfico ${kind}: ${e instanceof Error ? e.message : e}`), undefined))
+    }
+    return { reply, topic: queries[0].topic as Topic, ai: true, image }
   } catch (error) {
     console.error(`ia ${contact.phone.slice(-4)}: ${error instanceof Error ? error.message : error}`)
     return { reply: 'Não consegui te responder agora. Me manda de novo daqui a pouco, ou fale direto com a equipe da Avence.' }

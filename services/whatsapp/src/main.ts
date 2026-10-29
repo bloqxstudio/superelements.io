@@ -173,6 +173,19 @@ const BATCH_MAX = 15_000
 const pending = new Map<string, Batch>()
 const turns = new Map<string, Promise<unknown>>()
 
+/** Gráfico como foto com a resposta de legenda: sobe o PNG e põe na fila (o envio é o mesmo dos arquivos da tela). Falhou: o texto sai sozinho. */
+async function queueImage(teamId: string, jid: string, caption: string, png: Buffer): Promise<boolean> {
+  const name = `grafico-${Date.now()}.png`
+  const path = `${teamId}/saida/ia/${name}`
+  const { error: uploadError } = await db.storage.from(BUCKET).upload(path, png, { contentType: 'image/png', cacheControl: '3600' })
+  if (uploadError) return console.error(`[${teamId.slice(0, 8)}] gráfico não subiu: ${uploadError.message}`), false
+  const body = `[Foto] ${caption}`
+  const { error } = await db.from('crm_whatsapp_messages').insert({ team_id: teamId, chat_jid: jid, from_me: true, body, kind: 'image', status: 'queued', media_path: path, media_mime: 'image/png', media_name: name })
+  if (error) return console.error(`[${teamId.slice(0, 8)}] gráfico não entrou na fila: ${error.message}`), false
+  await db.from('crm_whatsapp_chats').update({ last_text: body, last_from_me: true, last_at: new Date().toISOString() }).eq('team_id', teamId).eq('jid', jid)
+  return true
+}
+
 /** Responde a uma ou mais mensagens seguidas de uma só vez */
 async function respond(teamId: string, who: Who, messages: StoredMessage[]) {
   const m = messages[0]
@@ -181,14 +194,19 @@ async function respond(teamId: string, who: Who, messages: StoredMessage[]) {
   const { data: past } = await db.from('crm_whatsapp_messages').select('from_me, body, kind, ts').eq('team_id', teamId).eq('chat_jid', m.jid).lt('ts', m.at.toISOString()).order('ts', { ascending: false }).limit(15)
   const history = (past ?? []).reverse().filter((p) => p.kind === 'text' && p.body).map((p) => ({ fromMe: p.from_me as boolean, text: p.body as string, at: new Date(p.ts as string) }))
   let reply: string
+  let image: Buffer | undefined
   if (who.isCommander) {
-    reply = (await answerClient(db, who.contact, text, history)).reply.slice(0, MAX_REPLY)
+    const result = await answerClient(db, who.contact, text, history)
+    reply = result.reply.slice(0, MAX_REPLY)
+    image = result.image
   } else {
     const result = await answerClient(db, who.contact, text, history)
     reply = result.reply.slice(0, MAX_REPLY)
+    image = result.image
     const { error: logError } = await db.from('crm_whatsapp_client_log').insert({ team_id: teamId, account_id: who.contact.accountId, phone: who.contact.phone, question: text.slice(0, 300), topic: result.topic ?? (result.ai ? 'ia' : null), answered: !!result.topic || !!result.ai })
     if (logError && !isMissingTable(logError)) console.error(`[${teamId.slice(0, 8)}] não registrou a pergunta: ${logError.message}`)
   }
+  if (image && (await queueImage(teamId, m.jid, reply, image))) return
   const { error: sendError } = await db.rpc('crm_whatsapp_enqueue_reply', { p_team: teamId, p_jid: m.jid, p_text: reply })
   if (sendError) console.error(`[${teamId.slice(0, 8)}] não enfileirou a resposta: ${sendError.message}`)
 }
