@@ -51,25 +51,25 @@ function svgOf(spec: ChartSpec): string {
     ${spec.legend ? `<text x="${W - 48}" y="112" text-anchor="end" font-family="${FONT}" font-size="20" fill="${MUTED}">${esc(spec.legend)}</text>` : ''}`
   const max = Math.max(1, ...bars.map((b) => b.value))
   if (spec.horizontal) {
-    const rowH = 56
-    const H = 170 + bars.length * rowH + 40
+    const H = W
+    const rowH = Math.min(92, (H - 160 - 90) / Math.max(1, bars.length))
     const left = 270
     const right = W - 140
     const rows = bars
       .map((b, i) => {
         const y = 160 + i * rowH
         const w = Math.max(b.value > 0 ? 4 : 0, ((right - left) * b.value) / max)
-        return `<text x="48" y="${y + 30}" font-family="${FONT}" font-size="22" fill="${INK}">${esc(b.label.slice(0, 22))}</text>
-        <rect x="${left}" y="${y + 6}" width="${w}" height="32" fill="${INK}"/>
-        ${b.accent ? `<rect x="${left}" y="${y + 6}" width="${Math.max(4, ((right - left) * b.accent) / max)}" height="32" fill="${BLUE}"/>` : ''}
-        <text x="${left + w + 12}" y="${y + 31}" font-family="${FONT}" font-size="22" font-weight="700" fill="${INK}">${fmt(b.value)}</text>`
+        return `<text x="48" y="${y + rowH / 2 + 8}" font-family="${FONT}" font-size="26" fill="${INK}">${esc(b.label.slice(0, 20))}</text>
+        <rect x="${left}" y="${y + rowH * 0.15}" width="${w}" height="${rowH * 0.6}" fill="${INK}"/>
+        ${b.accent ? `<rect x="${left}" y="${y + rowH * 0.15}" width="${Math.max(4, ((right - left) * b.accent) / max)}" height="${rowH * 0.6}" fill="${BLUE}"/>` : ''}
+        <text x="${left + w + 12}" y="${y + rowH / 2 + 8}" font-family="${FONT}" font-size="26" font-weight="700" fill="${INK}">${fmt(b.value)}</text>`
       })
       .join('')
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${PAPER}"/>${header}${rows}${footer(W, H)}</svg>`
   }
-  const H = 620
+  const H = W
   const top = 170
-  const base = 520
+  const base = H - 100
   const left = 48
   const right = W - 48
   const slot = (right - left) / Math.max(1, bars.length)
@@ -84,8 +84,8 @@ function svgOf(spec: ChartSpec): string {
       const showValue = bars.length <= 12 || i === peak
       return `<rect x="${x}" y="${base - h}" width="${barW}" height="${h}" fill="${INK}"/>
       ${b.accent ? `<rect x="${x}" y="${base - ((base - top - 30) * b.accent) / max}" width="${barW}" height="${((base - top - 30) * b.accent) / max}" fill="${BLUE}"/>` : ''}
-      ${showValue && b.value > 0 ? `<text x="${x + barW / 2}" y="${base - h - 10}" text-anchor="middle" font-family="${FONT}" font-size="20" font-weight="700" fill="${INK}">${fmt(b.value)}</text>` : ''}
-      ${i % every === 0 ? `<text x="${x + barW / 2}" y="${base + 30}" text-anchor="middle" font-family="${FONT}" font-size="18" fill="${MUTED}">${esc(b.label)}</text>` : ''}`
+      ${showValue && b.value > 0 ? `<text x="${x + barW / 2}" y="${base - h - 10}" text-anchor="middle" font-family="${FONT}" font-size="24" font-weight="700" fill="${INK}">${fmt(b.value)}</text>` : ''}
+      ${i % every === 0 ? `<text x="${x + barW / 2}" y="${base + 30}" text-anchor="middle" font-family="${FONT}" font-size="22" fill="${MUTED}">${esc(b.label)}</text>` : ''}`
     })
     .join('')
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${PAPER}"/>${header}<line x1="${left}" y1="${base}" x2="${right}" y2="${base}" stroke="${LINE}" stroke-width="2"/>${body}${footer(W, H)}</svg>`
