@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { anuncios, funil, norm, periodOf, readOnly, site, type Period } from './comandos.ts'
-import { aiEnabled, askAi, findClaude } from './ia.ts'
+import { aiEnabled, answerAi, findClaude, planAi, type AiContext, type Turn } from './ia.ts'
 
 /**
  * Central de relacionamento: quem está em `crm_whatsapp_client_contacts` escreve para o
@@ -137,62 +137,62 @@ const read = (db: Db, topic: Topic, accountId: string, period: Period, isHome = 
   : topic === 'caixa' ? caixa(db, accountId)
   : projetos(db, accountId, isHome, text)
 
-/** A resposta ao que o cliente escreveu e o assunto atendido (para o registro) */
-export async function answerClient(rawDb: Db, contact: ClientContact, rawText: string, history: { fromMe: boolean; text: string }[] = []): Promise<{ reply: string; topic?: Topic; ai?: boolean }> {
+const SP_OFFSET = '-03:00'
+const spDate = (text: string, fallback: Date) => {
+  const d = new Date(`${text.slice(0, 16)}:00${SP_OFFSET}`)
+  return Number.isNaN(d.getTime()) ? fallback : d
+}
+
+/** Período exato pedido pela conversa; anúncios e Instagram só guardam relatórios por dia (preset mais próximo) */
+function periodBetween(from: Date, to: Date): Period {
+  const days = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / 86_400_000))
+  const sp = new Date(to.getTime() - 3 * 3_600_000)
+  const monthStart = new Date(Date.UTC(sp.getUTCFullYear(), sp.getUTCMonth(), 1) + 3 * 3_600_000)
+  const preset: Period['preset'] = Math.abs(from.getTime() - monthStart.getTime()) < 86_400_000 && days > 7 ? 'this_month' : days <= 7 ? 'last_7d' : days <= 30 ? 'last_30d' : 'last_90d'
+  const fmt = (d: Date) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
+  return { label: `${fmt(from)} a ${fmt(to)}`, from, to, preset }
+}
+
+const TOPICS = Object.keys(NUMBER) as Topic[]
+
+/**
+ * A conversa com quem escreveu: a IA do computador lê a conversa, decide o que consultar (e o período
+ * exato), lê os dados da PRÓPRIA conta (só leitura, só os assuntos liberados) e responde em linguagem natural.
+ * Sem menu nem palavras-chave. Se a IA não estiver disponível, uma frase simples (nunca um menu).
+ */
+export async function answerClient(rawDb: Db, contact: ClientContact, rawText: string, history: Turn[] = []): Promise<{ reply: string; topic?: Topic; ai?: boolean }> {
   const db = readOnly(rawDb)
   const { data: account } = await rawDb.from('crm_teams').select('name, status, modules, is_home').eq('id', contact.accountId).maybeSingle()
   if (!account) return { reply: 'Não achei a sua conta. Fale com a Avence.' }
   if (account.status === 'pausada') return { reply: 'A sua conta está pausada. Fale com a Avence.' }
   const modules = (account.modules ?? {}) as Record<string, boolean>
   const allowed = contact.topics.filter((t) => modules[MODULE[t]] !== false)
-  const first = contact.name.split(' ')[0]
-  const menu = [
-    `Oi${first ? `, ${first}` : ''}! Aqui são os dados da conta *${account.name}*. Responda com o número:`,
-    ...allowed.map((t) => `${NUMBER[t]}. ${LABEL[t]}`),
-    '',
-    'Pode acrescentar o período: hoje, ontem, 7, 30 ou mês (ex.: "2 mês").',
-  ].join('\n')
   if (!allowed.length) return { reply: 'Ainda não há nada liberado para o seu número. Fale com a Avence.' }
+  if (!aiEnabled() || !findClaude()) return { reply: 'Não consegui te atender automaticamente agora. Me manda de novo daqui a pouco, ou fale direto com a equipe da Avence.' }
 
-  const text = norm(rawText)
-  const byNumber = text.match(/^([1-9])\b/)
-  // Os números são fixos: o 2 é sempre anúncios, mesmo quando o 1 está desligado
-  const picked = byNumber ? (Object.keys(NUMBER) as Topic[]).find((t) => NUMBER[t] === Number(byNumber[1])) : undefined
-  let topic: Topic | undefined = picked && allowed.includes(picked) ? picked : undefined
-  if (!topic && !byNumber) {
-    topic = WORDS.find(([, re]) => re.test(text))?.[0]
-    if (topic && !allowed.includes(topic)) return { reply: `Esse assunto não está liberado para o seu número.\n\n${menu}` }
-  }
-  if (!topic) {
-    // Sem número nem palavra de assunto: a IA do computador responde com os dados liberados para a pessoa.
-    // Número solto ("9") e falha da IA caem no menu.
-    if (!byNumber && aiEnabled() && findClaude()) {
+  const ctx: AiContext = { accountName: account.name as string, firstName: contact.name.split(' ')[0] ?? '', abilities: allowed.map((t) => LABEL[t]), history, question: rawText }
+  try {
+    const plan = await planAi(ctx)
+    const queries = plan.queries.filter((q) => TOPICS.includes(q.topic as Topic) && allowed.includes(q.topic as Topic)).slice(0, 4)
+    if (!queries.length) {
+      if (plan.reply) return { reply: plan.reply, ai: true }
+      return { reply: await answerAi(ctx, ''), ai: true }
+    }
+    const parts: string[] = []
+    for (const q of queries) {
+      const now = new Date()
+      const to = new Date(Math.min(spDate(q.to, now).getTime(), now.getTime()))
+      const from = spDate(q.from, new Date(to.getTime() - 7 * 86_400_000))
       try {
-        const period = periodOf(text)
-        const parts: string[] = []
-        for (const t of allowed) {
-          try {
-            parts.push(clean(await read(db, t, contact.accountId, period, account.is_home === true, text)))
-          } catch {
-            // Um assunto que falha não derruba a resposta
-          }
-        }
-        const reply = await askAi({ accountName: account.name as string, firstName: first, question: rawText, data: parts.join('\n\n'), history })
-        return { reply, ai: true }
+        parts.push(clean(await read(db, q.topic as Topic, contact.accountId, periodBetween(from, to > from ? to : now), account.is_home === true, q.search ?? '')))
       } catch (error) {
-        console.error(`ia ${contact.phone.slice(-4)}: ${error instanceof Error ? error.message : error}`)
+        console.error(`consulta ${q.topic}: ${error instanceof Error ? error.message : error}`)
       }
     }
-    return { reply: menu }
-  }
-
-  const period = periodOf(text)
-  try {
-    const raw = await read(db, topic, contact.accountId, period, account.is_home === true, text)
-    return { reply: clean(raw), topic }
+    return { reply: await answerAi(ctx, parts.join('\n\n')), topic: queries[0].topic as Topic, ai: true }
   } catch (error) {
-    console.error(`cliente ${contact.phone.slice(-4)}: ${error instanceof Error ? error.message : error}`)
-    return { reply: GENERIC_ERROR, topic }
+    console.error(`ia ${contact.phone.slice(-4)}: ${error instanceof Error ? error.message : error}`)
+    return { reply: 'Não consegui te responder agora. Me manda de novo daqui a pouco, ou fale direto com a equipe da Avence.' }
   }
 }
 

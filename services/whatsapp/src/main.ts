@@ -149,8 +149,8 @@ async function command(teamId: string, m: StoredMessage) {
   // Passou do limite: um aviso uma vez e silêncio até a hora virar
   if (recent.length > limit) return
   // Últimas mensagens da conversa (antes desta), para a IA entender o contexto
-  const { data: past } = await db.from('crm_whatsapp_messages').select('from_me, body, kind').eq('team_id', teamId).eq('chat_jid', m.jid).order('ts', { ascending: false }).limit(7)
-  const history = (past ?? []).slice(1).reverse().filter((p) => p.kind === 'text' && p.body).map((p) => ({ fromMe: p.from_me as boolean, text: p.body as string }))
+  const { data: past } = await db.from('crm_whatsapp_messages').select('from_me, body, kind, ts').eq('team_id', teamId).eq('chat_jid', m.jid).order('ts', { ascending: false }).limit(15)
+  const history = (past ?? []).slice(1).reverse().filter((p) => p.kind === 'text' && p.body).map((p) => ({ fromMe: p.from_me as boolean, text: p.body as string, at: new Date(p.ts as string) }))
   let reply: string
   if (recent.length === limit) {
     reply = `Limite de ${limit} perguntas por hora atingido. Volto a responder daqui a pouco.`
