@@ -279,6 +279,9 @@ export type InsertKind =
 
 const widget = (widgetType: string, settings: Settings): SectionElement => ({ id: newElementId(), elType: 'widget', widgetType, settings, elements: [] })
 
+/** Widget novo com os padrões dados (para quem monta elementos fora do painel Elementos, como o formulário). */
+export const createWidget = widget
+
 /** Elemento novo com os padrões do Elementor, pronto para o motor e para o site. */
 export function createElement(kind: InsertKind): SectionElement {
   switch (kind) {

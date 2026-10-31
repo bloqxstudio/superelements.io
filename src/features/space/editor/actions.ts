@@ -150,6 +150,14 @@ export function insertKind(kind: InsertKind) {
   return element.id ?? null
 }
 
+/** Um elemento já montado (como o formulário): na seleção, ou numa seção nova. */
+export function insertElement(element: SectionElement) {
+  const sectionId = targetSection()
+  if (sectionId) return insertInto(sectionId, element)
+  addBlankSection({ with: [element] })
+  return element.id ?? null
+}
+
 export function insertBlock(block: SavedBlock, sectionId = targetSection(), target?: InsertTarget) {
   const { element, pinned } = freshCopy(block.element, block.pinned)
   if (sectionId) return insertInto(sectionId, element, target, pinned)

@@ -4,6 +4,8 @@ import {
   Component as ComponentIcon,
   Film,
   Heading1,
+  ListChecks,
+  ExternalLink,
   Image,
   LayoutGrid,
   Minus,
@@ -19,7 +21,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { createElement, isContainer, type InsertKind } from '../editor/tree'
-import { addBlankSection, insertBlock, insertComponent, insertKind } from '../editor/actions'
+import { addBlankSection, insertBlock, insertComponent, insertElement, insertKind } from '../editor/actions'
 import { COMPONENT_COLOR, COMPONENT_COLOR_STRONG, componentElements, componentUses } from '../components/components'
 import { useSpaceStore } from '@/store/spaceStore'
 import type { SpaceComponent } from '@/types/space'
@@ -27,6 +29,10 @@ import { startInsertDrag, type InsertItem } from '../editor/insertDrag'
 import { useBlocks, type SavedBlock } from '../editor/blocks'
 import { INSERT_KEYS } from '../editor/useEditorShortcuts'
 import { createBlankSection } from '../editor/tree'
+import { toast } from 'sonner'
+import { useCrm } from '@/features/crm/crmStore'
+import { listForms, saveForm, type CrmForm } from '@/features/crm/forms'
+import { formElement } from './formWidget'
 
 interface ElementEntry {
   kind: InsertKind
@@ -90,6 +96,104 @@ const componentItem = (component: SpaceComponent): InsertItem => {
         ? insertComponent(component.id, { sectionId: where.sectionId, target: where.target })
         : insertComponent(component.id, { sectionId: null, pageId: where.pageId, index: where.index }),
   }
+}
+
+/** Um formulário da conta: entra como widget HTML com o código de embed (publica no WordPress como qualquer widget). */
+const formItem = (form: CrmForm): InsertItem => ({
+  label: form.name,
+  kind: 'widget',
+  make: () => ({ element: formElement(form) }),
+})
+
+const warnDraft = (form: CrmForm, onPublished: () => void) => {
+  if (form.status === 'published') return
+  toast.warning(`“${form.name}” está em rascunho e não aparece no site.`, {
+    action: {
+      label: 'Publicar formulário',
+      onClick: () =>
+        saveForm({ ...form, status: 'published' }).then(
+          () => {
+            onPublished()
+            toast.success('Formulário publicado')
+          },
+          (e) => toast.error(e instanceof Error ? e.message : String(e))
+        ),
+    },
+  })
+}
+
+const FormRow: React.FC<{ form: CrmForm; onPublished: () => void }> = ({ form, onPublished }) => (
+  <li>
+    <button
+      type="button"
+      className="flex w-full cursor-grab items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-left transition-[border-color,background-color,transform] hover:border-violet-300 hover:bg-violet-50/50 active:scale-[0.96] active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+      onPointerDown={(e) =>
+        startInsertDrag(e, formItem(form), () => {
+          const id = insertElement(formElement(form))
+          warnDraft(form, onPublished)
+          return id
+        })
+      }
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          insertElement(formElement(form))
+          warnDraft(form, onPublished)
+        }
+      }}
+      title="Clique para pôr na camada selecionada, ou arraste até o canvas"
+    >
+      <ListChecks className="h-3.5 w-3.5 shrink-0 text-violet-500" strokeWidth={1.75} aria-hidden />
+      <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800">{form.name}</span>
+      <span className={`shrink-0 text-[10px] ${form.status === 'published' ? 'text-gray-400' : 'text-amber-600'}`}>
+        {form.kind === 'quiz' ? 'quiz' : 'form'}
+        {form.status === 'published' ? '' : ' · rascunho'}
+      </span>
+    </button>
+  </li>
+)
+
+/** Formulários e quizzes da conta (CRM › Formulários), para pôr na página sem sair do editor. */
+const FormsSection: React.FC = () => {
+  const team = useCrm((s) => s.team)
+  const [forms, setForms] = useState<CrmForm[] | null>(null)
+  const reload = React.useCallback(() => {
+    if (!team) return
+    listForms(team.id).then(setForms, () => setForms([]))
+  }, [team])
+  React.useEffect(() => {
+    reload()
+    // Volta da aba onde o formulário foi criado ou editado
+    window.addEventListener('focus', reload)
+    return () => window.removeEventListener('focus', reload)
+  }, [reload])
+
+  if (!team) return null
+  return (
+    <section aria-labelledby="insert-forms">
+      <div className="mb-2 flex items-center justify-between">
+        <h3 id="insert-forms" className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+          Formulários
+        </h3>
+        <a href="/crm/formularios" target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-medium text-violet-600 hover:underline">
+          Criar ou editar <ExternalLink className="h-2.5 w-2.5" aria-hidden />
+        </a>
+      </div>
+      {forms === null ? (
+        <p className="px-1 text-[11px] text-gray-400">Carregando…</p>
+      ) : forms.length ? (
+        <ul className="space-y-1.5">
+          {forms.map((form) => (
+            <FormRow key={form.id} form={form} onPublished={reload} />
+          ))}
+        </ul>
+      ) : (
+        <p className="rounded-lg border border-dashed border-gray-200 px-3 py-3 text-[11px] leading-relaxed text-gray-400">
+          Nenhum formulário ainda. Use <strong className="font-medium text-gray-500">Criar ou editar</strong> para montar um formulário ou quiz; ele aparece aqui para arrastar.
+        </p>
+      )}
+    </section>
+  )
 }
 
 const ComponentRow: React.FC<{ component: SpaceComponent; uses: number }> = ({ component, uses }) => {
@@ -304,6 +408,8 @@ export const ElementsLibrary: React.FC = () => {
             ))}
           </div>
         </section>
+
+        <FormsSection />
 
         {components.length > 0 && (
           <section aria-labelledby="insert-components">
