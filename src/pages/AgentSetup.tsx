@@ -18,7 +18,7 @@ const AgentSetup: React.FC = () => {
   const [params, setParams] = useSearchParams()
   const tab = TABS.find((t) => t.id === params.get('aba'))?.id ?? 'identidade'
   return (
-    <div className="min-h-[calc(100vh-57px)] bg-zinc-50">
+    <div className="min-h-[calc(100vh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <Link to="/agentes" className="text-xs text-gray-500 underline">
           ← Agentes

@@ -57,7 +57,7 @@ const AdsCallback: React.FC = () => {
 
   const error = result?.kind === 'error'
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-10">
+    <main className="flex se-product se-app min-h-screen items-center justify-center px-4 py-10">
       <div className={`w-full rounded-xl border bg-white p-6 shadow-sm ${result?.kind === 'pending' ? 'max-w-lg' : 'max-w-sm'}`} aria-live="polite">
         {result?.kind === 'pending' ? (
           <>

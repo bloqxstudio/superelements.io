@@ -85,7 +85,7 @@ const Agents: React.FC = () => {
   )
 
   return (
-    <div className="min-h-[calc(100vh-57px)] bg-zinc-50">
+    <div className="min-h-[calc(100vh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Agentes</h1>
         <p className="mt-1 max-w-2xl text-sm text-gray-500">

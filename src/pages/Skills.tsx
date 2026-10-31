@@ -113,7 +113,7 @@ export default function Skills() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-57px)] bg-zinc-50">
+    <div className="min-h-[calc(100vh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>

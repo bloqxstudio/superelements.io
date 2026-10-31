@@ -52,7 +52,7 @@ const InstagramCallback: React.FC = () => {
 
   const error = result?.kind === 'error'
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
+    <main className="flex se-product se-app min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-xl border bg-white p-6 shadow-sm" aria-live="polite">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 shrink-0">{error ? <CircleAlert className="h-5 w-5 text-destructive" aria-hidden /> : <Loader2 className="h-5 w-5 animate-spin text-gray-500" aria-hidden />}</span>

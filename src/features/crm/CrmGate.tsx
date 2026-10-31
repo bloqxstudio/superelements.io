@@ -16,7 +16,7 @@ import { createTeam } from './teams'
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 const Box: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="min-h-[calc(100vh-57px)] bg-zinc-50">
+  <div className="min-h-[calc(100vh-57px)]">
     <div className="mx-auto max-w-lg px-4 py-16 md:px-6">{children}</div>
   </div>
 )

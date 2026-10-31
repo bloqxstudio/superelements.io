@@ -95,7 +95,7 @@ const WordPressCallback: React.FC = () => {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
+    <main className="flex se-product se-app min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-xl border bg-white p-6 shadow-sm" aria-live="polite">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 shrink-0">{icon}</span>

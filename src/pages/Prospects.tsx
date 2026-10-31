@@ -336,7 +336,7 @@ const Prospects: React.FC = () => {
   if (oldFunnelLink) return <Navigate to="/crm" replace />
 
   return (
-    <div className="min-h-[calc(100vh-57px)] bg-zinc-50">
+    <div className="min-h-[calc(100vh-57px)]">
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10">
         <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Prospecção</h1>
         <p className="mt-1 max-w-2xl text-sm text-gray-500">

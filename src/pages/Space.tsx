@@ -46,7 +46,7 @@ const Space: React.FC = () => {
   }, [])
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-[#f4f4f5]">
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-[#f5f5f7]">
       <SpaceTopBar projectId={projectId} />
       <div className="flex min-h-0 flex-1">
         {panels && <SpaceSidebar />}
