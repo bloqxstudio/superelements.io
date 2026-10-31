@@ -463,12 +463,13 @@ const Campaigns: React.FC<{ h: HomeData; rows: CampaignRow[]; w: Window; now: nu
   const [open, setOpen] = useState<string>()
   const adsCond = conditionOf(h.ads, now, { freshMs: ADS_FRESH })
   const loading = (h.ads.status === 'loading' || h.site.status === 'loading') && !rows.length
+  if (!h.adsOn && !h.siteOn) return null
   return (
     <Block
       id="campanhas"
       title="Campanhas e o caminho até a oportunidade"
       hint="Investimento e resultados lado a lado. Abra uma campanha para ver o que o sistema consegue ligar a ela."
-      status={h.adsOn ? <Condition {...adsCond} title="Anúncios são o último relatório guardado da Meta, não tempo real" /> : undefined}
+      status={h.adsOn && h.ads.status !== 'none' ? <Condition {...adsCond} title="Anúncios são o último relatório guardado da Meta, não tempo real" /> : undefined}
     >
       {loading ? (
         <div className="grid gap-2">
@@ -670,11 +671,10 @@ const Opportunities: React.FC<{ h: HomeData; summary: Summary; opps: Opportunity
   const recent = useMemo(() => (opps ? [...opps].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 6) : []), [opps])
   const max = Math.max(1, ...(summary?.byStage.map((s) => s.count) ?? [1]))
   const status = h.oppsError ? <Condition kind="indisponivel" label="Indisponível" /> : h.oppsAt ? (h.realtime ? <Condition kind="tempo-real" label="Tempo real" title="O funil muda para a equipe na hora" /> : <Condition kind="atualizado" label={`Lido às ${clock(h.oppsAt)} · mudanças chegam na hora`} />) : <Condition kind="lendo" label="Lendo…" />
+  if (!h.crmOn) return null
   return (
     <Block id="oportunidades" title="Oportunidades chegando e avançando" hint="As etapas são as do funil da conta. Abrir um cartão leva ao tratamento completo." status={h.crmOn ? status : undefined}>
-      {!h.crmOn ? (
-        <Empty title="O CRM está desligado nesta conta" />
-      ) : h.oppsError ? (
+      {h.oppsError ? (
         <Empty title="Não foi possível ler o funil" text={h.oppsError} to="/crm" action="Abrir Oportunidades" />
       ) : !summary ? (
         <Skeleton className="h-40" />
@@ -779,7 +779,8 @@ const Production: React.FC<{ h: HomeData; now: number; w: Window }> = ({ h, now,
   const scheduled = stories.filter((s) => s.status === 'agendado' && s.publishAt > now).sort((a, b) => a.publishAt - b.publishAt)
   const live = stories.filter((s) => s.status === 'publicado' && (s.publishedAt ?? 0) >= w.from)
   const media = instagram.status === 'ready' ? instagram.data.media.filter((m) => m.postedAt >= w.from) : []
-  if (!h.projOn && !h.adsOn) return null
+  const igShown = h.adsOn && instagram.status !== 'none'
+  if (!h.projOn && !igShown) return null
   return (
     <Block id="producao" title="Produção e publicação" hint="O trabalho que alimenta as campanhas e o site. Cada cartão leva à área para continuar.">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -827,7 +828,7 @@ const Production: React.FC<{ h: HomeData; now: number; w: Window }> = ({ h, now,
             )}
           </Tile>
         )}
-        {h.adsOn && (
+        {igShown && (
           <Tile icon={Instagram} title="Stories" to="/crm/instagram?aba=stories" status={conditionOf(instagram, now, { freshMs: IG_FRESH, realtime: instagram.status === 'ready' })}>
             {instagram.status === 'ready' ? (
               <>
@@ -842,7 +843,7 @@ const Production: React.FC<{ h: HomeData; now: number; w: Window }> = ({ h, now,
             )}
           </Tile>
         )}
-        {h.adsOn && (
+        {igShown && (
           <Tile icon={Instagram} title="Publicações no Instagram" to="/crm/instagram" status={conditionOf(instagram, now, { freshMs: IG_FRESH })}>
             {instagram.status === 'ready' ? (
               <>
@@ -864,9 +865,7 @@ const Production: React.FC<{ h: HomeData; now: number; w: Window }> = ({ h, now,
           </Tile>
         )}
       </div>
-      <p className="mt-3 text-xs text-gray-500">
-        Copy e Criativos ainda não guardam um estado (rascunho, em aprovação, aprovado) que a Início possa ler, então não aparecem aqui. Quando um criativo ou página tiver vínculo registrado com uma campanha, ele entra no percurso acima.
-      </p>
+      {(h.adsOn || h.siteOn) && <p className="mt-3 text-xs text-gray-500">Quando um criativo ou página tiver vínculo registrado com uma campanha, ele entra no percurso acima.</p>}
     </Block>
   )
 }
