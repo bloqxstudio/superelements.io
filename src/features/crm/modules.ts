@@ -7,7 +7,7 @@ import type { Team } from './types'
  * ficam sempre ligadas (sem elas ninguém entraria para ligar o resto).
  */
 
-export type ModuleId = 'projetos' | 'agentes' | 'copy' | 'criativos' | 'skills' | 'crm' | 'whatsapp' | 'instagram' | 'site'
+export type ModuleId = 'projetos' | 'agentes' | 'copy' | 'criativos' | 'skills' | 'crm' | 'clientes' | 'funis' | 'formularios' | 'social' | 'prospeccao' | 'diagnostico' | 'whatsapp' | 'instagram' | 'site'
 
 export interface ModuleInfo {
   id: ModuleId
@@ -25,7 +25,13 @@ export const MODULES: ModuleInfo[] = [
   { id: 'copy', label: 'Copy', hint: 'Documentos de texto e tendências.', group: 'Produção', enforcedInDb: false },
   { id: 'criativos', label: 'Criativos', hint: 'Posts e stories no canvas.', group: 'Produção', enforcedInDb: false },
   { id: 'skills', label: 'Skills', hint: 'As receitas dos agentes.', group: 'Produção', enforcedInDb: false },
-  { id: 'crm', label: 'CRM e Prospecção', hint: 'Oportunidades, clientes, social, prospecção e diagnóstico.', group: 'CRM', enforcedInDb: false },
+  { id: 'crm', label: 'Oportunidades', hint: 'O quadro de oportunidades do CRM e o recebimento de leads.', group: 'CRM', enforcedInDb: false },
+  { id: 'clientes', label: 'Clientes', hint: 'Cadastro e linha do tempo dos clientes.', group: 'CRM', enforcedInDb: false },
+  { id: 'funis', label: 'Funis de venda', hint: 'O mapa de funis com a jornada por etapas.', group: 'CRM', enforcedInDb: true },
+  { id: 'formularios', label: 'Formulários e quizzes', hint: 'Criar, publicar e receber respostas (a página pública também para).', group: 'CRM', enforcedInDb: true },
+  { id: 'social', label: 'Relacionamento nas redes', hint: 'A fila diária de social selling.', group: 'CRM', enforcedInDb: false },
+  { id: 'prospeccao', label: 'Prospecção', hint: 'Busca de empresas e o funil de prospecção.', group: 'CRM', enforcedInDb: false },
+  { id: 'diagnostico', label: 'Diagnóstico de site', hint: 'A leitura de um site com oferta de atualização.', group: 'CRM', enforcedInDb: false },
   { id: 'whatsapp', label: 'WhatsApp e Fluxos', hint: 'Caixa de entrada da equipe e rotinas de contato.', group: 'CRM', enforcedInDb: true },
   { id: 'instagram', label: 'Instagram e Anúncios', hint: 'Perfil, posts, stories, caixa e anúncios da Meta.', group: 'CRM', enforcedInDb: true },
   { id: 'site', label: 'Analytics do site', hint: 'Visitas, eventos, mapa e anúncios x site.', group: 'CRM', enforcedInDb: true },
@@ -64,12 +70,18 @@ export function moduleOfPath(pathname: string): ModuleId | undefined {
   if (p.startsWith('/crm/whatsapp') || p.startsWith('/crm/fluxos')) return 'whatsapp'
   if (p.startsWith('/crm/instagram') || p.startsWith('/crm/anuncios')) return 'instagram'
   if (p.startsWith('/crm/site')) return 'site'
-  if (p === '/crm' || p.startsWith('/crm/clientes') || p.startsWith('/crm/social') || p.startsWith('/crm/diagnostico') || p.startsWith('/crm/funis') || p.startsWith('/prospeccao')) return 'crm'
+  if (p.startsWith('/crm/clientes')) return 'clientes'
+  if (p.startsWith('/crm/funis')) return 'funis'
+  if (p.startsWith('/crm/formularios')) return 'formularios'
+  if (p.startsWith('/crm/social')) return 'social'
+  if (p.startsWith('/crm/diagnostico')) return 'diagnostico'
+  if (p.startsWith('/prospeccao')) return 'prospeccao'
+  if (p === '/crm') return 'crm'
   return undefined
 }
 
 /** A primeira tela que a conta ainda tem ligada, para a pessoa não ficar sem saída. */
 export function firstOpenPath(team: Pick<Team, 'status' | 'modules'> | undefined): string {
-  const order: [ModuleId, string][] = [['projetos', '/'], ['crm', '/crm'], ['whatsapp', '/crm/whatsapp'], ['instagram', '/crm/instagram'], ['site', '/crm/site'], ['criativos', '/criativos'], ['copy', '/copy'], ['agentes', '/agentes'], ['skills', '/skills']]
+  const order: [ModuleId, string][] = [['projetos', '/'], ['crm', '/crm'], ['clientes', '/crm/clientes'], ['funis', '/crm/funis'], ['formularios', '/crm/formularios'], ['whatsapp', '/crm/whatsapp'], ['instagram', '/crm/instagram'], ['site', '/crm/site'], ['criativos', '/criativos'], ['copy', '/copy'], ['agentes', '/agentes'], ['skills', '/skills']]
   return order.find(([id]) => moduleOn(team, id))?.[1] ?? '/crm/equipe'
 }

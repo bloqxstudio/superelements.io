@@ -31,6 +31,13 @@ const sha = async (text: string) => {
 
 const META_KEYS = ['page', 'referrer', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_id', 'gclid', 'gbraid', 'wbraid', 'fbclid', 'campaign_id', 'adset_id', 'ad_id', 'placement']
 
+/** A conta está ativa e com o módulo Formulários ligado? (a página pública também para) */
+async function formsOn(teamId: string): Promise<boolean> {
+  const { data } = await admin.from('crm_teams').select('status, modules').eq('id', teamId).maybeSingle()
+  if (!data || data.status !== 'ativa') return false
+  return (data.modules as Record<string, unknown> | null)?.formularios !== false
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
   const url = new URL(request.url)
@@ -39,8 +46,8 @@ Deno.serve(async (request) => {
     const id = url.searchParams.get('id') ?? ''
     if (!id) return json({ ok: true, version: VERSION })
     if (!UUID.test(id)) return json({ error: 'Formulário não encontrado.' }, 404)
-    const { data: form } = await admin.from('crm_forms').select('id, name, status, definition, theme, settings').eq('id', id).maybeSingle()
-    if (!form || form.status !== 'published') return json({ error: 'Formulário não encontrado.' }, 404)
+    const { data: form } = await admin.from('crm_forms').select('id, team_id, name, status, definition, theme, settings').eq('id', id).maybeSingle()
+    if (!form || form.status !== 'published' || !(await formsOn(form.team_id as string))) return json({ error: 'Formulário não encontrado.' }, 404)
     if (url.searchParams.get('view') === '1') await admin.rpc('crm_form_view', { p_form: id })
     return json(
       { id: form.id, name: form.name, definition: cleanDefinition(form.definition), theme: cleanTheme(form.theme), settings: cleanSettings(form.settings) },
@@ -64,7 +71,7 @@ Deno.serve(async (request) => {
   if (typeof body.hp === 'string' && body.hp) return json({ ok: true })
 
   const { data: form } = await admin.from('crm_forms').select('id, team_id, name, status, definition, settings').eq('id', id).maybeSingle()
-  if (!form || form.status !== 'published') return json({ error: 'Formulário não encontrado.' }, 404)
+  if (!form || form.status !== 'published' || !(await formsOn(form.team_id as string))) return json({ error: 'Formulário não encontrado.' }, 404)
   const teamId = form.team_id as string
   const definition = cleanDefinition(form.definition)
   const settings = cleanSettings(form.settings)

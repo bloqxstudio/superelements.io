@@ -202,15 +202,15 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
             {on('crm') && <OportunidadesItem />}
             {on('whatsapp') && <WhatsAppItem />}
             {on('whatsapp') && <Item to="/crm/fluxos" icon={Workflow} label="Automações" />}
-            {on('crm') && <Item to="/crm/formularios" icon={ListChecks} label="Formulários" />}
-            {on('crm') && <Item to="/crm/funis" icon={Filter} label="Funis de venda" />}
-            {on('crm') && <Item to="/crm/clientes" icon={Building2} label="Clientes" />}
-            {on('crm') && <Item to="/crm/social" icon={Send} label="Relacionamento nas redes" />}
+            {on('formularios') && <Item to="/crm/formularios" icon={ListChecks} label="Formulários" />}
+            {on('funis') && <Item to="/crm/funis" icon={Filter} label="Funis de venda" />}
+            {on('clientes') && <Item to="/crm/clientes" icon={Building2} label="Clientes" />}
+            {on('social') && <Item to="/crm/social" icon={Send} label="Relacionamento nas redes" />}
             {on('instagram') && <InstagramItem />}
             {on('instagram') && <Item to="/crm/anuncios" icon={Megaphone} label="Anúncios" />}
             {on('site') && <SiteItem />}
-            {on('crm') && <Item to="/prospeccao" icon={Radar} label="Prospecção" />}
-            {on('crm') && <Item to="/crm/diagnostico" icon={ScanSearch} label="Diagnóstico" />}
+            {on('prospeccao') && <Item to="/prospeccao" icon={Radar} label="Prospecção" />}
+            {on('diagnostico') && <Item to="/crm/diagnostico" icon={ScanSearch} label="Diagnóstico" />}
             <Item to="/crm/equipe" icon={Users} label="Equipe" />
           </Section>
         )}
