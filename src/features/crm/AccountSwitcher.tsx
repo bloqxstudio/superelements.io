@@ -5,7 +5,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
 import { useCrm } from './crmStore'
-import { NewAccountDialog } from './NewAccountDialog'
 
 /**
  * O seletor de conta no topo do menu lateral: mostra a empresa aberta, troca de
@@ -23,7 +22,6 @@ export const AccountSwitcher: React.FC = () => {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const { status, teams, team, select } = useCrm()
-  const [adding, setAdding] = useState(false)
   const platformAdmin = profile?.role === 'admin'
 
   if (status !== 'ready' || (!team && !platformAdmin)) return null
@@ -32,10 +30,9 @@ export const AccountSwitcher: React.FC = () => {
   if (!team) {
     return (
       <>
-        <button type="button" onClick={() => setAdding(true)} className="flex h-10 w-full items-center gap-2 rounded-lg border border-dashed border-gray-300 px-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
+        <button type="button" onClick={() => navigate('/contas/nova')} className="flex h-10 w-full items-center gap-2 rounded-lg border border-dashed border-gray-300 px-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
           <Plus className="h-4 w-4" aria-hidden /> Criar a primeira conta
         </button>
-        <NewAccountDialog open={adding} onOpenChange={setAdding} />
       </>
     )
   }
@@ -83,7 +80,7 @@ export const AccountSwitcher: React.FC = () => {
           {platformAdmin && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => setAdding(true)} className="gap-2.5">
+              <DropdownMenuItem onSelect={() => navigate('/contas/nova')} className="gap-2.5">
                 <Plus className="h-4 w-4" aria-hidden /> Adicionar conta
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => navigate('/contas')} className="gap-2.5">
@@ -93,7 +90,6 @@ export const AccountSwitcher: React.FC = () => {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-      <NewAccountDialog open={adding} onOpenChange={setAdding} />
     </>
   )
 }

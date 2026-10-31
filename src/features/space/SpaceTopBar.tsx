@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Bot, Check, ChevronDown, Cloud, CloudDownload, CloudOff, CloudUpload, Copy, Globe, History, LayoutGrid, NotebookText, Play, Plus, Redo2, Trash2, TriangleAlert, Undo2, Users, AlignHorizontalSpaceAround } from 'lucide-react'
 import {
   DropdownMenu,
@@ -72,15 +72,6 @@ const ProjectMenu: React.FC<{ projectId: string }> = ({ projectId }) => {
   // Conectar a partir do guia: ao fechar a conexão, o guia volta
   const fromGuide = useRef(false)
   const accountSite = useCrm((s) => s.team?.profile?.website)
-  const [params, setParams] = useSearchParams()
-  // Conta nova: o projeto abre com o guia de instalação (?configurar=1)
-  useEffect(() => {
-    if (params.get('configurar') !== '1') return
-    setDialog('guide')
-    const next = new URLSearchParams(params)
-    next.delete('configurar')
-    setParams(next, { replace: true })
-  }, [params, setParams])
   if (!project) return null
 
   const clear = () => {

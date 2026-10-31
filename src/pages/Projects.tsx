@@ -1,4 +1,3 @@
-import { useCrm } from '@/features/crm/crmStore'
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Archive, CircleAlert, CloudUpload, FolderPlus, Plus } from 'lucide-react'
@@ -73,16 +72,6 @@ const Projects: React.FC = () => {
     const team = pendingTeamInvite()
     if (team) navigate(`/equipe/convite/${team}`, { replace: true })
   }, [navigate])
-
-  // Conta de cliente tem um site só: abre direto nele, sem a lista
-  const team = useCrm((s) => s.team)
-  const crmReady = useCrm((s) => s.status === 'ready')
-  const clientAccount = crmReady && !!team && !team.isHome
-  useEffect(() => {
-    if (!clientAccount || status !== 'ready') return
-    const own = projects.filter((p) => !p.archivedAt && p.role !== 'admin')
-    if (own.length === 1) navigate(`/projetos/${own[0].id}`, { replace: true })
-  }, [clientAccount, projects, status, navigate])
 
   const sorted = useMemo(() => [...projects].sort((a, b) => b.updatedAt - a.updatedAt), [projects])
   // A conta admin também vê os projetos das outras contas (migração 20261006180000): ficam numa parte separada

@@ -10,7 +10,9 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Auth from "@/pages/Auth";
 import NotFound from "@/pages/NotFound";
 import Projects from "@/pages/Projects";
+import Home from "@/pages/Home";
 import ProjectSpace from "@/pages/ProjectSpace";
+import { AccountWizard } from "@/features/onboarding/AccountWizard";
 import Agents from "@/pages/Agents";
 import AgentSetup from "@/pages/AgentSetup";
 import AgentWorker from "@/pages/AgentWorker";
@@ -112,6 +114,7 @@ function App() {
                 }
               >
                 <Route index element={<Projects />} />
+                <Route path="inicio" element={<Home />} />
                 <Route path="projetos/:projectId" element={<ProjectSpace />} />
                 {/* Os agentes trabalhando agora, cada um no seu projeto */}
                 <Route path="agentes" element={<Agents />} />
@@ -131,6 +134,7 @@ function App() {
                 <Route path="crm/equipe" element={<CrmGate><CrmTeam /></CrmGate>} />
                 {/* As contas (empresas-cliente) e os módulos de cada uma; só o admin da plataforma */}
                 <Route path="contas" element={<CrmAccounts />} />
+                <Route path="contas/nova" element={<AccountWizard />} />
                 {/* Social selling: a fila do dia nas redes; quem segue e envia é a pessoa */}
                 <Route path="crm/social" element={<CrmGate><CrmSocial /></CrmGate>} />
                 <Route path="crm/diagnostico" element={<CrmGate><CrmDiagnosis /></CrmGate>} />

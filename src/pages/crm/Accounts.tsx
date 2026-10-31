@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCrm } from '@/features/crm/crmStore'
 import { ModuleToggles } from '@/features/crm/ModuleToggles'
-import { NewAccountDialog } from '@/features/crm/NewAccountDialog'
 import { MODULES, type ModuleId } from '@/features/crm/modules'
 import { listAccounts, setAccountModules, setAccountStatus, supportAccess } from '@/features/crm/teams'
 import type { AccountOverview } from '@/features/crm/types'
@@ -109,7 +108,6 @@ const Accounts: React.FC = () => {
   const { team, load, select } = useCrm()
   const [accounts, setAccounts] = useState<AccountOverview[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
 
   const reload = useCallback(async () => {
     try {
@@ -145,7 +143,7 @@ const Accounts: React.FC = () => {
   return (
     <Page>
       <PageHeader title="Contas" text="As empresas-cliente do produto. Cada conta tem o ambiente separado; aqui você liga e desliga os módulos de cada uma.">
-        <Button onClick={() => setAdding(true)} className="gap-1.5">
+        <Button onClick={() => navigate('/contas/nova')} className="gap-1.5">
           <Plus className="h-4 w-4" aria-hidden /> Nova conta
         </Button>
       </PageHeader>
@@ -173,8 +171,6 @@ const Accounts: React.FC = () => {
         ))}
         {accounts?.length === 0 && <p className="text-sm text-gray-500">Nenhuma conta ainda. Crie a primeira.</p>}
       </div>
-
-      <NewAccountDialog open={adding} onOpenChange={setAdding} onCreated={() => void reload()} />
     </Page>
   )
 }

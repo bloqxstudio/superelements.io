@@ -48,7 +48,7 @@ const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeSt
  * abrir já no clique (depois de um `await` o navegador bloqueia) e só então
  * receber o endereço do WordPress.
  */
-function openApprovalWindow(): Window | null {
+export function openApprovalWindow(): Window | null {
   const width = 560
   const height = 720
   const left = Math.round(window.screenX + Math.max(0, (window.outerWidth - width) / 2))
