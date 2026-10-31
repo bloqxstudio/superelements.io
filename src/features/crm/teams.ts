@@ -42,6 +42,7 @@ const ACCOUNT_ERRORS: Record<string, string> = {
   so_admin_da_plataforma: 'Só o admin da plataforma muda isto.',
   nome_obrigatorio: 'Dê um nome à conta.',
   conta_casa_nao_pausa: 'A conta da Avence não pode ser pausada.',
+  conta_casa_nao_exclui: 'A conta da Avence não pode ser excluída.',
   conta_inexistente: 'Essa conta não existe mais.',
 }
 const accountError = (message: string) => new Error(Object.entries(ACCOUNT_ERRORS).find(([code]) => message.includes(code))?.[1] ?? message)
@@ -91,6 +92,12 @@ export async function setAccountModules(teamId: string, modules: Record<string, 
 
 export async function setAccountStatus(teamId: string, status: 'ativa' | 'pausada') {
   const { error } = await supabase.rpc('crm_set_account_status', { p_team: teamId, p_status: status })
+  if (error) throw accountError(error.message)
+}
+
+/** Exclui a conta e os projetos dela. Só o admin da plataforma; nunca a conta da casa. */
+export async function deleteAccount(teamId: string) {
+  const { error } = await supabase.rpc('crm_delete_account', { p_team: teamId })
   if (error) throw accountError(error.message)
 }
 

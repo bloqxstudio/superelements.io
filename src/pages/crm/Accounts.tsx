@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { ExternalLink, Loader2, LogIn, Pause, Play, Plus } from 'lucide-react'
+import { ExternalLink, Loader2, LogIn, Pause, Play, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCrm } from '@/features/crm/crmStore'
 import { ModuleToggles } from '@/features/crm/ModuleToggles'
 import { MODULES, type ModuleId } from '@/features/crm/modules'
-import { listAccounts, setAccountModules, setAccountStatus, supportAccess } from '@/features/crm/teams'
+import { deleteAccount, listAccounts, setAccountModules, setAccountStatus, supportAccess } from '@/features/crm/teams'
 import type { AccountOverview } from '@/features/crm/types'
 import { Page, PageHeader, Surface, dayLabel, plural } from '@/features/crm/ui'
 import { cn } from '@/lib/utils'
@@ -20,6 +22,8 @@ import { cn } from '@/lib/utils'
 const AccountCard: React.FC<{ account: AccountOverview; current: boolean; onChanged: () => void; onEnter: (account: AccountOverview) => void }> = ({ account, current, onChanged, onEnter }) => {
   const [busy, setBusy] = useState<ModuleId | 'status' | null>(null)
   const [modules, setModules] = useState(account.modules)
+  const [confirming, setConfirming] = useState(false)
+  const [typed, setTyped] = useState('')
   const paused = account.status === 'pausada'
 
   useEffect(() => setModules(account.modules), [account.modules])
@@ -47,6 +51,20 @@ const AccountCard: React.FC<{ account: AccountOverview; current: boolean; onChan
       onChanged()
     } catch (error) {
       toast.error('Não foi possível mudar a conta', { description: error instanceof Error ? error.message : undefined })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const remove = async () => {
+    setBusy('status')
+    try {
+      await deleteAccount(account.id)
+      toast.success(`${account.name} excluída`)
+      setConfirming(false)
+      onChanged()
+    } catch (error) {
+      toast.error('Não foi possível excluir a conta', { description: error instanceof Error ? error.message : undefined })
     } finally {
       setBusy(null)
     }
@@ -90,8 +108,30 @@ const AccountCard: React.FC<{ account: AccountOverview; current: boolean; onChan
               {paused ? 'Reativar' : 'Pausar'}
             </Button>
           )}
+          {!account.isHome && (
+            <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-red-600 hover:text-red-700" onClick={() => { setTyped(''); setConfirming(true) }} disabled={busy === 'status'}>
+              <Trash2 className="h-3.5 w-3.5" aria-hidden /> Excluir
+            </Button>
+          )}
         </div>
       </div>
+      <Dialog open={confirming} onOpenChange={setConfirming}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir {account.name}?</DialogTitle>
+            <DialogDescription>
+              Apaga a conta, os projetos dela e todos os dados do CRM, Instagram, WhatsApp e site. Não dá para desfazer. Digite o nome da conta para confirmar.
+            </DialogDescription>
+          </DialogHeader>
+          <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={account.name} aria-label="Nome da conta para confirmar" />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirming(false)}>Cancelar</Button>
+            <Button variant="destructive" disabled={typed.trim() !== account.name.trim() || busy === 'status'} onClick={() => void remove()}>
+              {busy === 'status' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />} Excluir conta
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className={cn('mt-4', paused && 'opacity-60')}>
         <p className="mb-2 text-xs font-medium text-gray-700">
           Módulos: {on} de {MODULES.length} ligados {paused && '(a conta pausada fica sem nenhum)'}

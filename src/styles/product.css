@@ -42,8 +42,8 @@
 .se-nav-active { background: rgb(255 255 255 / .92); box-shadow: 0 1px 4px rgb(23 31 46 / .08), 0 0 0 1px rgb(23 31 46 / .035); font-weight: 600; }
 .se-nav-active svg { color: #262a34; }
 .se-nav-search { background: rgb(32 40 56 / .045); box-shadow: inset 0 1px 2px rgb(32 40 56 / .025); }
-.se-nav-search:focus-within { outline: 2px solid #2d83ee; outline-offset: 2px; }
-.se-nav-search input { box-shadow: none; }
+.se-nav-search:focus-within { outline: none; }
+.se-product .se-nav-search input, .se-product .se-nav-search input:focus, .se-product .se-nav-search input:focus-visible { box-shadow: none; outline: none; }
 .se-sidebar-section:not(:has(a)):not(:has(.se-section-toggle[aria-expanded='false'])), .se-navigation:not(:has(a)) > .mb-5 { display: none; }
 .se-nav-no-results { display: none; }
 .se-navigation:not(:has(a)) .se-nav-no-results { display: block; }
