@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useCrm } from '@/features/crm/crmStore'
 import { Page, PageHeader, Surface, plural, whenLabel } from '@/features/crm/ui'
 import { canManage } from '@/features/crm/types'
-import { FunnelTablesError, deleteFunnel, listFunnels, type Funnel } from '@/features/funnels/funnels'
+import { FunnelTablesError, PIPELINE_ID, deleteFunnel, listFunnels, type Funnel } from '@/features/funnels/funnels'
 import { isConnected } from '@/features/funnels/rules'
 
 /** Funis (CRM › Funis): a lista dos funis da conta, do caminho da campanha à oportunidade ganha. */
@@ -87,7 +87,21 @@ const FunnelsPage: React.FC = () => {
             </Button>
           )}
         </Surface>
-      ) : !funnels.length ? (
+      ) : null}
+
+      {team && funnels !== null && !error && (
+        <ul className="mt-6 grid gap-2">
+          <li className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)]">
+            <Link to={`/crm/funis/${PIPELINE_ID}`} className="min-w-0 flex-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <span className="block truncate text-sm font-semibold text-gray-900">Pipeline de oportunidades <span className="ml-1 rounded bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-700">pronto</span></span>
+              <span className="mt-0.5 block truncate text-sm text-gray-600">Do cadastro ao fechamento, pelos estados do CRM.</span>
+              <span className="mt-0.5 block text-xs text-gray-500">7 etapas · todas com fonte</span>
+            </Link>
+          </li>
+        </ul>
+      )}
+
+      {!team || funnels === null ? null : error ? null : !funnels.length ? (
         <Surface className="mt-6 max-w-2xl">
           <p className="text-sm font-medium text-gray-900">Nenhum funil ainda.</p>
           <p className="mt-1 text-sm text-gray-600">

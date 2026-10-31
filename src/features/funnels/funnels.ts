@@ -43,8 +43,56 @@ export interface Funnel {
   objective: string
   template: 'captacao' | 'prospeccao' | 'custom'
   steps: FunnelStep[]
+  /** Posição de cada cartão no mapa (por índice da etapa), compartilhada com a equipe */
+  layout: Record<string, { x: number; y: number }>
+  /** O funil de oportunidades do CRM: vem pronto, não se edita nem se apaga */
+  builtin?: boolean
   createdAt: number
   updatedAt: number
+}
+
+export const PIPELINE_ID = 'pipeline'
+
+/** O caminho das oportunidades no CRM, lido dos estados reais. Não é gravado: existe para toda conta. */
+export const pipelineFunnel = (teamId: string): Funnel => ({
+  id: PIPELINE_ID,
+  teamId,
+  name: 'Pipeline de oportunidades',
+  objective: 'Do cadastro da oportunidade ao fechamento, pelos estados do CRM.',
+  template: 'custom',
+  builtin: true,
+  layout: {},
+  createdAt: 0,
+  updatedAt: 0,
+  steps: [
+    { id: 'p0', name: 'Oportunidades', kind: 'opportunity', source: { cohort: 'created' } },
+    { id: 'p1', name: 'Fila da página', kind: 'stage', source: { stage: 'selecionado' } },
+    { id: 'p2', name: 'Página pronta', kind: 'stage', source: { stage: 'pagina' } },
+    { id: 'p3', name: 'Contatado', kind: 'stage', source: { stage: 'contatado' } },
+    { id: 'p4', name: 'Em conversa', kind: 'stage', source: { stage: 'conversa' } },
+    { id: 'p5', name: 'Proposta', kind: 'stage', source: { stage: 'proposta' } },
+    { id: 'p6', name: 'Fechado', kind: 'stage', source: { stage: 'fechado' } },
+  ],
+})
+
+const cleanLayout = (raw: unknown): Funnel['layout'] => {
+  const out: Funnel['layout'] = {}
+  if (raw && typeof raw === 'object') {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const p = v as { x?: unknown; y?: unknown }
+      if (/^\d{1,2}$/.test(k) && Number.isFinite(p?.x) && Number.isFinite(p?.y)) out[k] = { x: p.x as number, y: p.y as number }
+    }
+  }
+  return out
+}
+
+/** Grava só a organização do mapa (gestor). Falha com clareza se a migração do mapa não foi aplicada. */
+export async function saveFunnelLayout(id: string, layout: Funnel['layout']) {
+  const { error } = await supabase.from('crm_funnels').update({ layout }).eq('id', id)
+  if (error) {
+    if (error.code === '42703' || error.code === 'PGRST204') throw new Error('Falta aplicar a migração 20261031120000_crm_funnels_layout.sql.')
+    fail(error)
+  }
 }
 
 export class FunnelTablesError extends Error {
@@ -60,7 +108,7 @@ const fail = (error: { code?: string; message: string }): never => {
 }
 
 type StepRow = { id: string; position: number; name: string; kind: string; source: unknown }
-type FunnelRow = { id: string; team_id: string; name: string; objective: string; template: string; created_at: string; updated_at: string; steps?: StepRow[] }
+type FunnelRow = { layout?: unknown; id: string; team_id: string; name: string; objective: string; template: string; created_at: string; updated_at: string; steps?: StepRow[] }
 
 const toFunnel = (row: FunnelRow): Funnel => ({
   id: row.id,
@@ -69,6 +117,7 @@ const toFunnel = (row: FunnelRow): Funnel => ({
   objective: row.objective ?? '',
   template: row.template === 'captacao' || row.template === 'prospeccao' ? row.template : 'custom',
   steps: [...(row.steps ?? [])].sort((a, b) => a.position - b.position).map((s) => cleanStep(s)),
+  layout: cleanLayout(row.layout),
   createdAt: Date.parse(row.created_at),
   updatedAt: Date.parse(row.updated_at),
 })
@@ -83,6 +132,7 @@ export async function listFunnels(teamId: string): Promise<Funnel[]> {
 
 /** Só devolve o funil se for da conta aberta: um link de outra conta não abre nada. */
 export async function loadFunnel(teamId: string, id: string): Promise<Funnel | null> {
+  if (id === PIPELINE_ID) return pipelineFunnel(teamId)
   const { data, error } = await supabase.from('crm_funnels').select(SELECT).eq('id', id).eq('team_id', teamId).maybeSingle()
   if (error) fail(error)
   return data ? toFunnel(data as unknown as FunnelRow) : null

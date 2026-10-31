@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Loader2, RefreshCw } from 'lucide-react'
+import { ArrowLeft, GitBranch, LayoutList, Loader2, Network, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useCrm } from '@/features/crm/crmStore'
 import { Page, PageHeader, Surface, dayLabel } from '@/features/crm/ui'
 import { canManage } from '@/features/crm/types'
 import { FunnelTrack } from '@/features/funnels/FunnelTrack'
+import { FunnelMap } from '@/features/funnels/FunnelMap'
+import { FunnelFlow } from '@/features/funnels/FunnelFlow'
 import { FunnelWizard } from '@/features/funnels/FunnelWizard'
-import { FUNNEL_PERIODS, FUNNEL_PERIOD_LABEL, loadFunnel, readFunnel, type Funnel, type FunnelPeriod, type FunnelReading } from '@/features/funnels/funnels'
+import { FUNNEL_PERIODS, FUNNEL_PERIOD_LABEL, PIPELINE_ID, loadFunnel, readFunnel, saveFunnel, saveFunnelLayout, type Funnel, type FunnelPeriod, type FunnelReading } from '@/features/funnels/funnels'
 import { cn } from '@/lib/utils'
 
 /**
@@ -17,11 +19,27 @@ import { cn } from '@/lib/utils'
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-const Follow: React.FC<{ teamId: string; funnel: Funnel }> = ({ teamId, funnel }) => {
+const Follow: React.FC<{ teamId: string; funnel: Funnel; manager: boolean; onReordered: () => void }> = ({ teamId, funnel, manager, onReordered }) => {
   const [period, setPeriod] = useState<FunnelPeriod>(30)
   const [reading, setReading] = useState<FunnelReading>()
   const [error, setError] = useState<string>()
   const [tick, setTick] = useState(0)
+  const [mode, setModeState] = useState<'mapa' | 'jornada' | 'lista'>(() => {
+    try {
+      const v = localStorage.getItem('superelements-funil-visao')
+      return v === 'lista' || v === 'jornada' ? v : 'mapa'
+    } catch {
+      return 'mapa'
+    }
+  })
+  const setMode = (m: 'mapa' | 'jornada' | 'lista') => {
+    setModeState(m)
+    try {
+      localStorage.setItem('superelements-funil-visao', m)
+    } catch {
+      /* só vale nesta tela */
+    }
+  }
 
   // Um período ou funil novo descarta a leitura que ainda estiver voltando
   useEffect(() => {
@@ -55,6 +73,20 @@ const Follow: React.FC<{ teamId: string; funnel: Funnel }> = ({ teamId, funnel }
           ))}
         </div>
         <div className="flex items-center gap-3 text-xs text-gray-500">
+          <div role="radiogroup" aria-label="Visão" className="inline-flex rounded-lg bg-white p-0.5 shadow-[0_0_0_1px_rgb(0_0_0/0.08)]">
+            {([['mapa', 'Mapa', Network], ['jornada', 'Jornada', GitBranch], ['lista', 'Lista', LayoutList]] as const).map(([m, label, Icon]) => (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={mode === m}
+                onClick={() => setMode(m)}
+                className={cn('inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', mode === m ? 'bg-gray-900 text-white' : 'text-gray-600 hover:text-gray-900')}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden /> {label}
+              </button>
+            ))}
+          </div>
           {reading && (
             <span>
               {dayLabel(reading.from.getTime())} a {dayLabel(reading.to.getTime() - 60_000)}
@@ -86,7 +118,28 @@ const Follow: React.FC<{ teamId: string; funnel: Funnel }> = ({ teamId, funnel }
       ) : (
         <>
           {reading.cohortTruncated && <p className="text-xs text-amber-800">Há mais de 5.000 oportunidades no período: os números do CRM consideram só as mais recentes.</p>}
-          <FunnelTrack steps={funnel.steps} readings={reading.readings} cohort={reading.cohort} />
+          {mode === 'mapa' ? (
+            <FunnelMap
+              funnelId={funnel.id}
+              steps={funnel.steps}
+              readings={reading.readings}
+              layout={funnel.layout}
+              onSaveLayout={manager && !funnel.builtin ? (l) => saveFunnelLayout(funnel.id, l) : undefined}
+              onReorder={
+                manager && !funnel.builtin
+                  ? async (from, to, layout) => {
+                      const steps = [...funnel.steps]
+                      ;[steps[from], steps[to]] = [steps[to], steps[from]]
+                      await saveFunnel({ id: funnel.id, teamId, name: funnel.name, objective: funnel.objective, template: funnel.template, steps })
+                      await saveFunnelLayout(funnel.id, layout).catch(() => undefined)
+                      onReordered()
+                    }
+                  : undefined
+              }
+            />
+          ) : mode === 'jornada' ? (
+            <FunnelFlow cohort={reading.cohort} />
+          ) : <FunnelTrack steps={funnel.steps} readings={reading.readings} cohort={reading.cohort} />}
         </>
       )}
     </div>
@@ -196,7 +249,11 @@ const FunnelDetail: React.FC = () => {
           </div>
           <div className="mt-5" role="tabpanel">
             {tab === 'acompanhar' ? (
-              <Follow key={`${team.id}:${funnel.id}:${funnel.updatedAt}`} teamId={team.id} funnel={funnel} />
+              <Follow key={`${team.id}:${funnel.id}:${funnel.updatedAt}`} teamId={team.id} funnel={funnel} manager={manager} onReordered={load} />
+            ) : funnel.builtin ? (
+              <Surface>
+                <p className="text-sm text-gray-600">O pipeline de oportunidades vem pronto e segue os estados do CRM. Para um caminho seu, crie um funil novo.</p>
+              </Surface>
             ) : manager ? (
               <FunnelWizard
                 key={`${team.id}:${funnel.id}:${funnel.updatedAt}`}
