@@ -21,8 +21,10 @@ export const GuardedOutlet: React.FC = () => {
 
   const module = moduleOfPath(pathname)
   // A tela remonta ao trocar de conta: nada do ambiente anterior fica na tela
+  // Exceto o assistente de conta nova: ele mesmo troca de conta no meio e não pode recomeçar
+  const keepAcrossAccounts = pathname === '/contas/nova'
   const screen = (
-    <React.Fragment key={teamId ?? 'sem-conta'}>
+    <React.Fragment key={keepAcrossAccounts ? 'assistente' : (teamId ?? 'sem-conta')}>
       <Outlet />
     </React.Fragment>
   )
