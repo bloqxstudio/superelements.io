@@ -16,7 +16,7 @@ import { CONNECTOR_ZIP, openAdmin } from '@/features/wordpress/autologin'
 import { authorizationUrl, canReturnHere, completeConnection, listenConnections } from '@/features/wordpress/connect'
 import { pingConnector } from '@/features/wordpress/pluginPing'
 import { diagnoseSite } from '@/features/prospects/api'
-import { siteCandidates } from '@/features/wordpress/rest'
+import { restUrl, siteCandidates, type WordPressSite } from '@/features/wordpress/rest'
 import { syncSiteConfig } from '@/features/wordpress/siteConfig'
 import type { WordPressConnection } from '@/features/wordpress/types'
 import { openApprovalWindow } from '@/features/wordpress/WordPressDialog'
@@ -54,6 +54,18 @@ const BackgroundProject: React.FC<{ projectId: string; onReady: () => void }> = 
   return null
 }
 
+/** Usuários que o site mostra na API pública (autores), mais o `admin`, para tentar com a senha. */
+async function guessLogins(site: WordPressSite): Promise<string[]> {
+  const found: string[] = []
+  try {
+    const response = await fetch(restUrl(site.restRoot, 'wp/v2/users', { per_page: '20', _fields: 'slug' }), { headers: { Accept: 'application/json' } })
+    if (response.ok) for (const user of (await response.json()) as { slug?: string }[]) if (user.slug) found.push(user.slug)
+  } catch {
+    // sem a lista pública, só resta pedir o usuário
+  }
+  return [...new Set([...found, 'admin'])]
+}
+
 const waitSaved = async (projectId: string) => {
   // A sessão salva sozinha; espera o salvamento terminar antes de sair da tela
   await new Promise((r) => setTimeout(r, 2500))
@@ -89,6 +101,7 @@ export const AccountWizard: React.FC = () => {
   // Sem retorno (app em http, ou site que não devolve): a senha aparece no WordPress e é colada aqui
   const [manual, setManual] = useState(false)
   const [login, setLogin] = useState('')
+  const [needLogin, setNeedLogin] = useState(false)
   const [password, setPassword] = useState('')
   const [pasting, setPasting] = useState(false)
   const started = useRef(false)
@@ -220,7 +233,17 @@ export const AccountWizard: React.FC = () => {
     if (!projectId || !wordpress) return
     setPasting(true)
     try {
-      const saved = await completeConnection(projectId, wordpress.site, login, password)
+      // O WordPress pede usuário e senha, mas só a senha é mostrada: o usuário vem da lista pública do site
+      const candidates = login.trim() ? [login.trim()] : await guessLogins(wordpress.site)
+      let saved: WordPressConnection | null = null
+      for (const candidate of candidates) {
+        saved = await completeConnection(projectId, wordpress.site, candidate, password).catch(() => null)
+        if (saved) break
+      }
+      if (!saved) {
+        setNeedLogin(true)
+        throw new Error(login.trim() ? 'O WordPress não aceitou o usuário e a senha.' : 'Não consegui descobrir o usuário do WordPress. Informe-o abaixo.')
+      }
       setPassword('')
       setConnection(saved)
       mark('connect', 'done', saved.site.name)
@@ -441,9 +464,9 @@ export const AccountWizard: React.FC = () => {
                 )}
                 {task.id === 'connect' && manual && (s === 'doing' || s === 'error') && (
                   <form onSubmit={(e) => void savePasted(e)} className="mt-3 grid gap-2">
-                    <input value={login} onChange={(e) => setLogin(e.target.value)} placeholder="Usuário do WordPress" autoComplete="off" required className={`${FIELD} h-9`} />
-                    <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Senha mostrada pelo WordPress" autoComplete="off" required className={`${FIELD} h-9 font-mono`} />
-                    <Button type="submit" size="sm" className="w-fit" disabled={pasting || !login.trim() || !password.trim()}>
+                    <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Cole aqui a senha mostrada pelo WordPress" autoComplete="off" required autoFocus className={`${FIELD} h-9 font-mono`} />
+                    {needLogin && <input value={login} onChange={(e) => setLogin(e.target.value)} placeholder="Usuário do WordPress (o que você usa para entrar)" autoComplete="off" required className={`${FIELD} h-9`} />}
+                    <Button type="submit" size="sm" className="w-fit" disabled={pasting || !password.trim() || (needLogin && !login.trim())}>
                       {pasting ? 'Conferindo…' : 'Conectar'}
                     </Button>
                   </form>
