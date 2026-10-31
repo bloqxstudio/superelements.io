@@ -6,7 +6,7 @@ import type { SiteReport } from '@/features/crm/site'
 export const PALETTE = ['#2D83EE', '#8B5CF6', '#34C759', '#FF9F0A', '#FF375F', '#14B8A6', '#64748B']
 
 const Card: React.FC<{ title: string; sub?: string; children: React.ReactNode; className?: string }> = ({ title, sub, children, className }) => (
-  <div className={`rounded-[14px] bg-[#f7f7f9] p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.04)] ${className ?? ''}`}>
+  <div className={`rounded-[14px] bg-[#f5f5f7] p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.04)] ${className ?? ''}`}>
     <p className="text-[13px] font-semibold text-gray-900">{title}</p>
     {sub && <p className="mb-3 text-xs text-gray-500">{sub}</p>}
     {children}
@@ -90,7 +90,7 @@ const HomeChartsInner: React.FC<{
   if (!hasSite && !hasAds && !funnel.length) return null
   return (
     <Block id="graficos" title="Gráficos" hint="Visitas, gasto, origem e funil do período, lidos das mesmas fontes do resumo.">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))]">
         {hasSite && <Card title="Visitas por dia" sub="Linha tracejada: chegaram a um contato"><Area values={siteDays.map((d) => Number(d.sessions) || 0)} labels={siteDays.map((d) => dl(d.day))} color={PALETTE[0]} second={{ values: siteDays.map((d) => Number(d.converted) || 0), color: PALETTE[2] }} /></Card>}
         {hasAds && <Card title="Valor usado por dia" sub="Meta Ads"><Area values={adDays!.map((d) => d.spend)} labels={adDays!.map((d) => dl(d.day))} color={PALETTE[3]} fmt={money} /></Card>}
         {channels.length > 0 && <Card title="De onde vêm as visitas" sub="Por origem"><Donut items={channels} /></Card>}

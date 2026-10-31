@@ -5,9 +5,9 @@
   --ring: 214 92% 54%;
   --accent: 220 14% 94%;
   --accent-foreground: 240 6% 14%;
-  --se-desktop: #f1f1f4;
-  --se-ink: #202125;
-  --se-glass: rgb(255 255 255 / .78);
+  --se-desktop: #f5f5f7;
+  --se-ink: #1d1d1f;
+  --se-glass: rgb(255 255 255 / .72);
   --se-line: rgb(31 38 51 / .08);
   --se-shadow: 0 0 0 1px rgb(0 0 0 / .05), 0 1px 2px rgb(0 0 0 / .04), 0 10px 28px -14px rgb(0 0 0 / .14);
   color: var(--se-ink);
@@ -15,12 +15,7 @@
   -webkit-font-smoothing: antialiased;
 }
 .se-project { display: contents; }
-.se-app, .se-auth, .se-ds {
-  background:
-    radial-gradient(46% 34% at 0% 0%, rgb(210 245 37 / .09), transparent 70%),
-    linear-gradient(180deg, #f5f5f7 0%, #eeeef1 100%);
-  background-attachment: fixed;
-}
+.se-app, .se-auth, .se-ds { background: #f5f5f7; }
 .se-product svg.lucide { stroke-width: 1.75; }
 .se-workspace { isolation: isolate; }
 .se-workspace-bar { height: 56px; flex-shrink: 0; }
@@ -155,3 +150,13 @@ body:has(.se-product) .se-menu-glass [role='separator'] { margin: 4px 6px; backg
 .se-product [data-se-ui='button'][data-se-variant='destructive']:hover { background: #cf342e; }
 .se-product [data-se-ui='button']:disabled { opacity: .45; box-shadow: none; }
 .se-product a, .se-product button, .se-product [role='radio'], .se-product [role='tab'] { -webkit-tap-highlight-color: transparent; }
+
+/* Apple-neutral palette: black, white and system grays only. */
+.se-product { --se-muted: #6e6e73; }
+.se-product .text-gray-500, .se-product .text-gray-600 { color: var(--se-muted); }
+.se-sidebar { background: rgb(255 255 255 / .74); border-color: rgb(255 255 255 / .9); }
+.se-sidebar-user { background: transparent; }
+.se-nav-search { background: rgb(0 0 0 / .045); }
+.se-nav-item:hover { background: rgb(0 0 0 / .05); }
+.se-nav-active { background: #fff; }
+.se-product .se-surface { background: #fff; }
