@@ -26,8 +26,8 @@ const META_METRIC: Record<MetaMetric, string> = { linkClicks: 'Cliques no link',
 
 type Box = [number, number, number, number]
 
-const SITE_INK = '24, 24, 27'
-const META_INK = '37, 99, 235'
+const SITE_INK = '45, 131, 238'
+const META_INK = '139, 92, 246'
 const EMPTY = '#f1f1f3'
 
 /** O estado com folga em volta, sem aproximar demais um estado pequeno */

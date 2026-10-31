@@ -35,8 +35,8 @@ function scale(max: number, min = 0) {
 }
 
 const TONES = {
-  dark: { line: '#FAFAFA', fill: 'rgba(250,250,250,0.10)', grid: 'rgba(255,255,255,0.08)', axis: '#a1a1aa', surface: '#18181b' },
-  light: { line: '#18181b', fill: 'rgba(24,24,27,0.08)', grid: '#f1f1f3', axis: '#71717a', surface: '#ffffff' },
+  dark: { line: '#7CF0C4', fill: 'rgba(124,240,196,0.16)', grid: 'rgba(255,255,255,0.08)', axis: '#a1a1aa', surface: '#18181b' },
+  light: { line: '#2D83EE', fill: 'rgba(45,131,238,0.12)', grid: '#f1f1f3', axis: '#71717a', surface: '#ffffff' },
 }
 
 export const TrendChart: React.FC<{

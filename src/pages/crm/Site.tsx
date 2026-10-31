@@ -182,7 +182,7 @@ const Hours: React.FC<{ hours: SiteReport['hours'] }> = ({ hours }) => {
                     key={h}
                     title={`${WEEKDAYS[d]}, ${h}h: ${n} ${n === 1 ? 'visita' : 'visitas'}`}
                     className="h-5 rounded-[3px]"
-                    style={{ background: n ? `rgba(24,24,27,${0.12 + 0.88 * (n / max)})` : '#f4f4f5' }}
+                    style={{ background: n ? `rgba(45,131,238,${0.14 + 0.86 * (n / max)})` : '#f4f4f5' }}
                   />
                 ))}
               </div>

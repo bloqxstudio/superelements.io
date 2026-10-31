@@ -402,7 +402,7 @@ const MetricTile: React.FC<{ metric: string; view: AdView; ctx: SubContext; dark
       </DropdownMenu>
       <p className={cn('mt-1 truncate text-[26px] font-semibold leading-tight tracking-tight tabular-nums', dark ? 'text-white' : 'text-gray-900')}>{formatMetric(def, value, ctx.currency, true)}</p>
       {def.sub && <p className={cn('mt-auto pt-2 text-xs leading-snug', dark ? 'text-zinc-400' : 'text-gray-500')}>{def.sub(view.totals, ctx)}</p>}
-      {series.length > 1 && <Sparkline values={series} color={dark ? '#fafafa' : '#a1a1aa'} className="mt-2 h-7 w-full" />}
+      {series.length > 1 && <Sparkline values={series} color={dark ? '#7CF0C4' : '#2D83EE'} className="mt-2 h-7 w-full" />}
     </div>
   )
 }
