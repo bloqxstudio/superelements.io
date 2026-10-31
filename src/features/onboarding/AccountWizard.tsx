@@ -13,7 +13,7 @@ import { useProject, useProjectStore } from '@/features/projects/projectStore'
 import { loadWordPressConnection } from '@/features/projects/storage'
 import { useProjectSession, useProjectSync } from '@/features/projects/useProjectSession'
 import { CONNECTOR_ZIP, openAdmin } from '@/features/wordpress/autologin'
-import { authorizationUrl, canReturnHere, listenConnections } from '@/features/wordpress/connect'
+import { authorizationUrl, canReturnHere, completeConnection, listenConnections } from '@/features/wordpress/connect'
 import { pingConnector } from '@/features/wordpress/pluginPing'
 import { diagnoseSite } from '@/features/prospects/api'
 import { siteCandidates } from '@/features/wordpress/rest'
@@ -86,6 +86,11 @@ export const AccountWizard: React.FC = () => {
   const [skipPlugin, setSkipPlugin] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const approval = useRef<{ href: string } | null>(null)
+  // Sem retorno (app em http, ou site que não devolve): a senha aparece no WordPress e é colada aqui
+  const [manual, setManual] = useState(false)
+  const [login, setLogin] = useState('')
+  const [password, setPassword] = useState('')
+  const [pasting, setPasting] = useState(false)
   const started = useRef(false)
 
   // Campos que a pessoa mexeu: o que vem do site nunca escreve por cima
@@ -174,15 +179,15 @@ export const AccountWizard: React.FC = () => {
         await new Promise((r) => setTimeout(r, 300))
         return void (await finish(project.id))
       }
-      mark('connect', 'doing', 'Aprove o acesso na janela do WordPress.')
       const returnHere = canReturnHere(wordpress.site)
+      setManual(!returnHere)
+      mark('connect', 'doing', returnHere ? 'Aprove o acesso na janela do WordPress.' : 'Aprove na janela do WordPress, copie a senha que ele mostrar e cole abaixo.')
       const href = authorizationUrl({ projectId: project.id, projectName: form.name.trim(), site: wordpress.site, mode: 'popup', returnHere })
       approval.current = { href }
       if (popup) {
         popup.location.href = href
         popup.focus()
       }
-      if (!returnHere) setFailure('Este site não devolve a aprovação para cá (sem HTTPS). Conecte depois, pelo menu do projeto.')
     } catch (error) {
       started.current = false
       setFailure(error instanceof Error ? error.message : 'Não foi possível criar a conta.')
@@ -210,9 +215,26 @@ export const AccountWizard: React.FC = () => {
     })
   }, [projectId, wordpress])
 
+  const savePasted = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!projectId || !wordpress) return
+    setPasting(true)
+    try {
+      const saved = await completeConnection(projectId, wordpress.site, login, password)
+      setPassword('')
+      setConnection(saved)
+      mark('connect', 'done', saved.site.name)
+      mark('plugin', 'doing')
+    } catch (error) {
+      mark('connect', 'error', error instanceof Error ? error.message : 'Não foi possível conectar.')
+    } finally {
+      setPasting(false)
+    }
+  }
+
   const reopenApproval = () => {
     if (!approval.current) return
-    mark('connect', 'doing', 'Aprove o acesso na janela do WordPress.')
+    mark('connect', 'doing', manual ? 'Aprove na janela do WordPress, copie a senha que ele mostrar e cole abaixo.' : 'Aprove o acesso na janela do WordPress.')
     const popup = openApprovalWindow()
     if (popup) {
       popup.location.href = approval.current.href
@@ -416,6 +438,15 @@ export const AccountWizard: React.FC = () => {
                   <Button size="sm" variant="outline" className="mt-2" onClick={reopenApproval}>
                     Abrir a aprovação no WordPress
                   </Button>
+                )}
+                {task.id === 'connect' && manual && (s === 'doing' || s === 'error') && (
+                  <form onSubmit={(e) => void savePasted(e)} className="mt-3 grid gap-2">
+                    <input value={login} onChange={(e) => setLogin(e.target.value)} placeholder="Usuário do WordPress" autoComplete="off" required className={`${FIELD} h-9`} />
+                    <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Senha mostrada pelo WordPress" autoComplete="off" required className={`${FIELD} h-9 font-mono`} />
+                    <Button type="submit" size="sm" className="w-fit" disabled={pasting || !login.trim() || !password.trim()}>
+                      {pasting ? 'Conferindo…' : 'Conectar'}
+                    </Button>
+                  </form>
                 )}
                 {task.id === 'plugin' && s === 'doing' && (
                   <div className="mt-2 grid gap-2">
