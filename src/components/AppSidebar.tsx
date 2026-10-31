@@ -1,7 +1,7 @@
 import { useJobs } from '@/features/operations/jobs'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { Search } from 'lucide-react'
+import { ChevronDown, Search } from 'lucide-react'
 import { navigationMatches } from '@/features/navigation/workspace'
 import { Link, NavLink } from 'react-router-dom'
 import { Bot, Building2, CalendarDays, Filter, Target, House, Building, FolderKanban, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
@@ -29,7 +29,7 @@ const NavigationQuery = createContext('')
 
 const itemClass = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'se-nav-item flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]',
+    'se-nav-item flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-blue-500/40 active:scale-[0.98]',
     isActive ? 'se-nav-active text-gray-900' : 'text-gray-600 hover:text-gray-900'
   )
 
@@ -45,12 +45,21 @@ const Item: React.FC<{ to: string; icon: React.ElementType; label: string; end?:
   )
 }
 
-const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <div className="se-sidebar-section mt-5 first:mt-0">
-    <p className="mb-1 px-2.5 text-[11px] font-medium tracking-wide text-gray-500">{title}</p>
-    <div className="grid gap-0.5">{children}</div>
-  </div>
-)
+const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => {
+  const key = `superelements-menu-grupo:${title}`
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem(key) !== '0' } catch { return true } })
+  const query = useContext(NavigationQuery)
+  const shown = open || !!query
+  const toggle = () => setOpen((v) => { try { localStorage.setItem(key, v ? '0' : '1') } catch { /* sem armazenamento */ } return !v })
+  return (
+    <div className="se-sidebar-section mt-3 first:mt-0">
+      <button type="button" onClick={toggle} aria-expanded={shown} className="se-section-toggle mb-0.5 flex w-full items-center justify-between rounded-md px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-800">
+        {title}<ChevronDown className={cn('h-3 w-3 transition-transform', !shown && '-rotate-90')} aria-hidden />
+      </button>
+      {shown && <div className="grid gap-px">{children}</div>}
+    </div>
+  )
+}
 
 /** Agentes: sempre à vista, com quantos trabalham (agentes dos projetos e trabalhos de copy e criativos) e quantos esperam. */
 const AgentsItem: React.FC = () => {
