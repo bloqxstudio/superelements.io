@@ -42,3 +42,11 @@
   ExpiresByType application/x-javascript "access plus 1 month"
   ExpiresByType text/javascript "access plus 1 month"
 </IfModule>
+
+# Scripts que rodam em sites de clientes (formulários e visitas): cache curto, para uma correção chegar
+# em minutos a quem já visitou o site (o cache de 1 mês acima vale para o resto)
+<IfModule mod_headers.c>
+  <FilesMatch "^(forms|visitas)\.js$">
+    Header set Cache-Control "public, max-age=300, must-revalidate"
+  </FilesMatch>
+</IfModule>

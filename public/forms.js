@@ -97,16 +97,6 @@
     return n
   }
 
-  function skCss(t) {
-    return (
-      ':host{display:block;--p:' + t.primary + ';--bg:' + t.background + ';--tx:' + t.text + ';--r:' + t.radius + 'px}*{box-sizing:border-box}' +
-      '.sk{padding:28px;border-radius:calc(var(--r) * 1.6);min-height:260px}.sk.card{border:1px solid color-mix(in srgb,var(--tx) 14%,transparent);background:var(--bg)}' +
-      '.sk i{display:block;border-radius:var(--r);background:linear-gradient(90deg,color-mix(in srgb,var(--tx) 8%,transparent) 25%,color-mix(in srgb,var(--tx) 15%,transparent) 50%,color-mix(in srgb,var(--tx) 8%,transparent) 75%);background-size:200% 100%;animation:sh 1.2s linear infinite}' +
-      '@keyframes sh{to{background-position:-200% 0}}' +
-      '@media (prefers-reduced-motion:reduce){.sk i{animation:none}}'
-    )
-  }
-
   function css(t) {
     var font = t.font === 'Inter' ? "'Inter', system-ui, sans-serif" : t.font === 'system' ? 'system-ui, -apple-system, Segoe UI, sans-serif' : 'inherit'
     return (
@@ -440,15 +430,11 @@
     }
   }
 
-  // Esqueleto na hora, com o tema do cache se houver: ocupa o lugar e some quando o formulário monta
-  function skeleton(host, cfg) {
+  // Sem tela de carregamento: só guarda o lugar (invisível) para a página não pular quando o formulário entrar
+  function reserve(host) {
     var root = host.shadowRoot || host.attachShadow({ mode: 'open' })
-    var t = (cfg && cfg.theme) || { primary: '#2b3cf0', background: '#ffffff', text: '#111111', field: '#f4f4f5', radius: 10, font: 'inherit', frame: 'card' }
-    var bars = [['40%', 22], ['100%', 46], ['100%', 46], ['100%', 46], ['34%', 44]]
-    var box = el('div', { class: 'sk ' + t.frame, 'aria-busy': 'true', 'aria-label': 'Carregando o formulário' }, bars.map(function (b, i) { return el('i', { style: 'width:' + b[0] + ';height:' + b[1] + 'px;margin-bottom:' + (i === bars.length - 1 ? 0 : 14) + 'px' }) }))
     root.innerHTML = ''
-    root.appendChild(el('style', { text: skCss(t) }))
-    root.appendChild(box)
+    root.appendChild(el('div', { style: 'min-height:220px', 'aria-hidden': 'true' }))
   }
 
   function fetchJson(url) {
@@ -468,10 +454,14 @@
     var key = 'avence-form:' + id
     var cached = null
     try { cached = JSON.parse(localStorage.getItem(key) || 'null') } catch (e) {}
+    // A cópia que vai junto com o código (widget do editor): abre direto, sem esperar a rede
+    var snap = null
+    try { var tag = host.querySelector('script[type="application/json"]'); if (tag) snap = JSON.parse(tag.textContent) } catch (e) {}
+    var shown = (cached && cached.definition && cached) || (snap && snap.definition && snap) || null
     var handle = null
-    // Quem já abriu o formulário vê ele na hora, da cópia guardada; o servidor confirma por trás
-    if (cached && cached.definition) handle = mount(host, cached, { endpoint: endpoint })
-    else skeleton(host, null)
+    // Mostra o que já tem (cópia do navegador ou do código) na hora; o servidor confirma por trás
+    if (shown) handle = mount(host, shown, { endpoint: endpoint })
+    else reserve(host)
 
     // O arquivo do CDN é o caminho rápido; a função é a rede de segurança (e vale para formulários antigos)
     var url = host.getAttribute('data-config')
@@ -480,7 +470,7 @@
       .then(function (cfg) {
         try { localStorage.setItem(key, JSON.stringify(cfg)) } catch (e) {}
         if (!handle) handle = mount(host, cfg, { endpoint: endpoint })
-        else if (JSON.stringify(cfg) !== JSON.stringify(cached) && !handle.touched()) handle.update(cfg)
+        else if (JSON.stringify(cfg) !== JSON.stringify(shown) && !handle.touched()) handle.update(cfg)
         push('form_view', { form_id: cfg.id, form_name: cfg.name })
         // Conta a visualização sem pôr a pessoa para esperar
         try { fetch(endpoint + '?id=' + encodeURIComponent(id) + '&view=1', { keepalive: true, credentials: 'omit' }).catch(function () {}) } catch (e) {}
