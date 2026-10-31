@@ -14,7 +14,7 @@ export const ISLAND_SURFACE =
 export const ToolbarIsland: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className, ...props }) => (
   <div
     role="toolbar"
-    className={cn('pointer-events-auto flex items-center gap-0.5 rounded-xl p-1', ISLAND_SURFACE, className)}
+    className={cn('se-toolbar-glass pointer-events-auto flex items-center gap-0.5 rounded-xl p-1', ISLAND_SURFACE, className)}
     {...props}
   />
 )

@@ -635,7 +635,7 @@ export const CreativeEditor: React.FC = () => {
 
   return (
     <div className="flex h-[calc(100vh-56px)] min-h-[560px] flex-col md:h-screen" onClick={() => menu && setMenu(null)}>
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-white px-3">
+      <header className="se-editor-bar flex h-12 shrink-0 items-center gap-2 border-b bg-white px-3">
         <Link to="/criativos" aria-label="Voltar aos criativos" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
         <input aria-label="Nome do conjunto" value={set.name} onChange={(e) => useEditor.getState().edit((s) => ({ ...s, name: e.target.value }))} className="h-8 w-56 rounded-md border border-transparent px-2 text-sm font-semibold text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none" />
         <span className="text-xs text-gray-500">{savingLabel}</span>

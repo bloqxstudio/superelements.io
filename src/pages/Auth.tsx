@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import '@/styles/product.css';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -147,7 +148,7 @@ export default function Auth() {
   // Email confirmation success screen
   if (step === 'confirm-email') {
     return (
-      <div className="min-h-screen flex flex-col lg:flex-row bg-black">
+      <div className="se-product se-auth min-h-screen flex flex-col lg:flex-row">
         <VideoPanel />
         <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
           <div className="w-full max-w-lg">
@@ -196,7 +197,7 @@ export default function Auth() {
 
   if (step === 'login' || step === 'signup') {
     return (
-      <div className="min-h-screen flex flex-col lg:flex-row bg-black">
+      <div className="se-product se-auth min-h-screen flex flex-col lg:flex-row">
         <VideoPanel />
         <div className="flex-1 flex items-center justify-center p-4 lg:p-8">
           <div className="w-full max-w-lg">
@@ -329,7 +330,7 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-black">
+    <div className="se-product se-auth min-h-screen flex flex-col lg:flex-row">
       <VideoPanel />
 
       {/* Auth Form */}

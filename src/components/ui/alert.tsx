@@ -25,6 +25,7 @@ const Alert = React.forwardRef<
   React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof alertVariants>
 >(({ className, variant, ...props }, ref) => (
   <div
+    data-se-ui="alert"
     ref={ref}
     role="alert"
     className={cn(alertVariants({ variant }), className)}

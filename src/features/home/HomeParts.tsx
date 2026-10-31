@@ -125,7 +125,7 @@ export const Skeleton: React.FC<{ className?: string }> = ({ className }) => <di
 
 /** Título de bloco: o nome, a explicação de uma linha e o estado do dado. */
 export const Block: React.FC<{ id: string; title: string; hint?: string; status?: React.ReactNode; children: React.ReactNode; className?: string }> = ({ id, title, hint, status, children, className }) => (
-  <section aria-labelledby={id} className={cn('min-w-0 rounded-xl bg-white p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] md:p-5', className)}>
+  <section aria-labelledby={id} className={cn('se-surface min-w-0 rounded-xl bg-white p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] md:p-5', className)}>
     <div className="mb-3 flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
       <div className="min-w-0">
         <h2 id={id} className="text-sm font-semibold text-gray-900">

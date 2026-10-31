@@ -89,7 +89,7 @@ const NewDoc: React.FC<{ open: boolean; research: boolean; folders: { id: string
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{research ? 'Nova pesquisa' : 'Novo documento'}</DialogTitle>
-          <DialogDescription>{research ? 'Dê um assunto e o Pesquisador mapeia dores, clientes, jornada e referências na web.' : 'Escolha o formato: ele já vem com a estrutura certa, e os agentes escrevem em cima dela.'}</DialogDescription>
+          <DialogDescription>{research ? 'Dê um assunto e o Pesquisador mapeia dores, clientes, jornada e referências na web.' : 'Escolha o formato do texto. Você pode escrever, revisar ou pedir ajuda à IA.'}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           {!research && (
@@ -239,7 +239,7 @@ const Copy: React.FC = () => {
   }
 
   return (
-    <div className="min-h-[calc(100vh-57px)] bg-zinc-50">
+    <div className="se-page min-h-[calc(100vh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -251,7 +251,7 @@ const Copy: React.FC = () => {
               </>
             ) : (
               <>
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Copy</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Textos</h1>
             <p className="mt-1 max-w-2xl text-sm text-gray-500">O documento de texto da empresa: posts, landing pages, sites, campanhas, stories, e-mails e pesquisas. Os agentes escrevem e revisam com você acompanhando, a equipe edita e comenta ao vivo, e o texto segue para Criativos ou Projetos. Um assunto vira uma pasta com a pesquisa e os documentos que saem dela.</p>
               </>
             )}
@@ -289,7 +289,7 @@ const Copy: React.FC = () => {
           {listed.map((d) => {
             const f = formatById(d.format)
             return (
-              <div key={d.id} className="group relative rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] transition-shadow hover:shadow-[0_0_0_1px_rgb(0_0_0/0.1),0_6px_16px_-6px_rgb(0_0_0/0.14)]">
+              <div key={d.id} className="se-document-card group relative rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] transition-shadow hover:shadow-[0_0_0_1px_rgb(0_0_0/0.1),0_6px_16px_-6px_rgb(0_0_0/0.14)]">
                 <Link to={setLink(d)} className="block rounded-xl p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-800">{f.id === 'pesquisa' ? <Microscope className="h-3 w-3" /> : <FileText className="h-3 w-3" />}{f.label}</span>
                   <p className="mt-3 truncate text-sm font-semibold text-gray-900">{d.title || 'Documento sem título'}</p>

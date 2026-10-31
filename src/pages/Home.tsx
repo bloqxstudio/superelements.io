@@ -113,7 +113,7 @@ const Home: React.FC = () => {
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Início</h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">
-            A operação digital de {team?.name ?? 'sua conta'}: do que está sendo produzido e publicado até as oportunidades ganhas.
+            {team?.name ?? 'Sua conta'}: acompanhe a produção, os contatos e as próximas ações.
           </p>
         </div>
         <div className="flex flex-col items-start gap-1 sm:items-end">
@@ -183,7 +183,7 @@ const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { cur
   const sentence = parts.length ? `Nos últimos ${days} dias: ${parts.join('; ')}.` : undefined
 
   return (
-    <Block id="leitura" title="Leitura do período" hint="O que aconteceu na operação, em quatro números. Cada um abre a tela onde ele nasce.">
+    <Block id="leitura" title="Resumo do período" hint="Veja os resultados do período. Selecione um indicador para ver os detalhes.">
       {sentence ? <p className="mb-4 max-w-3xl text-[15px] leading-relaxed text-gray-800">{sentence}</p> : <Skeleton className="mb-4 h-5 w-2/3" />}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat

@@ -184,12 +184,12 @@ const Creatives: React.FC = () => {
   }
 
   return (
-    <div className="min-h-[calc(100vh-57px)] bg-zinc-50">
+    <div className="se-page min-h-[calc(100vh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Criativos</h1>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">Posts de Instagram na marca de cada projeto. Edite como no Canva e baixe em PNG ou JPG no tamanho do feed, do quadrado e do story.</p>
+            <p className="mt-1 max-w-2xl text-sm text-gray-500">Crie posts e stories com a marca do projeto. Edite as peças e baixe quando estiverem prontas.</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" className="gap-1.5 bg-white" disabled={importing} onClick={() => void bringReady()}><Images className="h-4 w-4" /> {importing ? 'Trazendo…' : 'Trazer criativos prontos'}</Button>

@@ -5,7 +5,7 @@ import { initialsOf } from './people'
 /** Peças das telas do CRM, no desenho das telas da conta (Prospecção, Agentes). */
 
 export const FIELD =
-  'w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-gray-50 disabled:text-gray-500'
+  'se-field w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-gray-50 disabled:text-gray-500'
 
 export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
@@ -36,7 +36,7 @@ export const instagramUrl = (handle: string | undefined) => {
 }
 
 export const PageHeader: React.FC<{ title: string; text?: React.ReactNode; children?: React.ReactNode }> = ({ title, text, children }) => (
-  <div className="flex flex-wrap items-end justify-between gap-4">
+  <div className="se-page-header flex flex-wrap items-end justify-between gap-4">
     <div className="min-w-0">
       <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{title}</h1>
       {text && <p className="mt-1 max-w-2xl text-sm text-gray-500">{text}</p>}
@@ -46,8 +46,8 @@ export const PageHeader: React.FC<{ title: string; text?: React.ReactNode; child
 )
 
 export const Page: React.FC<{ children: React.ReactNode; wide?: boolean }> = ({ children, wide }) => (
-  <div className="min-h-[calc(100vh-57px)] bg-zinc-50">
-    <div className={cn('mx-auto px-4 py-8 md:px-6 md:py-10', wide ? 'max-w-[1600px]' : 'max-w-6xl')}>{children}</div>
+  <div className="se-page min-h-[calc(100vh-57px)]">
+    <div className={cn('se-page-inner mx-auto px-4 py-8 md:px-8 md:py-8', wide ? 'max-w-[1600px]' : 'max-w-6xl')}>{children}</div>
   </div>
 )
 
@@ -88,7 +88,7 @@ export const AutoField: React.FC<{
 }
 
 export const Surface: React.FC<{ title?: string; action?: React.ReactNode; className?: string; children: React.ReactNode }> = ({ title, action, className, children }) => (
-  <section className={cn('rounded-xl bg-white p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] md:p-5', className)}>
+  <section className={cn('se-surface rounded-xl bg-white p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] md:p-5', className)}>
     {(title || action) && (
       <div className="mb-3 flex items-center justify-between gap-3">
         {title && <h2 className="text-sm font-semibold text-gray-900">{title}</h2>}

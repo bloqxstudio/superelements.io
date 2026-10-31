@@ -1,5 +1,8 @@
 import { useJobs } from '@/features/operations/jobs'
-import React, { useEffect } from 'react'
+import * as DialogPrimitive from '@radix-ui/react-dialog'
+import React, { createContext, useContext, useEffect, useState } from 'react'
+import { Search } from 'lucide-react'
+import { navigationMatches } from '@/features/navigation/workspace'
 import { Link, NavLink } from 'react-router-dom'
 import { Bot, Building2, CalendarDays, Filter, Target, House, Building, FolderKanban, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
@@ -22,23 +25,29 @@ import { cn } from '@/lib/utils'
  * Space ocupa a tela e o menu some.
  */
 
+const NavigationQuery = createContext('')
+
 const itemClass = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]',
-    isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+    'se-nav-item flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]',
+    isActive ? 'se-nav-active text-gray-900' : 'text-gray-600 hover:text-gray-900'
   )
 
-const Item: React.FC<{ to: string; icon: React.ElementType; label: string; end?: boolean; children?: React.ReactNode }> = ({ to, icon: Icon, label, end, children }) => (
+const Item: React.FC<{ to: string; icon: React.ElementType; label: string; end?: boolean; children?: React.ReactNode }> = ({ to, icon: Icon, label, end, children }) => {
+  const query = useContext(NavigationQuery)
+  if (!navigationMatches(query, label, to)) return null
+  return (
   <NavLink to={to} end={end} className={itemClass}>
     <Icon className="h-4 w-4 shrink-0" aria-hidden />
     <span className="min-w-0 flex-1 truncate">{label}</span>
     {children}
   </NavLink>
-)
+  )
+}
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <div className="mt-5 first:mt-0">
-    <p className="mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{title}</p>
+  <div className="se-sidebar-section mt-5 first:mt-0">
+    <p className="mb-1 px-2.5 text-[11px] font-medium tracking-wide text-gray-500">{title}</p>
     <div className="grid gap-0.5">{children}</div>
   </div>
 )
@@ -52,7 +61,7 @@ const AgentsItem: React.FC = () => {
   const working = (connected ? agents.filter((a) => agentStatus(a, now) === 'working').length : 0) + jobsRunning
   const asking = agents.filter((a) => agentStatus(a, now) === 'question').length
   return (
-    <Item to="/agentes" icon={Bot} label="Agentes">
+    <Item to="/agentes" icon={Bot} label="Agentes de IA">
       {working > 0 && (
         <span className="flex items-center gap-1 rounded-full px-1.5 text-[11px] font-semibold tabular-nums text-white" style={{ background: AGENT_COLOR }} title={`${working} trabalhando`}>
           <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-white motion-safe:animate-pulse" />
@@ -117,7 +126,7 @@ const SiteItem: React.FC = () => {
   const contacts = useMenuBadges((s) => s.contacts)
   const liveLabel = live === 1 ? '1 pessoa no site agora' : `${live} pessoas no site agora`
   return (
-    <Item to="/crm/site" icon={Globe} label="Site">
+    <Item to="/crm/site" icon={Globe} label="Visitas ao site">
       {live > 0 && (
         <span className="flex items-center gap-1 rounded-full bg-emerald-500 px-1.5 text-[11px] font-semibold tabular-nums text-white" title={liveLabel}>
           <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-white motion-safe:animate-pulse" />
@@ -133,6 +142,7 @@ const SiteItem: React.FC = () => {
 const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const { user, profile, signOut } = useAuth()
   const { teams, team } = useCrm()
+  const [query, setQuery] = useState('')
   const platformAdmin = profile?.role === 'admin'
   const crm = teams.length > 0 || platformAdmin
   // Módulos ligados na conta aberta (a Avence liga e desliga em Contas)
@@ -141,7 +151,7 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
 
   return (
     <>
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-100 px-4">
+      <div className="se-sidebar-brand flex h-16 shrink-0 items-center justify-between px-4">
         <Link to={crm ? '/inicio' : '/'} aria-label={crm ? 'Início' : 'Projetos'} className="transition-opacity hover:opacity-80">
           <Logo />
         </Link>
@@ -156,7 +166,12 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         <AccountSwitcher />
       </div>
 
-      <nav aria-label="Navegação" className="flex-1 overflow-y-auto px-3 py-4">
+      <label className="se-nav-search mx-3 mt-3 flex items-center gap-2 rounded-xl px-2.5">
+        <Search className="h-3.5 w-3.5 shrink-0 text-gray-500" aria-hidden />
+        <input type="search" aria-label="Encontrar uma área" placeholder="Encontrar uma área" value={query} onChange={(e) => setQuery(e.target.value)} className="h-9 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-gray-500" />
+      </label>
+      <NavigationQuery.Provider value={query}>
+      <nav aria-label="Navegação" className="se-navigation flex-1 overflow-y-auto px-3 py-4">
         {crm && (
           <div className="mb-5">
             <Item to="/inicio" icon={House} label="Início" />
@@ -165,23 +180,23 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         {producao && (
           <Section title="Produção">
             {on('projetos') && <Item to="/" end icon={FolderKanban} label="Projetos" />}
-            {teams.length > 0 && on('copy') && <Item to="/plano" icon={Target} label="Plano" />}
+            {teams.length > 0 && on('copy') && <Item to="/plano" icon={Target} label="Plano da empresa" />}
             {teams.length > 0 && on('copy') && <Item to="/conteudos" icon={CalendarDays} label="Conteúdos" />}
             {on('agentes') && <AgentsItem />}
-            {on('copy') && <Item to="/copy" icon={PenLine} label="Copy" />}
+            {on('copy') && <Item to="/copy" icon={PenLine} label="Textos" />}
             {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" />}
-            {on('skills') && <Item to="/skills" icon={Wand2} label="Skills" />}
+            {on('skills') && <Item to="/skills" icon={Wand2} label="Instruções de IA" />}
           </Section>
         )}
         {crm && (
-          <Section title="CRM">
+          <Section title="Clientes e vendas">
             {on('crm') && <OportunidadesItem />}
             {on('whatsapp') && <WhatsAppItem />}
-            {on('whatsapp') && <Item to="/crm/fluxos" icon={Workflow} label="Fluxos" />}
+            {on('whatsapp') && <Item to="/crm/fluxos" icon={Workflow} label="Automações" />}
             {on('crm') && <Item to="/crm/formularios" icon={ListChecks} label="Formulários" />}
-            {on('crm') && <Item to="/crm/funis" icon={Filter} label="Funis" />}
+            {on('crm') && <Item to="/crm/funis" icon={Filter} label="Funis de venda" />}
             {on('crm') && <Item to="/crm/clientes" icon={Building2} label="Clientes" />}
-            {on('crm') && <Item to="/crm/social" icon={Send} label="Social" />}
+            {on('crm') && <Item to="/crm/social" icon={Send} label="Relacionamento nas redes" />}
             {on('instagram') && <InstagramItem />}
             {on('instagram') && <Item to="/crm/anuncios" icon={Megaphone} label="Anúncios" />}
             {on('site') && <SiteItem />}
@@ -195,9 +210,11 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
             <Item to="/contas" icon={Building} label="Contas e módulos" />
           </Section>
         )}
+        <p className="se-nav-no-results px-2.5 py-6 text-xs leading-relaxed text-gray-500" role="status">Nenhuma área encontrada. Tente outro nome.</p>
       </nav>
+      </NavigationQuery.Provider>
 
-      <div className="shrink-0 space-y-2 border-t border-gray-100 px-3 py-3">
+      <div className="se-sidebar-user shrink-0 space-y-2 px-3 py-3">
         {user && (
           <div className="flex items-center gap-2 px-1">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white" aria-hidden>
@@ -235,20 +252,20 @@ export const AppSidebar: React.FC<{ open: boolean; onClose: () => void }> = ({ o
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-gray-200 bg-white md:flex">
+      <aside className="se-sidebar fixed bottom-3 left-3 top-3 z-30 hidden w-60 flex-col md:flex">
         <SidebarContent />
       </aside>
 
-      {open && <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={onClose} aria-hidden />}
-      <aside
-        className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-white shadow-xl transition-[transform,visibility] duration-200 motion-reduce:transition-none md:hidden',
-          // Fechado fica invisível: fora da ordem do Tab e dos leitores de tela
-          open ? 'visible translate-x-0' : 'invisible -translate-x-full'
-        )}
-      >
-        <SidebarContent onClose={onClose} />
-      </aside>
+      <DialogPrimitive.Root open={open} onOpenChange={(next) => !next && onClose()}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="se-drawer-scrim fixed inset-0 z-40 md:hidden" />
+          <DialogPrimitive.Content className="se-sidebar se-sidebar-mobile fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col outline-none md:hidden">
+            <DialogPrimitive.Title className="sr-only">Menu de navegação</DialogPrimitive.Title>
+            <DialogPrimitive.Description className="sr-only">Escolha uma área do seu espaço de trabalho.</DialogPrimitive.Description>
+            <SidebarContent onClose={onClose} />
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </>
   )
 }

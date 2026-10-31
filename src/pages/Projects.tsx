@@ -145,7 +145,7 @@ const Projects: React.FC = () => {
   }
 
   return (
-    <div className="min-h-[calc(100vh-57px)] bg-zinc-50">
+    <div className="se-page min-h-[calc(100vh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -188,7 +188,7 @@ const Projects: React.FC = () => {
             </span>
             <h2 className="mt-4 text-sm font-semibold text-gray-900">Nenhum projeto ainda</h2>
             <p className="mt-1 max-w-sm text-sm text-gray-500">
-              Crie um projeto para cada cliente e monte as páginas dele no canvas, já com a marca aplicada.
+              Organize as páginas e a identidade de cada cliente em um projeto. Comece criando o primeiro.
             </p>
             <Button onClick={() => setDialog({ open: true })} className="mt-5 gap-1.5">
               <Plus className="h-4 w-4" />

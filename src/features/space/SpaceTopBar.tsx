@@ -282,7 +282,7 @@ export const SpaceTopBar: React.FC<SpaceTopBarProps> = ({ projectId }) => {
   const { undo, redo, openPlayer } = useSpaceStore.getState()
 
   return (
-    <header className="relative z-50 grid h-12 shrink-0 select-none grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-gray-200 bg-white px-2">
+    <header className="se-editor-bar relative z-50 grid h-12 shrink-0 select-none grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-gray-200 bg-white px-2">
       <div className="flex min-w-0 items-center gap-0.5">
         <ProjectMenu projectId={projectId} />
         <div aria-hidden className="mx-1 h-5 w-px bg-gray-200" />

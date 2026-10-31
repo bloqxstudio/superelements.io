@@ -128,7 +128,7 @@ interface ProjectCardProps {
 export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onArchive, onDelete, onLeave }) => (
   <article
     className={cn(
-      'group relative overflow-hidden rounded-xl transition-shadow duration-200',
+      'se-project-card group relative overflow-hidden rounded-xl transition-shadow duration-200',
       project.archivedAt && 'opacity-70',
       ISLAND_SURFACE,
       'hover:shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_2px_4px_-1px_rgb(0_0_0/0.08),0_12px_24px_-6px_rgb(0_0_0/0.14)]'

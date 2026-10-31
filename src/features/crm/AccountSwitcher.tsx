@@ -54,13 +54,13 @@ export const AccountSwitcher: React.FC = () => {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex h-11 w-full items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-2 text-left transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-gray-50"
+            className="se-account-switcher flex h-11 w-full items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-2 text-left transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-gray-50"
             aria-label={`Conta aberta: ${team.name}. Trocar de conta`}
           >
             <Initial name={team.name} paused={team.status === 'pausada'} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium leading-tight text-gray-900">{team.name}</span>
-              <span className="block truncate text-[11px] leading-tight text-gray-500">{team.status === 'pausada' ? 'Conta pausada' : team.isHome ? 'Conta da casa' : 'Conta cliente'}</span>
+              <span className="block truncate text-[11px] leading-tight text-gray-500">{team.status === 'pausada' ? 'Conta pausada' : team.isHome ? 'Sua empresa' : 'Conta de cliente'}</span>
             </span>
             <ChevronsUpDown className="h-4 w-4 shrink-0 text-gray-400" aria-hidden />
           </button>
