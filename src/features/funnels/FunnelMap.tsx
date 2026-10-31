@@ -18,9 +18,16 @@ const pct = (n: number) => `${String(n).replace('.', ',')}%`
 
 const W = 248
 const H = 176
-const GAP = 120
+const GAP = 88
 const ORIGIN = 40
-const defaultPos = (i: number) => ({ x: ORIGIN + i * (W + GAP), y: ORIGIN })
+/** Até 5 etapas ficam numa linha; mais que isso vira duas linhas em zigue-zague (a segunda volta da direita), para o zoom não encolher. */
+const perRowOf = (n: number) => (n > 5 ? Math.ceil(n / 2) : n)
+const defaultPos = (i: number, n: number) => {
+  const per = perRowOf(n)
+  const row = Math.floor(i / per)
+  const col = row % 2 === 0 ? i % per : per - 1 - (i % per)
+  return { x: ORIGIN + col * (W + GAP), y: ORIGIN + row * (H + 96) }
+}
 
 type Pos = { x: number; y: number }
 type View = { x: number; y: number; k: number }
@@ -77,7 +84,7 @@ export const FunnelMap: React.FC<FunnelMapProps> = ({ funnelId, steps, readings,
   const box = useRef<HTMLDivElement>(null)
   const fitted = useRef(false)
 
-  const posOf = useCallback((s: FunnelStep, i: number): Pos => positions[stepKey(s, i)] ?? defaultPos(i), [positions])
+  const posOf = useCallback((s: FunnelStep, i: number): Pos => positions[stepKey(s, i)] ?? defaultPos(i, steps.length), [positions, steps.length])
 
   const persist = (next: Record<string, Pos>) => {
     if (onSaveLayout) {
@@ -228,9 +235,12 @@ export const FunnelMap: React.FC<FunnelMapProps> = ({ funnelId, steps, readings,
     requestAnimationFrame(() => {
       const el = box.current
       if (!el) return
-      const w = ORIGIN * 2 + steps.length * W + (steps.length - 1) * GAP
-      const k = Math.min(1, el.clientWidth / w)
-      setView({ k, x: (el.clientWidth - w * k) / 2, y: 24 })
+      const per = perRowOf(steps.length)
+      const rows = Math.ceil(steps.length / per)
+      const w = ORIGIN * 2 + per * W + (per - 1) * GAP
+      const h = ORIGIN * 2 + rows * H + (rows - 1) * 96
+      const k = Math.min(1, el.clientWidth / w, el.clientHeight / h)
+      setView({ k, x: (el.clientWidth - w * k) / 2, y: (el.clientHeight - h * k) / 2 })
     })
   }
 
@@ -340,6 +350,11 @@ export const FunnelMap: React.FC<FunnelMapProps> = ({ funnelId, steps, readings,
                     {i + 1}
                   </span>
                   <span className="truncate text-[11px] font-medium uppercase tracking-wide text-gray-500">{KIND_LABEL[step.kind]}</span>
+                  {link && (
+                    <Link to={link.to} className="ml-auto shrink-0 text-[11px] font-medium text-violet-700 hover:underline">
+                      {link.label}
+                    </Link>
+                  )}
                 </div>
                 <h3 className="mt-1.5 line-clamp-2 text-sm font-semibold leading-snug text-gray-900 [overflow-wrap:anywhere]">{step.name}</h3>
 
@@ -384,11 +399,6 @@ export const FunnelMap: React.FC<FunnelMapProps> = ({ funnelId, steps, readings,
                       <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
-                )}
-                {link && (
-                  <Link to={link.to} className="absolute right-3 top-3 text-[11px] font-medium text-violet-700 hover:underline">
-                    {link.label}
-                  </Link>
                 )}
               </div>
             )
