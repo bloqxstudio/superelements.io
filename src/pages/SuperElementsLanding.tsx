@@ -136,7 +136,7 @@ const Price = ({ name, price, text, list, featured = false }: { name: string; pr
 const SuperElementsLanding: React.FC = () => {
   const [menu, setMenu] = useState(false)
   const [faq, setFaq] = useState<number | null>(0)
-  return <div className="se-page">
+  return <div className="sel-page">
     <header className="se-header"><a href="#inicio"><Brand /></a><nav className={menu ? 'open' : ''}><a href="#produto">Produto</a><a href="#publicos">Para quem</a><a href="#funcionalidades">Funcionalidades</a><a href="#precos">Preços</a></nav><div><Link to="/auth">Entrar</Link><Link className="se-cta" to="/auth">Criar primeiro projeto <ArrowRight /></Link></div><button className="se-menu" onClick={() => setMenu(!menu)} aria-label={menu ? 'Fechar menu' : 'Abrir menu'}>{menu ? <X /> : <Menu />}</button></header>
     <main>
       <section className="se-hero" id="inicio"><div className="se-hero-copy"><p><i /> Criado para WordPress + Elementor</p><h1>O site continua WordPress.<br />O trabalho fica muito mais simples.</h1><h2>Crie, organize e publique sites Elementor em um espaço visual. Um site para sua empresa ou todos os clientes da sua agência.</h2><div><Link className="se-cta" to="/auth">Criar meu primeiro projeto <ArrowRight /></Link><a href="#produto"><Play /> Ver como funciona</a></div><small><Check /> Conecte sua hospedagem atual <Check /> Sem cartão para testar</small></div><div className="se-hero-demo"><ProductDemo /><p><MousePointer2 /> Experimente: selecione uma camada e publique.</p></div></section>
