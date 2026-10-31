@@ -15,6 +15,7 @@ import { useProjectSession, useProjectSync } from '@/features/projects/useProjec
 import { CONNECTOR_ZIP, openAdmin } from '@/features/wordpress/autologin'
 import { authorizationUrl, canReturnHere, listenConnections } from '@/features/wordpress/connect'
 import { pingConnector } from '@/features/wordpress/pluginPing'
+import { diagnoseSite } from '@/features/prospects/api'
 import { siteCandidates } from '@/features/wordpress/rest'
 import { syncSiteConfig } from '@/features/wordpress/siteConfig'
 import type { WordPressConnection } from '@/features/wordpress/types'
@@ -87,7 +88,19 @@ export const AccountWizard: React.FC = () => {
   const approval = useRef<{ href: string } | null>(null)
   const started = useRef(false)
 
-  const set = (key: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: e.target.value }))
+  // Campos que a pessoa mexeu: o que vem do site nunca escreve por cima
+  const touched = useRef(new Set<string>())
+  const [filled, setFilled] = useState(false)
+  const set = (key: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    touched.current.add(key)
+    setForm((f) => ({ ...f, [key]: e.target.value }))
+  }
+  const fill = useCallback((values: Partial<typeof EMPTY>) => {
+    const next = Object.entries(values).filter(([key, value]) => value && !touched.current.has(key))
+    if (!next.length) return
+    setForm((f) => ({ ...f, ...Object.fromEntries(next.filter(([key]) => !f[key as keyof typeof EMPTY])) }))
+    setFilled(true)
+  }, [])
   const mark = (id: TaskId, value: Status, text?: string) => {
     setStatus((s) => ({ ...s, [id]: value }))
     setDetail((d) => ({ ...d, [id]: text }))
@@ -109,6 +122,25 @@ export const AccountWizard: React.FC = () => {
     }, 600)
     return () => clearTimeout(timer)
   }, [form.website, origin])
+
+  // Achou o site: o nome vem do próprio WordPress e o contato, da leitura da página inicial (se a função estiver no ar)
+  const detectedSite = kind && kind !== 'checking' && kind.kind === 'wordpress' ? kind.site : null
+  useEffect(() => {
+    if (!detectedSite) return
+    fill({ name: detectedSite.name })
+    let active = true
+    void diagnoseSite(form.website.trim())
+      .then(({ scan }) => {
+        if (!active) return
+        fill({ contactEmail: scan.emails[0], contactPhone: scan.whatsapp ?? scan.phones[0] })
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+    // só quando o site detectado muda
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detectedSite?.siteUrl, fill])
 
   const wordpress = origin === 'url' && kind && kind !== 'checking' && kind.kind === 'wordpress' && !kind.blocked ? kind : null
 
@@ -315,6 +347,7 @@ export const AccountWizard: React.FC = () => {
                 </span>
               </label>
             )}
+            {filled && <p className="text-xs text-gray-500 sm:col-span-2">Preenchido a partir do site. Confira e corrija o que precisar.</p>}
             <label className="grid gap-1.5 sm:col-span-2">
               <span className="text-xs font-medium text-gray-700">Nome da empresa</span>
               <input value={form.name} onChange={set('name')} maxLength={120} required autoFocus={origin === 'new'} className={`${FIELD} h-10`} />
