@@ -2965,6 +2965,7 @@ export type Database = {
       }
       crm_set_modules: { Args: { p_team: string; p_modules: Json }; Returns: Json }
       crm_set_account_status: { Args: { p_team: string; p_status: string }; Returns: undefined }
+      crm_delete_account: { Args: { p_team: string }; Returns: undefined }
       crm_support_access: { Args: { p_team: string }; Returns: undefined }
       crm_accounts_overview: {
         Args: Record<PropertyKey, never>
