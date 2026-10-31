@@ -62,6 +62,7 @@ const promptOf = (r: EditRequest) =>
     '',
     `## Marca\n${JSON.stringify(r.brand)}`,
     '',
+    ...(r.brief?.trim() ? [`## Briefing da empresa (do plano; respeite público, tom e restrições)\n${r.brief.trim()}`, ''] : []),
     `## Fontes disponíveis\n${r.fonts.join(', ')}`,
     '',
     `## Imagens disponíveis (src: descrição)\n${r.images.map((i) => `${i.src}: ${i.label}`).join('\n') || '(nenhuma)'}`,

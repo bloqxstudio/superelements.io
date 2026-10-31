@@ -93,6 +93,8 @@ export interface EditRequest {
   /** Perfil do agente (quem é, como trabalha, regras). */
   persona?: string
   message: string
+  /** Briefing do plano da empresa, quando o conjunto nasceu de um conteúdo (Conteúdos). */
+  brief?: string
   /** Escopo da conversa: o que estava selecionado. */
   scope: 'layer' | 'slide' | 'post' | 'set'
   postId?: string

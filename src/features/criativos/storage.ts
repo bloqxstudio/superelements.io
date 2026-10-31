@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client'
 import { currentUserId } from '@/features/projects/storage'
 import { personalFolder } from '@/features/crm/accountScope'
+import { createOnce, isAlreadyExists } from '@/features/conteudos/exclusive'
 import type { CreativeSet, SetAsset, SetSummary } from './types'
 
 /**
@@ -108,6 +109,30 @@ export async function saveSet(set: CreativeSet) {
   const where = placeOf(set)
   await writeJson(`${await folderOf(where)}/${set.id}/set.json`, set)
   await writeIndex(where, (list) => [summaryOf(set), ...list.filter((s) => s.id !== set.id)])
+}
+
+/**
+ * Cria o conjunto só se ainda não existe (`upsert: false`); se já existe, devolve o que está
+ * gravado, sem escrever por cima. Falha de leitura ou permissão sobe como erro. As gravações
+ * normais (`saveSet`) não mudam.
+ */
+export async function createSetOnce(set: CreativeSet): Promise<{ set: CreativeSet; created: boolean }> {
+  const where = placeOf(set)
+  const base = await folderOf(where)
+  const result = await createOnce<CreativeSet>(
+    {
+      load: () => loadSet(set.id, where),
+      create: async (value) => {
+        const { error } = await bucket().upload(`${base}/${value.id}/set.json`, new Blob([JSON.stringify(value)], { type: 'application/json' }), { contentType: 'application/json', upsert: false, cacheControl: '0' })
+        if (!error) return 'created'
+        if (isAlreadyExists(error)) return 'exists'
+        throw error
+      },
+      index: (value) => writeIndex(where, (list) => [summaryOf(value), ...list.filter((s) => s.id !== value.id)]),
+    },
+    set
+  )
+  return { set: result.value, created: result.created }
 }
 
 export async function deleteSet(set: Pick<SetSummary, 'id' | 'projectId' | 'shared'>) {

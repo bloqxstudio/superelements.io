@@ -36,18 +36,24 @@ export async function generatePosts(form: AiForm, brand: SetBrand, signal?: Abor
   const body = await callAi<Partial<PlanResponse>>('plan', request, signal)
   if (!body.posts) throw new Error('A IA não respondeu.')
   const known = new Set(AV_CASES.map((c) => c.slug))
-  return body.posts.map((p) =>
+  // Sem nenhum case escolhido (conjunto de outra marca, vindo de Conteúdos) nenhum slide usa case da Avence
+  const noCases = form.cases.length === 0
+  const posts = body.posts.map((p) =>
     buildPost(
       {
         name: p.name || 'Post',
         format: (p.format in FORMATS ? p.format : form.format) as Post['format'],
         caption: p.caption,
-        // Um case que a IA inventou vira o primeiro dos escolhidos
-        slides: p.slides.map((s) => ({ ...s, case: s.case && known.has(s.case) ? s.case : form.cases[0] ?? AV_CASES[0].slug })),
+        slides: noCases
+          ? p.slides.filter((s) => !s.template.startsWith('case-')).map((s) => ({ ...s, case: undefined }))
+          : // Um case que a IA inventou vira o primeiro dos escolhidos
+            p.slides.map((s) => ({ ...s, case: s.case && known.has(s.case) ? s.case : form.cases[0] ?? AV_CASES[0].slug })),
       },
       brand
     )
   )
+  if (noCases && posts.some((p) => p.slides.length === 0)) throw new Error('A IA só montou telas de cases. Descreva melhor o post no briefing e tente de novo.')
+  return posts
 }
 
 // Conversa de edição
@@ -131,7 +137,9 @@ export async function requestEdit(call: EditCall, fonts: string[], signal?: Abor
       ...(set.brand.logoOnLight ? [{ src: set.brand.logoOnLight, label: 'Logo para fundo claro' }] : []),
       ...(set.brand.logoOnDark ? [{ src: set.brand.logoOnDark, label: 'Logo para fundo escuro' }] : []),
     ],
-    cases: AV_CASES.map((c) => ({ slug: c.slug, name: c.name, segment: c.segment, summary: c.summary })),
+    // Conjunto vindo de Conteúdos: briefing do plano no pedido e nenhum case da Avence
+    brief: set.source ? set.brief : undefined,
+    cases: set.source ? [] : AV_CASES.map((c) => ({ slug: c.slug, name: c.name, segment: c.segment, summary: c.summary })),
     image: slide && post && call.scope !== 'post' ? slidePreview(slide, post.format, call.images) : undefined,
     // O post inteiro: a IA vê todos os cards, não só um
     previews: post && call.scope === 'post' ? post.slides.slice(0, 10).map((sl) => slidePreview(sl, post.format, call.images, 540)) : undefined,

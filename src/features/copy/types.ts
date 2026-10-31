@@ -82,6 +82,8 @@ export interface CopyDoc {
   folderId?: string
   folderName?: string
   brief: Brief
+  /** O conteúdo do Plano de onde este documento nasceu (Conteúdos): o botão "Voltar ao conteúdo" usa. */
+  source?: { contentId: string; contextVersion?: number }
   blocks: Block[]
   comments: CopyComment[]
   /** Fontes que uma pesquisa leu. */

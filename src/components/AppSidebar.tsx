@@ -1,7 +1,7 @@
 import { useJobs } from '@/features/operations/jobs'
 import React, { useEffect } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { Bot, Building2, Filter, House, Building, FolderKanban, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
+import { Bot, Building2, CalendarDays, Filter, Target, House, Building, FolderKanban, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { useAuth } from '@/contexts/AuthContext'
 import { AccountSwitcher } from '@/features/crm/AccountSwitcher'
@@ -165,6 +165,8 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         {producao && (
           <Section title="Produção">
             {on('projetos') && <Item to="/" end icon={FolderKanban} label="Projetos" />}
+            {teams.length > 0 && on('copy') && <Item to="/plano" icon={Target} label="Plano" />}
+            {teams.length > 0 && on('copy') && <Item to="/conteudos" icon={CalendarDays} label="Conteúdos" />}
             {on('agentes') && <AgentsItem />}
             {on('copy') && <Item to="/copy" icon={PenLine} label="Copy" />}
             {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" />}

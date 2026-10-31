@@ -544,6 +544,8 @@ function spaceBridge() {
         const host = address.address === "127.0.0.1" ? "127.0.0.1" : "localhost";
         state = { url: `http://${host}:${address.port}`, token, pid: process.pid, startedAt: (/* @__PURE__ */ new Date()).toISOString() };
         current = { url: state.url, token };
+        mkdirSync(path.dirname(stateFile2), { recursive: true });
+        writeFileSync(path.join(path.dirname(stateFile2), `bridge-${address.port}.json`), JSON.stringify(state, null, 2));
         claim();
       });
       server.httpServer?.on("close", () => {
@@ -952,41 +954,41 @@ function spaceChat({ guide = REPO_GUIDE } = {}) {
           save();
         }, 70);
       };
-      const cursor = (run2, hint) => server.ws.send(CHAT_EVENTS.cursor, { projectId: run2.projectId, session: run2.session, agent: CHAT_AGENTS[run2.agent].name, ...hint });
-      const appendText = (run2, text3) => {
+      const cursor = (run, hint) => server.ws.send(CHAT_EVENTS.cursor, { projectId: run.projectId, session: run.session, agent: CHAT_AGENTS[run.agent].name, ...hint });
+      const appendText = (run, text3) => {
         if (!text3) return;
-        const parts = run2.message.parts ??= [];
+        const parts = run.message.parts ??= [];
         const last = parts[parts.length - 1];
-        if (last?.type === "text") last.text += run2.newBlock && last.text ? `
+        if (last?.type === "text") last.text += run.newBlock && last.text ? `
 
 ${text3}` : text3;
         else parts.push({ type: "text", text: text3 });
-        run2.newBlock = false;
-        run2.message.thinking = false;
+        run.newBlock = false;
+        run.message.thinking = false;
       };
-      const addStep = (run2, key, step, state = "running") => {
-        const existing = run2.steps.get(key);
+      const addStep = (run, key, step, state = "running") => {
+        const existing = run.steps.get(key);
         if (existing) return existing;
         const full = { id: key, at: Date.now(), state, ...step };
-        run2.steps.set(key, full);
-        (run2.message.parts ??= []).push({ type: "step", step: full });
-        run2.newBlock = true;
-        run2.message.thinking = false;
+        run.steps.set(key, full);
+        (run.message.parts ??= []).push({ type: "step", step: full });
+        run.newBlock = true;
+        run.message.thinking = false;
         const hint = cursorOf(full);
-        if (hint) cursor(run2, hint);
+        if (hint) cursor(run, hint);
         return full;
       };
-      const finishStep = (run2, key, ok) => {
-        const step = run2.steps.get(key);
+      const finishStep = (run, key, ok) => {
+        const step = run.steps.get(key);
         if (step && step.state === "running") step.state = ok ? "ok" : "error";
-        run2.message.thinking = true;
+        run.message.thinking = true;
       };
-      const item = (run2) => conversations.get(run2.projectId);
-      const onClaude = (run2, event) => {
+      const item = (run) => conversations.get(run.projectId);
+      const onClaude = (run, event) => {
         if (event.parent_tool_use_id) return;
         switch (event.type) {
           case "system":
-            if (event.subtype === "init" && event.session_id) item(run2).resume.claude = event.session_id;
+            if (event.subtype === "init" && event.session_id) item(run).resume.claude = event.session_id;
             return;
           case "rate_limit_event": {
             const usage = planUsageOf("claude", event);
@@ -998,45 +1000,45 @@ ${text3}` : text3;
           }
           case "stream_event": {
             const e = event.event ?? {};
-            if (e.type === "message_start") run2.message.thinking = true;
+            if (e.type === "message_start") run.message.thinking = true;
             if (e.type === "content_block_start") {
-              if (e.content_block?.type === "text") run2.newBlock = true;
-              if (e.content_block?.type === "thinking") run2.message.thinking = true;
+              if (e.content_block?.type === "text") run.newBlock = true;
+              if (e.content_block?.type === "thinking") run.message.thinking = true;
             }
             if (e.type === "content_block_delta" && e.delta?.type === "text_delta") {
-              run2.streamed.add("text");
-              appendText(run2, e.delta.text);
+              run.streamed.add("text");
+              appendText(run, e.delta.text);
             }
             return;
           }
           case "assistant": {
             const content = event.message?.content ?? [];
-            const sawDeltas = run2.streamed.delete("text");
+            const sawDeltas = run.streamed.delete("text");
             for (const block of content) {
-              if (block.type === "tool_use") addStep(run2, block.id, stepFromTool(root, block.name, block.input ?? {}));
+              if (block.type === "tool_use") addStep(run, block.id, stepFromTool(root, block.name, block.input ?? {}));
               else if (block.type === "text" && !sawDeltas) {
-                run2.newBlock = true;
-                appendText(run2, block.text);
+                run.newBlock = true;
+                appendText(run, block.text);
               }
             }
             return;
           }
           case "user":
             for (const block of event.message?.content ?? []) {
-              if (block.type === "tool_result") finishStep(run2, block.tool_use_id, !block.is_error);
+              if (block.type === "tool_result") finishStep(run, block.tool_use_id, !block.is_error);
             }
             return;
           case "result":
-            run2.finished = true;
-            run2.message.durationMs = event.duration_ms;
-            run2.message.costUsd = event.total_cost_usd;
-            run2.message.tokens = tokensOf(event.usage, "claude");
-            if (event.session_id) item(run2).resume.claude = event.session_id;
-            if (event.is_error || event.subtype && event.subtype !== "success") run2.message.error = clip(event.result, 600) || `O ${CHAT_AGENTS.claude.name} parou (${event.subtype})`;
+            run.finished = true;
+            run.message.durationMs = event.duration_ms;
+            run.message.costUsd = event.total_cost_usd;
+            run.message.tokens = tokensOf(event.usage, "claude");
+            if (event.session_id) item(run).resume.claude = event.session_id;
+            if (event.is_error || event.subtype && event.subtype !== "success") run.message.error = clip(event.result, 600) || `O ${CHAT_AGENTS.claude.name} parou (${event.subtype})`;
             return;
         }
       };
-      const onCodex = (run2, event) => {
+      const onCodex = (run, event) => {
         const it = event.item ?? {};
         const limits = planUsageOf("codex", event);
         if (limits) {
@@ -1045,41 +1047,41 @@ ${text3}` : text3;
         }
         switch (event.type) {
           case "thread.started":
-            if (event.thread_id) item(run2).resume.codex = event.thread_id;
+            if (event.thread_id) item(run).resume.codex = event.thread_id;
             return;
           case "turn.started":
-            run2.message.thinking = true;
+            run.message.thinking = true;
             return;
           case "item.started":
-            if (it.type === "command_execution") addStep(run2, it.id, stepFromCommand(String(it.command ?? "")));
-            else if (it.type === "reasoning") run2.message.thinking = true;
+            if (it.type === "command_execution") addStep(run, it.id, stepFromCommand(String(it.command ?? "")));
+            else if (it.type === "reasoning") run.message.thinking = true;
             return;
           case "item.completed":
             if (it.type === "agent_message") {
-              run2.newBlock = true;
-              appendText(run2, String(it.text ?? ""));
+              run.newBlock = true;
+              appendText(run, String(it.text ?? ""));
             } else if (it.type === "command_execution") {
-              addStep(run2, it.id, stepFromCommand(String(it.command ?? "")));
-              finishStep(run2, it.id, it.exit_code === 0 || it.exit_code == null && it.status === "completed");
+              addStep(run, it.id, stepFromCommand(String(it.command ?? "")));
+              finishStep(run, it.id, it.exit_code === 0 || it.exit_code == null && it.status === "completed");
             } else if (it.type === "file_change") {
               const changes = it.changes ?? [];
               const sections = changes.map((c) => sectionOfFile(root, c.path)).filter(Boolean);
               const text3 = sections.length ? `Editando a se\xE7\xE3o "${sections[0].title}"` : `Editando ${changes.map((c) => baseName(c.path)).join(", ") || "arquivos"}`;
-              addStep(run2, it.id, { kind: "edit", text: short(text3, 110), detail: changes.map((c) => c.path).join(", "), sectionId: sections[0]?.id }, it.status === "failed" ? "error" : "ok");
+              addStep(run, it.id, { kind: "edit", text: short(text3, 110), detail: changes.map((c) => c.path).join(", "), sectionId: sections[0]?.id }, it.status === "failed" ? "error" : "ok");
             } else if (it.type === "mcp_tool_call" || it.type === "web_search") {
-              addStep(run2, it.id, { kind: "run", text: it.type === "web_search" ? `Pesquisando ${clip(it.query, 60)}` : `${it.server ?? ""} ${it.tool ?? ""}`.trim() }, "ok");
-            } else if (it.type === "error") run2.message.error = clip(it.message, 600);
+              addStep(run, it.id, { kind: "run", text: it.type === "web_search" ? `Pesquisando ${clip(it.query, 60)}` : `${it.server ?? ""} ${it.tool ?? ""}`.trim() }, "ok");
+            } else if (it.type === "error") run.message.error = clip(it.message, 600);
             return;
           case "turn.completed":
-            run2.finished = true;
-            run2.message.tokens = tokensOf(event.usage, "codex");
+            run.finished = true;
+            run.message.tokens = tokensOf(event.usage, "codex");
             return;
           case "turn.failed":
-            run2.finished = true;
-            run2.message.error = clip(event.error?.message, 600) || "O Codex parou com erro";
+            run.finished = true;
+            run.message.error = clip(event.error?.message, 600) || "O Codex parou com erro";
             return;
           case "error":
-            run2.message.error = clip(event.message, 600);
+            run.message.error = clip(event.message, 600);
             return;
         }
       };
@@ -1201,7 +1203,7 @@ ${text3}` : text3;
         } catch (error) {
           return fail2(`N\xE3o consegui abrir o ${info.name}: ${error instanceof Error ? error.message : String(error)}`);
         }
-        const run2 = {
+        const run = {
           projectId: payload.projectId,
           agent: payload.agent,
           child,
@@ -1219,10 +1221,10 @@ ${text3}` : text3;
           newBlock: false,
           steps: /* @__PURE__ */ new Map()
         };
-        runs.set(key, run2);
+        runs.set(key, run);
         broadcast(conversation);
         const first = context.element?.sectionId ?? context.sections[0]?.id;
-        cursor(run2, { mode: "arrive", text: "Lendo o pedido", sectionId: first, pageId: context.pageId, elementId: context.element?.elementId });
+        cursor(run, { mode: "arrive", text: "Lendo o pedido", sectionId: first, pageId: context.pageId, elementId: context.element?.elementId });
         child.stdin?.on("error", () => {
         });
         child.stdin?.end(prompt);
@@ -1237,8 +1239,8 @@ ${text3}` : text3;
             if (!line.startsWith("{")) continue;
             try {
               const event = JSON.parse(line);
-              if (payload.agent === "claude") onClaude(run2, event);
-              else onCodex(run2, event);
+              if (payload.agent === "claude") onClaude(run, event);
+              else onCodex(run, event);
               touch(conversation, answer);
             } catch {
             }
@@ -1246,25 +1248,25 @@ ${text3}` : text3;
         });
         child.stderr?.setEncoding("utf8");
         child.stderr?.on("data", (chunk) => {
-          run2.stderr = (run2.stderr + chunk).slice(-6e3);
+          run.stderr = (run.stderr + chunk).slice(-6e3);
         });
         const done = (code2, spawnError) => {
-          if (runs.get(key) !== run2) return;
+          if (runs.get(key) !== run) return;
           runs.delete(key);
-          clearTimeout(run2.timer);
-          for (const step of run2.steps.values()) if (step.state === "running") step.state = run2.stopped || code2 ? "error" : "ok";
+          clearTimeout(run.timer);
+          for (const step of run.steps.values()) if (step.state === "running") step.state = run.stopped || code2 ? "error" : "ok";
           answer.streaming = false;
           answer.thinking = false;
-          answer.durationMs ??= Date.now() - run2.startedAt;
-          if (run2.stopped) answer.stopped = true;
+          answer.durationMs ??= Date.now() - run.startedAt;
+          if (run.stopped) answer.stopped = true;
           else if (spawnError) answer.error = `N\xE3o consegui abrir o ${info.name}: ${spawnError.message}`;
-          else if (!run2.finished && code2) {
-            const reason = run2.stderr.split("\n").filter((l) => l.trim() && !/rmcp::|failed to load skill|AuthRequired/.test(l)).slice(-6).join("\n");
+          else if (!run.finished && code2) {
+            const reason = run.stderr.split("\n").filter((l) => l.trim() && !/rmcp::|failed to load skill|AuthRequired/.test(l)).slice(-6).join("\n");
             answer.error ??= reason ? short(reason, 600) : `O ${info.name} saiu com o c\xF3digo ${code2}`;
           }
           if (!answer.parts?.length && !answer.error && !answer.stopped) answer.error = `O ${info.name} terminou sem resposta`;
           broadcast(conversation);
-          cursor(run2, { mode: "done", text: answer.error ? "Parou com erro" : answer.stopped ? "Parado" : "Pronto" });
+          cursor(run, { mode: "done", text: answer.error ? "Parou com erro" : answer.stopped ? "Parado" : "Pronto" });
         };
         child.on("error", (error) => done(1, error));
         child.on("close", (code2) => done(code2));
@@ -1375,11 +1377,11 @@ ${said}` : intro }];
       const stop = (projectId, agent, note) => {
         const pendingLogin = logins.get(runKey(projectId, agent));
         if (pendingLogin) kill(pendingLogin);
-        const run2 = runs.get(runKey(projectId, agent));
-        if (!run2) return;
-        run2.stopped = true;
-        if (note) run2.message.error = note;
-        kill(run2.child);
+        const run = runs.get(runKey(projectId, agent));
+        if (!run) return;
+        run.stopped = true;
+        if (note) run.message.error = note;
+        kill(run.child);
       };
       server.ws.on(CHAT_EVENTS.hello, async (data, client) => {
         const list2 = await checkAgents();
@@ -1414,7 +1416,7 @@ ${said}` : intro }];
         broadcast(item2);
       });
       server.httpServer?.on("close", () => {
-        for (const run2 of runs.values()) kill(run2.child);
+        for (const run of runs.values()) kill(run.child);
       });
     }
   };
@@ -2500,13 +2502,13 @@ async function downloadImage(rawUrl, signal) {
 }
 
 // scripts/criativos/captura.ts
-import { execFile as execFile2 } from "node:child_process";
+import { spawn as spawn2 } from "node:child_process";
 import { existsSync as existsSync3, mkdtempSync as mkdtempSync3, readFileSync as readFileSync3, rmSync as rmSync4, writeFileSync as writeFileSync4 } from "node:fs";
 import os4 from "node:os";
 import path5 from "node:path";
 import { pathToFileURL } from "node:url";
 var isWindows2 = process.platform === "win32";
-var MAX_HEIGHT = 14e3;
+var MAX_HEIGHT = 4e4;
 function findBrowser() {
   const env = process.env.SE_BROWSER_BIN?.trim();
   if (env) return existsSync3(env) ? env : void 0;
@@ -2521,11 +2523,30 @@ function findBrowser() {
     }
   return void 0;
 }
-var run = (bin, args, signal) => new Promise((resolve, reject) => {
-  const child = execFile2(bin, args, { timeout: 9e4, maxBuffer: 80 * 1024 * 1024, windowsHide: true, signal }, (error, stdout) => error && !stdout ? reject(error) : resolve(String(stdout)));
-  child.stdin?.end();
-});
-var MEASURE = `<script>(function(){function m(){var b=0;[].slice.call(document.body.children).forEach(function(el){if(el.tagName==='SCRIPT'||el.tagName==='STYLE')return;var r=el.getBoundingClientRect();if(r.height>0)b=Math.max(b,r.bottom+window.scrollY)});if(!b)b=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);document.documentElement.setAttribute('data-se-h',String(Math.ceil(b)))}addEventListener('load',function(){setTimeout(m,500);setTimeout(m,2000);setTimeout(m,5000)})})()</script>`;
+async function openCdp(url) {
+  const ws = new WebSocket(url);
+  await new Promise((resolve, reject) => {
+    ws.onopen = () => resolve();
+    ws.onerror = () => reject(new Error("Falha ao conectar \xE0 captura."));
+  });
+  let id = 0;
+  const pending = /* @__PURE__ */ new Map();
+  ws.onmessage = (event) => {
+    const result = JSON.parse(String(event.data));
+    const call = pending.get(result.id);
+    if (!call) return;
+    pending.delete(result.id);
+    result.error ? call.reject(new Error(result.error.message)) : call.resolve(result.result);
+  };
+  return {
+    send: (method, params = {}) => new Promise((resolve, reject) => {
+      const next = ++id;
+      pending.set(next, { resolve, reject });
+      ws.send(JSON.stringify({ id: next, method, params }));
+    }),
+    close: () => ws.close()
+  };
+}
 async function capturePage(html, width, signal) {
   const bin = findBrowser();
   if (!bin) throw new Error("N\xE3o achei o Chrome, o Edge, o Brave nem o Chromium neste computador para fotografar a p\xE1gina. Instale um deles, ou diga onde est\xE1 em SE_BROWSER_BIN.");
@@ -2533,16 +2554,47 @@ async function capturePage(html, width, signal) {
   const dir = mkdtempSync3(path5.join(os4.tmpdir(), "se-captura-"));
   try {
     const file = path5.join(dir, "pagina.html");
-    writeFileSync4(file, html.includes("</body>") ? html.replace("</body>", `${MEASURE}</body>`) : `${html}${MEASURE}`);
+    writeFileSync4(file, html);
     const url = pathToFileURL(file).href;
-    const base = ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--force-device-scale-factor=1", `--user-data-dir=${path5.join(dir, "perfil")}`, "--virtual-time-budget=12000", "--run-all-compositor-stages-before-draw"];
-    const dom = await run(bin, [...base, `--window-size=${w},900`, "--dump-dom", url], signal);
-    const measured = Number(/data-se-h="(\d+)"/.exec(dom)?.[1] ?? 0);
-    const height = Math.min(MAX_HEIGHT, Math.max(600, measured || 1800));
-    const out = path5.join(dir, "pagina.png");
-    await run(bin, [...base, `--window-size=${w},${height}`, `--screenshot=${out}`, url], signal);
-    if (!existsSync3(out)) throw new Error("O navegador n\xE3o gerou a imagem da p\xE1gina.");
-    return { data: `data:image/png;base64,${readFileSync3(out).toString("base64")}`, width: w, height };
+    const child = spawn2(bin, ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${path5.join(dir, "perfil")}`, "--hide-scrollbars", "--no-first-run", "--no-default-browser-check", "--force-color-profile=srgb", "about:blank"], { stdio: "ignore" });
+    const stop = () => child.kill();
+    signal?.addEventListener("abort", stop, { once: true });
+    let tab;
+    try {
+      const portFile = path5.join(dir, "perfil", "DevToolsActivePort");
+      for (let i = 0; i < 100 && !existsSync3(portFile); i++) {
+        signal?.throwIfAborted();
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      if (!existsSync3(portFile)) throw new Error("O navegador da captura n\xE3o iniciou.");
+      const port = readFileSync3(portFile, "utf8").split("\n")[0];
+      const pages = await fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.json());
+      const page = pages.find((p) => p.type === "page");
+      if (!page) throw new Error("A captura n\xE3o abriu a p\xE1gina.");
+      tab = await openCdp(page.webSocketDebuggerUrl);
+      await tab.send("Page.enable");
+      await tab.send("Emulation.setDeviceMetricsOverride", { width: w, height: 900, deviceScaleFactor: 1, mobile: false });
+      await tab.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+      await tab.send("Page.navigate", { url });
+      const evaluate = async (expression) => {
+        const result = await tab.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
+        if (result.exceptionDetails) throw new Error("Falha ao preparar a captura da p\xE1gina.");
+        return result.result.value;
+      };
+      for (let i = 0; i < 150; i++) {
+        signal?.throwIfAborted();
+        if (await evaluate('document.readyState === "complete"')) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      await evaluate(`Promise.race([(async()=>{await document.fonts.ready; await Promise.all([...document.images].map(async i=>{i.loading='eager';try{await i.decode()}catch{}}));return true})(),new Promise(r=>setTimeout(()=>r(true),20000))])`);
+      const height = Math.min(MAX_HEIGHT, Math.max(600, await evaluate("Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)")));
+      const shot = await tab.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width: w, height, scale: 1 } });
+      return { data: `data:image/png;base64,${shot.data}`, width: w, height };
+    } finally {
+      tab?.close();
+      signal?.removeEventListener("abort", stop);
+      child.kill();
+    }
   } finally {
     setTimeout(() => {
       try {
@@ -2663,7 +2715,7 @@ async function viaCodex(prompt, ratio, signal) {
     `Orientation: ${SHAPE[ratio]}.`,
     "When the image is generated, reply with the single word OK."
   ].join("\n");
-  const run2 = (extra) => new Promise((resolve, reject) => {
+  const run = (extra) => new Promise((resolve, reject) => {
     const cwd = mkdtempSync4(path6.join(os5.tmpdir(), "se-imagem-"));
     const startedAt = Date.now() - 2e3;
     const env = { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" };
@@ -2743,8 +2795,8 @@ async function viaCodex(prompt, ratio, signal) {
     });
     child.stdin?.end(text3);
   });
-  let result = await run2(["--enable", "image_generation"]);
-  if (!result.file && /(unexpected argument|unknown (feature|option)|unrecognized)/i.test(result.stderr)) result = await run2([]);
+  let result = await run(["--enable", "image_generation"]);
+  if (!result.file && /(unexpected argument|unknown (feature|option)|unrecognized)/i.test(result.stderr)) result = await run([]);
   if (!result.file) {
     const why = result.stderr.split("\n").filter((l) => l.trim() && !/rmcp::|failed to load skill|AuthRequired/.test(l)).slice(-3).join(" ");
     if (/log ?in|not logged|unauthorized|401/i.test(why + result.reply)) throw new Error("O Codex n\xE3o est\xE1 logado neste computador. Rode `codex login` no terminal e tente de novo.");
@@ -2920,6 +2972,8 @@ ${r.projects.join(", ")}`, ""] : [],
   `## Marca
 ${JSON.stringify(r.brand)}`,
   "",
+  ...r.brief?.trim() ? [`## Briefing da empresa (do plano; respeite p\xFAblico, tom e restri\xE7\xF5es)
+${r.brief.trim()}`, ""] : [],
   `## Fontes dispon\xEDveis
 ${r.fonts.join(", ")}`,
   "",
@@ -3406,7 +3460,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610282144", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202610310419", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -3423,7 +3477,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610282144" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202610310419" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);

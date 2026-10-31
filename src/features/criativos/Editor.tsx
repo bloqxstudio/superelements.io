@@ -639,6 +639,11 @@ export const CreativeEditor: React.FC = () => {
         <Link to="/criativos" aria-label="Voltar aos criativos" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
         <input aria-label="Nome do conjunto" value={set.name} onChange={(e) => useEditor.getState().edit((s) => ({ ...s, name: e.target.value }))} className="h-8 w-56 rounded-md border border-transparent px-2 text-sm font-semibold text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none" />
         <span className="text-xs text-gray-500">{savingLabel}</span>
+        {set.source?.contentId && (
+          <Link to={`/conteudos/${set.source.contentId}`} className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100">
+            <ArrowLeft className="h-3 w-3" aria-hidden /> Voltar ao conteúdo
+          </Link>
+        )}
         {set.shared ? (
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             <span className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700" title={live ? 'Ao vivo com a equipe do projeto' : 'Conectando ao canal ao vivo…'}>

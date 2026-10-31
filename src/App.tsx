@@ -41,6 +41,9 @@ import CrmWhatsApp from "@/pages/crm/WhatsApp";
 import CrmFlows from "@/pages/crm/Flows";
 import CrmForms from "@/pages/crm/Forms";
 import CrmFormEditor from "@/pages/crm/FormEditor";
+import CrmPlan from "@/pages/crm/Plan";
+import CrmContents from "@/pages/crm/Contents";
+import CrmContentDetail from "@/pages/crm/ContentDetail";
 import CrmFunnels from "@/pages/crm/Funnels";
 import CrmFunnelDetail from "@/pages/crm/FunnelDetail";
 import InstagramCallback from "@/pages/InstagramCallback";
@@ -135,6 +138,9 @@ function App() {
                 <Route path="criativos" element={<Creatives />} />
                 <Route path="criativos/:setId" element={<CreativeEditor />} />
                 {/* CRM da equipe: funil, clientes, equipe e convites; só para quem é de uma equipe */}
+                <Route path="plano" element={<CrmGate><CrmPlan /></CrmGate>} />
+                <Route path="conteudos" element={<CrmGate><CrmContents /></CrmGate>} />
+                <Route path="conteudos/:id" element={<CrmGate><CrmContentDetail /></CrmGate>} />
                 <Route path="crm" element={<CrmGate><CrmOpportunities /></CrmGate>} />
                 <Route path="crm/clientes" element={<CrmGate><CrmClients /></CrmGate>} />
                 <Route path="crm/clientes/:clientId" element={<CrmGate><CrmClientDetail /></CrmGate>} />

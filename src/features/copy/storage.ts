@@ -1,6 +1,7 @@
 import { currentUserId } from '@/features/projects/storage'
 import { personalFolder } from '@/features/crm/accountScope'
 import { supabase } from '@/integrations/supabase/client'
+import { createOnce, isAlreadyExists } from '@/features/conteudos/exclusive'
 import { wordsOf, type CopyDoc, type CopySummary } from './types'
 
 /**
@@ -82,6 +83,30 @@ export async function saveDoc(doc: CopyDoc) {
   const where = placeOf(doc)
   await writeJson(`${await folderOf(where)}/${doc.id}.json`, doc)
   await writeIndex(where, (list) => [summaryOf(doc), ...list.filter((s) => s.id !== doc.id)])
+}
+
+/**
+ * Cria o documento só se ainda não existe (`upsert: false`); se já existe, devolve o que está
+ * gravado, sem escrever por cima. Falha de leitura ou permissão sobe como erro. As gravações
+ * normais (`saveDoc`) não mudam.
+ */
+export async function createDocOnce(doc: CopyDoc): Promise<{ doc: CopyDoc; created: boolean }> {
+  const where = placeOf(doc)
+  const base = await folderOf(where)
+  const result = await createOnce<CopyDoc>(
+    {
+      load: () => loadDoc(doc.id, where),
+      create: async (value) => {
+        const { error } = await bucket().upload(`${base}/${value.id}.json`, new Blob([JSON.stringify(value)], { type: 'application/json' }), { contentType: 'application/json', upsert: false, cacheControl: '0' })
+        if (!error) return 'created'
+        if (isAlreadyExists(error)) return 'exists'
+        throw error
+      },
+      index: (value) => writeIndex(where, (list) => [summaryOf(value), ...list.filter((s) => s.id !== value.id)]),
+    },
+    doc
+  )
+  return { doc: result.value, created: result.created }
 }
 
 export async function deleteDoc(s: Pick<CopySummary, 'id' | 'projectId' | 'shared'>) {

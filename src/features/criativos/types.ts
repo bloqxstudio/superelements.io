@@ -191,6 +191,9 @@ export interface CreativeSet {
   /** Guardado na pasta do projeto: a equipe dele abre e edita junto, ao vivo. */
   shared?: boolean
   brand: SetBrand
+  /** O conteúdo do Plano de onde nasceu o conjunto, e o briefing compartilhado que ele recebeu. */
+  source?: { contentId: string; contextVersion?: number }
+  brief?: string
   posts: Post[]
   assets: SetAsset[]
   createdAt: number
