@@ -488,6 +488,11 @@ export const SettingsEditor: React.FC<{ settings: FormSettings; kind: 'form' | '
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <Switch checked={settings.showProgress} onCheckedChange={(showProgress) => onChange({ ...settings, showProgress })} /> Barra de progresso nas etapas
           </label>
+          {kind === 'quiz' && (
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <Switch checked={!!settings.showScore} onCheckedChange={(showScore) => onChange({ ...settings, showScore })} /> Mostrar a pontuação para quem responde
+            </label>
+          )}
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <Switch checked={settings.autoAdvance} onCheckedChange={(autoAdvance) => onChange({ ...settings, autoAdvance })} /> Avançar sozinho ao escolher (uma pergunta por tela)
           </label>

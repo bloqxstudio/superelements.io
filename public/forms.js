@@ -28,6 +28,12 @@
     } catch (e) {}
   }
 
+  // Aviso por DOM para quem hospeda o formulário (a página pública /f/ liga o pixel e acerta o título); não vai ao dataLayer
+  function emit(host, detail) {
+    try { host.dispatchEvent(new CustomEvent('avence-form', { bubbles: true, composed: true, detail: detail })) } catch (e) {}
+  }
+  function track(host, event, data) { push(event, data); emit(host, Object.assign({ event: event }, data)) }
+
   // A origem da primeira visita da sessão (os links de anúncio trazem os parâmetros só na entrada)
   function tracking() {
     var saved = {}
@@ -230,11 +236,11 @@
       var lone = !!step.title && step.fields.length === 1 && cfg.definition.kind === 'quiz'
 
       if (isPick(f.type) && f.type !== 'select') {
-        var opts = optionsOf(f)
+        var choices = optionsOf(f)
         var multi = f.type === 'multi'
         var legend = el('legend', { class: lone ? 'sr' : null, text: f.label }, [req])
         var wrap = el('div', { class: 'ops' + (multi ? ' multi' : '') + (f.type === 'rating' ? ' stars' : '') })
-        opts.forEach(function (o) {
+        choices.forEach(function (o) {
           var on = multi ? asList(saved).indexOf(o.id) >= 0 : saved === o.id
           var input = el('input', { type: multi ? 'checkbox' : 'radio', name: id, value: o.id, checked: on, 'aria-describedby': desc })
           wrap.appendChild(el('label', { class: 'op' }, [input, f.type === 'rating' ? null : el('i'), f.type === 'rating' ? el('b', { text: o.label }) : el('span', { text: o.label })]))
@@ -268,7 +274,7 @@
       if (saved) control.value = saved
       control.addEventListener('input', function () {
         if (f.type === 'phone') control.value = maskPhone(control.value)
-        if (!started) { started = true; if (!opts.preview) push('form_start', { form_id: cfg.id, form_name: cfg.name }) }
+        if (!started) { started = true; if (!opts.preview) track(host, 'form_start', { form_id: cfg.id, form_name: cfg.name }) }
         if (box.classList.contains('bad')) { box.classList.remove('bad'); err.textContent = '' }
         answers[f.id] = control.value.trim()
         refresh()
@@ -339,7 +345,7 @@
       var s = cfg.settings
       var out = el('div', { class: 'out', role: 'status' })
       out.appendChild(el('div', { class: 'ok', 'aria-hidden': 'true', text: '✓' }))
-      if (res.score !== null && res.score !== undefined && cfg.definition.kind === 'quiz' && res.result) out.appendChild(el('div', { class: 'pts', text: res.score + ' pontos' }))
+      if (cfg.settings.showScore === true && res.score !== null && res.score !== undefined && cfg.definition.kind === 'quiz' && res.result) out.appendChild(el('div', { class: 'pts', text: res.score + ' pontos' }))
       out.appendChild(el('h3', { text: res.result ? res.result.title : s.successTitle }))
       var text = res.result ? res.result.text : s.successText
       if (text) out.appendChild(el('p', { class: 'd', text: text, style: 'margin:0' }))
@@ -392,6 +398,7 @@
           push('form_submit', data)
           if (r.body.qualified === true) push('lead_qualificado', data)
           else if (r.body.qualified === false) push('lead_nao_qualificado', data)
+          emit(host, { event: 'form_submit', form_id: cfg.id, form_name: cfg.name, qualified: r.body.qualified })
           if (r.body.redirectUrl) { location.href = r.body.redirectUrl; return }
           finish(r.body)
         })
@@ -460,7 +467,7 @@
     var shown = (cached && cached.definition && cached) || (snap && snap.definition && snap) || null
     var handle = null
     // Mostra o que já tem (cópia do navegador ou do código) na hora; o servidor confirma por trás
-    if (shown) handle = mount(host, shown, { endpoint: endpoint })
+    if (shown) { handle = mount(host, shown, { endpoint: endpoint }); emit(host, { event: 'form_config', config: shown }) }
     else reserve(host)
 
     // O arquivo do CDN é o caminho rápido; a função é a rede de segurança (e vale para formulários antigos)
@@ -471,13 +478,15 @@
         try { localStorage.setItem(key, JSON.stringify(cfg)) } catch (e) {}
         if (!handle) handle = mount(host, cfg, { endpoint: endpoint })
         else if (JSON.stringify(cfg) !== JSON.stringify(shown) && !handle.touched()) handle.update(cfg)
-        push('form_view', { form_id: cfg.id, form_name: cfg.name })
+        emit(host, { event: 'form_config', config: cfg })
+        track(host, 'form_view', { form_id: cfg.id, form_name: cfg.name })
         // Conta a visualização sem pôr a pessoa para esperar
         try { fetch(endpoint + '?id=' + encodeURIComponent(id) + '&view=1', { keepalive: true, credentials: 'omit' }).catch(function () {}) } catch (e) {}
       })
       .catch(function (err) {
         // Formulário despublicado: some da página e esquece a cópia
         if (err && err.notFound) {
+          emit(host, { event: 'form_unavailable' })
           try { localStorage.removeItem(key) } catch (e) {}
           if (!handle || !handle.touched()) { if (handle) handle.destroy(); else host.shadowRoot.innerHTML = '' }
         } else if (!handle) { host.shadowRoot.innerHTML = ''; host.__avence = false }

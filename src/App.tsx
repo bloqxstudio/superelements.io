@@ -26,6 +26,7 @@ import WordPressCallback from "@/pages/WordPressCallback";
 import PageApproval from "@/pages/PageApproval";
 import ProjectInvite from "@/pages/ProjectInvite";
 import TeamInvite from "@/pages/TeamInvite";
+import PublicForm from "@/pages/PublicForm";
 import CrmOpportunities from "@/pages/crm/Opportunities";
 import CrmClients from "@/pages/crm/Clients";
 import CrmClientDetail from "@/pages/crm/ClientDetail";
@@ -88,6 +89,8 @@ function App() {
               <Route path="/convite/:inviteId" element={<ProjectInvite />} />
               {/* Convite para a equipe do CRM: mostra o convite antes do login */}
               <Route path="/equipe/convite/:inviteId" element={<TeamInvite />} />
+              {/* Link direto para um formulário (campanhas, WhatsApp, e-mail): público, sem login */}
+              <Route path="/f/:id" element={<PublicForm />} />
               <Route path="/menuzito-modelo" element={<MenuzitoModel />} />
               <Route path="/menuzito-style-guide" element={<MenuzitoStyleGuide />} />
               <Route path="/uglycash-modelo" element={<UglyCashModel />} />

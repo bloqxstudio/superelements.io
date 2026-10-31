@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, ChevronDown, CircleAlert, Copy, Download, ExternalLink, Loader2, RefreshCw, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, CircleAlert, Copy, Download, ExternalLink, Link2, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/integrations/supabase/client'
+import { isLocalAppUrl, publicAppUrl } from '@/features/approval/shares'
 import { FORMS_ENDPOINT, deleteSubmission, embedOf, listSubmissions, submissionsCsv, type CrmForm, type FormSubmission } from '@/features/crm/forms'
+import { META_URL_PARAMS as META_PARAMS } from '@/features/crm/SiteAds'
 import { Surface, whenLabel } from '@/features/crm/ui'
 import { cn } from '@/lib/utils'
 
@@ -154,6 +156,137 @@ export const Submissions: React.FC<{ form: CrmForm; manager: boolean }> = ({ for
   )
 }
 
+
+// ---------- link direto ----------
+
+/** O endereço que abre só o formulário (a página pública `/f/<id>`). No app local, o endereço publicado. */
+export const directUrl = (form: Pick<CrmForm, 'id'>) => `${isLocalAppUrl() ? 'https://app.avencestudio.com' : publicAppUrl()}/f/${form.id}`
+
+const SOURCES: { id: string; label: string; source: string; medium: string }[] = [
+  { id: 'google', label: 'Google Ads', source: 'google', medium: 'cpc' },
+  { id: 'instagram', label: 'Instagram (anúncio)', source: 'instagram', medium: 'paid' },
+  { id: 'facebook', label: 'Facebook (anúncio)', source: 'facebook', medium: 'paid' },
+  { id: 'whatsapp', label: 'WhatsApp', source: 'whatsapp', medium: 'mensagem' },
+  { id: 'email', label: 'E-mail', source: 'email', medium: 'email' },
+  { id: 'bio', label: 'Bio do Instagram', source: 'instagram', medium: 'bio' },
+]
+
+const TRACK_FIELD = 'h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+/**
+ * Link direto: abre só o formulário, sem depender do WordPress. O construtor monta a URL da campanha
+ * (UTM) e, se quiser, leva o Tag Manager e o pixel da Meta junto, porque a página pública não tem onde
+ * guardar essas configurações. O Google Ads acrescenta o gclid sozinho (marcação automática).
+ */
+export const DirectLink: React.FC<{ form: CrmForm }> = ({ form }) => {
+  const [source, setSource] = useState('google')
+  const [campaign, setCampaign] = useState('')
+  const [content, setContent] = useState('')
+  const [gtm, setGtm] = useState('')
+  const [pixel, setPixel] = useState('')
+  const base = directUrl(form)
+  const preset = SOURCES.find((x) => x.id === source)!
+  const meta = source === 'instagram' || source === 'facebook'
+
+  const url = (() => {
+    const q = new URLSearchParams()
+    q.set('utm_source', preset.source)
+    q.set('utm_medium', preset.medium)
+    if (campaign.trim()) q.set('utm_campaign', campaign.trim())
+    if (content.trim()) q.set('utm_content', content.trim())
+    if (/^GTM-[A-Za-z0-9]{4,12}$/.test(gtm.trim())) q.set('gtm', gtm.trim().toUpperCase())
+    if (/^\d{8,20}$/.test(pixel.trim())) q.set('px', pixel.trim())
+    const text = q.toString()
+    return text ? `${base}?${text}` : base
+  })()
+  const gtmBad = gtm.trim() !== '' && !/^GTM-[A-Za-z0-9]{4,12}$/.test(gtm.trim())
+  const pixelBad = pixel.trim() !== '' && !/^\d{8,20}$/.test(pixel.trim())
+
+  return (
+    <Surface
+      title="Link direto"
+      action={
+        <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-medium text-violet-700 hover:underline">
+          Abrir <ExternalLink className="h-3 w-3" aria-hidden />
+        </a>
+      }
+    >
+      <p className="mb-3 text-sm text-gray-600">Uma página só com o formulário, sem depender do WordPress. Use como destino de anúncio, no WhatsApp, no e-mail ou na bio.</p>
+      <div className="mb-3 flex items-center gap-2 rounded-lg bg-zinc-50 p-2 ring-1 ring-inset ring-gray-200">
+        <Link2 className="ml-1 h-4 w-4 shrink-0 text-gray-400" aria-hidden />
+        <code className="min-w-0 flex-1 break-all text-xs text-gray-800">{base}</code>
+        <Button size="sm" variant="outline" onClick={() => void copy(base, 'Link copiado')}>
+          <Copy className="mr-1.5 h-3.5 w-3.5" /> Copiar
+        </Button>
+      </div>
+
+      <details className="group rounded-lg border border-gray-200" open>
+        <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-sm font-medium text-gray-900">
+          Montar o link de uma campanha
+          <ChevronDown className="h-4 w-4 text-gray-400 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="grid gap-3 border-t border-gray-100 p-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs font-medium text-gray-600">
+              De onde vem
+              <select className={`${TRACK_FIELD} mt-1`} value={source} onChange={(e) => setSource(e.target.value)}>
+                {SOURCES.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-medium text-gray-600">
+              Nome da campanha
+              <input className={`${TRACK_FIELD} mt-1`} value={campaign} onChange={(e) => setCampaign(e.target.value)} placeholder="sites-sao-leopoldo" />
+            </label>
+            <label className="block text-xs font-medium text-gray-600 sm:col-span-2">
+              Anúncio ou variação (opcional)
+              <input className={`${TRACK_FIELD} mt-1`} value={content} onChange={(e) => setContent(e.target.value)} placeholder="video-01" />
+            </label>
+            <label className="block text-xs font-medium text-gray-600">
+              Tag Manager (opcional)
+              <input className={`${TRACK_FIELD} mt-1 ${gtmBad ? 'border-rose-400' : ''}`} value={gtm} onChange={(e) => setGtm(e.target.value)} placeholder="GTM-XXXXXXX" aria-invalid={gtmBad} />
+            </label>
+            <label className="block text-xs font-medium text-gray-600">
+              Pixel da Meta (opcional)
+              <input className={`${TRACK_FIELD} mt-1 ${pixelBad ? 'border-rose-400' : ''}`} value={pixel} onChange={(e) => setPixel(e.target.value)} placeholder="1234567890123456" inputMode="numeric" aria-invalid={pixelBad} />
+            </label>
+          </div>
+          <div className="flex items-start gap-2 rounded-lg bg-zinc-900 p-3">
+            <code className="min-w-0 flex-1 break-all text-xs leading-relaxed text-zinc-100">{url}</code>
+            <Button size="sm" onClick={() => void copy(url, 'Link da campanha copiado')}>
+              <Copy className="mr-1.5 h-3.5 w-3.5" /> Copiar
+            </Button>
+          </div>
+          <ul className="grid gap-1.5 text-xs leading-relaxed text-gray-600">
+            <li>
+              <strong className="font-medium text-gray-800">Google Ads:</strong> deixe a marcação automática ligada; o <code className="rounded bg-zinc-100 px-1">gclid</code> é acrescentado ao link e o lead chega como Google Ads.
+            </li>
+            {meta && (
+              <li>
+                <strong className="font-medium text-gray-800">Meta:</strong> em vez dos campos acima, cole nos parâmetros de URL do anúncio o texto que traz campanha, conjunto e anúncio sozinhos:{' '}
+                <button type="button" onClick={() => void copy(META_PARAMS, 'Parâmetros copiados')} className="break-all rounded bg-zinc-100 px-1 text-left font-mono text-[11px] text-gray-800 hover:bg-zinc-200">
+                  {META_PARAMS}
+                </button>
+              </li>
+            )}
+            <li>
+              <strong className="font-medium text-gray-800">Conversão:</strong> com o Tag Manager ou o pixel no link, a página avisa a cada envio (<code className="rounded bg-zinc-100 px-1">lead_qualificado</code>, ou <code className="rounded bg-zinc-100 px-1">Lead</code> na Meta, que ignora quem o quiz desqualificou).
+            </li>
+          </ul>
+        </div>
+      </details>
+      {form.status !== 'published' && (
+        <p className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /> Em rascunho, o link mostra “Formulário indisponível”. Ligue “Publicado” no topo antes de usar na campanha.
+        </p>
+      )}
+    </Surface>
+  )
+}
+
 // ---------- como usar no Elementor ----------
 
 type Endpoint = 'checking' | 'ok' | 'missing' | 'error'
@@ -179,6 +312,7 @@ export const EmbedPanel: React.FC<{ form: CrmForm }> = ({ form }) => {
           <span>Este formulário está em rascunho: no site ele não aparece. Ligue “Publicado” no topo antes de testar.</span>
         </div>
       )}
+      <DirectLink form={form} />
       <Surface title="Código para o Elementor">
         <pre className="overflow-x-auto rounded-lg bg-zinc-900 p-3 text-xs leading-relaxed text-zinc-100">{snippet}</pre>
         <Button size="sm" className="mt-3" onClick={() => void copy(snippet, 'Código copiado')}>

@@ -82,6 +82,8 @@ export interface FormSettings {
   /** Uma pergunta por tela, avançando ao escolher (o jeito do quiz) */
   autoAdvance: boolean
   showProgress: boolean
+  /** Mostra "N pontos" na tela final do quiz. Desligado por padrão: num quiz de qualificação, entrega a lógica do filtro. */
+  showScore?: boolean
 }
 
 export interface FormDefinition {
@@ -285,5 +287,6 @@ export function cleanSettings(raw: unknown): FormSettings {
     whatsapp: wa,
     autoAdvance: s.autoAdvance === true,
     showProgress: s.showProgress !== false,
+    showScore: s.showScore === true,
   }
 }
