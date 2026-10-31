@@ -81,9 +81,11 @@ function useSoon(run: () => void, ms: number) {
   }, [ms])
 }
 
-export type Days = 7 | 30
+/** 1 é "Hoje". A Meta só entrega até ontem, então os anúncios de "Hoje" mostram os últimos 7 dias. */
+export type Days = 1 | 7 | 30
 
-const PRESET: Record<Days, AdPreset> = { 7: 'last_7d', 30: 'last_30d' }
+const PRESET: Record<Days, AdPreset> = { 1: 'last_7d', 7: 'last_7d', 30: 'last_30d' }
+export const sitePeriod = (days: Days) => (days === 1 ? ('hoje' as const) : days)
 
 // ---------- as formas de cada fonte ----------
 
@@ -246,7 +248,7 @@ export function useHome(days: Days) {
       if (!trackers.length) throw new Absent('Nenhum site conectado a esta conta.')
       const parts = await Promise.all(
         trackers.map(async (t) => {
-          const [report, live, contacts] = await Promise.all([loadReport(t.id, days), loadSessions(t.id, { live: true }), loadSessions(t.id, { period: days, converted: true })])
+          const [report, live, contacts] = await Promise.all([loadReport(t.id, sitePeriod(days)), loadSessions(t.id, { live: true }), loadSessions(t.id, { period: sitePeriod(days), converted: true })])
           return { report, live: live.sessions, contacts: contacts.sessions }
         })
       )

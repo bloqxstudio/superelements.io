@@ -34,6 +34,7 @@ const SITE_POLL_FRESH = 8 * 60_000
 const PRODUCTION_FRESH = 5 * 60_000
 
 const DAYS: { id: Days; label: string }[] = [
+  { id: 1, label: 'Hoje' },
   { id: 7, label: '7 dias' },
   { id: 30, label: '30 dias' },
 ]
@@ -45,7 +46,7 @@ const plainText = (value: string | undefined, max = 90) => {
 
 const Home: React.FC = () => {
   const [params, setParams] = useSearchParams()
-  const days: Days = params.get('periodo') === '30' ? 30 : 7
+  const days: Days = params.get('periodo') === '30' ? 30 : params.get('periodo') === 'hoje' ? 1 : 7
   const now = useNow()
   const h = useHome(days)
   const { team, opps, site, ads, production, instagram, wa } = h
@@ -53,7 +54,7 @@ const Home: React.FC = () => {
   const w = useMemo(() => windowOf(days), [days, Math.floor(now / 60_000)]) // eslint-disable-line react-hooks/exhaustive-deps
   const pipelineLoaded = useCrm((s) => s.status)
 
-  const setDays = (d: Days) => setParams(d === 7 ? {} : { periodo: String(d) }, { replace: true })
+  const setDays = (d: Days) => setParams(d === 7 ? {} : { periodo: d === 1 ? 'hoje' : String(d) }, { replace: true })
 
   const summary = useMemo(() => (opps ? summarizeOpportunities(opps, w, h.settings) : undefined), [opps, w, h.settings])
   const adsData = ads.status === 'ready' ? ads.data : undefined
@@ -140,9 +141,9 @@ const Home: React.FC = () => {
       </header>
 
       <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-5">
-        {site.status === 'ready' && <HomeToday trackers={site.data.trackers} live={site.data.live} />}
-
         <Reading h={h} w={w} summary={summary} spend={spend} now={now} days={days} />
+
+        <HomeToday trackers={site.status === 'ready' ? site.data.trackers : undefined} live={site.status === 'ready' ? site.data.live : undefined} days={days} />
 
         <HomeCharts
           site={site.status === 'ready' ? site.data : undefined}
@@ -188,10 +189,10 @@ const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { cur
 
   // A frase do período usa só o que foi lido; o que falta é dito, não preenchido
   const parts: string[] = []
-  if (spend.length) parts.push(`Investimos ${spend.map((s) => adMoney(s.spend, s.currency)).join(' + ')} em anúncios da Meta`)
+  if (spend.length && days !== 1) parts.push(`Investimos ${spend.map((s) => adMoney(s.spend, s.currency)).join(' + ')} em anúncios da Meta`)
   if (siteData) parts.push(`o site recebeu ${siteData.totals.sessions.toLocaleString('pt-BR')} visitas e ${plural(siteData.totals.converted, 'chegou', 'chegaram')} a um contato`)
   if (summary) parts.push(`${plural(summary.created, 'oportunidade entrou', 'oportunidades entraram')} no funil e ${plural(summary.won, 'foi ganha', 'foram ganhas')}`)
-  const sentence = parts.length ? `Nos últimos ${days} dias: ${parts.join('; ')}.` : undefined
+  const sentence = parts.length ? `${days === 1 ? 'Hoje' : `Nos últimos ${days} dias`}: ${parts.join('; ')}.` : undefined
 
   return (
     <Block id="leitura" title="Resumo do período" hint="Veja os resultados do período. Selecione um indicador para ver os detalhes.">
@@ -204,7 +205,7 @@ const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { cur
           value={ads.status === 'loading' ? <Skeleton className="h-7 w-28" /> : spend.length ? spend.map((s) => adMoney(s.spend, s.currency, true)).join(' + ') : '—'}
           note={
             spend.length
-              ? `Só Meta Ads${adsWindow ? `, ${adsWindow} (a Meta fecha o período no dia anterior)` : ''}. Gasto de outras plataformas não entra.`
+              ? `${days === 1 ? 'A Meta só entrega até ontem: últimos 7 dias. ' : ''}Só Meta Ads${adsWindow ? `, ${adsWindow} (a Meta fecha o período no dia anterior)` : ''}. Gasto de outras plataformas não entra.`
               : ads.status === 'none'
                 ? 'Nenhuma conta de anúncios conectada: o valor não é zero, é desconhecido.'
                 : ads.status === 'off'
@@ -258,7 +259,7 @@ const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { cur
         </Stat>
       </div>
       <p className="mt-3 text-xs text-gray-500">
-        Variações comparam períodos do mesmo tamanho ({days} dias). O gasto não é comparado: a Meta não entrega o período anterior no mesmo formato.
+        {days === 1 ? 'Hoje é comparado a ontem.' : `Variações comparam períodos do mesmo tamanho (${days} dias).`} O gasto não é comparado: a Meta não entrega o período anterior no mesmo formato.
       </p>
     </Block>
   )

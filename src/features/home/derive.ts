@@ -27,7 +27,7 @@ export function windowOf(days: number, now = Date.now()): Window {
   start.setHours(0, 0, 0, 0)
   start.setDate(start.getDate() - (days - 1))
   const from = start.getTime()
-  return { days, from, to: now, prevFrom: from - (now - from), prevTo: from }
+  return { days, from, to: now, prevFrom: days === 1 ? from - 86_400_000 : from - (now - from), prevTo: from }
 }
 
 const within = (t: number | undefined, from: number, to: number) => t !== undefined && Number.isFinite(t) && t >= from && t < to
