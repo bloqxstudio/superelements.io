@@ -440,6 +440,19 @@ function superelements_config() {
 add_action(
 	'rest_api_init',
 	function () {
+		// Pública, só com a versão: o guia de instalação da plataforma confere assim que o plugin foi ativado
+		register_rest_route(
+			'superelements/v1',
+			'/ping',
+			array(
+				'methods'             => 'GET',
+				'permission_callback' => '__return_true',
+				'callback'            => function () {
+					return array( 'plugin' => 'superelements-connector', 'version' => SUPERELEMENTS_CONNECTOR_VERSION );
+				},
+			)
+		);
+
 		register_rest_route(
 			'superelements/v1',
 			'/config',

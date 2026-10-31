@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Bot, Check, ChevronDown, Cloud, CloudDownload, CloudOff, CloudUpload, Copy, Globe, History, LayoutGrid, NotebookText, Play, Plus, Redo2, Trash2, TriangleAlert, Undo2, Users, AlignHorizontalSpaceAround } from 'lucide-react'
 import {
   DropdownMenu,
@@ -18,6 +18,8 @@ import { ProjectDialog } from '@/features/projects/ProjectDialog'
 import { useProject, useProjectStore } from '@/features/projects/projectStore'
 import { useProjectSync, type SyncStatus } from '@/features/projects/useProjectSession'
 import { WordPressDialog } from '@/features/wordpress/WordPressDialog'
+import { SiteGuide } from '@/features/wordpress/SiteGuide'
+import { useCrm } from '@/features/crm/crmStore'
 import { useWordPressUi } from '@/features/wordpress/uiStore'
 import { useActiveWordPress, useWordPressConnection } from '@/features/wordpress/useWordPressConnection'
 import { useAgents } from '@/features/space/bridge/agentsStore'
@@ -66,7 +68,19 @@ const ProjectMenu: React.FC<{ projectId: string }> = ({ projectId }) => {
   const bridge = useAgents((s) => s.connected)
   const pageCount = useSpaceStore((s) => s.pages.length)
   const navigate = useNavigate()
-  const [dialog, setDialog] = useState<'context' | 'wordpress' | 'chatgpt' | 'history' | null>(null)
+  const [dialog, setDialog] = useState<'context' | 'wordpress' | 'chatgpt' | 'history' | 'guide' | null>(null)
+  // Conectar a partir do guia: ao fechar a conexão, o guia volta
+  const fromGuide = useRef(false)
+  const accountSite = useCrm((s) => s.team?.profile?.website)
+  const [params, setParams] = useSearchParams()
+  // Conta nova: o projeto abre com o guia de instalação (?configurar=1)
+  useEffect(() => {
+    if (params.get('configurar') !== '1') return
+    setDialog('guide')
+    const next = new URLSearchParams(params)
+    next.delete('configurar')
+    setParams(next, { replace: true })
+  }, [params, setParams])
   if (!project) return null
 
   const clear = () => {
@@ -101,6 +115,9 @@ const ProjectMenu: React.FC<{ projectId: string }> = ({ projectId }) => {
             <NotebookText className="h-3.5 w-3.5" /> Contexto do projeto…
             {!project.context.trim() && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-gray-300" aria-label="(vazio)" />}
           </DropdownMenuItem>
+          <DropdownMenuItem className="gap-2 rounded-lg text-xs" onSelect={() => setDialog('guide')}>
+            <Globe className="h-3.5 w-3.5" /> Guia de instalação do site…
+          </DropdownMenuItem>
           <DropdownMenuItem className="gap-2 rounded-lg text-xs" onSelect={() => setDialog('wordpress')}>
             <Globe className="h-3.5 w-3.5" />
             <span className="min-w-0 truncate">{connection ? `WordPress · ${connection.site.name}` : 'Conectar o WordPress…'}</span>
@@ -133,11 +150,26 @@ const ProjectMenu: React.FC<{ projectId: string }> = ({ projectId }) => {
       <ProjectDialog open={dialog === 'context'} onOpenChange={(open) => !open && setDialog(null)} project={project} onSubmit={(fields) => update(project.id, fields)} />
       <WordPressDialog
         open={dialog === 'wordpress'}
-        onOpenChange={(open) => !open && setDialog(null)}
+        onOpenChange={(open) => {
+          if (open) return
+          setDialog(fromGuide.current ? 'guide' : null)
+          fromGuide.current = false
+        }}
+        initialAddress={accountSite}
         projectId={projectId}
         projectName={project.name}
         connection={connection}
         reload={reload}
+      />
+      <SiteGuide
+        open={dialog === 'guide'}
+        onOpenChange={(open) => !open && setDialog(null)}
+        projectId={projectId}
+        connection={connection}
+        onConnect={() => {
+          fromGuide.current = true
+          setDialog('wordpress')
+        }}
       />
       <HistoryDialog projectId={projectId} open={dialog === 'history'} onOpenChange={(open) => !open && setDialog(null)} />
       {hasChatGPT(project.name) && <ChatGPTConnectionDialog open={dialog === 'chatgpt'} onOpenChange={(open) => !open && setDialog(null)} projectName={project.name} />}

@@ -1,3 +1,5 @@
+import { useNavigate } from 'react-router-dom'
+import { useProjectStore } from '@/features/projects/projectStore'
 import React, { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -20,6 +22,7 @@ const EMPTY = { name: '', segment: '', website: '', contactName: '', contactEmai
 
 export const NewAccountDialog: React.FC<{ open: boolean; onOpenChange: (open: boolean) => void; onCreated?: (teamId: string) => void }> = ({ open, onOpenChange, onCreated }) => {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const load = useCrm((s) => s.load)
   const select = useCrm((s) => s.select)
   const [form, setForm] = useState(EMPTY)
@@ -42,9 +45,20 @@ export const NewAccountDialog: React.FC<{ open: boolean; onOpenChange: (open: bo
       const id = await createAccount({ ...form, modules })
       await load(user.id, true)
       await select(id)
-      toast.success(`Conta ${form.name.trim()} criada`, { description: 'Você já está nela. Convide as pessoas em Equipe e conecte os serviços.' })
       onOpenChange(false)
       onCreated?.(id)
+      // Conta de cliente tem um site só: o projeto nasce junto e abre com o guia de instalação
+      if (modules.projetos !== false) {
+        try {
+          const project = await useProjectStore.getState().create({ name: form.name.trim(), context: form.website.trim() ? `Site: ${form.website.trim()}` : '' })
+          toast.success(`Conta ${form.name.trim()} criada`, { description: 'Siga o guia: conectar o site, instalar o plugin e importar as páginas.' })
+          navigate(`/projetos/${project.id}?configurar=1`)
+          return
+        } catch (error) {
+          console.error('[contas] falha ao criar o projeto da conta', error)
+        }
+      }
+      toast.success(`Conta ${form.name.trim()} criada`, { description: 'Você já está nela. Convide as pessoas em Equipe e conecte os serviços.' })
     } catch (error) {
       toast.error('Não foi possível criar a conta', { description: error instanceof Error ? error.message : undefined })
     } finally {

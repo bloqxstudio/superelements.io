@@ -310,10 +310,12 @@ interface WordPressDialogProps {
   projectName: string
   connection: WordPressConnection | null
   reload: () => Promise<void>
+  /** Endereço já preenchido (o site cadastrado na conta). */
+  initialAddress?: string
 }
 
 /** Liga o projeto ao WordPress do cliente, mostra a conexão e desconecta. */
-export const WordPressDialog: React.FC<WordPressDialogProps> = ({ open, onOpenChange, projectId, projectName, connection, reload }) => {
+export const WordPressDialog: React.FC<WordPressDialogProps> = ({ open, onOpenChange, projectId, projectName, connection, reload, initialAddress }) => {
   const [step, setStep] = useState<Step>('address')
   const [address, setAddress] = useState('')
   const [check, setCheck] = useState<Check>({ status: 'idle' })
@@ -334,7 +336,8 @@ export const WordPressDialog: React.FC<WordPressDialogProps> = ({ open, onOpenCh
     setNotice(null)
     setPasteError(null)
     setPassword('')
-  }, [open])
+    if (initialAddress) setAddress((current) => current || initialAddress)
+  }, [open, initialAddress])
 
   const runCheck = useCallback(async (text: string) => {
     const id = ++checkSeq.current
