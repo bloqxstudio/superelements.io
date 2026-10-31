@@ -10,12 +10,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 type Db = SupabaseClient
 
 export type DeliverText = (teamId: string, jid: string, text: string) => Promise<boolean>
+/** Envio direto a um grupo (o grupo não é uma conversa da caixa de entrada) */
+export type DeliverGroup = (teamId: string, jid: string, text: string) => Promise<boolean>
 
 const DAY = 86_400_000
 let warned = false
+let warnedGroups = false
 
 /** Uma passada (chame a cada poucos segundos). `openTeams`: os números de WhatsApp ligados agora. */
-export async function runLeadAlerts(db: Db, openTeams: string[], deliver: DeliverText) {
+export async function runLeadAlerts(db: Db, openTeams: string[], deliver: DeliverText, deliverGroup: DeliverGroup) {
   if (!openTeams.length) return
   const { data: alerts, error } = await db.from('crm_lead_alerts').select('id, team_id, text, created_at').is('sent_at', null).gt('created_at', new Date(Date.now() - DAY).toISOString()).order('created_at').limit(20)
   if (error) {
@@ -27,8 +30,14 @@ export async function runLeadAlerts(db: Db, openTeams: string[], deliver: Delive
     const accountId = alert.team_id as string
     const { data: people } = await db.from('crm_whatsapp_client_contacts').select('team_id, phone').eq('account_id', accountId).eq('leads', true).eq('enabled', true)
     const recipients = (people ?? []).filter((p) => openTeams.includes(p.team_id as string))
-    // Há quem deva receber, mas o número dessa pessoa está desligado: espera o serviço voltar (até um dia)
-    if ((people ?? []).length && !recipients.length) continue
+    const { data: groupRows, error: groupError } = await db.from('crm_whatsapp_groups').select('team_id, jid, name').eq('leads_account_id', accountId)
+    if (groupError && !warnedGroups) {
+      console.error(groupError.code === '42P01' || groupError.code === 'PGRST205' ? 'Falta a migração 20261031180000_crm_whatsapp_groups.sql: os avisos em grupo estão desligados.' : `Grupos de leads: ${groupError.message}`)
+      warnedGroups = true
+    }
+    const groups = (groupRows ?? []).filter((g) => openTeams.includes(g.team_id as string))
+    // Há quem deva receber (pessoa ou grupo), mas o número está desligado: espera o serviço voltar (até um dia)
+    if ((people ?? []).length + (groupRows ?? []).length && !recipients.length && !groups.length) continue
     const { data: claimed } = await db.rpc('crm_claim_lead_alert', { p_id: alert.id })
     if (!claimed) continue
     for (const person of recipients) {
@@ -41,6 +50,10 @@ export async function runLeadAlerts(db: Db, openTeams: string[], deliver: Delive
         continue
       }
       if (!(await deliver(teamId, jid, String(alert.text)))) console.error(`[${teamId.slice(0, 8)}] aviso de lead para …${phone.slice(-4)} não entrou na fila`)
+    }
+    for (const group of groups) {
+      const teamId = group.team_id as string
+      if (!(await deliverGroup(teamId, String(group.jid), String(alert.text)))) console.error(`[${teamId.slice(0, 8)}] aviso de lead no grupo "${group.name}" não saiu`)
     }
   }
 }

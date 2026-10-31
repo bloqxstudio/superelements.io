@@ -54,7 +54,9 @@ Deno.serve(async (request) => {
 
   // Quem recebe aviso: ao menos um número marcado nesta conta (senão não enfileira)
   const { count } = await admin.from('crm_whatsapp_client_contacts').select('phone', { count: 'exact', head: true }).eq('account_id', teamId).eq('leads', true).eq('enabled', true)
-  const alert = count ? alertText(lead, campaign, `${APP_URL}/crm?oportunidade={id}`) : null
+  // Também vale um grupo de WhatsApp escolhido para receber os leads da conta (crm_whatsapp_groups)
+  const { count: groupCount } = await admin.from('crm_whatsapp_groups').select('jid', { count: 'exact', head: true }).eq('leads_account_id', teamId)
+  const alert = count || groupCount ? alertText(lead, campaign, `${APP_URL}/crm?oportunidade={id}`) : null
 
   const { data, error } = await admin.rpc('crm_receive_lead', { p_team: teamId, p_lead: { name: lead.name, email: lead.email, phone: lead.phone, message: lead.message }, p_origin: origin, p_alert: alert })
   if (error) {

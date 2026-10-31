@@ -68,6 +68,8 @@ export interface Session {
   resolve: (jid: string) => Promise<string | undefined>
   /** Envia texto (ou o arquivo, com o texto de legenda) e devolve o id da mensagem no WhatsApp */
   send: (jid: string, text: string, file?: OutFile) => Promise<string>
+  /** Os grupos em que o número está (uma consulta ao WhatsApp: não chame a toda hora) */
+  groups: () => Promise<{ jid: string; name: string; size: number }[]>
   /** Passa a receber "digitando…" desta pessoa (vai para `onTyping`) */
   watch: (jid: string) => Promise<void>
   /** Saindo: tirando o aparelho do celular */
@@ -320,6 +322,11 @@ export function openSession(o: Options): Session {
       if (!sock || !isOpen || ended) throw new Error('O WhatsApp não está conectado agora.')
       // Sem foto (ou escondida): o WhatsApp responde com erro, e isso não é falha nossa
       return sock.profilePictureUrl(jid, 'image', 10_000).catch(() => undefined)
+    },
+    groups: async () => {
+      if (!sock || !isOpen || ended) throw new Error('O WhatsApp não está conectado agora.')
+      const all = await sock.groupFetchAllParticipating()
+      return Object.values(all).map((g) => ({ jid: g.id, name: g.subject ?? '', size: g.participants?.length ?? 0 }))
     },
     watch: async (jid) => {
       if (!sock || !isOpen || ended) return
