@@ -38,6 +38,8 @@ import CrmAnuncios from "@/pages/crm/Anuncios";
 import CrmSite from "@/pages/crm/Site";
 import CrmWhatsApp from "@/pages/crm/WhatsApp";
 import CrmFlows from "@/pages/crm/Flows";
+import CrmForms from "@/pages/crm/Forms";
+import CrmFormEditor from "@/pages/crm/FormEditor";
 import InstagramCallback from "@/pages/InstagramCallback";
 import AdsCallback from "@/pages/AdsCallback";
 import { CrmGate } from "@/features/crm/CrmGate";
@@ -147,6 +149,8 @@ function App() {
                 <Route path="crm/whatsapp" element={<CrmGate><CrmWhatsApp /></CrmGate>} />
                 {/* Fluxos de atendimento e prospecção: a rotina comercial em mensagens de WhatsApp */}
                 <Route path="crm/fluxos" element={<CrmGate><CrmFlows /></CrmGate>} />
+                <Route path="crm/formularios" element={<CrmGate><CrmForms /></CrmGate>} />
+                <Route path="crm/formularios/:id" element={<CrmGate><CrmFormEditor /></CrmGate>} />
                 {/* Buscas da equipe na nuvem; a varredura pesada continua no app local. */}
                 <Route path="prospeccao" element={<CrmGate><Prospects /></CrmGate>} />
               </Route>

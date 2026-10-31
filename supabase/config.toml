@@ -15,3 +15,7 @@ verify_jwt = false
 # Leads por webhook: o site não tem login, a chave da conta (?key=) autoriza
 [functions.lead-webhook]
 verify_jwt = false
+
+# Formulários e quizzes embedados no site: o visitante não tem login, o id do formulário publicado autoriza
+[functions.form-submit]
+verify_jwt = false
