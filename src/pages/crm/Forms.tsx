@@ -141,7 +141,7 @@ const FormsPage: React.FC = () => {
                           aria-label={`Apagar ${f.name}`}
                           onClick={() => {
                             if (!window.confirm(`Apagar “${f.name}” e as ${c.total} respostas? Os leads já criados no funil continuam.`)) return
-                            deleteForm(f.id).then(() => setForms((list) => (list ?? []).filter((x) => x.id !== f.id)), (e) => toast.error(errorText(e)))
+                            deleteForm(f).then(() => setForms((list) => (list ?? []).filter((x) => x.id !== f.id)), (e) => toast.error(errorText(e)))
                           }}
                         >
                           <Trash2 className="h-4 w-4" />

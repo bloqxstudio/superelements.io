@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
-import { SETTINGS_DEFAULT, THEME_DEFAULT, cleanDefinition, cleanSettings, cleanTheme, newId, type Answers, type FormDefinition, type FormSettings, type FormTheme } from '../../../supabase/functions/_shared/forms.ts'
+import { SETTINGS_DEFAULT, THEME_DEFAULT, cleanDefinition, cleanSettings, cleanTheme, newId, type Answers, type FormDefinition, type FormField, type FormSettings, type FormStep, type FormTheme } from '../../../supabase/functions/_shared/forms.ts'
 import { isLocalAppUrl, publicAppUrl } from '@/features/approval/shares'
 
 /**
@@ -16,8 +16,19 @@ const db = supabase as unknown as SupabaseClient
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, '') || 'https://nfmfcpcwyavutntnrxqq.supabase.co'
 export const FORMS_ENDPOINT = `${SUPABASE_URL}/functions/v1/form-submit`
 
+/**
+ * Muda a cada alteração do `public/forms.js`: o servidor guarda o arquivo por 30 dias no navegador,
+ * e o `?v=` faz as correções chegarem a quem já visitou o site.
+ */
+export const FORMS_SCRIPT_VERSION = '3'
+
 /** O script sai sempre do app publicado (no app local, o endereço daqui não abre no site). */
-export const formsScriptUrl = () => `${isLocalAppUrl() ? 'https://app.avencestudio.com' : publicAppUrl()}/forms.js`
+export const formsScriptUrl = () => `${isLocalAppUrl() ? 'https://app.avencestudio.com' : publicAppUrl()}/forms.js?v=${FORMS_SCRIPT_VERSION}`
+
+const CONFIG_BUCKET = 'crm-forms'
+
+/** A definição publicada, servida pelo CDN do Storage (migração 20261031100000): abre bem mais rápido que a função. */
+export const configUrl = (teamId: string, formId: string) => `${SUPABASE_URL}/storage/v1/object/public/${CONFIG_BUCKET}/${teamId}/${formId}.json`
 
 export interface CrmForm {
   id: string
@@ -110,17 +121,38 @@ export async function createForm(teamId: string, name: string, definition: FormD
   return toForm(data as FormRow)
 }
 
-export async function saveForm(form: Pick<CrmForm, 'id' | 'name' | 'status' | 'definition' | 'theme' | 'settings'>) {
+/**
+ * Mantém o arquivo público da configuração em dia: publicado grava, rascunho apaga. É um ganho de
+ * velocidade, nunca um requisito: sem o bucket (migração por aplicar) o `forms.js` busca na função.
+ */
+async function syncPublic(form: Pick<CrmForm, 'id' | 'teamId' | 'name' | 'status' | 'definition' | 'theme' | 'settings'>) {
+  const path = `${form.teamId}/${form.id}.json`
+  try {
+    if (form.status === 'published') {
+      const body = JSON.stringify({ id: form.id, name: form.name, definition: cleanDefinition(form.definition), theme: cleanTheme(form.theme), settings: cleanSettings(form.settings) })
+      const { error } = await supabase.storage.from(CONFIG_BUCKET).upload(path, new Blob([body], { type: 'application/json' }), { upsert: true, contentType: 'application/json', cacheControl: '30' })
+      if (error) console.warn('forms: configuração pública não gravada:', error.message)
+    } else {
+      await supabase.storage.from(CONFIG_BUCKET).remove([path])
+    }
+  } catch (e) {
+    console.warn('forms: configuração pública não gravada:', e)
+  }
+}
+
+export async function saveForm(form: Pick<CrmForm, 'id' | 'teamId' | 'name' | 'status' | 'definition' | 'theme' | 'settings'>) {
   const { error } = await db
     .from('crm_forms')
     .update({ name: form.name.trim() || 'Sem nome', kind: form.definition.kind, status: form.status, definition: form.definition, theme: form.theme, settings: form.settings, updated_at: new Date().toISOString() })
     .eq('id', form.id)
   if (error) fail(error)
+  await syncPublic(form)
 }
 
-export async function deleteForm(id: string) {
-  const { error } = await db.from('crm_forms').delete().eq('id', id)
+export async function deleteForm(form: Pick<CrmForm, 'id' | 'teamId'>) {
+  const { error } = await db.from('crm_forms').delete().eq('id', form.id)
   if (error) fail(error)
+  await syncPublic({ ...form, name: '', status: 'draft', definition: cleanDefinition(null), theme: THEME_DEFAULT, settings: SETTINGS_DEFAULT })
 }
 
 /** Quantas respostas cada formulário já recebeu (para a taxa de conversão da lista). */
@@ -178,8 +210,8 @@ export async function deleteSubmission(id: string) {
 }
 
 /** O trecho que vai no widget HTML do Elementor, no lugar do formulário do WordPress. */
-export const embedOf = (form: Pick<CrmForm, 'id'>) =>
-  `<div data-avence-form="${form.id}" data-endpoint="${FORMS_ENDPOINT}"></div>\n<script defer src="${formsScriptUrl()}"></script>`
+export const embedOf = (form: Pick<CrmForm, 'id' | 'teamId'>) =>
+  `<link rel="preconnect" href="${SUPABASE_URL}" crossorigin>\n<div data-avence-form="${form.id}" data-config="${configUrl(form.teamId, form.id)}" data-endpoint="${FORMS_ENDPOINT}"></div>\n<script defer src="${formsScriptUrl()}"></script>`
 
 /** CSV das respostas (uma coluna por pergunta, na ordem do formulário) para abrir no Excel. */
 export function submissionsCsv(form: CrmForm, rows: FormSubmission[]): string {
@@ -215,6 +247,83 @@ export interface FormTemplate {
 
 const opt = (label: string, score?: number) => ({ id: newId('o'), label, score })
 
+const NO = -10
+
+/**
+ * Lead de criação de site: as mesmas perguntas e regras da página de proposta da Avence
+ * (`LP_RULES`, `src/features/avence/proposta.ts`). Loja virtual e verba até R$ 500 desqualificam
+ * sozinhas (pontuação muito negativa); os demais sinais somam (máximo 14). A partir de 10 pontos o
+ * lead é qualificado e vê o WhatsApp: um sinal fraco passa, dois reprovam (como na proposta). Abaixo
+ * disso recebe uma resposta educada, sem o botão.
+ */
+function siteLeadDefinition(): FormDefinition {
+  const pick = (title: string, label: string, options: [string, number][], extra: Partial<FormField> = {}): FormStep => ({
+    id: newId('s'),
+    title,
+    fields: [{ id: newId('f'), type: 'choice', label, required: true, options: options.map(([text, score]) => opt(text, score)), ...extra }],
+  })
+  const siteId = newId('f')
+  const hasSite = opt('Já tenho site', 1)
+  return {
+    kind: 'quiz',
+    steps: [
+      pick('O que o seu negócio faz?', 'Tipo de negócio', [
+        ['Atende com hora marcada (saúde, advocacia, estética, contabilidade…)', 3],
+        ['Presta outro serviço para clientes da região', 3],
+        ['Vende pela internet (loja virtual)', NO],
+        ['Ainda vou abrir o negócio', 0],
+      ]),
+      {
+        id: newId('s'),
+        title: 'Como está o seu site hoje?',
+        fields: [
+          { id: siteId, type: 'choice', label: 'Situação do site', required: true, options: [hasSite, opt('Só tenho Instagram', 1), opt('Ainda não tenho', 1)] },
+          { id: newId('f'), type: 'short', label: 'Qual o endereço do site?', placeholder: 'seunegocio.com.br', showIf: { field: siteId, op: 'eq', value: hasSite.id } },
+        ],
+      },
+      pick('Quanto você investe por mês em anúncios no Google ou no Instagram?', 'Investimento em anúncios', [
+        ['Ainda não anuncio', 0],
+        ['Até R$ 500', 1],
+        ['De R$ 500 a R$ 2.000', 2],
+        ['Mais de R$ 2.000', 3],
+      ]),
+      pick('Quanto pensa em investir no site? (valor único)', 'Investimento no site', [
+        ['Até R$ 500', NO],
+        ['De R$ 500 a R$ 1.500', 1],
+        ['De R$ 1.500 a R$ 3.000', 3],
+        ['Mais de R$ 3.000', 4],
+      ]),
+      pick('Quem decide sobre o site?', 'Quem decide', [
+        ['Eu decido (dono ou sócio)', 2],
+        ['Decido junto com outra pessoa', 1],
+        ['Outra pessoa decide', 0],
+      ]),
+      pick('Quando você quer começar?', 'Prazo', [
+        ['Este mês', 3],
+        ['Nos próximos 3 meses', 2],
+        ['Só estou pesquisando', 0],
+      ]),
+      {
+        id: newId('s'),
+        title: 'Para onde enviamos a proposta?',
+        description: 'Usamos só para responder você.',
+        fields: [
+          { id: newId('f'), type: 'short', label: 'Seu nome', required: true, map: 'name', placeholder: 'Como podemos te chamar?' },
+          { id: newId('f'), type: 'phone', label: 'WhatsApp com DDD', required: true, map: 'phone', placeholder: '(51) 99999-9999' },
+          { id: newId('f'), type: 'short', label: 'Nome da empresa', placeholder: 'Opcional' },
+          { id: newId('f'), type: 'long', label: 'Quer contar mais alguma coisa?', map: 'message', placeholder: 'Opcional' },
+        ],
+      },
+    ],
+    results: [
+      { id: newId('r'), min: -100, title: 'Recebemos suas respostas', text: 'Vamos olhar com calma e, se fizer sentido para os dois lados, respondemos por aqui.', qualified: false },
+      { id: newId('r'), min: 10, title: 'Vamos montar a sua proposta', text: 'Já temos o que precisamos. Continue no WhatsApp para combinar os próximos passos.', qualified: true },
+    ],
+  }
+}
+
+const SITE_LEAD_SETTINGS: Partial<FormSettings> = { submitLabel: 'Pedir proposta', autoAdvance: true, successTitle: 'Recebemos suas respostas', successText: 'Retornamos em breve.' }
+
 /** Pontos de partida: a equipe edita tudo depois. */
 export const TEMPLATES: FormTemplate[] = [
   {
@@ -237,6 +346,13 @@ export const TEMPLATES: FormTemplate[] = [
       ],
     }),
     settings: { submitLabel: 'Enviar mensagem', successTitle: 'Mensagem enviada', successText: 'Retornamos pelo WhatsApp em breve.' },
+  },
+  {
+    id: 'site',
+    name: 'Lead de criação de site',
+    text: 'Quiz que qualifica quem quer um site novo (negócio, anúncios, verba, decisão, prazo) e chama no WhatsApp. Só o lead qualificado dispara a conversão.',
+    definition: () => siteLeadDefinition(),
+    settings: SITE_LEAD_SETTINGS,
   },
   {
     id: 'qualificacao',

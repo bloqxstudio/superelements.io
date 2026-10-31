@@ -207,7 +207,7 @@ export const EmbedPanel: React.FC<{ form: CrmForm }> = ({ form }) => {
         </p>
         <ol className="grid list-decimal gap-2 pl-5 text-sm text-gray-700 marker:text-gray-400">
           <li>
-            Aplicar a migração <code className="rounded bg-zinc-100 px-1 text-xs">supabase/migrations/20261030100000_crm_forms.sql</code>.
+            Aplicar as migrações <code className="rounded bg-zinc-100 px-1 text-xs">20261030100000_crm_forms.sql</code> e <code className="rounded bg-zinc-100 px-1 text-xs">20261031100000_crm_forms_cdn.sql</code> (a segunda faz o formulário abrir mais rápido no site).
           </li>
           <li>
             Publicar a função:{' '}

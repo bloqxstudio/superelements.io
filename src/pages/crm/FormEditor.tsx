@@ -24,8 +24,8 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'respostas', label: 'Respostas' },
 ]
 
-type Draft = Pick<CrmForm, 'id' | 'name' | 'status' | 'definition' | 'theme' | 'settings'>
-const draftOf = (f: CrmForm): Draft => ({ id: f.id, name: f.name, status: f.status, definition: f.definition, theme: f.theme, settings: f.settings })
+type Draft = Pick<CrmForm, 'id' | 'teamId' | 'name' | 'status' | 'definition' | 'theme' | 'settings'>
+const draftOf = (f: CrmForm): Draft => ({ id: f.id, teamId: f.teamId, name: f.name, status: f.status, definition: f.definition, theme: f.theme, settings: f.settings })
 
 const FormEditor: React.FC = () => {
   const { id } = useParams()

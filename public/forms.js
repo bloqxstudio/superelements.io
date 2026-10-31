@@ -97,6 +97,16 @@
     return n
   }
 
+  function skCss(t) {
+    return (
+      ':host{display:block;--p:' + t.primary + ';--bg:' + t.background + ';--tx:' + t.text + ';--r:' + t.radius + 'px}*{box-sizing:border-box}' +
+      '.sk{padding:28px;border-radius:calc(var(--r) * 1.6);min-height:260px}.sk.card{border:1px solid color-mix(in srgb,var(--tx) 14%,transparent);background:var(--bg)}' +
+      '.sk i{display:block;border-radius:var(--r);background:linear-gradient(90deg,color-mix(in srgb,var(--tx) 8%,transparent) 25%,color-mix(in srgb,var(--tx) 15%,transparent) 50%,color-mix(in srgb,var(--tx) 8%,transparent) 75%);background-size:200% 100%;animation:sh 1.2s linear infinite}' +
+      '@keyframes sh{to{background-position:-200% 0}}' +
+      '@media (prefers-reduced-motion:reduce){.sk i{animation:none}}'
+    )
+  }
+
   function css(t) {
     var font = t.font === 'Inter' ? "'Inter', system-ui, sans-serif" : t.font === 'system' ? 'system-ui, -apple-system, Segoe UI, sans-serif' : 'inherit'
     return (
@@ -140,8 +150,13 @@
       '.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}' +
       '.out{text-align:center;padding:12px 0}' +
       '.out .ok{width:52px;height:52px;border-radius:50%;background:color-mix(in srgb,var(--p) 14%,transparent);color:var(--p);display:grid;place-items:center;margin:0 auto 16px;font-size:26px}' +
-      '.out a.go{display:inline-block;text-decoration:none;margin:14px 6px 0;color:#fff}' +
-      '.out a.wa{background:#25d366;color:#0b2e17}' +
+      '.out .cta{display:flex;flex-direction:column;gap:10px;margin-top:20px}' +
+      '.out a.btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:15px 20px;border-radius:var(--r);font:inherit;font-weight:700;font-size:1.02em;text-decoration:none;transition:transform .1s,filter .15s,box-shadow .15s}' +
+      '.out a.btn:hover{filter:brightness(1.06)}.out a.btn:active{transform:scale(.98)}.out a.btn:focus-visible{outline:3px solid color-mix(in srgb,var(--p) 40%,transparent);outline-offset:2px}' +
+      '.out a.btn svg{flex:none;width:22px;height:22px}' +
+      '.out a.wa{background:#25d366;color:#06240f;box-shadow:0 6px 18px -6px rgba(37,211,102,.7)}' +
+      '.out a.alt{background:transparent;color:var(--p);border:1.5px solid color-mix(in srgb,var(--p) 45%,transparent)}' +
+      '.out .sub{font-size:.84em;opacity:.65;margin:-2px 0 0}' +
       '.pts{display:inline-block;font-size:.82em;font-weight:650;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--p) 12%,transparent);color:var(--p);margin-bottom:12px}' +
       '.pv{font-size:.78em;opacity:.55;margin-top:14px;text-align:center}' +
       '.st{animation:in .28s cubic-bezier(.22,1,.36,1)}' +
@@ -149,6 +164,17 @@
       '@media (prefers-reduced-motion:reduce){.st{animation:none}.bar i,.op,button{transition:none}}' +
       '@media (max-width:480px){.f{padding:20px}}'
     )
+  }
+
+  // O ícone do WhatsApp (traço oficial simplificado), herda a cor do texto
+  function wa() {
+    var ns = 'http://www.w3.org/2000/svg'
+    var svg = document.createElementNS(ns, 'svg')
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('fill', 'currentColor')
+    var path = document.createElementNS(ns, 'path')
+    path.setAttribute('d', 'M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.91-4.45 9.91-9.91A9.84 9.84 0 0 0 12.04 2Zm0 18.15h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.23 8.25-8.23 2.2 0 4.27.86 5.82 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.7 8.23-8.23 8.23Zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.5.11-.11.25-.29.37-.43.12-.15.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.42h-.48c-.17 0-.43.06-.66.31-.23.25-.87.85-.87 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18-.06-.1-.23-.16-.48-.29Z')
+    svg.appendChild(path)
+    return svg
   }
 
   function mount(host, config, opts) {
@@ -327,8 +353,13 @@
       out.appendChild(el('h3', { text: res.result ? res.result.title : s.successTitle }))
       var text = res.result ? res.result.text : s.successText
       if (text) out.appendChild(el('p', { class: 'd', text: text, style: 'margin:0' }))
-      if (res.result && res.result.ctaUrl) out.appendChild(el('a', { class: 'go', href: res.result.ctaUrl, text: res.result.ctaLabel || 'Continuar' }))
-      if (res.whatsappUrl) out.appendChild(el('a', { class: 'go wa', href: res.whatsappUrl, target: '_blank', rel: 'noopener', text: 'Falar no WhatsApp' }))
+      var cta = el('div', { class: 'cta' })
+      if (res.whatsappUrl) {
+        cta.appendChild(el('a', { class: 'btn wa', href: res.whatsappUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Continuar no WhatsApp (abre em uma nova aba)' }, [wa(), el('span', { text: 'Continuar no WhatsApp' })]))
+        cta.appendChild(el('p', { class: 'sub', text: 'Suas respostas já vão na mensagem.' }))
+      }
+      if (res.result && res.result.ctaUrl) cta.appendChild(el('a', { class: 'btn ' + (res.whatsappUrl ? 'alt' : 'wa-off'), href: res.result.ctaUrl, text: res.result.ctaLabel || 'Continuar', style: res.whatsappUrl ? null : 'background:var(--p);color:#fff' }))
+      if (cta.childNodes.length) out.appendChild(cta)
       if (opts.preview) out.appendChild(el('p', { class: 'pv', text: 'Prévia: nada foi enviado.' }))
       frame([out])
       var f = root.querySelector('.out')
@@ -403,8 +434,29 @@
         done = false
         render(false)
       },
+      // A pessoa já mexeu (digitou, respondeu, avançou ou enviou): nada de trocar o formulário debaixo dela
+      touched: function () { return started || done || cur > 0 || Object.keys(answers).some(function (k) { return asList(answers[k]).length }) },
       destroy: function () { root.innerHTML = '' },
     }
+  }
+
+  // Esqueleto na hora, com o tema do cache se houver: ocupa o lugar e some quando o formulário monta
+  function skeleton(host, cfg) {
+    var root = host.shadowRoot || host.attachShadow({ mode: 'open' })
+    var t = (cfg && cfg.theme) || { primary: '#2b3cf0', background: '#ffffff', text: '#111111', field: '#f4f4f5', radius: 10, font: 'inherit', frame: 'card' }
+    var bars = [['40%', 22], ['100%', 46], ['100%', 46], ['100%', 46], ['34%', 44]]
+    var box = el('div', { class: 'sk ' + t.frame, 'aria-busy': 'true', 'aria-label': 'Carregando o formulário' }, bars.map(function (b, i) { return el('i', { style: 'width:' + b[0] + ';height:' + b[1] + 'px;margin-bottom:' + (i === bars.length - 1 ? 0 : 14) + 'px' }) }))
+    root.innerHTML = ''
+    root.appendChild(el('style', { text: skCss(t) }))
+    root.appendChild(box)
+  }
+
+  function fetchJson(url) {
+    return fetch(url, { credentials: 'omit' }).then(function (r) {
+      if (r.status === 404) { var e = new Error('404'); e.notFound = true; throw e }
+      if (!r.ok) throw new Error(String(r.status))
+      return r.json()
+    })
   }
 
   function boot(host) {
@@ -413,13 +465,33 @@
     var endpoint = host.getAttribute('data-endpoint')
     if (!id || !endpoint) return
     host.__avence = true
-    fetch(endpoint + '?id=' + encodeURIComponent(id) + '&view=1')
-      .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json() })
+    var key = 'avence-form:' + id
+    var cached = null
+    try { cached = JSON.parse(localStorage.getItem(key) || 'null') } catch (e) {}
+    var handle = null
+    // Quem já abriu o formulário vê ele na hora, da cópia guardada; o servidor confirma por trás
+    if (cached && cached.definition) handle = mount(host, cached, { endpoint: endpoint })
+    else skeleton(host, null)
+
+    // O arquivo do CDN é o caminho rápido; a função é a rede de segurança (e vale para formulários antigos)
+    var url = host.getAttribute('data-config')
+    var load = url ? fetchJson(url).catch(function () { return fetchJson(endpoint + '?id=' + encodeURIComponent(id)) }) : fetchJson(endpoint + '?id=' + encodeURIComponent(id))
+    load
       .then(function (cfg) {
-        mount(host, cfg, { endpoint: endpoint })
+        try { localStorage.setItem(key, JSON.stringify(cfg)) } catch (e) {}
+        if (!handle) handle = mount(host, cfg, { endpoint: endpoint })
+        else if (JSON.stringify(cfg) !== JSON.stringify(cached) && !handle.touched()) handle.update(cfg)
         push('form_view', { form_id: cfg.id, form_name: cfg.name })
+        // Conta a visualização sem pôr a pessoa para esperar
+        try { fetch(endpoint + '?id=' + encodeURIComponent(id) + '&view=1', { keepalive: true, credentials: 'omit' }).catch(function () {}) } catch (e) {}
       })
-      .catch(function () { host.__avence = false })
+      .catch(function (err) {
+        // Formulário despublicado: some da página e esquece a cópia
+        if (err && err.notFound) {
+          try { localStorage.removeItem(key) } catch (e) {}
+          if (!handle || !handle.touched()) { if (handle) handle.destroy(); else host.shadowRoot.innerHTML = '' }
+        } else if (!handle) { host.shadowRoot.innerHTML = ''; host.__avence = false }
+      })
   }
 
   function scan() { [].forEach.call(document.querySelectorAll('[data-avence-form]'), boot) }
