@@ -14,6 +14,7 @@
     "prospectar": "node scripts/prospects/prospectar.ts",
     "prospectar:subir": "node scripts/prospects/upload.ts",
     "conector": "node scripts/connector/build.mjs",
+    "plugin:zip": "node scripts/connector/plugin-zip.mjs",
     "whatsapp": "npm --prefix services/whatsapp start",
     "db:status": "node scripts/supabase.mjs status",
     "db:plan": "node scripts/supabase.mjs plan",

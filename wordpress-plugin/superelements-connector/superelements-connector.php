@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Superelements Connector
  * Description: Deixa a plataforma Superelements gravar o SEO do Yoast em páginas e publicar o cabeçalho, o rodapé e os componentes do site como modelos do Elementor, pela API do WordPress.
- * Version: 0.4.0
+ * Version: 0.5.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: Superelements
@@ -22,13 +22,18 @@
  * único (60 segundos) para quem já está autenticado pela senha de aplicação, e o
  * site guarda de onde cada visita veio (UTM, gclid, fbclid) para preencher os
  * campos ocultos do formulário que manda o lead ao CRM.
+ *
+ * 0.5: uma configuração só (`superelements_config`), gravada pela plataforma ao conectar o
+ * site (POST superelements/v1/config): a chave e o endereço do painel Site, e o webhook de leads
+ * da conta. O script de visitas (assets/visitas.js) vai dentro do plugin e passa a rodar sozinho
+ * assim que a chave chega; ninguém cola código no Elementor.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const SUPERELEMENTS_CONNECTOR_VERSION = '0.4.0';
+const SUPERELEMENTS_CONNECTOR_VERSION = '0.5.0';
 
 add_action(
 	'init',
@@ -420,4 +425,118 @@ fill();document.addEventListener('DOMContentLoaded',fill);document.addEventListe
 		<?php
 	},
 	99
+);
+
+
+/**
+ * Configuração unificada. Uma opção, escrita pela plataforma (administrador, senha de aplicação):
+ * { tracker: { key, endpoint }, leads: { url } }. `tracker: null` desliga o painel Site.
+ */
+function superelements_config() {
+	$config = get_option( 'superelements_config', array() );
+	return is_array( $config ) ? $config : array();
+}
+
+add_action(
+	'rest_api_init',
+	function () {
+		register_rest_route(
+			'superelements/v1',
+			'/config',
+			array(
+				array(
+					'methods'             => 'GET',
+					'permission_callback' => function () {
+						return current_user_can( 'edit_pages' );
+					},
+					'callback'            => function () {
+						$config = superelements_config();
+						return array(
+							'version' => SUPERELEMENTS_CONNECTOR_VERSION,
+							'tracker' => isset( $config['tracker'] ) ? $config['tracker'] : null,
+							'leads'   => isset( $config['leads'] ) ? $config['leads'] : null,
+							'script'  => file_exists( plugin_dir_path( __FILE__ ) . 'assets/visitas.js' ),
+						);
+					},
+				),
+				array(
+					'methods'             => 'POST',
+					'permission_callback' => function () {
+						return current_user_can( 'manage_options' );
+					},
+					'callback'            => function ( WP_REST_Request $request ) {
+						$config = superelements_config();
+						$body   = $request->get_json_params();
+						if ( ! is_array( $body ) ) {
+							return superelements_error( 'superelements_bad_config', 'Configuração inválida.', 400 );
+						}
+						if ( array_key_exists( 'tracker', $body ) ) {
+							$tracker = $body['tracker'];
+							if ( null === $tracker ) {
+								unset( $config['tracker'] );
+							} else {
+								$key      = isset( $tracker['key'] ) ? (string) $tracker['key'] : '';
+								$endpoint = isset( $tracker['endpoint'] ) ? esc_url_raw( (string) $tracker['endpoint'], array( 'https' ) ) : '';
+								if ( ! preg_match( '/^[0-9a-f-]{36}$/i', $key ) || '' === $endpoint ) {
+									return superelements_error( 'superelements_bad_tracker', 'Chave ou endereço do painel Site inválidos.', 400 );
+								}
+								$config['tracker'] = array( 'key' => strtolower( $key ), 'endpoint' => $endpoint );
+							}
+						}
+						if ( array_key_exists( 'leads', $body ) ) {
+							$leads = $body['leads'];
+							if ( null === $leads ) {
+								unset( $config['leads'] );
+							} else {
+								$url = isset( $leads['url'] ) ? esc_url_raw( (string) $leads['url'], array( 'https' ) ) : '';
+								if ( '' === $url ) {
+									return superelements_error( 'superelements_bad_leads', 'Endereço do webhook de leads inválido.', 400 );
+								}
+								$config['leads'] = array( 'url' => $url );
+							}
+						}
+						update_option( 'superelements_config', $config, false );
+						return array(
+							'version' => SUPERELEMENTS_CONNECTOR_VERSION,
+							'tracker' => isset( $config['tracker'] ) ? $config['tracker'] : null,
+							'leads'   => isset( $config['leads'] ) ? $config['leads'] : null,
+						);
+					},
+				),
+			)
+		);
+	}
+);
+
+/** O script de visitas, do próprio plugin, só para visitantes e só com a chave configurada. */
+add_action(
+	'wp_enqueue_scripts',
+	function () {
+		$config = superelements_config();
+		$file   = plugin_dir_path( __FILE__ ) . 'assets/visitas.js';
+		if ( empty( $config['tracker']['key'] ) || empty( $config['tracker']['endpoint'] ) || ! file_exists( $file ) ) {
+			return;
+		}
+		if ( is_admin() || is_customize_preview() || is_user_logged_in() ) {
+			return;
+		}
+		wp_enqueue_script( 'superelements-visitas', plugins_url( 'assets/visitas.js', __FILE__ ), array(), filemtime( $file ), array( 'in_footer' => true, 'strategy' => 'defer' ) );
+	}
+);
+
+add_filter(
+	'script_loader_tag',
+	function ( $tag, $handle ) {
+		if ( 'superelements-visitas' !== $handle ) {
+			return $tag;
+		}
+		$config = superelements_config();
+		return str_replace(
+			' src=',
+			' data-site="' . esc_attr( $config['tracker']['key'] ) . '" data-endpoint="' . esc_url( $config['tracker']['endpoint'] ) . '" src=',
+			$tag
+		);
+	},
+	10,
+	2
 );

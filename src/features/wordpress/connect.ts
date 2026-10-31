@@ -1,3 +1,4 @@
+import { syncSiteConfig } from './siteConfig'
 import { deleteWordPressConnection, loadWordPressConnection, saveWordPressConnection } from '@/features/projects/storage'
 import { INDEX_FIELDS, siteFromIndex, wpRequest, WordPressError, type Credentials, type WordPressSite, type WpIndex } from './rest'
 import type { WordPressConnection } from './types'
@@ -142,6 +143,7 @@ export async function completeConnection(projectId: string, site: WordPressSite,
   const connection = await inspect(site, creds)
   await saveWordPressConnection(projectId, connection)
   announce({ type: 'connected', projectId })
+  void syncSiteConfig(projectId, connection).catch(() => undefined)
   return connection
 }
 
