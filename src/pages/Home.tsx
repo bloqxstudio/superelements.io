@@ -16,6 +16,7 @@ import {
 } from '@/features/home/derive'
 import { Block, Condition, conditionOf, ago, clock, dayTime, Delta, Empty, LIME, Skeleton, Stat, useNow } from '@/features/home/HomeParts'
 import { metaCampaigns, useHome, type Days } from '@/features/home/useHome'
+import { HomeToday } from '@/features/home/HomeToday'
 import { HomeCharts } from '@/features/home/HomeCharts'
 import { PlanBlock } from '@/features/conteudos/PlanBlock'
 
@@ -139,6 +140,8 @@ const Home: React.FC = () => {
       </header>
 
       <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-5">
+        {site.status === 'ready' && <HomeToday trackers={site.data.trackers} live={site.data.live} />}
+
         <Reading h={h} w={w} summary={summary} spend={spend} now={now} days={days} />
 
         <HomeCharts

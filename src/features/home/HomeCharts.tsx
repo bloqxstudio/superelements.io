@@ -14,7 +14,7 @@ const Card: React.FC<{ title: string; sub?: string; children: React.ReactNode; c
 )
 
 /** Área com linha suave e ponto de leitura ao passar o mouse. */
-const Area: React.FC<{ values: number[]; labels: string[]; color: string; second?: { values: number[]; color: string }; fmt?: (n: number) => string }> = ({ values, labels, color, second, fmt = (n) => n.toLocaleString('pt-BR') }) => {
+export const Area: React.FC<{ values: number[]; labels: string[]; color: string; second?: { values: number[]; color: string }; fmt?: (n: number) => string }> = ({ values, labels, color, second, fmt = (n) => n.toLocaleString('pt-BR') }) => {
   const id = useId().replace(/:/g, '')
   const [hover, setHover] = useState<number | null>(null)
   const W = 320, H = 120, P = 6
@@ -101,7 +101,7 @@ const HomeChartsInner: React.FC<{
   )
 }
 
-class Boundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
+export class Boundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
   state = { failed: false }
   static getDerivedStateFromError() { return { failed: true } }
   render() { return this.state.failed ? null : this.props.children }
