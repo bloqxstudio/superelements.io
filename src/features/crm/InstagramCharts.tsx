@@ -204,12 +204,14 @@ export const Sparkline: React.FC<{ values: number[]; color?: string; className?:
   )
 }
 
+const BAR_COLORS = ['#FF375F', '#8B5CF6', '#2D83EE', '#14B8A6', '#FF9F0A', '#34C759']
+
 /** Uma barra por linha, com o nome e o valor ao lado (a lista já é a tabela). */
 export const BarList: React.FC<{ rows: { label: string; value: number; note?: string }[]; format?: (n: number) => string; className?: string }> = ({ rows, format = compact, className }) => {
   const max = Math.max(...rows.map((r) => r.value), 1)
   return (
     <ul className={cn('grid gap-3', className)}>
-      {rows.map((row) => (
+      {rows.map((row, i) => (
         <li key={row.label}>
           <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
             <span className="min-w-0 truncate text-gray-700">
@@ -218,8 +220,8 @@ export const BarList: React.FC<{ rows: { label: string; value: number; note?: st
             </span>
             <span className="shrink-0 font-medium tabular-nums text-gray-900">{format(row.value)}</span>
           </div>
-          <div className="h-2 rounded-r bg-gray-100" aria-hidden>
-            <div className="h-2 rounded-r bg-gray-900" style={{ width: `${Math.max(2, (row.value / max) * 100)}%` }} />
+          <div className="h-2 overflow-hidden rounded-full bg-black/5" aria-hidden>
+            <div className="h-2 rounded-full" style={{ width: `${Math.max(2, (row.value / max) * 100)}%`, background: `linear-gradient(90deg, ${BAR_COLORS[i % BAR_COLORS.length]}, ${BAR_COLORS[i % BAR_COLORS.length]}aa)` }} />
           </div>
         </li>
       ))}

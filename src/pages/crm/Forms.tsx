@@ -4,6 +4,7 @@ import { ListChecks, Loader2, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useCrm } from '@/features/crm/crmStore'
+import { Bars, Card, Donut } from '@/features/home/HomeCharts'
 import { FormsTablesError, TEMPLATES, blankDefinition, createForm, deleteForm, listForms, submissionCounts, type CrmForm } from '@/features/crm/forms'
 import { Page, PageHeader, Surface, plural, whenLabel } from '@/features/crm/ui'
 import { THEME_DEFAULT, SETTINGS_DEFAULT } from '@/features/crm/forms'
@@ -112,6 +113,17 @@ const FormsPage: React.FC = () => {
               </button>
             </div>
           </section>
+
+          {forms.length > 0 && Object.values(counts).some((c) => c.total > 0) && (
+            <section aria-labelledby="desempenho">
+              <h2 id="desempenho" className="mb-3 text-sm font-semibold text-gray-900">Desempenho</h2>
+              <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))]">
+                <Card title="Respostas por formulário" sub="Total recebido"><Bars items={forms.map((f) => ({ label: f.name, value: (counts[f.id] ?? { total: 0 }).total })).sort((a, b) => b.value - a.value).slice(0, 6)} /></Card>
+                <Card title="Quantos convertem" sub="Respostas sobre visualizações"><Bars items={forms.filter((f) => f.views > 0).map((f) => ({ label: f.name, value: Math.round(Math.min(100, ((counts[f.id]?.total ?? 0) / f.views) * 100)) })).sort((a, b) => b.value - a.value).slice(0, 6)} offset={2} /></Card>
+                <Card title="Formulários e quizzes"><Donut items={[{ label: 'Formulários', value: forms.filter((f) => f.kind === 'form').length }, { label: 'Quizzes', value: forms.filter((f) => f.kind === 'quiz').length }].filter((i) => i.value > 0)} /></Card>
+              </div>
+            </section>
+          )}
 
           <section aria-labelledby="lista">
             <h2 id="lista" className="mb-3 text-sm font-semibold text-gray-900">

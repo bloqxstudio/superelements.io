@@ -5,7 +5,7 @@ import type { SiteReport } from '@/features/crm/site'
 /** Gráficos do Início: SVG puro, cores do sistema, lidos dos mesmos relatórios dos blocos acima. */
 export const PALETTE = ['#2D83EE', '#8B5CF6', '#34C759', '#FF9F0A', '#FF375F', '#14B8A6', '#64748B']
 
-const Card: React.FC<{ title: string; sub?: string; children: React.ReactNode; className?: string }> = ({ title, sub, children, className }) => (
+export const Card: React.FC<{ title: string; sub?: string; children: React.ReactNode; className?: string }> = ({ title, sub, children, className }) => (
   <div className={`rounded-[14px] bg-[#f5f5f7] p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.04)] ${className ?? ''}`}>
     <p className="text-[13px] font-semibold text-gray-900">{title}</p>
     {sub && <p className="mb-3 text-xs text-gray-500">{sub}</p>}
@@ -41,7 +41,7 @@ export const Area: React.FC<{ values: number[]; labels: string[]; color: string;
   )
 }
 
-const Donut: React.FC<{ items: { label: string; value: number }[] }> = ({ items }) => {
+export const Donut: React.FC<{ items: { label: string; value: number }[] }> = ({ items }) => {
   const total = items.reduce((s, i) => s + i.value, 0) || 1
   const R = 38, C = 2 * Math.PI * R
   let acc = 0
@@ -58,7 +58,7 @@ const Donut: React.FC<{ items: { label: string; value: number }[] }> = ({ items 
   )
 }
 
-const Bars: React.FC<{ items: { label: string; value: number }[]; offset?: number }> = ({ items, offset = 0 }) => {
+export const Bars: React.FC<{ items: { label: string; value: number }[]; offset?: number }> = ({ items, offset = 0 }) => {
   const max = Math.max(1, ...items.map((i) => i.value))
   return (
     <ul className="space-y-2">

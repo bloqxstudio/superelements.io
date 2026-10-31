@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { isLocalAppUrl, publicAppUrl } from '@/features/approval/shares'
 import { FORMS_ENDPOINT, deleteSubmission, embedOf, listSubmissions, submissionsCsv, type CrmForm, type FormSubmission } from '@/features/crm/forms'
 import { META_URL_PARAMS as META_PARAMS } from '@/features/crm/SiteAds'
+import { FormAnalytics } from '@/features/crm/FormAnalytics'
 import { Surface, whenLabel } from '@/features/crm/ui'
 import { cn } from '@/lib/utils'
 
@@ -68,6 +69,8 @@ export const Submissions: React.FC<{ form: CrmForm; manager: boolean }> = ({ for
   }
 
   return (
+    <>
+    <FormAnalytics form={form} rows={rows} />
     <Surface
       title={`${rows.length} ${rows.length === 1 ? 'resposta' : 'respostas'}${quiz && rows.length ? ` · ${qualified} qualificadas` : ''}`}
       action={
@@ -153,6 +156,7 @@ export const Submissions: React.FC<{ form: CrmForm; manager: boolean }> = ({ for
         </ul>
       )}
     </Surface>
+    </>
   )
 }
 
