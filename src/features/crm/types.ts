@@ -54,6 +54,8 @@ export interface AccountOverview extends AccountProfile {
   members: number
   /** Quem olha já está dentro da conta (sem isso, "Entrar" dá acesso de suporte). */
   iAmMember: boolean
+  /** Quando foi arquivada (a conta some das listas, mas nada é apagado). */
+  archivedAt?: number
 }
 
 export interface TeamPerson {

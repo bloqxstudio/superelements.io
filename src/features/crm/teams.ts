@@ -16,14 +16,14 @@ const role = (value: string): TeamRole => (value === 'owner' || value === 'admin
 export async function listMyTeams(userId: string): Promise<Team[]> {
   const { data, error } = await supabase
     .from('crm_team_members')
-    .select('role, created_at, team:crm_teams(id, name, status, modules, is_home, segment, website, contact_name, contact_email, contact_phone, notes)')
+    .select('role, created_at, team:crm_teams(id, name, status, modules, is_home, segment, website, contact_name, contact_email, contact_phone, notes, archived_at)')
     .eq('user_id', userId)
     .order('created_at', { ascending: true })
   if (error) throw error
   return (data ?? [])
     .map((row) => {
-      const team = row.team as unknown as { id: string; name: string; status?: string; modules?: unknown; is_home?: boolean; segment?: string; website?: string; contact_name?: string; contact_email?: string; contact_phone?: string; notes?: string } | null
-      return team
+      const team = row.team as unknown as { archived_at?: string | null; id: string; name: string; status?: string; modules?: unknown; is_home?: boolean; segment?: string; website?: string; contact_name?: string; contact_email?: string; contact_phone?: string; notes?: string } | null
+      return team && !team.archived_at
         ? { id: team.id, name: team.name, role: role(row.role), status: team.status === 'pausada' ? 'pausada' : 'ativa', modules: cleanModules(team.modules), isHome: !!team.is_home, profile: { segment: team.segment ?? '', website: team.website ?? '', contactName: team.contact_name ?? '', contactEmail: team.contact_email ?? '', contactPhone: team.contact_phone ?? '', notes: team.notes ?? '' } }
         : null
     })
@@ -42,7 +42,10 @@ const ACCOUNT_ERRORS: Record<string, string> = {
   so_admin_da_plataforma: 'Só o admin da plataforma muda isto.',
   nome_obrigatorio: 'Dê um nome à conta.',
   conta_casa_nao_pausa: 'A conta da Avence não pode ser pausada.',
-  conta_casa_nao_exclui: 'A conta da Avence não pode ser excluída.',
+  conta_casa_nao_exclui: 'A conta da Avence não pode ser arquivada.',
+  conta_arquivada: 'A conta está arquivada: restaure antes de reativar.',
+  conta_nao_arquivada: 'Arquive a conta antes de excluir.',
+  arquivo_recente: 'A exclusão definitiva só vale 30 dias depois de arquivar.',
   conta_inexistente: 'Essa conta não existe mais.',
 }
 const accountError = (message: string) => new Error(Object.entries(ACCOUNT_ERRORS).find(([code]) => message.includes(code))?.[1] ?? message)
@@ -81,6 +84,7 @@ export async function listAccounts(): Promise<AccountOverview[]> {
     createdAt: Date.parse(row.created_at),
     members: row.members,
     iAmMember: row.i_am_member,
+    archivedAt: row.archived_at ? Date.parse(row.archived_at) : undefined,
   }))
 }
 
@@ -95,9 +99,21 @@ export async function setAccountStatus(teamId: string, status: 'ativa' | 'pausad
   if (error) throw accountError(error.message)
 }
 
-/** Exclui a conta e os projetos dela. Só o admin da plataforma; nunca a conta da casa. */
-export async function deleteAccount(teamId: string) {
-  const { error } = await supabase.rpc('crm_delete_account', { p_team: teamId })
+/** Arquiva a conta: some das listas e fica pausada, sem apagar nada. Só o admin da plataforma. */
+export async function archiveAccount(teamId: string) {
+  const { error } = await supabase.rpc('crm_archive_account', { p_team: teamId })
+  if (error) throw accountError(error.message)
+}
+
+/** Tira a conta do arquivo (volta pausada; reativar é à parte). */
+export async function restoreAccount(teamId: string) {
+  const { error } = await supabase.rpc('crm_restore_account', { p_team: teamId })
+  if (error) throw accountError(error.message)
+}
+
+/** Exclusão definitiva: só para conta arquivada há 30 dias ou mais. */
+export async function purgeAccount(teamId: string) {
+  const { error } = await supabase.rpc('crm_purge_account', { p_team: teamId })
   if (error) throw accountError(error.message)
 }
 

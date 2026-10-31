@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { ExternalLink, Loader2, LogIn, Pause, Play, Plus, Trash2 } from 'lucide-react'
+import { ExternalLink, Loader2, LogIn, Pause, Archive, ArchiveRestore, Play, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useCrm } from '@/features/crm/crmStore'
 import { ModuleToggles } from '@/features/crm/ModuleToggles'
 import { MODULES, type ModuleId } from '@/features/crm/modules'
-import { deleteAccount, listAccounts, setAccountModules, setAccountStatus, supportAccess } from '@/features/crm/teams'
+import { archiveAccount, listAccounts, purgeAccount, restoreAccount, setAccountModules, setAccountStatus, supportAccess } from '@/features/crm/teams'
 import type { AccountOverview } from '@/features/crm/types'
 import { Page, PageHeader, Surface, dayLabel, plural } from '@/features/crm/ui'
 import { cn } from '@/lib/utils'
@@ -24,6 +24,9 @@ const AccountCard: React.FC<{ account: AccountOverview; current: boolean; onChan
   const [modules, setModules] = useState(account.modules)
   const [confirming, setConfirming] = useState(false)
   const [typed, setTyped] = useState('')
+  const archived = account.archivedAt !== undefined
+  const daysArchived = archived ? Math.floor((Date.now() - (account.archivedAt as number)) / 86_400_000) : 0
+  const canPurge = archived && daysArchived >= 30
   const paused = account.status === 'pausada'
 
   useEffect(() => setModules(account.modules), [account.modules])
@@ -56,19 +59,22 @@ const AccountCard: React.FC<{ account: AccountOverview; current: boolean; onChan
     }
   }
 
-  const remove = async () => {
+  const run = async (action: () => Promise<void>, done: string, fail: string) => {
     setBusy('status')
     try {
-      await deleteAccount(account.id)
-      toast.success(`${account.name} excluída`)
+      await action()
+      toast.success(done)
       setConfirming(false)
       onChanged()
     } catch (error) {
-      toast.error('Não foi possível excluir a conta', { description: error instanceof Error ? error.message : undefined })
+      toast.error(fail, { description: error instanceof Error ? error.message : undefined })
     } finally {
       setBusy(null)
     }
   }
+  const archive = () => run(() => archiveAccount(account.id), `${account.name} arquivada`, 'Não foi possível arquivar a conta')
+  const restore = () => run(() => restoreAccount(account.id), `${account.name} restaurada`, 'Não foi possível restaurar a conta')
+  const purge = () => run(() => purgeAccount(account.id), `${account.name} excluída definitivamente`, 'Não foi possível excluir a conta')
 
   const on = MODULES.filter((m) => modules[m.id] !== false).length
 
@@ -102,32 +108,45 @@ const AccountCard: React.FC<{ account: AccountOverview; current: boolean; onChan
           <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => onEnter(account)} disabled={current}>
             <LogIn className="h-3.5 w-3.5" aria-hidden /> {account.iAmMember ? 'Abrir' : 'Entrar para suporte'}
           </Button>
-          {!account.isHome && (
-            <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => void togglePause()} disabled={busy === 'status'}>
-              {busy === 'status' ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : paused ? <Play className="h-3.5 w-3.5" aria-hidden /> : <Pause className="h-3.5 w-3.5" aria-hidden />}
-              {paused ? 'Reativar' : 'Pausar'}
-            </Button>
-          )}
-          {!account.isHome && (
-            <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-red-600 hover:text-red-700" onClick={() => { setTyped(''); setConfirming(true) }} disabled={busy === 'status'}>
-              <Trash2 className="h-3.5 w-3.5" aria-hidden /> Excluir
-            </Button>
+          {archived ? (
+            <>
+              <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => void restore()} disabled={busy === 'status'}>
+                <ArchiveRestore className="h-3.5 w-3.5" aria-hidden /> Restaurar
+              </Button>
+              <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-red-600 hover:text-red-700" onClick={() => { setTyped(''); setConfirming(true) }} disabled={!canPurge || busy === 'status'} title={canPurge ? undefined : `Libera em ${30 - daysArchived} dias`}>
+                <Trash2 className="h-3.5 w-3.5" aria-hidden /> Excluir definitivamente
+              </Button>
+            </>
+          ) : (
+            !account.isHome && (
+              <>
+                <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => void togglePause()} disabled={busy === 'status'}>
+                  {busy === 'status' ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : paused ? <Play className="h-3.5 w-3.5" aria-hidden /> : <Pause className="h-3.5 w-3.5" aria-hidden />}
+                  {paused ? 'Reativar' : 'Pausar'}
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => setConfirming(true)} disabled={busy === 'status'}>
+                  <Archive className="h-3.5 w-3.5" aria-hidden /> Arquivar
+                </Button>
+              </>
+            )
           )}
         </div>
       </div>
       <Dialog open={confirming} onOpenChange={setConfirming}>
-        <DialogContent>
+        <DialogContent className="!max-w-[min(28rem,calc(100vw-32px))]">
           <DialogHeader>
-            <DialogTitle>Excluir {account.name}?</DialogTitle>
+            <DialogTitle>{archived ? `Excluir ${account.name} definitivamente?` : `Arquivar ${account.name}?`}</DialogTitle>
             <DialogDescription>
-              Apaga a conta, os projetos dela e todos os dados do CRM, Instagram, WhatsApp e site. Não dá para desfazer. Digite o nome da conta para confirmar.
+              {archived
+                ? 'Apaga a conta, os projetos dela e todos os dados do CRM, Instagram, WhatsApp e site. Não dá para desfazer. Digite o nome da conta para confirmar.'
+                : 'A conta some das listas e fica pausada (módulos, formulários públicos e coleta do site param). Nada é apagado: dá para restaurar quando quiser.'}
             </DialogDescription>
           </DialogHeader>
-          <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={account.name} aria-label="Nome da conta para confirmar" />
+          {archived && <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={account.name} aria-label="Nome da conta para confirmar" />}
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirming(false)}>Cancelar</Button>
-            <Button variant="destructive" disabled={typed.trim() !== account.name.trim() || busy === 'status'} onClick={() => void remove()}>
-              {busy === 'status' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />} Excluir conta
+            <Button variant={archived ? 'destructive' : 'default'} disabled={(archived && typed.trim() !== account.name.trim()) || busy === 'status'} onClick={() => void (archived ? purge() : archive())}>
+              {busy === 'status' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />} {archived ? 'Excluir conta' : 'Arquivar conta'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -206,8 +225,12 @@ const Accounts: React.FC = () => {
             </Button>
           </Surface>
         )}
-        {accounts?.map((account) => (
+        {accounts?.filter((a) => a.archivedAt === undefined).map((account) => (
           <AccountCard key={account.id} account={account} current={team?.id === account.id} onChanged={() => void reload()} onEnter={(a) => void enter(a)} />
+        ))}
+        {accounts?.some((a) => a.archivedAt !== undefined) && <h2 className="mt-4 text-sm font-semibold text-gray-700">Arquivadas</h2>}
+        {accounts?.filter((a) => a.archivedAt !== undefined).map((account) => (
+          <AccountCard key={account.id} account={account} current={false} onChanged={() => void reload()} onEnter={(a) => void enter(a)} />
         ))}
         {accounts?.length === 0 && <p className="text-sm text-gray-500">Nenhuma conta ainda. Crie a primeira.</p>}
       </div>

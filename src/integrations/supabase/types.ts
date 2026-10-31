@@ -2965,13 +2965,15 @@ export type Database = {
       }
       crm_set_modules: { Args: { p_team: string; p_modules: Json }; Returns: Json }
       crm_set_account_status: { Args: { p_team: string; p_status: string }; Returns: undefined }
-      crm_delete_account: { Args: { p_team: string }; Returns: undefined }
+      crm_archive_account: { Args: { p_team: string }; Returns: undefined }
+      crm_restore_account: { Args: { p_team: string }; Returns: undefined }
+      crm_purge_account: { Args: { p_team: string }; Returns: undefined }
       crm_support_access: { Args: { p_team: string }; Returns: undefined }
       crm_accounts_overview: {
         Args: Record<PropertyKey, never>
         Returns: {
           id: string; name: string; segment: string; website: string; contact_name: string; contact_email: string; contact_phone: string
-          notes: string; status: string; modules: Json; is_home: boolean; created_at: string; members: number; i_am_member: boolean
+          notes: string; status: string; modules: Json; is_home: boolean; created_at: string; members: number; i_am_member: boolean; archived_at: string | null
         }[]
       }
       crm_module_on: { Args: { p_team: string; p_module: string }; Returns: boolean }

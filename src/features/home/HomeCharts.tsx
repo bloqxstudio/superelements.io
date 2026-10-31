@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 import { Block } from '@/features/home/HomeParts'
 import type { SiteReport } from '@/features/crm/site'
 
@@ -17,15 +17,27 @@ export const Card: React.FC<{ title: string; sub?: string; children: React.React
 export const Area: React.FC<{ values: number[]; labels: string[]; color: string; second?: { values: number[]; color: string }; fmt?: (n: number) => string }> = ({ values, labels, color, second, fmt = (n) => n.toLocaleString('pt-BR') }) => {
   const id = useId().replace(/:/g, '')
   const [hover, setHover] = useState<number | null>(null)
-  const W = 320, H = 120, P = 6
+  // Desenha no tamanho real do cartão: o viewBox fixo deixava o gráfico pequeno e centrado em telas largas.
+  const box = useRef<HTMLDivElement>(null)
+  const [W, setW] = useState(320)
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const read = () => setW(Math.max(160, Math.round(el.getBoundingClientRect().width)))
+    read()
+    const ro = new ResizeObserver(read)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const H = 150, P = 8
   const max = Math.max(1, ...values, ...(second?.values ?? []))
   const step = values.length > 1 ? (W - P * 2) / (values.length - 1) : 0
   const pt = (v: number, i: number) => [P + i * step, H - P - (v / max) * (H - P * 2 - 8)] as const
   const line = (vs: number[]) => vs.map((v, i) => { const [x, y] = pt(v, i); return `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}` }).join(' ')
   const area = `${line(values)} L${P + (values.length - 1) * step},${H} L${P},${H} Z`
   return (
-    <div className="relative">
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-32 w-full overflow-visible" role="img" aria-label={`Gráfico de ${labels[0] ?? ''} a ${labels[labels.length - 1] ?? ''}`}
+    <div className="relative" ref={box}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block overflow-visible" role="img" aria-label={`Gráfico de ${labels[0] ?? ''} a ${labels[labels.length - 1] ?? ''}`}
         onMouseLeave={() => setHover(null)}
         onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); setHover(Math.max(0, Math.min(values.length - 1, Math.round(((e.clientX - r.left) / r.width * W - P) / (step || 1))))) }}>
         <defs><linearGradient id={id} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={color} stopOpacity=".38" /><stop offset="1" stopColor={color} stopOpacity="0" /></linearGradient></defs>
@@ -33,6 +45,8 @@ export const Area: React.FC<{ values: number[]; labels: string[]; color: string;
         <path d={area} fill={`url(#${id})`} />
         <path d={line(values)} fill="none" stroke={color} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
         {second && <path d={line(second.values)} fill="none" stroke={second.color} strokeWidth="2" strokeDasharray="4 3" strokeLinecap="round" />}
+        {hover === null && values.length > 0 && <circle cx={pt(values[values.length - 1], values.length - 1)[0]} cy={pt(values[values.length - 1], values.length - 1)[1]} r="3.5" fill="#fff" stroke={color} strokeWidth="2.2" />}
+        <text x={W - P} y="9" textAnchor="end" fontSize="10" fill="#9ca3af">{`máx. ${fmt(max)}`}</text>
         {hover !== null && <><line x1={pt(0, hover)[0]} x2={pt(0, hover)[0]} y1="0" y2={H} stroke="#00000022" /><circle cx={pt(values[hover], hover)[0]} cy={pt(values[hover], hover)[1]} r="4" fill="#fff" stroke={color} strokeWidth="2.2" /></>}
       </svg>
       <div className="mt-1 flex justify-between text-[11px] text-gray-400"><span>{labels[0]}</span><span>{labels[labels.length - 1]}</span></div>
