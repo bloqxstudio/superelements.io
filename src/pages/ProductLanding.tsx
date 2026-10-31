@@ -1,24 +1,25 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform } from 'framer-motion';
-import { ArrowRight, BarChart3, CalendarDays, Globe2, Image as ImageIcon, Lightbulb, Megaphone, MessageCircle, Sparkles, TrendingUp, Users, Workflow, FileBarChart } from 'lucide-react';
+import { ArrowRight, BarChart3, Filter, Globe2, Image as ImageIcon, ListChecks, Megaphone, MessageCircle, Sparkles, TrendingUp, UserPlus, Users, Workflow, FileBarChart } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import './ProductLanding.css';
 
 const STEPS = [
-  { icon: Lightbulb, tab: 'Conteúdos', title: 'Comece pela ideia.', text: 'Plano, pautas e conteúdos da semana no mesmo lugar, com agentes que sugerem e você aprova.' },
-  { icon: ImageIcon, tab: 'Criativo', title: 'Crie o criativo.', text: 'Posts, stories e peças saem da pauta, na identidade do cliente, prontos para revisar.' },
-  { icon: Megaphone, tab: 'Anúncios', title: 'Veja a campanha.', text: 'Valor gasto, alcance e resultado de cada anúncio, sem abrir o gerenciador.' },
-  { icon: Globe2, tab: 'Visitas ao site', title: 'Acompanhe o site ao vivo.', text: 'Quem está no site agora, de qual estado, de qual campanha e o que fez.' },
-  { icon: FileBarChart, tab: 'WhatsApp', title: 'Receba o relatório.', text: 'Resumo pronto no WhatsApp, com o que melhorar. Tudo ligado do começo ao fim.' },
+  { icon: Megaphone, tab: 'Anúncios', title: 'O clique começa aqui.', text: 'A campanha roda na Meta. O valor gasto já aparece no produto, campanha por campanha.' },
+  { icon: ListChecks, tab: 'Formulários', title: 'Um formulário só seu.', text: 'Crie formulários e quizzes no produto, publique no site ou em um link direto. Sem plugin de terceiros.' },
+  { icon: UserPlus, tab: 'Oportunidades', title: 'O lead chega com história.', text: 'Cada resposta vira oportunidade no funil, com origem, campanha, página e quanto foi investido.' },
+  { icon: Filter, tab: 'Funil', title: 'Acompanhe cada etapa.', text: 'Do novo lead ao fechado, a equipe move os cards e o histórico fica registrado.' },
+  { icon: Globe2, tab: 'Visitas ao site', title: 'Veja o custo de cada lead.', text: 'Visitas ao vivo por estado e campanha, cruzadas com o valor gasto e os contatos gerados.' },
+  { icon: FileBarChart, tab: 'WhatsApp', title: 'Receba o que melhorar.', text: 'Um resumo no WhatsApp com os números da semana e o próximo passo sugerido.' },
 ];
 
 const MODULES = [
+  { icon: ListChecks, t: 'Formulários e quizzes próprios', d: 'Crie no produto, publique no site ou em link direto. Cada resposta vira lead no funil, com a origem da campanha.' },
   { icon: Globe2, t: 'Site em tempo real', d: 'Visitas ao vivo por estado, cidade, campanha e página. Cada contato, com a origem.' },
   { icon: Megaphone, t: 'Anúncios', d: 'Meta Ads com valor usado, resultados e custo por resultado, cruzados com o que aconteceu no site.' },
   { icon: Users, t: 'Oportunidades', d: 'O lead cai no funil já com origem, campanha e valor gasto. Aviso na hora no WhatsApp.' },
   { icon: MessageCircle, t: 'WhatsApp da equipe', d: 'Conversas dos clientes, rotinas de contato e relatórios chegando por onde você já trabalha.' },
-  { icon: ImageIcon, t: 'Criativos e Instagram', d: 'Do post ao story agendado, com métricas de alcance e melhores publicações.' },
   { icon: Workflow, t: 'Agentes de IA', d: 'Agentes que escrevem, desenham, analisam e propõem melhorias. Você decide o que vai ao ar.' },
 ];
 
@@ -39,29 +40,46 @@ const Bar = ({ label, v, max = 100 }: { label: string; v: number; max?: number }
   <div className="lp-bar"><span>{label}</span><i><b style={{ width: `${(v / max) * 100}%` }} /></i><em>{v}</em></div>
 );
 
-const Panel: React.FC<{ i: number }> = ({ i }) => {
+const COLS = ['Novo lead', 'Em conversa', 'Proposta', 'Fechado'];
+
+const Panel: React.FC<{ i: number; sub: number }> = ({ i, sub }) => {
   const live = useLive();
   if (i === 0) return (
-    <div className="lp-pn"><h4><CalendarDays /> Semana de 3 a 9</h4>
-      <div className="lp-cal">{['Seg', 'Ter', 'Qua', 'Qui', 'Sex'].map((d, k) => (
-        <div key={d}><small>{d}</small><p className={k % 2 ? 'a' : 'b'}>{['Bastidores da obra', 'Antes e depois', 'Dúvida do cliente', 'Prova social', 'Oferta do mês'][k]}</p></div>))}</div>
-      <label><Sparkles /> Agente sugeriu 5 pautas com base nos últimos posts</label></div>);
-  if (i === 1) return (
-    <div className="lp-pn"><h4><ImageIcon /> Criativos · Stories</h4>
-      <div className="lp-crs">{[0, 1, 2, 3].map((k) => (<figure key={k} className={`c${k}`}><b>{['Novo', 'Antes', 'Depois', 'Fale'][k]}</b><span>{['lançamento', 'reforma', 'resultado', 'agora'][k]}</span></figure>))}</div>
-      <label><Sparkles /> 4 peças prontas · aguardando sua aprovação</label></div>);
-  if (i === 2) return (
     <div className="lp-pn"><h4><Megaphone /> Anúncios · últimos 7 dias</h4>
-      <div className="lp-kpis"><div><small>Valor usado</small><b>R$ 1.284</b></div><div><small>Resultados</small><b>96</b></div><div><small>Custo por resultado</small><b>R$ 13,37</b></div></div>
-      <Bar label="Campanha Verão" v={48} max={60} /><Bar label="Remarketing" v={31} max={60} /><Bar label="Institucional" v={17} max={60} /></div>);
-  if (i === 3) return (
+      <div className="lp-kpis"><div><small>Valor usado</small><b>R$ 1.284</b></div><div><small>Cliques no link</small><b>1.912</b></div><div><small>Alcance</small><b>38,4 mil</b></div></div>
+      <Bar label="Verão" v={48} max={60} /><Bar label="Remarketing" v={31} max={60} /><Bar label="Institucional" v={17} max={60} /></div>);
+  if (i === 1) return (
+    <div className="lp-pn lp-formpn"><h4><ListChecks /> Quiz · Orçamento de reforma</h4>
+      <div className="lp-qbar"><i style={{ width: `${34 + sub * 33}%` }} /></div>
+      <p className="lp-q">Qual o tamanho do imóvel?</p>
+      <div className="lp-ops">{['Até 60 m²', '60 a 120 m²', 'Acima de 120 m²'].map((o, k) => <span key={o} className={k === 1 ? 'on' : ''}><i />{o}</span>)}</div>
+      <label><Sparkles /> Publicado no site e em link direto · sem plugin</label></div>);
+  if (i === 2) return (
+    <div className="lp-pn"><h4><UserPlus /> Novo lead agora</h4>
+      <div className="lp-lead"><b>Marina Albuquerque</b><span>Quiz · Orçamento de reforma</span></div>
+      <div className="lp-meta"><div><small>Canal</small>Meta Ads</div><div><small>Campanha</small>Verão</div><div><small>Estado</small>RS</div><div><small>Valor da campanha</small>R$ 612</div></div>
+      <label><MessageCircle /> Aviso enviado no WhatsApp da equipe</label></div>);
+  if (i === 3) {
+    const stage = Math.min(3, sub + 1);
+    return (
+      <div className="lp-pn"><h4><Filter /> Funil de vendas</h4>
+        <div className="lp-kan">{COLS.map((c, k) => (
+          <div key={c}><small>{c}</small>
+            {k === 0 && <p className="g">Pedro · Reforma</p>}
+            {k === 1 && <p className="g">Carla · Cozinha</p>}
+            {k === stage && <motion.p layoutId="lead" className="hl">Marina · Reforma</motion.p>}
+            {k === 2 && stage !== 2 && <p className="g">Bruno · Sala</p>}
+          </div>))}</div>
+        <label><TrendingUp /> Cada mudança de etapa fica no histórico do cliente</label></div>);
+  }
+  if (i === 4) return (
     <div className="lp-pn"><h4><Globe2 /> Site · agora <span className="lp-live"><i />{live} online</span></h4>
       <div className="lp-cols"><div><small>Por estado</small><Bar label="SP" v={42} /><Bar label="RS" v={27} /><Bar label="MG" v={18} /><Bar label="PR" v={9} /></div>
-        <div><small>Por campanha</small><Bar label="Verão" v={38} /><Bar label="Remarketing" v={22} /><Bar label="Orgânico" v={31} /></div></div>
+        <div><small>Custo por lead</small><Bar label="Verão" v={38} /><Bar label="Remarketing" v={22} /><Bar label="Orgânico" v={31} /></div></div>
       <label><TrendingUp /> 7 contatos hoje · R$ 183 por contato</label></div>);
   return (
     <div className="lp-pn"><h4><FileBarChart /> Relatório semanal</h4>
-      <div className="lp-wa"><p>Resumo da semana: o site recebeu mais visitas vindas do Remarketing, com o menor custo por contato.</p><p>Sugestão: mover verba da campanha Institucional para o Remarketing e testar um novo criativo.</p></div>
+      <div className="lp-wa"><p>Resumo da semana: 23 leads, 4 propostas e 1 fechado. O Remarketing teve o menor custo por lead.</p><p>Sugestão: mover verba da Institucional para o Remarketing e testar um novo criativo.</p></div>
       <label><BarChart3 /> Enviado no WhatsApp · segunda, 8h</label></div>);
 };
 
@@ -70,7 +88,8 @@ const Story: React.FC = () => {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress: p } = useScroll({ target: ref, offset: ['start start', 'end end'] });
   const [step, setStep] = useState(0);
-  useMotionValueEvent(p, 'change', (v) => setStep(Math.min(4, Math.max(0, Math.floor((v - 0.12) / 0.17)))));
+  const [sub, setSub] = useState(0);
+  useMotionValueEvent(p, 'change', (v) => { const x = Math.max(0, (v - 0.1) / 0.15); setStep(Math.min(5, Math.floor(x))); setSub(Math.min(2, Math.floor((x % 1) * 3))); });
   const rotateX = useTransform(p, [0, 0.12], [reduce ? 0 : 32, 0]);
   const scale = useTransform(p, [0, 0.12], [reduce ? 1 : 0.8, 1]);
   const y = useTransform(p, [0, 0.12], [reduce ? 0 : 70, 0]);
@@ -81,7 +100,7 @@ const Story: React.FC = () => {
         <div className="lp-story__caption">
           <AnimatePresence mode="wait">
             <motion.div key={s} initial={{ opacity: 0, y: 24, filter: 'blur(8px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -16, filter: 'blur(8px)' }} transition={{ duration: 0.4 }}>
-              <span>0{s + 1} / 05</span><h2>{STEPS[s].title}</h2><p>{STEPS[s].text}</p>
+              <span>0{s + 1} / 06</span><h2>{STEPS[s].title}</h2><p>{STEPS[s].text}</p>
             </motion.div>
           </AnimatePresence>
         </div>
@@ -90,7 +109,7 @@ const Story: React.FC = () => {
           <div className="lp-win__body">
             <aside className="lp-hide"><small>Sua empresa</small><i><Globe2 /> Início</i>{STEPS.map((st, k) => <i key={st.tab} className={k === s ? 'on' : ''}><st.icon /> {st.tab}</i>)}</aside>
             <div className="lp-win__canvas">
-              <AnimatePresence mode="wait"><motion.div key={s} className="lp-pnwrap" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}><Panel i={s} /></motion.div></AnimatePresence>
+              <AnimatePresence mode="wait"><motion.div key={s} className="lp-pnwrap" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }}><Panel i={s} sub={sub} /></motion.div></AnimatePresence>
             </div>
           </div>
         </motion.div>
@@ -108,21 +127,21 @@ const ProductLanding: React.FC = () => (
 
     <header className="lp-hero">
       <div className="lp-glow" aria-hidden />
-      <span className="lp-pill"><i /> Operação do cliente, de ponta a ponta</span>
-      <h1>Da ideia ao<br /><em>resultado.</em></h1>
-      <p>Criativo, campanha, site em tempo real e relatório na mesma plataforma. Tudo conectado, sem abrir dez painéis.</p>
+      <span className="lp-pill"><i /> Funil, formulário e acompanhamento</span>
+      <h1>Do clique<br />ao <em>cliente.</em></h1>
+      <p>Anúncio, formulário próprio, funil e relatório na mesma plataforma. Cada lead com origem, campanha e custo, em tempo real.</p>
       <div className="lp-hero__cta"><Link to="/auth" className="lp-btn lp-btn--lime">Começar agora <ArrowRight /></Link><a href="#como" className="lp-btn lp-btn--ghost">Ver em ação</a></div>
     </header>
 
     <div id="como"><Story /></div>
 
     <section className="lp-big">
-      <h2>Tudo conectado.<br /><em>Tudo ao vivo.</em></h2>
-      <p>O que o anúncio gasta, quem chegou ao site, de qual estado e campanha, quem virou conversa. Uma visão só, atualizando enquanto acontece.</p>
+      <h2>Cada lead<br /><em>com história.</em></h2>
+      <p>Quanto o anúncio gastou, quem preencheu o formulário, de qual estado e campanha veio, em que etapa do funil está. Uma visão só, atualizando enquanto acontece.</p>
       <div className="lp-stats">
         <div><b>Ao vivo</b><span>visitas por estado e campanha</span></div>
-        <div><b>R$</b><span>valor gasto ligado ao contato</span></div>
-        <div><b>1 tela</b><span>da ideia ao relatório</span></div>
+        <div><b>R$</b><span>custo de cada lead</span></div>
+        <div><b>1 funil</b><span>do formulário ao fechado</span></div>
       </div>
     </section>
 
