@@ -143,7 +143,7 @@ const Home: React.FC = () => {
 
         <HomeCharts
           site={site.status === 'ready' ? site.data : undefined}
-          adDays={adsData?.reports.find((r) => r.report)?.report?.days.map((d) => ({ day: d.day, spend: d.metrics.spend }))}
+          adDays={adsData?.reports.find((r) => r.report)?.report?.days?.map((d) => ({ day: d.day, spend: d.metrics.spend }))}
           stages={summary?.byStage}
           currency={adsData?.reports.find((r) => r.report)?.report?.currency}
         />

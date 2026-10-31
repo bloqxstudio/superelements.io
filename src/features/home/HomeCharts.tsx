@@ -6,7 +6,7 @@ import type { SiteReport } from '@/features/crm/site'
 export const PALETTE = ['#2D83EE', '#8B5CF6', '#34C759', '#FF9F0A', '#FF375F', '#14B8A6', '#64748B']
 
 const Card: React.FC<{ title: string; sub?: string; children: React.ReactNode; className?: string }> = ({ title, sub, children, className }) => (
-  <div className={`rounded-2xl border border-black/5 bg-white/70 p-4 ${className ?? ''}`}>
+  <div className={`rounded-[14px] bg-[#f7f7f9] p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.04)] ${className ?? ''}`}>
     <p className="text-[13px] font-semibold text-gray-900">{title}</p>
     {sub && <p className="mb-3 text-xs text-gray-500">{sub}</p>}
     {children}
@@ -73,24 +73,25 @@ const Bars: React.FC<{ items: { label: string; value: number }[]; offset?: numbe
   )
 }
 
-export const HomeCharts: React.FC<{
+const HomeChartsInner: React.FC<{
   site?: SiteReport
   adDays?: { day: string; spend: number }[]
   stages?: { label: string; count: number }[]
   currency?: string
 }> = ({ site, adDays, stages, currency = 'BRL' }) => {
-  const dl = (d: string) => d.split('-').reverse().slice(0, 2).join('/')
+  const dl = (d: unknown) => String(d ?? '').slice(0, 10).split('-').reverse().slice(0, 2).join('/')
   const money = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency, maximumFractionDigits: 0 })
-  const hasSite = !!site && site.days.length > 1
-  const hasAds = !!adDays && adDays.length > 1
-  const channels = (site?.channels ?? []).slice(0, 6).map((c) => ({ label: c.channel, value: c.sessions })).filter((c) => c.value > 0)
-  const states = (site?.regions ?? []).filter((r) => r.country === 'BR').slice(0, 6).map((r) => ({ label: r.name ?? r.region, value: r.sessions }))
-  const funnel = (stages ?? []).filter((s) => s.count > 0).map((s) => ({ label: s.label, value: s.count }))
+  const siteDays = Array.isArray(site?.days) ? site!.days : []
+  const hasSite = siteDays.length > 1
+  const hasAds = Array.isArray(adDays) && adDays.length > 1
+  const channels = (Array.isArray(site?.channels) ? site!.channels : []).slice(0, 6).map((c) => ({ label: c.channel, value: c.sessions })).filter((c) => c.value > 0)
+  const states = (Array.isArray(site?.regions) ? site!.regions : []).filter((r) => r.country === 'BR').slice(0, 6).map((r) => ({ label: r.name ?? r.region, value: r.sessions }))
+  const funnel = (Array.isArray(stages) ? stages : []).filter((s) => s.count > 0).map((s) => ({ label: s.label, value: s.count }))
   if (!hasSite && !hasAds && !funnel.length) return null
   return (
     <Block id="graficos" title="Gráficos" hint="Visitas, gasto, origem e funil do período, lidos das mesmas fontes do resumo.">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {hasSite && <Card title="Visitas por dia" sub="Linha tracejada: chegaram a um contato"><Area values={site!.days.map((d) => d.sessions)} labels={site!.days.map((d) => dl(d.day))} color={PALETTE[0]} second={{ values: site!.days.map((d) => d.converted), color: PALETTE[2] }} /></Card>}
+        {hasSite && <Card title="Visitas por dia" sub="Linha tracejada: chegaram a um contato"><Area values={siteDays.map((d) => Number(d.sessions) || 0)} labels={siteDays.map((d) => dl(d.day))} color={PALETTE[0]} second={{ values: siteDays.map((d) => Number(d.converted) || 0), color: PALETTE[2] }} /></Card>}
         {hasAds && <Card title="Valor usado por dia" sub="Meta Ads"><Area values={adDays!.map((d) => d.spend)} labels={adDays!.map((d) => dl(d.day))} color={PALETTE[3]} fmt={money} /></Card>}
         {channels.length > 0 && <Card title="De onde vêm as visitas" sub="Por origem"><Donut items={channels} /></Card>}
         {states.length > 0 && <Card title="Visitas por estado"><Bars items={states} /></Card>}
@@ -99,3 +100,12 @@ export const HomeCharts: React.FC<{
     </Block>
   )
 }
+
+class Boundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  render() { return this.state.failed ? null : this.props.children }
+}
+
+/** Um gráfico com dado inesperado nunca derruba o Início. */
+export const HomeCharts: React.FC<React.ComponentProps<typeof HomeChartsInner>> = (props) => <Boundary><HomeChartsInner {...props} /></Boundary>
