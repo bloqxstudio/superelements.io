@@ -16,6 +16,9 @@ import { cn } from '@/lib/utils'
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
+const TINTS: [string, string][] = [['#2D83EE', '#8B5CF6'], ['#34C759', '#14B8A6'], ['#FF9F0A', '#FF375F'], ['#8B5CF6', '#FF375F'], ['#14B8A6', '#2D83EE']]
+const tint = (id: string) => TINTS[[...id].reduce((n, c) => n + c.charCodeAt(0), 0) % TINTS.length]
+
 const FormsPage: React.FC = () => {
   const { team } = useCrm()
   const navigate = useNavigate()
@@ -80,10 +83,13 @@ const FormsPage: React.FC = () => {
                   type="button"
                   disabled={!!busy}
                   onClick={() => void create(t.name, t.definition(), { ...SETTINGS_DEFAULT, ...t.settings }, t.id)}
-                  className="rounded-xl bg-white p-4 text-left shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] transition hover:shadow-[0_0_0_1px_rgb(124_58_237/0.4)] disabled:opacity-60"
+                  className="group rounded-2xl bg-white p-4 text-left shadow-[0_0_0_1px_rgb(0_0_0/0.05),0_1px_2px_rgb(0_0_0/0.04),0_10px_28px_-14px_rgb(0_0_0/0.14)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_16px_36px_-14px_rgb(0_0_0/0.22)] active:scale-[0.97] disabled:opacity-60"
                 >
+                  <span className="mb-3 flex h-24 flex-col justify-end gap-1.5 rounded-xl p-3" style={{ background: `linear-gradient(150deg, ${tint(t.id)[0]}, ${tint(t.id)[1]})` }} aria-hidden>
+                    <i className="block h-2 w-2/3 rounded-full bg-white/80" /><i className="block h-2 w-1/2 rounded-full bg-white/55" /><i className="block h-4 w-1/3 rounded-md bg-white/90" />
+                  </span>
                   <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                    {busy === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4 text-violet-600" />} {t.name}
+                    {busy === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4 text-gray-500" />} {t.name}
                   </span>
                   <span className="mt-1 block text-xs text-gray-500">{t.text}</span>
                 </button>
@@ -92,7 +98,7 @@ const FormsPage: React.FC = () => {
                 type="button"
                 disabled={!!busy}
                 onClick={() => void create('Novo formulário', blankDefinition('form'))}
-                className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 p-4 text-sm font-medium text-gray-600 hover:border-violet-400 hover:text-violet-700 disabled:opacity-60"
+                className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 p-4 text-sm font-medium text-gray-600 hover:border-gray-400 hover:text-gray-900 disabled:opacity-60"
               >
                 <Plus className="h-4 w-4" /> Em branco
               </button>
@@ -100,7 +106,7 @@ const FormsPage: React.FC = () => {
                 type="button"
                 disabled={!!busy}
                 onClick={() => void create('Novo quiz', blankDefinition('quiz'), { ...SETTINGS_DEFAULT, autoAdvance: true })}
-                className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 p-4 text-sm font-medium text-gray-600 hover:border-violet-400 hover:text-violet-700 disabled:opacity-60"
+                className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 p-4 text-sm font-medium text-gray-600 hover:border-gray-400 hover:text-gray-900 disabled:opacity-60"
               >
                 <Plus className="h-4 w-4" /> Quiz em branco
               </button>

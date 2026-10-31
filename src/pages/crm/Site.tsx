@@ -93,6 +93,8 @@ const bounceRate = (t: SiteTotals) => shareOf(t.bounces, t.sessions)
 const contactRate = (t: SiteTotals) => shareOf(t.converted, t.sessions)
 
 /** Uma linha por item, com barra; cada linha pode abrir as visitas daquele item. */
+const RANK_COLORS = ['#2D83EE', '#8B5CF6', '#34C759', '#FF9F0A', '#FF375F', '#14B8A6', '#64748B']
+
 const RankList: React.FC<{ rows: { key: string; label: string; value: number; note?: string; onClick?: () => void }[]; format?: (n: number) => string; empty: string }> = ({
   rows,
   format = compact,
@@ -101,8 +103,8 @@ const RankList: React.FC<{ rows: { key: string; label: string; value: number; no
   if (!rows.length) return <p className="text-sm text-gray-500">{empty}</p>
   const max = Math.max(...rows.map((r) => r.value), 1)
   return (
-    <ul className="grid gap-0.5">
-      {rows.map((row) => {
+    <ul className="grid grid-cols-[minmax(0,1fr)] gap-0.5">
+      {rows.map((row, i) => {
         const body = (
           <>
             <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
@@ -112,13 +114,13 @@ const RankList: React.FC<{ rows: { key: string; label: string; value: number; no
               </span>
               <span className="shrink-0 font-medium tabular-nums text-gray-900">{format(row.value)}</span>
             </div>
-            <div className="h-2 rounded-r bg-gray-100" aria-hidden>
-              <div className="h-2 rounded-r bg-gray-900" style={{ width: `${Math.max(2, (row.value / max) * 100)}%` }} />
+            <div className="h-2 overflow-hidden rounded-full bg-black/5" aria-hidden>
+              <div className="h-2 rounded-full" style={{ width: `${Math.max(2, (row.value / max) * 100)}%`, background: `linear-gradient(90deg, ${RANK_COLORS[i % RANK_COLORS.length]}, ${RANK_COLORS[i % RANK_COLORS.length]}aa)` }} />
             </div>
           </>
         )
         return (
-          <li key={row.key}>
+          <li key={row.key} className="min-w-0">
             {row.onClick ? (
               <button type="button" onClick={row.onClick} className="-mx-2 block w-[calc(100%+16px)] rounded-lg px-2 py-1 text-left transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {body}
