@@ -1,7 +1,7 @@
 import { useJobs } from '@/features/operations/jobs'
 import React, { useEffect } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { Bot, Building2, Building, FolderKanban, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
+import { Bot, Building2, Filter, House, Building, FolderKanban, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { useAuth } from '@/contexts/AuthContext'
 import { AccountSwitcher } from '@/features/crm/AccountSwitcher'
@@ -142,7 +142,7 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   return (
     <>
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-100 px-4">
-        <Link to="/" aria-label="Projetos" className="transition-opacity hover:opacity-80">
+        <Link to={crm ? '/inicio' : '/'} aria-label={crm ? 'Início' : 'Projetos'} className="transition-opacity hover:opacity-80">
           <Logo />
         </Link>
         {onClose && (
@@ -157,6 +157,11 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       </div>
 
       <nav aria-label="Navegação" className="flex-1 overflow-y-auto px-3 py-4">
+        {crm && (
+          <div className="mb-5">
+            <Item to="/inicio" icon={House} label="Início" />
+          </div>
+        )}
         {producao && (
           <Section title="Produção">
             {on('projetos') && <Item to="/" end icon={FolderKanban} label="Projetos" />}
@@ -172,6 +177,7 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
             {on('whatsapp') && <WhatsAppItem />}
             {on('whatsapp') && <Item to="/crm/fluxos" icon={Workflow} label="Fluxos" />}
             {on('crm') && <Item to="/crm/formularios" icon={ListChecks} label="Formulários" />}
+            {on('crm') && <Item to="/crm/funis" icon={Filter} label="Funis" />}
             {on('crm') && <Item to="/crm/clientes" icon={Building2} label="Clientes" />}
             {on('crm') && <Item to="/crm/social" icon={Send} label="Social" />}
             {on('instagram') && <InstagramItem />}

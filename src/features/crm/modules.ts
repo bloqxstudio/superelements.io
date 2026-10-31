@@ -63,7 +63,7 @@ export function moduleOfPath(pathname: string): ModuleId | undefined {
   if (p.startsWith('/crm/whatsapp') || p.startsWith('/crm/fluxos')) return 'whatsapp'
   if (p.startsWith('/crm/instagram') || p.startsWith('/crm/anuncios')) return 'instagram'
   if (p.startsWith('/crm/site')) return 'site'
-  if (p === '/crm' || p.startsWith('/crm/clientes') || p.startsWith('/crm/social') || p.startsWith('/crm/diagnostico') || p.startsWith('/prospeccao')) return 'crm'
+  if (p === '/crm' || p.startsWith('/crm/clientes') || p.startsWith('/crm/social') || p.startsWith('/crm/diagnostico') || p.startsWith('/crm/funis') || p.startsWith('/prospeccao')) return 'crm'
   return undefined
 }
 

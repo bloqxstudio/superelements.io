@@ -40,6 +40,8 @@ import CrmWhatsApp from "@/pages/crm/WhatsApp";
 import CrmFlows from "@/pages/crm/Flows";
 import CrmForms from "@/pages/crm/Forms";
 import CrmFormEditor from "@/pages/crm/FormEditor";
+import CrmFunnels from "@/pages/crm/Funnels";
+import CrmFunnelDetail from "@/pages/crm/FunnelDetail";
 import InstagramCallback from "@/pages/InstagramCallback";
 import AdsCallback from "@/pages/AdsCallback";
 import { CrmGate } from "@/features/crm/CrmGate";
@@ -151,6 +153,8 @@ function App() {
                 <Route path="crm/fluxos" element={<CrmGate><CrmFlows /></CrmGate>} />
                 <Route path="crm/formularios" element={<CrmGate><CrmForms /></CrmGate>} />
                 <Route path="crm/formularios/:id" element={<CrmGate><CrmFormEditor /></CrmGate>} />
+                <Route path="crm/funis" element={<CrmGate><CrmFunnels /></CrmGate>} />
+                <Route path="crm/funis/:id" element={<CrmGate><CrmFunnelDetail /></CrmGate>} />
                 {/* Buscas da equipe na nuvem; a varredura pesada continua no app local. */}
                 <Route path="prospeccao" element={<CrmGate><Prospects /></CrmGate>} />
               </Route>
