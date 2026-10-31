@@ -67,16 +67,42 @@ interface AuthorizationRequest {
   mode: PendingConnection['mode']
   /** Sem retorno, o WordPress mostra a senha na tela para ser copiada. */
   returnHere: boolean
+  /**
+   * Volta pelo app publicado (https) em vez desta origem: serve quando o app roda em http (localhost) e o site
+   * exige https. O pedido vai no próprio endereço (projeto e site, sem segredo) e quem espera confere a conexão salva.
+   */
+  remote?: boolean
+}
+
+const REMOTE_ORIGIN = 'https://app.avencestudio.com'
+
+const toBase64Url = (text: string) => btoa(unescape(encodeURIComponent(text))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+const fromBase64Url = (text: string) => decodeURIComponent(escape(atob(text.replace(/-/g, '+').replace(/_/g, '/'))))
+
+/** Pedido que veio dentro do endereço de retorno (`?p=`), de um app que roda em outra origem. */
+export function remotePending(encoded: string | null): PendingConnection | undefined {
+  if (!encoded) return undefined
+  try {
+    const data = JSON.parse(fromBase64Url(encoded)) as { projectId?: string; site?: WordPressSite }
+    if (!data.projectId || !data.site?.restRoot || !data.site.siteUrl) return undefined
+    return { state: 'remote', projectId: data.projectId, site: data.site, mode: 'popup', createdAt: Date.now() }
+  } catch {
+    return undefined
+  }
 }
 
 /** Endereço da tela de aprovação no WordPress; com retorno, guarda o pedido para a volta. */
-export function authorizationUrl({ projectId, projectName, site, mode, returnHere }: AuthorizationRequest): string {
+export function authorizationUrl({ projectId, projectName, site, mode, returnHere, remote }: AuthorizationRequest): string {
   if (!site.authorizeUrl) throw new WordPressError('Este site não aceita senhas de aplicação.')
   const url = new URL(site.authorizeUrl)
   url.searchParams.set('app_name', `Superelements · ${projectName}`)
   url.searchParams.set('app_id', APP_ID)
 
-  if (returnHere) {
+  if (remote) {
+    const back = `${REMOTE_ORIGIN}${CALLBACK_PATH}?p=${toBase64Url(JSON.stringify({ projectId, site }))}`
+    url.searchParams.set('success_url', back)
+    url.searchParams.set('reject_url', `${back}&success=false`)
+  } else if (returnHere) {
     const state = crypto.randomUUID()
     const all = Object.fromEntries(Object.entries(readPending()).filter(([, p]) => alive(p)))
     all[state] = { state, projectId, site, mode, createdAt: Date.now() }

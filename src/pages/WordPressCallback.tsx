@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { CircleAlert, CircleCheck, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { announce, CALLBACK_PATH, completeConnection, takePending, type PendingConnection } from '@/features/wordpress/connect'
+import { announce, CALLBACK_PATH, completeConnection, remotePending, takePending, type PendingConnection } from '@/features/wordpress/connect'
 
 type Outcome =
   | { kind: 'connected'; pending: PendingConnection; siteName: string }
@@ -19,7 +19,7 @@ function handleReturn(): Promise<Outcome> {
   const params = new URLSearchParams(window.location.search)
   window.history.replaceState(null, '', CALLBACK_PATH)
 
-  const pending = takePending(params.get('state') ?? '')
+  const pending = takePending(params.get('state') ?? '') ?? remotePending(params.get('p'))
   if (!pending) {
     return Promise.resolve({
       kind: 'error',

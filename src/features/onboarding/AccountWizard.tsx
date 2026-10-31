@@ -180,9 +180,11 @@ export const AccountWizard: React.FC = () => {
         return void (await finish(project.id))
       }
       const returnHere = canReturnHere(wordpress.site)
-      setManual(!returnHere)
-      mark('connect', 'doing', returnHere ? 'Aprove o acesso na janela do WordPress.' : 'Aprove na janela do WordPress, copie a senha que ele mostrar e cole abaixo.')
-      const href = authorizationUrl({ projectId: project.id, projectName: form.name.trim(), site: wordpress.site, mode: 'popup', returnHere })
+      // App em http e site em https: o WordPress volta pelo app publicado e esta tela espera a conexão aparecer
+      const remote = !returnHere && wordpress.site.siteUrl.startsWith('https:')
+      setManual(!returnHere && !remote)
+      mark('connect', 'doing', returnHere || remote ? 'Aprove o acesso na janela do WordPress. Esta tela continua sozinha.' : 'Aprove na janela do WordPress, copie a senha que ele mostrar e cole abaixo.')
+      const href = authorizationUrl({ projectId: project.id, projectName: form.name.trim(), site: wordpress.site, mode: 'popup', returnHere, remote })
       approval.current = { href }
       if (popup) {
         popup.location.href = href
@@ -214,6 +216,20 @@ export const AccountWizard: React.FC = () => {
       }
     })
   }, [projectId, wordpress])
+
+  // A conexão pode ser salva por outra origem (retorno pelo app publicado): confere a conta enquanto espera
+  useEffect(() => {
+    if (!projectId || !wordpress || status.connect !== 'doing' || connection) return
+    const timer = setInterval(() => {
+      void loadWordPressConnection(projectId).then((saved) => {
+        if (!saved) return
+        setConnection(saved)
+        mark('connect', 'done', saved.site.name)
+        mark('plugin', 'doing')
+      })
+    }, 2500)
+    return () => clearInterval(timer)
+  }, [projectId, wordpress, status.connect, connection])
 
   const savePasted = async (event: React.FormEvent) => {
     event.preventDefault()
