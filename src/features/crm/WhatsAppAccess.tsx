@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarClock, Check, Loader2, MessageCircleQuestion, Pencil, Plus, ShieldCheck } from 'lucide-react'
+import { CalendarClock, Check, Loader2, MessageCircleQuestion, Pencil, Plus, ShieldCheck, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -14,12 +14,15 @@ import {
   WEEKDAYS,
   cleanPhone,
   listContacts,
+  listGroups,
+  setGroupLeads,
   listQuestions,
   removeContact,
   saveContact,
   type AccessTopic,
   type ClientContact,
   type ClientQuestion,
+  type WhatsAppGroup,
   type ReportKind,
 } from '@/features/crm/clientAccess'
 import { formatPhone } from '@/features/crm/whatsapp'
@@ -339,15 +342,17 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
   const admin = profile?.role === 'admin'
   const [contacts, setContacts] = useState<ClientContact[]>()
   const [questions, setQuestions] = useState<ClientQuestion[]>([])
+  const [groups, setGroups] = useState<WhatsAppGroup[]>([])
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([])
   const [missing, setMissing] = useState(false)
   const [dialog, setDialog] = useState<{ open: boolean; editing?: ClientContact }>({ open: false })
 
   const load = useCallback(async () => {
     try {
-      const [list, log] = await Promise.all([listContacts(teamId), listQuestions(teamId)])
+      const [list, log, groupList] = await Promise.all([listContacts(teamId), listQuestions(teamId), listGroups(teamId).catch(() => [])])
       setContacts(list)
       setQuestions(log)
+      setGroups(groupList)
       setMissing(false)
     } catch (error) {
       if (message(error) === NO_TABLE) setMissing(true)
@@ -374,6 +379,16 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
       await load()
     } catch (error) {
       toast.error('Não foi possível mudar', { description: message(error) })
+    }
+  }
+
+  const changeGroup = async (group: WhatsAppGroup, accountId: string) => {
+    try {
+      await setGroupLeads(teamId, group.jid, accountId || undefined)
+      await load()
+      toast.success(accountId ? 'Os leads novos vão para este grupo' : 'Grupo fora dos avisos de lead')
+    } catch (error) {
+      toast.error('Não foi possível mudar o grupo', { description: message(error) })
     }
   }
 
@@ -460,6 +475,47 @@ export const WhatsAppAccess: React.FC<{ teamId: string }> = ({ teamId }) => {
             )
           })}
         </ul>
+      )}
+
+      {groups.length > 0 && (
+        <div className="mt-6 border-t border-gray-100 pt-4">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            <Users className="h-3.5 w-3.5" aria-hidden />
+            Grupos
+          </p>
+          <ul className="mt-2 grid gap-2">
+            {groups.map((g) => (
+              <li key={g.jid} className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-500">
+                  <Users className="h-4 w-4" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-gray-900">{g.name || 'Grupo sem nome'}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">{g.size} participantes</p>
+                </div>
+                {admin ? (
+                  <select
+                    className={cn(FIELD, 'h-9 w-full sm:w-64')}
+                    value={g.leadsAccountId ?? ''}
+                    onChange={(e) => void changeGroup(g, e.target.value)}
+                    aria-label={`Leads novos no grupo ${g.name || 'sem nome'}`}
+                  >
+                    <option value="">Sem avisos de lead</option>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        Leads de {a.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className={cn('rounded-md px-1.5 py-0.5 text-[11px] font-medium', g.leadsAccountId ? 'bg-violet-50 text-violet-800 ring-1 ring-inset ring-violet-600/15' : 'text-gray-400')}>
+                    {g.leadsAccountId ? `Leads de ${accountName(g.leadsAccountId)}` : 'Sem avisos de lead'}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {questions.length > 0 && (

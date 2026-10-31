@@ -466,12 +466,44 @@ function serve() {
     if (alerting) return
     alerting = true
     const open = [...sessions.entries()].filter(([, session]) => session.open && !session.leaving).map(([teamId]) => teamId)
-    runLeadAlerts(db, open, async (teamId, jid, text) => !(await db.rpc('crm_whatsapp_enqueue_reply', { p_team: teamId, p_jid: jid, p_text: text })).error)
+    runLeadAlerts(
+      db,
+      open,
+      async (teamId, jid, text) => !(await db.rpc('crm_whatsapp_enqueue_reply', { p_team: teamId, p_jid: jid, p_text: text })).error,
+      async (teamId, jid, text) => {
+        try {
+          await sessions.get(teamId)?.send(jid, text)
+          return true
+        } catch (error) {
+          console.error(`[${teamId.slice(0, 8)}] grupo: ${error instanceof Error ? error.message : String(error)}`)
+          return false
+        }
+      },
+    )
       .catch((error) => console.error('Falha nos avisos de lead:', error))
       .finally(() => {
         alerting = false
       })
   }, 10_000)
+
+  // Lista dos grupos de cada número ligado (o admin escolhe qual recebe os leads de cada conta)
+  const syncGroups = async () => {
+    for (const [teamId, session] of sessions) {
+      if (!session.open || session.leaving) continue
+      try {
+        const groups = await session.groups()
+        if (!groups.length) continue
+        const at = new Date().toISOString()
+        // upsert sem a coluna leads_account_id: a escolha do admin é preservada
+        const { error } = await db.from('crm_whatsapp_groups').upsert(groups.map((g) => ({ team_id: teamId, jid: g.jid, name: g.name, size: g.size, seen_at: at })), { onConflict: 'team_id,jid' })
+        if (error && error.code !== '42P01' && error.code !== 'PGRST205') console.error('Não gravou os grupos:', error.message)
+      } catch (error) {
+        console.error('Não li os grupos:', error instanceof Error ? error.message : String(error))
+      }
+    }
+  }
+  setTimeout(() => void syncGroups(), 30_000)
+  setInterval(() => void syncGroups(), 30 * 60_000)
 
   // Sinal de vida na linha de cada número ligado: a tela avisa quando o serviço some
   setInterval(async () => {

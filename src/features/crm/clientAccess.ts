@@ -95,3 +95,27 @@ export async function removeContact(teamId: string, phone: string) {
   const { error } = await db.from('crm_whatsapp_client_contacts').delete().eq('team_id', teamId).eq('phone', phone)
   if (error) throw fail(error)
 }
+
+export interface WhatsAppGroup {
+  jid: string
+  name: string
+  size: number
+  /** A conta cujos leads novos chegam neste grupo (vazio = nenhuma) */
+  leadsAccountId?: string
+}
+
+/** Os grupos em que o número da equipe está (o serviço atualiza a lista a cada 30 minutos) */
+export async function listGroups(teamId: string): Promise<WhatsAppGroup[]> {
+  const { data, error } = await db.from('crm_whatsapp_groups').select('jid, name, size, leads_account_id').eq('team_id', teamId).order('name')
+  if (error) {
+    if (error.code === '42P01' || error.code === 'PGRST205') return []
+    throw new Error(error.message)
+  }
+  return (data ?? []).map((g) => ({ jid: g.jid as string, name: (g.name as string) ?? '', size: (g.size as number) ?? 0, leadsAccountId: (g.leads_account_id as string | null) ?? undefined }))
+}
+
+/** Só o admin da plataforma muda; vazio tira o grupo dos avisos de lead */
+export async function setGroupLeads(teamId: string, jid: string, accountId: string | undefined) {
+  const { error } = await db.from('crm_whatsapp_groups').update({ leads_account_id: accountId ?? null }).eq('team_id', teamId).eq('jid', jid)
+  if (error) throw new Error(error.message)
+}
