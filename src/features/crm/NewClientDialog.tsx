@@ -76,7 +76,7 @@ export const NewClientDialog: React.FC<{
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] max-w-lg overflow-y-auto">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Novo cliente</DialogTitle>
           <DialogDescription>Uma empresa ou pessoa com quem a equipe conversa. Dá para completar a ficha depois.</DialogDescription>

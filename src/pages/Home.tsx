@@ -189,7 +189,7 @@ const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { cur
 
   // A frase do período usa só o que foi lido; o que falta é dito, não preenchido
   const parts: string[] = []
-  if (spend.length && days !== 1) parts.push(`Investimos ${spend.map((s) => adMoney(s.spend, s.currency)).join(' + ')} em anúncios da Meta`)
+  if (spend.length) parts.push(`Investimos ${spend.map((s) => adMoney(s.spend, s.currency)).join(' + ')} em anúncios da Meta`)
   if (siteData) parts.push(`o site recebeu ${siteData.totals.sessions.toLocaleString('pt-BR')} visitas e ${plural(siteData.totals.converted, 'chegou', 'chegaram')} a um contato`)
   if (summary) parts.push(`${plural(summary.created, 'oportunidade entrou', 'oportunidades entraram')} no funil e ${plural(summary.won, 'foi ganha', 'foram ganhas')}`)
   const sentence = parts.length ? `${days === 1 ? 'Hoje' : `Nos últimos ${days} dias`}: ${parts.join('; ')}.` : undefined
@@ -205,7 +205,9 @@ const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { cur
           value={ads.status === 'loading' ? <Skeleton className="h-7 w-28" /> : spend.length ? spend.map((s) => adMoney(s.spend, s.currency, true)).join(' + ') : '—'}
           note={
             spend.length
-              ? `${days === 1 ? 'A Meta só entrega até ontem: últimos 7 dias. ' : ''}Só Meta Ads${adsWindow ? `, ${adsWindow} (a Meta fecha o período no dia anterior)` : ''}. Gasto de outras plataformas não entra.`
+              ? days === 1
+                ? 'Só Meta Ads, gasto de hoje até a última leitura (a Meta pode levar alguns minutos para contar). Gasto de outras plataformas não entra.'
+                : `Só Meta Ads${adsWindow ? `, ${adsWindow} (a Meta fecha o período no dia anterior)` : ''}. Gasto de outras plataformas não entra.`
               : ads.status === 'none'
                 ? 'Nenhuma conta de anúncios conectada: o valor não é zero, é desconhecido.'
                 : ads.status === 'off'

@@ -400,7 +400,7 @@ export const WordPressImportDialog: React.FC = () => {
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !progress && close()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle>Importar do WordPress</DialogTitle>
           <DialogDescription>

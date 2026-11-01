@@ -89,6 +89,8 @@ import {
  */
 
 const STALE = 30 * 60_000
+// Hoje muda ao longo do dia: relê com mais frequência
+const STALE_TODAY = 5 * 60_000
 const DAY = 86_400_000
 
 const ago = (at: number | undefined) => {
@@ -601,7 +603,7 @@ const Campaigns: React.FC<{ view: AdView; account: AdAccount; currency: string; 
     >
       {list.length ? (
         <div className="-mx-1 overflow-x-auto px-1">
-          <table className="w-full min-w-[680px] text-left">
+          <table className="se-table w-full min-w-[680px] text-left">
             <thead>
               <tr className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
                 <th className="pb-2 pr-3 font-medium">Campanha</th>
@@ -709,7 +711,7 @@ const AdPreviewDialog: React.FC<{ ad: AdCreative; account: AdAccount; currency: 
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto p-0">
+      <DialogContent size="xl" className="p-0">
         <div className="grid md:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
           <div className="min-w-0 bg-zinc-100 p-4">
             <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Formato da prévia">
@@ -799,7 +801,7 @@ const Ads: React.FC<{ view: AdView; account: AdAccount; currency: string }> = ({
     <Surface title="Anúncios" action={<span className="text-xs text-gray-400">Clique para ver o criativo</span>}>
       {view.ads.length ? (
         <div className="-mx-1 overflow-x-auto px-1">
-          <table className="w-full min-w-[560px] text-left">
+          <table className="se-table w-full min-w-[560px] text-left">
             <thead>
               <tr className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
                 <th className="pb-2 pr-3 font-medium">Anúncio</th>
@@ -1040,7 +1042,7 @@ const AccountArea: React.FC<{
         setReport(saved)
         const key = `${account.id}:${preset}`
         if (account.syncError === 'token' || autoRefreshed.current.has(key)) return
-        if (saved && Date.now() - saved.fetchedAt < STALE) return
+        if (saved && Date.now() - saved.fetchedAt < (preset === 'today' ? STALE_TODAY : STALE)) return
         autoRefreshed.current.add(key)
         void refresh(true)
       })

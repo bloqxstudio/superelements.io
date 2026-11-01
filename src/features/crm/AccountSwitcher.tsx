@@ -22,7 +22,7 @@ const Initial: React.FC<{ name: string; paused?: boolean }> = ({ name, paused })
  * `inline`: dentro do menu do celular (um diálogo modal), uma lista que abre ali mesmo. O dropdown
  * abre num portal fora do diálogo, que bloqueia toque e rolagem fora dele, e a troca de conta não funcionava.
  */
-export const AccountSwitcher: React.FC<{ inline?: boolean; onPicked?: () => void }> = ({ inline, onPicked }) => {
+export const AccountSwitcher: React.FC<{ inline?: boolean; compact?: boolean; onPicked?: () => void }> = ({ inline, compact, onPicked }) => {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const { status, teams, team, select } = useCrm()
@@ -32,6 +32,7 @@ export const AccountSwitcher: React.FC<{ inline?: boolean; onPicked?: () => void
 
   // Sem nenhuma conta ainda (o admin da plataforma cria a primeira)
   if (!team) {
+    if (compact) return null
     return (
       <>
         <button type="button" onClick={() => navigate('/contas/nova')} className="flex h-10 w-full items-center gap-2 rounded-lg border border-dashed border-gray-300 px-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
@@ -44,9 +45,9 @@ export const AccountSwitcher: React.FC<{ inline?: boolean; onPicked?: () => void
   // Uma conta e sem poder criar outra: só o nome, sem menu
   if (teams.length < 2 && !platformAdmin) {
     return (
-      <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5">
+      <div className={cn('flex items-center gap-2.5 rounded-lg py-1.5', compact ? 'justify-center px-0' : 'px-2.5')} title={compact ? team.name : undefined}>
         <Initial name={team.name} paused={team.status === 'pausada'} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">{team.name}</span>
+        {!compact && <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">{team.name}</span>}
       </div>
     )
   }
@@ -60,18 +61,25 @@ export const AccountSwitcher: React.FC<{ inline?: boolean; onPicked?: () => void
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="se-account-switcher flex h-11 w-full items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-2 text-left transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-gray-50"
+            title={compact ? `${team.name}: trocar de conta` : undefined}
+            className={cn(
+              'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              // Recolhido: só a inicial, do tamanho de um item do menu, sem a caixa
+              compact
+                ? 'mx-auto flex h-10 w-10 items-center justify-center rounded-[10px] hover:bg-[rgb(27_34_49/.045)] data-[state=open]:bg-[rgb(27_34_49/.06)]'
+                : 'se-account-switcher flex h-11 w-full items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-2 text-left hover:bg-gray-50 data-[state=open]:bg-gray-50'
+            )}
             aria-label={`Conta aberta: ${team.name}. Trocar de conta`}
           >
             <Initial name={team.name} paused={team.status === 'pausada'} />
-            <span className="min-w-0 flex-1">
+            {!compact && <><span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium leading-tight text-gray-900">{team.name}</span>
               <span className="block truncate text-[11px] leading-tight text-gray-500">{team.status === 'pausada' ? 'Conta pausada' : team.isHome ? 'Sua empresa' : 'Conta de cliente'}</span>
             </span>
-            <ChevronsUpDown className="h-4 w-4 shrink-0 text-gray-400" aria-hidden />
+            <ChevronsUpDown className="h-4 w-4 shrink-0 text-gray-400" aria-hidden /></>}
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuContent align="start" side={compact ? 'right' : 'bottom'} className="w-64">
           <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Contas</DropdownMenuLabel>
           {teams.map((t) => (
             <DropdownMenuItem key={t.id} onSelect={() => void select(t.id)} className="gap-2.5">

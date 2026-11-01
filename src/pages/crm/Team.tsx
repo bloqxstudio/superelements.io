@@ -19,7 +19,7 @@ import {
 } from '@/features/crm/teams'
 import { ROLE_HINT, ROLE_LABEL, canManage, type TeamInvite, type TeamPerson, type TeamRole } from '@/features/crm/types'
 import { AutoField, FIELD, Page, PageHeader, Surface, dayLabel, plural } from '@/features/crm/ui'
-import { personName } from '@/features/projects/access'
+import { PersonAvatar } from '@/features/profile/PersonAvatar'
 import { cn } from '@/lib/utils'
 
 /**
@@ -164,7 +164,7 @@ const Team: React.FC = () => {
         return
       }
       setPeople((prev) => (prev ?? []).filter((p) => p.userId !== person.userId))
-      toast.success(`${personName(person.email)} saiu da equipe`)
+      toast.success(`${person.name} saiu da equipe`)
     } catch (error) {
       toast.error('Não foi possível tirar da equipe', { description: error instanceof Error ? error.message : undefined })
     }
@@ -229,12 +229,10 @@ const Team: React.FC = () => {
                   const owner = person.role === 'owner'
                   return (
                     <li key={person.userId} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-semibold text-gray-700" aria-hidden>
-                        {person.email.charAt(0).toUpperCase()}
-                      </span>
+                      <PersonAvatar name={person.name} url={person.avatarUrl} size={32} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-gray-900">
-                          {personName(person.email)}
+                          {person.name}
                           {self && <span className="font-normal text-gray-500"> (você)</span>}
                         </p>
                         <p className="truncate text-xs text-gray-500">
@@ -243,7 +241,7 @@ const Team: React.FC = () => {
                       </div>
                       {manager && !owner && !self ? (
                         <select
-                          aria-label={`Papel de ${personName(person.email)}`}
+                          aria-label={`Papel de ${person.name}`}
                           value={person.role}
                           onChange={(e) => void changeRole(person, e.target.value as Exclude<TeamRole, 'owner'>)}
                           className={cn(FIELD, 'h-8 w-auto text-xs')}
@@ -260,7 +258,7 @@ const Team: React.FC = () => {
                           size="sm"
                           className="h-8 gap-1 text-gray-500 hover:text-rose-700"
                           onClick={() => void remove(person)}
-                          aria-label={self ? 'Sair da equipe' : `Tirar ${personName(person.email)} da equipe`}
+                          aria-label={self ? 'Sair da equipe' : `Tirar ${person.name} da equipe`}
                         >
                           {self ? <LogOut className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
                           {self ? 'Sair' : 'Tirar'}

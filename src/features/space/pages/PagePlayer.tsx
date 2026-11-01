@@ -286,7 +286,7 @@ export const PagePlayer: React.FC = () => {
         setApprovalOpen(false)
       }}
     >
-      <DialogContent className="flex h-[92vh] w-[95vw] max-w-6xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent size="xl" className="flex h-[min(80dvh,760px)] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0 border-b px-4 py-3 pr-12">
           <div className="flex min-w-0 items-center gap-2">
             <div className="flex items-center gap-0.5" aria-label="Histórico do preview">

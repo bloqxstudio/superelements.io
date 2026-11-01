@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { PhoneCollectionModal } from '@/components/PhoneCollectionModal';
+import { avatarUrlOf, displayName } from '@/features/profile/profile';
 
 export type AppRole = 'free' | 'pro' | 'admin';
 
@@ -10,6 +11,13 @@ export interface UserProfile {
   email: string;
   role: AppRole;
   phone?: string;
+  /** O nome que a pessoa escreveu em /perfil (vazio: sai do e-mail em `name`). */
+  fullName?: string;
+  /** Nome para mostrar: `fullName` ou o tirado do e-mail. */
+  name: string;
+  avatarPath?: string;
+  avatarUrl?: string;
+  createdAt?: string;
 }
 
 interface AuthContextType {
@@ -21,6 +29,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  /** Lê o perfil de novo (depois de mudar nome, foto ou telefone). */
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,11 +42,11 @@ export const useAuth = () => {
 };
 
 async function fetchProfile(userId: string): Promise<UserProfile | null> {
-  let profileData: { id: string; email: string; phone?: string } | null = null;
+  let profileData: { id: string; email: string; phone?: string | null; full_name?: string | null; avatar_path?: string | null; created_at?: string } | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, phone')
+      .select('id, email, phone, full_name, avatar_path, created_at')
       .eq('id', userId)
       .single();
     if (!error) { profileData = data; break; }
@@ -51,7 +61,17 @@ async function fetchProfile(userId: string): Promise<UserProfile | null> {
 
   const { data: roleData } = await supabase.from('user_roles').select('role').eq('user_id', userId).single();
 
-  return { ...profileData, role: (roleData?.role as AppRole) || 'free' };
+  return {
+    id: profileData.id,
+    email: profileData.email,
+    phone: profileData.phone ?? undefined,
+    fullName: profileData.full_name?.trim() || undefined,
+    name: displayName(profileData.full_name, profileData.email),
+    avatarPath: profileData.avatar_path ?? undefined,
+    avatarUrl: avatarUrlOf(profileData.avatar_path),
+    createdAt: profileData.created_at,
+    role: (roleData?.role as AppRole) || 'free',
+  };
 }
 
 /**
@@ -115,6 +135,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
 
+      // Troca de e-mail confirmada ou senha nova: o usuário do login muda
+      if (event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+        return;
+      }
+
       if (event === 'SIGNED_IN') {
         setSession(newSession);
         setUser(newSession?.user ?? null);
@@ -170,6 +197,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const refreshProfile = async () => {
+    const id = user?.id;
+    if (!id) return;
+    const p = await fetchProfile(id);
+    if (p) setProfile(p);
+  };
+
   const handlePhoneModalComplete = async () => {
     setShowPhoneModal(false);
     if (user) {
@@ -179,7 +213,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, signUp, signIn, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, session, profile, loading, signUp, signIn, signInWithGoogle, signOut, refreshProfile }}>
       {children}
       <PhoneCollectionModal open={showPhoneModal} onComplete={handlePhoneModalComplete} userEmail={user?.email || ''} />
     </AuthContext.Provider>

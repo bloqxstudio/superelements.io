@@ -67,7 +67,7 @@ export const LeadHookDialog: React.FC<{ open: boolean; onOpenChange: (open: bool
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] max-w-xl overflow-y-auto">
+      <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle>Receber leads do site</DialogTitle>
           <DialogDescription>Cada envio vira um cartão em "Novo lead", com contato, origem e campanha. Só gestores veem o endereço.</DialogDescription>

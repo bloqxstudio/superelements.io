@@ -47,7 +47,7 @@ export const AiDialog: React.FC<{ open: boolean; onClose: () => void }> = ({ ope
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Gerar posts com IA</DialogTitle>
           <DialogDescription>{fromContent ? 'A IA parte do briefing do plano da empresa, escolhe os modelos e escreve os textos e a legenda.' : 'A IA escolhe os modelos, escreve os textos e a legenda e usa as telas dos cases.'} Você ajusta tudo no editor. Leva cerca de 1 minuto.</DialogDescription>

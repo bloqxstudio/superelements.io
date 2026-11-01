@@ -77,7 +77,7 @@ export const CleanupDialog: React.FC<{ open: boolean; onClose: () => void; items
   const chosen = stuck.filter((o) => picked.has(o.id)).length
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !busy && onClose()}>
-      <DialogContent className="max-h-[85vh] max-w-2xl gap-0 overflow-hidden p-0">
+      <DialogContent size="lg" className="gap-0 overflow-hidden p-0">
         <div className="border-b border-gray-100 p-4">
           <DialogTitle className="text-base">Limpar cartões parados</DialogTitle>
           <p className="mt-1 text-xs text-gray-500">Cartões há muito tempo na mesma etapa. Os que têm projeto no Space ou próximo passo marcado para o futuro vêm desmarcados.</p>

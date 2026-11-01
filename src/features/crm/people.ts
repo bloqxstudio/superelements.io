@@ -1,26 +1,17 @@
 import { useEffect, useState } from 'react'
+import { displayName, initialsOf } from '@/features/profile/profile'
 import { listPeople } from './teams'
 import type { TeamPerson } from './types'
 
 /**
- * As pessoas da equipe como as telas do CRM mostram: o nome sai do e-mail da
- * conta ("igor.nascimento@…" → "Igor Nascimento"), porque a conta não guarda
- * outro nome.
+ * As pessoas da equipe como as telas do CRM mostram: o nome do perfil (/perfil)
+ * ou, quando a pessoa não escreveu um, o que sai do e-mail
+ * ("igor.nascimento@…" → "Igor Nascimento").
  */
 
-export const personLabel = (email: string | undefined) => {
-  const words = (email?.split('@')[0] ?? '').split(/[._\-+]+/).filter(Boolean)
-  if (!words.length) return email || 'Alguém'
-  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-}
+export const personLabel = (email: string | undefined) => displayName(undefined, email)
 
-export const initialsOf = (label: string) =>
-  label
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w.charAt(0).toUpperCase())
-    .join('') || '?'
+export { initialsOf }
 
 /** As pessoas da equipe aberta; undefined enquanto lê. */
 export function useTeamPeople(teamId: string | undefined): TeamPerson[] | undefined {
@@ -45,5 +36,5 @@ export function useTeamPeople(teamId: string | undefined): TeamPerson[] | undefi
 export const nameOf = (people: TeamPerson[] | undefined, userId: string | undefined) => {
   if (!userId) return undefined
   const person = people?.find((p) => p.userId === userId)
-  return person ? personLabel(person.email) : undefined
+  return person?.name
 }

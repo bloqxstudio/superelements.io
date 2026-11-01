@@ -133,7 +133,7 @@ const AccountCard: React.FC<{ account: AccountOverview; current: boolean; onChan
         </div>
       </div>
       <Dialog open={confirming} onOpenChange={setConfirming}>
-        <DialogContent className="!max-w-[min(28rem,calc(100vw-32px))]">
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>{archived ? `Excluir ${account.name} definitivamente?` : `Arquivar ${account.name}?`}</DialogTitle>
             <DialogDescription>

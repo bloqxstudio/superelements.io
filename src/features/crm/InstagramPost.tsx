@@ -171,7 +171,7 @@ export const PostPanel: React.FC<{ media: IgMedia | null; accountId: string; use
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto p-0">
+      <DialogContent size="xl" className="p-0">
         <div className="grid md:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
           <div className="bg-zinc-100 md:min-h-full">
             {format === 'reels' || (format === 'story' && media.type === 'VIDEO') ? (

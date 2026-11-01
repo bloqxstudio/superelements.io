@@ -36,6 +36,8 @@ export interface FormField {
   options?: FieldOption[]
   map?: FieldMap
   showIf?: FieldCondition
+  /** `half` põe o campo ao lado de outro `half` (duas colunas; uma só em telas estreitas) */
+  width?: 'half'
 }
 
 export interface FormStep {
@@ -68,6 +70,8 @@ export interface FormTheme {
   font: 'inherit' | 'Inter' | 'system'
   /** `card` desenha o cartão com borda; `plain` fica solto na página */
   frame: 'card' | 'plain'
+  /** `outline`: campos brancos com contorno visível; `fill` (padrão): campos preenchidos */
+  fieldStyle?: 'fill' | 'outline'
 }
 
 export interface FormSettings {
@@ -84,6 +88,8 @@ export interface FormSettings {
   showProgress: boolean
   /** Mostra "N pontos" na tela final do quiz. Desligado por padrão: num quiz de qualificação, entrega a lógica do filtro. */
   showScore?: boolean
+  /** Frase miúda abaixo do botão de enviar (ex.: o que fazemos com os dados) */
+  footnote?: string
 }
 
 export interface FormDefinition {
@@ -245,6 +251,7 @@ export function cleanDefinition(raw: unknown): FormDefinition {
         required: f?.required === true,
         options: Array.isArray(f?.options) ? f.options.slice(0, 30).map((o, k) => ({ id: String(o?.id ?? `o${k}`), label: String(o?.label ?? '').slice(0, 200), score: typeof o?.score === 'number' && Number.isFinite(o.score) ? Math.round(o.score) : undefined })) : undefined,
         map: f?.map === 'name' || f?.map === 'email' || f?.map === 'phone' || f?.map === 'message' ? f.map : undefined,
+        width: f?.width === 'half' ? 'half' : undefined,
         showIf: f?.showIf && typeof f.showIf.field === 'string' ? { field: f.showIf.field, op: f.showIf.op === 'neq' ? 'neq' : 'eq', value: String(f.showIf.value ?? '') } : undefined,
       })),
     })),
@@ -271,6 +278,7 @@ export function cleanTheme(raw: unknown): FormTheme {
     radius: typeof t.radius === 'number' ? Math.max(0, Math.min(28, Math.round(t.radius))) : THEME_DEFAULT.radius,
     font: t.font === 'Inter' || t.font === 'system' ? t.font : 'inherit',
     frame: t.frame === 'plain' ? 'plain' : 'card',
+    fieldStyle: t.fieldStyle === 'outline' ? 'outline' : 'fill',
   }
 }
 
@@ -288,5 +296,6 @@ export function cleanSettings(raw: unknown): FormSettings {
     autoAdvance: s.autoAdvance === true,
     showProgress: s.showProgress !== false,
     showScore: s.showScore === true,
+    footnote: typeof s.footnote === 'string' && s.footnote.trim() ? s.footnote.trim().slice(0, 160) : undefined,
   }
 }

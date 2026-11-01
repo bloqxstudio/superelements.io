@@ -20,7 +20,7 @@ export const FORMS_ENDPOINT = `${SUPABASE_URL}/functions/v1/form-submit`
  * Muda a cada alteração do `public/forms.js`: o servidor guarda o arquivo por 30 dias no navegador,
  * e o `?v=` faz as correções chegarem a quem já visitou o site.
  */
-export const FORMS_SCRIPT_VERSION = '6'
+export const FORMS_SCRIPT_VERSION = '7'
 
 /** O script sai sempre do app publicado (no app local, o endereço daqui não abre no site). */
 export const formsScriptUrl = () => `${isLocalAppUrl() ? 'https://app.avencestudio.com' : publicAppUrl()}/forms.js?v=${FORMS_SCRIPT_VERSION}`
@@ -243,6 +243,7 @@ export interface FormTemplate {
   text: string
   definition: () => FormDefinition
   settings?: Partial<FormSettings>
+  theme?: FormTheme
 }
 
 const opt = (label: string, score?: number) => ({ id: newId('o'), label, score })
@@ -324,8 +325,38 @@ function siteLeadDefinition(): FormDefinition {
 
 const SITE_LEAD_SETTINGS: Partial<FormSettings> = { submitLabel: 'Pedir proposta', autoAdvance: true, successTitle: 'Recebemos suas respostas', successText: 'Retornamos em breve.' }
 
+/**
+ * Modelo "Diagnóstico": o padrão do formulário de contato da ProcessBase. Campos com contorno, nome e
+ * empresa lado a lado, papel e WhatsApp lado a lado, texto livre opcional, botão laranja com seta e a
+ * frase miúda embaixo. Troque as cores e os textos na aba Aparência.
+ */
+const DIAGNOSTICO_THEME: FormTheme = { primary: '#ff5900', background: '#ffffff', text: '#171a2c', field: '#ffffff', radius: 8, font: 'Inter', frame: 'plain', fieldStyle: 'outline' }
+
 /** Pontos de partida: a equipe edita tudo depois. */
 export const TEMPLATES: FormTemplate[] = [
+  {
+    id: 'diagnostico',
+    name: 'Diagnóstico (duas colunas)',
+    text: 'Nome e empresa, papel e WhatsApp lado a lado, texto livre e botão com seta. Campos com contorno, sem moldura.',
+    definition: () => ({
+      kind: 'form',
+      results: [],
+      steps: [
+        {
+          id: newId('s'),
+          fields: [
+            { id: newId('f'), type: 'short', label: 'Seu nome', required: true, map: 'name', placeholder: 'Como podemos te chamar', width: 'half' },
+            { id: newId('f'), type: 'short', label: 'Empresa', required: true, placeholder: 'Nome da empresa', width: 'half' },
+            { id: newId('f'), type: 'short', label: 'Seu papel na empresa', placeholder: 'Dono, sócio, gerente', width: 'half' },
+            { id: newId('f'), type: 'phone', label: 'WhatsApp', required: true, map: 'phone', placeholder: '(51) 00000-0000', width: 'half' },
+            { id: newId('f'), type: 'long', label: 'O que mais trava a empresa hoje (opcional)', map: 'message', placeholder: 'Ex.: tudo passa por mim e cada pessoa faz de um jeito' },
+          ],
+        },
+      ],
+    }),
+    settings: { submitLabel: 'Agendar diagnóstico →', successTitle: 'Recebemos', successText: 'Respondemos para marcar a conversa.', footnote: 'Usamos estes dados só para responder você.' },
+    theme: DIAGNOSTICO_THEME,
+  },
   {
     id: 'contato',
     name: 'Contato simples',

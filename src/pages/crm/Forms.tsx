@@ -47,11 +47,11 @@ const FormsPage: React.FC = () => {
     void load()
   }, [load])
 
-  const create = async (name: string, definition: ReturnType<typeof blankDefinition>, settings = SETTINGS_DEFAULT, key = 'blank') => {
+  const create = async (name: string, definition: ReturnType<typeof blankDefinition>, settings = SETTINGS_DEFAULT, key = 'blank', theme = THEME_DEFAULT) => {
     if (!team) return
     setBusy(key)
     try {
-      const form = await createForm(team.id, name, definition, THEME_DEFAULT, settings)
+      const form = await createForm(team.id, name, definition, theme, settings)
       navigate(`/crm/formularios/${form.id}`)
     } catch (e) {
       toast.error(errorText(e))
@@ -83,7 +83,7 @@ const FormsPage: React.FC = () => {
                   key={t.id}
                   type="button"
                   disabled={!!busy}
-                  onClick={() => void create(t.name, t.definition(), { ...SETTINGS_DEFAULT, ...t.settings }, t.id)}
+                  onClick={() => void create(t.name, t.definition(), { ...SETTINGS_DEFAULT, ...t.settings }, t.id, t.theme)}
                   className="group rounded-2xl bg-white p-4 text-left shadow-[0_0_0_1px_rgb(0_0_0/0.05),0_1px_2px_rgb(0_0_0/0.04),0_10px_28px_-14px_rgb(0_0_0/0.14)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_16px_36px_-14px_rgb(0_0_0/0.22)] active:scale-[0.97] disabled:opacity-60"
                 >
                   <span className="mb-3 flex h-24 flex-col justify-end gap-1.5 rounded-xl p-3" style={{ background: `linear-gradient(150deg, ${tint(t.id)[0]}, ${tint(t.id)[1]})` }} aria-hidden>

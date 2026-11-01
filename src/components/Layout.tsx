@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useMatch } from 'react-router-dom';
 import { ChevronRight, Menu } from 'lucide-react';
 import { useCrm } from '@/features/crm/crmStore';
@@ -16,6 +16,48 @@ import { GuardedOutlet } from '@/features/crm/GuardedOutlet';
  * o botão do menu). Dentro de um projeto quem desenha a barra é o próprio
  * Space, no desenho do Framer, e ele ocupa a tela.
  */
+const COLLAPSED_KEY = 'superelements-menu-recolhido';
+
+/**
+ * A localização acompanha o container da tela aberta: mede o primeiro bloco
+ * centralizado (`mx-auto`) do conteúdo e usa as mesmas margens, assim fica
+ * alinhada com o título em telas de 6xl, 7xl ou largas.
+ */
+const usePageGutters = (main: React.RefObject<HTMLElement>, bar: React.RefObject<HTMLElement>, deps: unknown[]) => {
+  const [gutters, setGutters] = useState<{ left: number; right: number } | null>(null);
+  useLayoutEffect(() => {
+    const root = main.current;
+    if (!root) return;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const box = bar.current?.getBoundingClientRect();
+      const page = root.querySelector<HTMLElement>('.mx-auto');
+      if (!box || !box.width || !page) return setGutters((g) => (g === null ? g : null));
+      const r = page.getBoundingClientRect();
+      const cs = getComputedStyle(page);
+      const left = Math.max(0, Math.round(r.left - box.left + parseFloat(cs.paddingLeft)));
+      const right = Math.max(0, Math.round(box.right - r.right + parseFloat(cs.paddingRight)));
+      setGutters((g) => (g && g.left === left && g.right === right ? g : { left, right }));
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
+    measure();
+    const resize = new ResizeObserver(schedule);
+    resize.observe(root);
+    const mutation = new MutationObserver(schedule);
+    mutation.observe(root, { childList: true, subtree: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      resize.disconnect();
+      mutation.disconnect();
+      window.removeEventListener('resize', schedule);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return gutters;
+};
+
 const Layout: React.FC = () => {
   const inProject = !!useMatch('/projetos/:projectId');
   const accountName = useCrm((s) => s.team?.name);
@@ -24,6 +66,14 @@ const Layout: React.FC = () => {
   const embedded = new URLSearchParams(search).get('embed') === '1';
   const editorRoute = /^\/(copy|criativos)\/[^/]+/.test(pathname);
   const [open, setOpen] = useState(false);
+  // Menu lateral recolhido (só ícones), lembrado neste navegador
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem(COLLAPSED_KEY) === '1' } catch { return false } });
+  const toggleCollapsed = useCallback(() => setCollapsed((v) => {
+    try { localStorage.setItem(COLLAPSED_KEY, v ? '0' : '1') } catch { /* sem armazenamento */ }
+    return !v;
+  }), []);
+  const mainRef = useRef<HTMLElement>(null);
+  const barRef = useRef<HTMLElement>(null);
   // As rotinas dos agentes rodam daqui (uma vez no app; a prévia embutida não dispara)
   useRoutineScheduler(!embedded);
   const close = useCallback(() => setOpen(false), []);
@@ -32,14 +82,15 @@ const Layout: React.FC = () => {
 
   // Trocou de tela pelo menu do celular: ele fecha
   useEffect(() => setOpen(false), [pathname]);
+  const gutters = usePageGutters(mainRef, barRef, [pathname, collapsed, inProject, embedded, editorRoute]);
 
   if (inProject || embedded) return <div className="se-product se-project"><GuardedOutlet /></div>;
 
   return (
-    <div className="se-product se-app min-h-screen w-full">
-      <AppSidebar open={open} onClose={close} />
+    <div className={`se-product se-app min-h-screen w-full${collapsed ? ' se-menu-collapsed' : ''}`}>
+      <AppSidebar open={open} onClose={close} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       <a href="#workspace-content" className="se-skip-link">Pular para o conteúdo</a>
-      <div className="se-workspace flex min-h-screen min-w-0 flex-col md:pl-[264px]">
+      <div className={`se-workspace flex min-h-screen min-w-0 flex-col transition-[padding] duration-200 ease-out motion-reduce:transition-none ${collapsed ? 'md:pl-[88px]' : 'md:pl-[264px]'}`}>
         <header className="se-mobile-bar sticky top-0 z-30 box-content flex h-14 items-center gap-3 px-4 md:hidden">
           <button
             type="button"
@@ -56,12 +107,17 @@ const Layout: React.FC = () => {
           </Link>
         </header>
 
-        {!editorRoute && <div className="se-workspace-bar hidden items-center gap-2 px-8 md:flex" aria-label="Localização atual">
+        {!editorRoute && <nav
+          ref={barRef}
+          className="se-workspace-bar hidden items-center gap-2 px-8 md:flex"
+          style={gutters ? { paddingLeft: gutters.left, paddingRight: gutters.right } : undefined}
+          aria-label="Localização atual"
+        >
           <Link to="/inicio" className="truncate text-sm text-gray-500 hover:text-gray-900">{accountName ?? 'Seu espaço'}</Link>
           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden />
           <span className="truncate text-sm font-medium text-gray-700">{workspaceTitle(pathname)}</span>
-        </div>}
-        <main id="workspace-content" tabIndex={-1} className="se-content min-w-0 flex-1 outline-none">
+        </nav>}
+        <main ref={mainRef} id="workspace-content" tabIndex={-1} className="se-content min-w-0 flex-1 outline-none">
           <GuardedOutlet />
         </main>
         <PreviewDrawer />

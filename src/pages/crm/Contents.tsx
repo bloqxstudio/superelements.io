@@ -61,7 +61,7 @@ const NewContent: React.FC<{ open: boolean; teamId: string; context: AccountCont
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Novo conteúdo</DialogTitle>
           <DialogDescription>Comece pela ideia. O roteiro, o Copy e os Criativos vêm depois.</DialogDescription>

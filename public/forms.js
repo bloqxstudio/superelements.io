@@ -155,10 +155,12 @@
       '.out .sub{font-size:.84em;opacity:.65;margin:-2px 0 0}' +
       '.pts{display:inline-block;font-size:.82em;font-weight:650;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--p) 12%,transparent);color:var(--p);margin-bottom:12px}' +
       '.pv{font-size:.78em;opacity:.55;margin-top:14px;text-align:center}' +
-      '.st{animation:in .28s cubic-bezier(.22,1,.36,1)}' +
+      '.st{animation:in .28s cubic-bezier(.22,1,.36,1);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:14px}.st>*{grid-column:1/-1}.st>.fl.half{grid-column:auto}' +
+      '.f.ol input.t,.f.ol textarea,.f.ol select{background:var(--bg);border-color:color-mix(in srgb,var(--tx) 38%,transparent)}.f.ol input.t:hover,.f.ol textarea:hover,.f.ol select:hover{border-color:color-mix(in srgb,var(--tx) 65%,transparent)}.f.ol label.l,.f.ol legend{font-weight:500;font-size:.9em;margin-bottom:6px}.f.ol ::placeholder{color:color-mix(in srgb,var(--tx) 52%,transparent);opacity:1}.f.ol .bad input.t,.f.ol .bad textarea,.f.ol .bad select{border-color:#d92d20}' +
+      '.fn{font-size:.82em;opacity:.7;margin:14px 0 0;text-align:center}' +
       '@keyframes in{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}' +
       '@media (prefers-reduced-motion:reduce){.st{animation:none}.bar i,.op,button{transition:none}}' +
-      '@media (max-width:480px){.f{padding:20px}}'
+      '@media (max-width:480px){.f{padding:20px}.st>.fl.half{grid-column:1/-1}}'
     )
   }
 
@@ -226,7 +228,7 @@
 
     function field(f, step) {
       var id = 'q-' + f.id
-      var box = el('div', { class: 'fl', 'data-f': f.id, hidden: !visible(f, answers) })
+      var box = el('div', { class: 'fl' + (f.width === 'half' ? ' half' : ''), 'data-f': f.id, hidden: !visible(f, answers) })
       var req = f.required ? el('span', { class: 'req', 'aria-hidden': 'true', text: '*' }) : null
       var help = f.help ? el('p', { class: 'h', id: id + '-h', text: f.help }) : null
       var err = el('p', { class: 'er', id: id + '-e', role: 'alert' })
@@ -306,7 +308,7 @@
     }
 
     function frame(children) {
-      var f = el('form', { class: 'f ' + cfg.theme.frame, novalidate: true }, children)
+      var f = el('form', { class: 'f ' + cfg.theme.frame + (cfg.theme.fieldStyle === 'outline' ? ' ol' : ''), novalidate: true }, children)
       f.addEventListener('submit', function (e) { e.preventDefault(); next() })
       root.innerHTML = ''
       root.appendChild(el('style', { text: css(cfg.theme) }))
@@ -332,6 +334,7 @@
       children.push(wrap)
       children.push(el('div', { class: 'hp', 'aria-hidden': 'true' }, [el('input', { type: 'text', name: 'website', tabindex: '-1', autocomplete: 'off' })]))
       children.push(el('div', { class: 'row' }, [back, go]))
+      if (s.footnote) children.push(el('p', { class: 'fn', text: s.footnote }))
       if (opts.preview) children.push(el('p', { class: 'pv', text: 'Prévia: nada é enviado.' }))
       frame(children)
       if (focus) {

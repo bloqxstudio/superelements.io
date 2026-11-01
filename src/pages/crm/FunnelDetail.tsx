@@ -233,7 +233,7 @@ const FunnelDetail: React.FC = () => {
       ) : (
         <>
           <PageHeader title={funnel.name} text={funnel.objective || undefined} />
-          <div role="tablist" aria-label="Funil" className="mt-5 flex gap-1 border-b border-gray-200">
+          <div role="tablist" aria-label="Funil" className="se-tabs mt-5 flex gap-1 border-b border-gray-200">
             {(['acompanhar', 'configurar'] as const).map((t) => (
               <button
                 key={t}

@@ -99,7 +99,7 @@ export const SiteGuide: React.FC<SiteGuideProps> = ({ open, onOpenChange, projec
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Colocar o site do cliente na plataforma</DialogTitle>
           <DialogDescription>Três passos. A conta tem um site só; o guia confere o que já foi feito.</DialogDescription>

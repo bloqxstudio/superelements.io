@@ -236,7 +236,7 @@ const Projects: React.FC = () => {
       />
 
       <Dialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Excluir {deleting?.name}?</DialogTitle>
             <DialogDescription>
@@ -255,7 +255,7 @@ const Projects: React.FC = () => {
       </Dialog>
 
       <Dialog open={!!leaving} onOpenChange={(open) => !open && setLeaving(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Sair de {leaving?.name}?</DialogTitle>
             <DialogDescription>

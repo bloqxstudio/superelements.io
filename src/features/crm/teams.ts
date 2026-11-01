@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client'
 import { publicAppUrl } from '@/features/approval/shares'
+import { avatarUrlOf, displayName } from '@/features/profile/profile'
 import type { AccountOverview, AccountProfile, Team, TeamInvite, TeamPerson, TeamRole } from './types'
 import { cleanModules } from './modules'
 
@@ -149,7 +150,14 @@ export async function renameTeam(id: string, name: string) {
 export async function listPeople(teamId: string): Promise<TeamPerson[]> {
   const { data, error } = await supabase.rpc('crm_team_people', { p_team: teamId })
   if (error) throw error
-  return (data ?? []).map((row) => ({ userId: row.user_id, email: row.email, role: role(row.role), joinedAt: Date.parse(row.joined_at) }))
+  return (data ?? []).map((row) => ({
+    userId: row.user_id,
+    email: row.email,
+    role: role(row.role),
+    joinedAt: Date.parse(row.joined_at),
+    name: displayName(row.full_name, row.email),
+    avatarUrl: avatarUrlOf(row.avatar_path),
+  }))
 }
 
 export async function setPersonRole(teamId: string, userId: string, next: Exclude<TeamRole, 'owner'>) {

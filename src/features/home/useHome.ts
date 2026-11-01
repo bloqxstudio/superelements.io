@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useCrm } from '@/features/crm/crmStore'
 import { moduleOn } from '@/features/crm/modules'
-import { loadAdAccounts, loadAdReport, NoAdTablesError, resultLabel, type AdAccount, type AdPreset, type AdReport } from '@/features/crm/ads'
+import { fetchAdReport, loadAdAccounts, loadAdReport, NoAdTablesError, resultLabel, type AdAccount, type AdPreset, type AdReport } from '@/features/crm/ads'
 import { loadAccounts as loadIgAccounts, loadMedia, NoTablesError, type IgAccount, type IgMedia } from '@/features/crm/instagram'
 import { listOpportunities } from '@/features/crm/opportunities'
 import { useOpportunityFeed } from '@/features/crm/live'
@@ -81,10 +81,22 @@ function useSoon(run: () => void, ms: number) {
   }, [ms])
 }
 
-/** 1 é "Hoje". A Meta só entrega até ontem, então os anúncios de "Hoje" mostram os últimos 7 dias. */
+/** 1 é "Hoje": os anúncios usam o relatório `today` da Meta (o gasto do dia até agora). */
 export type Days = 1 | 7 | 30
 
-const PRESET: Record<Days, AdPreset> = { 1: 'last_7d', 7: 'last_7d', 30: 'last_30d' }
+const PRESET: Record<Days, AdPreset> = { 1: 'today', 7: 'last_7d', 30: 'last_30d' }
+/** O relatório de hoje muda ao longo do dia: guardado há mais que isso, a Home lê a Meta de novo (como a aba Anúncios). */
+const TODAY_STALE = 5 * 60_000
+const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/** O relatório guardado do período; em "Hoje", só vale o do dia, e um velho é relido da Meta (se falhar, fica o guardado do dia). */
+async function adReportFor(accountId: string, preset: AdPreset): Promise<AdReport | null> {
+  const saved = await loadAdReport(accountId, preset).catch(() => null)
+  if (preset !== 'today') return saved
+  const sameDay = saved && saved.since === localDay() ? saved : null
+  if (sameDay && Date.now() - sameDay.fetchedAt < TODAY_STALE) return sameDay
+  return fetchAdReport(accountId, 'today').catch(() => sameDay)
+}
 export const sitePeriod = (days: Days) => (days === 1 ? ('hoje' as const) : days)
 
 // ---------- as formas de cada fonte ----------
@@ -154,7 +166,7 @@ const stateOfShare = (row: ShareRow): ShareState => {
 }
 
 const sumTotals = (list: SiteReport['totals'][]): SiteReport['totals'] =>
-  list.reduce((a, b) => ({ sessions: a.sessions + b.sessions, visitors: a.visitors + b.visitors, newVisitors: a.newVisitors + b.newVisitors, pageviews: a.pageviews + b.pageviews, activeMs: a.activeMs + b.activeMs, bounces: a.bounces + b.bounces, converted: a.converted + b.converted }))
+  list.reduce((a, b) => ({ sessions: a.sessions + b.sessions, visitors: a.visitors + b.visitors, newVisitors: a.newVisitors + b.newVisitors, pageviews: a.pageviews + b.pageviews, activeMs: a.activeMs + b.activeMs, bounces: a.bounces + b.bounces, converted: a.converted + b.converted, orders: a.orders + b.orders, revenue: a.revenue + b.revenue, buyers: a.buyers + b.buyers }))
 
 export function metaCampaigns(data: AdsData | undefined): MetaCampaignInput[] {
   return (data?.reports ?? []).flatMap(({ report }) =>
@@ -277,7 +289,7 @@ export function useHome(days: Days) {
     return () => void supabase.removeChannel(channel)
   }, [teamId, siteOn, soonSite])
 
-  // ---- anúncios: o último relatório guardado de cada conta (a Home não chama a Meta) ----
+  // ---- anúncios: o último relatório guardado de cada conta (a Home só chama a Meta para o de hoje, quando velho) ----
   const adsOn = on('instagram')
   const [ads] = useSource<AdsData>(
     adsOn,
@@ -290,7 +302,7 @@ export function useHome(days: Days) {
         throw e
       }
       if (!accounts.length) throw new Absent('Nenhuma conta de anúncios conectada.')
-      const reports = await Promise.all(accounts.map(async (account) => ({ account, report: await loadAdReport(account.id, PRESET[days]).catch(() => null) })))
+      const reports = await Promise.all(accounts.map(async (account) => ({ account, report: account.syncError ? await loadAdReport(account.id, PRESET[days]).catch(() => null) : await adReportFor(account.id, PRESET[days]) })))
       return { accounts, reports }
     },
     `${teamId}:${days}`,

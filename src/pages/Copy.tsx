@@ -86,7 +86,7 @@ const NewDoc: React.FC<{ open: boolean; research: boolean; folders: { id: string
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle>{research ? 'Nova pesquisa' : 'Novo documento'}</DialogTitle>
           <DialogDescription>{research ? 'Dê um assunto e o Pesquisador mapeia dores, clientes, jornada e referências na web.' : 'Escolha o formato do texto. Você pode escrever, revisar ou pedir ajuda à IA.'}</DialogDescription>

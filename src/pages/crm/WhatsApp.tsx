@@ -38,7 +38,7 @@ const timeLabel = (at: number) => new Date(at).toLocaleTimeString('pt-BR', { hou
 
 export default function CrmWhatsApp() {
   const team = useCrm((s) => s.team)
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [params, setParams] = useSearchParams()
   // "Chamar" em outra tela: o número, o nome e o cliente chegam pelo endereço
   const call = useMemo(() => {
@@ -49,7 +49,7 @@ export default function CrmWhatsApp() {
       name: params.get('nome') ?? undefined,
       clientId: params.get('cliente') ?? undefined,
       opportunityId: params.get('oportunidade') ?? undefined,
-      text: params.get('texto') ?? openingText(personLabel(user?.email)),
+      text: params.get('texto') ?? openingText(profile?.name ?? personLabel(user?.email)),
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params])
@@ -123,7 +123,7 @@ export default function CrmWhatsApp() {
   return (
     <Page wide>
       <PageHeader title="WhatsApp" text="O número da empresa conectado ao CRM como mais um aparelho, pelo QR code. Ele continua funcionando no celular." />
-      <div className="mt-4 flex items-center gap-1 border-b border-gray-200" role="tablist" aria-label="WhatsApp">
+      <div className="se-tabs mt-4 flex items-center gap-1 border-b border-gray-200" role="tablist" aria-label="WhatsApp">
         {(
           [
             ['conversas', 'Conversas', MessageCircle],

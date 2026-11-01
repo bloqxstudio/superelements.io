@@ -63,6 +63,9 @@ export interface TeamPerson {
   email: string
   role: TeamRole
   joinedAt: number
+  /** O nome do perfil, ou o tirado do e-mail. */
+  name: string
+  avatarUrl?: string
 }
 
 export interface TeamInvite {

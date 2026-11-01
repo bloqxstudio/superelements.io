@@ -226,7 +226,7 @@ export const LeadTable: React.FC<{ leads: Lead[]; selection?: Selection }> = ({ 
   const all = leads.length > 0 && leads.every((l) => selection?.selected.has(l.id))
   return (
     <div className={cn(SURFACE, 'overflow-x-auto')}>
-      <table className="w-full min-w-[980px] text-left text-sm">
+      <table className="se-table w-full min-w-[980px] text-left text-sm">
         <thead>
           <tr className="text-xs text-gray-500">
             {selection && (

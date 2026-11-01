@@ -31,11 +31,13 @@ import CrmOpportunities from "@/pages/crm/Opportunities";
 import CrmClients from "@/pages/crm/Clients";
 import CrmClientDetail from "@/pages/crm/ClientDetail";
 import CrmTeam from "@/pages/crm/Team";
+import Profile from "@/pages/Profile";
 import CrmAccounts from "@/pages/crm/Accounts";
 import CrmSocial from "@/pages/crm/Social";
 import CrmDiagnosis from "@/pages/crm/Diagnosis";
 import CrmInstagram from "@/pages/crm/Instagram";
 import CrmAnuncios from "@/pages/crm/Anuncios";
+import CrmOperacao from "@/pages/crm/Operacao";
 import CrmSite from "@/pages/crm/Site";
 import CrmWhatsApp from "@/pages/crm/WhatsApp";
 import CrmFlows from "@/pages/crm/Flows";
@@ -129,6 +131,7 @@ function App() {
               >
                 <Route index element={<Projects />} />
                 <Route path="inicio" element={<Home />} />
+                <Route path="perfil" element={<Profile />} />
                 <Route path="projetos/:projectId" element={<ProjectSpace />} />
                 {/* Os agentes trabalhando agora, cada um no seu projeto */}
                 <Route path="agentes" element={<Agents />} />
@@ -158,6 +161,7 @@ function App() {
                 {/* O Instagram da equipe pela API oficial da Meta: números, posts, publicar e comentários */}
                 <Route path="crm/instagram" element={<CrmGate><CrmInstagram /></CrmGate>} />
                 <Route path="crm/anuncios" element={<CrmGate><CrmAnuncios /></CrmGate>} />
+                <Route path="crm/operacao" element={<CrmGate><CrmOperacao /></CrmGate>} />
                 {/* As visitas do site da equipe, contadas pelo script visitas.js colado no WordPress */}
                 <Route path="crm/site" element={<CrmGate><CrmSite /></CrmGate>} />
                 {/* O número de WhatsApp da equipe conectado pelo QR code (serviço services/whatsapp) */}

@@ -184,6 +184,11 @@ const FieldEditor: React.FC<{
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <Switch checked={!!field.required} onCheckedChange={(required) => onChange({ required })} /> Obrigatório
         </label>
+        {(field.type === 'short' || field.type === 'email' || field.type === 'phone' || field.type === 'number' || field.type === 'select') && (
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <Switch checked={field.width === 'half'} onCheckedChange={(half) => onChange({ width: half ? 'half' : undefined })} /> Meia largura (lado a lado)
+          </label>
+        )}
       </div>
       {pickable.length > 0 && (
         <div>
@@ -445,6 +450,13 @@ export const DesignEditor: React.FC<{ theme: FormTheme; onChange: (theme: FormTh
         </select>
       </label>
       <label className="flex items-center justify-between gap-3 text-sm text-gray-700">
+        Campos
+        <select className={cn(INPUT, 'w-auto')} value={theme.fieldStyle ?? 'fill'} onChange={(e) => onChange({ ...theme, fieldStyle: e.target.value as 'fill' | 'outline' })}>
+          <option value="fill">Preenchidos</option>
+          <option value="outline">Com contorno</option>
+        </select>
+      </label>
+      <label className="flex items-center justify-between gap-3 text-sm text-gray-700">
         Moldura
         <select className={cn(INPUT, 'w-auto')} value={theme.frame} onChange={(e) => onChange({ ...theme, frame: e.target.value as FormTheme['frame'] })}>
           <option value="card">Cartão com borda</option>
@@ -481,6 +493,7 @@ export const SettingsEditor: React.FC<{ settings: FormSettings; kind: 'form' | '
           <div className="grid grid-cols-2 gap-3">
             <Text label="Botão de continuar" value={settings.nextLabel} onChange={(nextLabel) => onChange({ ...settings, nextLabel })} />
             <Text label="Botão de enviar" value={settings.submitLabel} onChange={(submitLabel) => onChange({ ...settings, submitLabel })} />
+            <Text label="Frase abaixo do botão (opcional)" value={settings.footnote ?? ''} onChange={(footnote) => onChange({ ...settings, footnote })} />
           </div>
           <Text label="Título depois de enviar" value={settings.successTitle} onChange={(successTitle) => onChange({ ...settings, successTitle })} />
           <Text label="Mensagem depois de enviar" value={settings.successText} onChange={(successText) => onChange({ ...settings, successText })} area />

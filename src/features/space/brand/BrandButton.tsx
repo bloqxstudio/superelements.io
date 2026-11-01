@@ -155,7 +155,7 @@ export const BrandButton: React.FC<{ variant?: 'toolbar' | 'row' }> = ({ variant
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[92vh] w-[95vw] max-w-5xl flex-col gap-4">
+        <DialogContent size="xl" className="flex flex-col gap-4">
           <DialogHeader>
             <DialogTitle>Marca do Space</DialogTitle>
             <DialogDescription>

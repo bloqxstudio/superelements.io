@@ -129,7 +129,7 @@ export const HistoryDialog: React.FC<HistoryDialogProps> = ({ projectId, open, o
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(80vh,720px)] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent size="lg" className="flex h-[min(80vh,720px)] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="space-y-1 border-b px-5 pb-3 pt-5">
           <DialogTitle>Histórico do projeto</DialogTitle>
           <DialogDescription>Quem fez o quê, o que foi excluído e as versões guardadas do conteúdo.</DialogDescription>

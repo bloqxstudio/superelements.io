@@ -1,11 +1,12 @@
 import { useJobs } from '@/features/operations/jobs'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { ChevronDown, Search } from 'lucide-react'
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { navigationMatches } from '@/features/navigation/workspace'
 import { Link, NavLink } from 'react-router-dom'
-import { Bot, Building2, CalendarDays, Filter, Target, House, Building, FolderKanban, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
+import { Activity, Bot, Building2, CalendarDays, Filter, Target, House, Building, FolderKanban, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
+import { PersonAvatar } from '@/features/profile/PersonAvatar'
 import { useAuth } from '@/contexts/AuthContext'
 import { AccountSwitcher } from '@/features/crm/AccountSwitcher'
 import { useCrm } from '@/features/crm/crmStore'
@@ -26,6 +27,8 @@ import { cn } from '@/lib/utils'
  */
 
 const NavigationQuery = createContext('')
+/** Menu recolhido: só os ícones, com o nome no title. */
+const Collapsed = createContext(false)
 
 const itemClass = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -35,12 +38,13 @@ const itemClass = ({ isActive }: { isActive: boolean }) =>
 
 const Item: React.FC<{ to: string; icon: React.ElementType; label: string; end?: boolean; children?: React.ReactNode }> = ({ to, icon: Icon, label, end, children }) => {
   const query = useContext(NavigationQuery)
+  const collapsed = useContext(Collapsed)
   if (!navigationMatches(query, label, to)) return null
   return (
-  <NavLink to={to} end={end} className={itemClass}>
+  <NavLink to={to} end={end} className={itemClass} title={collapsed ? label : undefined}>
     <Icon className="h-4 w-4 shrink-0" aria-hidden />
-    <span className="min-w-0 flex-1 truncate">{label}</span>
-    {children}
+    <span className="se-nav-label min-w-0 flex-1 truncate">{label}</span>
+    {children && <span className="se-nav-badges flex items-center gap-1">{children}</span>}
   </NavLink>
   )
 }
@@ -49,13 +53,15 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
   const key = `superelements-menu-grupo:${title}`
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(key) !== '0' } catch { return true } })
   const query = useContext(NavigationQuery)
-  const shown = open || !!query
+  const collapsed = useContext(Collapsed)
+  // Recolhido não há como abrir o grupo: mostra todos, separados por uma linha
+  const shown = open || !!query || collapsed
   const toggle = () => setOpen((v) => { try { localStorage.setItem(key, v ? '0' : '1') } catch { /* sem armazenamento */ } return !v })
   return (
     <div className="se-sidebar-section mt-3 first:mt-0">
-      <button type="button" onClick={toggle} aria-expanded={shown} className="se-section-toggle mb-0.5 flex w-full items-center justify-between rounded-md px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-800">
+      {collapsed ? <div className="se-section-rule" role="separator" aria-label={title} /> : <button type="button" onClick={toggle} aria-expanded={shown} className="se-section-toggle mb-0.5 flex w-full items-center justify-between rounded-md px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-800">
         {title}<ChevronDown className={cn('h-3 w-3 transition-transform', !shown && '-rotate-90')} aria-hidden />
-      </button>
+      </button>}
       {shown && <div className="grid gap-px">{children}</div>}
     </div>
   )
@@ -148,7 +154,7 @@ const SiteItem: React.FC = () => {
   )
 }
 
-const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
+const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onToggleCollapsed?: () => void }> = ({ onClose, collapsed = false, onToggleCollapsed }) => {
   const { user, profile, signOut } = useAuth()
   const { teams, team } = useCrm()
   const [query, setQuery] = useState('')
@@ -161,9 +167,21 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   return (
     <>
       <div className="se-sidebar-brand flex h-16 shrink-0 items-center justify-between px-4">
+        {collapsed && onToggleCollapsed ? (
+          <button type="button" onClick={onToggleCollapsed} aria-label="Expandir menu" title="Expandir menu" className="se-collapse-toggle group relative mx-auto flex h-9 w-9 items-center justify-center rounded-lg hover:bg-gray-100">
+            <span className="transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0"><Logo /></span>
+            <PanelLeftOpen className="absolute h-4 w-4 text-gray-600 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden />
+          </button>
+        ) : <>
         <Link to={crm ? '/inicio' : '/'} aria-label={crm ? 'Início' : 'Projetos'} className="transition-opacity hover:opacity-80">
           <Logo />
         </Link>
+        {onToggleCollapsed && (
+          <button type="button" onClick={onToggleCollapsed} aria-label="Recolher menu" title="Recolher menu" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        )}
+        </>}
         {onClose && (
           <button type="button" onClick={onClose} aria-label="Fechar menu" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900">
             <X className="h-4 w-4" />
@@ -172,14 +190,15 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       </div>
 
       <div className="shrink-0 px-3 pt-3">
-        <AccountSwitcher inline={!!onClose} onPicked={onClose} />
+        <AccountSwitcher inline={!!onClose} compact={collapsed} onPicked={onClose} />
       </div>
 
-      <label className="se-nav-search mx-3 mt-3 flex items-center gap-2 rounded-xl px-2.5">
+      {!collapsed && <label className="se-nav-search mx-3 mt-3 flex items-center gap-2 rounded-xl px-2.5">
         <Search className="h-3.5 w-3.5 shrink-0 text-gray-500" aria-hidden />
         <input type="search" aria-label="Encontrar uma área" placeholder="Encontrar uma área" value={query} onChange={(e) => setQuery(e.target.value)} className="h-9 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-gray-500" />
-      </label>
-      <NavigationQuery.Provider value={query}>
+      </label>}
+      <Collapsed.Provider value={collapsed}>
+      <NavigationQuery.Provider value={collapsed ? '' : query}>
       <nav aria-label="Navegação" className="se-navigation flex-1 overflow-y-auto px-3 py-4">
         {crm && (
           <div className="mb-5">
@@ -199,6 +218,7 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         )}
         {crm && (
           <Section title="Clientes e vendas">
+            {on('crm') && <Item to="/crm/operacao" icon={Activity} label="Operação" />}
             {on('crm') && <OportunidadesItem />}
             {on('whatsapp') && <WhatsAppItem />}
             {on('whatsapp') && <Item to="/crm/fluxos" icon={Workflow} label="Automações" />}
@@ -222,16 +242,24 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         <p className="se-nav-no-results px-2.5 py-6 text-xs leading-relaxed text-gray-500" role="status">Nenhuma área encontrada. Tente outro nome.</p>
       </nav>
       </NavigationQuery.Provider>
+      </Collapsed.Provider>
 
       <div className="se-sidebar-user shrink-0 space-y-2 px-3 py-3">
         {user && (
-          <div className="flex items-center gap-2 px-1">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white" aria-hidden>
-              {(profile?.email ?? user.email ?? '?').charAt(0).toUpperCase()}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-xs text-gray-600" title={profile?.email ?? user.email ?? ''}>
-              {profile?.email ?? user.email}
-            </span>
+          <div className={cn('flex items-center gap-1', collapsed && 'flex-col')}>
+            <NavLink
+              to="/perfil"
+              onClick={onClose}
+              title="Meu perfil e configurações"
+              aria-label={collapsed ? 'Meu perfil e configurações' : undefined}
+              className={({ isActive }) => cn('flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 transition-colors hover:bg-gray-100', isActive && 'bg-gray-100')}
+            >
+              <PersonAvatar name={profile?.name ?? user.email ?? '?'} url={profile?.avatarUrl} size={32} />
+              {!collapsed && <span className="min-w-0 flex-1 leading-tight">
+                <span className="block truncate text-xs font-medium text-gray-900">{profile?.name ?? user.email}</span>
+                <span className="block truncate text-[11px] text-gray-500">{user.email ?? profile?.email}</span>
+              </span>}
+            </NavLink>
             <button type="button" onClick={() => void signOut()} aria-label="Sair da conta" title="Sair" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900">
               <LogOut className="h-4 w-4" />
             </button>
@@ -242,7 +270,7 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   )
 }
 
-export const AppSidebar: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
+export const AppSidebar: React.FC<{ open: boolean; onClose: () => void; collapsed?: boolean; onToggleCollapsed?: () => void }> = ({ open, onClose, collapsed = false, onToggleCollapsed }) => {
   const { user } = useAuth()
   const load = useCrm((s) => s.load)
   // As equipes de quem entrou: decidem se o CRM aparece no menu
@@ -261,8 +289,8 @@ export const AppSidebar: React.FC<{ open: boolean; onClose: () => void }> = ({ o
 
   return (
     <>
-      <aside className="se-sidebar fixed bottom-3 left-3 top-3 z-30 hidden w-60 flex-col md:flex">
-        <SidebarContent />
+      <aside className={cn('se-sidebar fixed bottom-3 left-3 top-3 z-30 hidden flex-col transition-[width] duration-200 ease-out motion-reduce:transition-none md:flex', collapsed ? 'se-sidebar-collapsed w-16' : 'w-60')}>
+        <SidebarContent collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />
       </aside>
 
       <DialogPrimitive.Root open={open} onOpenChange={(next) => !next && onClose()}>

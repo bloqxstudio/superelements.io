@@ -365,7 +365,7 @@ const Overview: React.FC<{ account: IgAccount; days: IgDay[]; media: IgMedia[]; 
         <Surface title={recent.length ? `Melhores posts dos últimos ${period} dias` : 'Melhores posts recentes'}>
           {top.length ? (
             <div className="-mx-1 overflow-x-auto px-1">
-              <table className="w-full min-w-[480px] text-left">
+              <table className="se-table w-full min-w-[480px] text-left">
                 <thead>
                   <tr className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
                     <th className="pb-2 pr-3 font-medium">Post</th>
@@ -711,7 +711,7 @@ const InstagramPage: React.FC = () => {
 
   return (
     <Page wide>
-      <div className="mb-6 flex items-center gap-1 border-b border-gray-200" role="tablist" aria-label="Instagram">
+      <div className="se-tabs mb-6 flex items-center gap-1 border-b border-gray-200" role="tablist" aria-label="Instagram">
         {(
           [
             ['perfil', 'Perfil', InstagramIcon],

@@ -4,10 +4,13 @@ import { block, plainOf, type CopyDoc } from '@/features/copy/types'
 import { loadProjectDoc } from '@/features/projects/storage'
 import { parseDesignMd } from '@/features/space/brand/designMd'
 import { setBrandFrom } from '@/features/criativos/brand'
-import { createSetOnce, loadSet } from '@/features/criativos/storage'
-import { buildPost } from '@/features/criativos/templates'
+import { fillSetImages } from '@/features/criativos/generate'
+import { useCreativeLink } from '@/features/criativos/link'
+import { createSetOnce, loadSet, saveSet } from '@/features/criativos/storage'
 import type { CreativeSet, SetBrand } from '@/features/criativos/types'
+import { toast } from 'sonner'
 import { linkContent } from './api'
+import { accountBrand, aiCarousel, carouselPost } from './carousel'
 import { briefOf, briefText, hashOf, joinParagraphs, scriptParagraphs, type AccountContext, type Content, type ContentLink } from './rules'
 
 /**
@@ -131,10 +134,17 @@ export async function forwardToCriativos(content: Content, ctx: AccountContext |
     const source = cloud?.doc?.brand?.source
     const parsed = source?.trim() ? parseDesignMd(source).brand : null
     brand = setBrandFrom(parsed, project.name)
+  } else {
+    // Sem projeto não há DESIGN.md: usa a marca do conjunto mais recente da conta (cores, fontes, logo)
+    brand = (await accountBrand()) ?? brand
   }
   const format = content.format === 'story' || content.format === 'reels' ? '9x16' : '4x5'
   const now = Date.now()
-  const post = buildPost({ name: content.title, format, caption: content.script || undefined, slides: [{ template: 'manifesto', label: brand.name, title: content.title, body: content.goal.trim() || ctx?.goal.trim() || ' ' }] }, brand)
+  const brief = briefText(briefOf(ctx, content))
+  // O roteiro vira carrossel: pela IA quando conectada, senão fatiado por regra
+  const photos = useCreativeLink.getState().providers.length > 0
+  const post = (await aiCarousel(content, ctx, brand, format, brief, photos)) ?? carouselPost(content, brand, format, content.script || undefined, photos)
+  if (!post.caption && content.script) post.caption = content.script
   const set: CreativeSet = {
     id: artifactId(content),
     name: content.title,
@@ -143,13 +153,28 @@ export async function forwardToCriativos(content: Content, ctx: AccountContext |
     shared: !!project,
     brand,
     source: { contentId: content.id, contextVersion: ctx?.version },
-    brief: briefText(briefOf(ctx, content)),
+    brief,
     posts: [post],
     assets: [],
     createdAt: now,
     updatedAt: now,
   }
   const { set: final, created } = await createSetOnce(set)
-  await linkContent(content.id, 'criativos', final.id, project?.id, await setHash(final))
+  // As fotos vêm do Codex (ou do serviço de imagens pronto); sem elas o carrossel segue tipográfico
+  let ready = final
+  if (created && photos) {
+    const id = toast.loading('Gerando as fotos do carrossel…')
+    try {
+      const out = await fillSetImages(final, [post.id], { signal: AbortSignal.timeout(300_000), provider: 'codex', onImage: (done, total) => toast.loading(`Gerando as fotos do carrossel… ${done} de ${total}`, { id }) })
+      ready = out.set
+      await saveSet(ready)
+      if (out.failed.length) toast.message('Algumas fotos não saíram: gere de novo no editor.')
+    } catch {
+      toast.message('Não consegui gerar as fotos agora: o carrossel abre sem elas.')
+    } finally {
+      toast.dismiss(id)
+    }
+  }
+  await linkContent(content.id, 'criativos', ready.id, project?.id, await setHash(ready))
   return { path: setPath(content, project?.id), created }
 }

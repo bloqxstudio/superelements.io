@@ -1962,8 +1962,10 @@ export type Database = {
       profiles: {
         Row: {
           asaas_customer_id: string | null
+          avatar_path: string | null
           created_at: string
           email: string
+          full_name: string | null
           id: string
           is_demo: boolean
           phone: string | null
@@ -1971,8 +1973,10 @@ export type Database = {
         }
         Insert: {
           asaas_customer_id?: string | null
+          avatar_path?: string | null
           created_at?: string
           email: string
+          full_name?: string | null
           id: string
           is_demo?: boolean
           phone?: string | null
@@ -1980,8 +1984,10 @@ export type Database = {
         }
         Update: {
           asaas_customer_id?: string | null
+          avatar_path?: string | null
           created_at?: string
           email?: string
+          full_name?: string | null
           id?: string
           is_demo?: boolean
           phone?: string | null
@@ -2981,8 +2987,9 @@ export type Database = {
       create_crm_team: { Args: { p_name: string }; Returns: string }
       crm_team_people: {
         Args: { p_team: string }
-        Returns: { user_id: string; email: string; role: string; joined_at: string }[]
+        Returns: { user_id: string; email: string; role: string; joined_at: string; full_name: string | null; avatar_path: string | null }[]
       }
+      profile_sync_email: { Args: Record<PropertyKey, never>; Returns: string | null }
       crm_whatsapp_connect: { Args: { p_team: string }; Returns: undefined }
       crm_whatsapp_disconnect: { Args: { p_team: string }; Returns: undefined }
       get_crm_invite: { Args: { p_id: string }; Returns: Json }

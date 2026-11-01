@@ -3,12 +3,13 @@ import { Check, CircleAlert, Copy, ExternalLink, Loader2, RefreshCw } from 'luci
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { FIELD, Surface, whenLabel } from '@/features/crm/ui'
-import { VISITAS_ENDPOINT, checkEndpoint, createTracker, normalizeDomain, removeTracker, snippetOf, visitasScriptUrl, type SiteTracker } from '@/features/crm/site'
+import { VISITAS_ENDPOINT, checkEndpoint, createTracker, normalizeDomain, removeTracker, shopifyPixelOf, snippetOf, visitasScriptUrl, type SiteTracker } from '@/features/crm/site'
 import { cn } from '@/lib/utils'
 
 /**
  * Instalação do painel Site: cadastrar o site (gestor), o código que vai uma
- * vez no WordPress, onde colar, como testar, como a equipe deixa de contar e
+ * vez no site (WordPress, Shopify ou qualquer HTML), onde colar, o pixel da
+ * Shopify para as compras do checkout, como testar, como a equipe deixa de contar e
  * o que precisa estar no Supabase (migração e função `site-visitas`).
  */
 
@@ -18,7 +19,7 @@ const copy = (text: string, what = 'Copiado') =>
     () => toast.error('Não consegui copiar')
   )
 
-const MIGRATIONS = ['20261025180000_site_visitas.sql', '20261025230000_site_visitas_mapa.sql']
+const MIGRATIONS = ['20261025180000_site_visitas.sql', '20261025230000_site_visitas_mapa.sql', '20261101120000_site_visitas_loja.sql']
 const DEPLOY = 'supabase functions deploy site-visitas --no-verify-jwt'
 const GEO_SECRETS = 'supabase secrets set MAXMIND_ACCOUNT_ID=… MAXMIND_LICENSE_KEY=…'
 
@@ -111,6 +112,22 @@ const Step: React.FC<{ n: number; title: string; children: React.ReactNode }> = 
   </li>
 )
 
+type Platform = 'wordpress' | 'shopify' | 'outro'
+const PLATFORMS: { id: Platform; label: string }[] = [
+  { id: 'wordpress', label: 'WordPress' },
+  { id: 'shopify', label: 'Shopify' },
+  { id: 'outro', label: 'Outro site' },
+]
+
+const CodeBox: React.FC<{ code: string; what: string; tall?: boolean }> = ({ code, what, tall }) => (
+  <div className="relative mt-3">
+    <pre className={cn('overflow-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-900 p-3 pr-24 font-mono text-[12px] leading-relaxed text-zinc-100', tall && 'max-h-64')}>{code}</pre>
+    <Button size="sm" variant="secondary" onClick={() => void copy(code, what)} className="absolute right-2 top-2 h-7 gap-1.5 px-2.5 text-xs">
+      <Copy className="h-3.5 w-3.5" /> Copiar
+    </Button>
+  </div>
+)
+
 const ENDPOINT_TEXT: Record<string, { tone: string; text: string }> = {
   ok: { tone: 'text-emerald-700', text: 'Função site-visitas publicada e aberta para o site.' },
   missing: { tone: 'text-amber-800', text: 'A função site-visitas ainda não está publicada no Supabase.' },
@@ -123,6 +140,9 @@ export const SiteSetup: React.FC<{ tracker: SiteTracker; manager: boolean; onRel
   const [checking, setChecking] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const snippet = snippetOf(tracker)
+  const [platform, setPlatform] = useState<Platform>('wordpress')
+  const shopify = platform === 'shopify'
+  const n = (step: number) => (shopify && step > 2 ? step + 1 : step)
   const site = `https://${tracker.domain}`
 
   const check = async () => {
@@ -152,15 +172,75 @@ export const SiteSetup: React.FC<{ tracker: SiteTracker; manager: boolean; onRel
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <Surface>
         <ol className="grid gap-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-gray-500">O site é feito em</span>
+            <div className="flex gap-1 rounded-lg bg-zinc-100 p-0.5" role="group" aria-label="Plataforma do site">
+              {PLATFORMS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-pressed={platform === p.id}
+                  onClick={() => setPlatform(p.id)}
+                  className={cn('h-7 rounded-md px-2.5 text-xs font-medium transition-colors', platform === p.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900')}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <Step n={1} title="Copie o código do site">
             <p>É o mesmo para todas as páginas. A chave dele é pública (como a de qualquer ferramenta de métricas): só eventos vindos de {tracker.domain} são aceitos.</p>
-            <div className="relative mt-3">
-              <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-900 p-3 pr-24 font-mono text-[12px] leading-relaxed text-zinc-100">{snippet}</pre>
-              <Button size="sm" variant="secondary" onClick={() => void copy(snippet, 'Código copiado')} className="absolute right-2 top-2 h-7 gap-1.5 px-2.5 text-xs">
-                <Copy className="h-3.5 w-3.5" /> Copiar
-              </Button>
-            </div>
+            <CodeBox code={snippet} what="Código copiado" />
           </Step>
+          {platform === 'shopify' ? (
+            <>
+              <Step n={2} title="Cole no tema da Shopify, uma vez">
+                <ol className="grid list-decimal gap-1 pl-5 marker:text-gray-400">
+                  <li>
+                    No admin da Shopify: <strong className="font-medium text-gray-800">Loja virtual › Temas › … › Editar código</strong>.
+                  </li>
+                  <li>
+                    Abra <strong className="font-medium text-gray-800">layout/theme.liquid</strong> e cole o código logo antes de <span className="font-mono">&lt;/body&gt;</span>. Salve.
+                  </li>
+                </ol>
+                <p className="mt-2 text-xs text-gray-500">
+                  Ele conta as páginas da loja, o tempo, a rolagem e os cliques (WhatsApp, telefone…). O domínio cadastrado aqui deve ser o da loja ({tracker.domain}); uma loja sem domínio próprio
+                  usa o <span className="font-mono">loja.myshopify.com</span>.
+                </p>
+              </Step>
+              <Step n={3} title="Adicione o pixel (compras e checkout)">
+                <p>
+                  O checkout da Shopify não roda o código do tema. Este pixel manda produto visto, carrinho, checkout, pagamento e a compra (valor, moeda, itens e o pedido) na mesma visita, com a
+                  origem de onde a pessoa veio.
+                </p>
+                <ol className="mt-2 grid list-decimal gap-1 pl-5 marker:text-gray-400">
+                  <li>
+                    <strong className="font-medium text-gray-800">Configurações › Eventos do cliente › Adicionar pixel personalizado</strong>. Nome: Visitas.
+                  </li>
+                  <li>
+                    Em Permissão, <strong className="font-medium text-gray-800">Não é necessária</strong> (ou Marketing/Análise, se a loja pede consentimento de cookies: aí só conta quem aceitar).
+                  </li>
+                  <li>
+                    Apague o exemplo, cole o código, <strong className="font-medium text-gray-800">Salvar</strong> e <strong className="font-medium text-gray-800">Conectar</strong>.
+                  </li>
+                </ol>
+                <CodeBox code={shopifyPixelOf(tracker)} what="Pixel copiado" tall />
+                <p className="mt-2 text-xs text-gray-500">Cada pedido conta uma vez, mesmo que a página de obrigado seja recarregada. Para testar, faça um pedido de teste (gateway de teste da Shopify).</p>
+              </Step>
+            </>
+          ) : platform === 'outro' ? (
+            <Step n={2} title="Cole no site, uma vez">
+              <p>
+                No HTML de todas as páginas, antes de <span className="font-mono">&lt;/body&gt;</span> (no layout comum do site: Astro, Next, GitHub Pages, Webflow em Código personalizado, Wix em
+                Configurações › Código personalizado).
+              </p>
+              <p className="mt-2 text-xs text-gray-500">
+                Loja com outro checkout (WooCommerce, Nuvemshop…): os eventos de comércio do GA4 no dataLayer (<span className="font-mono">purchase</span>,{' '}
+                <span className="font-mono">add_to_cart</span>, <span className="font-mono">begin_checkout</span>) chegam como compra, carrinho e checkout, com valor. Ou chame{' '}
+                <span className="font-mono">visitas('compra', {'{'} valor: 199.9, moeda: 'BRL', pedido: '1234' {'}'})</span> na página de obrigado.
+              </p>
+            </Step>
+          ) : (
           <Step n={2} title="Cole no WordPress, uma vez">
             <ol className="grid list-decimal gap-1 pl-5 marker:text-gray-400">
               <li>
@@ -172,9 +252,11 @@ export const SiteSetup: React.FC<{ tracker: SiteTracker; manager: boolean; onRel
               </li>
             </ol>
             <p className="mt-2 text-xs text-gray-500">Sem o Elementor Pro, o plugin WPCode (Header &amp; Footer) faz o mesmo: cole no rodapé (Footer). Se houver plugin de cache, limpe o cache depois.</p>
+            <p className="mt-1 text-xs text-gray-500">Vale para qualquer tema (Astra, Hello, Kadence…). WooCommerce: as compras chegam pelos eventos do GA4 no dataLayer (plugins como o GTM4WP os mandam).</p>
           </Step>
-          <Step n={3} title="Teste numa janela anônima">
-            <p>Logado no WordPress não conta (nem no editor do Elementor). Abra o site numa janela anônima ou no celular, navegue um pouco e clique em algo: a visita aparece em Visitas › No site agora.</p>
+          )}
+          <Step n={n(3)} title="Teste numa janela anônima">
+            <p>{shopify ? 'O editor de tema não conta.' : platform === 'wordpress' ? 'Logado no WordPress não conta (nem no editor do Elementor).' : ''} Abra o site numa janela anônima ou no celular, navegue um pouco e clique em algo: a visita aparece em Visitas › No site agora.</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button asChild size="sm" variant="outline" className="gap-1.5">
                 <a href={`${site}/?visitas=debug`} target="_blank" rel="noreferrer">
@@ -199,7 +281,7 @@ export const SiteSetup: React.FC<{ tracker: SiteTracker; manager: boolean; onRel
             </ul>
             <p className="mt-2 text-xs text-gray-500">Com ?visitas=debug no endereço, o console do navegador mostra cada coisa que é mandada.</p>
           </Step>
-          <Step n={4} title="Tire a equipe da contagem">
+          <Step n={n(4)} title="Tire a equipe da contagem">
             <p>Abra este endereço uma vez em cada navegador e celular da equipe: daí em diante ele não conta mais.</p>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <a href={`${site}/?visitas=off`} target="_blank" rel="noreferrer" className="rounded-md bg-zinc-100 px-2 py-1 font-mono text-xs text-gray-800 hover:bg-zinc-200">
@@ -224,6 +306,7 @@ export const SiteSetup: React.FC<{ tracker: SiteTracker; manager: boolean; onRel
             <li>Cliques no WhatsApp, no telefone, no e-mail, em botões e links, e dúvidas abertas.</li>
             <li>Formulário: quem começou a preencher e quem enviou.</li>
             <li>Eventos do dataLayer (como lead_qualificado da página de proposta).</li>
+            <li>Loja: produto visto, carrinho, checkout e compras com valor (pixel da Shopify ou eventos do GA4), por origem e campanha.</li>
             <li>Aparelho, navegador (inclusive o do Instagram), sistema, país e idioma.</li>
           </ul>
           <p className="mt-3 rounded-lg bg-zinc-50 p-3 text-xs text-gray-600">

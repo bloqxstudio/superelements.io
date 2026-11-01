@@ -10,7 +10,7 @@ import { useComments, type OpportunityComment } from '@/features/crm/comments'
 import { useCrm } from '@/features/crm/crmStore'
 import { LeadOriginCard } from '@/features/crm/LeadOriginCard'
 import { OpportunityComments } from '@/features/crm/OpportunityComments'
-import { nameOf, personLabel, useTeamPeople } from '@/features/crm/people'
+import { nameOf, useTeamPeople } from '@/features/crm/people'
 import type { TeamPerson, TeamRole } from '@/features/crm/types'
 import { Avatar } from '@/features/crm/ui'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
@@ -166,7 +166,7 @@ const AgentStrip: React.FC = () => {
           Conectar
         </button>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="max-w-sm gap-0 p-0">
+          <DialogContent size="sm" className="gap-0 p-0">
             <DialogTitle className="sr-only">Conectar meus agentes</DialogTitle>
             <ConnectorPrompt />
           </DialogContent>
@@ -428,7 +428,7 @@ const OwnerPicker: React.FC<{ ownerId?: string; people?: TeamPerson[]; onAssign:
         <option value="">Sem responsável</option>
         {people?.map((p) => (
           <option key={p.userId} value={p.userId}>
-            {personLabel(p.email)}
+            {p.name}
             {p.userId === user?.id ? ' (eu)' : ''}
           </option>
         ))}
@@ -463,7 +463,7 @@ const Panel: React.FC<{
   const lead = item.lead
   const scan = lead.scan
   return (
-    <aside className="fixed inset-y-0 right-0 z-40 flex w-full max-w-xl flex-col border-l border-gray-200 bg-white shadow-[-12px_0_32px_-12px_rgb(0_0_0/0.18)]" aria-label={`Oportunidade: ${lead.name}`}>
+    <aside className="se-side-panel fixed inset-y-0 right-0 z-40 flex w-full max-w-xl flex-col border-l border-gray-200 bg-white shadow-[-12px_0_32px_-12px_rgb(0_0_0/0.18)]" aria-label={`Oportunidade: ${lead.name}`}>
       <header className="border-b border-gray-100 px-5 pt-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -896,7 +896,7 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
               <option value="ninguem">Sem responsável</option>
               {people.map((p) => (
                 <option key={p.userId} value={p.userId}>
-                  {personLabel(p.email)}
+                  {p.name}
                 </option>
               ))}
             </select>

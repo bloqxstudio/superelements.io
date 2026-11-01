@@ -1,0 +1,15 @@
+import React from 'react';
+
+export const SINFY_SYMBOL = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28"><rect width="28" height="28" rx="8" fill="#D2F525"/><path d="M14.771 14.557c-.409.401-1.218.729-1.796.729H7.122c-.58 0-.718-.328-.309-.729l6.406-6.279c.409-.401 1.217-.729 1.796-.729h5.854c.579 0 .717.328.308.729l-6.406 6.279Zm-.01 5.532c-.409.402-1.218.73-1.796.73H7.112c-.579 0-.717-.328-.308-.73l6.405-6.278c.409-.401 1.218-.73 1.797-.73h5.853c.579 0 .718.329.309.73l-6.407 6.278Z" fill="#263126"/></svg>';
+
+/** Símbolo original em S, com cantos mais suaves para a identidade Sinfy. */
+export function SinfyMark({ className = '' }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect width="28" height="28" rx="8" fill="#D2F525" />
+    <path d="M14.771 14.557c-.409.401-1.218.729-1.796.729H7.122c-.58 0-.718-.328-.309-.729l6.406-6.279c.409-.401 1.217-.729 1.796-.729h5.854c.579 0 .717.328.308.729l-6.406 6.279Zm-.01 5.532c-.409.402-1.218.73-1.796.73H7.112c-.579 0-.717-.328-.308-.73l6.405-6.278c.409-.401 1.218-.73 1.797-.73h5.853c.579 0 .718.329.309.73l-6.407 6.278Z" fill="#263126" />
+  </svg>;
+}
+
+export function SinfyWordmark() {
+  return <span className="sinfy-wordmark"><SinfyMark /><span>sinfy<span className="sinfy-wordmark__dot">.</span></span></span>;
+}

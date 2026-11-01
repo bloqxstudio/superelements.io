@@ -28,7 +28,7 @@ const VERSION = 'v26.0'
 const GRAPH = `https://graph.facebook.com/${VERSION}`
 const SCOPES = ['ads_read']
 const CALLBACK_PATH = '/anuncios/retorno'
-const PRESETS = ['last_7d', 'last_30d', 'last_90d', 'this_month'] as const
+const PRESETS = ['today', 'last_7d', 'last_30d', 'last_90d', 'this_month'] as const
 type Preset = (typeof PRESETS)[number]
 const DAY = 86_400_000
 

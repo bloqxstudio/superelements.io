@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { isLocalAppUrl, publicAppUrl } from '@/features/approval/shares'
+import { shopifyPixelCode } from './shopifyPixel'
 
 /**
  * As visitas do site da equipe (CRM › Site, `/crm/site`): quem entrou, de onde
@@ -36,8 +37,12 @@ export interface SiteTotals {
   activeMs: number
   /** Visitas de uma página só, sem contato e com menos de 10 s em uso */
   bounces: number
-  /** Visitas que chamaram no WhatsApp, ligaram, mandaram e-mail ou enviaram formulário */
+  /** Visitas que chamaram no WhatsApp, ligaram, mandaram e-mail, enviaram formulário ou compraram */
   converted: number
+  /** Compras (cada pedido uma vez), o valor somado e quem comprou */
+  orders: number
+  revenue: number
+  buyers: number
 }
 
 export interface SiteDay {
@@ -46,15 +51,17 @@ export interface SiteDay {
   visitors: number
   pageviews: number
   converted: number
+  orders?: number
+  revenue?: number
 }
 
 export interface SiteReport {
   totals: SiteTotals
   previous: SiteTotals
   days: SiteDay[]
-  channels: { channel: string; sessions: number; visitors: number; converted: number; activeMs: number }[]
+  channels: { channel: string; sessions: number; visitors: number; converted: number; activeMs: number; orders?: number; revenue?: number }[]
   sources: { channel: string; source: string; sessions: number; converted: number }[]
-  campaigns: { channel: string; source: string | null; medium: string | null; campaign: string; sessions: number; converted: number }[]
+  campaigns: { channel: string; source: string | null; medium: string | null; campaign: string; sessions: number; converted: number; orders?: number; revenue?: number }[]
   pages: { path: string; title: string | null; views: number; visitors: number; activeMs: number | null; scroll: number | null }[]
   landings: { path: string; sessions: number; converted: number; bounces: number }[]
   events: { name: string; total: number; sessions: number }[]
@@ -74,6 +81,9 @@ export interface SiteReport {
   cities: { country: string; region: string | null; city: string; lat: number; lon: number; sessions: number; visitors: number; converted: number }[]
   /** Por campanha, conjunto (`utm_term`) e anúncio (`utm_content`), como o link da Meta manda */
   ads: SiteAdRow[]
+  /** Loja: a moeda das compras e os produtos (vistos, no carrinho, comprados) */
+  currency?: string
+  products: { name: string; views: number; carts: number; orders: number }[]
   /** O relatório já vem com estados, cidades e anúncios (migração do mapa aplicada) */
   mapReady: boolean
 }
@@ -97,6 +107,8 @@ export interface SiteAdRow {
   /** Visitas com `lead_qualificado` / `lead_nao_qualificado` no dataLayer (a página Proposta) */
   qualified: number
   unqualified: number
+  orders?: number
+  revenue?: number
 }
 
 export interface Cut {
@@ -145,6 +157,10 @@ export interface SiteSession {
   activeMs: number
   converted: boolean
   conversions: string[]
+  /** Compras da visita, o valor e a moeda */
+  orders: number
+  revenue: number
+  currency?: string
 }
 
 /** O que o navegador contou do aparelho e o que veio no link do anúncio */
@@ -237,6 +253,9 @@ export async function removeTracker(id: string) {
 /** O código que vai no WordPress (uma vez, no fim do `<body>` de todas as páginas). */
 export const snippetOf = (tracker: SiteTracker) => `<script defer src="${visitasScriptUrl()}" data-site="${tracker.id}" data-endpoint="${VISITAS_ENDPOINT}"></script>`
 
+/** O pixel da Shopify deste site (`shopifyPixel.ts`). */
+export const shopifyPixelOf = (tracker: SiteTracker) => shopifyPixelCode(tracker.id, VISITAS_ENDPOINT)
+
 /** A função `site-visitas` está publicada e aberta para o site? */
 export async function checkEndpoint(): Promise<'ok' | 'missing' | 'jwt' | 'error'> {
   return (await endpointInfo()).status
@@ -299,7 +318,7 @@ export const localTz = () => {
 /** `2026-10-25` no fuso de quem abre */
 export const dayKeyOf = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
-const ZERO: SiteTotals = { sessions: 0, visitors: 0, newVisitors: 0, pageviews: 0, activeMs: 0, bounces: 0, converted: 0 }
+const ZERO: SiteTotals = { sessions: 0, visitors: 0, newVisitors: 0, pageviews: 0, activeMs: 0, bounces: 0, converted: 0, orders: 0, revenue: 0, buyers: 0 }
 const totalsOf = (value: unknown): SiteTotals => {
   const t = (value ?? {}) as Partial<Record<keyof SiteTotals, number | string>>
   return Object.fromEntries(Object.keys(ZERO).map((key) => [key, Number(t[key as keyof SiteTotals] ?? 0) || 0])) as unknown as SiteTotals
@@ -339,6 +358,8 @@ export async function loadReportRange(siteId: string, from: Date, to: Date): Pro
     regions: listOf(r.regions),
     cities: listOf<SiteReport['cities'][number]>(r.cities).map((c) => ({ ...c, lat: Number(c.lat), lon: Number(c.lon) })),
     ads: listOf(r.ads),
+    currency: typeof r.currency === "string" ? r.currency : undefined,
+    products: listOf(r.products),
     mapReady: Array.isArray(r.ads),
   }
 }
@@ -397,6 +418,9 @@ type SessionRow = {
   active_ms: number
   converted: boolean
   conversions: string[] | null
+  orders?: number | null
+  revenue?: number | string | null
+  currency?: string | null
 }
 
 const sessionOf = (r: SessionRow): SiteSession => ({
@@ -436,6 +460,9 @@ const sessionOf = (r: SessionRow): SiteSession => ({
   activeMs: r.active_ms,
   converted: r.converted,
   conversions: r.conversions ?? [],
+  orders: r.orders ?? 0,
+  revenue: Number(r.revenue ?? 0) || 0,
+  currency: opt(r.currency),
 })
 
 export const SESSIONS_PAGE = 50
@@ -546,6 +573,18 @@ export async function removeSession(id: string) {
 
 // ---------- nomes e números ----------
 
+/** O caminho da loja, na ordem (do pixel da Shopify ou do dataLayer do GA4); `compra` também é conversão */
+export const SHOP_EVENTS = ['produto', 'carrinho', 'checkout', 'pagamento', 'compra']
+
+/** `R$ 1.234,50` na moeda das compras (sem moeda, real) */
+export function moneyText(value: number, currency?: string, cents = true) {
+  try {
+    return value.toLocaleString('pt-BR', { style: 'currency', currency: currency || 'BRL', maximumFractionDigits: cents ? 2 : 0, minimumFractionDigits: cents ? 2 : 0 })
+  } catch {
+    return `${currency || 'R$'} ${value.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}`
+  }
+}
+
 /** Eventos que contam como contato (a visita "converteu") */
 export const CONTACT_EVENTS = ['whatsapp', 'telefone', 'email', 'formulario']
 
@@ -560,10 +599,15 @@ const EVENT_LABEL: Record<string, string> = {
   pergunta: 'Abriu uma dúvida',
   lead_qualificado: 'Lead qualificado',
   lead_nao_qualificado: 'Lead não qualificado',
+  produto: 'Viu um produto',
+  carrinho: 'Pôs no carrinho',
+  checkout: 'Começou o checkout',
+  pagamento: 'Informou o pagamento',
+  compra: 'Comprou',
 }
 export const eventLabel = (name: string) => EVENT_LABEL[name] ?? name.replace(/[_:]+/g, ' ')
 
-const CONTACT_SHORT: Record<string, string> = { whatsapp: 'WhatsApp', telefone: 'Ligação', email: 'E-mail', formulario: 'Formulário' }
+const CONTACT_SHORT: Record<string, string> = { whatsapp: 'WhatsApp', telefone: 'Ligação', email: 'E-mail', formulario: 'Formulário', compra: 'Compra' }
 export const contactLabel = (name: string) => CONTACT_SHORT[name] ?? eventLabel(name)
 
 /** `42 s`, `3 min 5 s`, `1 h 2 min` */

@@ -60,6 +60,10 @@ export interface PlanRequest {
   cases: { slug: string; name: string; segment: string; place?: string; summary: string; stack: string }[]
   /** Sequência de stories (9:16): cada slide é uma tela, sem link nem legenda (a pauta da semana). */
   story?: boolean
+  /** Roteiro aprovado de um conteúdo do Plano: os slides seguem as ideias dele, na ordem. */
+  script?: string
+  /** A empresa dona do conteúdo (quando não é a Avence): a IA escreve em nome dela. */
+  company?: { name: string; offer: string; audience: string; tone: string; restrictions: string }
   /** Libera os modelos com foto gerada (viral-capa, viral-foto), com a cena em `prompt`. */
   photos?: boolean
 }

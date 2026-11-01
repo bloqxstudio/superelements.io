@@ -170,7 +170,7 @@ export const ProjectAccessDialog: React.FC<ProjectAccessDialogProps> = ({ open, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>{owner ? `Compartilhar ${project.name}` : `Pessoas em ${project.name}`}</DialogTitle>
           <DialogDescription>

@@ -303,7 +303,7 @@ export const MetaCross: React.FC<{
           </div>
 
           <div className="-mx-1 overflow-x-auto px-1">
-            <table className="w-full min-w-[820px] text-left">
+            <table className="se-table w-full min-w-[820px] text-left">
               <thead>
                 <tr className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
                   <th className="pb-2 pr-3 font-medium">Campanha</th>

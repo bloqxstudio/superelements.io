@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowRight, CircleHelp, ExternalLink, FileText, Loader2, Mail, MapPin, Megaphone, MessageCircle, Monitor, MousePointerClick, Phone, Smartphone, Tablet, Trash2, X, Zap } from 'lucide-react'
+import { ArrowRight, CircleHelp, ExternalLink, FileText, Loader2, Mail, MapPin, Megaphone, MessageCircle, Monitor, MousePointerClick, Package, Phone, ShoppingBag, ShoppingCart, Smartphone, Tablet, Trash2, X, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,7 @@ import {
   CONTACT_EVENTS,
   SESSIONS_PAGE,
   contactLabel,
+  moneyText,
   duration,
   eventLabel,
   isLiveSession as isLive,
@@ -63,12 +64,14 @@ function deviceText(s: SiteSession) {
   return [s.details.model ?? s.device, os, s.browser].filter(Boolean).join(' · ')
 }
 
-const ContactBadges: React.FC<{ names: string[] }> = ({ names }) =>
+const ContactBadges: React.FC<{ names: string[]; session?: Pick<SiteSession, 'orders' | 'revenue' | 'currency'> }> = ({ names, session }) =>
   names.length ? (
     <span className="flex flex-wrap gap-1">
       {names.map((name) => (
         <span key={name} className="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800 ring-1 ring-inset ring-emerald-600/20">
-          {contactLabel(name)}
+          {name === 'compra' && session && session.revenue > 0
+            ? `${session.orders > 1 ? `${session.orders} compras` : 'Compra'} · ${moneyText(session.revenue, session.currency)}`
+            : contactLabel(name)}
         </span>
       ))}
     </span>
@@ -126,7 +129,7 @@ const SessionRow: React.FC<{ session: SiteSession; onOpen: () => void }> = ({ se
           </span>
         </span>
         <span className="flex justify-end">
-          <ContactBadges names={s.conversions} />
+          <ContactBadges names={s.conversions} session={s} />
         </span>
       </button>
     </li>
@@ -338,6 +341,11 @@ export const VisitsList: React.FC<{
 // ---------- uma visita ----------
 
 const EVENT_ICON: Record<string, React.ElementType> = {
+  produto: Package,
+  carrinho: ShoppingCart,
+  checkout: ShoppingCart,
+  pagamento: ShoppingCart,
+  compra: ShoppingBag,
   whatsapp: MessageCircle,
   telefone: Phone,
   email: Mail,
@@ -356,6 +364,13 @@ const offset = (ms: number) => {
 }
 
 const KNOWN_KEYS = new Set(['texto', 'secao', 'destino', 'formulario', 'nf'])
+
+/** `Camiseta · R$ 89,90 · 2 itens` */
+function shopDetail(d: SiteEvent['data']) {
+  const value = typeof d.valor === 'number' ? moneyText(d.valor, typeof d.moeda === 'string' ? d.moeda : undefined) : ''
+  const items = typeof d.itens === 'number' && d.itens > 1 ? `${d.itens} itens` : ''
+  return [typeof d.produto === 'string' ? d.produto : '', value, items].filter(Boolean).join(' · ')
+}
 
 /** Para onde levou o clique: `/#cases` vira `Início #cases` */
 const destination = (value: string) => {
@@ -381,6 +396,12 @@ function eventText(e: SiteEvent) {
       return { title: `Clicou em ${label || 'um botão'}`, detail: [where, typeof d.destino === 'string' ? `→ ${destination(d.destino)}` : ''].filter(Boolean).join(' ') }
     case 'pergunta':
       return { title: `Abriu a dúvida ${label}`, detail: where }
+    case 'produto':
+    case 'carrinho':
+    case 'checkout':
+    case 'pagamento':
+    case 'compra':
+      return { title: eventLabel(e.name), detail: shopDetail(d) }
     default: {
       const extra = Object.entries(d)
         .filter(([k]) => !KNOWN_KEYS.has(k))
@@ -501,7 +522,7 @@ export const VisitPanel: React.FC<{
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
+      <DialogContent size="lg">
         <DialogHeader className="space-y-1 text-left">
           <DialogTitle className="flex flex-wrap items-center gap-2 text-base">
             Visita de {whenLabel(s.startedAt)}
@@ -510,7 +531,7 @@ export const VisitPanel: React.FC<{
           <DialogDescription className="flex flex-wrap items-center gap-2">
             {duration(s.activeMs)} em uso · {plural(s.pageviews, 'página', 'páginas')}
             {s.visitNumber > 1 ? ` · ${s.visitNumber}ª visita desta pessoa` : ' · primeira visita'}
-            <ContactBadges names={s.conversions} />
+            <ContactBadges names={s.conversions} session={s} />
           </DialogDescription>
         </DialogHeader>
 
@@ -567,7 +588,7 @@ export const VisitPanel: React.FC<{
             <ol className="relative grid gap-0.5 before:absolute before:bottom-3 before:left-[80px] before:top-3 before:w-px before:bg-gray-200">
               {events.map((e) => {
                 const page = e.type === 'pageview'
-                const contact = !page && CONTACT_EVENTS.includes(e.name ?? '')
+                const contact = !page && (CONTACT_EVENTS.includes(e.name ?? '') || e.name === 'compra')
                 const Icon = page ? FileText : (EVENT_ICON[e.name ?? ''] ?? Zap)
                 const text = page
                   ? { title: `Viu ${e.title ? `“${e.title}”` : pathLabel(e.path)}`, detail: [e.title ? pathLabel(e.path) : '', e.activeMs ? `${duration(e.activeMs)} em uso` : '', e.scroll ? `rolou ${e.scroll}%` : '', e.data.nf ? 'página não encontrada (404)' : ''].filter(Boolean).join(' · ') }
@@ -604,7 +625,7 @@ export const VisitPanel: React.FC<{
                     <span className="tabular-nums text-gray-900">{whenLabel(o.startedAt)}</span>
                     <span className="text-gray-500">{originText(o)}</span>
                     <span className="text-gray-500">{plural(o.pageviews, 'página', 'páginas')}</span>
-                    <ContactBadges names={o.conversions} />
+                    <ContactBadges names={o.conversions} session={o} />
                   </button>
                 </li>
               ))}

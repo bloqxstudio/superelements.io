@@ -589,7 +589,7 @@ export const WordPressDialog: React.FC<WordPressDialogProps> = ({ open, onOpenCh
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={connection && editingIcon ? 'max-h-[92vh] max-w-2xl overflow-y-auto' : 'max-w-md'}>{body}</DialogContent>
+      <DialogContent size={connection && editingIcon ? 'lg' : 'sm'}>{body}</DialogContent>
     </Dialog>
   )
 }

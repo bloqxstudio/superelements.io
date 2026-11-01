@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { addActivity, deleteActivity, deleteClient, deleteContact, getClient, listActivities, listContacts, saveContact, updateClient } from '@/features/crm/clients'
 import { useCrm } from '@/features/crm/crmStore'
 import { createOpportunity, leadForClient, listClientOpportunities, updateOpportunity } from '@/features/crm/opportunities'
-import { nameOf, personLabel, useTeamPeople } from '@/features/crm/people'
+import { nameOf, useTeamPeople } from '@/features/crm/people'
 import {
   NOTE_KINDS,
   SOURCES,
@@ -251,7 +251,7 @@ const Opportunities: React.FC<{ client: Client; list: Opportunity[]; people?: Te
                     <option value="">Sem responsável</option>
                     {people?.map((p) => (
                       <option key={p.userId} value={p.userId}>
-                        {personLabel(p.email)}
+                        {p.name}
                       </option>
                     ))}
                     {o.ownerId && people && !nameOf(people, o.ownerId) && <option value={o.ownerId}>Fora da equipe</option>}
@@ -602,7 +602,7 @@ const ClientDetail: React.FC = () => {
       </div>
 
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent className="max-w-md">
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Apagar {client.name}?</DialogTitle>
             <DialogDescription>Saem junto os contatos, as oportunidades no funil e a linha do tempo. Não dá para desfazer.</DialogDescription>

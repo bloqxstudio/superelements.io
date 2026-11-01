@@ -144,7 +144,7 @@ const FormEditor: React.FC = () => {
         </label>
       </div>
 
-      <div role="tablist" aria-label="Seções do formulário" className="mt-5 flex gap-1 overflow-x-auto border-b border-gray-200">
+      <div role="tablist" aria-label="Seções do formulário" className="se-tabs mt-5 flex gap-1 overflow-x-auto border-b border-gray-200">
         {TABS.map((t) => (
           <button
             key={t.id}

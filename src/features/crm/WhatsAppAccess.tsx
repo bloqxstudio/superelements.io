@@ -161,7 +161,7 @@ const ClientDialog: React.FC<{
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92dvh] max-w-xl gap-0 overflow-y-auto p-0">
+      <DialogContent size="lg" className="gap-0 p-0">
         <DialogHeader className="border-b border-gray-100 px-6 pb-4 pt-6 text-left">
           <DialogTitle>{editing ? 'Editar cliente do WhatsApp' : 'Novo cliente do WhatsApp'}</DialogTitle>
           <DialogDescription>Quem pode escrever para o número da Avence, o que vê da própria conta e quando recebe o relatório.</DialogDescription>

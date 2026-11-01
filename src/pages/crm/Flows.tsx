@@ -65,7 +65,7 @@ interface Data {
 
 export default function CrmFlows() {
   const team = useCrm((s) => s.team)
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [tab, setTab] = useState<'rotina' | 'fluxos'>('rotina')
   const [data, setData] = useState<Data>()
   const [failure, setFailure] = useState<FlowError>()
@@ -104,7 +104,7 @@ export default function CrmFlows() {
   return (
     <Page wide>
       <PageHeader title="Fluxos" text="Sequências de mensagens de WhatsApp para a prospecção e o atendimento. A rotina do dia mostra quem está na vez, com o texto pronto: você confere e envia." />
-      <div className="mt-5 flex gap-1 border-b border-gray-200" role="tablist">
+      <div className="se-tabs mt-5 flex gap-1 border-b border-gray-200" role="tablist">
         {(['rotina', 'fluxos'] as const).map((id) => (
           <button
             key={id}
@@ -132,7 +132,7 @@ export default function CrmFlows() {
             Lendo os fluxos…
           </p>
         ) : tab === 'rotina' ? (
-          <Routine data={data} teamId={team.id} seller={personLabel(user.email)} reload={load} goFlows={() => setTab('fluxos')} />
+          <Routine data={data} teamId={team.id} seller={profile?.name ?? personLabel(user.email)} reload={load} goFlows={() => setTab('fluxos')} />
         ) : (
           <Flows data={data} teamId={team.id} userId={user.id} manager={canManage(team.role)} reload={load} />
         )}

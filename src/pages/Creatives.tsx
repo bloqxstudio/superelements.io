@@ -78,7 +78,7 @@ const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClos
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Novo conjunto de criativos</DialogTitle>
           <DialogDescription>Escolha o projeto de quem são os posts e os modelos para começar. Você muda tudo no editor.</DialogDescription>

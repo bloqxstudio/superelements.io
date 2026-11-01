@@ -280,7 +280,7 @@ export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; 
 
   return (
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
+      <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle>Publicar em @{account.username}</DialogTitle>
           <DialogDescription>

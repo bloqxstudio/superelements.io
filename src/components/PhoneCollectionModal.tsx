@@ -66,7 +66,7 @@ export const PhoneCollectionModal: React.FC<PhoneCollectionModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+      <DialogContent size="sm" onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
             <Phone className="h-8 w-8 text-primary" />

@@ -63,7 +63,7 @@ export const ChatGPTConnectionDialog: React.FC<ChatGPTConnectionDialogProps> = (
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="overflow-hidden p-0 sm:max-w-[520px]">
+      <DialogContent size="md" className="overflow-hidden p-0">
         <div className="border-b bg-gray-50 px-6 py-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-950 text-white shadow-sm">

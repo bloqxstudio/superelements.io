@@ -448,7 +448,7 @@ const Prospects: React.FC = () => {
                   <p key={note} className="mt-3 text-xs text-amber-800">{note}</p>
                 ))}
 
-                <div className="mt-6 flex items-center gap-1 border-b border-gray-200" role="tablist">
+                <div className="se-tabs mt-6 flex items-center gap-1 border-b border-gray-200" role="tablist">
                   {(
                     [
                       ['empresas', `Empresas (${leads.length})`],

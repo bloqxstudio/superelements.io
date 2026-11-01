@@ -125,7 +125,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({ open, onOpenChange, sk
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent size="lg" className="flex flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b px-6 pb-4 pt-6 text-left">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-700 ring-1 ring-gray-200">

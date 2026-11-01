@@ -1,3 +1,4 @@
+import { codexModelArgs } from './codex.ts'
 import type { ChildProcess } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -157,7 +158,7 @@ async function viaCodex(prompt: string, ratio: ImageRatio, signal?: AbortSignal)
       for (const key of ['CODEX_THREAD_ID', 'CODEX_SESSION_ID']) delete env[key]
       let child: ChildProcess
       try {
-        child = launch(bin, ['exec', '--json', '--skip-git-repo-check', '-s', 'workspace-write', '-c', 'approval_policy="never"', ...extra, '-'], { cwd, env })
+        child = launch(bin, ['exec', '--json', '--skip-git-repo-check', '-s', 'workspace-write', '-c', 'approval_policy="never"', ...codexModelArgs(), ...extra, '-'], { cwd, env })
       } catch (error) {
         rmSync(cwd, { recursive: true, force: true })
         return reject(new Error(`Não consegui abrir o Codex: ${error instanceof Error ? error.message : String(error)}`))

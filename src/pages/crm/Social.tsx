@@ -309,7 +309,7 @@ const Social: React.FC = () => {
   const [autoOpen, setAutoOpen] = useState(readAutoOpen)
   const loadedAt = useRef(0)
 
-  const sender = personLabel(profile?.email ?? user?.email ?? undefined).split(' ')[0] || '[seu nome]'
+  const sender = (profile?.name ?? personLabel(user?.email ?? undefined)).split(' ')[0] || '[seu nome]'
 
   const read = useCallback(() => {
     if (!pipeline) return

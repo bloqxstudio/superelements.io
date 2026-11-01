@@ -16,6 +16,10 @@ export interface AiForm {
   posts: number
   /** `slug` dos cases que o post pode usar. */
   cases: string[]
+  script?: string
+  company?: PlanRequest['company']
+  /** Libera os modelos com foto gerada. */
+  photos?: boolean
 }
 
 export const AI_EXAMPLES = [
@@ -31,6 +35,9 @@ export async function generatePosts(form: AiForm, brand: SetBrand, signal?: Abor
     slides: form.slides,
     posts: form.posts,
     engine: resolveIa('criativos'),
+    script: form.script,
+    photos: form.photos,
+    company: form.company,
     cases: AV_CASES.filter((c) => form.cases.includes(c.slug)).map((c) => ({ slug: c.slug, name: c.name, segment: c.segment, place: c.place, summary: c.summary, stack: c.stack })),
   }
   const body = await callAi<Partial<PlanResponse>>('plan', request, signal)

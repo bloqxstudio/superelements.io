@@ -115,7 +115,7 @@ export const SendDialog: React.FC<{ open: boolean; onClose: () => void; initial?
   const pages = pagesOf(doc)
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent size="sm">
         <DialogHeader>
           <DialogTitle>{dest === 'pasta' ? 'Enviar a pasta' : 'Enviar este texto'}</DialogTitle>
           <DialogDescription>{doc.format === 'pesquisa' ? 'Uma pesquisa vira posts; os outros textos vão como estão, sem reescrever.' : 'O texto vai como está: ele não é reescrito no caminho.'}</DialogDescription>

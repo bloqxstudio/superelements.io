@@ -46,7 +46,7 @@ export const ProjectDialog: React.FC<ProjectDialogProps> = ({ open, onOpenChange
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent size="md">
         <form onSubmit={submit} className="grid gap-5">
           <DialogHeader>
             <DialogTitle>{project ? 'Detalhes do projeto' : 'Novo projeto'}</DialogTitle>

@@ -133,7 +133,7 @@ const Clients: React.FC = () => {
             <p className="mt-6 text-sm text-gray-500">Nenhum cliente com esse filtro.</p>
           ) : (
             <div className="mt-4 overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)]">
-              <table className="w-full text-left text-sm">
+              <table className="se-table w-full text-left text-sm">
                 <thead className="hidden border-b border-gray-100 text-xs text-gray-500 md:table-header-group">
                   <tr>
                     <th className="px-4 py-2.5 font-medium">Cliente</th>

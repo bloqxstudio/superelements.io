@@ -145,7 +145,7 @@ const AiStrip: React.FC = () => {
           Conectar
         </Button>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="max-w-sm gap-0 p-0">
+          <DialogContent size="sm" className="gap-0 p-0">
             <DialogTitle className="sr-only">Conectar meus agentes</DialogTitle>
             <ConnectorPrompt />
           </DialogContent>
@@ -417,7 +417,7 @@ const StoryPanel: React.FC<{
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto">
+      <DialogContent size="xl">
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">
             <StatusChip status={story.status} />

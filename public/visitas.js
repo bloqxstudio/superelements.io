@@ -17,6 +17,13 @@
  * equipe); `?visitas=on` volta a contar; `?visitas=debug` mostra no console o
  * que seria mandado. Logado no WordPress, no editor do Elementor ou dentro de
  * um quadro, não conta. Eventos próprios: visitas('nome', { chave: 'valor' }).
+ *
+ * Serve em qualquer site (WordPress, Shopify, HTML). Loja: os eventos de
+ * comércio do GA4 no dataLayer (`view_item`, `add_to_cart`, `begin_checkout`,
+ * `add_payment_info`, `purchase`) chegam como `produto`, `carrinho`, `checkout`,
+ * `pagamento` e `compra`, com valor, moeda, itens e pedido; a compra é conversão.
+ * Na Shopify, no `theme.liquid`; a loja e o checkout vêm do pixel da Shopify
+ * (`shopifyPixelOf` em `src/features/crm/site.ts`), que usa a mesma visita.
  */
 ;(function () {
   'use strict'
@@ -72,6 +79,9 @@
     params.has('preview_id') ||
     params.has('customize_changeset_uuid') ||
     params.get('preview') === 'true' ||
+    // Editor de tema e prévia de tema na Shopify
+    !!(window.Shopify && window.Shopify.designMode) ||
+    params.has('preview_theme_id') ||
     (body && /(^|\s)(logged-in|elementor-editor-active|elementor-editor-preview)(\s|$)/.test(body.className))
   try {
     if (window.top !== window.self) skip = true
@@ -452,14 +462,58 @@
     }
     return data
   }
-  function fromDataLayer(item) {
+  // Loja (eventos de comércio do GA4): o nome vira o do painel e vêm junto o valor,
+  // a moeda, os itens e o pedido (`items` e `ecommerce` são objetos, que `simple` deixaria de fora)
+  var SHOP_EVENTS = { view_item: 'produto', add_to_cart: 'carrinho', begin_checkout: 'checkout', add_payment_info: 'pagamento', purchase: 'compra' }
+  // Na Shopify quem manda a loja é o pixel (Eventos do cliente), que também vê o checkout
+  var onShopify = !!(window.Shopify && window.Shopify.shop)
+  function commerce(name, source) {
+    var mapped = SHOP_EVENTS[name]
+    if (!mapped || !source || typeof source !== 'object') return null
+    var ec = source.ecommerce && typeof source.ecommerce === 'object' ? source.ecommerce : source
+    var data = {}
+    var raw = ec.value != null ? ec.value : ec.revenue
+    var value = typeof raw === 'number' ? raw : parseFloat(raw)
+    if (isFinite(value) && value >= 0) data.valor = Math.round(value * 100) / 100
+    if (typeof ec.currency === 'string' && ec.currency) data.moeda = ec.currency.slice(0, 3).toUpperCase()
+    var order = ec.transaction_id != null ? ec.transaction_id : ec.transactionId
+    if (order != null && order !== '') data.pedido = String(order).slice(0, 80)
+    var items = Array.isArray(ec.items) ? ec.items : []
+    if (items.length) {
+      var count = 0
+      for (var i = 0; i < items.length && i < 100; i++) count += (items[i] && Number(items[i].quantity)) || 1
+      data.itens = count
+      var first = items[0] || {}
+      var product = first.item_name || first.name
+      if (product) data.produto = String(product).slice(0, 120)
+    }
+    return { name: mapped, data: data }
+  }
+  function emit(name, source, skip, fromLayer) {
+    var shop = commerce(name, source)
+    if (shop) {
+      if (!(fromLayer && onShopify)) track(shop.name, shop.data, true)
+      return
+    }
+    track(name, simple(source, skip), true)
+  }
+  function fromDataLayer(item, onlyShop) {
     if (!item || typeof item !== 'object') return
     // gtag('event', 'nome', { … }) empurra os argumentos
-    if (item[0] === 'event' && typeof item[1] === 'string') return track(item[1], simple(item[2]), true)
-    if (typeof item.event !== 'string' || /^(gtm|gtag|optimize)\./.test(item.event)) return
-    track(item.event, simple(item, 'event'), true)
+    var name = item[0] === 'event' && typeof item[1] === 'string' ? item[1] : item.event
+    if (typeof name !== 'string' || /^(gtm|gtag|optimize)\./.test(name)) return
+    if (onlyShop && !SHOP_EVENTS[name]) return
+    if (item[0] === 'event') emit(name, item[2], undefined, true)
+    else emit(name, item, 'event', true)
   }
   var layer = (window.dataLayer = window.dataLayer || [])
+  // A compra empurrada antes do script (a página de obrigado da loja) também conta;
+  // o mesmo pedido não soma duas vezes no painel
+  for (var d = 0; d < layer.length && d < 200; d++) {
+    try {
+      fromDataLayer(layer[d], true)
+    } catch (e) {}
+  }
   var push = layer.push
   layer.push = function () {
     for (var i = 0; i < arguments.length; i++) {
@@ -473,7 +527,7 @@
   // Eventos próprios: visitas('nome', { chave: 'valor' })
   var queued = window.visitas && window.visitas.q
   window.visitas = function (name, data) {
-    if (typeof name === 'string' && name) track(name, simple(data), true)
+    if (typeof name === 'string' && name) emit(name, data)
   }
   if (queued && queued.length) for (var q = 0; q < queued.length; q++) window.visitas.apply(null, queued[q])
 })()
