@@ -3,6 +3,8 @@ import {
   Check, ChevronDown, Filter, Globe2, Instagram, LayoutDashboard, ListChecks, Megaphone, MessageCircle, Mic, Paperclip, Search, Send, TrendingUp, UserPlus,
 } from 'lucide-react';
 import { SinfyWordmark } from './SinfyBrand';
+import { SiteMap } from '@/features/crm/SiteMap';
+import type { SiteReport, SiteSession } from '@/features/crm/site';
 import './ProductTour.css';
 
 /**
@@ -213,11 +215,28 @@ function Formularios() {
 /** Visitantes fictícios que andam pelo site: troca de página, um chega, um clica no WhatsApp. */
 const PAGES = ['/inicio', '/clube-do-banho', '/servicos/tosa', '/hotel', '/contato'];
 const VISITORS = [
-  { id: 'a', place: 'Porto Alegre, RS', from: 'Meta Ads · Reels Verão', device: 'iPhone' },
-  { id: 'b', place: 'São Leopoldo, RS', from: 'Google · Busca', device: 'Android' },
-  { id: 'c', place: 'Canoas, RS', from: 'Instagram', device: 'Android' },
-  { id: 'd', place: 'Novo Hamburgo, RS', from: 'Direto', device: 'Computador' },
+  { id: 'a', place: 'Porto Alegre, RS', city: 'Porto Alegre', lat: -30.03, lon: -51.22, from: 'Meta Ads · Reels Verão', channel: 'Meta Ads', device: 'iPhone' },
+  { id: 'b', place: 'São Leopoldo, RS', city: 'São Leopoldo', lat: -29.76, lon: -51.15, from: 'Google · Busca', channel: 'Google (busca)', device: 'Android' },
+  { id: 'c', place: 'Canoas, RS', city: 'Canoas', lat: -29.92, lon: -51.18, from: 'Instagram', channel: 'Instagram', device: 'Android' },
+  { id: 'd', place: 'Novo Hamburgo, RS', city: 'Novo Hamburgo', lat: -29.68, lon: -51.13, from: 'Direto', channel: 'Direto', device: 'Computador' },
 ];
+
+/** O relatório do período no formato do `site_report`, só com o que o mapa lê (dados fictícios). */
+const CITY = (city: string, region: string, lat: number, lon: number, sessions: number, converted: number) => ({ country: 'BR', region, city, lat, lon, sessions, visitors: Math.round(sessions * 0.8), converted });
+const DEMO_REPORT = {
+  totals: { sessions: 652, visitors: 511, newVisitors: 402, pageviews: 1490, activeMs: 0, bounces: 0, converted: 38, orders: 0, revenue: 0, buyers: 0 },
+  regions: [
+    { country: 'BR', region: 'RS', name: 'Rio Grande do Sul', sessions: 602, visitors: 470, converted: 35, meta: 0 },
+    { country: 'BR', region: 'SC', name: 'Santa Catarina', sessions: 31, visitors: 26, converted: 2, meta: 0 },
+    { country: 'BR', region: 'PR', name: 'Paraná', sessions: 19, visitors: 15, converted: 1, meta: 0 },
+  ],
+  cities: [
+    CITY('Porto Alegre', 'RS', -30.03, -51.22, 214, 12), CITY('São Leopoldo', 'RS', -29.76, -51.15, 168, 11), CITY('Novo Hamburgo', 'RS', -29.68, -51.13, 97, 6),
+    CITY('Canoas', 'RS', -29.92, -51.18, 81, 4), CITY('Gravataí', 'RS', -29.94, -50.99, 42, 2), CITY('Florianópolis', 'SC', -27.6, -48.55, 31, 2), CITY('Curitiba', 'PR', -25.43, -49.27, 19, 1),
+  ],
+  countries: [{ key: 'BR', sessions: 652 }],
+  mapReady: true,
+} as unknown as SiteReport;
 function useLiveVisitors() {
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -233,11 +252,19 @@ function useLiveVisitors() {
   });
 }
 
+/** Os visitantes ao vivo no formato de visita do produto, para piscarem no mapa. */
+function asSessions(list: ReturnType<typeof useLiveVisitors>): SiteSession[] {
+  const now = Date.now();
+  return list.map((v) => ({
+    id: v.id, visitorId: v.id, visitNumber: 1, startedAt: now - v.seconds * 1000, lastAt: now, landing: '/inicio', exit: v.page, channel: v.channel,
+    device: v.device, country: 'BR', city: v.city, region: 'RS', regionName: 'Rio Grande do Sul', lat: v.lat, lon: v.lon, details: {},
+    pageviews: 3, events: 2, activeMs: v.seconds * 1000, converted: v.converted, conversions: v.converted ? ['whatsapp'] : [],
+  }) as unknown as SiteSession);
+}
+
 function Site() {
-  const cities = [['Porto Alegre', 214], ['São Leopoldo', 168], ['Novo Hamburgo', 97], ['Canoas', 81], ['Gravataí', 42]] as const;
-  const grow = useGrow();
-  const pins = [[52, 38, true], [58, 46, true], [47, 55, false], [63, 30, false], [41, 44, true], [55, 62, false], [66, 52, false]] as const;
   const live = useLiveVisitors();
+  const sessions = asSessions(live);
   const converted = live.find((v) => v.converted);
   return <>
     <Head title="Visitas ao site" sub="caramelopet.exemplo · 652 visitas no período"><span className="pt-live"><i />{live.length} no site agora</span><Period /></Head>
@@ -247,24 +274,15 @@ function Site() {
       <Kpi label="Tempo médio" value="1 min 42 s" />
       <Kpi label="Chegaram a um contato" value="38" delta="5,8%" />
     </div>
-    <div className="pt-grid2">
-      <section className="pt-card pt-map">
-        <h5>Mapa · Região Metropolitana</h5>
-        <svg viewBox="0 0 100 80" aria-hidden="true"><path d="M20 18 L48 8 L78 14 L90 34 L84 60 L60 74 L30 70 L12 50 Z" fill="#eef3e6" stroke="#cfdcc0" strokeWidth=".6" /><path d="M40 10 L44 40 L30 70 M48 40 L84 40 M44 40 L60 74" stroke="#dfe7d4" strokeWidth=".5" fill="none" />
-          {pins.map(([x, y, live], i) => <g key={i}>{live && <circle cx={x} cy={y} r="4.5" className="pt-pulse" />}<circle cx={x} cy={y} r={live ? 2 : 1.6} fill={live ? '#6f8c3a' : '#b4c49d'} /></g>)}</svg>
-        <div className="pt-legend"><span><i className="is-live" />Ao vivo</span><span><i />Visitas do período</span></div>
-      </section>
-      <section className="pt-card">
-        <h5>No site agora</h5>
-        <div className="pt-visitors" aria-live="polite">{live.map((v) => <div key={v.id} className={`pt-visitor${v.converted ? ' is-converted' : ''}`}>
-          <i className="pt-dot" /><div><b>{v.place}</b><span>{v.from} · {v.device}</span></div>
-          <code key={v.page}>{v.page}</code><small>{Math.floor(v.seconds / 60)}:{String(v.seconds % 60).padStart(2, '0')}</small>
-        </div>)}</div>
-        {converted && <div className="pt-toast" key="toast"><MessageCircle aria-hidden="true" /><div><b>Clicou no WhatsApp</b><span>{converted.place} · {converted.from}</span></div></div>}
-        <h5 className="pt-mt">Cidades</h5>
-        {cities.slice(0, 3).map(([c, n]) => <div key={c} className="pt-bar"><span>{c}</span><div><i style={{ width: grow ? `${(n / 214) * 100}%` : 0 }} /></div><b>{n}</b></div>)}
-      </section>
-    </div>
+    <div className="pt-sitemap"><SiteMap report={DEMO_REPORT} live={sessions} onVisits={() => undefined} onOpenSession={() => undefined} /></div>
+    <section className="pt-card pt-mt-card">
+      <h5>No site agora</h5>
+      <div className="pt-visitors pt-visitors--row" aria-live="polite">{live.map((v) => <div key={v.id} className={`pt-visitor${v.converted ? ' is-converted' : ''}`}>
+        <i className="pt-dot" /><div><b>{v.place}</b><span>{v.from} · {v.device}</span></div>
+        <code key={v.page}>{v.page}</code><small>{Math.floor(v.seconds / 60)}:{String(v.seconds % 60).padStart(2, '0')}</small>
+      </div>)}</div>
+      {converted && <div className="pt-toast" key="toast"><MessageCircle aria-hidden="true" /><div><b>Clicou no WhatsApp</b><span>{converted.place} · {converted.from}</span></div></div>}
+    </section>
   </>;
 }
 

@@ -152,6 +152,16 @@
 .pt-bar div{height:7px;border-radius:4px;background:var(--pt-paper);overflow:hidden}.pt-bar i{display:block;height:100%;border-radius:4px;background:#b9cf8f;transition:width .8s cubic-bezier(.2,.8,.2,1)}
 .pt-bar b{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
 
+/* mapa real do produto (SiteMap) dentro da /lp: desfaz o tamanho fixo dos svgs da página */
+.pt-sitemap{margin-bottom:12px;font-size:14px;line-height:1.45}
+.lp .pt-sitemap h2,.lp .pt-sitemap h3{font-size:13px;font-weight:600;letter-spacing:0;line-height:1.3}
+.lp .pt-sitemap button{font-size:12px;line-height:1.3}
+.lp .pt-sitemap svg[role=img]{width:100%;height:380px}
+.lp .pt-sitemap svg:not([role=img]){width:14px;height:14px}
+.pt-sitemap>*{border-radius:12px}
+.pt-mt-card{margin-top:0}
+.pt-visitors--row{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+
 /* anúncios */
 .pt-chart__h{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.pt-chart__h h5{margin:0}
 .pt-cols{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;align-items:end;height:200px;padding:12px;border-radius:10px;background:var(--pt-dark)}
