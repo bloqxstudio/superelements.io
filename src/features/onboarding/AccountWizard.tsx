@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, CircleAlert, Download, ExternalLink, FilePlus2, Globe, Loader2, SkipForward } from 'lucide-react'
+import { ArrowLeft, Check, CircleAlert, Download, ExternalLink, FilePlus2, Globe, Loader2, ShoppingBag, SkipForward } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
@@ -8,6 +8,7 @@ import { useCrm } from '@/features/crm/crmStore'
 import { ModuleToggles } from '@/features/crm/ModuleToggles'
 import type { ModuleId } from '@/features/crm/modules'
 import { createAccount } from '@/features/crm/teams'
+import { createTracker, type SiteTracker } from '@/features/crm/site'
 import { FIELD } from '@/features/crm/ui'
 import { useProject, useProjectStore } from '@/features/projects/projectStore'
 import { loadWordPressConnection } from '@/features/projects/storage'
@@ -23,17 +24,24 @@ import { openApprovalWindow } from '@/features/wordpress/WordPressDialog'
 import { cn } from '@/lib/utils'
 import { importWholeSite } from './importSite'
 import { detectSiteKind, type SiteKind } from './siteKind'
+import { manualStore, readShopifyStore, type ShopifyStore } from './shopify'
+import { ShopifyOnboarding } from './ShopifyOnboarding'
 
 /**
  * Assistente de conta nova: o tipo de site, o cadastro básico e, para WordPress, conectar, instalar o
  * plugin e importar o site. O projeto abre em segundo plano (sem o editor) e a pessoa cai na tela
- * principal quando termina.
+ * principal quando termina. Loja Shopify (escolhida no começo, ou achada pelo endereço em "Já tem um
+ * site"): a conta nasce sem Projetos e com o Analytics do site, a loja já cadastrada nele, e segue
+ * para o onboarding da loja (`ShopifyOnboarding`: os dois códigos e a conferência ao vivo).
  */
 
 const EMPTY = { name: '', segment: '', website: '', contactName: '', contactEmail: '', contactPhone: '' }
 
-type Origin = 'new' | 'url'
-type Phase = 'origin' | 'details' | 'run'
+type Origin = 'new' | 'url' | 'shopify'
+type Phase = 'origin' | 'details' | 'run' | 'shopify'
+
+/** Loja Shopify: sem o Space (Projetos), com o Analytics do site */
+const SHOPIFY_MODULES: Record<string, boolean> = { projetos: false, site: true }
 type Status = 'wait' | 'doing' | 'done' | 'skipped' | 'error'
 type TaskId = 'account' | 'connect' | 'plugin' | 'import'
 
@@ -105,6 +113,10 @@ export const AccountWizard: React.FC = () => {
   const [password, setPassword] = useState('')
   const [pasting, setPasting] = useState(false)
   const started = useRef(false)
+  // Loja Shopify: lida do `/meta.json` enquanto o endereço é digitado; depois, o site cadastrado no Analytics
+  const [shop, setShop] = useState<ShopifyStore | 'checking' | null>(null)
+  const [shopTracker, setShopTracker] = useState<SiteTracker | null>(null)
+  const shopSeq = useRef(0)
 
   // Campos que a pessoa mexeu: o que vem do site nunca escreve por cima
   const touched = useRef(new Set<string>())
@@ -141,6 +153,37 @@ export const AccountWizard: React.FC = () => {
     return () => clearTimeout(timer)
   }, [form.website, origin])
 
+  // Loja Shopify: confirma pelo endereço e preenche o nome
+  useEffect(() => {
+    if (origin !== 'shopify') return
+    const text = form.website.trim()
+    if (!siteCandidates(text).length) {
+      shopSeq.current++
+      setShop(null)
+      return
+    }
+    const id = ++shopSeq.current
+    setShop('checking')
+    const timer = setTimeout(() => {
+      void readShopifyStore(text).then((store) => {
+        if (id !== shopSeq.current) return
+        setShop(store)
+        if (store) fill({ name: store.name })
+      })
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [form.website, origin, fill])
+  const store = origin === 'shopify' && shop && shop !== 'checking' ? shop : null
+
+  /** Em "Já tem um site" o endereço era de uma loja Shopify: segue pelo onboarding dela */
+  const switchToShopify = (found: ShopifyStore) => {
+    setOrigin('shopify')
+    setModules((m) => ({ ...m, ...SHOPIFY_MODULES }))
+    shopSeq.current++
+    setShop(found)
+    fill({ name: found.name })
+  }
+
   // Achou o site: o nome vem do próprio WordPress e o contato, da leitura da página inicial (se a função estiver no ar)
   const detectedSite = kind && kind !== 'checking' && kind.kind === 'wordpress' ? kind.site : null
   useEffect(() => {
@@ -174,12 +217,29 @@ export const AccountWizard: React.FC = () => {
   )
 
   const start = async () => {
-    if (!user || !form.name.trim() || started.current) return
+    if (!user || !form.name.trim() || started.current || (origin === 'shopify' && !store)) return
     started.current = true
     // A janela de aprovação precisa abrir neste clique; o endereço entra quando a conta existir
     const popup = wordpress ? openApprovalWindow() : null
     setPhase('run')
     mark('account', 'doing')
+    if (origin === 'shopify' && store) {
+      try {
+        const teamId = await createAccount({ ...form, website: form.website.trim() || store.domain, modules: { ...modules, site: true } })
+        await load(user.id, true)
+        await select(teamId)
+        const name = form.name.trim() || store.name
+        const id = await createTracker(teamId, store.domain, name)
+        setShopTracker({ id, teamId, name, domain: store.domain, createdAt: Date.now() })
+        mark('account', 'done')
+        setPhase('shopify')
+      } catch (error) {
+        started.current = false
+        setFailure(error instanceof Error ? error.message : 'Não foi possível criar a conta.')
+        mark('account', 'error')
+      }
+      return
+    }
     try {
       const teamId = await createAccount({ ...form, modules })
       await load(user.id, true)
@@ -327,19 +387,25 @@ export const AccountWizard: React.FC = () => {
   if (phase === 'origin') {
     const choose = (next: Origin) => {
       setOrigin(next)
+      if (next === 'shopify') setModules((m) => ({ ...m, ...SHOPIFY_MODULES }))
       setPhase('details')
     }
     return (
       <div className="mx-auto w-full max-w-2xl px-4 py-10">
         <h1 className="text-xl font-semibold text-gray-900">Nova conta</h1>
-        <p className="mt-1 text-sm text-gray-600">O cliente já tem um site ou vamos começar do zero?</p>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <button type="button" onClick={() => choose('url')} className={cn(card, 'text-left transition-colors hover:border-gray-400')}>
+        <p className="mt-1 text-sm text-gray-600">O cliente já tem um site, tem uma loja Shopify ou vamos começar do zero?</p>
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <button type="button" onClick={() => choose('url')} className={cn(card, 'flex flex-col items-start justify-start text-left transition-colors hover:border-gray-400')}>
             <Globe className="h-5 w-5 text-gray-700" aria-hidden />
             <p className="mt-3 text-sm font-semibold text-gray-900">Já tem um site</p>
             <p className="mt-1 text-sm text-gray-600">Informe o endereço. Se for WordPress, conectamos, instalamos o plugin e importamos as páginas.</p>
           </button>
-          <button type="button" onClick={() => choose('new')} className={cn(card, 'text-left transition-colors hover:border-gray-400')}>
+          <button type="button" onClick={() => choose('shopify')} className={cn(card, 'flex flex-col items-start justify-start text-left transition-colors hover:border-gray-400')}>
+            <ShoppingBag className="h-5 w-5 text-gray-700" aria-hidden />
+            <p className="mt-3 text-sm font-semibold text-gray-900">Loja Shopify</p>
+            <p className="mt-1 text-sm text-gray-600">Visitas, origem, carrinho e vendas da loja no Analytics. Dois códigos no admin, sem plugin.</p>
+          </button>
+          <button type="button" onClick={() => choose('new')} className={cn(card, 'flex flex-col items-start justify-start text-left transition-colors hover:border-gray-400')}>
             <FilePlus2 className="h-5 w-5 text-gray-700" aria-hidden />
             <p className="mt-3 text-sm font-semibold text-gray-900">Site novo</p>
             <p className="mt-1 text-sm text-gray-600">Cria a conta e o projeto vazio. O site é construído depois.</p>
@@ -355,7 +421,7 @@ export const AccountWizard: React.FC = () => {
   if (phase === 'details') {
     return (
       <div className="mx-auto w-full max-w-2xl px-4 py-10">
-        <h1 className="text-xl font-semibold text-gray-900">{origin === 'url' ? 'Dados da conta e do site' : 'Dados da conta'}</h1>
+        <h1 className="text-xl font-semibold text-gray-900">{origin === 'url' ? 'Dados da conta e do site' : origin === 'shopify' ? 'Dados da conta e da loja' : 'Dados da conta'}</h1>
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -364,6 +430,45 @@ export const AccountWizard: React.FC = () => {
           className={cn(card, 'mt-6 grid gap-5')}
         >
           <div className="grid gap-3 sm:grid-cols-2">
+            {origin === 'shopify' && (
+              <label className="grid gap-1.5 sm:col-span-2">
+                <span className="text-xs font-medium text-gray-700">Endereço da loja</span>
+                <input value={form.website} onChange={set('website')} maxLength={200} placeholder="minhaloja.com.br ou minhaloja.myshopify.com" required autoFocus className={`${FIELD} h-10`} />
+                <span className="flex min-h-5 items-center gap-1.5 text-xs text-gray-600">
+                  {shop === 'checking' && (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Procurando a loja…
+                    </>
+                  )}
+                  {store && (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden /> Loja Shopify{store.headless ? ' (headless)' : ''}: {store.name} · {store.domain}
+                      {store.currency ? ` · ${store.currency}` : ''}
+                    </>
+                  )}
+                  {shop === null && form.website.trim() && siteCandidates(form.website.trim()).length > 0 && (
+                    <>
+                      <CircleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
+                      <span>
+                        Não achei uma loja Shopify com tema neste endereço. Confira o domínio (ou use o .myshopify.com).{' '}
+                        {manualStore(form.website, form.name) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              shopSeq.current++
+                              setShop(manualStore(form.website, form.name))
+                            }}
+                            className="font-medium text-gray-900 underline underline-offset-2 hover:text-gray-700"
+                          >
+                            É Shopify (headless): continuar com este domínio
+                          </button>
+                        )}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </label>
+            )}
             {origin === 'url' && (
               <label className="grid gap-1.5 sm:col-span-2">
                 <span className="text-xs font-medium text-gray-700">Endereço do site</span>
@@ -382,6 +487,14 @@ export const AccountWizard: React.FC = () => {
                   {kind && kind !== 'checking' && kind.kind === 'wordpress' && kind.blocked && (
                     <>
                       <CircleAlert className="h-3.5 w-3.5 text-amber-600" aria-hidden /> WordPress, mas: {kind.blocked}
+                    </>
+                  )}
+                  {kind && kind !== 'checking' && kind.kind === 'shopify' && (
+                    <>
+                      <ShoppingBag className="h-3.5 w-3.5 text-emerald-600" aria-hidden /> Loja Shopify: {kind.store.name}.
+                      <button type="button" onClick={() => switchToShopify(kind.store)} className="font-medium text-gray-900 underline underline-offset-2 hover:text-gray-700">
+                        Seguir pelo onboarding da Shopify
+                      </button>
                     </>
                   )}
                   {kind && kind !== 'checking' && kind.kind === 'other' && (
@@ -423,12 +536,24 @@ export const AccountWizard: React.FC = () => {
             <Button type="button" variant="ghost" className="gap-2" onClick={() => setPhase('origin')}>
               <ArrowLeft className="h-4 w-4" aria-hidden /> Voltar
             </Button>
-            <Button type="submit" disabled={!form.name.trim() || (origin === 'url' && !form.website.trim())}>
-              {wordpress ? 'Criar e conectar o WordPress' : 'Criar conta'}
+            <Button type="submit" disabled={!form.name.trim() || (origin === 'url' && !form.website.trim()) || (origin === 'shopify' && !store)}>
+              {wordpress ? 'Criar e conectar o WordPress' : origin === 'shopify' ? 'Criar e conectar a loja' : 'Criar conta'}
             </Button>
           </div>
         </form>
       </div>
+    )
+  }
+
+  if (phase === 'shopify' && store && shopTracker) {
+    return (
+      <ShopifyOnboarding
+        store={store}
+        tracker={shopTracker}
+        accountName={form.name.trim() || store.name}
+        onOpenSite={() => navigate('/crm/site', { replace: true })}
+        onLater={() => navigate('/', { replace: true })}
+      />
     )
   }
 

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { FIELD, Surface, whenLabel } from '@/features/crm/ui'
 import { VISITAS_ENDPOINT, checkEndpoint, createTracker, normalizeDomain, removeTracker, shopifyPixelOf, snippetOf, visitasScriptUrl, type SiteTracker } from '@/features/crm/site'
 import { cn } from '@/lib/utils'
+import { readShopifyStore } from '@/features/onboarding/shopify'
 
 /**
  * Instalação do painel Site: cadastrar o site (gestor), o código que vai uma
@@ -13,7 +14,7 @@ import { cn } from '@/lib/utils'
  * o que precisa estar no Supabase (migração e função `site-visitas`).
  */
 
-const copy = (text: string, what = 'Copiado') =>
+export const copy = (text: string, what = 'Copiado') =>
   navigator.clipboard.writeText(text).then(
     () => toast.success(what),
     () => toast.error('Não consegui copiar')
@@ -119,7 +120,7 @@ const PLATFORMS: { id: Platform; label: string }[] = [
   { id: 'outro', label: 'Outro site' },
 ]
 
-const CodeBox: React.FC<{ code: string; what: string; tall?: boolean }> = ({ code, what, tall }) => (
+export const CodeBox: React.FC<{ code: string; what: string; tall?: boolean }> = ({ code, what, tall }) => (
   <div className="relative mt-3">
     <pre className={cn('overflow-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-900 p-3 pr-24 font-mono text-[12px] leading-relaxed text-zinc-100', tall && 'max-h-64')}>{code}</pre>
     <Button size="sm" variant="secondary" onClick={() => void copy(code, what)} className="absolute right-2 top-2 h-7 gap-1.5 px-2.5 text-xs">
@@ -141,6 +142,14 @@ export const SiteSetup: React.FC<{ tracker: SiteTracker; manager: boolean; onRel
   const [confirmRemove, setConfirmRemove] = useState(false)
   const snippet = snippetOf(tracker)
   const [platform, setPlatform] = useState<Platform>('wordpress')
+  // Loja Shopify (o `/meta.json` responde): a instalação já abre na aba dela
+  useEffect(() => {
+    let active = true
+    void readShopifyStore(tracker.domain).then((store) => active && store && setPlatform('shopify'))
+    return () => {
+      active = false
+    }
+  }, [tracker.domain])
   const shopify = platform === 'shopify'
   const n = (step: number) => (shopify && step > 2 ? step + 1 : step)
   const site = `https://${tracker.domain}`
