@@ -172,7 +172,7 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       </div>
 
       <div className="shrink-0 px-3 pt-3">
-        <AccountSwitcher />
+        <AccountSwitcher inline={!!onClose} onPicked={onClose} />
       </div>
 
       <label className="se-nav-search mx-3 mt-3 flex items-center gap-2 rounded-xl px-2.5">

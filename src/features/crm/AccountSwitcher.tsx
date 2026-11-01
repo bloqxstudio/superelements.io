@@ -18,7 +18,11 @@ const Initial: React.FC<{ name: string; paused?: boolean }> = ({ name, paused })
   </span>
 )
 
-export const AccountSwitcher: React.FC = () => {
+/**
+ * `inline`: dentro do menu do celular (um diálogo modal), uma lista que abre ali mesmo. O dropdown
+ * abre num portal fora do diálogo, que bloqueia toque e rolagem fora dele, e a troca de conta não funcionava.
+ */
+export const AccountSwitcher: React.FC<{ inline?: boolean; onPicked?: () => void }> = ({ inline, onPicked }) => {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const { status, teams, team, select } = useCrm()
@@ -46,6 +50,8 @@ export const AccountSwitcher: React.FC = () => {
       </div>
     )
   }
+
+  if (inline) return <InlineSwitcher onPicked={onPicked} />
 
   return (
     <>
@@ -91,5 +97,77 @@ export const AccountSwitcher: React.FC = () => {
         </DropdownMenuContent>
       </DropdownMenu>
     </>
+  )
+}
+
+const InlineSwitcher: React.FC<{ onPicked?: () => void }> = ({ onPicked }) => {
+  const { profile } = useAuth()
+  const navigate = useNavigate()
+  const { teams, team, select } = useCrm()
+  const [open, setOpen] = useState(false)
+  const platformAdmin = profile?.role === 'admin'
+  if (!team) return null
+  const go = (to: string) => {
+    onPicked?.()
+    navigate(to)
+  }
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="se-account-switcher flex h-11 w-full items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-2 text-left transition-colors active:bg-gray-50"
+        aria-expanded={open}
+        aria-label={`Conta aberta: ${team.name}. Trocar de conta`}
+      >
+        <Initial name={team.name} paused={team.status === 'pausada'} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium leading-tight text-gray-900">{team.name}</span>
+          <span className="block truncate text-[11px] leading-tight text-gray-500">{team.status === 'pausada' ? 'Conta pausada' : team.isHome ? 'Sua empresa' : 'Conta de cliente'}</span>
+        </span>
+        <ChevronsUpDown className="h-4 w-4 shrink-0 text-gray-400" aria-hidden />
+      </button>
+      {open && (
+        <ul className="mt-1.5 max-h-[50vh] overflow-y-auto rounded-lg border border-gray-200 bg-white p-1" role="listbox" aria-label="Contas">
+          {teams.map((t) => (
+            <li key={t.id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={t.id === team.id}
+                onClick={() => {
+                  setOpen(false)
+                  if (t.id !== team.id) void select(t.id)
+                  onPicked?.()
+                }}
+                className="flex min-h-11 w-full items-center gap-2.5 rounded-md px-2 text-left active:bg-gray-100"
+              >
+                <Initial name={t.name} paused={t.status === 'pausada'} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-gray-900">{t.name}</span>
+                  {t.status === 'pausada' && <span className="block text-[11px] text-gray-500">Pausada</span>}
+                </span>
+                {t.id === team.id && <Check className="h-4 w-4 shrink-0 text-gray-700" aria-hidden />}
+              </button>
+            </li>
+          ))}
+          {platformAdmin && (
+            <>
+              <li role="separator" className="my-1 h-px bg-gray-100" />
+              <li>
+                <button type="button" onClick={() => go('/contas/nova')} className="flex min-h-11 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm active:bg-gray-100">
+                  <Plus className="h-4 w-4" aria-hidden /> Adicionar conta
+                </button>
+              </li>
+              <li>
+                <button type="button" onClick={() => go('/contas')} className="flex min-h-11 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm active:bg-gray-100">
+                  <Settings2 className="h-4 w-4" aria-hidden /> Gerenciar contas e módulos
+                </button>
+              </li>
+            </>
+          )}
+        </ul>
+      )}
+    </div>
   )
 }
