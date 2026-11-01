@@ -3,7 +3,8 @@ import { bareHost, browserOf, browserVersionOf, countryOf, deviceOf, hostOf, isB
 
 /**
  * As visitas do site (painel Site do CRM, `/crm/site`): recebe o que o script
- * `visitas.js` manda do WordPress (páginas vistas, eventos, tempo e rolagem) e
+ * `visitas.js` manda do site (WordPress, Shopify, qualquer HTML: páginas vistas,
+ * eventos, tempo e rolagem) e o pixel da Shopify manda do checkout (compras), e
  * grava pela `site_collect`. É pública, porque o visitante não tem conta: vai
  * publicada sem verificação de JWT (`verify_jwt = false` em
  * `supabase/config.toml`, ou `--no-verify-jwt`) e só aceita eventos do domínio
@@ -21,7 +22,7 @@ import { bareHost, browserOf, browserVersionOf, countryOf, deviceOf, hostOf, isB
  * c: { tz, lang, sw, sh, tp, vw, vh, dpr, ct, cs, model, pfv }, e: [hits] }.
  */
 
-const VERSION = 2
+const VERSION = 3
 
 const MAXMIND_ACCOUNT = Deno.env.get('MAXMIND_ACCOUNT_ID') ?? ''
 const MAXMIND_KEY = Deno.env.get('MAXMIND_LICENSE_KEY') ?? ''
@@ -42,6 +43,8 @@ const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUP
 
 const ID = /^[A-Za-z0-9-]{8,40}$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+/** Endereços da própria Shopify onde o pixel roda (não são o domínio da loja) */
+const SHOPIFY_HOST = /(^|\.)(shopify\.com|shopifycdn\.com|shopifysvc\.com|shopifypreview\.com)$/
 
 type Prim = string | number | boolean
 type Raw = Record<string, unknown>
@@ -260,8 +263,11 @@ Deno.serve(async (req) => {
   const hits = cleanHits(body.e)
   if (!hits.length) return done()
 
-  // O domínio vem do navegador (Origin); sem ele, do que o script diz
-  const host = hostOf(req.headers.get('origin')) ?? bareHost(text(body.h, 200))
+  // O domínio vem do navegador (Origin); sem ele, do que o script diz. O pixel da
+  // Shopify roda num quadro isolado (Origin `null` ou um endereço da Shopify): vale o
+  // domínio da loja que ele lê da página
+  const originHost = hostOf(req.headers.get('origin'))
+  const host = (originHost && !SHOPIFY_HOST.test(originHost) ? originHost : undefined) ?? bareHost(text(body.h, 200))
   if (!host) return done(400)
 
   const ctx = (body.c && typeof body.c === 'object' ? body.c : {}) as Raw

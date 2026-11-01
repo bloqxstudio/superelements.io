@@ -154,7 +154,7 @@ const stateOfShare = (row: ShareRow): ShareState => {
 }
 
 const sumTotals = (list: SiteReport['totals'][]): SiteReport['totals'] =>
-  list.reduce((a, b) => ({ sessions: a.sessions + b.sessions, visitors: a.visitors + b.visitors, newVisitors: a.newVisitors + b.newVisitors, pageviews: a.pageviews + b.pageviews, activeMs: a.activeMs + b.activeMs, bounces: a.bounces + b.bounces, converted: a.converted + b.converted }))
+  list.reduce((a, b) => ({ sessions: a.sessions + b.sessions, visitors: a.visitors + b.visitors, newVisitors: a.newVisitors + b.newVisitors, pageviews: a.pageviews + b.pageviews, activeMs: a.activeMs + b.activeMs, bounces: a.bounces + b.bounces, converted: a.converted + b.converted, orders: a.orders + b.orders, revenue: a.revenue + b.revenue, buyers: a.buyers + b.buyers }))
 
 export function metaCampaigns(data: AdsData | undefined): MetaCampaignInput[] {
   return (data?.reports ?? []).flatMap(({ report }) =>

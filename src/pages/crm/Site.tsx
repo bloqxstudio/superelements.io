@@ -8,12 +8,14 @@ import { compact, percent } from '@/features/crm/instagram'
 import { useCrm } from '@/features/crm/crmStore'
 import { MetaCross } from '@/features/crm/SiteAds'
 import { SiteMap } from '@/features/crm/SiteMap'
+import { SiteShop, hasShop } from '@/features/crm/SiteShop'
 import { ServerSteps, SiteSetup, SiteStart } from '@/features/crm/SiteSetup'
 import { VisitPanel, VisitsList } from '@/features/crm/SiteVisits'
 import {
   CONTACT_EVENTS,
   NoSiteTablesError,
   PERIOD_LABEL,
+  SHOP_EVENTS,
   SITE_PERIODS,
   contactLabel,
   countryLabel,
@@ -232,7 +234,8 @@ const Overview: React.FC<{
   }, [report.hours])
 
   const contacts = report.events.filter((e) => CONTACT_EVENTS.includes(e.name))
-  const otherEvents = report.events.filter((e) => !CONTACT_EVENTS.includes(e.name))
+  const otherEvents = report.events.filter((e) => !CONTACT_EVENTS.includes(e.name) && !SHOP_EVENTS.includes(e.name))
+  const shop = hasShop(report)
   const topClicks = report.clicks.filter((c) => c.name !== 'formulario_inicio').slice(0, 10)
 
   const pages = useMemo(() => {
@@ -283,7 +286,7 @@ const Overview: React.FC<{
           }
         />
         <Stat
-          label="Contatos"
+          label={shop ? 'Conversões' : 'Contatos'}
           value={compact(t.converted)}
           sub={
             <span className="flex flex-wrap items-center gap-x-2">
@@ -356,6 +359,8 @@ const Overview: React.FC<{
           />
         </Surface>
       </div>
+
+      {shop && <SiteShop report={report} period={period} onVisits={onVisits} />}
 
       <SiteMap report={report} live={live} meta={metaState.status === 'ready' ? metaState.meta : undefined} endpoint={endpoint} onVisits={onVisits} onOpenSession={onOpenSession} />
 
