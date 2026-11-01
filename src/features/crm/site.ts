@@ -238,11 +238,19 @@ export async function loadTrackers(teamId: string): Promise<SiteTracker[]> {
 export async function createTracker(teamId: string, domain: string, name: string) {
   const clean = normalizeDomain(domain)
   if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(clean)) throw new Error('Digite o domínio do site, como avencestudio.com.')
-  const { error } = await supabase.from('site_trackers').insert({ team_id: teamId, domain: clean, name: name.trim() || clean })
+  const { data, error } = await supabase.from('site_trackers').insert({ team_id: teamId, domain: clean, name: name.trim() || clean }).select('id').single()
   if (error) {
     if (error.code === '23505') throw new Error('Esse site já está cadastrado.')
     fail(error)
   }
+  return data!.id as string
+}
+
+/** O que chegou do site até agora (as últimas 200 coisas): o onboarding da loja confere cada código por aqui. */
+export async function recentHits(siteId: string): Promise<Pick<SiteEvent, 'type' | 'name' | 'path'>[]> {
+  const { data, error } = await supabase.from('site_events').select('type, name, path').eq('site_id', siteId).order('at', { ascending: false }).limit(200)
+  if (error) fail(error)
+  return (data ?? []).map((r) => ({ type: r.type === 'event' ? 'event' : 'pageview', name: r.name ?? undefined, path: r.path ?? undefined }))
 }
 
 export async function removeTracker(id: string) {
