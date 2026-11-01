@@ -45,7 +45,7 @@ export interface LeadOrigin {
   fields?: Record<string, string>
 }
 
-export const PRESET_LABEL: Record<string, string> = { last_7d: 'últimos 7 dias', last_30d: 'últimos 30 dias', last_90d: 'últimos 90 dias', this_month: 'este mês' }
+export const PRESET_LABEL: Record<string, string> = { today: 'hoje', last_7d: 'últimos 7 dias', last_30d: 'últimos 30 dias', last_90d: 'últimos 90 dias', this_month: 'este mês' }
 export const CAMPAIGN_STATUS: Record<string, string> = { ACTIVE: 'Ativa', PAUSED: 'Pausada', ARCHIVED: 'Arquivada', DELETED: 'Apagada' }
 
 // O build publicado pode não ter VITE_SUPABASE_URL (o cliente do Supabase tem o endereço fixo): o projeto é este

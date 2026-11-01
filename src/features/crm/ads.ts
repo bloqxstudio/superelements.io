@@ -12,9 +12,9 @@ import { publicAppUrl } from '@/features/approval/shares'
 
 export const ADS_CALLBACK_PATH = '/anuncios/retorno'
 
-export type AdPreset = 'last_7d' | 'last_30d' | 'last_90d' | 'this_month'
-export const AD_PRESETS: AdPreset[] = ['last_7d', 'last_30d', 'last_90d', 'this_month']
-export const PRESET_LABEL: Record<AdPreset, string> = { last_7d: '7 dias', last_30d: '30 dias', last_90d: '90 dias', this_month: 'Este mês' }
+export type AdPreset = 'today' | 'last_7d' | 'last_30d' | 'last_90d' | 'this_month'
+export const AD_PRESETS: AdPreset[] = ['today', 'last_7d', 'last_30d', 'last_90d', 'this_month']
+export const PRESET_LABEL: Record<AdPreset, string> = { today: 'Hoje', last_7d: '7 dias', last_30d: '30 dias', last_90d: '90 dias', this_month: 'Este mês' }
 
 export interface AdMetrics {
   spend: number

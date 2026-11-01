@@ -89,6 +89,8 @@ import {
  */
 
 const STALE = 30 * 60_000
+// Hoje muda ao longo do dia: relê com mais frequência
+const STALE_TODAY = 5 * 60_000
 const DAY = 86_400_000
 
 const ago = (at: number | undefined) => {
@@ -1040,7 +1042,7 @@ const AccountArea: React.FC<{
         setReport(saved)
         const key = `${account.id}:${preset}`
         if (account.syncError === 'token' || autoRefreshed.current.has(key)) return
-        if (saved && Date.now() - saved.fetchedAt < STALE) return
+        if (saved && Date.now() - saved.fetchedAt < (preset === 'today' ? STALE_TODAY : STALE)) return
         autoRefreshed.current.add(key)
         void refresh(true)
       })

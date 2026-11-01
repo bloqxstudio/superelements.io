@@ -27,7 +27,8 @@ export interface CampaignSnapshot {
   fetchedAt?: string
 }
 
-const PRESET_ORDER = ['last_30d', 'this_month', 'last_90d', 'last_7d']
+// Hoje por último: o gasto de um dia só não representa a campanha
+const PRESET_ORDER = ['last_30d', 'this_month', 'last_90d', 'last_7d', 'today']
 const same = (a: unknown, b: string) => typeof a === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase()
 
 /** Acha a campanha do lead (pelo id ou pelo nome do link) no relatório mais útil da conta */
