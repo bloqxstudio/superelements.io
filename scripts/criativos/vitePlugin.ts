@@ -121,7 +121,8 @@ export const criativos = (): Plugin => ({
             const req = call.request as Partial<CreativeImageRequest>
             const ratio = req.ratio === 'portrait' || req.ratio === 'landscape' ? req.ratio : 'square'
             const prefer = req.provider === 'codex' || req.provider === 'openai' || req.provider === 'gemini' ? req.provider : undefined
-            send({ id, ok: true, data: await generateImage(String(req.prompt ?? ''), ratio, controller.signal, prefer) })
+            const refs = Array.isArray(req.references) ? req.references.filter((r): r is string => typeof r === 'string' && r.startsWith('data:image/')).slice(0, 4) : []
+            send({ id, ok: true, data: await generateImage(String(req.prompt ?? ''), ratio, controller.signal, prefer, refs) })
           } else if (call.kind === 'copy') {
             const req = call.request as CopyRequest
             if (!String(req?.message ?? '').trim()) throw new Error('Escreva o que você quer.')

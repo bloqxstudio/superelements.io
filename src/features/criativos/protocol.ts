@@ -49,4 +49,6 @@ export interface CreativeImageRequest {
   /** Qual serviço usar (o escolhido na tela); sem ele, o primeiro pronto. */
   provider?: CreativeImageProvider
   ratio: 'square' | 'portrait' | 'landscape'
+  /** Imagens de referência (data URLs, até 4): o Codex segue a forma do que elas mostram. */
+  references?: string[]
 }

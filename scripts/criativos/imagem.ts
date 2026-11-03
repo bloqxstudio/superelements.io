@@ -139,11 +139,23 @@ function newestImage(dir: string, since: number, depth = 1): { file: string; at:
   return best
 }
 
-async function viaCodex(prompt: string, ratio: ImageRatio, signal?: AbortSignal): Promise<{ data: string; model: string }> {
+async function viaCodex(prompt: string, ratio: ImageRatio, signal?: AbortSignal, references: string[] = []): Promise<{ data: string; model: string }> {
   const bin = findBin('codex')
   if (!bin) throw new Error('O Codex não foi encontrado neste computador.')
+  // Imagens de referência (2026-11-03: fotos de produto fiéis ao painel de cada modelo): numa pasta à parte,
+  // para nunca serem confundidas com a imagem gerada, e anexadas com `-i` antes das outras opções
+  const refDir = references.length ? mkdtempSync(path.join(os.tmpdir(), 'se-ref-')) : ''
+  const refFiles = references.slice(0, 4).flatMap((data, i) => {
+    const m = /^data:image\/(png|jpe?g|webp);base64,(.+)$/.exec(data)
+    if (!m) return []
+    const f = path.join(refDir, `referencia-${i + 1}.${m[1] === 'jpeg' ? 'jpg' : m[1]}`)
+    writeFileSync(f, Buffer.from(m[2], 'base64'))
+    return [f]
+  })
+  const refArgs = refFiles.flatMap((f) => ['-i', f])
   const text = [
     'Use your built-in image generation tool (image_gen) to create exactly ONE image, and nothing else.',
+    ...(refFiles.length ? ['The attached image(s) are references: follow them for the exact shape and details they show, as the description says. Create a new original photo; do not copy logos, watermarks or text from the references.'] : []),
     'Do not write code, do not create or edit project files, do not search the web, do not ask questions.',
     `Image description: ${prompt}`,
     `Orientation: ${SHAPE[ratio]}.`,
@@ -158,7 +170,7 @@ async function viaCodex(prompt: string, ratio: ImageRatio, signal?: AbortSignal)
       for (const key of ['CODEX_THREAD_ID', 'CODEX_SESSION_ID']) delete env[key]
       let child: ChildProcess
       try {
-        child = launch(bin, ['exec', '--json', '--skip-git-repo-check', '-s', 'workspace-write', '-c', 'approval_policy="never"', ...codexModelArgs(), ...extra, '-'], { cwd, env })
+        child = launch(bin, ['exec', ...refArgs, '--json', '--skip-git-repo-check', '-s', 'workspace-write', '-c', 'approval_policy="never"', ...codexModelArgs(), ...extra, '-'], { cwd, env })
       } catch (error) {
         rmSync(cwd, { recursive: true, force: true })
         return reject(new Error(`Não consegui abrir o Codex: ${error instanceof Error ? error.message : String(error)}`))
@@ -243,6 +255,7 @@ async function viaCodex(prompt: string, ratio: ImageRatio, signal?: AbortSignal)
     throw new Error(`O Codex não gerou a imagem.${result.reply && result.reply !== 'OK' ? ` Ele disse: ${result.reply.slice(0, 240)}` : why ? ` ${why.slice(0, 240)}` : ' A ferramenta de imagem pode não estar disponível nesta versão ou conta.'}`)
   }
   const buf = readFileSync(result.file)
+  if (refDir) rmSync(refDir, { recursive: true, force: true })
   try {
     rmSync(result.file, { force: true })
   } catch {
@@ -258,13 +271,13 @@ export interface GeneratedImage {
   model: string
 }
 
-export async function generateImage(prompt: string, ratio: ImageRatio, signal?: AbortSignal, prefer?: ImageProvider): Promise<GeneratedImage> {
+export async function generateImage(prompt: string, ratio: ImageRatio, signal?: AbortSignal, prefer?: ImageProvider, references: string[] = []): Promise<GeneratedImage> {
   const ready = imageProviders()
   const provider = prefer && ready.includes(prefer) ? prefer : ready[0]
   if (!provider) throw new Error('Nenhum serviço de imagem pronto neste computador: instale e entre no Codex, ou guarde uma chave do OpenAI ou do Google.')
   const clean = prompt.trim().slice(0, 3500)
   if (!clean) throw new Error('Faltou descrever a imagem.')
-  const out = provider === 'codex' ? await viaCodex(clean, ratio, signal) : provider === 'openai' ? await viaOpenAI(clean, ratio, signal) : await viaGemini(clean, ratio, signal)
+  const out = provider === 'codex' ? await viaCodex(clean, ratio, signal, references) : provider === 'openai' ? await viaOpenAI(clean, ratio, signal) : await viaGemini(clean, ratio, signal)
   return { ...out, provider }
 }
 
