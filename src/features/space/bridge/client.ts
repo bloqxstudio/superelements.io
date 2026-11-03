@@ -1178,7 +1178,8 @@ function component(
 
 /** Acesso por código às mesmas operações do editor de Criativos. */
 let creativeImport: { state: string; postId?: string; error?: string } | undefined
-async function creatives(params: { action?: string; setId?: string; projectId?: string; pageId?: string; projectName?: string; postId?: string; index?: number; set?: CreativeSet; images?: { key: string; name: string; data: string }[]; contentId?: string }) {
+let creativeImages: { state: string; done?: number; total?: number; error?: string } | undefined
+async function creatives(params: { action?: string; teamId?: string; provider?: string; setId?: string; projectId?: string; pageId?: string; projectName?: string; postId?: string; index?: number; set?: CreativeSet; images?: { key: string; name: string; data: string }[]; contentId?: string }) {
   // Gravar um conjunto montado por um agente (2026-11-02): envia as imagens pela sessão
   // do app e troca `asset:<key>` pelo id de cada uma. Não precisa do conjunto aberto.
   if (params.action === 'save') {
@@ -1210,9 +1211,54 @@ async function creatives(params: { action?: string; setId?: string; projectId?: 
     }
     return { id: saved.id, name: saved.name, posts: saved.posts.length, assets: assets.length, linked: !!params.contentId }
   }
+  // Conta aberta nesta aba (2026-11-03): o conjunto vai para a pasta da conta aberta, então o agente
+  // confere (e, com `teamId`, troca) antes de gravar. Devolve também os serviços de imagem prontos.
+  if (params.action === 'account') {
+    const { useCrm } = await import('@/features/crm/crmStore')
+    if (params.teamId && useCrm.getState().team?.id !== params.teamId) {
+      if (!useCrm.getState().teams.some((t) => t.id === params.teamId)) throw new Error('Esta pessoa não está nessa conta.')
+      await useCrm.getState().select(params.teamId)
+    }
+    const { team, teams } = useCrm.getState()
+    const { useCreativeLink, imageProviderChoice } = await import('@/features/criativos/link')
+    const link = useCreativeLink.getState()
+    return { team: team ? { id: team.id, name: team.name } : null, teams: teams.map((t) => ({ id: t.id, name: t.name })), ai: link.connected && !!link.ia, images: link.providers, chosen: imageProviderChoice() ?? null }
+  }
+  // Mostra um conjunto na tela desta aba (o cliente e a equipe veem o que o agente faz)
+  if (params.action === 'show') {
+    if (!params.setId) throw new Error('Informe o conjunto.')
+    const q = params.projectId ? `?projeto=${params.projectId}` : ''
+    setTimeout(() => navigate(`/criativos/${params.setId}${q}`), 50)
+    return { opening: params.setId }
+  }
   const { useEditor } = await import('@/features/criativos/store')
   const state = useEditor.getState()
+  // Andamento da geração de imagens pedida por `generate`
+  if (params.action === 'generating') return creativeImages ?? { state: 'idle' }
   if (!state.set || (params.setId && state.set.id !== params.setId)) throw new Error('Abra o conjunto de Criativos solicitado no produto.')
+  // Gera, no editor aberto, as imagens das camadas com `prompt` e sem imagem (o mesmo botão da tela),
+  // com o serviço pedido (o Codex quando pronto): cada imagem aparece no card enquanto fica pronta.
+  if (params.action === 'generate') {
+    if (creativeImages?.state === 'running') return creativeImages
+    const { generateAll } = await import('@/features/criativos/generate')
+    const { chooseImageProvider, useCreativeLink } = await import('@/features/criativos/link')
+    const provider = (params.provider ?? 'codex') as 'codex' | 'openai' | 'gemini'
+    if (!useCreativeLink.getState().providers.includes(provider)) throw new Error(`O serviço de imagens "${provider}" não está pronto neste computador.`)
+    chooseImageProvider(provider)
+    const list = state.set.posts
+      .filter((p) => !params.postId || p.id === params.postId)
+      .flatMap((p) => p.slides.flatMap((s) => s.layers.filter((l) => l.type === 'image' && !l.src && l.prompt?.trim()).map((l) => ({ slideId: s.id, layerId: l.id, prompt: (l as { prompt: string }).prompt }))))
+    if (!list.length) return { state: 'done', done: 0, total: 0 }
+    const controller = new AbortController()
+    creativeImages = { state: 'running', done: 0, total: list.length }
+    void generateAll(list, 'codex', controller.signal)
+      .then(async (done) => {
+        await useEditor.getState().flush()
+        creativeImages = { state: 'done', done, total: list.length }
+      })
+      .catch((error) => { creativeImages = { state: 'error', error: String(error), total: list.length } })
+    return creativeImages
+  }
   if (params.action === 'sideways') {
     if (creativeImport?.state === 'running') throw new Error('A importação já está em andamento.')
     if (!params.projectId || !params.pageId || !params.projectName) throw new Error('Informe projeto, página e nome do case.')
