@@ -644,3 +644,11 @@ gravado em gzip (~3× menor; a leitura aceita JSON antigo e gzip pelos bytes `1f
 (`superelements-docs`, os 12 mais recentes) por caminho, inclusive o que a própria aba gravou; o serviço do WhatsApp
 acorda pela Realtime (`crm_whatsapp_numbers`, mensagens `queued`) e só consulta a cada 20 s/15 s como reserva
 (antes 2 s/1,5 s). Não voltar a gerar link assinado por montagem nem a encurtar esses intervalos.
+
+## Piloto Vizor Películas (2026-11-03)
+
+O usuário: validar com a Vizor (cliente, site em Astro) "análise da jornada completa e criativos em volume"; a referência de conteúdo é @protlepeliculas. Conta Sinfy **Vizor Películas** (`a247fefc-2b42-4b7c-bc76-185515063c98`, produto `resultados`, dono o admin da plataforma). Ainda não anunciam.
+- **Site** (`bloqxstudio/Vizorpeliculas`, Astro 6, publicado pela Hostinger a partir da `main`; commit `3f43692` autorizado pelo usuário): `visitas.js` no `Layout.astro` (tracker `fc96ba0d-…`), o formulário "Quero ser revendedor" também manda o lead ao `lead-webhook` da conta com a primeira origem da sessão (continua gravando em `distributor_leads` do Supabase da Vizor), e o localizador emite `busca_pelicula` (marca, modelo, ano, resultados). Cliques no WhatsApp vêm do próprio `visitas.js`.
+- **Plano** preenchido do `vizor-project-brief.md` e da voz e tom do `vizor-design-system.md` (peça de reposição, nunca "original da montadora").
+- **Marca da conta**: `brands/vizor-peliculas/DESIGN.md` (logos em `public/brands/vizor-peliculas/logo/`) guardado em `crm_account_context.brand_md` (migração `20261103160000_crm_account_brand.sql`, aplicada). `accountBrand` lê essa coluna depois dos projetos da conta, então conta sem projeto já cria Criativos na marca dela. Ainda sem tela para editar (SQL).
+- **Instagram sem login**: a Business Discovery da Meta não foi testada (ler o token direto foi barrado; o caminho certo é uma ação na função `instagram`) e provavelmente exige o login pelo Facebook com a conta da Avence ligada a uma Página. Nunca raspar o Instagram.

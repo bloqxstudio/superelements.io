@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { supabase } from '@/integrations/supabase/client'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { useCrm } from '@/features/crm/crmStore'
 import { loadProjectDoc } from '@/features/projects/storage'
 import { parseDesignMd } from '@/features/space/brand/designMd'
@@ -97,7 +98,16 @@ export async function accountBrand(): Promise<SetBrand | undefined> {
         if (parsed && (parsed.colors.length || parsed.logo)) return setBrandFrom(parsed, project.name)
       }
     } catch {
-      // Sem acesso aos projetos: segue para os conjuntos
+      // Sem acesso aos projetos: segue para a marca da conta
+    }
+    // Conta sem projeto (Sinfy): o DESIGN.md guardado na conta (`crm_account_context.brand_md`)
+    try {
+      const { data } = await (supabase as unknown as SupabaseClient).from('crm_account_context').select('brand_md').eq('team_id', team.id).maybeSingle()
+      const source = (data as { brand_md?: string } | null)?.brand_md
+      const parsed = source?.trim() ? parseDesignMd(source).brand : null
+      if (parsed && (parsed.colors.length || parsed.logo)) return setBrandFrom(parsed, team.name)
+    } catch {
+      // Coluna ausente (migração não aplicada): segue para os conjuntos
     }
   }
   try {
