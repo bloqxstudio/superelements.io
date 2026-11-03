@@ -43,3 +43,13 @@ test('prévia: o slide vira SVG com o texto quebrado e o logo', async (t) => {
   assert.ok((svg.match(/<text /g) ?? []).length > 6, 'o título sai em várias linhas e palavras')
   assert.ok(opentype)
 })
+
+test('plataforma: lista fechada sem segredos e gravação limitada', () => {
+  const src = readFileSync(new URL('../../supabase/functions/sinfy-mcp/plataforma.ts', import.meta.url), 'utf8')
+  const block = src.slice(src.indexOf('const TABLES'), src.indexOf('interface Column'))
+  for (const secret of ['crm_instagram_tokens', 'crm_ad_tokens', 'crm_whatsapp_auth', 'crm_mcp_keys', 'crm_team_invites', 'crm_teams:', 'crm_ad_pending', 'crm_lead_hooks']) assert.ok(!block.includes(secret), `${secret} não pode estar na lista`)
+  assert.match(src, /set local role authenticated/)
+  assert.match(src, /total > 25/)
+  assert.match(src, /a\.confirmar !== true/)
+  assert.match(src, /WHATSAPP_DAILY_LIMIT = 30/)
+})

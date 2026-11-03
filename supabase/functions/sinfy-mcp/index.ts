@@ -4,6 +4,7 @@ import { initWasm, Resvg } from 'npm:@resvg/resvg-wasm@2.6.2'
 import { adsData, funnelData, instagramData, periodOf, siteData } from './dados.ts'
 import * as Criativos from './_gerado/criativos.js'
 import { loadFamilies, measureContext, rasterize, sniff, toBase64, type FontLib, type ResvgLike } from './previa.ts'
+import { fetchFile, platformTools } from './plataforma.ts'
 
 /**
  * MCP da Sinfy: qualquer IA (Claude, ChatGPT, Cursor, Claude Code…) conecta na conta da empresa.
@@ -236,7 +237,7 @@ async function renderSlides(posts: BuiltPost[], assets: { id: string; path: stri
   const [fonts, images] = await Promise.all([fontsFor([...families]), imagesFor(srcs, assets), ensureWasm()])
   return slides.map(({ s, format }) => {
     Criativos.setMeasureContext(fonts.ctx)
-    const svg = Criativos.slideToSvg(s, format, (src: string) => images.get(src))
+    const svg = (Criativos.slideToSvg as (slide: unknown, format: string, image: (src: string) => unknown) => string)(s, format, (src: string) => images.get(src))
     return { data: toBase64(rasterize(Resvg as unknown as ResvgLike, svg, fonts.bytes, width)), mimeType: 'image/png' as const }
   })
 }
@@ -714,6 +715,65 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: 'sinfy_criativo_foto',
+    title: 'Pôr uma foto no criativo',
+    description: 'Sobe uma foto (url https ou base64) para um conjunto de Criativos e põe num slide: no lugar da foto pedida ainda não gerada, ou trocando a imagem do slide. Devolve a prévia do slide com a foto.',
+    inputSchema: {
+      type: 'object',
+      required: ['id'],
+      properties: {
+        id: { type: 'string', description: 'Id do conjunto.' },
+        projeto_id: { type: 'string' },
+        post: { type: 'integer', minimum: 1, description: 'Post do conjunto (padrão 1).' },
+        slide: { type: 'integer', minimum: 1, description: 'Slide do post (padrão 1).' },
+        url: { type: 'string', description: 'Endereço https da foto.' },
+        base64: { type: 'string', description: 'Ou a foto em base64 (data URL).' },
+        nome_arquivo: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+    run: async (caller, a) => {
+      need(caller, 'criativos', 'Criativos')
+      const found = (await listSets(caller)).find((s) => s.id === a.id && (!a.projeto_id || s.projectId === a.projeto_id))
+      if (!found) throw new ToolError('Conjunto não encontrado nesta conta.')
+      const path = `${found.folder}/${found.id}/set.json`
+      const set = await readJson<Record<string, unknown> & { name: string; brand?: Brand; posts: BuiltPost[]; pending?: { name: string; format: string; caption?: string; slides: unknown[] }[]; pendingBrand?: boolean; assets?: { id: string; name: string; path: string; width: number; height: number }[] }>(path)
+      if (!set) throw new ToolError('Não consegui abrir o conjunto.')
+      if (set.pending?.length) {
+        if (set.pendingBrand) throw new ToolError('Este conjunto ainda espera a marca do projeto: abra o link uma vez na Sinfy e tente de novo.')
+        const brand = set.brand ?? neutralBrand(set.name)
+        const fonts = await fontsFor([brand.headingFont, brand.bodyFont, brand.emphasisFont ?? ''])
+        Criativos.setMeasureContext(fonts.ctx)
+        set.posts = [...(set.posts ?? []), ...set.pending.map((p) => Criativos.buildPost(p, brand) as BuiltPost)]
+        delete set.pending
+      }
+      const post = set.posts[Math.max(1, Number(a.post) || 1) - 1]
+      if (!post) throw new ToolError('Esse post não existe no conjunto.')
+      const slide = post.slides[Math.max(1, Number(a.slide) || 1) - 1]
+      if (!slide) throw new ToolError('Esse slide não existe no post.')
+      const images = slide.layers.filter((l) => l.type === 'image' && !l.hidden) as (Layer & { prompt?: string; genFailed?: boolean; name?: string })[]
+      const target = images.find((l) => !l.src && l.prompt) ?? images.find((l) => !(l.name ?? '').toLowerCase().includes('logo') && !(l.src ?? '').includes('/logo')) ?? undefined
+      if (!target) throw new ToolError('Este slide não tem lugar de foto. Use um modelo com foto (viral-capa, foto-manchete, viral-foto) ou ponha a foto noutro slide.')
+      const file = await fetchFile({ admin, appUrl: APP_URL, fail: (m) => { throw new ToolError(m) } }, a, 15 * 1024 * 1024)
+      const info = sniff(file.bytes)
+      if (!info || !info.mime.startsWith('image/')) throw new ToolError('O arquivo não é uma imagem que eu reconheça (PNG, JPEG, WebP ou GIF).')
+      const assetId = crypto.randomUUID().slice(0, 8)
+      const assetPath = `${found.folder}/${found.id}/${assetId}.${info.mime.split('/')[1].replace('jpeg', 'jpg').replace('svg+xml', 'svg')}`
+      const { error } = await admin.storage.from(BUCKET).upload(assetPath, file.bytes, { contentType: info.mime, upsert: false })
+      if (error) throw new ToolError(`Não consegui subir a foto (${error.message}).`)
+      set.assets = [...(set.assets ?? []), { id: assetId, name: file.name, path: assetPath, width: info.width, height: info.height }]
+      target.src = `asset:${assetId}`
+      delete target.prompt
+      delete target.genFailed
+      set.updatedAt = Date.now()
+      await writeJson(path, set)
+      const index = (await readJson<Summary[]>(`${found.folder}/index.json`)) ?? []
+      await writeJson(`${found.folder}/index.json`, index.map((s) => (s.id === found.id ? { ...s, posts: set.posts.length, updatedAt: set.updatedAt as number } : s)))
+      const preview = await renderSlides([{ ...post, slides: [slide] }], set.assets, 540, 1)
+      return new WithImages({ ok: true, conjunto: found.id, post: Number(a.post) || 1, slide: Number(a.slide) || 1, link: setUrl(found.id, found.projectId), aviso: 'Se o conjunto estiver aberto no editor agora, recarregue a página para não gravar por cima.' }, preview)
+    },
+  },
+  {
     name: 'sinfy_site',
     title: 'Métricas do site',
     description: 'Visitas do site da conta no período: totais e período anterior, por dia, canais de origem, campanhas e anúncios que trouxeram visitas, páginas, entradas, cliques, eventos, contatos (WhatsApp, telefone, formulário), aparelhos, estados, cidades, horários e loja (vendas e faturamento, quando há). Use para analisar o que funciona e sugerir conteúdos e ajustes.',
@@ -759,6 +819,9 @@ const TOOLS: Tool[] = [
   },
 ]
 
+// A plataforma inteira (dados, WhatsApp, formulários), como a pessoa da chave
+TOOLS.push(...(platformTools({ admin, appUrl: APP_URL, fail: (m) => { throw new ToolError(m) } }) as unknown as Tool[]))
+
 const PROMPTS = [
   {
     name: 'criar_criativos_do_plano',
@@ -794,7 +857,7 @@ async function handle(msg: Rpc, caller: Caller) {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } },
         serverInfo: SERVER,
-        instructions: `Você está conectado à conta "${caller.team.name}" na Sinfy. Comece por sinfy_conta para saber quem é a empresa, o Plano (oferta, público, tom, restrições) e a marca. Escreva sempre em nome desta empresa, no tom do Plano, sem inventar números, preços, depoimentos ou resultados. Criativos ficam como rascunho na Sinfy; nada é publicado nem aprovado por aqui. Quando uma ferramenta devolver imagens dos slides, mostre-as à pessoa.`,
+        instructions: `Você está conectado à conta "${caller.team.name}" na Sinfy. Comece por sinfy_conta para saber quem é a empresa, o Plano (oferta, público, tom, restrições) e a marca. Escreva sempre em nome desta empresa, no tom do Plano, sem inventar números, preços, depoimentos ou resultados. Você opera a plataforma como a pessoa da chave: leia e grave dados (sinfy_dados_*), veja e responda o WhatsApp, crie páginas de oferta (sinfy_formulario_salvar) e criativos. Antes de enviar mensagem a um cliente, apagar ou mudar muitas linhas, mostre o que vai fazer e confirme com a pessoa. Criativos ficam como rascunho na Sinfy; nada é publicado nem aprovado por aqui. Quando uma ferramenta devolver imagens dos slides, mostre-as à pessoa.`,
       })
     }
     case 'ping':
