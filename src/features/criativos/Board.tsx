@@ -194,6 +194,9 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   viewRef.current = view
   const [size, setSize] = useState({ w: 1200, h: 800 })
   const [hover, setHover] = useState<{ slideId: string; layerId: string } | null>(null)
+  // O que passa da borda do card aparece esmaecido em volta dele só se a pessoa ligar (começa desligado)
+  const [showOut, setShowOut] = useState(() => { try { return localStorage.getItem('criativos-borda') === '1' } catch { return false } })
+  const toggleOut = () => setShowOut((v) => { try { localStorage.setItem('criativos-borda', v ? '0' : '1') } catch { /* sem armazenamento */ } return !v })
   const [editing, setEditing] = useState<{ postId: string; slideId: string; layerId: string } | null>(null)
   const [menu, setMenu] = useState<{ postId: string; x: number; y: number } | null>(null)
   const [panning, setPanning] = useState(false)
@@ -539,7 +542,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
       <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
         {/* O que passa da borda dos cards, por trás de todos eles */}
         {placed.map((p) =>
-          visible.has(p.slideId) && sticksOut(p.slide, p.w, p.h) ? (
+          showOut && visible.has(p.slideId) && sticksOut(p.slide, p.w, p.h) ? (
             <div key={`out-${p.slideId}`} className="pointer-events-none absolute" style={{ left: p.x - PAD, top: p.y - PAD, width: p.w + PAD * 2, height: p.h + PAD * 2 }}>
               <OverflowCanvas slide={p.slide} format={p.format} images={images} scale={scale} />
             </div>
@@ -805,6 +808,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
         <button type="button" onClick={() => zoomAt(size.w / 2, size.h / 2, 1 / view.k)} className="h-8 w-14 rounded-md text-xs font-semibold tabular-nums text-gray-700 hover:bg-gray-100" title="100%">{Math.round(view.k * 100)}%</button>
         <BarButton label="Mais zoom" onClick={() => zoomAt(size.w / 2, size.h / 2, 1.25)}><Plus className="h-4 w-4" /></BarButton>
         <BarButton label="Ver tudo" onClick={() => fit()}><Scan className="h-4 w-4" /></BarButton>
+        <button type="button" onClick={toggleOut} aria-pressed={showOut} title="Mostrar o que passa da borda do card" className={cn('h-8 rounded-md px-2 text-xs font-medium', showOut ? 'bg-violet-100 text-violet-800' : 'text-gray-600 hover:bg-gray-100')}>Bordas</button>
       </div>
       <p className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-white/80 px-2 py-1 text-[11px] text-gray-500">Arraste o fundo para mover · Ctrl/⌘ + roda para zoom · dois cliques no texto para editar</p>
     </div>
