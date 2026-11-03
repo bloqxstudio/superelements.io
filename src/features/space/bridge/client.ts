@@ -1,4 +1,5 @@
 import { renderElementorDocument } from '@/engine/elementor'
+import type { CreativeSet } from '@/features/criativos/types'
 import { loadApprovals, shareState, useApprovalStore } from '@/features/approval/approvalStore'
 import { htmlHash, isLocalAppUrl, shareUrl, type PageShare } from '@/features/approval/shares'
 import { cancelInvite, createInvite, inviteUrl, listInvites, listPeople } from '@/features/projects/access'
@@ -1177,7 +1178,32 @@ function component(
 
 /** Acesso por código às mesmas operações do editor de Criativos. */
 let creativeImport: { state: string; postId?: string; error?: string } | undefined
-async function creatives(params: { action?: string; setId?: string; projectId?: string; pageId?: string; projectName?: string; postId?: string; index?: number }) {
+async function creatives(params: { action?: string; setId?: string; projectId?: string; pageId?: string; projectName?: string; postId?: string; index?: number; set?: CreativeSet; images?: { key: string; name: string; data: string }[] }) {
+  // Gravar um conjunto montado por um agente (2026-11-02): envia as imagens pela sessão
+  // do app e troca `asset:<key>` pelo id de cada uma. Não precisa do conjunto aberto.
+  if (params.action === 'save') {
+    const set = params.set
+    if (!set?.id || !Array.isArray(set.posts)) throw new Error('Mande o conjunto (id e posts).')
+    const { saveSet, uploadAsset } = await import('@/features/criativos/storage')
+    const ids = new Map<string, string>()
+    const assets = [...(set.assets ?? [])]
+    for (const image of params.images ?? []) {
+      const blob = await (await fetch(image.data)).blob()
+      const asset = await uploadAsset(set, blob, image.name)
+      assets.push(asset)
+      ids.set(image.key, asset.id)
+    }
+    const posts = set.posts.map((post) => ({
+      ...post,
+      slides: post.slides.map((slide) => ({
+        ...slide,
+        layers: slide.layers.map((layer) => (layer.type === 'image' && layer.src.startsWith('asset:') && ids.has(layer.src.slice(6)) ? { ...layer, src: `asset:${ids.get(layer.src.slice(6))}` } : layer)),
+      })),
+    }))
+    const saved: CreativeSet = { ...set, posts, assets, updatedAt: Date.now() }
+    await saveSet(saved)
+    return { id: saved.id, name: saved.name, posts: saved.posts.length, assets: assets.length }
+  }
   const { useEditor } = await import('@/features/criativos/store')
   const state = useEditor.getState()
   if (!state.set || (params.setId && state.set.id !== params.setId)) throw new Error('Abra o conjunto de Criativos solicitado no produto.')

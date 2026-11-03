@@ -57,7 +57,8 @@ export interface ProductInfo {
 }
 
 export const PRODUCTS: ProductInfo[] = [
-  { id: 'resultados', label: 'Sinfy · Resultados', hint: 'Anúncios, site, leads e conversas: do anúncio à venda.', modules: ['crm', 'clientes', 'formularios', 'whatsapp', 'instagram', 'site'] },
+  // Conteúdo entrou na Sinfy em 2026-11-02 (o usuário: criar posts e stories para o Instagram com a ferramenta)
+  { id: 'resultados', label: 'Sinfy · Resultados', hint: 'Anúncios, site, leads, conversas e conteúdo para o Instagram.', modules: ['crm', 'clientes', 'formularios', 'whatsapp', 'instagram', 'site', 'copy', 'criativos'] },
   { id: 'builder', label: 'SuperElements · Sites', hint: 'Sites no Space, criativos, textos e agentes.', modules: ['projetos', 'agentes', 'copy', 'criativos', 'skills'] },
   { id: 'completo', label: 'Completo', hint: 'Tudo, como a Avence usa.', modules: [...MODULE_IDS] },
 ]

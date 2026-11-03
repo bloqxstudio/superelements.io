@@ -159,7 +159,7 @@ const SiteItem: React.FC<{ label?: string }> = ({ label = 'Visitas ao site' }) =
  * para "Mais", assim nada ligado fica sem caminho.
  */
 const PRODUCT_AREAS: Record<Exclude<ProductId, 'completo'>, ModuleId[]> = {
-  resultados: ['instagram', 'site', 'crm', 'formularios', 'whatsapp'],
+  resultados: ['instagram', 'site', 'crm', 'formularios', 'whatsapp', 'copy', 'criativos'],
   builder: ['projetos', 'agentes', 'copy', 'criativos', 'skills'],
 }
 
@@ -199,6 +199,15 @@ const ResultsNav: React.FC<{ on: (id: ModuleId) => boolean }> = ({ on }) => (
         {on('crm') && <OportunidadesItem label="Leads" />}
         {on('formularios') && <Item to="/crm/formularios" icon={ListChecks} label="Formulários" />}
         {on('whatsapp') && <WhatsAppItem name="Conversas" />}
+      </Section>
+    )}
+    {(on('copy') || on('criativos') || on('instagram')) && (
+      <Section title="Conteúdo">
+        {on('copy') && <Item to="/plano" icon={Target} label="Plano da empresa" />}
+        {on('copy') && <Item to="/conteudos" icon={CalendarDays} label="Conteúdos" />}
+        {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" />}
+        {on('instagram') && <InstagramItem />}
+        {on('copy') && <Item to="/copy" icon={PenLine} label="Textos" />}
       </Section>
     )}
     <ExtraItems product="resultados" on={on} />
