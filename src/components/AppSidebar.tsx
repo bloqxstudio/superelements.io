@@ -136,7 +136,7 @@ const WhatsAppItem: React.FC<{ name?: string }> = ({ name = 'WhatsApp' }) => {
 }
 
 /** Site: quem está no site agora (verde, pulsando) e os contatos novos. */
-const SiteItem: React.FC<{ label?: string }> = ({ label = 'Visitas ao site' }) => {
+const SiteItem: React.FC<{ label?: string }> = ({ label = 'Site' }) => {
   const live = useMenuBadges((s) => s.live)
   const contacts = useMenuBadges((s) => s.contacts)
   const liveLabel = live === 1 ? '1 pessoa no site agora' : `${live} pessoas no site agora`

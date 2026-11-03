@@ -3,7 +3,7 @@ const AREAS: [string, string][] = [
   ['/crm/formularios', 'Formulários'], ['/crm/clientes', 'Clientes'], ['/crm/whatsapp', 'WhatsApp'],
   ['/crm/fluxos', 'Automações'], ['/crm/funis', 'Funis de venda'], ['/crm/equipe', 'Equipe'],
   ['/crm/social', 'Relacionamento nas redes'], ['/crm/instagram', 'Instagram'], ['/crm/anuncios', 'Anúncios'],
-  ['/crm/site', 'Visitas ao site'], ['/crm/diagnostico', 'Diagnóstico'], ['/crm', 'Oportunidades'],
+  ['/crm/site', 'Site'], ['/crm/diagnostico', 'Diagnóstico'], ['/crm', 'Oportunidades'],
   ['/conteudos', 'Conteúdos'], ['/plano', 'Plano da empresa'], ['/copy', 'Textos'], ['/criativos', 'Criativos'],
   ['/agentes', 'Agentes de IA'], ['/skills', 'Instruções de IA'], ['/prospeccao', 'Prospecção'],
   ['/contas', 'Contas e módulos'], ['/inicio', 'Início'],
