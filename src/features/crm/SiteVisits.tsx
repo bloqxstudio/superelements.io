@@ -209,7 +209,7 @@ export const VisitsList: React.FC<{
       return
     }
     const fits =
-        (f.live ? isLive(incoming) : incoming.startedAt >= periodRange(period).from.getTime()) &&
+        (f.live ? isLive(incoming) : incoming.startedAt >= periodRange(period).from.getTime() && incoming.startedAt < periodRange(period).to.getTime()) &&
         (!f.converted || incoming.converted) &&
         (!f.channel || incoming.channel === f.channel) &&
         (!f.region || incoming.region === f.region) &&

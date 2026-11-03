@@ -3,7 +3,7 @@ import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { BarList, Stat, TrendChart } from '@/features/crm/InstagramCharts'
 import { compact, percent } from '@/features/crm/instagram'
 import { Surface } from '@/features/crm/ui'
-import { SHOP_EVENTS, dailySeries, eventLabel, moneyText, shareOf, type SessionFilter, type SitePeriod, type SiteReport } from '@/features/crm/site'
+import { SHOP_EVENTS, dailySeries, isOneDay, eventLabel, moneyText, shareOf, type SessionFilter, type SitePeriod, type SiteReport } from '@/features/crm/site'
 import { cn } from '@/lib/utils'
 
 /**
@@ -39,7 +39,7 @@ export const SiteShop: React.FC<{ report: SiteReport; period: SitePeriod; onVisi
   const ticket = t.orders ? t.revenue / t.orders : 0
   const ticketBefore = p.orders ? p.revenue / p.orders : 0
   const rate = shareOf(t.orders, t.sessions)
-  const today = period === 'hoje'
+  const today = isOneDay(period)
 
   const revenueLine = useMemo(() => dailySeries(report, period, (d) => Number(d.revenue ?? 0) || 0), [report, period])
   const funnel = STEPS.map((name) => ({ name, sessions: report.events.find((e) => e.name === name)?.sessions ?? 0 }))

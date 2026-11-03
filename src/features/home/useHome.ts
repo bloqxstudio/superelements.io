@@ -1,3 +1,4 @@
+import { addDays, dayOfPeriod, dayPeriod, dayStart, isDayPeriod, todayKey } from '@/lib/day'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useCrm } from '@/features/crm/crmStore'
@@ -8,7 +9,7 @@ import { listOpportunities } from '@/features/crm/opportunities'
 import { useOpportunityFeed } from '@/features/crm/live'
 import { loadNumber, useNumberFeed, type WaNumber } from '@/features/crm/whatsapp'
 import { listStories, NoStoryTablesError, useStoryFeed, type Story } from '@/features/crm/stories'
-import { loadReport, loadSessions, loadTrackers, NoSiteTablesError, type SiteReport, type SiteSession, type SiteTracker } from '@/features/crm/site'
+import { loadReport, loadSessions, loadTrackers, NoSiteTablesError, type SitePeriod, type SiteReport, type SiteSession, type SiteTracker } from '@/features/crm/site'
 import { listProjects } from '@/features/projects/storage'
 import type { Project } from '@/features/projects/types'
 import { rescore } from '@/features/prospects/api'
@@ -92,12 +93,20 @@ const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() +
 /** O relatório guardado do período; em "Hoje", só vale o do dia, e um velho é relido da Meta (se falhar, fica o guardado do dia). */
 async function adReportFor(accountId: string, preset: AdPreset): Promise<AdReport | null> {
   const saved = await loadAdReport(accountId, preset).catch(() => null)
+  // Um dia escolhido: o guardado vale (relido só se já é de depois do dia fechar e veio antes); sem guardado, lê a Meta
+  if (isDayPeriod(preset)) {
+    const day = dayOfPeriod(preset)
+    const closed = dayStart(addDays(day, 2)).getTime()
+    if (saved && (saved.fetchedAt > closed || (day === todayKey() ? Date.now() - saved.fetchedAt < TODAY_STALE : Date.now() - saved.fetchedAt < 30 * 60_000))) return saved
+    return fetchAdReport(accountId, preset).catch(() => saved)
+  }
   if (preset !== 'today') return saved
   const sameDay = saved && saved.since === localDay() ? saved : null
   if (sameDay && Date.now() - sameDay.fetchedAt < TODAY_STALE) return sameDay
   return fetchAdReport(accountId, 'today').catch(() => sameDay)
 }
-export const sitePeriod = (days: Days) => (days === 1 ? ('hoje' as const) : days)
+export const sitePeriod = (days: Days, day?: string): SitePeriod => (day ? dayPeriod(day) : days === 1 ? 'hoje' : days)
+const adPresetOf = (days: Days, day?: string): AdPreset => (day ? dayPeriod(day) : PRESET[days])
 
 // ---------- as formas de cada fonte ----------
 
@@ -185,7 +194,8 @@ export function metaCampaigns(data: AdsData | undefined): MetaCampaignInput[] {
 
 // ---------- o hook ----------
 
-export function useHome(days: Days) {
+/** `day`: um dia escolhido no calendário (`2026-10-30`); `days` é então 1 */
+export function useHome(days: Days, day?: string) {
   const team = useCrm((s) => s.team)
   const pipeline = useCrm((s) => s.pipeline)
   const teamId = team?.id
@@ -260,7 +270,7 @@ export function useHome(days: Days) {
       if (!trackers.length) throw new Absent('Nenhum site conectado a esta conta.')
       const parts = await Promise.all(
         trackers.map(async (t) => {
-          const [report, live, contacts] = await Promise.all([loadReport(t.id, sitePeriod(days)), loadSessions(t.id, { live: true }), loadSessions(t.id, { period: sitePeriod(days), converted: true })])
+          const [report, live, contacts] = await Promise.all([loadReport(t.id, sitePeriod(days, day)), loadSessions(t.id, { live: true }), loadSessions(t.id, { period: sitePeriod(days, day), converted: true })])
           return { report, live: live.sessions, contacts: contacts.sessions }
         })
       )
@@ -274,7 +284,7 @@ export function useHome(days: Days) {
         lastEventAt: Math.max(0, ...trackers.map((t) => t.lastSeenAt ?? 0)) || undefined,
       }
     },
-    `${teamId}:${days}`,
+    `${teamId}:${days}:${day ?? ''}`,
     5 * 60_000
   )
   const [siteRealtime, setSiteRealtime] = useState(false)
@@ -302,10 +312,10 @@ export function useHome(days: Days) {
         throw e
       }
       if (!accounts.length) throw new Absent('Nenhuma conta de anúncios conectada.')
-      const reports = await Promise.all(accounts.map(async (account) => ({ account, report: account.syncError ? await loadAdReport(account.id, PRESET[days]).catch(() => null) : await adReportFor(account.id, PRESET[days]) })))
+      const reports = await Promise.all(accounts.map(async (account) => ({ account, report: account.syncError ? await loadAdReport(account.id, adPresetOf(days, day)).catch(() => null) : await adReportFor(account.id, adPresetOf(days, day)) })))
       return { accounts, reports }
     },
-    `${teamId}:${days}`,
+    `${teamId}:${days}:${day ?? ''}`,
     10 * 60_000
   )
 

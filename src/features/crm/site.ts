@@ -1,3 +1,4 @@
+import { dayIn, dayOfPeriod, dayRange, dayShort, isDayPeriod, type DayPeriod } from '@/lib/day'
 import { useEffect, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { isLocalAppUrl, publicAppUrl } from '@/features/approval/shares'
@@ -303,12 +304,22 @@ export function endpointInfo(): Promise<EndpointInfo> {
 
 // ---------- período e relatório ----------
 
-export type SitePeriod = 'hoje' | 7 | 30 | 90
+/** Os períodos de sempre ou um dia escolhido no calendário (`dia:2026-10-30`) */
+export type SitePeriod = 'hoje' | 7 | 30 | 90 | DayPeriod
 export const SITE_PERIODS: SitePeriod[] = ['hoje', 7, 30, 90]
 export const PERIOD_LABEL: Record<string, string> = { hoje: 'Hoje', 7: '7 dias', 30: '30 dias', 90: '90 dias' }
+export const periodLabel = (period: SitePeriod) => (isDayPeriod(period) ? dayShort(dayOfPeriod(period)) : PERIOD_LABEL[period])
+/** Um dia só (hoje ou o escolhido): a tela mostra por hora em vez de por dia */
+export const isOneDay = (period: SitePeriod) => period === 'hoje' || isDayPeriod(period)
+/** "hoje", "nos últimos 7 dias", "em 30 out." */
+export const periodPhrase = (period: SitePeriod) => (period === 'hoje' ? 'hoje' : isDayPeriod(period) ? dayIn(dayOfPeriod(period)) : `nos últimos ${PERIOD_LABEL[period]}`)
 
-/** Do começo do primeiro dia (no fuso de quem abre) até agora. */
+/** Do começo do primeiro dia (no fuso de quem abre) até agora; um dia escolhido vai da meia-noite à seguinte. */
 export function periodRange(period: SitePeriod, now = new Date()) {
+  if (isDayPeriod(period)) {
+    const { from, to } = dayRange(dayOfPeriod(period))
+    return { from, to: to.getTime() > now.getTime() ? new Date(now.getTime() + 60_000) : to }
+  }
   const from = new Date(now)
   from.setHours(0, 0, 0, 0)
   if (period !== 'hoje') from.setDate(from.getDate() - (period - 1))
@@ -377,7 +388,7 @@ export function dailySeries(report: SiteReport, period: SitePeriod, pick: (day: 
   const { from } = periodRange(period)
   const byDay = new Map(report.days.map((d) => [d.day, d]))
   const points: { day: string; value: number }[] = []
-  const today = dayKeyOf(new Date())
+  const today = isDayPeriod(period) ? dayOfPeriod(period) : dayKeyOf(new Date())
   for (const date = new Date(from); ; date.setDate(date.getDate() + 1)) {
     const key = dayKeyOf(date)
     const day = byDay.get(key)

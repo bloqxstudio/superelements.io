@@ -52,13 +52,101 @@ async function uploadJson(path: string, value: unknown, { upsert = false, cacheC
   if (error) throw error
 }
 
+const isGzip = (bytes: Uint8Array) => bytes[0] === 0x1f && bytes[1] === 0x8b
+
+async function blobText(data: Blob) {
+  const head = new Uint8Array(await data.slice(0, 2).arrayBuffer())
+  if (!isGzip(head)) return data.text()
+  return new Response(data.stream().pipeThrough(new DecompressionStream('gzip'))).text()
+}
+
 async function downloadJson<T>(path: string): Promise<T | undefined> {
   const { data, error } = await bucket().download(path)
   if (error) {
     if (isNotFound(error)) return undefined
     throw error
   }
-  return JSON.parse(await data.text()) as T
+  return JSON.parse(await blobText(data)) as T
+}
+
+// Conteúdo dos projetos: cada gravação vai para um arquivo novo que nunca muda (doc-….json), então
+// o navegador guarda o que já leu ou gravou e não baixa de novo. Gravado comprimido (gzip, ~3× menor).
+// Baixar o projeto a cada abertura era metade do tráfego de saída do Supabase (nov/2026).
+
+const DOC_DB = 'superelements-docs'
+const DOC_STORE = 'docs'
+const DOC_KEEP = 12
+
+let docDb: Promise<IDBDatabase | undefined> | undefined
+function openDocDb() {
+  docDb ??= new Promise((resolve) => {
+    try {
+      const request = indexedDB.open(DOC_DB, 1)
+      request.onupgradeneeded = () => request.result.createObjectStore(DOC_STORE)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => resolve(undefined)
+      request.onblocked = () => resolve(undefined)
+    } catch {
+      resolve(undefined)
+    }
+  })
+  return docDb
+}
+
+async function docStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T | undefined> {
+  const db = await openDocDb()
+  if (!db) return undefined
+  return new Promise((resolve) => {
+    try {
+      const request = run(db.transaction(DOC_STORE, mode).objectStore(DOC_STORE))
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => resolve(undefined)
+    } catch {
+      resolve(undefined)
+    }
+  })
+}
+
+interface CachedDoc {
+  text: string
+  at: number
+}
+
+async function cacheDoc(path: string, text: string) {
+  await docStore('readwrite', (store) => store.put({ text, at: Date.now() } satisfies CachedDoc, path))
+  // Só os mais recentes: um projeto grande passa de 6 MB
+  const keys = ((await docStore('readonly', (store) => store.getAllKeys())) ?? []) as string[]
+  if (keys.length <= DOC_KEEP) return
+  const all = ((await docStore('readonly', (store) => store.getAll())) ?? []) as CachedDoc[]
+  const old = keys.map((key, i) => ({ key, at: all[i]?.at ?? 0 })).sort((a, b) => b.at - a.at).slice(DOC_KEEP)
+  for (const { key } of old) await docStore('readwrite', (store) => store.delete(key))
+}
+
+async function uploadDoc(path: string, doc: ProjectDoc) {
+  const text = JSON.stringify(doc)
+  let body: Blob = new Blob([text], { type: 'application/json' })
+  if (typeof CompressionStream !== 'undefined') {
+    body = await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))).blob()
+  }
+  const { error } = await bucket().upload(path, body, { contentType: 'application/json', cacheControl: '31536000' })
+  if (error) throw error
+  void cacheDoc(path, text)
+}
+
+async function downloadDoc(path: string): Promise<ProjectDoc | undefined> {
+  const hit = await docStore<CachedDoc>('readonly', (store) => store.get(path))
+  if (hit?.text) {
+    void docStore('readwrite', (store) => store.put({ text: hit.text, at: Date.now() } satisfies CachedDoc, path))
+    return JSON.parse(hit.text) as ProjectDoc
+  }
+  const { data, error } = await bucket().download(path)
+  if (error) {
+    if (isNotFound(error)) return undefined
+    throw error
+  }
+  const text = await blobText(data)
+  void cacheDoc(path, text)
+  return JSON.parse(text) as ProjectDoc
 }
 
 /** Apaga tudo o que está numa pasta do bucket, subpastas inclusive. */
@@ -205,7 +293,7 @@ export async function loadProjectDoc(id: string): Promise<CloudDoc | undefined> 
   for (let attempt = 0; ; attempt++) {
     const head = await loadDocHead(id)
     if (!head?.path) return head
-    const doc = await downloadJson<ProjectDoc>(head.path)
+    const doc = await downloadDoc(head.path)
     if (doc) return { ...head, doc }
     // Outro aparelho salvou (e apagou o arquivo antigo) entre as duas leituras: lê de novo
     if (attempt === 1) {
@@ -310,7 +398,7 @@ export async function listVersions(id: string): Promise<ProjectVersion[] | null>
 }
 
 /** O conteúdo de uma versão guardada. */
-export const loadVersionDoc = (path: string) => downloadJson<ProjectDoc>(path)
+export const loadVersionDoc = (path: string) => downloadDoc(path)
 
 export type SaveResult = { saved: DocHead } | { conflict: true }
 
@@ -330,7 +418,7 @@ interface SaveOptions {
  */
 export async function saveProjectDoc(id: string, doc: ProjectDoc, { base, previousPath, summary, edited }: SaveOptions): Promise<SaveResult> {
   const path = `${await projectFolder(id)}/doc-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}.json`
-  await uploadJson(path, doc)
+  await uploadDoc(path, doc)
 
   const { data, error } = await supabase
     .from('space_projects')

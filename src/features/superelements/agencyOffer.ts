@@ -3,13 +3,14 @@ export const AGENCY_OFFER = {
   name: 'Agência',
   monthlyPerCompany: 149,
   suggestedClientMonthly: 299,
+  // Só o que a Sinfy entrega (o caminho do anúncio à venda); criar páginas e criativos é do SuperElements
   items: [
-    'CRM, contatos, responsáveis e oportunidades',
-    'WhatsApp, histórico e rotinas de contato',
+    'Campanhas da Meta: valor usado, resultados e custo',
+    'Visitas ao site com origem, campanha e contatos',
     'Formulários e quizzes de qualificação',
-    'Origem disponível, site e campanhas Meta',
-    'Relatórios e acompanhamento da operação',
-    'Criação de páginas e criativos pela agência',
+    'Leads com responsável, etapa e próximo passo',
+    'Conversas do WhatsApp da equipe e avisos de lead',
+    'Relatórios no WhatsApp do cliente',
   ],
 } as const;
 

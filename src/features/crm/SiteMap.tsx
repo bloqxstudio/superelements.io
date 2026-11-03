@@ -106,7 +106,9 @@ export const SiteMap: React.FC<{
   endpoint?: EndpointInfo
   onVisits: (filter: Partial<SessionFilter>) => void
   onOpenSession: (session: SiteSession) => void
-}> = ({ report, live, meta, endpoint, onVisits, onOpenSession }) => {
+  /** Outro título (a Operação mostra só quem está agora) */
+  title?: string
+}> = ({ report, live, meta, endpoint, onVisits, onOpenSession, title = 'Mapa' }) => {
   const [layer, setLayer] = useState<Layer>('site')
   const [metric, setMetric] = useState<MetaMetric>('linkClicks')
   const [selected, setSelected] = useState<string | null>(null)
@@ -182,7 +184,7 @@ export const SiteMap: React.FC<{
 
   return (
     <Surface
-      title="Mapa"
+      title={title}
       action={
         <span className="flex flex-wrap items-center gap-1.5">
           <Chip active={!showMeta} onClick={() => setLayer('site')} className="h-7 px-2.5 text-xs">

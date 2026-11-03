@@ -1,3 +1,4 @@
+import type { ProductId } from './modules'
 import type { FunnelSettings } from '@/features/prospects/funnel'
 import type { Lead } from '@/features/prospects/types'
 
@@ -30,6 +31,8 @@ export interface Team {
   modules: Record<string, boolean>
   /** A conta da própria Avence: dos projetos antigos e de quem ainda não tem conta. */
   isHome: boolean
+  /** O produto da conta (`completo`, `resultados` = Sinfy, `builder` = SuperElements): decide o menu. */
+  product: ProductId
   profile: AccountProfile
 }
 
@@ -50,6 +53,7 @@ export interface AccountOverview extends AccountProfile {
   status: 'ativa' | 'pausada'
   modules: Record<string, boolean>
   isHome: boolean
+  product: ProductId
   createdAt: number
   members: number
   /** Quem olha já está dentro da conta (sem isso, "Entrar" dá acesso de suporte). */

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchAdReport, loadAdAccounts, loadAdReport, NoAdTablesError, type AdAudienceRow, type AdCampaign, type AdCreative, type AdCut, type AdMetrics, type AdPreset, type AdReport } from './ads'
 import { sumMetrics } from './adsMetrics'
+import { isDayPeriod } from '@/lib/day'
 import type { SiteAdRow, SitePeriod, SiteSession } from './site'
 import { UF_NAME, ufOf } from './siteGeo'
 
@@ -18,8 +19,8 @@ import { UF_NAME, ufOf } from './siteGeo'
 
 const STALE = 30 * 60_000
 
-/** O período do site no relatório da Meta (hoje cai nos 7 dias: a Meta não tem "hoje") */
-export const presetOf = (period: SitePeriod): AdPreset => (period === 30 ? 'last_30d' : period === 90 ? 'last_90d' : 'last_7d')
+/** O período do site no relatório da Meta (hoje cai nos 7 dias: a Meta não tem "hoje"); um dia escolhido é o mesmo dia */
+export const presetOf = (period: SitePeriod): AdPreset => (isDayPeriod(period) ? period : period === 30 ? 'last_30d' : period === 90 ? 'last_90d' : 'last_7d')
 
 export interface MetaCampaign extends AdCampaign {
   accountId: string

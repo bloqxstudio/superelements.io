@@ -12,7 +12,7 @@ import type { ChatAgentId } from '@/features/space/chat/protocol'
  * gravam aqui, então ficam sempre de acordo.
  */
 
-export type IaTask = 'criativos' | 'copy' | 'sites' | 'comercial' | 'stories'
+export type IaTask = 'criativos' | 'copy' | 'sites' | 'comercial' | 'stories' | 'perfil'
 
 export const IA_TASKS: { id: IaTask; label: string; hint: string }[] = [
   { id: 'criativos', label: 'Criativos', hint: 'Posts e carrosséis, edição no editor e posts vindos da Copy' },
@@ -20,6 +20,7 @@ export const IA_TASKS: { id: IaTask; label: string; hint: string }[] = [
   { id: 'comercial', label: 'Comercial', hint: 'Revisão do funil, pesquisa de negócios e rascunhos de abordagem' },
   { id: 'sites', label: 'Sites e páginas', hint: 'Páginas no Space, inclusive as da fila de prospecção' },
   { id: 'stories', label: 'Stories', hint: 'Pauta, revisão, sequências e fotos dos stories programados (Instagram › Stories)' },
+  { id: 'perfil', label: 'Análise de perfil', hint: 'Leitura da foto, da bio, dos destaques e do grid do Instagram conectado (Instagram › Análise)' },
 ]
 
 /** Sem escolha feita, a tarefa prefere esta IA quando ela está instalada (os stories nasceram para o Codex). */
@@ -27,7 +28,7 @@ const PREFERRED: Partial<Record<IaTask, ChatAgentId>> = { stories: 'codex' }
 
 const KEY = 'ia-por-tarefa'
 /** Onde cada escolha ficava antes desta tela. */
-const OLD_KEY: Record<IaTask, string> = { criativos: 'criativos-agente', copy: 'copy-agente-motor', sites: 'space-chat-agent', comercial: 'comercial-agente', stories: 'stories-agente' }
+const OLD_KEY: Record<IaTask, string> = { criativos: 'criativos-agente', copy: 'copy-agente-motor', sites: 'space-chat-agent', comercial: 'comercial-agente', stories: 'stories-agente', perfil: 'perfil-agente' }
 
 const isId = (v: unknown): v is ChatAgentId => v === 'claude' || v === 'codex'
 

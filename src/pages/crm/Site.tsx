@@ -1,3 +1,5 @@
+import { DayPicker } from '@/components/DayPicker'
+import { dayLong, dayOfPeriod, dayPeriod, isDayPeriod, todayKey } from '@/lib/day'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ArrowDownRight, ArrowUpRight, ExternalLink, Globe, Loader2, RefreshCw } from 'lucide-react'
@@ -15,6 +17,9 @@ import {
   CONTACT_EVENTS,
   NoSiteTablesError,
   PERIOD_LABEL,
+  isOneDay,
+  periodLabel,
+  periodPhrase,
   SHOP_EVENTS,
   SITE_PERIODS,
   contactLabel,
@@ -221,17 +226,18 @@ const Overview: React.FC<{
   const [metric, setMetric] = useState<Metric>('visitors')
   const t = report.totals
   const p = report.previous
-  const today = period === 'hoje'
-  const label = PERIOD_LABEL[period].toLowerCase()
+  const today = isOneDay(period)
+  const label = periodLabel(period).toLowerCase()
+  const pastDay = isDayPeriod(period) && dayOfPeriod(period) !== todayKey()
 
   const series = useMemo(() => dailySeries(report, period, (d) => d[metric]), [report, period, metric])
   const visitorsLine = useMemo(() => dailySeries(report, period, (d) => d.visitors).map((d) => d.value), [report, period])
   const hourly = useMemo(() => {
-    const now = new Date().getHours()
+    const now = pastDay ? 23 : new Date().getHours()
     const counts = Array<number>(24).fill(0)
     for (const h of report.hours) counts[h.hour] += h.sessions
     return counts.slice(0, now + 1).map((value, hour) => ({ day: String(hour), value }))
-  }, [report.hours])
+  }, [report.hours, pastDay])
 
   const contacts = report.events.filter((e) => CONTACT_EVENTS.includes(e.name))
   const otherEvents = report.events.filter((e) => !CONTACT_EVENTS.includes(e.name) && !SHOP_EVENTS.includes(e.name))
@@ -247,7 +253,7 @@ const Overview: React.FC<{
   if (t.sessions === 0 && !p.sessions)
     return (
       <Surface className="mx-auto max-w-2xl text-center">
-        <p className="text-sm font-medium text-gray-900">{tracker.lastSeenAt ? `Nenhuma visita ${today ? 'hoje' : `nos últimos ${label}`}.` : 'Nenhuma visita ainda.'}</p>
+        <p className="text-sm font-medium text-gray-900">{tracker.lastSeenAt ? `Nenhuma visita ${periodPhrase(period)}.` : 'Nenhuma visita ainda.'}</p>
         <p className="mt-1 text-sm text-gray-500">
           {tracker.lastSeenAt ? `O último sinal do site foi ${whenLabel(tracker.lastSeenAt)}.` : 'Os números aparecem aqui assim que o código estiver no site e alguém visitar.'}
         </p>
@@ -322,7 +328,7 @@ const Overview: React.FC<{
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold">{today ? 'Visitas por hora' : METRIC_LABEL[metric].title}</h2>
-              <p className="text-xs text-zinc-400">{today ? 'Hoje, no seu fuso' : METRIC_LABEL[metric].hint}</p>
+              <p className="text-xs text-zinc-400">{today ? `${isDayPeriod(period) ? dayLong(dayOfPeriod(period)).replace(/^./, (c) => c.toUpperCase()) : 'Hoje'}, no seu fuso` : METRIC_LABEL[metric].hint}</p>
             </div>
             {!today && (
               <div className="flex flex-wrap gap-1" role="group" aria-label="Métrica do gráfico">
@@ -341,7 +347,7 @@ const Overview: React.FC<{
             )}
           </div>
           {today ? (
-            <TrendChart points={hourly} unit="visitas" label="Visitas por hora hoje" tone="dark" height={260} short={(h) => `${h}h`} long={(h) => `Das ${h}h às ${h}h59`} />
+            <TrendChart points={hourly} unit="visitas" label={`Visitas por hora ${periodPhrase(period)}`} tone="dark" height={260} short={(h) => `${h}h`} long={(h) => `Das ${h}h às ${h}h59`} />
           ) : (
             <TrendChart points={series} unit={METRIC_LABEL[metric].unit} label={`${METRIC_LABEL[metric].title} nos últimos ${label}`} tone="dark" height={260} />
           )}
@@ -708,6 +714,7 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
                 {PERIOD_LABEL[p]}
               </button>
             ))}
+            <DayPicker value={isDayPeriod(period) ? dayOfPeriod(period) : null} onChange={(key) => setPeriod(key === todayKey() ? 'hoje' : dayPeriod(key))} />
           </div>
         )}
       </div>

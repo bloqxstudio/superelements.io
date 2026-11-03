@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { publicAppUrl } from '@/features/approval/shares'
 import { avatarUrlOf, displayName } from '@/features/profile/profile'
 import type { AccountOverview, AccountProfile, Team, TeamInvite, TeamPerson, TeamRole } from './types'
-import { cleanModules } from './modules'
+import { cleanModules, productOf, type ProductId } from './modules'
 
 /**
  * A equipe do CRM e o acesso a ela pela plataforma: quem gerencia cria um
@@ -17,15 +17,15 @@ const role = (value: string): TeamRole => (value === 'owner' || value === 'admin
 export async function listMyTeams(userId: string): Promise<Team[]> {
   const { data, error } = await supabase
     .from('crm_team_members')
-    .select('role, created_at, team:crm_teams(id, name, status, modules, is_home, segment, website, contact_name, contact_email, contact_phone, notes, archived_at)')
+    .select('role, created_at, team:crm_teams(id, name, status, modules, is_home, product, segment, website, contact_name, contact_email, contact_phone, notes, archived_at)')
     .eq('user_id', userId)
     .order('created_at', { ascending: true })
   if (error) throw error
   return (data ?? [])
     .map((row) => {
-      const team = row.team as unknown as { archived_at?: string | null; id: string; name: string; status?: string; modules?: unknown; is_home?: boolean; segment?: string; website?: string; contact_name?: string; contact_email?: string; contact_phone?: string; notes?: string } | null
+      const team = row.team as unknown as { archived_at?: string | null; id: string; name: string; status?: string; modules?: unknown; is_home?: boolean; product?: string; segment?: string; website?: string; contact_name?: string; contact_email?: string; contact_phone?: string; notes?: string } | null
       return team && !team.archived_at
-        ? { id: team.id, name: team.name, role: role(row.role), status: team.status === 'pausada' ? 'pausada' : 'ativa', modules: cleanModules(team.modules), isHome: !!team.is_home, profile: { segment: team.segment ?? '', website: team.website ?? '', contactName: team.contact_name ?? '', contactEmail: team.contact_email ?? '', contactPhone: team.contact_phone ?? '', notes: team.notes ?? '' } }
+        ? { id: team.id, name: team.name, role: role(row.role), status: team.status === 'pausada' ? 'pausada' : 'ativa', modules: cleanModules(team.modules), isHome: !!team.is_home, product: productOf(team.product), profile: { segment: team.segment ?? '', website: team.website ?? '', contactName: team.contact_name ?? '', contactEmail: team.contact_email ?? '', contactPhone: team.contact_phone ?? '', notes: team.notes ?? '' } }
         : null
     })
     .filter((team): team is Team => team !== null)
@@ -48,11 +48,13 @@ const ACCOUNT_ERRORS: Record<string, string> = {
   conta_nao_arquivada: 'Arquive a conta antes de excluir.',
   arquivo_recente: 'A exclusão definitiva só vale 30 dias depois de arquivar.',
   conta_inexistente: 'Essa conta não existe mais.',
+  conta_casa_completa: 'A conta da Avence fica no produto Completo.',
+  produto_invalido: 'Produto desconhecido.',
 }
 const accountError = (message: string) => new Error(Object.entries(ACCOUNT_ERRORS).find(([code]) => message.includes(code))?.[1] ?? message)
 
 /** Conta nova (empresa-cliente) com o cadastro básico e os módulos que já nascem ligados. Só o admin da plataforma. */
-export async function createAccount(input: { name: string; modules: Record<string, boolean> } & Partial<AccountProfile>): Promise<string> {
+export async function createAccount(input: { name: string; modules: Record<string, boolean>; product?: ProductId } & Partial<AccountProfile>): Promise<string> {
   const { data, error } = await supabase.rpc('create_crm_account', {
     p_name: input.name.trim(),
     p_segment: input.segment ?? '',
@@ -63,7 +65,17 @@ export async function createAccount(input: { name: string; modules: Record<strin
     p_modules: input.modules,
   })
   if (error) throw accountError(error.message)
-  return String(data)
+  const id = String(data)
+  // O produto vem depois da conta existir (a conta nasce "completo"; os módulos já vieram do produto)
+  if (input.product && input.product !== 'completo') await setAccountProduct(id, input.product)
+  return id
+}
+
+/** Troca o produto da conta (o menu muda); os módulos são trocados à parte, por quem chama. Só o admin da plataforma. */
+export async function setAccountProduct(teamId: string, product: ProductId): Promise<ProductId> {
+  const { data, error } = await supabase.rpc('crm_set_product', { p_team: teamId, p_product: product })
+  if (error) throw accountError(error.message)
+  return productOf(data)
 }
 
 /** Todas as contas da plataforma, com quantas pessoas têm. Só o admin da plataforma lê. */
@@ -82,6 +94,7 @@ export async function listAccounts(): Promise<AccountOverview[]> {
     status: row.status === 'pausada' ? 'pausada' : 'ativa',
     modules: cleanModules(row.modules),
     isHome: row.is_home,
+    product: productOf(row.product),
     createdAt: Date.parse(row.created_at),
     members: row.members,
     iAmMember: row.i_am_member,

@@ -1,6 +1,7 @@
+import { addDays, dayOfPeriod, dayShort as dayShortKey, dayStart, isDayPeriod, type DayPeriod } from '@/lib/day'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase as typed } from '@/integrations/supabase/client'
-import { loadAdAccounts, loadAdReport, NoAdTablesError, type AdAccount, type AdPreset, type AdReport } from '@/features/crm/ads'
+import { fetchAdReport, loadAdAccounts, loadAdReport, NoAdTablesError, type AdAccount, type AdPreset, type AdReport } from '@/features/crm/ads'
 import { listForms, FormsTablesError, type CrmForm } from '@/features/crm/forms'
 import { dayKeyOf, loadReportRange, loadTrackers, NoSiteTablesError, periodRange, type SiteReport, type SiteTracker } from '@/features/crm/site'
 import {
@@ -31,10 +32,12 @@ import {
 // As tabelas novas ainda não estão nos tipos gerados do Supabase
 const supabase = typed as unknown as SupabaseClient
 
-export type FunnelPeriod = 7 | 30 | 90
-export const FUNNEL_PERIODS: FunnelPeriod[] = [7, 30, 90]
-export const FUNNEL_PERIOD_LABEL: Record<FunnelPeriod, string> = { 7: '7 dias', 30: '30 dias', 90: '90 dias' }
-const AD_PRESET: Record<FunnelPeriod, AdPreset> = { 7: 'last_7d', 30: 'last_30d', 90: 'last_90d' }
+/** 7, 30 ou 90 dias, ou um dia escolhido no calendário (`dia:2026-10-30`) */
+export type FunnelPeriod = 7 | 30 | 90 | DayPeriod
+export const FUNNEL_PERIODS: Exclude<FunnelPeriod, DayPeriod>[] = [7, 30, 90]
+export const FUNNEL_PERIOD_LABEL: Record<7 | 30 | 90, string> = { 7: '7 dias', 30: '30 dias', 90: '90 dias' }
+export const funnelPeriodLabel = (period: FunnelPeriod) => (isDayPeriod(period) ? dayShortKey(dayOfPeriod(period)) : FUNNEL_PERIOD_LABEL[period])
+const AD_PRESET: Record<7 | 30 | 90, AdPreset> = { 7: 'last_7d', 30: 'last_30d', 90: 'last_90d' }
 
 export interface Funnel {
   id: string
@@ -319,11 +322,25 @@ async function loadSubmissions(teamId: string, formIds: string[], from: Date, to
 const ago = (at: number) => new Date(at).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 const dayShort = (key: string | undefined) => (key ? key.split('-').reverse().slice(0, 2).join('/') : '?')
 
+/** O relatório de um dia: o guardado do dia, senão a Meta lida agora, senão um período guardado que o cubra. */
+async function dayAdReport(accountId: string, period: DayPeriod): Promise<AdReport | null> {
+  const saved = await loadAdReport(accountId, period).catch(() => null)
+  if (saved) return saved
+  const fresh = await fetchAdReport(accountId, period).catch(() => null)
+  if (fresh) return fresh
+  const day = dayOfPeriod(period)
+  for (const preset of ['last_30d', 'last_90d'] as AdPreset[]) {
+    const report = await loadAdReport(accountId, preset).catch(() => null)
+    if (report?.since && report.until && report.since <= day && report.until >= day) return report
+  }
+  return null
+}
+
 /** Lê cada etapa na sua fonte, no mesmo período; a que falha vira "indisponível" sem derrubar as outras. */
 export async function readFunnel(teamId: string, steps: FunnelStep[], period: FunnelPeriod): Promise<FunnelReading> {
   const { from, to } = periodRange(period)
   const fromKey = dayKeyOf(from)
-  const toKey = dayKeyOf(new Date())
+  const toKey = isDayPeriod(period) ? dayOfPeriod(period) : dayKeyOf(new Date())
   const rule = cohortRuleOf(steps)
 
   const needs = (kind: FunnelStep['kind']) => steps.some((s) => s.kind === kind && isConnected(s))
@@ -339,7 +356,7 @@ export async function readFunnel(teamId: string, steps: FunnelStep[], period: Fu
   }
   const adReports = new Map<string, Promise<AdReport | null>>()
   const adReport = (id: string) => {
-    if (!adReports.has(id)) adReports.set(id, loadAdReport(id, AD_PRESET[period]))
+    if (!adReports.has(id)) adReports.set(id, isDayPeriod(period) ? dayAdReport(id, period) : loadAdReport(id, AD_PRESET[period]))
     return adReports.get(id) as Promise<AdReport | null>
   }
 
@@ -390,8 +407,10 @@ export async function readFunnel(teamId: string, steps: FunnelStep[], period: Fu
           const account = ads.find((a) => a.id === s.accountId)
           if (!account) return { state: 'unavailable', reason: 'A conta de anúncios escolhida não está mais conectada a esta conta.' }
           const report = await adReport(account.id)
-          if (!report) return { state: 'unavailable', reason: `Nenhum relatório da Meta de ${FUNNEL_PERIOD_LABEL[period]} guardado. Abra Anúncios e leia a Meta uma vez.` }
-          const sum = sumAds(report, (s.campaigns ?? []).map((c) => c.id), fromKey, toKey)
+          if (!report) return { state: 'unavailable', reason: isDayPeriod(period) ? `A Meta não devolveu o relatório de ${funnelPeriodLabel(period)}. Abra Anúncios e leia esse dia.` : `Nenhum relatório da Meta de ${FUNNEL_PERIOD_LABEL[period]} guardado. Abra Anúncios e leia a Meta uma vez.` }
+          // Um dia que já passou: lido depois de fechar, a leitura não envelhece
+          const closed = isDayPeriod(period) && report.fetchedAt > dayStart(addDays(toKey, 2)).getTime()
+          const sum = sumAds(report, (s.campaigns ?? []).map((c) => c.id), fromKey, toKey, closed ? report.fetchedAt : Date.now())
           const parts = [`Relatório da Meta de ${dayShort(sum.since)} a ${dayShort(sum.until)}, lido em ${ago(report.fetchedAt)}.`]
           if (sum.partial) parts.push(`Não cobre o período pedido (${dayShort(fromKey)} a ${dayShort(toKey)}): cliques e gasto são parciais.`)
           if (sum.stale) parts.push('Leitura com mais de 24 h: pode faltar gasto recente.')

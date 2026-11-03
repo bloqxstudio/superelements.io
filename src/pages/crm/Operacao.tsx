@@ -10,6 +10,9 @@ import { money as brl, valueOf, STAGE_LABEL, type Opportunity, type Stage } from
 import { activityEvents, byRecent, spendByCurrency, windowOf, wonAt, type FeedEvent, type Window } from '@/features/home/derive'
 import { ago, LIME, useNow } from '@/features/home/HomeParts'
 import { useHome, type Days } from '@/features/home/useHome'
+import { DayPicker } from '@/components/DayPicker'
+import { dayLong, isDayKey, todayKey } from '@/lib/day'
+import { OperacaoAoVivo } from '@/features/crm/OperacaoAoVivo'
 
 /**
  * Operação (CRM › Operação): o caminho do clique ao cliente como um painel de
@@ -86,12 +89,25 @@ const fmt = (n: number | undefined) => (n === undefined ? '—' : n.toLocaleStri
 
 const OperacaoPage: React.FC = () => {
   const [params, setParams] = useSearchParams()
-  const days: Days = params.get('periodo') === '30' ? 30 : params.get('periodo') === '7' ? 7 : 1
-  const setDays = (d: Days) => setParams(d === 1 ? {} : { periodo: String(d) }, { replace: true })
+  // `?periodo=2026-10-30`: um dia que já passou, escolhido no calendário (sem o "agora")
+  const chosen = params.get('periodo')
+  const day = isDayKey(chosen) && chosen !== todayKey() ? chosen : undefined
+  const days: Days = day ? 1 : chosen === '30' ? 30 : chosen === '7' ? 7 : 1
+  // `?vista=ao-vivo`: quem está agora, o funil em faixas, o mapa e os aparelhos
+  const view: 'quadro' | 'ao-vivo' = params.get('vista') === 'ao-vivo' ? 'ao-vivo' : 'quadro'
+  const go = (periodo: string | null, vista: string = view) => {
+    const next: Record<string, string> = {}
+    if (periodo) next.periodo = periodo
+    if (vista !== 'quadro') next.vista = vista
+    setParams(next, { replace: true })
+  }
+  const setDays = (d: Days) => go(d === 1 ? null : String(d))
+  const setDay = (key: string) => go(key === todayKey() ? null : key)
+  const setView = (v: 'quadro' | 'ao-vivo') => go(chosen, v)
   const now = useNow(15_000)
-  const h = useHome(days)
+  const h = useHome(days, day)
   const { opps, site, ads } = h
-  const w = useMemo(() => windowOf(days), [days, Math.floor(now / 60_000)]) // eslint-disable-line react-hooks/exhaustive-deps
+  const w = useMemo(() => windowOf(days, Date.now(), day), [days, day, Math.floor(now / 60_000)]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const siteData = site.status === 'ready' ? site.data : undefined
   const adsData = ads.status === 'ready' ? ads.data : undefined
@@ -138,7 +154,8 @@ const OperacaoPage: React.FC = () => {
   // ---- as bolinhas: o que está acontecendo agora ----
   const dots = useMemo(() => {
     const out: Dot[] = []
-    for (const s of siteData?.live ?? []) {
+    // Num dia que já passou, as bolinhas são só as vendas daquele dia: quem está no site e as etapas são de agora
+    for (const s of day ? [] : siteData?.live ?? []) {
       out.push({
         key: `v:${s.id}`,
         col: s.converted ? 'contato' : 'visita',
@@ -151,13 +168,13 @@ const OperacaoPage: React.FC = () => {
     for (const o of opps ?? []) {
       const href = `/crm?oportunidade=${o.id}`
       const col = COL_OF_STAGE[o.stage]
-      if (col) out.push({ key: `o:${o.id}`, col, letter: initial(o.lead.name), title: `${o.lead.name} · ${STAGE_LABEL[o.stage]}`, since: enteredAt(o), href })
+      if (col && !day) out.push({ key: `o:${o.id}`, col, letter: initial(o.lead.name), title: `${o.lead.name} · ${STAGE_LABEL[o.stage]}`, since: enteredAt(o), href })
       const won = wonAt(o)
       if (won !== undefined && within(won, w)) out.push({ key: `o:${o.id}`, col: 'venda', letter: initial(o.lead.name), title: `${o.lead.name} · ganha`, since: won, href })
     }
     // Novo leads de prospecção (sem origem) parados há muito tempo não são operação: só os últimos 30 dias
     return out.filter((d) => d.col === 'visita' || d.col === 'venda' || now - d.since < 30 * 86_400_000).sort((a, b) => b.since - a.since)
-  }, [siteData, opps, w, now])
+  }, [siteData, opps, w, now, day])
 
   // ---- notificações ----
   const events = useMemo(() => {
@@ -167,7 +184,7 @@ const OperacaoPage: React.FC = () => {
       const what = [...new Set(s.conversions.map(contactLabel))].join(', ') || 'contato'
       out.push({ id: `c:${s.id}`, at: s.lastAt, kind: 'contato', title: `Contato pelo site · ${what}`, detail: [s.campaign || s.channel, placeLabel(s)].filter(Boolean).join(' · '), href: '/crm/site?aba=visitas' })
     }
-    return out.filter((e) => e.at >= w.from && e.at <= now + 60_000).sort(byRecent).slice(0, 20)
+    return out.filter((e) => e.at >= w.from && e.at <= (day ? w.to : now + 60_000)).sort(byRecent).slice(0, 20)
   }, [opps, h.acts, siteData, w, now])
 
   // O que chegou com a tela aberta ganha destaque
@@ -208,17 +225,25 @@ const OperacaoPage: React.FC = () => {
             </span>
             <div className="leading-tight">
               <h1 className="text-[15px] font-semibold tracking-tight text-gray-900">Operação</h1>
-              <p className="text-xs text-gray-500">Do clique ao cliente · {loading ? 'lendo…' : 'ao vivo'}</p>
+              <p className="text-xs text-gray-500">Do clique ao cliente · {loading ? 'lendo…' : day ? dayLong(day) : 'ao vivo'}</p>
             </div>
           </div>
           <div className="mx-auto flex rounded-lg border border-gray-200 bg-gray-50 p-0.5" role="group" aria-label="Período">
             {DAYS.map((d) => (
-              <button key={d.id} type="button" onClick={() => setDays(d.id)} aria-pressed={days === d.id} className={cn('h-7 rounded-md px-3 text-xs font-medium transition-colors', days === d.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900')}>
+              <button key={d.id} type="button" onClick={() => setDays(d.id)} aria-pressed={!day && days === d.id} className={cn('h-7 rounded-md px-3 text-xs font-medium transition-colors', !day && days === d.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900')}>
                 {d.label}
               </button>
             ))}
+            <DayPicker value={day ?? null} onChange={setDay} variant="segment" className="[&>button]:h-7 [&>button]:text-xs" />
           </div>
           <div className="flex items-center gap-3">
+            <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-0.5" role="group" aria-label="Vista">
+              {([['quadro', 'Quadro'], ['ao-vivo', 'Ao vivo']] as const).map(([id, label]) => (
+                <button key={id} type="button" onClick={() => setView(id)} aria-pressed={view === id} className={cn('h-7 rounded-md px-3 text-xs font-medium transition-colors', view === id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900')}>
+                  {label}
+                </button>
+              ))}
+            </div>
             {h.siteOn && (
               <span className="flex items-center gap-1.5 text-xs text-gray-600" title="Quem teve atividade no site nos últimos 5 minutos">
                 <span aria-hidden className={cn('h-2 w-2 rounded-full', liveCount ? 'bg-emerald-500 motion-safe:animate-pulse' : 'bg-gray-300')} />
@@ -232,6 +257,16 @@ const OperacaoPage: React.FC = () => {
           </div>
         </header>
 
+        {view === 'ao-vivo' ? (
+          <OperacaoAoVivo
+            siteOn={h.siteOn}
+            siteState={site.status}
+            live={siteData?.live ?? []}
+            steps={COLS.map((c) => ({ id: c.id, label: c.label, value: totals[c.id], hint: c.hint }))}
+            pastDay={day}
+            tall={full}
+          />
+        ) : (
         <div className={cn('grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_300px]', full && 'overflow-hidden')}>
           <div className="flex min-w-0 flex-col overflow-x-auto">
             <div className="flex min-w-[720px] flex-1 flex-col">
@@ -286,6 +321,7 @@ const OperacaoPage: React.FC = () => {
             </div>
           </aside>
         </div>
+        )}
 
         <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-200 px-5 py-2.5 text-[11px] text-gray-500">
           <Source label="Anúncios" state={ads.status} at={adsData ? Math.max(0, ...adsData.reports.map((r) => r.report?.fetchedAt ?? 0)) : undefined} now={now} to="/crm/anuncios" />

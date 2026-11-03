@@ -113,7 +113,8 @@ Deno.serve(async (request) => {
   const origin = { ...leadOrigin(lead, campaign, hash), form: form.name as string, formId: id, ...(score !== null ? { score, result: result?.title, qualified } : {}) }
 
   const { count } = await admin.from('crm_whatsapp_client_contacts').select('phone', { count: 'exact', head: true }).eq('account_id', teamId).eq('leads', true).eq('enabled', true)
-  const alert = count ? alertText(lead, campaign, `${APP_URL}/crm?oportunidade={id}`) : null
+  const { count: groupCount } = await admin.from('crm_whatsapp_groups').select('jid', { count: 'exact', head: true }).eq('leads_account_id', teamId)
+  const alert = count || groupCount ? alertText(lead, campaign, `${APP_URL}/crm?oportunidade={id}`) : null
 
   const { data: received, error } = await admin.rpc('crm_receive_lead', { p_team: teamId, p_lead: { name: lead.name, email: lead.email, phone: lead.phone, message: payload.message }, p_origin: origin, p_alert: alert })
   if (error) {

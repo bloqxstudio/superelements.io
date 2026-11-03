@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCrm } from '@/features/crm/crmStore'
 import { ModuleToggles } from '@/features/crm/ModuleToggles'
-import { MODULES, type ModuleId } from '@/features/crm/modules'
-import { archiveAccount, listAccounts, purgeAccount, restoreAccount, setAccountModules, setAccountStatus, supportAccess } from '@/features/crm/teams'
+import { MODULES, productInfo, productModules, type ModuleId, type ProductId } from '@/features/crm/modules'
+import { ProductPicker } from '@/features/crm/ProductPicker'
+import { archiveAccount, listAccounts, setAccountProduct, purgeAccount, restoreAccount, setAccountModules, setAccountStatus, supportAccess } from '@/features/crm/teams'
 import type { AccountOverview } from '@/features/crm/types'
 import { Page, PageHeader, Surface, dayLabel, plural } from '@/features/crm/ui'
 import { cn } from '@/lib/utils'
@@ -20,8 +21,11 @@ import { cn } from '@/lib/utils'
  */
 
 const AccountCard: React.FC<{ account: AccountOverview; current: boolean; onChanged: () => void; onEnter: (account: AccountOverview) => void }> = ({ account, current, onChanged, onEnter }) => {
-  const [busy, setBusy] = useState<ModuleId | 'status' | null>(null)
+  const [busy, setBusy] = useState<ModuleId | 'status' | 'product' | null>(null)
   const [modules, setModules] = useState(account.modules)
+  const [product, setProduct] = useState<ProductId>(account.product)
+  /** O produto escolhido que ainda espera confirmação (ele troca os módulos). */
+  const [nextProduct, setNextProduct] = useState<ProductId | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [typed, setTyped] = useState('')
   const archived = account.archivedAt !== undefined
@@ -30,6 +34,26 @@ const AccountCard: React.FC<{ account: AccountOverview; current: boolean; onChan
   const paused = account.status === 'pausada'
 
   useEffect(() => setModules(account.modules), [account.modules])
+  useEffect(() => setProduct(account.product), [account.product])
+
+  // Trocar de produto troca o menu e os módulos: liga os do produto e desliga os outros
+  const changeProduct = async (next: ProductId) => {
+    setBusy('product')
+    try {
+      await setAccountProduct(account.id, next)
+      setProduct(next)
+      setModules(await setAccountModules(account.id, productModules(next)))
+      toast.success(`${account.name} agora é ${productInfo(next).label}`, { description: 'Os módulos do produto foram ligados e os outros desligados. Dá para ajustar um a um abaixo.' })
+      setNextProduct(null)
+      onChanged()
+    } catch (error) {
+      toast.error('Não foi possível trocar o produto', { description: error instanceof Error ? error.message : undefined })
+    } finally {
+      setBusy(null)
+    }
+  }
+  // O que a troca desliga e hoje está ligado (para a pessoa ver antes de confirmar)
+  const turnsOff = nextProduct ? MODULES.filter((m) => !productModules(nextProduct)[m.id] && modules[m.id] !== false) : []
 
   const toggle = async (id: ModuleId, on: boolean) => {
     setBusy(id)
@@ -85,6 +109,7 @@ const AccountCard: React.FC<{ account: AccountOverview; current: boolean; onChan
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="truncate text-base font-semibold text-gray-900">{account.name}</h2>
             {account.isHome && <span className="rounded-full bg-gray-900 px-2 py-0.5 text-[11px] font-medium text-white">Conta da casa</span>}
+            {product !== 'completo' && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">{productInfo(product).label}</span>}
             {paused && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">Pausada</span>}
             {current && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">Aberta agora</span>}
           </div>
@@ -151,11 +176,28 @@ const AccountCard: React.FC<{ account: AccountOverview; current: boolean; onChan
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <div className="mt-4">
+        <p className="mb-2 text-xs font-medium text-gray-700">Produto</p>
+        <ProductPicker value={nextProduct ?? product} onChange={(p) => setNextProduct(p === product ? null : p)} disabled={busy !== null || archived} only={account.isHome ? ['completo'] : undefined} />
+        {nextProduct && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <span className="min-w-0 flex-1">
+              Trocar para {productInfo(nextProduct).label}?{' '}
+              {turnsOff.length ? `Desliga ${turnsOff.map((m) => m.label).join(', ')}.` : 'Nenhum módulo ligado será desligado.'}
+              {turnsOff.some((m) => m.id === 'whatsapp') && ' O número de WhatsApp da conta será desconectado.'}
+            </span>
+            <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => setNextProduct(null)} disabled={busy === 'product'}>Cancelar</Button>
+            <Button type="button" size="sm" className="h-7 gap-1.5" onClick={() => void changeProduct(nextProduct)} disabled={busy === 'product'}>
+              {busy === 'product' && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />} Trocar produto
+            </Button>
+          </div>
+        )}
+      </div>
       <div className={cn('mt-4', paused && 'opacity-60')}>
         <p className="mb-2 text-xs font-medium text-gray-700">
           Módulos: {on} de {MODULES.length} ligados {paused && '(a conta pausada fica sem nenhum)'}
         </p>
-        <ModuleToggles value={modules} onChange={(id, next) => void toggle(id, next)} busyId={busy === 'status' ? null : busy} />
+        <ModuleToggles value={modules} onChange={(id, next) => void toggle(id, next)} busyId={busy === 'status' || busy === 'product' ? null : busy} disabled={busy === 'product'} />
       </div>
     </Surface>
   )
@@ -201,7 +243,7 @@ const Accounts: React.FC = () => {
 
   return (
     <Page>
-      <PageHeader title="Contas" text="As empresas-cliente do produto. Cada conta tem o ambiente separado; aqui você liga e desliga os módulos de cada uma.">
+      <PageHeader title="Contas" text="As empresas-cliente do produto. Cada conta tem o ambiente separado; aqui você escolhe o produto de cada uma e liga ou desliga os módulos.">
         <Button onClick={() => navigate('/contas/nova')} className="gap-1.5">
           <Plus className="h-4 w-4" aria-hidden /> Nova conta
         </Button>

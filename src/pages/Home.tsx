@@ -15,7 +15,9 @@ import {
   type CampaignRow, type FeedEvent, type Window,
 } from '@/features/home/derive'
 import { Block, Condition, conditionOf, ago, clock, dayTime, Delta, Empty, LIME, Skeleton, Stat, useNow } from '@/features/home/HomeParts'
-import { metaCampaigns, useHome, type Days } from '@/features/home/useHome'
+import { metaCampaigns, sitePeriod, useHome, type Days } from '@/features/home/useHome'
+import { DayPicker } from '@/components/DayPicker'
+import { dayLong, dayShort, isDayKey, todayKey } from '@/lib/day'
 import { HomeToday } from '@/features/home/HomeToday'
 import { HomeCharts } from '@/features/home/HomeCharts'
 import { PlanBlock } from '@/features/conteudos/PlanBlock'
@@ -46,15 +48,19 @@ const plainText = (value: string | undefined, max = 90) => {
 
 const Home: React.FC = () => {
   const [params, setParams] = useSearchParams()
-  const days: Days = params.get('periodo') === '30' ? 30 : params.get('periodo') === 'hoje' ? 1 : 7
+  // `?periodo=2026-10-30`: um dia escolhido no calendário
+  const chosen = params.get('periodo')
+  const day = isDayKey(chosen) && chosen !== todayKey() ? chosen : undefined
+  const days: Days = day ? 1 : chosen === '30' ? 30 : chosen === 'hoje' || chosen === todayKey() ? 1 : 7
   const now = useNow()
-  const h = useHome(days)
+  const h = useHome(days, day)
   const { team, opps, site, ads, production, instagram, wa } = h
   const people = useTeamPeople(team?.id)
-  const w = useMemo(() => windowOf(days), [days, Math.floor(now / 60_000)]) // eslint-disable-line react-hooks/exhaustive-deps
+  const w = useMemo(() => windowOf(days, Date.now(), day), [days, day, Math.floor(now / 60_000)]) // eslint-disable-line react-hooks/exhaustive-deps
   const pipelineLoaded = useCrm((s) => s.status)
 
   const setDays = (d: Days) => setParams(d === 7 ? {} : { periodo: d === 1 ? 'hoje' : String(d) }, { replace: true })
+  const setDay = (key: string) => setParams({ periodo: key === todayKey() ? 'hoje' : key }, { replace: true })
 
   const summary = useMemo(() => (opps ? summarizeOpportunities(opps, w, h.settings) : undefined), [opps, w, h.settings])
   const adsData = ads.status === 'ready' ? ads.data : undefined
@@ -84,7 +90,7 @@ const Home: React.FC = () => {
         else if (s.respondedAt) out.push({ id: `r:${s.id}`, at: s.respondedAt, kind: 'aprovacao', title: s.state === 'aprovada' ? `Cliente aprovou a página ${s.pageName}` : `Cliente pediu ajustes em ${s.pageName}`, detail: s.projectName, href: `/projetos/${s.projectId}` })
       }
     }
-    return out.filter((e) => e.at >= w.from && e.at <= now + 60_000).sort(byRecent).slice(0, 14)
+    return out.filter((e) => e.at >= w.from && e.at <= Math.min(now + 60_000, w.to + (day ? 0 : 60_000))).sort(byRecent).slice(0, 14)
   }, [opps, h.acts, site, instagram, production, w, now])
 
   // O que chegou depois que a tela abriu ganha uma marca "Novo"
@@ -107,8 +113,8 @@ const Home: React.FC = () => {
   }
 
   const attention = buildAttention(h, now)
-  const win = `${shortDay(w.from)} a hoje`
-  const prevWin = `${shortDay(w.prevFrom)} a ${shortDay(w.prevTo - 1)}`
+  const win = day ? dayLong(day).replace(/^./, (c) => c.toUpperCase()) : `${shortDay(w.from)} a hoje`
+  const prevWin = day ? shortDay(w.prevFrom) : `${shortDay(w.prevFrom)} a ${shortDay(w.prevTo - 1)}`
 
   return (
     <Page wide>
@@ -126,13 +132,14 @@ const Home: React.FC = () => {
                 key={d.id}
                 type="button"
                 role="radio"
-                aria-checked={days === d.id}
+                aria-checked={!day && days === d.id}
                 onClick={() => setDays(d.id)}
-                className={cn('h-8 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97]', days === d.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900')}
+                className={cn('h-8 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97]', !day && days === d.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900')}
               >
                 {d.label}
               </button>
             ))}
+            <DayPicker value={day ?? null} onChange={setDay} variant="segment" />
           </div>
           <p className="text-xs text-gray-500">
             {win} · comparado a {prevWin}
@@ -141,9 +148,9 @@ const Home: React.FC = () => {
       </header>
 
       <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-5">
-        <Reading h={h} w={w} summary={summary} spend={spend} now={now} days={days} />
+        <Reading h={h} w={w} summary={summary} spend={spend} now={now} days={days} day={day} />
 
-        <HomeToday trackers={site.status === 'ready' ? site.data.trackers : undefined} live={site.status === 'ready' ? site.data.live : undefined} days={days} />
+        <HomeToday trackers={site.status === 'ready' ? site.data.trackers : undefined} live={site.status === 'ready' ? site.data.live : undefined} days={days} day={day} />
 
         <HomeCharts
           site={site.status === 'ready' ? site.data : undefined}
@@ -159,7 +166,7 @@ const Home: React.FC = () => {
           <Attention items={attention} />
         </div>
 
-        <Campaigns h={h} rows={chain} w={w} now={now} days={days} />
+        <Campaigns h={h} rows={chain} w={w} now={now} days={days} day={day} />
 
         <Opportunities h={h} summary={summary} opps={opps} people={people} now={now} />
 
@@ -180,7 +187,7 @@ export default Home
 type HomeData = ReturnType<typeof useHome>
 type Summary = ReturnType<typeof summarizeOpportunities> | undefined
 
-const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { currency: string; spend: number }[]; now: number; days: Days }> = ({ h, w, summary, spend, now, days }) => {
+const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { currency: string; spend: number }[]; now: number; days: Days; day?: string }> = ({ h, w, summary, spend, now, days, day }) => {
   const { site, ads } = h
   const siteData = site.status === 'ready' ? site.data : undefined
   const adReports = ads.status === 'ready' ? ads.data.reports.filter((r) => r.report) : []
@@ -192,7 +199,7 @@ const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { cur
   if (spend.length) parts.push(`Investimos ${spend.map((s) => adMoney(s.spend, s.currency)).join(' + ')} em anúncios da Meta`)
   if (siteData) parts.push(`o site recebeu ${siteData.totals.sessions.toLocaleString('pt-BR')} visitas e ${plural(siteData.totals.converted, 'chegou', 'chegaram')} a um contato`)
   if (summary) parts.push(`${plural(summary.created, 'oportunidade entrou', 'oportunidades entraram')} no funil e ${plural(summary.won, 'foi ganha', 'foram ganhas')}`)
-  const sentence = parts.length ? `${days === 1 ? 'Hoje' : `Nos últimos ${days} dias`}: ${parts.join('; ')}.` : undefined
+  const sentence = parts.length ? `${day ? `Em ${dayShort(day)}` : days === 1 ? 'Hoje' : `Nos últimos ${days} dias`}: ${parts.join('; ')}.` : undefined
 
   return (
     <Block id="leitura" title="Resumo do período" hint="Veja os resultados do período. Selecione um indicador para ver os detalhes.">
@@ -205,7 +212,9 @@ const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { cur
           value={ads.status === 'loading' ? <Skeleton className="h-7 w-28" /> : spend.length ? spend.map((s) => adMoney(s.spend, s.currency, true)).join(' + ') : '—'}
           note={
             spend.length
-              ? days === 1
+              ? day
+                ? `Só Meta Ads, gasto de ${dayShort(day)} no fuso da conta de anúncios. Gasto de outras plataformas não entra.`
+                : days === 1
                 ? 'Só Meta Ads, gasto de hoje até a última leitura (a Meta pode levar alguns minutos para contar). Gasto de outras plataformas não entra.'
                 : `Só Meta Ads${adsWindow ? `, ${adsWindow} (a Meta fecha o período no dia anterior)` : ''}. Gasto de outras plataformas não entra.`
               : ads.status === 'none'
@@ -261,7 +270,7 @@ const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { cur
         </Stat>
       </div>
       <p className="mt-3 text-xs text-gray-500">
-        {days === 1 ? 'Hoje é comparado a ontem.' : `Variações comparam períodos do mesmo tamanho (${days} dias).`} O gasto não é comparado: a Meta não entrega o período anterior no mesmo formato.
+        {day ? `${dayShort(day).replace(/^./, (c) => c.toUpperCase())} é comparado ao dia anterior.` : days === 1 ? 'Hoje é comparado a ontem.' : `Variações comparam períodos do mesmo tamanho (${days} dias).`} O gasto não é comparado: a Meta não entrega o período anterior no mesmo formato.
       </p>
     </Block>
   )
@@ -461,7 +470,7 @@ const Attention: React.FC<{ items: Alert[] }> = ({ items }) => {
 
 // ---------- 3. campanhas → oportunidades ----------
 
-const Campaigns: React.FC<{ h: HomeData; rows: CampaignRow[]; w: Window; now: number; days: Days }> = ({ h, rows, w, now, days }) => {
+const Campaigns: React.FC<{ h: HomeData; rows: CampaignRow[]; w: Window; now: number; days: Days; day?: string }> = ({ h, rows, w, now, days, day }) => {
   const [open, setOpen] = useState<string>()
   const adsCond = conditionOf(h.ads, now, { freshMs: ADS_FRESH })
   const loading = (h.ads.status === 'loading' || h.site.status === 'loading') && !rows.length
@@ -490,7 +499,7 @@ const Campaigns: React.FC<{ h: HomeData; rows: CampaignRow[]; w: Window; now: nu
           </div>
           <ul className="grid gap-2">
             {rows.map((r) => (
-              <CampaignItem key={r.key} r={r} expanded={open === r.key} onToggle={() => setOpen(open === r.key ? undefined : r.key)} h={h} w={w} days={days} />
+              <CampaignItem key={r.key} r={r} expanded={open === r.key} onToggle={() => setOpen(open === r.key ? undefined : r.key)} h={h} w={w} days={days} day={day} />
             ))}
           </ul>
         </>
@@ -514,7 +523,7 @@ const Campaigns: React.FC<{ h: HomeData; rows: CampaignRow[]; w: Window; now: nu
   )
 }
 
-const CampaignItem: React.FC<{ r: CampaignRow; expanded: boolean; onToggle: () => void; h: HomeData; w: Window; days: Days }> = ({ r, expanded, onToggle, h, w, days }) => {
+const CampaignItem: React.FC<{ r: CampaignRow; expanded: boolean; onToggle: () => void; h: HomeData; w: Window; days: Days; day?: string }> = ({ r, expanded, onToggle, h, w, days, day }) => {
   const cell = 'flex items-baseline justify-between gap-2 md:block md:text-right'
   const lab = 'text-[11px] text-gray-400 md:hidden'
   const id = `camp-${r.key.replace(/[^a-z0-9]/gi, '-')}`
@@ -553,20 +562,20 @@ const CampaignItem: React.FC<{ r: CampaignRow; expanded: boolean; onToggle: () =
           </span>
         </span>
       </button>
-      {expanded && <CampaignDetail id={id} r={r} h={h} w={w} days={days} />}
+      {expanded && <CampaignDetail id={id} r={r} h={h} w={w} days={days} day={day} />}
     </li>
   )
 }
 
 /** O percurso de uma campanha, com a origem de cada elo e a fonte para investigar. */
-const CampaignDetail: React.FC<{ id: string; r: CampaignRow; h: HomeData; w: Window; days: Days }> = ({ id, r, h, w, days }) => {
+const CampaignDetail: React.FC<{ id: string; r: CampaignRow; h: HomeData; w: Window; days: Days; day?: string }> = ({ id, r, h, w, days, day }) => {
   const trackers = h.site.status === 'ready' ? h.site.data.trackers : []
   const [pages, setPages] = useState<{ path: string; sessions: number }[] | null>(null)
   useEffect(() => {
     // As páginas de entrada saem das visitas que trouxeram o nome desta campanha no link
     if (!r.from.site || !trackers.length) return void setPages([])
     let alive = true
-    Promise.all(trackers.map((t) => loadSessions(t.id, { period: days, campaign: r.name })))
+    Promise.all(trackers.map((t) => loadSessions(t.id, { period: sitePeriod(days, day), campaign: r.name })))
       .then((lists) => {
         if (!alive) return
         const count = new Map<string, number>()
@@ -575,7 +584,7 @@ const CampaignDetail: React.FC<{ id: string; r: CampaignRow; h: HomeData; w: Win
       })
       .catch(() => alive && setPages([]))
     return () => void (alive = false)
-  }, [r.name, r.from.site, days]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [r.name, r.from.site, days, day]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const steps: { label: string; value: string; source: string; ok: boolean }[] = [
     { label: 'Investimento', value: r.spend !== undefined ? adMoney(r.spend, r.currency) : 'sem gasto disponível', source: r.from.meta ? 'Relatório da Meta' : 'Esta plataforma não informa gasto ao produto', ok: r.spend !== undefined },
@@ -630,7 +639,7 @@ const CampaignDetail: React.FC<{ id: string; r: CampaignRow; h: HomeData; w: Win
           Ver no funil <ArrowUpRight aria-hidden className="h-3 w-3" />
         </Link>
       </div>
-      <span className="sr-only">Período de {w.days} dias</span>
+      <span className="sr-only">{day ? `Dia ${dayShort(day)}` : `Período de ${w.days} dias`}</span>
     </div>
   )
 }
@@ -775,12 +784,12 @@ const Production: React.FC<{ h: HomeData; now: number; w: Window }> = ({ h, now,
   const shares = production.status === 'ready' ? production.data.shares : []
   const waiting = shares.filter((s) => s.state === 'aguardando')
   const changes = shares.filter((s) => s.state === 'ajustes')
-  const updated = projects.filter((p) => p.updatedAt >= w.from)
+  const updated = projects.filter((p) => p.updatedAt >= w.from && p.updatedAt < w.to + 60_000)
   const stories = instagram.status === 'ready' ? instagram.data.stories : []
   const toApprove = stories.filter((s) => s.status === 'criativo')
   const scheduled = stories.filter((s) => s.status === 'agendado' && s.publishAt > now).sort((a, b) => a.publishAt - b.publishAt)
-  const live = stories.filter((s) => s.status === 'publicado' && (s.publishedAt ?? 0) >= w.from)
-  const media = instagram.status === 'ready' ? instagram.data.media.filter((m) => m.postedAt >= w.from) : []
+  const live = stories.filter((s) => s.status === 'publicado' && (s.publishedAt ?? 0) >= w.from && (s.publishedAt ?? 0) < w.to + 60_000)
+  const media = instagram.status === 'ready' ? instagram.data.media.filter((m) => m.postedAt >= w.from && m.postedAt < w.to + 60_000) : []
   const igShown = h.adsOn && instagram.status !== 'none'
   if (!h.projOn && !igShown) return null
   return (

@@ -1,4 +1,4 @@
-import { askClaude } from '../criativos/claude.ts'
+import { askClaude, imageBlock } from '../criativos/claude.ts'
 import { askCodex } from '../criativos/codex.ts'
 
 /**
@@ -13,7 +13,11 @@ export interface AgentRunRequest {
   system: string
   prompt: string
   web?: boolean
+  /** Imagens (data URL JPEG, PNG ou WebP) que o agente vê junto com o texto: a foto e o grid de um perfil, por exemplo. */
+  images?: string[]
 }
+
+const MAX_IMAGES = 12
 
 export interface AgentRunResponse {
   reply: string
@@ -36,6 +40,7 @@ const WEB_NOTE = '\n\n## Acesso à web\nVocê pode abrir páginas públicas para
 export const runAgent = (input: AgentRunRequest, signal?: AbortSignal, onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing', detail?: string) => void): Promise<AgentRunResponse> => {
   const web = !!input.web
   const prompt = `${input.prompt.slice(0, 40000)}${web ? WEB_NOTE : ''}`
-  if (input.engine === 'codex') return askCodex<AgentRunResponse>({ prompt: `${input.system}\n\n${FORMAT_NOTE}\n\n${prompt}`, web, timeoutMs: web ? 600_000 : 300_000, idleMs: web ? 180_000 : undefined, signal, onStep })
-  return askClaude<AgentRunResponse>({ system: input.system, schema: AGENT_RUN_SCHEMA, content: [{ type: 'text', text: prompt }], web, timeoutMs: web ? 600_000 : 300_000, idleMs: web ? 180_000 : undefined, signal, onStep })
+  const images = (input.images ?? []).filter((d) => typeof d === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(d)).slice(0, MAX_IMAGES)
+  if (input.engine === 'codex') return askCodex<AgentRunResponse>({ prompt: `${input.system}\n\n${FORMAT_NOTE}\n\n${prompt}`, images, web, timeoutMs: web ? 600_000 : 300_000, idleMs: web ? 180_000 : undefined, signal, onStep })
+  return askClaude<AgentRunResponse>({ system: input.system, schema: AGENT_RUN_SCHEMA, content: [...images.flatMap(imageBlock), { type: 'text', text: prompt }], web, timeoutMs: web ? 600_000 : 300_000, idleMs: web ? 180_000 : undefined, signal, onStep })
 }

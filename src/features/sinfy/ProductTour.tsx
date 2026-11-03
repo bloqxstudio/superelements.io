@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Check, ChevronDown, Filter, Globe2, Instagram, LayoutDashboard, ListChecks, Megaphone, MessageCircle, Mic, Paperclip, Search, Send, TrendingUp, UserPlus,
+  Check, ChevronDown, Filter, Globe2, Instagram, LayoutDashboard, ShoppingBag, ListChecks, Megaphone, MessageCircle, Mic, Paperclip, Search, Send, UserPlus,
 } from 'lucide-react';
 import { SinfyWordmark } from './SinfyBrand';
 import { SiteMap } from '@/features/crm/SiteMap';
@@ -11,18 +11,22 @@ import './ProductTour.css';
  * Tour do produto na /lp: as áreas reais da plataforma desenhadas como componentes
  * na própria página (não imagens), com a marca Sinfy e uma empresa fictícia
  * (Caramelo Pet). Cada aba explica uma funcionalidade que existe no produto.
+ * As abas seguem o que a Sinfy junta num lugar só: Instagram, anúncios, site,
+ * loja (Shopify), formulários, leads e conversas. Páginas e criativos não entram:
+ * são de outro produto.
  */
 
-type ScreenId = 'inicio' | 'oportunidades' | 'whatsapp' | 'formularios' | 'site' | 'anuncios' | 'instagram';
+type ScreenId = 'inicio' | 'instagram' | 'loja' | 'oportunidades' | 'whatsapp' | 'formularios' | 'site' | 'anuncios';
 
 const SCREENS: { id: ScreenId; label: string; icon: React.ElementType; kicker: string; title: string; text: string; items: string[] }[] = [
-  { id: 'inicio', label: 'Início', icon: LayoutDashboard, kicker: 'Visão geral', title: 'A empresa inteira em uma tela.', text: 'Visitas, contatos, oportunidades e investimento do período, comparados com o período anterior. O que precisa de atenção aparece primeiro.', items: ['Indicadores do período com comparação', 'Pontos de atenção com o motivo', 'Campanha → visitas → contatos → oportunidades'] },
-  { id: 'oportunidades', label: 'Oportunidades', icon: Filter, kicker: 'CRM de vendas', title: 'Cada oportunidade tem dono e próximo passo.', text: 'O quadro mostra em que etapa cada negociação está, quem cuida dela e de onde ela veio. A equipe comenta no cartão e todos veem na hora.', items: ['Etapas arrastáveis, ao vivo para a equipe', 'Responsável, origem e comentários no cartão', 'Valor em aberto por etapa'] },
-  { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, kicker: 'Atendimento da equipe', title: 'Um número. A equipe toda atendendo.', text: 'As conversas do WhatsApp da empresa ficam numa caixa compartilhada, com etiquetas, fotos, áudios e o histórico de cada contato.', items: ['Caixa de entrada compartilhada', 'Etiquetas: quente, morno, frio, cliente', 'Áudio, foto, vídeo e documentos'] },
-  { id: 'formularios', label: 'Formulários', icon: ListChecks, kicker: 'Captação e qualificação', title: 'O contato chega qualificado.', text: 'Formulários e quizzes publicados nas páginas levam as respostas e a origem da visita direto para o CRM, já na etapa certa.', items: ['Quizzes com perguntas de qualificação', 'Origem e campanha junto com as respostas', 'Aviso no WhatsApp a cada novo lead'] },
-  { id: 'site', label: 'Visitas ao site', icon: Globe2, kicker: 'Analytics do site', title: 'Quem está no site agora, e de onde veio.', text: 'Cada visita com origem, páginas, tempo e cliques no WhatsApp. O mapa mostra as cidades e quem está navegando neste momento.', items: ['Visitantes ao vivo no mapa', 'Origem: Google, Meta, Instagram, direto', 'Contatos gerados por página e campanha'] },
+  { id: 'inicio', label: 'Visão geral', icon: LayoutDashboard, kicker: 'Visão geral', title: 'A empresa inteira em uma tela.', text: 'Investimento, visitas, contatos e leads do período, comparados com o período anterior. O que precisa de atenção aparece primeiro.', items: ['Indicadores do período com comparação', 'Pontos de atenção com o motivo', 'Campanha → visitas → contatos → oportunidades'] },
+  { id: 'instagram', label: 'Instagram', icon: Instagram, kicker: 'Instagram da empresa', title: 'O perfil e o que ele traz.', text: 'Seguidores, alcance, os melhores posts e os toques no link do perfil, pela API oficial da Meta. Comentários e mensagens ficam na mesma caixa.', items: ['Seguidores e alcance por dia', 'Melhores posts por alcance e interações', 'Comentários e mensagens para responder'] },
   { id: 'anuncios', label: 'Anúncios', icon: Megaphone, kicker: 'Meta Ads', title: 'O investimento ao lado do resultado.', text: 'As campanhas da Meta com os nomes de métrica do Gerenciador, lidas pela conta de anúncios do cliente. Somente leitura: nada muda nas campanhas.', items: ['Valor usado, resultados e custo por resultado', 'Gráfico diário com a métrica que você escolher', 'Prévia nativa de cada anúncio'] },
-  { id: 'instagram', label: 'Instagram', icon: Instagram, kicker: 'Perfil e conteúdo', title: 'O Instagram acompanhado de perto.', text: 'Seguidores, alcance e os melhores posts, com stories programados que a equipe aprova antes de ir ao ar.', items: ['Alcance por dia e por formato', 'Os posts que mais funcionaram', 'Stories programados com aprovação'] },
+  { id: 'site', label: 'Site', icon: Globe2, kicker: 'Analytics do site', title: 'Quem está no site agora, e de onde veio.', text: 'Cada visita com origem, páginas, tempo e cliques no WhatsApp. O mapa mostra as cidades e quem está navegando neste momento.', items: ['Visitantes ao vivo no mapa', 'Origem: Google, Meta, Instagram, direto', 'Contatos gerados por página e campanha'] },
+  { id: 'loja', label: 'Loja', icon: ShoppingBag, kicker: 'Shopify e lojas', title: 'O que vendeu e de onde veio.', text: 'Faturamento, pedidos e ticket médio da loja, com a origem de cada compra. Do produto visto ao pedido pago, cada etapa aparece.', items: ['Faturamento e vendas do período', 'Do produto à compra, etapa por etapa', 'Faturamento por origem e campanha'] },
+  { id: 'formularios', label: 'Formulários', icon: ListChecks, kicker: 'Captação e qualificação', title: 'O contato chega qualificado.', text: 'Formulários e quizzes publicados nas páginas levam as respostas e a origem da visita direto para os leads, já na etapa certa.', items: ['Quizzes com perguntas de qualificação', 'Origem e campanha junto com as respostas', 'Aviso no WhatsApp a cada novo lead'] },
+  { id: 'oportunidades', label: 'Leads', icon: Filter, kicker: 'Leads e vendas', title: 'Cada lead tem dono e próximo passo.', text: 'O quadro mostra em que etapa cada negociação está, quem cuida dela e de onde ela veio. A equipe comenta no cartão e todos veem na hora.', items: ['Etapas arrastáveis, ao vivo para a equipe', 'Responsável, origem e comentários no cartão', 'Valor em aberto por etapa'] },
+  { id: 'whatsapp', label: 'Conversas', icon: MessageCircle, kicker: 'Atendimento da equipe', title: 'Um número. A equipe toda atendendo.', text: 'As conversas do WhatsApp da empresa ficam numa caixa compartilhada, com etiquetas, fotos, áudios e o histórico de cada contato.', items: ['Caixa de entrada compartilhada', 'Etiquetas: quente, morno, frio, cliente', 'Áudio, foto, vídeo e documentos'] },
 ];
 
 export function ProductTour() {
@@ -62,6 +66,7 @@ export function ProductTour() {
           {active === 'site' && <Site />}
           {active === 'anuncios' && <Anuncios />}
           {active === 'instagram' && <InstagramScreen />}
+          {active === 'loja' && <Loja />}
         </div>
       </div>
 
@@ -138,7 +143,7 @@ function Oportunidades() {
     { label: 'Fechado', dot: '#8fbf3a', value: 'R$ 9.800', cards: [{ n: 'Bruno Tavares', d: 'Clube do Banho anual', o: 'Remarketing', who: 'RF', c: 4 }] },
   ];
   return <>
-    <Head title="Oportunidades" sub="Funil de vendas · ao vivo para a equipe"><span className="pt-filter">Comigo</span><span className="pt-filter is-on">Todos</span><span className="pt-btn"><UserPlus aria-hidden="true" />Novo cliente</span></Head>
+    <Head title="Leads" sub="Funil de vendas · ao vivo para a equipe"><span className="pt-filter">Comigo</span><span className="pt-filter is-on">Todos</span><span className="pt-btn"><UserPlus aria-hidden="true" />Novo cliente</span></Head>
     <div className="pt-board">
       {cols.map((col) => <div key={col.label} className="pt-col">
         <div className="pt-col__h"><span><i style={{ background: col.dot }} />{col.label}</span><small>{col.cards.length} · {col.value}</small></div>
@@ -267,7 +272,7 @@ function Site() {
   const sessions = asSessions(live);
   const converted = live.find((v) => v.converted);
   return <>
-    <Head title="Visitas ao site" sub="caramelopet.exemplo · 652 visitas no período"><span className="pt-live"><i />{live.length} no site agora</span><Period /></Head>
+    <Head title="Site" sub="caramelopet.exemplo · 652 visitas no período"><span className="pt-live"><i />{live.length} no site agora</span><Period /></Head>
     <div className="pt-kpis pt-kpis--4">
       <Kpi label="Visitas" value="652" delta="+18%" />
       <Kpi label="Pessoas" value="511" />
@@ -312,36 +317,57 @@ function Anuncios() {
   </>;
 }
 
+
 function InstagramScreen() {
+  const days = [38, 44, 52, 47, 71, 63, 58];
   const grow = useGrow();
-  const reach = [40, 52, 46, 70, 64, 88, 76, 92, 70, 84];
-  const path = reach.map((v, i) => `${i === 0 ? 'M' : 'L'}${(i / (reach.length - 1)) * 100} ${40 - (v / 100) * 36}`).join(' ');
+  const posts = [['Reels · Banho do Thor', 'Reels', '3.420', '286', '#f3d9b8'], ['Antes e depois da tosa', 'Carrossel', '2.180', '194', '#d9e6f2'], ['Clube do Banho chegou', 'Foto', '1.240', '88', '#e2edcf']] as const;
   return <>
-    <Head title="Instagram" sub="@caramelopet.exemplo · perfil profissional"><span className="pt-filter is-on">Perfil</span><span className="pt-filter">Stories</span><span className="pt-filter">Caixa</span></Head>
-    <div className="pt-ig">
-      <section className="pt-ig__followers">
-        <span>Seguidores</span><b>4.812</b><em>+126 em 7 dias</em>
-        <svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d={path} fill="none" stroke="#d2f525" strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg>
-      </section>
-      <div className="pt-kpis pt-kpis--3">
-        <Kpi label="Alcance" value="18,4 mil" delta="+22%" />
-        <Kpi label="Interações" value="1.296" delta="+8%" />
-        <Kpi label="Toques no link" value="214" delta="+31%" />
-      </div>
+    <Head title="Instagram" sub="Perfil da Caramelo Pet · API oficial da Meta"><span className="pt-filter is-on">Perfil</span><span className="pt-filter">Caixa</span><Period /></Head>
+    <div className="pt-kpis pt-kpis--4">
+      <Kpi label="Seguidores" value="4.812" delta="+86" dark />
+      <Kpi label="Alcance (7 dias)" value="12,4 mil" delta="38% fora dos seguidores" />
+      <Kpi label="Contas engajadas" value="864" delta="1.320 interações" />
+      <Kpi label="Toques nos links do perfil" value="57" delta="site e WhatsApp" />
     </div>
-    <div className="pt-grid2">
-      <section className="pt-card">
-        <h5>Melhores posts · 30 dias</h5>
-        <div className="pt-posts">{[['#f4d9b8', 'Reels', '6,2 mil'], ['#cfe0f1', 'Carrossel', '3,8 mil'], ['#e2edcf', 'Foto', '2,1 mil'], ['#f1d3d9', 'Reels', '1,9 mil']].map(([bg, f, r], i) =>
-          <div key={i} style={{ background: bg }}><span>{f}</span><b>{r}<small> alcance</small></b></div>)}</div>
+    <div className="pt-grid2 pt-grid2--ads">
+      <section className="pt-card pt-chart">
+        <div className="pt-chart__h"><h5>Alcance por dia</h5><span className="pt-pill">Alcance <ChevronDown aria-hidden="true" /></span></div>
+        <div className="pt-cols">{days.map((v, i) => <div key={i}><i style={{ height: grow ? `${v}%` : '2%' }} className={i === 4 ? 'is-hi' : ''} /><span>{['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'][i]}</span></div>)}</div>
       </section>
       <section className="pt-card">
-        <h5>Stories programados</h5>
-        {[['Hoje · 18:00', 'Antes e depois do banho', 'Agendado'], ['Amanhã · 10:00', 'Dica: escovação diária', 'Aguardando aprovação'], ['Sex · 12:00', 'Clube do Banho', 'Ideia']].map(([when, t, s]) =>
-          <div className="pt-row" key={t}><span className="pt-story" /><div><b>{t}</b><span>{when}</span></div><em className={`pt-tag ${s === 'Agendado' ? 'k-ok' : s === 'Ideia' ? '' : 'k-passo'}`}>{s}</em></div>)}
-        <div className="pt-bars-mini">{[64, 80, 52, 90, 70].map((v, i) => <i key={i} style={{ height: grow ? `${v}%` : '4%' }} />)}<span><TrendingUp aria-hidden="true" />Alcance dos stories da semana</span></div>
+        <h5>Melhores posts recentes</h5>
+        <div className="pt-camp pt-camp--h"><span>Post</span><span>Formato</span><span>Alcance</span><span>Interações</span></div>
+        {posts.map(([n, f, r, x, tint]) => <div key={n} className="pt-camp"><b><i className="pt-thumb" style={{ background: tint }} />{n}</b><span>{f}</span><span>{r}</span><span>{x}</span></div>)}
+        <p className="pt-note">Comentários e mensagens ficam na aba Caixa.</p>
       </section>
     </div>
   </>;
 }
 
+function Loja() {
+  const grow = useGrow();
+  const steps = [['Viram um produto', 1312], ['Puseram no carrinho', 214], ['Foram ao checkout', 96], ['Compraram', 38]] as const;
+  return <>
+    <Head title="Loja" sub="loja.caramelopet.exemplo · Shopify"><Period /></Head>
+    <div className="pt-kpis pt-kpis--4">
+      <Kpi label="Faturamento" value="R$ 6.840" delta="+14%" dark />
+      <Kpi label="Vendas" value="38" delta="+5" />
+      <Kpi label="Ticket médio" value="R$ 180" delta="+3%" />
+      <Kpi label="Conversão em venda" value="2,9%" delta="das visitas" />
+    </div>
+    <div className="pt-grid2">
+      <section className="pt-card">
+        <h5>Do produto à compra</h5>
+        <div className="pt-funnel">{steps.map(([label, n]) => <div key={label}><span>{label}</span><div><i style={{ width: grow ? `${Math.max(4, (n / 1312) * 100)}%` : 0 }} /></div><b>{n.toLocaleString('pt-BR')}</b></div>)}</div>
+      </section>
+      <section className="pt-card">
+        <h5>De onde vem o faturamento</h5>
+        <div className="pt-camp pt-camp--h"><span>Origem</span><span>Faturamento</span><span>Vendas</span><span>Ticket</span></div>
+        {[['Meta Ads', 'R$ 2.950', '16', 'R$ 184', true], ['Instagram', 'R$ 1.720', '10', 'R$ 172', true], ['Google (busca)', 'R$ 1.310', '7', 'R$ 187', true], ['Direto', 'R$ 860', '5', 'R$ 172', false]].map(([n, r, v, t, on]) =>
+          <div key={String(n)} className="pt-camp"><b><i className={on ? 'is-on' : ''} />{n}</b><span>{r}</span><span>{v}</span><span>{t}</span></div>)}
+        <p className="pt-note">Pedido contado uma vez, com a origem da visita que comprou.</p>
+      </section>
+    </div>
+  </>;
+}

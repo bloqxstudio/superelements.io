@@ -29,7 +29,19 @@ const GRAPH = `https://graph.facebook.com/${VERSION}`
 const SCOPES = ['ads_read']
 const CALLBACK_PATH = '/anuncios/retorno'
 const PRESETS = ['today', 'last_7d', 'last_30d', 'last_90d', 'this_month'] as const
-type Preset = (typeof PRESETS)[number]
+/** Um dia escolhido no calendário da tela: `dia:2026-10-30` (no fuso da conta de anúncios) */
+type DayPreset = `dia:${string}`
+type Preset = (typeof PRESETS)[number] | DayPreset
+const DAY_PRESET = /^dia:(\d{4}-\d{2}-\d{2})$/
+function presetOf(value: unknown): Preset {
+  const text = String(value)
+  if ((PRESETS as readonly string[]).includes(text)) return text as Preset
+  const day = DAY_PRESET.exec(text)?.[1]
+  // A Meta guarda 37 meses; um dia que não existe (2026-02-31) ou futuro cai no padrão
+  if (day && !Number.isNaN(Date.parse(`${day}T00:00:00Z`)) && new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day && Date.parse(day) <= Date.now() + 2 * DAY && Date.parse(day) >= Date.now() - 37 * 31 * DAY)
+    return `dia:${day}`
+  return 'last_30d'
+}
 const DAY = 86_400_000
 
 const corsHeaders = {
@@ -625,7 +637,8 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
 
   const info = await graph<AdAccount & { disable_reason?: number }>(`act_${act}`, token, { fields: `${ACCOUNT_FIELDS},disable_reason` })
   const currency = info.currency || account.currency || 'BRL'
-  const base: Params = { date_preset: preset }
+  const day = DAY_PRESET.exec(preset)?.[1]
+  const base: Params = day ? { time_range: JSON.stringify({ since: day, until: day }) } : { date_preset: preset }
 
   // A conta inteira (o alcance não soma entre campanhas) e cada campanha, no total e por dia
   const [totalsRows, dayRows, campaignRows, campaignList, campaignDayRows] = await Promise.all([
@@ -857,7 +870,7 @@ Deno.serve(async (req) => {
 
       case 'report': {
         const account = await accountOf(ctx, body.accountId)
-        const preset = (PRESETS as readonly string[]).includes(String(body.preset)) ? (body.preset as Preset) : 'last_30d'
+        const preset = presetOf(body.preset)
         const token = await tokenOf(ctx, account)
         try {
           return json(await report(ctx, account, token, preset))

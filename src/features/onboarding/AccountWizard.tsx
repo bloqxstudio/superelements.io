@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCrm } from '@/features/crm/crmStore'
 import { ModuleToggles } from '@/features/crm/ModuleToggles'
-import type { ModuleId } from '@/features/crm/modules'
+import { productModules, type ModuleId, type ProductId } from '@/features/crm/modules'
+import { ProductPicker } from '@/features/crm/ProductPicker'
 import { createAccount } from '@/features/crm/teams'
 import { createTracker, type SiteTracker } from '@/features/crm/site'
 import { FIELD } from '@/features/crm/ui'
@@ -94,6 +95,7 @@ export const AccountWizard: React.FC = () => {
   const [origin, setOrigin] = useState<Origin>('new')
   const [form, setForm] = useState(EMPTY)
   const [modules, setModules] = useState<Record<string, boolean>>({})
+  const [product, setProduct] = useState<ProductId>('completo')
   const [kind, setKind] = useState<SiteKind | 'checking' | null>(null)
   const checkSeq = useRef(0)
 
@@ -225,7 +227,7 @@ export const AccountWizard: React.FC = () => {
     mark('account', 'doing')
     if (origin === 'shopify' && store) {
       try {
-        const teamId = await createAccount({ ...form, website: form.website.trim() || store.domain, modules: { ...modules, site: true } })
+        const teamId = await createAccount({ ...form, website: form.website.trim() || store.domain, modules: { ...modules, site: true }, product })
         await load(user.id, true)
         await select(teamId)
         const name = form.name.trim() || store.name
@@ -241,7 +243,7 @@ export const AccountWizard: React.FC = () => {
       return
     }
     try {
-      const teamId = await createAccount({ ...form, modules })
+      const teamId = await createAccount({ ...form, modules, product })
       await load(user.id, true)
       await select(teamId)
       const project = await useProjectStore.getState().create({ name: form.name.trim(), context: form.website.trim() ? `Site: ${form.website.trim()}` : '' })
@@ -526,6 +528,10 @@ export const AccountWizard: React.FC = () => {
               <span className="text-xs font-medium text-gray-700">Telefone ou WhatsApp</span>
               <input value={form.contactPhone} onChange={set('contactPhone')} maxLength={40} className={`${FIELD} h-10`} />
             </label>
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-medium text-gray-700">Produto</p>
+            <ProductPicker value={product} onChange={(p) => { setProduct(p); setModules(productModules(p)) }} />
           </div>
           <div>
             <p className="mb-2 text-xs font-medium text-gray-700">Módulos que já nascem ligados</p>

@@ -29,6 +29,7 @@ export type Database = {
           notes: string
           status: string
           modules: Json
+          product: string
           is_home: boolean
         }
         Insert: {
@@ -45,6 +46,7 @@ export type Database = {
           notes?: string
           status?: string
           modules?: Json
+          product?: string
           is_home?: boolean
         }
         Update: {
@@ -61,6 +63,7 @@ export type Database = {
           notes?: string
           status?: string
           modules?: Json
+          product?: string
           is_home?: boolean
         }
         Relationships: []
@@ -2970,6 +2973,7 @@ export type Database = {
         Returns: string
       }
       crm_set_modules: { Args: { p_team: string; p_modules: Json }; Returns: Json }
+      crm_set_product: { Args: { p_team: string; p_product: string }; Returns: string }
       crm_set_account_status: { Args: { p_team: string; p_status: string }; Returns: undefined }
       crm_archive_account: { Args: { p_team: string }; Returns: undefined }
       crm_restore_account: { Args: { p_team: string }; Returns: undefined }
@@ -2979,7 +2983,7 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: {
           id: string; name: string; segment: string; website: string; contact_name: string; contact_email: string; contact_phone: string
-          notes: string; status: string; modules: Json; is_home: boolean; created_at: string; members: number; i_am_member: boolean; archived_at: string | null
+          notes: string; status: string; modules: Json; is_home: boolean; created_at: string; members: number; i_am_member: boolean; archived_at: string | null; product: string
         }[]
       }
       crm_module_on: { Args: { p_team: string; p_module: string }; Returns: boolean }

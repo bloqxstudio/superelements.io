@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCrm } from './crmStore'
 import { ModuleGate } from './ModuleGate'
-import { moduleOfPath } from './modules'
+import { firstOpenPath, moduleOfPath, moduleOn } from './modules'
 
 /**
  * A tela da rota, atrás da guarda do módulo dela: com o módulo desligado na conta
@@ -14,12 +14,15 @@ export const GuardedOutlet: React.FC = () => {
   const { pathname } = useLocation()
   const { user } = useAuth()
   const load = useCrm((s) => s.load)
-  const teamId = useCrm((s) => s.team?.id)
+  const team = useCrm((s) => s.team)
+  const teamId = team?.id
   useEffect(() => {
     if (user) void load(user.id)
   }, [user, load])
 
   const module = moduleOfPath(pathname)
+  // A raiz é a lista de projetos: numa conta sem projetos (a Sinfy) ela leva à primeira tela ligada
+  if (pathname === '/' && team && team.status !== 'pausada' && !moduleOn(team, 'projetos')) return <Navigate to={firstOpenPath(team)} replace />
   // A tela remonta ao trocar de conta: nada do ambiente anterior fica na tela
   // Exceto o assistente de conta nova: ele mesmo troca de conta no meio e não pode recomeçar
   const keepAcrossAccounts = pathname === '/contas/nova'

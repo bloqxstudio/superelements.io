@@ -136,7 +136,7 @@ export const criativos = (): Plugin => ({
           } else if (call.kind === 'agent') {
             const req = call.request as Partial<AgentRunRequest>
             if (!String(req?.prompt ?? '').trim()) throw new Error('O pedido veio vazio.')
-            send({ id, ok: true, data: await runAgent({ engine: req.engine === 'codex' ? 'codex' : 'claude', system: String(req.system ?? '').slice(0, 12000), prompt: String(req.prompt), web: !!req.web }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
+            send({ id, ok: true, data: await runAgent({ engine: req.engine === 'codex' ? 'codex' : 'claude', system: String(req.system ?? '').slice(0, 12000), prompt: String(req.prompt), web: !!req.web, images: Array.isArray(req.images) ? req.images.filter((i): i is string => typeof i === 'string').slice(0, 12) : undefined }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
           } else if (call.kind === 'download') {
             send({ id, ok: true, data: await downloadImage(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
           } else if (call.kind === 'capture') {

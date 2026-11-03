@@ -170,23 +170,17 @@
 .pt-cols i.is-hi{background:var(--pt-lime)}
 .pt-cols span{font-size:10px;color:#a3ab9f}
 .pt-camp{display:grid;grid-template-columns:1.6fr .8fr .6fr .8fr;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #f0f2ec;font-size:11.5px;font-variant-numeric:tabular-nums}
+.pt-camp b i.pt-thumb{width:22px;height:22px;border-radius:5px;flex:none}
+.pt-funnel{display:grid;gap:10px;padding-top:4px}
+.pt-funnel>div{display:grid;grid-template-columns:130px minmax(0,1fr) 44px;gap:10px;align-items:center;font-size:11.5px}
+.pt-funnel span{color:var(--pt-muted)}
+.pt-funnel>div>div{height:22px;border-radius:6px;background:var(--pt-paper);overflow:hidden}
+.pt-funnel i{display:block;height:100%;border-radius:6px;background:var(--pt-lime);transition:width .8s cubic-bezier(.2,.8,.2,1)}
+.pt-funnel b{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
 .pt-camp--h{color:var(--pt-soft);font-size:10.5px;border-color:var(--pt-line);padding-top:0}
 .pt-camp b{display:flex;align-items:center;gap:7px;font-weight:600}.pt-camp b i{width:7px;height:7px;border-radius:50%;background:#c7ccc2}.pt-camp b i.is-on{background:#6f8c3a}
 
 /* instagram */
-.pt-ig{display:grid;grid-template-columns:.9fr 2fr;gap:8px;margin-bottom:12px}
-.pt-ig__followers{position:relative;display:grid;gap:1px;padding:13px;border-radius:12px;background:var(--pt-dark);color:#fff;overflow:hidden}
-.pt-ig__followers span{font-size:11px;color:#a3ab9f}.pt-ig__followers b{font-size:24px;font-weight:600;letter-spacing:-.04em}.pt-ig__followers em{font-style:normal;font-size:11px;color:var(--pt-lime)}
-.lp .pt-ig__followers svg{position:absolute;right:10px;bottom:10px;width:50%;height:44px}
-.pt-ig .pt-kpis--3 .pt-kpi{height:100%}
-.pt-posts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.pt-posts div{position:relative;aspect-ratio:4/5;border-radius:8px;display:flex;flex-direction:column;justify-content:space-between;padding:7px}
-.pt-posts span{justify-self:start;align-self:flex-start;font-size:9.5px;font-weight:600;padding:2px 6px;border-radius:999px;background:#ffffffcc}
-.pt-posts b{font-size:12px;font-weight:700}.pt-posts small{font-size:9.5px;font-weight:500;color:var(--pt-muted)}
-.pt-story{flex:none;width:26px;height:40px;border-radius:6px;background:linear-gradient(160deg,#e2edcf,#bcd3a8)}
-.pt-bars-mini{display:flex;align-items:flex-end;gap:5px;height:52px;margin-top:10px;padding-top:8px;border-top:1px solid #f0f2ec}
-.pt-bars-mini i{width:14px;border-radius:4px 4px 1px 1px;background:var(--pt-lime);transition:height .8s cubic-bezier(.2,.8,.2,1)}
-.pt-bars-mini span{display:flex;align-items:center;gap:5px;margin-left:8px;font-size:10.5px;color:var(--pt-muted);align-self:center}
 
 @media (max-width:1024px){
   .pt-app{grid-template-columns:1fr}.pt-side{display:none}
@@ -198,7 +192,7 @@
   .pt-main{padding:14px}.pt-app{min-height:0}
   .pt-explain{grid-template-columns:1fr;gap:16px;padding:20px 8px 8px}.pt .pt-explain h3{font-size:21px}
   .pt-kpis,.pt-kpis--4,.pt-kpis--3{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .pt-grid2,.pt-grid2--ads,.pt-ig{grid-template-columns:1fr}
+  .pt-grid2,.pt-grid2--ads{grid-template-columns:1fr}
   .pt-head{flex-direction:column}.pt-head__side{justify-content:flex-start}
   .pt-wa{grid-template-columns:1fr;margin:-14px}.pt-wa__list{border-right:0;border-bottom:1px solid var(--pt-line)}.pt-chat:nth-child(n+5){display:none}
   .pt-board{grid-template-columns:repeat(4,200px)}

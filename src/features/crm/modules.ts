@@ -39,6 +39,40 @@ export const MODULES: ModuleInfo[] = [
 
 export const MODULE_IDS = MODULES.map((m) => m.id)
 
+/**
+ * Os produtos da plataforma (migração 20261102100000). Cada conta tem um: ele decide o
+ * menu e os módulos que a conta recebe ao nascer ou ao trocar de produto. Os módulos
+ * continuam sendo o que libera cada área; um módulo fora do produto que o admin ligue
+ * à mão aparece em "Mais", para nada ficar sem caminho.
+ */
+export type ProductId = 'completo' | 'resultados' | 'builder'
+
+export interface ProductInfo {
+  id: ProductId
+  /** O nome que aparece para quem administra as contas. */
+  label: string
+  hint: string
+  /** Os módulos do produto; os outros nascem desligados. */
+  modules: ModuleId[]
+}
+
+export const PRODUCTS: ProductInfo[] = [
+  { id: 'resultados', label: 'Sinfy · Resultados', hint: 'Anúncios, site, leads e conversas: do anúncio à venda.', modules: ['crm', 'clientes', 'formularios', 'whatsapp', 'instagram', 'site'] },
+  { id: 'builder', label: 'SuperElements · Sites', hint: 'Sites no Space, criativos, textos e agentes.', modules: ['projetos', 'agentes', 'copy', 'criativos', 'skills'] },
+  { id: 'completo', label: 'Completo', hint: 'Tudo, como a Avence usa.', modules: [...MODULE_IDS] },
+]
+
+export const productOf = (id: string | null | undefined): ProductId =>
+  id === 'resultados' || id === 'builder' ? id : 'completo'
+
+export const productInfo = (id: ProductId): ProductInfo => PRODUCTS.find((p) => p.id === id) ?? PRODUCTS[PRODUCTS.length - 1]
+
+/** Todos os módulos, ligados os do produto e desligados os outros. */
+export function productModules(id: ProductId): Record<ModuleId, boolean> {
+  const keep = new Set(productInfo(id).modules)
+  return Object.fromEntries(MODULE_IDS.map((m) => [m, keep.has(m)])) as Record<ModuleId, boolean>
+}
+
 /** Só as chaves conhecidas, só valores verdadeiro ou falso (o que vier do banco ou de fora). */
 export function cleanModules(raw: unknown): Record<string, boolean> {
   const out: Record<string, boolean> = {}
@@ -81,7 +115,9 @@ export function moduleOfPath(pathname: string): ModuleId | undefined {
 }
 
 /** A primeira tela que a conta ainda tem ligada, para a pessoa não ficar sem saída. */
-export function firstOpenPath(team: Pick<Team, 'status' | 'modules'> | undefined): string {
+export function firstOpenPath(team: (Pick<Team, 'status' | 'modules'> & Partial<Pick<Team, 'product'>>) | undefined): string {
+  // A Sinfy abre pela Visão geral (o caminho do anúncio à venda), que não depende de um módulo
+  if (team?.product === 'resultados' && team.status !== 'pausada') return '/inicio'
   const order: [ModuleId, string][] = [['projetos', '/'], ['crm', '/crm'], ['clientes', '/crm/clientes'], ['funis', '/crm/funis'], ['formularios', '/crm/formularios'], ['whatsapp', '/crm/whatsapp'], ['instagram', '/crm/instagram'], ['site', '/crm/site'], ['criativos', '/criativos'], ['copy', '/copy'], ['agentes', '/agentes'], ['skills', '/skills']]
   return order.find(([id]) => moduleOn(team, id))?.[1] ?? '/crm/equipe'
 }

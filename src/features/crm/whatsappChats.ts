@@ -179,11 +179,41 @@ export function useInboxFeed(teamId: string | undefined, onChange: () => void) {
 }
 
 const MEDIA_BUCKET = 'crm-whatsapp'
-const SIGNED_FOR = 3600
+// Link de 7 dias guardado no navegador: o mesmo endereço volta a cada recarga, então o arquivo vem do
+// cache do navegador (mídia não muda; enviada com cache de 1 ano) em vez de sair de novo do Supabase.
+// Com um link novo a cada carga, a mídia do WhatsApp era o maior tráfego de saída do projeto (nov/2026).
+const SIGNED_FOR = 7 * 24 * 3600
+const KEEP_FOR = SIGNED_FOR - 24 * 3600
+const STORE_KEY = 'superelements-whatsapp-links'
 const signed = new Map<string, { url: string; until: number }>()
 const signing = new Map<string, Promise<string | undefined>>()
 
-/** Link temporário (1 h) de um arquivo do bucket do WhatsApp; guardado por 50 min para não pedir de novo. */
+function loadStored() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORE_KEY) || '{}') as Record<string, { url: string; until: number }>
+    const now = Date.now()
+    for (const [path, hit] of Object.entries(raw)) if (hit?.url && hit.until > now) signed.set(path, hit)
+  } catch {
+    // sem localStorage: só a memória da aba
+  }
+}
+loadStored()
+
+let saveTimer: ReturnType<typeof setTimeout> | undefined
+function saveStored() {
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    try {
+      const now = Date.now()
+      const live = [...signed.entries()].filter(([, hit]) => hit.until > now).slice(-500)
+      localStorage.setItem(STORE_KEY, JSON.stringify(Object.fromEntries(live)))
+    } catch {
+      // cheio ou bloqueado: segue sem guardar
+    }
+  }, 500)
+}
+
+/** Link temporário (7 dias) de um arquivo do bucket do WhatsApp; guardado no navegador por 6 dias para não pedir de novo. */
 async function signedUrl(path: string): Promise<string | undefined> {
   const hit = signed.get(path)
   if (hit && hit.until > Date.now()) return hit.url
@@ -193,7 +223,10 @@ async function signedUrl(path: string): Promise<string | undefined> {
     .from(MEDIA_BUCKET)
     .createSignedUrl(path, SIGNED_FOR)
     .then(({ data }) => {
-      if (data?.signedUrl) signed.set(path, { url: data.signedUrl, until: Date.now() + (SIGNED_FOR - 600) * 1000 })
+      if (data?.signedUrl) {
+        signed.set(path, { url: data.signedUrl, until: Date.now() + KEEP_FOR * 1000 })
+        saveStored()
+      }
       return data?.signedUrl
     })
     .finally(() => signing.delete(path))

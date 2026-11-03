@@ -36,7 +36,8 @@ export function campaignSnapshot(reports: AdReports, lead: ParsedLead): Campaign
   const label = lead.utm.campaign
   const ids = [lead.ids.campaignId, lead.utm.id].filter(Boolean) as string[]
   if (!label && !ids.length) return undefined
-  const sorted = [...reports].sort((a, b) => PRESET_ORDER.indexOf(a.preset) - PRESET_ORDER.indexOf(b.preset))
+  // Os relatórios de um dia escolhido na tela (`dia:…`) não entram: o retrato da campanha é de um período
+  const sorted = reports.filter((r) => PRESET_ORDER.includes(r.preset)).sort((a, b) => PRESET_ORDER.indexOf(a.preset) - PRESET_ORDER.indexOf(b.preset))
   for (const report of sorted) {
     const campaigns: any[] = Array.isArray(report.data?.campaigns) ? report.data.campaigns : []
     const hit =

@@ -49,7 +49,10 @@ const db = createClient(url, key, { auth: { persistSession: false, autoRefreshTo
 // Os avisos da biblioteca; LOG_LEVEL=debug mostra tudo
 const log = pino({ level: process.env.LOG_LEVEL ?? 'warn' })
 
-const LOOP = 2000
+// O Realtime avisa na hora (pedido de conexão, mensagem na fila); a leitura periódica só cobre um aviso perdido.
+// Antes era 2 s e 1,5 s: ~90 mil consultas por dia só para achar nada, o grosso do tráfego do serviço.
+const LOOP = 20_000
+const FLUSH = 15_000
 const BEAT = 15_000
 const TABLE = 'crm_whatsapp_numbers'
 
@@ -291,7 +294,7 @@ async function refreshPhotos() {
           const response = await fetch(url)
           if (response.ok) {
             const path = `${teamId}/avatars/${safe(jid)}.jpg`
-            const { error: uploadError } = await db.storage.from(BUCKET).upload(path, Buffer.from(await response.arrayBuffer()), { contentType: 'image/jpeg', upsert: true, cacheControl: '3600' })
+            const { error: uploadError } = await db.storage.from(BUCKET).upload(path, Buffer.from(await response.arrayBuffer()), { contentType: 'image/jpeg', upsert: true, cacheControl: '604800' })
             if (!uploadError) patch.photo_path = path
           }
         }
@@ -415,27 +418,49 @@ function serve() {
   // No Mac: não dormir enquanto o serviço roda (o caffeinate sai sozinho quando este processo acaba)
   if (process.platform === 'darwin') spawn('/usr/bin/caffeinate', ['-is', '-w', String(process.pid)], { stdio: 'ignore' }).on('error', () => undefined)
 
-  let busy = false
-  setInterval(() => {
-    if (busy) return
-    busy = true
-    reconcile()
-      .catch((error) => console.error('Falha ao ler os pedidos:', error))
-      .finally(() => {
-        busy = false
-      })
-  }, LOOP)
+  // Cada tarefa roda uma vez por vez; um aviso que chega no meio pede mais uma rodada no fim
+  const runner = (task: () => Promise<void>, label: string) => {
+    let busy = false
+    let again = false
+    const run = () => {
+      if (busy) {
+        again = true
+        return
+      }
+      busy = true
+      again = false
+      task()
+        .catch((error) => console.error(label, error))
+        .finally(() => {
+          busy = false
+          if (again) run()
+        })
+    }
+    return run
+  }
+  const runReconcile = runner(reconcile, 'Falha ao ler os pedidos:')
+  const runFlush = runner(flush, 'Falha ao enviar a fila:')
+  setInterval(runReconcile, LOOP)
+  setInterval(runFlush, FLUSH)
+  runReconcile()
 
-  let flushing = false
-  setInterval(() => {
-    if (flushing) return
-    flushing = true
-    flush()
-      .catch((error) => console.error('Falha ao enviar a fila:', error))
-      .finally(() => {
-        flushing = false
-      })
-  }, 1500)
+  // Avisos do banco: Conectar/Desconectar e mensagem nova na fila de envio
+  db.channel('whatsapp-servico')
+    .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, (change) => {
+      // O próprio sinal de vida (seen_at) não muda nada a fazer
+      const row = change.new as { wanted?: boolean; status?: string } | undefined
+      const was = change.old as { wanted?: boolean; status?: string } | undefined
+      if (change.eventType === 'UPDATE' && row && was && 'wanted' in was && row.wanted === was.wanted && row.status === was.status) return
+      runReconcile()
+    })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_whatsapp_messages', filter: 'status=eq.queued' }, () => runFlush())
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'crm_whatsapp_messages', filter: 'status=eq.queued' }, () => runFlush())
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        runReconcile()
+        runFlush()
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.error(`Realtime: ${status}; seguindo pela leitura a cada ${LOOP / 1000} s.`)
+    })
 
   let photos = false
   setInterval(() => {

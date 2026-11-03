@@ -147,12 +147,13 @@
       '.out{text-align:center;padding:12px 0}' +
       '.out .ok{width:52px;height:52px;border-radius:50%;background:color-mix(in srgb,var(--p) 14%,transparent);color:var(--p);display:grid;place-items:center;margin:0 auto 16px;font-size:26px}' +
       '.out .cta{display:flex;flex-direction:column;gap:10px;margin-top:20px}' +
-      '.out a.btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:15px 20px;border-radius:var(--r);font:inherit;font-weight:700;font-size:1.02em;text-decoration:none;transition:transform .1s,filter .15s,box-shadow .15s}' +
-      '.out a.btn:hover{filter:brightness(1.06)}.out a.btn:active{transform:scale(.98)}.out a.btn:focus-visible{outline:3px solid color-mix(in srgb,var(--p) 40%,transparent);outline-offset:2px}' +
+      '.out a.btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:56px;padding:14px 22px;border-radius:var(--r);font:inherit;font-weight:600;font-size:1em;letter-spacing:-.005em;text-decoration:none;transition:transform .12s,background-color .18s,color .18s,border-color .18s}' +
+      '.out a.btn:active{transform:scale(.98)}.out a.btn:focus-visible{outline:3px solid color-mix(in srgb,var(--p) 40%,transparent);outline-offset:2px}' +
       '.out a.btn svg{flex:none;width:22px;height:22px}' +
-      '.out a.wa{background:#25d366;color:#06240f;box-shadow:0 6px 18px -6px rgba(37,211,102,.7)}' +
-      '.out a.alt{background:transparent;color:var(--p);border:1.5px solid color-mix(in srgb,var(--p) 45%,transparent)}' +
-      '.out .sub{font-size:.84em;opacity:.65;margin:-2px 0 0}' +
+      '.out a.wa{background:var(--tx);color:var(--bg)}.out a.wa svg{color:#25d366}.out a.wa svg.arr{color:inherit}.out a.wa .arr{flex:none;width:16px;height:16px;margin-left:2px;opacity:.7;transition:transform .2s cubic-bezier(.2,0,0,1),opacity .2s}' +
+      '@media (hover:hover){.out a.wa:hover{background:color-mix(in srgb,var(--tx) 86%,var(--bg))}.out a.wa:hover .arr{transform:translateX(3px);opacity:1}}' +
+      '.out a.alt{background:transparent;color:var(--p);border:1.5px solid color-mix(in srgb,var(--p) 45%,transparent)}.out a.alt:hover{border-color:var(--p)}' +
+      '.out .sub{font-size:.84em;opacity:.6;margin:0}' +
       '.pts{display:inline-block;font-size:.82em;font-weight:650;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--p) 12%,transparent);color:var(--p);margin-bottom:12px}' +
       '.pv{font-size:.78em;opacity:.55;margin-top:14px;text-align:center}' +
       '.st{animation:in .28s cubic-bezier(.22,1,.36,1);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:14px}.st>*{grid-column:1/-1}.st>.fl.half{grid-column:auto}' +
@@ -164,13 +165,25 @@
     )
   }
 
-  // O ícone do WhatsApp (traço oficial simplificado), herda a cor do texto
+  // O logo do WhatsApp (o glifo oficial, como no Font Awesome), herda a cor do texto
   function wa() {
     var ns = 'http://www.w3.org/2000/svg'
     var svg = document.createElementNS(ns, 'svg')
-    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('fill', 'currentColor')
+    svg.setAttribute('viewBox', '0 0 448 512'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('fill', 'currentColor')
     var path = document.createElementNS(ns, 'path')
-    path.setAttribute('d', 'M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.91-4.45 9.91-9.91A9.84 9.84 0 0 0 12.04 2Zm0 18.15h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.23 8.25-8.23 2.2 0 4.27.86 5.82 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.7 8.23-8.23 8.23Zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.5.11-.11.25-.29.37-.43.12-.15.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.42h-.48c-.17 0-.43.06-.66.31-.23.25-.87.85-.87 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18-.06-.1-.23-.16-.48-.29Z')
+    path.setAttribute('d', 'M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z')
+    svg.appendChild(path)
+    return svg
+  }
+
+  // Seta do botão (traço, herda a cor do texto)
+  function arrow() {
+    var ns = 'http://www.w3.org/2000/svg'
+    var svg = document.createElementNS(ns, 'svg')
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('class', 'arr')
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2.2'); svg.setAttribute('stroke-linecap', 'square')
+    var path = document.createElementNS(ns, 'path')
+    path.setAttribute('d', 'M4 12h15M13 6l6 6-6 6')
     svg.appendChild(path)
     return svg
   }
@@ -354,7 +367,7 @@
       if (text) out.appendChild(el('p', { class: 'd', text: text, style: 'margin:0' }))
       var cta = el('div', { class: 'cta' })
       if (res.whatsappUrl) {
-        cta.appendChild(el('a', { class: 'btn wa', href: res.whatsappUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Continuar no WhatsApp (abre em uma nova aba)' }, [wa(), el('span', { text: 'Continuar no WhatsApp' })]))
+        cta.appendChild(el('a', { class: 'btn wa', href: res.whatsappUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Continuar no WhatsApp (abre em uma nova aba)' }, [wa(), el('span', { text: 'Continuar no WhatsApp' }), arrow()]))
         cta.appendChild(el('p', { class: 'sub', text: 'Suas respostas já vão na mensagem.' }))
       }
       if (res.result && res.result.ctaUrl) cta.appendChild(el('a', { class: 'btn ' + (res.whatsappUrl ? 'alt' : 'wa-off'), href: res.result.ctaUrl, text: res.result.ctaLabel || 'Continuar', style: res.whatsappUrl ? null : 'background:var(--p);color:#fff' }))

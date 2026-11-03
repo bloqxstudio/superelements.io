@@ -1,3 +1,5 @@
+import { DayPicker } from '@/components/DayPicker'
+import { addDays, dayOfPeriod, dayPeriod, dayStart, isDayPeriod, todayKey } from '@/lib/day'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, CircleAlert, Copy, ExternalLink, Eye, Facebook, Info, Instagram as InstagramIcon, KeyRound, ListFilter, Loader2, Megaphone, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -23,6 +25,7 @@ import { nameOf, useTeamPeople } from './people'
 import { FIELD, Surface, dayLabel, plural, whenLabel } from './ui'
 import {
   ACCOUNT_STATUS,
+  AD_FIRST_DAY,
   AD_PRESETS,
   AdsError,
   GENDER_LABEL,
@@ -91,6 +94,13 @@ import {
 const STALE = 30 * 60_000
 // Hoje muda ao longo do dia: relê com mais frequência
 const STALE_TODAY = 5 * 60_000
+/** Um dia que já passou faz tempo não muda mais na Meta: o guardado vale; o de hoje envelhece rápido */
+function staleAfter(preset: AdPreset, fetchedAt: number) {
+  if (!isDayPeriod(preset)) return preset === 'today' ? STALE_TODAY : STALE
+  const day = dayOfPeriod(preset)
+  if (day === todayKey()) return STALE_TODAY
+  return fetchedAt > dayStart(addDays(day, 2)).getTime() ? Infinity : STALE
+}
 const DAY = 86_400_000
 
 const ago = (at: number | undefined) => {
@@ -1042,7 +1052,7 @@ const AccountArea: React.FC<{
         setReport(saved)
         const key = `${account.id}:${preset}`
         if (account.syncError === 'token' || autoRefreshed.current.has(key)) return
-        if (saved && Date.now() - saved.fetchedAt < (preset === 'today' ? STALE_TODAY : STALE)) return
+        if (saved && Date.now() - saved.fetchedAt < staleAfter(preset, saved.fetchedAt)) return
         autoRefreshed.current.add(key)
         void refresh(true)
       })
@@ -1149,11 +1159,17 @@ const AccountArea: React.FC<{
               {PRESET_LABEL[p]}
             </button>
           ))}
+          <DayPicker
+            value={isDayPeriod(preset) ? dayOfPeriod(preset) : null}
+            onChange={(key) => setPreset(key === todayKey() ? 'today' : dayPeriod(key))}
+            min={AD_FIRST_DAY()}
+            hint="O dia no fuso da conta de anúncios. A Meta guarda os números dos últimos 37 meses."
+          />
         </div>
         {report && <CampaignFilter campaigns={report.campaigns} selected={selected} onChange={setSelected} currency={report.currency} />}
         {report?.since && report.until && (
           <p className="text-xs text-gray-500">
-            {dayLabel(`${report.since}T12:00:00`)} a {dayLabel(`${report.until}T12:00:00`)}
+            {report.since === report.until ? dayLabel(`${report.since}T12:00:00`) : `${dayLabel(`${report.since}T12:00:00`)} a ${dayLabel(`${report.until}T12:00:00`)}`}
           </p>
         )}
       </div>
