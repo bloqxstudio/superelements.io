@@ -92,14 +92,27 @@ interface Measured {
   height: number
 }
 
-const scratch = typeof document !== 'undefined' ? document.createElement('canvas').getContext('2d') : null
+let scratch: CanvasRenderingContext2D | null = typeof document !== 'undefined' ? document.createElement('canvas').getContext('2d') : null
+
+/**
+ * Fora do navegador (a prévia do MCP da Sinfy, no servidor) não há canvas: quem chama entrega um
+ * contexto que só mede texto (`font`, `letterSpacing`, `measureText`), e os modelos passam a quebrar
+ * as linhas como no editor.
+ */
+export function setMeasureContext(ctx: CanvasRenderingContext2D | null) {
+  scratch = ctx
+}
 
 /** Fonte do destaque: a serifa da marca, itálico. */
 export const EMPHASIS_FONT = 'Instrument Serif'
 
+/** Destaque na serifa itálica (conjuntos antigos e a Avence) ou, com `emphasisFont` de outra família, na fonte da marca. */
+const serifEmphasis = (layer: TextLayer) => !layer.emphasisFont || layer.emphasisFont === EMPHASIS_FONT
+
 function setText(ctx: CanvasRenderingContext2D, layer: TextLayer, em = false) {
-  ctx.font = em ? `italic 400 ${layer.size * 1.12}px "${EMPHASIS_FONT}", Georgia, serif` : fontCss(layer)
-  ctx.letterSpacing = em ? '0px' : `${layer.letterSpacing * layer.size}px`
+  const serif = em && serifEmphasis(layer)
+  ctx.font = serif ? `italic 400 ${layer.size * 1.12}px "${EMPHASIS_FONT}", Georgia, serif` : em ? fontCss({ ...layer, font: layer.emphasisFont! }) : fontCss(layer)
+  ctx.letterSpacing = serif ? '0px' : `${layer.letterSpacing * layer.size}px`
   ctx.textBaseline = 'alphabetic'
 }
 
@@ -244,6 +257,52 @@ function drawText(ctx: CanvasRenderingContext2D, layer: TextLayer) {
       x += ctx.measureText(run.text).width
     })
   })
+}
+
+/** Um pedaço de texto já posicionado (linha de base), com a fonte que ele usa: para desenhar fora do canvas. */
+export interface PlacedRun {
+  text: string
+  x: number
+  y: number
+  font: string
+  weight: number
+  italic: boolean
+  size: number
+  letterSpacing: number
+  color: string
+}
+
+/** A mesma conta de `drawText`, devolvendo cada pedaço com a posição em vez de pintar. */
+export function placeText(layer: TextLayer, ctx: CanvasRenderingContext2D | null = scratch): PlacedRun[] {
+  if (!ctx) return []
+  const { lines, lineHeight } = measureText(layer, ctx)
+  const ascent = layer.size * 0.8 + (lineHeight - layer.size) / 2
+  const out: PlacedRun[] = []
+  ctx.save()
+  lines.forEach((line, i) => {
+    setText(ctx, layer)
+    const space = ctx.measureText(' ').width
+    const total = line.reduce((n, r, k) => n + runWidth(ctx, layer, r) + (k && !r.glue ? space : 0), 0)
+    let x = layer.align === 'left' ? layer.x : layer.align === 'center' ? layer.x + (layer.w - total) / 2 : layer.x + layer.w - total
+    line.forEach((run, k) => {
+      if (k && !run.glue) x += space
+      const serif = run.em && serifEmphasis(layer)
+      out.push({
+        text: run.text,
+        x,
+        y: layer.y + ascent + i * lineHeight,
+        font: serif ? EMPHASIS_FONT : run.em ? layer.emphasisFont! : layer.font,
+        weight: serif ? 400 : layer.weight,
+        italic: serif,
+        size: serif ? layer.size * 1.12 : layer.size,
+        letterSpacing: serif ? 0 : layer.letterSpacing * layer.size,
+        color: run.em ? layer.emphasisColor ?? layer.color : layer.color,
+      })
+      x += runWidth(ctx, layer, run)
+    })
+  })
+  ctx.restore()
+  return out
 }
 
 // Formas e imagens

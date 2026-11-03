@@ -1,5 +1,5 @@
 import { mix } from '@/features/space/brand/color'
-import { paletteOf, type Palette } from './brand'
+import { buttonRadiusOf, capsButton, paletteOf, type Palette } from './brand'
 import { alpha } from './color'
 import { caseBySlug, caseImage, ILLUSTRATIONS } from './library'
 import type { SlideSpec, TemplateId } from './plan'
@@ -78,16 +78,16 @@ const edOf = (brand: SetBrand, format: FormatId, dark: boolean, at?: SlideAt, to
     y1: foot - (story ? 70 : 60),
     fg: dark ? '#ffffff' : p.ink,
     body: dark ? mix(p.paper, p.ink, 0.12) : mix(p.ink, p.paper, 0.18),
-    muted: dark ? mix(p.paper, p.ink, 0.4) : p.muted,
+    muted: dark ? p.mutedOnDark : p.muted,
     line: dark ? 'rgba(255, 255, 255, 0.14)' : mix(p.ink, p.paper, 0.86),
-    hi: dark ? mix(p.accent, '#ffffff', 0.5) : p.accent,
+    hi: dark ? p.accentOnDark : p.accentOnLight,
   }
 }
 
 // ---------- camadas ----------
 
 const text = (c: Ed, name: string, t: string, o: Partial<TextLayer> & Pick<TextLayer, 'x' | 'y' | 'w' | 'size'>): TextLayer => ({
-  id: uid(), type: 'text', name, text: t, h: 0, font: c.brand.bodyFont, weight: 400, color: c.fg, align: 'left', lineHeight: 1.3, letterSpacing: 0, emphasisColor: c.hi, ...o,
+  id: uid(), type: 'text', name, text: t, h: 0, font: c.brand.bodyFont, weight: 400, color: c.fg, align: 'left', lineHeight: 1.3, letterSpacing: 0, emphasisColor: c.hi, emphasisFont: c.brand.emphasisFont, ...o,
 })
 
 const heightOf = (layer: TextLayer) => measureText(layer).height
@@ -137,10 +137,11 @@ const footRow = (c: Ed, onDark = c.dark, color = c.muted): Layer[] => {
 /** Botão quadrado no acento, em maiúsculas com a seta. */
 const button = (c: Ed, t: string, x: number, y: number): Layer[] => {
   const t2 = `${t.trim()}  →`
-  const probe = text(c, 'Botão (texto)', t2, { x: x + 36, y: 0, w: 2000, size: c.story ? 28 : 26, weight: 600, letterSpacing: 0.08, upper: true, color: c.p.onAccent })
+  const caps = capsButton(c.brand)
+  const probe = text(c, 'Botão (texto)', t2, { x: x + 36, y: 0, w: 2000, size: c.story ? 30 : 28, weight: 600, letterSpacing: caps ? 0.08 : -0.01, upper: caps, color: c.p.onAccent })
   const w = Math.min(c.w - c.m * 2, Math.max(320, Math.ceil(widestLine(probe)) + 72))
   const h = c.story ? 104 : 96
-  return [rect('Botão', { x, y, w, h, fill: c.p.accent }), { ...probe, w: w - 72, y: y + (h - heightOf(probe)) / 2 }]
+  return [rect('Botão', { x, y, w, h, fill: c.p.accent, radius: buttonRadiusOf(c.brand, h) }), { ...probe, w: w - 72, y: y + (h - heightOf(probe)) / 2 }]
 }
 
 /** Linhas numeradas (01, 02…) entre filetes, como um índice. */

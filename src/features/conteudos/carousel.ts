@@ -1,4 +1,9 @@
 import { toast } from 'sonner'
+import { supabase } from '@/integrations/supabase/client'
+import { useCrm } from '@/features/crm/crmStore'
+import { loadProjectDoc } from '@/features/projects/storage'
+import { parseDesignMd } from '@/features/space/brand/designMd'
+import { setBrandFrom } from '@/features/criativos/brand'
 import { generatePosts } from '@/features/criativos/ai'
 import { useCreativeLink } from '@/features/criativos/link'
 import { listSets, loadSet } from '@/features/criativos/storage'
@@ -75,8 +80,26 @@ export function slidesFromScript(content: Pick<Content, 'title' | 'goal' | 'scri
   return slides
 }
 
-/** A marca da conta quando o conteúdo não tem projeto: a do conjunto mais recente que já tem cores ou logo. */
+/**
+ * A marca da conta quando o conteúdo não tem projeto. Primeiro o DESIGN.md de um projeto da
+ * própria conta (a fonte da identidade); depois o conjunto mais recente da conta que já tem cores
+ * ou logo. Nunca a marca de outra conta: sem nada disso, o chamador fica com a neutra.
+ */
 export async function accountBrand(): Promise<SetBrand | undefined> {
+  const team = useCrm.getState().team
+  // Conta de cliente: os projetos dela (a conta da casa guarda os projetos sem conta, de todos os clientes)
+  if (team && !team.isHome) {
+    try {
+      const { data } = await supabase.from('space_projects').select('id, name').eq('team_id', team.id).is('archived_at', null).order('updated_at', { ascending: false }).limit(3)
+      for (const project of data ?? []) {
+        const source = (await loadProjectDoc(project.id))?.doc?.brand?.source
+        const parsed = source?.trim() ? parseDesignMd(source).brand : null
+        if (parsed && (parsed.colors.length || parsed.logo)) return setBrandFrom(parsed, project.name)
+      }
+    } catch {
+      // Sem acesso aos projetos: segue para os conjuntos
+    }
+  }
   try {
     for (const summary of (await listSets()).slice(0, 8)) {
       if (!summary.colors.length) continue

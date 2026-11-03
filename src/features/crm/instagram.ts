@@ -439,7 +439,7 @@ export async function creativeImages(set: CreativeSet, slides: Slide[]): Promise
   const sources = new Set<string>()
   for (const slide of slides)
     for (const layer of slide.layers) {
-      if (layer.type === 'text') fonts.add(layer.font)
+      if (layer.type === 'text') { fonts.add(layer.font); if (layer.emphasisFont) fonts.add(layer.emphasisFont) }
       if (layer.type === 'image' && layer.src) sources.add(layer.src)
     }
   await Promise.all([...fonts].map((f) => loadFont(f).catch(() => undefined)))

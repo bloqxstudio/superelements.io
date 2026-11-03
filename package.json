@@ -21,6 +21,7 @@
     "db:migrate": "node scripts/supabase.mjs migrate",
     "db:query": "node scripts/supabase.mjs query",
     "functions:deploy": "node scripts/supabase.mjs deploy",
+    "build:mcp": "node scripts/mcp/build.mjs",
     "test": "node --test scripts/tests/*.test.mjs",
     "repo:check": "node scripts/check-repository.mjs"
   },

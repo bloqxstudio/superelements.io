@@ -90,6 +90,8 @@ export interface TextLayer extends LayerBase {
   /** `*palavra*` vira o destaque em serifa itálica na cor de destaque da marca. */
   emphasis?: boolean
   emphasisColor?: string
+  /** Fonte do destaque; sem ela, a serifa itálica dos conjuntos antigos. */
+  emphasisFont?: string
 }
 
 /** Moldura em volta da imagem: a tela de um site num navegador ou num celular. */
@@ -162,8 +164,13 @@ export interface SetBrand {
   colors: { name: string; hex: string }[]
   headingFont: string
   bodyFont: string
-  /** Serifa dos destaques (Instrument Serif itálico, na Avence). */
+  /**
+   * Fonte do destaque (`*palavra*`). Sem o campo, a serifa itálica (Instrument Serif), que é da
+   * Avence: marcas novas guardam a própria fonte aqui e o destaque fica só na cor da marca.
+   */
   emphasisFont?: string
+  /** Canto do botão em px (999 = pílula). Sem o campo, quadrado. */
+  buttonRadius?: number
   /** Logo para fundo claro / escuro. */
   logoOnLight?: string
   logoOnDark?: string
@@ -196,6 +203,15 @@ export interface CreativeSet {
   brief?: string
   posts: Post[]
   assets: SetAsset[]
+  /**
+   * Posts pedidos por uma IA de fora (MCP da Sinfy) e ainda não desenhados: o roteiro de cada slide.
+   * O Criativos monta na marca ao abrir (`materializePending`) e apaga o campo.
+   */
+  pending?: import('./plan').PostPlan[]
+  /** A marca ainda não foi escolhida (veio do MCP): resolve a da conta ao montar. */
+  pendingBrand?: boolean
+  /** Quem criou fora da tela: `mcp` (uma IA conectada pela chave de uma pessoa). */
+  origin?: 'mcp'
   createdAt: number
   updatedAt: number
 }

@@ -2,6 +2,7 @@ import { AV_CASES } from '@/features/avence/cases'
 import type { EditOp, LayerFields, SlideDef } from './edit'
 import { LIBRARY } from './library'
 import { alpha } from './color'
+import { paletteOf } from './brand'
 import { spreadLayer } from './spanOps'
 import { reformat } from './store'
 import { measureText, widestLine } from './render'
@@ -70,9 +71,10 @@ export const imageOk = (src: string, set: CreativeSet) =>
   src === '' || allowed.has(src) || LIBRARY.some((i) => i.src === src) || src === set.brand.logoOnLight || src === set.brand.logoOnDark || (src.startsWith('asset:') && set.assets.some((a) => a.id === src.slice(6)))
 
 const DEFAULTS: Record<Layer['type'], (set: CreativeSet) => Record<string, unknown>> = {
-  text: (set) => ({ text: 'Texto', h: 0, w: 600, font: set.brand.bodyFont, weight: 500, size: 56, color: '#111111', align: 'left', lineHeight: 1.15, letterSpacing: 0 }),
+  // Destaque, cor e forma na marca do conjunto (nunca as cores ou a serifa de outra marca)
+  text: (set) => ({ text: 'Texto', h: 0, w: 600, font: set.brand.bodyFont, weight: 500, size: 56, color: paletteOf(set.brand).ink, align: 'left', lineHeight: 1.15, letterSpacing: 0, emphasisFont: set.brand.emphasisFont }),
   image: () => ({ src: '', w: 600, h: 400, fit: 'cover', radius: 0, frame: 'none' }),
-  rect: (set) => ({ w: 300, h: 300, fill: set.brand.colors[0]?.hex ?? '#2b3cf0', radius: 0 }),
+  rect: (set) => ({ w: 300, h: 300, fill: paletteOf(set.brand).accent, radius: 0 }),
   ring: () => ({ w: 400, h: 400, stroke: '#ffffff', strokeWidth: 2 }),
   dots: () => ({ w: 400, h: 400, color: '#ffffff', gap: 40, dot: 3, opacity: 0.07 }),
 }

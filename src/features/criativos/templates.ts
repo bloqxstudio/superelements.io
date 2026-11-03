@@ -1,5 +1,5 @@
 import { mix } from '@/features/space/brand/color'
-import { paletteOf, type Palette } from './brand'
+import { buttonRadiusOf, paletteOf, type Palette } from './brand'
 import { alpha } from './color'
 import { EDITORIAL, type SlideAt } from './editorial'
 import { measureText, widestLine } from './render'
@@ -41,11 +41,11 @@ const ctxOf = (brand: SetBrand, format: FormatId, dark: boolean): Ctx => {
   const p = paletteOf(brand)
   const { width: w, height: h } = sizeOf(format)
   const story = h / w > 1.7
-  return { brand, p, w, h, m: 84, top: story ? STORY_SAFE.top : 84, bottom: story ? STORY_SAFE.bottom : 84, story, dark, hi: dark ? mix(p.accent, '#ffffff', 0.5) : p.accent, fg: dark ? p.paper : p.ink, soft: dark ? 'rgba(255,255,255,0.62)' : p.muted }
+  return { brand, p, w, h, m: 84, top: story ? STORY_SAFE.top : 84, bottom: story ? STORY_SAFE.bottom : 84, story, dark, hi: dark ? p.accentOnDark : p.accentOnLight, fg: dark ? p.paper : p.ink, soft: dark ? 'rgba(255,255,255,0.62)' : p.muted }
 }
 
 const text = (c: Ctx, name: string, t: string, o: Partial<TextLayer> & Pick<TextLayer, 'x' | 'y' | 'w' | 'size'>): TextLayer => ({
-  id: uid(), type: 'text', name, text: t, h: 0, font: c.brand.bodyFont, weight: 400, color: c.fg, align: 'left', lineHeight: 1.15, letterSpacing: 0, emphasisColor: c.hi, ...o,
+  id: uid(), type: 'text', name, text: t, h: 0, font: c.brand.bodyFont, weight: 400, color: c.fg, align: 'left', lineHeight: 1.15, letterSpacing: 0, emphasisColor: c.hi, emphasisFont: c.brand.emphasisFont, ...o,
 })
 
 const title = (c: Ctx, t: string, o: Partial<TextLayer> & Pick<TextLayer, 'x' | 'y' | 'w' | 'size'> & { maxLines?: number }) => {
@@ -231,7 +231,7 @@ const BUILDERS: Record<TemplateId, Build> = {
     const tall = c.h > 1500
     return slide(bg(c), [
       ...backdrop(c, [[c.w - 420, -160, 760], [-260, c.h - 520, 640]]),
-      ...header(c, spec.label ?? 'Avence Studio'),
+      ...header(c, spec.label ?? c.brand.name),
       title(c, spec.title ?? 'Sites com *acabamento* de estúdio.', { x: c.m, y: c.h * (tall ? 0.3 : 0.27), w: c.w - c.m * 2, size: tall ? 150 : 132 }),
       text(c, 'Apoio', spec.body ?? 'Identidade, texto e movimento trabalhando juntos.', { x: c.m, y: c.h - c.bottom - 190, w: c.w - c.m * 2 - 220, size: 38, color: c.soft, lineHeight: 1.3 }),
       square(c, c.w - c.m - 70, c.h - c.bottom - 70, 48),
@@ -326,9 +326,9 @@ const BUILDERS: Record<TemplateId, Build> = {
       ...backdrop(c, [[c.w - 460, c.h - 560, 760], [-300, -200, 560]]),
       ...header(c, spec.label ?? 'Próximo passo'),
       title(c, spec.title ?? 'Veja o site do seu negócio *antes* de fechar.', { x: c.m, y, w: c.w - c.m * 2, size: c.h > 1500 ? 128 : 112 }),
-      rect('Botão', { x: c.m, y: y + 520, w: 520, h: 104, fill: c.p.accent }),
+      rect('Botão', { x: c.m, y: y + 520, w: 520, h: 104, fill: c.p.accent, radius: buttonRadiusOf(c.brand, 104) }),
       text(c, 'Botão', spec.cta ?? 'Peça uma prévia', { x: c.m + 44, y: y + 520 + 30, w: 440, size: 38, weight: 600, color: c.p.onAccent }),
-      text(c, 'Contato', spec.body ?? '@avencestudio', { x: c.m, y: c.h - c.bottom - 40, w: c.w - c.m * 2, size: 34, color: c.soft }),
+      text(c, 'Contato', spec.body ?? c.brand.name, { x: c.m, y: c.h - c.bottom - 40, w: c.w - c.m * 2, size: 34, color: c.soft }),
       square(c, c.w - c.m - 70, c.h - c.bottom - 70, 48),
     ])
   },

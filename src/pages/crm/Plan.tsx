@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowRight, Check, CircleAlert, Info, Loader2, Lock, Plus, RefreshCw, X } from 'lucide-react'
+import { ArrowRight, Check, CircleAlert, Info, Loader2, Lock, Plug, Plus, RefreshCw, X } from 'lucide-react'
+import { McpDialog } from '@/features/crm/McpDialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useCrm } from '@/features/crm/crmStore'
@@ -237,6 +238,7 @@ const Plan: React.FC = () => {
   const [saving, setSaving] = useState(false)
   const [conflict, setConflict] = useState(false)
   const [problem, setProblem] = useState<string>()
+  const [mcpOpen, setMcpOpen] = useState(false)
 
   const load = useCallback(async () => {
     if (!team) return
@@ -316,12 +318,19 @@ const Plan: React.FC = () => {
   return (
     <Page>
       <PageHeader title="Plano da empresa" text={`O contexto de ${team?.name ?? 'sua conta'} que todo conteúdo, texto e criativo reaproveita. Escreva uma vez; o briefing sai daqui.`}>
+        {team && (
+          <Button type="button" variant="outline" size="sm" onClick={() => setMcpOpen(true)}>
+            <Plug className="h-3.5 w-3.5" aria-hidden /> Conectar sua IA
+          </Button>
+        )}
         <Button asChild variant="outline" size="sm">
           <Link to="/conteudos">
             Ir para Conteúdos <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
         </Button>
       </PageHeader>
+
+      {team && <McpDialog open={mcpOpen} onOpenChange={setMcpOpen} teamId={team.id} teamName={team.name} />}
 
       {state === 'loading' && (
         <p className="mt-10 flex items-center gap-2 text-sm text-gray-500" role="status">

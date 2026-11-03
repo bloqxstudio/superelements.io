@@ -1178,7 +1178,7 @@ function component(
 
 /** Acesso por código às mesmas operações do editor de Criativos. */
 let creativeImport: { state: string; postId?: string; error?: string } | undefined
-async function creatives(params: { action?: string; setId?: string; projectId?: string; pageId?: string; projectName?: string; postId?: string; index?: number; set?: CreativeSet; images?: { key: string; name: string; data: string }[] }) {
+async function creatives(params: { action?: string; setId?: string; projectId?: string; pageId?: string; projectName?: string; postId?: string; index?: number; set?: CreativeSet; images?: { key: string; name: string; data: string }[]; contentId?: string }) {
   // Gravar um conjunto montado por um agente (2026-11-02): envia as imagens pela sessão
   // do app e troca `asset:<key>` pelo id de cada uma. Não precisa do conjunto aberto.
   if (params.action === 'save') {
@@ -1202,7 +1202,13 @@ async function creatives(params: { action?: string; setId?: string; projectId?: 
     }))
     const saved: CreativeSet = { ...set, posts, assets, updatedAt: Date.now() }
     await saveSet(saved)
-    return { id: saved.id, name: saved.name, posts: saved.posts.length, assets: assets.length }
+    // Criativo de um conteúdo do Plano: grava o vínculo com o hash do que foi salvo, como o painel faz
+    if (params.contentId) {
+      const { linkContent } = await import('@/features/conteudos/api')
+      const { setHash } = await import('@/features/conteudos/forward')
+      await linkContent(params.contentId, 'criativos', saved.id, saved.projectId, await setHash(saved))
+    }
+    return { id: saved.id, name: saved.name, posts: saved.posts.length, assets: assets.length, linked: !!params.contentId }
   }
   const { useEditor } = await import('@/features/criativos/store')
   const state = useEditor.getState()
@@ -1249,6 +1255,23 @@ async function creatives(params: { action?: string; setId?: string; projectId?: 
   return { set: state.set, postId: state.postId, slideId: state.slideId, saving: state.saving, importing: creativeImport }
 }
 
+/**
+ * Põe arquivos na fila do WhatsApp da equipe, pelo mesmo caminho da tela (upload na
+ * pasta `<conta>/saida/` e `crm_whatsapp_send_media`), com o login desta aba. Para
+ * um agente mandar o que produziu a uma conversa que já existe (2026-11-02).
+ */
+async function whatsappSend(params: { team?: string; jid?: string; items?: { data: string; name: string; caption?: string }[] }) {
+  if (!params.team || !params.jid || !params.items?.length) throw new Error('Informe a conta, a conversa e os arquivos.')
+  const { sendFile } = await import('@/features/crm/whatsappChats')
+  let sent = 0
+  for (const item of params.items) {
+    const blob = await (await fetch(item.data)).blob()
+    await sendFile(params.team, params.jid, new File([blob], item.name, { type: blob.type }), item.caption ?? '')
+    sent++
+  }
+  return { sent }
+}
+
 async function projectImage(params: { data?: string; action?: 'audit' }) {
   const projectId = requireProject()
   if (params.action === 'audit') {
@@ -1265,7 +1288,7 @@ async function projectImage(params: { data?: string; action?: 'audit' }) {
 }
 
 const METHODS: Record<string, (params: never, ctx: CallContext) => unknown> = {
-  status, pull, apply, focus, say, work, plan, render, view, projects, open, create, brand, creatives,
+  status, pull, apply, focus, say, work, plan, render, view, projects, open, create, brand, creatives, whatsappSend,
   brief, approval, invite, wordpress, details, publish, restore, component, componentPlan, prospect, projectImage,
 }
 

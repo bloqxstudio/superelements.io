@@ -9,6 +9,7 @@ import { useCreativeLink } from '@/features/criativos/link'
 import { createSetOnce, loadSet, saveSet } from '@/features/criativos/storage'
 import type { CreativeSet, SetBrand } from '@/features/criativos/types'
 import { toast } from 'sonner'
+import { useCrm } from '@/features/crm/crmStore'
 import { linkContent } from './api'
 import { accountBrand, aiCarousel, carouselPost } from './carousel'
 import { briefOf, briefText, hashOf, joinParagraphs, scriptParagraphs, type AccountContext, type Content, type ContentLink } from './rules'
@@ -128,7 +129,8 @@ export async function forwardToCriativos(content: Content, ctx: AccountContext |
     return { path: setPath(content, existing.projectId), created: false }
   }
 
-  let brand: SetBrand = setBrandFrom(null, project?.name ?? 'Marca')
+  // Sem marca nenhuma: neutra, com o nome da conta (nunca a identidade de outra marca)
+  let brand: SetBrand = setBrandFrom(null, project?.name ?? useCrm.getState().team?.name ?? 'Marca')
   if (project) {
     const cloud = await loadProjectDoc(project.id)
     const source = cloud?.doc?.brand?.source

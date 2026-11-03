@@ -52,7 +52,8 @@ export async function generatePosts(form: AiForm, brand: SetBrand, signal?: Abor
         format: (p.format in FORMATS ? p.format : form.format) as Post['format'],
         caption: p.caption,
         slides: noCases
-          ? p.slides.filter((s) => !s.template.startsWith('case-')).map((s) => ({ ...s, case: undefined }))
+          ? // Nem as ilustrações da Avence entram no conteúdo de outra empresa
+            p.slides.filter((s) => !s.template.startsWith('case-') && !(form.company && s.template === 'ilustracao')).map((s) => ({ ...s, case: undefined, illustration: undefined }))
           : // Um case que a IA inventou vira o primeiro dos escolhidos
             p.slides.map((s) => ({ ...s, case: s.case && known.has(s.case) ? s.case : form.cases[0] ?? AV_CASES[0].slug })),
       },
@@ -119,6 +120,9 @@ export interface EditCall {
   projects?: string[]
 }
 
+/** Conjunto de outra marca (veio de Conteúdos, ou a marca não é a Avence): nada da identidade da Avence entra. */
+const otherBrand = (set: CreativeSet) => !!set.source || !/avence/i.test(set.brand.name)
+
 export async function requestEdit(call: EditCall, fonts: string[], signal?: AbortSignal, onStep?: (step: CreativeStep) => void): Promise<EditResponse> {
   const { set } = call
   const post = set.posts.find((p) => p.id === call.postId)
@@ -134,19 +138,20 @@ export async function requestEdit(call: EditCall, fonts: string[], signal?: Abor
     slideId: call.slideId,
     layerId: call.layerId,
     layerIds: call.layerIds,
-    brand: { name: set.brand.name, colors: set.brand.colors, headingFont: set.brand.headingFont, bodyFont: set.brand.bodyFont },
+    brand: { name: set.brand.name, colors: set.brand.colors, headingFont: set.brand.headingFont, bodyFont: set.brand.bodyFont, emphasisFont: set.brand.emphasisFont },
     // Escopo menor que o conjunto: só o post aberto vai para a IA
     posts: compactPosts(call.scope === 'set' || !post ? set.posts : [post], { postId: call.postId, slideId: call.slideId, scope: call.scope }),
     fonts,
     images: [
-      ...LIBRARY.map((i) => ({ src: i.src, label: i.label })),
+      // As ilustrações da biblioteca são da identidade da Avence: só nos conjuntos dela
+      ...(otherBrand(set) ? [] : LIBRARY.map((i) => ({ src: i.src, label: i.label }))),
       ...set.assets.map((a) => ({ src: `asset:${a.id}`, label: `Enviada: ${a.name}` })),
       ...(set.brand.logoOnLight ? [{ src: set.brand.logoOnLight, label: 'Logo para fundo claro' }] : []),
       ...(set.brand.logoOnDark ? [{ src: set.brand.logoOnDark, label: 'Logo para fundo escuro' }] : []),
     ],
     // Conjunto vindo de Conteúdos: briefing do plano no pedido e nenhum case da Avence
     brief: set.source ? set.brief : undefined,
-    cases: set.source ? [] : AV_CASES.map((c) => ({ slug: c.slug, name: c.name, segment: c.segment, summary: c.summary })),
+    cases: otherBrand(set) ? [] : AV_CASES.map((c) => ({ slug: c.slug, name: c.name, segment: c.segment, summary: c.summary })),
     image: slide && post && call.scope !== 'post' ? slidePreview(slide, post.format, call.images) : undefined,
     // O post inteiro: a IA vê todos os cards, não só um
     previews: post && call.scope === 'post' ? post.slides.slice(0, 10).map((sl) => slidePreview(sl, post.format, call.images, 540)) : undefined,

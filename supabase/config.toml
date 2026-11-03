@@ -16,6 +16,10 @@ verify_jwt = false
 [functions.lead-webhook]
 verify_jwt = false
 
+# MCP da Sinfy: IAs de fora (Claude, ChatGPT, Cursor) conectam com a chave pessoal da conta (crm_mcp_keys), sem login do Supabase
+[functions.sinfy-mcp]
+verify_jwt = false
+
 # Formulários e quizzes embedados no site: o visitante não tem login, o id do formulário publicado autoriza
 [functions.form-submit]
 verify_jwt = false

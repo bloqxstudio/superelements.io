@@ -178,7 +178,8 @@ test('Criativos: conjunto de conteúdo herda o briefing e não usa cases alheios
   assert.doesNotMatch(dialog, /EMPTY_AI/)
   const ai = read('../../src/features/criativos/ai.ts')
   assert.match(ai, /brief: set\.source \? set\.brief : undefined/)
-  assert.match(ai, /cases: set\.source \? \[\]/)
+  assert.match(ai, /cases: otherBrand\(set\) \? \[\]/)
+  assert.match(ai, /const otherBrand = \(set: CreativeSet\) => !!set\.source \|\|/)
   assert.match(ai, /const noCases = form\.cases\.length === 0/)
   assert.match(read('../../scripts/criativos/edit.ts'), /Briefing da empresa/)
   // o fluxo antigo (conjunto sem origem) continua com os cases da Avence

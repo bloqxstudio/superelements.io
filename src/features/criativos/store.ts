@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { toast } from 'sonner'
 import { EMPHASIS_FONT, loadFont, loadImage, type ImageMap } from './render'
 import { loadSet, saveSet, assetUrl } from './storage'
+import { hasPending, materializePending } from './pending'
 import { mergePatch, type SyncPatch } from './syncPatch'
 import { syncSpans } from './spanOps'
 import type { CreativeSet, FormatId, Layer, Post, Slide } from './types'
@@ -79,8 +80,10 @@ export const useEditor = create<EditorState>()((set, get) => {
     open: async (id, projectId) => {
       set({ status: 'loading', set: undefined, past: [], future: [], images: new Map(), saving: 'saved' })
       try {
-        const loaded = await loadSet(id, projectId)
+        let loaded = await loadSet(id, projectId)
         if (!loaded) return set({ status: 'missing' })
+        // Posts pedidos pela IA de fora (MCP): monta na marca antes de abrir
+        if (hasPending(loaded)) loaded = await materializePending(loaded)
         const post = loaded.posts[0]
         set({ set: loaded, status: 'ready', postId: post?.id, slideId: post?.slides[0]?.id, layerId: undefined, layerIds: [] })
         void get().ensureAssets()
@@ -182,7 +185,7 @@ export const useEditor = create<EditorState>()((set, get) => {
       for (const post of current.posts)
         for (const slide of post.slides)
           for (const layer of slide.layers) {
-            if (layer.type === 'text') fonts.add(layer.font)
+            if (layer.type === 'text') { fonts.add(layer.font); if (layer.emphasisFont) fonts.add(layer.emphasisFont) }
             if (layer.type === 'image' && layer.src) srcs.add(layer.src)
           }
       for (const key of ['logoOnLight', 'logoOnDark'] as const) if (current.brand[key]) srcs.add(current.brand[key]!)
