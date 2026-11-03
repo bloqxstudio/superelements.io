@@ -158,6 +158,8 @@ export interface Post {
   slides: Slide[]
   /** Legenda para publicar junto com o post. */
   caption?: string
+  /** Marcado como aprovado (é o padrão a seguir; o resto pode ser excluído). */
+  approved?: boolean
 }
 
 export interface SetBrand {

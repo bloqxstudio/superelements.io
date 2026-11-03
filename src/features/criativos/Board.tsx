@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AtSign, Copy, Download, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
+import { AtSign, Check, Copy, Download, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { agentInfo, PHASE_LABEL, useAgent } from './agentStore'
 import { boundsOf, withGroups } from './layerOps'
@@ -45,6 +45,7 @@ interface Row {
   width: number
   slides: Placed[]
   addX: number
+  approved?: boolean
 }
 
 function layout(set: CreativeSet, only?: string) {
@@ -55,7 +56,7 @@ function layout(set: CreativeSet, only?: string) {
     const { width, height } = sizeOf(post.format)
     const slides: Placed[] = post.slides.map((slide, index) => ({ postId: post.id, slideId: slide.id, index, format: post.format, x: index * (width + GAP), y: y + HEAD, w: width, h: height, slide }))
     const rowWidth = post.slides.length * (width + GAP) + width * 0.3
-    rows.push({ postId: post.id, name: post.name, format: post.format, y, width: rowWidth, slides, addX: post.slides.length * (width + GAP) })
+    rows.push({ postId: post.id, name: post.name, format: post.format, y, width: rowWidth, slides, addX: post.slides.length * (width + GAP), approved: post.approved })
     y += HEAD + height + ROW_GAP
   }
   const bounds = { w: Math.max(1, ...rows.map((r) => r.width)), h: Math.max(1, y - ROW_GAP) }
@@ -196,6 +197,9 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   const [hover, setHover] = useState<{ slideId: string; layerId: string } | null>(null)
   // O que passa da borda do card aparece esmaecido em volta dele só se a pessoa ligar (começa desligado)
   const [showOut, setShowOut] = useState(() => { try { return localStorage.getItem('criativos-borda') === '1' } catch { return false } })
+  const approvedCount = set.posts.filter((x) => x.approved).length
+  const [confirmDel, setConfirmDel] = useState(false)
+  const deleteRest = () => { useEditor.getState().edit((st) => ({ ...st, posts: st.posts.filter((x) => x.approved) })); setConfirmDel(false) }
   const toggleOut = () => setShowOut((v) => { try { localStorage.setItem('criativos-borda', v ? '0' : '1') } catch { /* sem armazenamento */ } return !v })
   const [editing, setEditing] = useState<{ postId: string; slideId: string; layerId: string } | null>(null)
   const [menu, setMenu] = useState<{ postId: string; x: number; y: number } | null>(null)
@@ -564,6 +568,17 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
             <button
               type="button"
               data-ui
+              onClick={() => useEditor.getState().edit((s) => ({ ...s, posts: s.posts.map((x) => (x.id === row.postId ? { ...x, approved: !x.approved } : x)) }))}
+              title={row.approved ? 'Aprovado: clique para tirar a marca' : 'Marcar este post como aprovado'}
+              aria-pressed={!!row.approved}
+              className={cn('absolute flex items-center gap-2 rounded-xl font-semibold', row.approved ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-white text-zinc-600 ring-2 ring-zinc-300 hover:bg-emerald-50 hover:text-emerald-700 hover:ring-emerald-400')}
+              style={{ left: Math.min(row.width - 60, 1180) - 330, top: row.y + 8, height: HEAD - 26, padding: '0 22px', fontSize: 26 }}
+            >
+              <Check style={{ width: 30, height: 30 }} /> {row.approved ? 'Aprovado' : 'Aprovar'}
+            </button>
+            <button
+              type="button"
+              data-ui
               onClick={() => useRefs.getState().add({ id: `post:${row.postId}`, kind: 'post', label: row.name, postId: row.postId }, true)}
               title="Referenciar este post no chat (@): diga o que trazer dele"
               aria-label={`Referenciar ${row.name} no chat`}
@@ -808,6 +823,11 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
         <button type="button" onClick={() => zoomAt(size.w / 2, size.h / 2, 1 / view.k)} className="h-8 w-14 rounded-md text-xs font-semibold tabular-nums text-gray-700 hover:bg-gray-100" title="100%">{Math.round(view.k * 100)}%</button>
         <BarButton label="Mais zoom" onClick={() => zoomAt(size.w / 2, size.h / 2, 1.25)}><Plus className="h-4 w-4" /></BarButton>
         <BarButton label="Ver tudo" onClick={() => fit()}><Scan className="h-4 w-4" /></BarButton>
+        <span className="mx-1 h-5 w-px bg-gray-200" />
+        <span className="px-1.5 text-xs font-medium text-emerald-700">{approvedCount} de {set.posts.length} aprovados</span>
+        {approvedCount > 0 && approvedCount < set.posts.length && (confirmDel
+          ? <><button type="button" onClick={deleteRest} className="h-8 rounded-md bg-red-600 px-2 text-xs font-semibold text-white hover:bg-red-700">Excluir {set.posts.length - approvedCount} não aprovados</button><button type="button" onClick={() => setConfirmDel(false)} className="h-8 rounded-md px-2 text-xs text-gray-600 hover:bg-gray-100">Cancelar</button></>
+          : <button type="button" onClick={() => setConfirmDel(true)} className="h-8 rounded-md px-2 text-xs font-medium text-red-600 hover:bg-red-50">Excluir não aprovados</button>)}
         <button type="button" onClick={toggleOut} aria-pressed={showOut} title="Mostrar o que passa da borda do card" className={cn('h-8 rounded-md px-2 text-xs font-medium', showOut ? 'bg-violet-100 text-violet-800' : 'text-gray-600 hover:bg-gray-100')}>Bordas</button>
       </div>
       <p className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-white/80 px-2 py-1 text-[11px] text-gray-500">Arraste o fundo para mover · Ctrl/⌘ + roda para zoom · dois cliques no texto para editar</p>
