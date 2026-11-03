@@ -14,7 +14,7 @@ const STEPS = [
 ] as const;
 
 const NAMES = ['Marina A.', 'Pedro S.', 'Carla M.', 'Bruno T.', 'Júlia R.', 'Rafael C.', 'Ana P.', 'Lucas F.', 'Bia N.', 'Diego L.', 'Sofia V.', 'Thiago O.', 'Laura K.', 'Gabriel D.', 'Helena B.', 'Caio M.'];
-const CAMPAIGNS = ['Reels Verão', 'Remarketing', 'Carrossel Cozinha', 'Google · Busca'];
+const CAMPAIGNS = ['Reels Closet', 'Remarketing', 'Carrossel Cozinha', 'Google · Busca'];
 const TINTS = ['#d2f525', '#cce1b9', '#bcd3a8', '#e2edcf', '#c4deba', '#d8e7c7'];
 /* Chance de seguir para a próxima etapa (o resto sai do funil). */
 const CONV = [0.72, 0.4, 0.85, 0.55, 0.5];

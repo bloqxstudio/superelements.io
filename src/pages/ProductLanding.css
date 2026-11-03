@@ -62,6 +62,18 @@
 .lp-hero__signals > span { display: flex; gap: 8px; align-items: center; }
 .lp-hero__signals svg { width: 14px; height: 14px; }
 .lp-hero__demo { margin-top: 64px; padding: 12px; border: 1px solid #ffffff20; background: #242a26; border-radius: 22px; }
+.lp-journey { margin-top: 0; }
+.lp-hero .pt-tabs button { border-color: #ffffff24; color: #b8bfb5; }
+.lp-hero .pt-tabs button:hover { color: #fff; border-color: #ffffff40; }
+.lp-hero .pt-tabs button[aria-selected=true] { background: var(--accent); border-color: var(--accent); color: var(--ink); }
+.lp-hero .pt-tabs button[aria-selected=true] svg { color: var(--ink); }
+.lp-hero .pt-tabs { padding-inline: 4px; }
+.lp-hero .pt-stage { background: #2c332e; border-color: #ffffff14; }
+.lp-hero .pt-count { color: #8a9286; }
+.lp-hero .pt-kicker { color: var(--accent); }
+.lp-hero .pt .pt-explain h3 { color: var(--inverse); }
+.lp-hero .pt-explain p:not(.pt-kicker) { color: #b8bfb5; }
+.lp-hero .pt-explain li { color: #e6e9e0; }
 .lp-demo-caption { display: flex; align-items: center; gap: 24px; padding: 8px 12px 20px; color: #b8bfb5; font-size: 11px; }
 .lp-demo-caption > span:first-child { display: flex; gap: 8px; align-items: center; color: var(--inverse); }
 .lp-demo-caption > span:nth-child(2) { margin-left: auto; }
@@ -75,11 +87,12 @@
 .lp-statement .lp-wrap { position: relative; }
 .lp-statement h2 { font-size: clamp(30px, 3.5vw, 48px); line-height: 1.15; }
 .lp-statement h2 > span { color: #54651f; }
-.lp-pillars { list-style: none; margin: 48px 0 0; padding: 32px 0 0; border-top: 1px solid rgba(0, 0, 0, .14); display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
+.lp-pillars { list-style: none; margin: 48px 0 0; padding: 32px 0 0; border-top: 1px solid rgba(0, 0, 0, .14); display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px; }
 .lp-pillars span { display: block; font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #54651f; margin-bottom: 12px; }
 .lp-pillars h3 { font-size: 21px; letter-spacing: -.035em; line-height: 1.2; margin-bottom: 8px; }
 .lp-pillars p { font-size: 14px; line-height: 1.6; max-width: 320px; opacity: .78; }
 .lp-statement .lp-hub__lede { max-width: 620px; margin-top: 28px; font-size: 16px; line-height: 1.6; color: #3c4a16; }
+@media (max-width: 1024px) { .lp-pillars { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 767px) { .lp-pillars { grid-template-columns: 1fr; gap: 24px; margin-top: 32px; padding-top: 24px; } }
 .lp-round-link { width: 64px; height: 64px; border: 1px solid #71852a; border-radius: 50%; display: grid; place-items: center; position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
 .lp-round-link svg { width: 24px; height: 24px; }

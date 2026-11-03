@@ -10,7 +10,7 @@ import './ProductTour.css';
 /**
  * Tour do produto na /lp: as áreas reais da plataforma desenhadas como componentes
  * na própria página (não imagens), com a marca Sinfy e uma empresa fictícia
- * (Caramelo Pet). Cada aba explica uma funcionalidade que existe no produto.
+ * (Casa Lume Planejados, móveis planejados com loja online). Cada aba explica uma funcionalidade que existe no produto.
  * As abas seguem o que a Sinfy junta num lugar só: Instagram, anúncios, site,
  * loja (Shopify), formulários, leads e conversas. Páginas e criativos não entram:
  * são de outro produto.
@@ -54,7 +54,7 @@ export function ProductTour() {
       <div className="pt-app" aria-label={`Tela ${screen.label} da Sinfy, com dados fictícios`}>
         <aside className="pt-side">
           <SinfyWordmark />
-          <span className="pt-account"><i>CP</i>Caramelo Pet<ChevronDown aria-hidden="true" /></span>
+          <span className="pt-account"><i>CL</i>Casa Lume<ChevronDown aria-hidden="true" /></span>
           <nav>{SCREENS.map((s) => <button key={s.id} type="button" tabIndex={-1} className={active === s.id ? 'is-on' : ''} onClick={() => setActive(s.id)}><s.icon aria-hidden="true" />{s.label}</button>)}</nav>
           <small>Empresa fictícia · demonstração</small>
         </aside>
@@ -107,14 +107,14 @@ function useGrow() {
 
 function Inicio() {
   const grow = useGrow();
-  const chain = [['Reels Verão', 'R$ 210', 312, 14, 6], ['Remarketing', 'R$ 140', 186, 9, 4], ['Google · Busca', '—', 154, 7, 3]] as const;
+  const chain = [['Reels Closet', 'R$ 210', 312, 14, 6], ['Remarketing', 'R$ 140', 186, 9, 4], ['Google · Busca', '—', 154, 7, 3]] as const;
   return <>
-    <Head title="Bom dia, Ana" sub="Caramelo Pet · o que aconteceu nos últimos 7 dias"><Period /></Head>
+    <Head title="Bom dia, Ana" sub="Casa Lume · o que aconteceu nos últimos 7 dias"><Period /></Head>
     <div className="pt-kpis">
       <Kpi label="Visitas ao site" value="652" delta="+18%" />
       <Kpi label="Contatos" value="38" delta="+9%" />
       <Kpi label="Oportunidades novas" value="24" delta="+4" />
-      <Kpi label="Ganhas" value="7" delta="+2" />
+      <Kpi label="Ganhas" value="3" delta="+1" />
       <Kpi label="Investido na Meta" value="R$ 480" delta="−6%" down dark />
     </div>
     <div className="pt-grid2">
@@ -137,10 +137,10 @@ function Inicio() {
 
 function Oportunidades() {
   const cols = [
-    { label: 'Novo lead', dot: '#93a3b8', value: 'R$ 3.600', cards: [{ n: 'Marina Albuquerque', d: 'Banho e tosa mensal', o: 'Meta Ads · quiz', who: '', c: 0 }, { n: 'Lucas Ferreira', d: 'Hotel para o fim de semana', o: 'Formulário do site', who: '', c: 0 }] },
-    { label: 'Em conversa', dot: '#7c9cf5', value: 'R$ 5.400', cards: [{ n: 'Pedro Siqueira', d: 'Plano Clube do Banho', o: 'Google · Busca', who: 'AN', c: 3 }, { n: 'Júlia Rocha', d: 'Creche 3x por semana', o: 'Instagram', who: 'RF', c: 1 }] },
-    { label: 'Proposta', dot: '#e3a33b', value: 'R$ 4.200', cards: [{ n: 'Carla Menezes', d: 'Pacote filhote', o: 'Meta Ads · Reels Verão', who: 'AN', c: 2 }] },
-    { label: 'Fechado', dot: '#8fbf3a', value: 'R$ 9.800', cards: [{ n: 'Bruno Tavares', d: 'Clube do Banho anual', o: 'Remarketing', who: 'RF', c: 4 }] },
+    { label: 'Novo lead', dot: '#93a3b8', value: 'R$ 38.000', cards: [{ n: 'Marina Albuquerque', d: 'Cozinha planejada · apartamento', o: 'Meta Ads · quiz', who: '', c: 0 }, { n: 'Lucas Ferreira', d: 'Closet do casal', o: 'Formulário do site', who: '', c: 0 }] },
+    { label: 'Em conversa', dot: '#7c9cf5', value: 'R$ 29.500', cards: [{ n: 'Pedro Siqueira', d: 'Home office completo', o: 'Google · Busca', who: 'AN', c: 3 }, { n: 'Júlia Rocha', d: 'Dormitório infantil', o: 'Instagram', who: 'RF', c: 1 }] },
+    { label: 'Proposta', dot: '#e3a33b', value: 'R$ 18.400', cards: [{ n: 'Carla Menezes', d: 'Cozinha e área gourmet', o: 'Meta Ads · Carrossel Cozinha', who: 'AN', c: 2 }] },
+    { label: 'Fechado', dot: '#8fbf3a', value: 'R$ 46.200', cards: [{ n: 'Bruno Tavares', d: 'Apartamento completo', o: 'Remarketing', who: 'RF', c: 4 }] },
   ];
   return <>
     <Head title="Leads" sub="Funil de vendas · ao vivo para a equipe"><span className="pt-filter">Comigo</span><span className="pt-filter is-on">Todos</span><span className="pt-btn"><UserPlus aria-hidden="true" />Novo cliente</span></Head>
@@ -160,8 +160,8 @@ function WhatsApp() {
   const chats = [
     { n: 'Marina Albuquerque', m: 'Pode ser sábado de manhã?', t: '09:42', u: 2, tag: 'Quente', tint: '#d2f525' },
     { n: 'Pedro Siqueira', m: '🎤 Mensagem de voz (0:24)', t: '09:15', u: 0, tag: 'Morno', tint: '#cce1b9' },
-    { n: 'Júlia Rocha', m: 'Vocês aceitam gato também?', t: 'Ontem', u: 0, tag: 'Frio', tint: '#e2edcf' },
-    { n: 'Bruno Tavares', m: 'Obrigado! Até semana que vem', t: 'Ontem', u: 0, tag: 'Cliente', tint: '#bcd3a8' },
+    { n: 'Júlia Rocha', m: 'Vocês fazem o projeto em 3D?', t: 'Ontem', u: 0, tag: 'Frio', tint: '#e2edcf' },
+    { n: 'Bruno Tavares', m: 'A montagem ficou perfeita, obrigado!', t: 'Ontem', u: 0, tag: 'Cliente', tint: '#bcd3a8' },
   ];
   return <div className="pt-wa">
     <div className="pt-wa__list">
@@ -170,12 +170,12 @@ function WhatsApp() {
       {chats.map((c, i) => <div key={c.n} className={`pt-chat${i === 0 ? ' is-on' : ''}`}><Avatar name={c.n} tint={c.tint} /><div><b>{c.n}</b><span>{c.m}</span><em className={`pt-wtag t-${c.tag}`}>{c.tag}</em></div><small>{c.t}{c.u > 0 && <i>{c.u}</i>}</small></div>)}
     </div>
     <div className="pt-wa__thread">
-      <div className="pt-wa__top"><Avatar name="Marina Albuquerque" tint="#d2f525" /><div><b>Marina Albuquerque</b><span>Veio do quiz · Meta Ads · Reels Verão</span></div><em className="pt-wtag t-Quente">Quente</em></div>
+      <div className="pt-wa__top"><Avatar name="Marina Albuquerque" tint="#d2f525" /><div><b>Marina Albuquerque</b><span>Veio do quiz · Meta Ads · Carrossel Cozinha</span></div><em className="pt-wtag t-Quente">Quente</em></div>
       <div className="pt-wa__msgs">
-        <p className="in">Oi! Vi o anúncio do Clube do Banho. Como funciona?</p>
-        <p className="out">Olá, Marina! São 4 banhos por mês com tosa higiênica. Qual é o porte do seu cachorro?</p>
-        <p className="in">É um shih-tzu, pequeno 🐶</p>
-        <p className="out">Perfeito. Tenho horário sábado às 9h ou às 11h.</p>
+        <p className="in">Oi! Vi o anúncio da cozinha planejada. Como funciona o orçamento?</p>
+        <p className="out">Olá, Marina! A gente mede o ambiente e entrega o projeto em 3D com o valor. Qual é o tamanho da cozinha?</p>
+        <p className="in">Uns 9 m², apartamento novo 🏠</p>
+        <p className="out">Perfeito. Posso marcar a medição sábado às 9h ou às 11h.</p>
         <p className="in">Pode ser sábado de manhã?</p>
       </div>
       <div className="pt-wa__reply"><Paperclip aria-hidden="true" /><span>Escreva uma mensagem</span><Mic aria-hidden="true" /><i><Send aria-hidden="true" /></i></div>
@@ -196,31 +196,31 @@ function useStep(max: number, every: number) {
 function Formularios() {
   const step = useStep(3, 1500);
   return <>
-    <Head title="Quiz · Primeiro banho" sub="Publicado na página de oferta · 128 respostas"><span className="pt-live"><i />Publicado</span></Head>
+    <Head title="Quiz · Orçamento de cozinha" sub="Publicado na página de cozinhas · 128 respostas"><span className="pt-live"><i />Publicado</span></Head>
     <div className="pt-grid2 pt-grid2--form">
       <section className="pt-card">
         <h5>Perguntas</h5>
-        {[['1', 'Qual é o porte do seu pet?', 'Pequeno · Médio · Grande'], ['2', 'Com que frequência ele toma banho?', 'Toda semana · A cada 15 dias · Raramente'], ['3', 'Qual o melhor horário?', 'Manhã · Tarde · Sábado'], ['4', 'Seu WhatsApp', 'Telefone · obrigatório']].map(([n, q, a]) =>
+        {[['1', 'Qual ambiente você quer planejar?', 'Cozinha · Closet · Dormitório · Apartamento'], ['2', 'Quando pretende começar?', 'Este mês · Em até 3 meses · Só pesquisando'], ['3', 'Qual o investimento previsto?', 'Até R$ 15 mil · R$ 15 a 30 mil · Acima de R$ 30 mil'], ['4', 'Seu WhatsApp', 'Telefone · obrigatório']].map(([n, q, a]) =>
           <div className="pt-q" key={n}><span>{n}</span><div><b>{q}</b><small>{a}</small></div></div>)}
-        <div className="pt-rule"><Check aria-hidden="true" />Toda semana ou a cada 15 dias → lead <b>quente</b></div>
+        <div className="pt-rule"><Check aria-hidden="true" />Este mês ou em até 3 meses → lead <b>quente</b></div>
       </section>
       <section className="pt-card">
         <h5>Lead chegando · agora</h5>
         {step === 0 ? <p className="pt-wait"><i className="pt-dot" />Esperando a próxima resposta…</p> : <>
           <div className="pt-lead pt-in"><Avatar name="Marina Albuquerque" tint="#d2f525" /><div><b>Marina Albuquerque</b><span>(51) 9•••-•••2 · respondeu o quiz</span></div><em className="pt-tag k-lead">Quente</em></div>
-          <dl className="pt-dl pt-in">{[['Porte', 'Pequeno'], ['Frequência', 'Toda semana'], ['Origem', 'Meta Ads'], ['Campanha', 'Reels Verão']].map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+          <dl className="pt-dl pt-in">{[['Ambiente', 'Cozinha'], ['Prazo', 'Este mês'], ['Origem', 'Meta Ads'], ['Campanha', 'Carrossel Cozinha']].map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
         </>}
         {step >= 2 && <div className="pt-flow pt-in"><Check aria-hidden="true" />Entrou em Oportunidades como <b>Novo lead</b></div>}
-        {step >= 3 && <div className="pt-wa-alert pt-in"><span className="pt-wa-alert__app"><MessageCircle aria-hidden="true" />WhatsApp · Equipe Caramelo</span><b>🔔 Novo lead: Marina Albuquerque</b><p>Quiz Primeiro banho · Meta Ads · Reels Verão<br />Porte pequeno · banho toda semana</p><small>agora</small></div>}
+        {step >= 3 && <div className="pt-wa-alert pt-in"><span className="pt-wa-alert__app"><MessageCircle aria-hidden="true" />WhatsApp · Equipe Casa Lume</span><b>🔔 Novo lead: Marina Albuquerque</b><p>Quiz Orçamento de cozinha · Meta Ads · Carrossel Cozinha<br />Cozinha · quer começar este mês</p><small>agora</small></div>}
       </section>
     </div>
   </>;
 }
 
 /** Visitantes fictícios que andam pelo site: troca de página, um chega, um clica no WhatsApp. */
-const PAGES = ['/inicio', '/clube-do-banho', '/servicos/tosa', '/hotel', '/contato'];
+const PAGES = ['/inicio', '/cozinhas', '/closets', '/orcamento', '/contato'];
 const VISITORS = [
-  { id: 'a', place: 'Porto Alegre, RS', city: 'Porto Alegre', lat: -30.03, lon: -51.22, from: 'Meta Ads · Reels Verão', channel: 'Meta Ads', device: 'iPhone' },
+  { id: 'a', place: 'Porto Alegre, RS', city: 'Porto Alegre', lat: -30.03, lon: -51.22, from: 'Meta Ads · Reels Closet', channel: 'Meta Ads', device: 'iPhone' },
   { id: 'b', place: 'São Leopoldo, RS', city: 'São Leopoldo', lat: -29.76, lon: -51.15, from: 'Google · Busca', channel: 'Google (busca)', device: 'Android' },
   { id: 'c', place: 'Canoas, RS', city: 'Canoas', lat: -29.92, lon: -51.18, from: 'Instagram', channel: 'Instagram', device: 'Android' },
   { id: 'd', place: 'Novo Hamburgo, RS', city: 'Novo Hamburgo', lat: -29.68, lon: -51.13, from: 'Direto', channel: 'Direto', device: 'Computador' },
@@ -272,7 +272,7 @@ function Site() {
   const sessions = asSessions(live);
   const converted = live.find((v) => v.converted);
   return <>
-    <Head title="Site" sub="caramelopet.exemplo · 652 visitas no período"><span className="pt-live"><i />{live.length} no site agora</span><Period /></Head>
+    <Head title="Site" sub="casalume.exemplo · 652 visitas no período"><span className="pt-live"><i />{live.length} no site agora</span><Period /></Head>
     <div className="pt-kpis pt-kpis--4">
       <Kpi label="Visitas" value="652" delta="+18%" />
       <Kpi label="Pessoas" value="511" />
@@ -295,7 +295,7 @@ function Anuncios() {
   const days = [32, 48, 41, 66, 58, 72, 61];
   const grow = useGrow();
   return <>
-    <Head title="Anúncios da Meta" sub="Conta Caramelo Pet · somente leitura"><Period /><span className="pt-btn pt-btn--ghost">Gerenciador ↗</span></Head>
+    <Head title="Anúncios da Meta" sub="Conta Casa Lume · somente leitura"><Period /><span className="pt-btn pt-btn--ghost">Gerenciador ↗</span></Head>
     <div className="pt-kpis pt-kpis--4">
       <Kpi label="Valor usado" value="R$ 480,20" />
       <Kpi label="Resultados" value="31" delta="Leads" />
@@ -310,7 +310,7 @@ function Anuncios() {
       <section className="pt-card">
         <h5>Campanhas</h5>
         <div className="pt-camp pt-camp--h"><span>Campanha</span><span>Usado</span><span>Result.</span><span>Custo</span></div>
-        {[['Reels Verão', 'R$ 210', '16', 'R$ 13,12', true], ['Remarketing', 'R$ 140', '9', 'R$ 15,55', true], ['Carrossel Cozinha', 'R$ 130', '6', 'R$ 21,66', false]].map(([n, s, r, c, on]) =>
+        {[['Reels Closet', 'R$ 210', '16', 'R$ 13,12', true], ['Remarketing', 'R$ 140', '9', 'R$ 15,55', true], ['Carrossel Cozinha', 'R$ 130', '6', 'R$ 21,66', false]].map(([n, s, r, c, on]) =>
           <div key={String(n)} className="pt-camp"><b><i className={on ? 'is-on' : ''} />{n}</b><span>{s}</span><span>{r}</span><span>{c}</span></div>)}
       </section>
     </div>
@@ -321,9 +321,9 @@ function Anuncios() {
 function InstagramScreen() {
   const days = [38, 44, 52, 47, 71, 63, 58];
   const grow = useGrow();
-  const posts = [['Reels · Banho do Thor', 'Reels', '3.420', '286', '#f3d9b8'], ['Antes e depois da tosa', 'Carrossel', '2.180', '194', '#d9e6f2'], ['Clube do Banho chegou', 'Foto', '1.240', '88', '#e2edcf']] as const;
+  const posts = [['Antes e depois da cozinha', 'Reels', '3.420', '286', '#ead9c4'], ['Closet sob medida', 'Carrossel', '2.180', '194', '#d9e1e8'], ['Nosso showroom', 'Foto', '1.240', '88', '#e2edcf']] as const;
   return <>
-    <Head title="Instagram" sub="Perfil da Caramelo Pet · API oficial da Meta"><span className="pt-filter is-on">Perfil</span><span className="pt-filter">Caixa</span><Period /></Head>
+    <Head title="Instagram" sub="Perfil da Casa Lume · API oficial da Meta"><span className="pt-filter is-on">Perfil</span><span className="pt-filter">Caixa</span><Period /></Head>
     <div className="pt-kpis pt-kpis--4">
       <Kpi label="Seguidores" value="4.812" delta="+86" dark />
       <Kpi label="Alcance (7 dias)" value="12,4 mil" delta="38% fora dos seguidores" />
@@ -349,7 +349,7 @@ function Loja() {
   const grow = useGrow();
   const steps = [['Viram um produto', 1312], ['Puseram no carrinho', 214], ['Foram ao checkout', 96], ['Compraram', 38]] as const;
   return <>
-    <Head title="Loja" sub="loja.caramelopet.exemplo · Shopify"><Period /></Head>
+    <Head title="Loja" sub="loja.casalume.exemplo · Shopify · acessórios e decoração"><Period /></Head>
     <div className="pt-kpis pt-kpis--4">
       <Kpi label="Faturamento" value="R$ 6.840" delta="+14%" dark />
       <Kpi label="Vendas" value="38" delta="+5" />
