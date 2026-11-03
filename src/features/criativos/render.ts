@@ -34,13 +34,14 @@ export async function loadFont(family: string): Promise<void> {
         setTimeout(() => resolve(false), 4000)
       })
     // Famílias de um peso só (Instrument Serif) recusam a lista de pesos: tenta com itálico e depois sem nada
-    if (!(await add(':ital,wght@0,400;0,500;0,600;0,700;0,800;1,400'))) if (!(await add(':ital@0;1'))) await add('')
+    // Primeiro a família inteira (300–900, com itálicos); quem não tem tudo cai na lista de antes
+    if (!(await add(':ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,300;1,400;1,500;1,600;1,700;1,800;1,900')))
+      if (!(await add(':ital,wght@0,400;0,500;0,600;0,700;0,800;1,400'))) if (!(await add(':ital@0;1'))) await add('')
   }
-  await Promise.all([400, 500, 600, 700, 800].map((w) => document.fonts.load(`${w} 40px "${name}"`).catch(() => [])))
-  await document.fonts.load(`italic 400 40px "${name}"`).catch(() => [])
+  await Promise.all([300, 400, 500, 600, 700, 800, 900].flatMap((w) => [document.fonts.load(`${w} 40px "${name}"`).catch(() => []), document.fonts.load(`italic ${w} 40px "${name}"`).catch(() => [])]))
 }
 
-export const fontCss = (layer: Pick<TextLayer, 'weight' | 'size' | 'font'>) => `${layer.weight} ${layer.size}px "${layer.font}", system-ui, sans-serif`
+export const fontCss = (layer: Pick<TextLayer, 'weight' | 'size' | 'font'> & { italic?: boolean }) => `${layer.italic ? 'italic ' : ''}${layer.weight} ${layer.size}px "${layer.font}", system-ui, sans-serif`
 
 // Imagens
 
@@ -293,7 +294,7 @@ export function placeText(layer: TextLayer, ctx: CanvasRenderingContext2D | null
         y: layer.y + ascent + i * lineHeight,
         font: serif ? EMPHASIS_FONT : run.em ? layer.emphasisFont! : layer.font,
         weight: serif ? 400 : layer.weight,
-        italic: serif,
+        italic: serif || !!layer.italic,
         size: serif ? layer.size * 1.12 : layer.size,
         letterSpacing: serif ? 0 : layer.letterSpacing * layer.size,
         color: run.em ? layer.emphasisColor ?? layer.color : layer.color,

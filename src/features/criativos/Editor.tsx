@@ -177,7 +177,7 @@ const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer })
             <Num label="Tamanho" value={layer.size} min={8} onChange={(n) => set_({ size: n })} />
             <Field label="Peso">
               <select className={inputClass} value={layer.weight} onChange={(e) => set_({ weight: Number(e.target.value) })}>
-                {[400, 500, 600, 700, 800].map((w) => (
+                {[300, 400, 500, 600, 700, 800, 900].map((w) => (
                   <option key={w} value={w}>{w}</option>
                 ))}
               </select>
@@ -194,6 +194,9 @@ const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer })
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input type="checkbox" checked={!!(layer as TextLayer).upper} onChange={(e) => set_({ upper: e.target.checked })} /> Tudo em maiúsculas
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={!!(layer as TextLayer).italic} onChange={(e) => set_({ italic: e.target.checked })} /> Itálico
           </label>
           <label className="flex items-start gap-2 text-sm text-gray-700">
             <input type="checkbox" className="mt-1" checked={!!layer.emphasis} onChange={(e) => set_({ emphasis: e.target.checked, emphasisColor: layer.emphasisColor ?? set.brand.colors[0]?.hex })} />

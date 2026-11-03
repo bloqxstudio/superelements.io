@@ -87,6 +87,8 @@ export interface TextLayer extends LayerBase {
   /** em */
   letterSpacing: number
   upper?: boolean
+  /** Itálico (a Barlow Condensed em itálico 900 "para impacto", 2026-11-03). */
+  italic?: boolean
   /** `*palavra*` vira o destaque em serifa itálica na cor de destaque da marca. */
   emphasis?: boolean
   emphasisColor?: string
