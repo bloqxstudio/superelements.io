@@ -120,7 +120,7 @@ export const McpDialog: React.FC<{ open: boolean; onOpenChange: (open: boolean) 
               <p className="font-medium text-gray-900">Como ligar</p>
               <ul className="mt-1.5 grid list-disc gap-1 pl-5 text-xs text-gray-600 marker:text-gray-400">
                 <li><strong>Claude</strong> (claude.ai ou app): Configurações › Conectores › Adicionar conector personalizado › cole o endereço.</li>
-                <li><strong>ChatGPT</strong>: Configurações › Conectores (modo desenvolvedor) › Criar › cole o endereço, sem autenticação.</li>
+                <li><strong>ChatGPT</strong>: Configurações › Apps e conectores › Configurações avançadas › ligue o Modo desenvolvedor; depois Criar › cole o endereço e, em Autenticação, escolha <strong>Sem autenticação</strong> (a chave já está no endereço; em OAuth o ChatGPT diz que não acha a configuração).</li>
                 <li><strong>Claude Code</strong>: <code>claude mcp add --transport http sinfy &lt;endereço&gt;</code></li>
                 <li><strong>Cursor e outros</strong>: servidor MCP do tipo HTTP (Streamable HTTP) com o endereço.</li>
               </ul>
