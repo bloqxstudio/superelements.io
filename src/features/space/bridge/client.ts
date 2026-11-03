@@ -1224,12 +1224,27 @@ async function creatives(params: { action?: string; teamId?: string; provider?: 
     const link = useCreativeLink.getState()
     return { team: team ? { id: team.id, name: team.name } : null, teams: teams.map((t) => ({ id: t.id, name: t.name })), ai: link.connected && !!link.ia, images: link.providers, chosen: imageProviderChoice() ?? null }
   }
+  // Fecha o conjunto aberto no editor (grava o que estava pendente e sai para a lista), para um
+  // `save` de fora não ser regravado pela cópia antiga que o editor tinha em memória.
+  if (params.action === 'close') {
+    const { useEditor } = await import('@/features/criativos/store')
+    const open = useEditor.getState().set
+    if (open) await useEditor.getState().flush()
+    useEditor.getState().close()
+    navigate('/criativos')
+    await new Promise((r) => setTimeout(r, 800))
+    return { closed: open?.id ?? null, open: useEditor.getState().set?.id ?? null }
+  }
   // Mostra um conjunto na tela desta aba (o cliente e a equipe veem o que o agente faz)
   if (params.action === 'show') {
     if (!params.setId) throw new Error('Informe o conjunto.')
     const q = params.projectId ? `?projeto=${params.projectId}` : ''
-    setTimeout(() => navigate(`/criativos/${params.setId}${q}`), 50)
-    return { opening: params.setId }
+    navigate(`/criativos/${params.setId}${q}`)
+    // Lê de novo do armazenamento (o editor pode ter a cópia de antes em memória)
+    const { useEditor } = await import('@/features/criativos/store')
+    await useEditor.getState().open(params.setId, params.projectId)
+    const loaded = useEditor.getState().set
+    return { opening: params.setId, posts: loaded?.posts.map((p) => p.name) ?? [] }
   }
   const { useEditor } = await import('@/features/criativos/store')
   const state = useEditor.getState()
