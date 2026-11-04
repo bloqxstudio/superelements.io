@@ -638,29 +638,50 @@
         return
       }
       if (picked.day >= days.length) picked.day = 0
-      var day = days[picked.day]
-      if (picked.time && day.times.indexOf(picked.time) < 0) picked.time = null
+      if (picked.time && days[picked.day].times.indexOf(picked.time) < 0) picked.time = null
       wrap.appendChild(el('p', { class: 'cap', text: 'Escolha o dia' }))
       var row = el('div', { class: 'days', role: 'group', 'aria-label': 'Dias disponíveis', style: '--n:' + days.length })
+      var grid = el('div', { class: 'times', role: 'group', 'aria-label': 'Horários disponíveis' })
+      var goLabel = el('span')
+      var go = el('button', { type: 'submit', class: 'go wide' }, [goLabel, busy ? null : icon('check')])
+      // Escolher dia ou horário só troca a seleção e os horários: a tela fica onde está (sem piscar)
+      function syncGo() {
+        go.disabled = !picked.time || busy
+        goLabel.textContent = busy ? 'Confirmando…' : picked.time ? b.confirmLabel + ' · ' + picked.time : b.confirmLabel
+      }
+      function fillTimes() {
+        grid.innerHTML = ''
+        days[picked.day].times.forEach(function (t) {
+          var btn = el('button', { type: 'button', text: t, 'aria-pressed': t === picked.time ? 'true' : 'false', 'data-k': 't' + t })
+          btn.addEventListener('click', function () {
+            picked.time = t
+            ;[].forEach.call(grid.children, function (x) { x.setAttribute('aria-pressed', x === btn ? 'true' : 'false') })
+            syncGo()
+          })
+          grid.appendChild(btn)
+        })
+      }
       days.forEach(function (d, i) {
         var btn = el('button', { type: 'button', 'aria-pressed': i === picked.day ? 'true' : 'false', 'data-k': 'd' + i, 'aria-label': WD_FULL[d.weekday] + ', ' + +d.date.slice(8, 10) + ' de ' + MONTHS[+d.date.slice(5, 7) - 1] }, [
           el('span', { class: 'w', text: WD[d.weekday] }),
           el('span', { class: 'd', text: d.date.slice(8, 10) + ' ' + MONTHS[+d.date.slice(5, 7) - 1] }),
         ])
-        btn.addEventListener('click', function () { picked.day = i; picked.time = null; renderBooking(null, '[data-k="d' + i + '"]') })
+        btn.addEventListener('click', function () {
+          if (picked.day === i) return
+          picked.day = i
+          picked.time = null
+          ;[].forEach.call(row.children, function (x) { x.setAttribute('aria-pressed', x === btn ? 'true' : 'false') })
+          fillTimes()
+          syncGo()
+        })
         row.appendChild(btn)
       })
       wrap.appendChild(row)
       wrap.appendChild(el('p', { class: 'cap' }, [document.createTextNode('Escolha o horário'), el('span', { text: 'Horário de Brasília' })]))
-      var grid = el('div', { class: 'times', role: 'group', 'aria-label': 'Horários disponíveis' })
-      day.times.forEach(function (t) {
-        var btn = el('button', { type: 'button', text: t, 'aria-pressed': t === picked.time ? 'true' : 'false', 'data-k': 't' + t })
-        btn.addEventListener('click', function () { picked.time = t; renderBooking(null, '[data-k="t' + t + '"]') })
-        grid.appendChild(btn)
-      })
+      fillTimes()
       wrap.appendChild(grid)
       if (message) wrap.appendChild(el('p', { class: 'er', role: 'alert', text: message, style: 'margin:0 0 12px' }))
-      var go = el('button', { type: 'submit', class: 'go wide', disabled: !picked.time || busy }, [el('span', { text: busy ? 'Confirmando…' : picked.time ? b.confirmLabel + ' · ' + picked.time : b.confirmLabel }), busy ? null : icon('check')])
+      syncGo()
       var children = [wrap, go]
       if (opts.preview) children.push(el('p', { class: 'pv', text: 'Prévia: os horários seguem a configuração, sem as reservas.' }))
       frame(children)
