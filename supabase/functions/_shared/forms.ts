@@ -103,6 +103,8 @@ export interface FormWelcome {
   valign?: WelcomeVAlign
   /** Posição só do logo; o texto segue à esquerda */
   logoAlign?: 'left' | 'center' | 'right'
+  /** Altura do logo em px (16 a 64); sem o campo, 32 */
+  logoSize?: number
 }
 
 export type WelcomeVAlign = 'top' | 'center' | 'bottom' | 'justify'
@@ -582,6 +584,7 @@ function cleanWelcome(raw: unknown): FormWelcome | undefined {
     buttonLabel: typeof w.buttonLabel === 'string' && w.buttonLabel.trim() ? w.buttonLabel.trim().slice(0, 40) : WELCOME_DEFAULT.buttonLabel,
     valign: w.valign === 'center' || w.valign === 'bottom' || w.valign === 'justify' ? w.valign : 'top',
     logoAlign: w.logoAlign === 'center' || w.logoAlign === 'right' ? w.logoAlign : 'left',
+    logoSize: typeof w.logoSize === 'number' && Number.isFinite(w.logoSize) ? Math.max(16, Math.min(64, Math.round(w.logoSize))) : undefined,
   }
 }
 

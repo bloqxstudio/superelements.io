@@ -573,6 +573,14 @@
       return !first
     }
 
+    // Tela de uma pergunta só, de escolha única, com o avanço sozinho ligado (ou quiz): não precisa do botão
+    function autoStep(step) {
+      if (!step || step.fields.length !== 1) return false
+      var t = step.fields[0].type
+      if (!isPick(t) || t === 'select' || t === 'multi') return false
+      return !!(cfg.settings.autoAdvance || cfg.definition.kind === 'quiz')
+    }
+
     function field(f, step) {
       var id = 'q-' + f.id
       var box = el('div', { class: 'fl' + (f.width === 'half' ? ' half' : ''), 'data-f': f.id, hidden: !visible(f, answers) })
@@ -601,9 +609,13 @@
           firstTouch()
           read(step, root.querySelector('.st'))
           refresh()
-          var single = !multi && step.fields.length === 1
           // Uma pergunta de escolha única por tela avança sozinha (o jeito do quiz)
-          if (single && (cfg.settings.autoAdvance || cfg.definition.kind === 'quiz')) setTimeout(function () { next() }, 220)
+          if (autoStep(step)) setTimeout(function () { next() }, 220)
+        })
+        // Sem o botão de avançar: tocar de novo na opção já marcada (ao voltar) também avança
+        if (autoStep(step)) wrap.addEventListener('click', function (e) {
+          var t = e.target
+          if (t && t.tagName === 'INPUT' && t.type === 'radio' && answers[f.id] === t.value) setTimeout(function () { next() }, 120)
         })
         return box
       }
@@ -668,7 +680,10 @@
     function renderWelcome(focus) {
       var w = cfg.definition.welcome
       // Três partes (logo, texto, botão) numa coluna: o alinhamento escolhe onde elas ficam na altura da tela
-      var logo = w.logoUrl ? el('div', { class: 'wl wl-logo lg-' + (w.logoAlign || 'left') }, [el('img', { class: 'logo', src: w.logoUrl, alt: cfg.name, decoding: 'async' })]) : null
+      // Altura escolhida no editor (16 a 64 px, padrão 32); a largura acompanha, até 5,6× a altura
+      var lh = Math.max(16, Math.min(64, Math.round(Number(w.logoSize) || 32)))
+      var lstyle = lh === 32 ? null : 'height:' + lh + 'px;max-width:min(100%,' + Math.round(lh * 5.6) + 'px)'
+      var logo = w.logoUrl ? el('div', { class: 'wl wl-logo lg-' + (w.logoAlign || 'left') }, [el('img', { class: 'logo', src: w.logoUrl, alt: cfg.name, decoding: 'async', style: lstyle })]) : null
       var box = el('div', { class: 'wl wl-mid' })
       var h = el('h1')
       var hi = w.icon ? icon(w.icon, 'hi') : null
@@ -870,7 +885,9 @@
       if (s.showProgress && steps().length > 1) children.push(bar())
       children.push(wrap)
       children.push(el('div', { class: 'hp', 'aria-hidden': 'true' }, [el('input', { type: 'text', name: 'website', tabindex: '-1', autocomplete: 'off' })]))
-      children.push(el('div', { class: 'row' }, [back, go]))
+      // Escolha que avança sozinha fica sem o botão (só volta a aparecer enquanto envia, no último passo)
+      if (autoStep(step) && !busy) go = null
+      if (back || go) children.push(el('div', { class: 'row' }, [back, go]))
       if (s.footnote) children.push(el('p', { class: 'fn', text: s.footnote }))
       if (opts.preview) children.push(el('p', { class: 'pv', text: opts.test ? 'Modo teste: avança sem preencher. Nada é enviado.' : 'Prévia: nada é enviado.' }))
       frame(children)

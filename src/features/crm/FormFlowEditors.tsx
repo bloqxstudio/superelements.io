@@ -338,6 +338,20 @@ export const WelcomeEditor: React.FC<{ form: Pick<CrmForm, 'id' | 'teamId'>; def
                   { id: 'right', label: 'Direita', icon: AlignRight },
                 ]}
               />
+              <div className="mt-3 flex items-center gap-3">
+                <span className="text-[11px] text-gray-500">Tamanho</span>
+                <input
+                  type="range"
+                  min={16}
+                  max={64}
+                  step={2}
+                  value={w.logoSize ?? 32}
+                  onChange={(e) => set({ logoSize: Number(e.target.value) })}
+                  aria-label="Altura do logo"
+                  className="w-40 accent-violet-600"
+                />
+                <span className="w-12 text-[11px] tabular-nums text-gray-600">{w.logoSize ?? 32} px</span>
+              </div>
             </div>
           )}
         </div>
