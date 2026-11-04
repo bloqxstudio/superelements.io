@@ -22,6 +22,7 @@ import {
   type FormField,
 } from '../_shared/forms.ts'
 import { background, fbcFrom, requestUser, scheduleEvents, sendCapi, submitEvents } from './capi.ts'
+import { markVisit, track } from './track.ts'
 
 /**
  * Formulários e quizzes do CRM (`/crm/formularios`), lado público: o script `forms.js` que roda no
@@ -31,6 +32,7 @@ import { background, fbcFrom, requestUser, scheduleEvents, sendCapi, submitEvent
  *   GET  ?id=<form>[&view=1]  → { id, name, definition, theme, settings } (conta a visualização com `view=1`)
  *   POST (texto ou JSON)      → { id, answers, meta: { page, referrer, utm_*, gclid… }, hp }
  *   POST { action: 'book', id, submission, token, start } → reserva um horário da agenda
+ *   POST { action: 'track', id, visit, kind, screen, step… } → batida da visita (Ao vivo e funil, `track.ts`)
  *
  * Tudo é refeito no servidor (validação, pontuação, faixa do quiz e qualificação). O lead entra pelo
  * mesmo caminho do webhook (`crm_receive_lead`): cliente, oportunidade "Novo lead", origem e aviso.
@@ -38,7 +40,7 @@ import { background, fbcFrom, requestUser, scheduleEvents, sendCapi, submitEvent
  * chave de serviço) que só serve para reservar com aquela resposta.
  */
 
-const VERSION = 2
+const VERSION = 3
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://app.avencestudio.com'
 const MAX_BODY = 64 * 1024
@@ -109,6 +111,7 @@ Deno.serve(async (request) => {
   const id = String(body.id ?? '')
   if (!UUID.test(id)) return json({ error: 'Formulário não encontrado.' }, 404)
   if (body.action === 'book') return book(id, body, request)
+  if (body.action === 'track') return track(admin, id, body, request, json)
   // Campo-isca que só robô preenche: finge sucesso e não grava
   if (typeof body.hp === 'string' && body.hp) return json({ ok: true })
 
@@ -198,6 +201,8 @@ Deno.serve(async (request) => {
     submissionId = saved?.id as string | undefined
   }
 
+  if (submissionId) await markVisit(admin, id, body.visit, { submitted: true, qualified, submission_id: submissionId, screen: 'result', left_at: null })
+
   // Passou no filtro: os horários livres e a chave para reservar vão junto
   let agenda: { token: string; submission: string; days: Awaited<ReturnType<typeof freeDays>> } | undefined
   if (eligible && booking && submissionId) {
@@ -276,6 +281,10 @@ async function book(id: string, body: Record<string, unknown>, request: Request)
     console.error('crm_form_bookings:', error.message)
     return json({ error: 'Não consegui reservar. Tente de novo.' }, 500)
   }
+
+  // A visita que enviou esta resposta vira "agendou" (Ao vivo e funil)
+  const { error: visitError } = await admin.from('crm_form_visits').update({ scheduled: true, screen: 'booked', last_at: new Date().toISOString() }).eq('submission_id', submission)
+  if (visitError) console.error('crm_form_visits:', visitError.message)
 
   const label = dayLabel(at)
   if (sub.opportunity_id) {

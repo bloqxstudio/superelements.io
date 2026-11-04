@@ -7,6 +7,7 @@ import { useCrm } from '@/features/crm/crmStore'
 import { DesignEditor, FormPreview, ResultsEditor, SettingsEditor, StepsEditor, type PreviewScreen } from '@/features/crm/FormBuilder'
 import { BookingEditor, BookingsList, PixelEditor, WelcomeEditor } from '@/features/crm/FormFlowEditors'
 import { EmbedPanel, Submissions } from '@/features/crm/FormPanels'
+import { FormLive } from '@/features/crm/FormLive'
 import { blankDefinition, loadForm, saveForm, setFormSlug, type CrmForm } from '@/features/crm/forms'
 import { PublishControl } from '@/features/crm/FormPublish'
 import { Page, Surface } from '@/features/crm/ui'
@@ -17,7 +18,7 @@ import { cn } from '@/lib/utils'
  * respostas. Salva sozinho (um instante depois da última mudança); a prévia é o forms.js do site.
  */
 
-type Tab = 'inicio' | 'construir' | 'agenda' | 'aparencia' | 'config' | 'pixel' | 'embed' | 'respostas'
+type Tab = 'inicio' | 'construir' | 'agenda' | 'aparencia' | 'config' | 'pixel' | 'embed' | 'aovivo' | 'respostas'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'inicio', label: 'Início' },
   { id: 'construir', label: 'Perguntas' },
@@ -26,6 +27,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'config', label: 'Configurações' },
   { id: 'pixel', label: 'Pixel da Meta' },
   { id: 'embed', label: 'Colocar no site' },
+  { id: 'aovivo', label: 'Ao vivo e funil' },
   { id: 'respostas', label: 'Respostas' },
 ]
 
@@ -274,6 +276,7 @@ const FormEditor: React.FC = () => {
             <EmbedPanel form={{ ...form, ...draft }} />
           </div>
         )}
+        {tab === 'aovivo' && <FormLive form={{ ...form, ...draft }} />}
         {tab === 'respostas' && (
           <div className="max-w-4xl">
             <Submissions form={{ ...form, ...draft }} manager={manager} />

@@ -11,6 +11,9 @@
  * lead ao CRM. Eventos no dataLayer: form_view, form_start, form_step, form_submit, lead_qualificado,
  * lead_nao_qualificado, schedule_view e schedule_confirmed (o visitas.js do Site também os recebe).
  * Sem cookies próprios; a origem (UTM, gclid, fbclid) fica na sessionStorage.
+ * Acompanhamento (CRM › Formulários › Ao vivo): a função recebe a abertura, o começo, cada etapa, a
+ * agenda, um sinal a cada 20 s com a aba à vista e a saída (`action: 'track'`), só a tela e a etapa,
+ * nunca as respostas. `?visitas=off` no endereço deixa de contar este navegador (a equipe).
  *
  * Telas: capa (definition.welcome) → perguntas → fim, ou → agenda (settings.booking, para quem passa
  * no filtro; os horários e a reserva vêm da função) → agradecimento.
@@ -420,6 +423,71 @@
     return svg
   }
 
+  // ---------- acompanhamento da visita (Ao vivo e funil no CRM) ----------
+  function rid() {
+    try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID() } catch (e) {}
+    var h = '0123456789abcdef', out = ''
+    for (var i = 0; i < 36; i++) out += i === 8 || i === 13 || i === 18 || i === 23 ? '-' : i === 14 ? '4' : h[(Math.random() * 16) | 0]
+    return out
+  }
+  function visitorId() {
+    try { var v = localStorage.getItem('avence-visitor'); if (!v) { v = rid(); localStorage.setItem('avence-visitor', v) } return v } catch (e) { return undefined }
+  }
+  // A equipe abre o link com ?visitas=off (o mesmo do visitas.js) e deixa de contar; robôs de captura também não contam
+  function trackOff() {
+    try {
+      var flag = new URLSearchParams(location.search).get('visitas')
+      if (flag === 'off') localStorage.setItem('visitas_off', '1')
+      if (flag === 'on') localStorage.removeItem('visitas_off')
+      return localStorage.getItem('visitas_off') === '1' || !!navigator.webdriver
+    } catch (e) { return !!navigator.webdriver }
+  }
+  function tracker(formId, endpoint, origin) {
+    if (!endpoint || trackOff()) return null
+    var visit = rid(), first = true, last = '', pos = {}, timer = null, gone = false
+    var ms = 0, since = document.visibilityState === 'visible' ? Date.now() : 0
+    var embed = /^\/f\//.test(location.pathname) && /(^|\.)avencestudio\.com$|^localhost$|^127\./.test(location.hostname) ? 'app' : 'site'
+    function active() { return ms + (since ? Date.now() - since : 0) }
+    function pause() { ms = active(); since = 0; clearInterval(timer) }
+    function send(kind, beacon) {
+      var body = { action: 'track', id: formId, visit: visit, kind: kind, ms: active() }
+      for (var k in pos) body[k] = pos[k]
+      if (first) {
+        first = false
+        var tz
+        try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone } catch (e) {}
+        body.first = { visitor: visitorId(), origin: origin, embed: embed, touch: navigator.maxTouchPoints || 0, tz: tz }
+      }
+      var text = JSON.stringify(body)
+      try {
+        if (beacon && navigator.sendBeacon && navigator.sendBeacon(endpoint, new Blob([text], { type: 'text/plain' }))) return
+        fetch(endpoint, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: text, keepalive: true, credentials: 'omit' }).catch(function () {})
+      } catch (e) {}
+    }
+    function beat() { clearInterval(timer); timer = setInterval(function () { if (document.visibilityState === 'visible') send('ping') }, 20000) }
+    document.addEventListener('visibilitychange', function () {
+      if (gone || !last) return
+      if (document.visibilityState === 'visible') { since = Date.now(); send('ping'); beat() }
+      else { pause(); send('leave', true) }
+    })
+    window.addEventListener('pagehide', function () { if (!gone && last) { gone = true; pause(); send('leave', true) } })
+    window.addEventListener('pageshow', function (e) { if (e.persisted && gone) { gone = false; since = Date.now(); send('ping'); beat() } })
+    return {
+      visit: visit,
+      // A pessoa mudou de tela ou de etapa (o primeiro desenho é a abertura)
+      moved: function (p) {
+        var key = p.screen + ':' + (p.step || '')
+        if (key === last) return
+        var kind = last ? (p.screen === 'steps' ? 'step' : 'screen') : 'view'
+        last = key
+        pos = p
+        send(kind)
+        if (kind === 'view') beat()
+      },
+      start: function () { if (last) send('start') },
+    }
+  }
+
   function mount(host, config, opts) {
     opts = opts || {}
     var root = host.shadowRoot || host.attachShadow({ mode: 'open' })
@@ -431,6 +499,7 @@
     var busy = false
     var origin = opts.preview ? {} : tracking()
     var pixel = opts.preview ? null : pixelOf(cfg, host)
+    var tr = opts.preview ? null : tracker(cfg.id, opts.endpoint, origin)
     // Telas: welcome (capa) → steps (perguntas) → result (fim) | booking (agenda) → booked (agradecimento)
     var screen = welcomeOn() ? 'welcome' : 'steps'
     var agenda = null // { token, submission, days }
@@ -449,9 +518,17 @@
       if (opts.preview) return
       track(host, 'form_start', base())
       fb(pixel, names().first, base())
+      if (tr) tr.start()
     }
 
     function steps() { return cfg.definition.steps }
+    // Onde a pessoa está agora (para o acompanhamento): a tela e, nas perguntas, a etapa
+    function where() {
+      var p = { screen: screen === 'steps' && done ? 'result' : screen }
+      var st = p.screen === 'steps' ? steps()[cur] : null
+      if (st) { p.step = st.id; p.index = cur + 1; p.total = steps().length }
+      return p
+    }
     function stepVisible(i) { return steps()[i].fields.some(function (f) { return visible(f, answers) }) }
     function nextIndex(from) { for (var i = from + 1; i < steps().length; i++) if (stepVisible(i)) return i; return -1 }
     function prevIndex(from) { for (var i = from - 1; i >= 0; i--) if (stepVisible(i)) return i; return -1 }
@@ -584,6 +661,7 @@
       root.innerHTML = ''
       root.appendChild(el('style', { text: css(cfg.theme) }))
       root.appendChild(f)
+      if (tr) tr.moved(where())
       return f
     }
 
@@ -839,7 +917,7 @@
       }
       busy = true
       render(false)
-      var body = JSON.stringify({ id: cfg.id, answers: answers, hp: hp ? hp.value : '', meta: metaNow(origin) })
+      var body = JSON.stringify({ id: cfg.id, answers: answers, hp: hp ? hp.value : '', meta: metaNow(origin), visit: tr ? tr.visit : undefined })
       fetch(opts.endpoint, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: body, keepalive: true })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j } }) })
         .then(function (r) {

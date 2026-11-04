@@ -8,6 +8,7 @@ import { Bars, Card, Donut } from '@/features/home/HomeCharts'
 import { FormsTablesError, TEMPLATES, blankDefinition, createForm, deleteForm, listForms, submissionCounts, type CrmForm } from '@/features/crm/forms'
 import { Page, PageHeader, Surface, plural, whenLabel } from '@/features/crm/ui'
 import { THEME_DEFAULT, SETTINGS_DEFAULT } from '@/features/crm/forms'
+import { useLiveCounts } from '@/features/crm/formVisits'
 import { cn } from '@/lib/utils'
 
 /**
@@ -28,6 +29,7 @@ const FormsPage: React.FC = () => {
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState<string>()
   const manager = team?.role === 'owner' || team?.role === 'admin'
+  const live = useLiveCounts(team?.id)
 
   const load = useCallback(async () => {
     if (!team) return
@@ -148,6 +150,11 @@ const FormsPage: React.FC = () => {
                           <span className="truncate text-sm font-semibold text-gray-900">{f.name}</span>
                           <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">{f.kind === 'quiz' ? 'Quiz' : 'Formulário'}</span>
                           <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium', f.status === 'published' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800')}>{f.status === 'published' ? 'Publicado' : 'Rascunho'}</span>
+                          {live[f.id] > 0 && (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700" title="Pessoas com o formulário aberto agora">
+                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none" aria-hidden /> {live[f.id]} agora
+                            </span>
+                          )}
                         </span>
                         <span className="mt-0.5 block text-xs text-gray-500">
                           {plural(c.total, 'resposta', 'respostas')}
