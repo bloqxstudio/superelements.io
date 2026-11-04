@@ -569,7 +569,7 @@ export const SettingsEditor: React.FC<{ settings: FormSettings; kind: 'form' | '
         {wa && (
           <div className="grid gap-3">
             <Text label="Número da equipe (com DDD)" value={wa.number} onChange={(number) => onChange({ ...settings, whatsapp: { ...wa, number } })} placeholder="5551999999999" />
-            <Text label="Mensagem inicial (as respostas vão junto)" value={wa.text} onChange={(text) => onChange({ ...settings, whatsapp: { ...wa, text } })} area />
+            <Text label="Mensagem de abertura (só ela vai; as respostas ficam no CRM)" value={wa.text} onChange={(text) => onChange({ ...settings, whatsapp: { ...wa, text } })} area />
           </div>
         )}
       </Surface>
