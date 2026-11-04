@@ -457,7 +457,8 @@ export function bookingDays(booking: FormBooking, now: Date, taken: Iterable<str
   const earliest = now.getTime() + booking.noticeHours * 3_600_000
   const days: BookingDay[] = []
   const today = localDay(now).date
-  for (let i = 0; i < 21 && days.length < booking.days; i++) {
+  // Nunca no mesmo dia: a equipe prepara o material da reunião, então a agenda começa amanhã
+  for (let i = 1; i <= 21 && days.length < booking.days; i++) {
     const date = new Date(Date.parse(`${today}T12:00:00Z`) + i * 86_400_000).toISOString().slice(0, 10)
     const weekday = new Date(`${date}T12:00:00Z`).getUTCDay()
     const times = freeTimes(booking, weekday, (t) => {

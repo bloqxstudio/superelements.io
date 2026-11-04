@@ -34,17 +34,18 @@ test('intervalos cortados na duração da reunião', () => {
   assert.deepEqual(timesOfDay(b, 3), ['09:00', '10:00', '11:00', '14:00'])
 })
 
-test('próximos dias pulam dia sem atendimento, antecedência e reservados', () => {
+test('próximos dias começam amanhã e pulam dia sem atendimento e reservados', () => {
   // Sexta, 06/11/2026, 10:00 em Brasília
   const now = slotInstant('2026-11-06', '10:00')
   const b = { ...BOOKING_DEFAULT, mode: 'range', days: 3, noticeHours: 2 }
   const taken = [slotInstant('2026-11-09', '09:00').toISOString()]
   const days = bookingDays(b, now, taken)
-  assert.deepEqual(days.map((d) => d.date), ['2026-11-06', '2026-11-09', '2026-11-10'])
-  // Sexta: só a partir de 12:00 (2 h de antecedência), e o intervalo da manhã acaba às 12
-  assert.deepEqual(days[0].times, ['14:00', '15:00', '16:00', '17:00'])
+  // Nunca a própria sexta (preparo da reunião); sábado e domingo sem atendimento
+  assert.deepEqual(days.map((d) => d.date), ['2026-11-09', '2026-11-10', '2026-11-11'])
   // Segunda: o das 9h foi reservado
-  assert.equal(days[1].times[0], '10:00')
+  assert.equal(days[0].times[0], '10:00')
+  // Às 23h de domingo, a segunda já pode (antecedência de 2 h cumprida)
+  assert.equal(bookingDays(b, slotInstant('2026-11-08', '23:00'))[0].date, '2026-11-09')
 })
 
 test('filtro por resposta abre a agenda só para quem marcou as opções', () => {
@@ -88,10 +89,10 @@ test('por prioridade: 2 por turno, manhã do mais tarde, tarde do mais cedo', as
   // Terça, 03/11/2026, 07:00 em Brasília (antes de qualquer horário)
   const now = slotInstant('2026-11-03', '07:00')
   const [first] = bookingDays({ ...B, noticeHours: 0 }, now)
-  assert.equal(first.date, '2026-11-03')
+  assert.equal(first.date, '2026-11-04')
   assert.deepEqual(first.times, ['09:30', '10:30', '13:30', '14:30'])
   // Reservaram 10:30 e 13:30: entram 08:30 e 15:30
-  const taken = [slotInstant('2026-11-03', '10:30'), slotInstant('2026-11-03', '13:30')].map((d) => d.toISOString())
+  const taken = [slotInstant('2026-11-04', '10:30'), slotInstant('2026-11-04', '13:30')].map((d) => d.toISOString())
   assert.deepEqual(bookingDays({ ...B, noticeHours: 0 }, now, taken)[0].times, ['08:30', '09:30', '14:30', '15:30'])
 })
 
@@ -101,7 +102,7 @@ test('dia lotado sai e entra o próximo dia útil (sexta lotada → segunda)', a
   const all = ['08:30', '09:30', '10:30', '13:30', '14:30', '15:30', '16:30', '17:30']
   const fridayFull = all.map((t) => slotInstant('2026-11-06', t).toISOString())
   const days = bookingDays({ ...B, noticeHours: 0, days: 3 }, now, fridayFull)
-  assert.deepEqual(days.map((d) => d.date), ['2026-11-04', '2026-11-05', '2026-11-09'])
+  assert.deepEqual(days.map((d) => d.date), ['2026-11-05', '2026-11-09', '2026-11-10'])
   // Formulário salvo antes de existir o modo: cai na regra por prioridade
   const old = cleanSettings({ booking: { enabled: true, week: { 1: [{ start: '09:00', end: '18:00' }] } } }).booking
   assert.equal(old.mode, 'priority')

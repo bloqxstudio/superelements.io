@@ -361,7 +361,8 @@
   function localDays(b, now) {
     var out = [], earliest = now.getTime() + b.noticeHours * 3600000
     var today = new Date(now.getTime() + OFFSET_MIN * 60000).toISOString().slice(0, 10)
-    for (var i = 0; i < 21 && out.length < b.days; i++) {
+    // Nunca no mesmo dia (preparo da reunião): começa amanhã, como no servidor
+    for (var i = 1; i <= 21 && out.length < b.days; i++) {
       var date = new Date(Date.parse(today + 'T12:00:00Z') + i * 86400000).toISOString().slice(0, 10)
       var wd = new Date(date + 'T12:00:00Z').getUTCDay()
       var times = freeTimes(b, wd, function (t) { return instant(date, t).getTime() >= earliest })

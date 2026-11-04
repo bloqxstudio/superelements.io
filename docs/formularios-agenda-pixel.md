@@ -83,3 +83,5 @@ O git também tem mudanças de outra sessão que não fazem parte deste trabalho
 ## Publicar no app e endereço (2026-11-04)
 
 Botão **Publicar** no topo do editor: escolhe o endereço `app.avencestudio.com/f/<slug>` e devolve o link pronto. Publicado: "No ar", link (clique copia), Ver formulário e o menu ⋯ (endereço e link de campanha, despublicar). Migração `20261104190000_crm_form_slug.sql` (coluna `slug` única + função `crm_form_by_slug`).
+
+A agenda nunca oferece o mesmo dia: começa amanhã (preparo do material da reunião). Regra fixa em `bookingDays` e no `forms.js` (v15).
