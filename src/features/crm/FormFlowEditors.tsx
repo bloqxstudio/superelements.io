@@ -542,7 +542,7 @@ export const BookingEditor: React.FC<{ definition: FormDefinition; settings: For
               </select>
             </div>
           </div>
-          <p className="text-xs text-gray-500">O lead sempre vê os próximos {b.days} dias que têm horário livre. Um dia lotado (ou sem atendimento) sai da lista e o próximo dia de atendimento entra no lugar. Horário de Brasília; um horário reservado sai da lista para os outros.</p>
+          <p className="text-xs text-gray-500">O lead sempre vê os próximos {b.days} dias que têm horário livre, a partir de amanhã (nunca no mesmo dia, para dar tempo de preparar a reunião). Um dia lotado (ou sem atendimento) sai da lista e o próximo dia de atendimento entra no lugar. Horário de Brasília; um horário reservado sai da lista para os outros.</p>
         </div>
       </Surface>
 
