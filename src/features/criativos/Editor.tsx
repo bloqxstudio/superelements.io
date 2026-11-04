@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
 import { LayersPanel } from './LayersPanel'
+import { MotionPanel, downloadMp4 } from './MotionPanel'
+import { videoSupported } from './video'
 import { spreadSelected, unspreadSelected, alignLayers, currentLayers, distributeLayers, duplicateLayers, groupLayers, moveLayers, patchLayerFields, removeLayers, stackLayers, ungroupLayers, type AlignHow } from './layerOps'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -450,13 +452,18 @@ export const CreativeEditor: React.FC = () => {
   const live = useLive((s) => s.live)
   const sharedId = set?.shared ? set.id : undefined
   const sharedProject = set?.projectId
-  const [panel, setPanel] = useState<'ia' | 'props' | 'layers'>('ia')
+  const [panel, setPanel] = useState<'ia' | 'props' | 'layers' | 'motion'>('ia')
   const [gridOpen, setGridOpen] = useState(false)
   const refFocus = useRefs((r) => r.focus)
   const layerIds = useEditor((s) => s.layerIds)
   useEffect(() => {
     if (refFocus) setPanel('ia')
   }, [refFocus])
+  // Vindo do item Motion do menu: abre direto na aba Motion
+  const motionParam = query.get('motion')
+  useEffect(() => {
+    if (motionParam) setPanel('motion')
+  }, [motionParam])
   const grid = gridOf(post)
   const setGrid = (patch: Partial<PostGrid>) => editPost((p) => ({ ...p, grid: { ...gridOf(p), ...patch } }))
   const upload = useRef<HTMLInputElement>(null)
@@ -707,6 +714,7 @@ export const CreativeEditor: React.FC = () => {
                 <Button variant="outline" className="w-full justify-start bg-white" onClick={() => void exportFiles('slide', exportType)}>Este slide</Button>
                 <Button variant="outline" className="w-full justify-start bg-white" onClick={() => void exportFiles('post', exportType)} disabled={(post?.slides.length ?? 0) < 2}>Post inteiro (ZIP · {post?.slides.length} slides)</Button>
                 <Button variant="outline" className="w-full justify-start bg-white" onClick={() => void exportFiles('set', exportType)}>Conjunto todo (ZIP)</Button>
+                <Button variant="outline" className="w-full justify-start gap-1.5 bg-white" disabled={!post || !videoSupported()} onClick={() => { setMenu(null); setPanel('motion'); if (post) { const id = toast.loading('Gerando o vídeo…'); void downloadMp4(post, (p) => toast.loading(`Gerando o vídeo… ${Math.round(p * 100)}%`, { id })).then(() => toast.success('Vídeo baixado.', { id }), (err) => toast.error(err instanceof Error ? err.message : 'Não consegui gerar o vídeo.', { id })) } }}><Clapperboard className="h-4 w-4" /> Vídeo MP4 deste post</Button>
                 <p className="text-[11px] leading-snug text-gray-500">{sizeOf(format).width}×{sizeOf(format).height}px, no tamanho do Instagram.</p>
               </div>
             )}
@@ -791,6 +799,7 @@ export const CreativeEditor: React.FC = () => {
             </div>
 
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => upload.current?.click()}><ImagePlus className="h-4 w-4" /> Imagem</Button>
+            <Button variant="ghost" size="sm" className={cn('h-8 gap-1.5', panel === 'motion' && 'bg-violet-50 text-violet-800')} title="Animar este post e baixar o vídeo MP4" onClick={() => setPanel(panel === 'motion' ? 'ia' : 'motion')}><Clapperboard className="h-4 w-4" /> Motion</Button>
             <input ref={upload} type="file" accept="image/*" className="hidden" onChange={(e) => void sendLayerImage(e.target.files?.[0])} />
             <label className="ml-auto flex items-center gap-2 text-xs text-gray-500">
               Fundo
@@ -805,15 +814,15 @@ export const CreativeEditor: React.FC = () => {
           {view === 'canvas' ? <Board onlyPostId={onlyPost && set?.posts.some((p) => p.id === onlyPost) ? onlyPost : undefined} onAddSlide={addSlideTo} onDownloadSlide={() => void exportFiles('slide', exportType)} onDuplicateSlide={duplicateSlide} onDeleteSlide={deleteSlide} /> : <Stage />}
         </main>
 
-        <aside className="hidden w-80 shrink-0 flex-col border-l bg-white lg:flex" onClick={(e) => e.stopPropagation()}>
+        <aside className={cn('w-80 shrink-0 flex-col border-l bg-white lg:flex', panel === 'motion' ? 'flex' : 'hidden')} onClick={(e) => e.stopPropagation()}>
           <div className="flex h-10 shrink-0 border-b" role="tablist">
-            {([['ia', 'IA', Sparkles], ['layers', 'Camadas', LayersIcon], ['props', 'Propriedades', SlidersHorizontal]] as const).map(([id, label, Icon]) => (
+            {([['ia', 'IA', Sparkles], ['layers', 'Camadas', LayersIcon], ['props', 'Ajustes', SlidersHorizontal], ['motion', 'Motion', Clapperboard]] as const).map(([id, label, Icon]) => (
               <button key={id} type="button" role="tab" aria-selected={panel === id} onClick={() => setPanel(id)} className={cn('flex flex-1 items-center justify-center gap-1.5 border-b-2 text-xs font-semibold', panel === id ? 'border-violet-600 text-violet-800' : 'border-transparent text-gray-500 hover:text-gray-800')}>
                 <Icon className="h-3.5 w-3.5" /> {label}
               </button>
             ))}
           </div>
-          {panel === 'ia' ? <div className="min-h-0 flex-1"><AiChat available={ai} /></div> : panel === 'layers' ? <div className="min-h-0 flex-1"><LayersPanel /></div> : <div className="min-h-0 flex-1 overflow-y-auto p-3" data-scroll>
+          {panel === 'ia' ? <div className="min-h-0 flex-1"><AiChat available={ai} /></div> : panel === 'motion' ? <div className="min-h-0 flex-1 overflow-y-auto p-3" data-scroll><MotionPanel /></div> : panel === 'layers' ? <div className="min-h-0 flex-1"><LayersPanel /></div> : <div className="min-h-0 flex-1 overflow-y-auto p-3" data-scroll>
           {layerIds.length > 1 ? (
             <MultiInspector ids={layerIds} />
           ) : layer ? (

@@ -1,5 +1,5 @@
 import { AV_CASES } from '@/features/avence/cases'
-import type { EditOp, LayerFields, SlideDef } from './edit'
+import { MOTION_FX_IDS, MOTION_TRANSITION_IDS, type EditOp, type LayerFields, type PostMotionDef, type SlideDef } from './edit'
 import { LIBRARY } from './library'
 import { alpha } from './color'
 import { paletteOf } from './brand'
@@ -7,7 +7,7 @@ import { spreadLayer } from './spanOps'
 import { reformat } from './store'
 import { measureText, widestLine } from './render'
 import { buildSlide } from './templates'
-import { parseFormat, sizeOf, uid, type CreativeSet, type FormatId, type Layer, type Post, type Slide } from './types'
+import { parseFormat, sizeOf, uid, type CreativeSet, type FormatId, type Layer, type LayerMotion, type MotionFx, type MotionTransition, type Post, type PostMotion, type Slide } from './types'
 
 /**
  * Aplica o que a IA devolveu. Cada operação é conferida contra o conjunto
@@ -15,7 +15,7 @@ import { parseFormat, sizeOf, uid, type CreativeSet, type FormatId, type Layer, 
  * passa é pulado e contado, o resto vira uma única mudança desfazível.
  */
 
-const COMMON = ['name', 'x', 'y', 'w', 'h', 'opacity', 'rotation'] as const
+const COMMON = ['name', 'x', 'y', 'w', 'h', 'opacity', 'rotation', 'motion'] as const
 const BY_TYPE: Record<Layer['type'], readonly string[]> = {
   text: ['text', 'font', 'weight', 'size', 'color', 'align', 'lineHeight', 'letterSpacing', 'upper', 'emphasis', 'emphasisColor'],
   image: ['src', 'fit', 'radius', 'frame', 'focusY', 'prompt'],
@@ -36,13 +36,43 @@ const STRINGS = new Set(['name', 'text', 'font', 'src', 'prompt'])
 
 const clamp = (n: number, [lo, hi]: [number, number]) => Math.min(hi, Math.max(lo, n))
 
+const num = (v: unknown, range: [number, number], fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, range) : fallback)
+
+/** Entrada da camada no vídeo; `null` tira a animação, `undefined` é um pedido que não se lê. */
+function motionOf(value: unknown): LayerMotion | null | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const v = value as Record<string, unknown>
+  if (v.fx === 'none') return null
+  if (!(MOTION_FX_IDS as readonly unknown[]).includes(v.fx)) return undefined
+  return { fx: v.fx as MotionFx, start: num(v.start, [0, 20], 0.3), dur: num(v.dur, [0.1, 5], 0.6), ...(v.count === true ? { count: true } : {}) }
+}
+
+/** `motion: null` (a IA pediu para tirar) não fica guardado na camada. */
+function withoutNullMotion(layer: Layer): Layer {
+  if (layer.motion !== null) return layer
+  const { motion: _drop, ...rest } = layer
+  return rest as Layer
+}
+
+function postMotionOf(def: PostMotionDef | undefined, base: PostMotion | undefined): PostMotion | undefined {
+  if (!def || typeof def !== 'object') return undefined
+  const next: PostMotion = { ...base }
+  if ((MOTION_TRANSITION_IDS as readonly unknown[]).includes(def.transition)) next.transition = def.transition as MotionTransition
+  if (typeof def.transitionDur === 'number' && Number.isFinite(def.transitionDur)) next.transitionDur = clamp(def.transitionDur, [0.1, 1.2])
+  if (typeof def.slideDur === 'number' && Number.isFinite(def.slideDur)) next.slideDur = def.slideDur > 0 ? clamp(def.slideDur, [1, 20]) : undefined
+  return next
+}
+
 /** Só o que a camada daquele tipo aceita, com valores dentro do que o editor desenha. */
 function clean(type: Layer['type'], fields: LayerFields | undefined, set: CreativeSet, base?: Layer): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   const allowed = new Set<string>([...COMMON, ...BY_TYPE[type]])
   for (const [key, value] of Object.entries(fields ?? {})) {
     if (!allowed.has(key) || value === undefined || value === null) continue
-    if (key in NUMBERS) {
+    if (key === 'motion') {
+      const m = motionOf(value)
+      if (m !== undefined) out.motion = m
+    } else if (key in NUMBERS) {
       if (typeof value === 'number' && Number.isFinite(value)) out[key] = clamp(value, NUMBERS[key])
     } else if (COLORS.has(key)) {
       if (typeof value === 'string' && COLOR.test(value.trim())) out[key] = value.trim()
@@ -85,7 +115,7 @@ const NAMES: Record<Layer['type'], string> = { text: 'Texto', image: 'Imagem', r
 function makeLayer(fields: LayerFields | undefined, set: CreativeSet): Layer | undefined {
   const type = fields?.type
   if (!type || !(type in BY_TYPE)) return undefined
-  return { id: uid(), type, name: NAMES[type], x: 84, y: 200, ...DEFAULTS[type](set), ...clean(type, fields, set) } as Layer
+  return withoutNullMotion({ id: uid(), type, name: NAMES[type], x: 84, y: 200, ...DEFAULTS[type](set), ...clean(type, fields, set) } as Layer)
 }
 
 /**
@@ -166,6 +196,7 @@ export function applyOps(start: CreativeSet, ops: EditOp[], defaults?: { postId?
         const format = parseFormat(def?.format ?? op.format)
         const name = def?.name ?? op.name
         const caption = def?.caption ?? op.caption
+        const motion = postMotionOf(op.motion, post.motion)
         // `post.slides` refaz o post inteiro: os slides de hoje saem e entram os novos, no formato do post
         const target = format ?? post.format
         const slides = def?.slides?.length ? def.slides.flatMap((d) => makeSlide(d, set, target) ?? []) : undefined
@@ -175,7 +206,7 @@ export function applyOps(start: CreativeSet, ops: EditOp[], defaults?: { postId?
             if (p.id !== post.id) return p
             let next: Post = format && format !== p.format ? reformat(p, format) : p
             if (slides?.length) next = { ...next, slides }
-            return { ...next, ...(name ? { name: name.slice(0, 120) } : {}), ...(caption !== undefined ? { caption: caption.slice(0, 2200) } : {}) }
+            return { ...next, ...(name ? { name: name.slice(0, 120) } : {}), ...(caption !== undefined ? { caption: caption.slice(0, 2200) } : {}), ...(motion ? { motion } : {}) }
           }),
         }
         if (slides?.length) {
@@ -272,7 +303,7 @@ export function applyOps(start: CreativeSet, ops: EditOp[], defaults?: { postId?
       if (op.op === 'update_layer') {
         const fields = clean(layer.type, op.layer, set, layer)
         if (!Object.keys(fields).length) return skipped.push(`${label}: nada para mudar`)
-        mapSlide(slide.id, (s) => ({ ...s, layers: s.layers.map((l) => (l.id === layer.id ? ({ ...l, ...fields } as Layer) : l)) }))
+        mapSlide(slide.id, (s) => ({ ...s, layers: s.layers.map((l) => (l.id === layer.id ? withoutNullMotion({ ...l, ...fields } as Layer) : l)) }))
         return void applied++
       }
       skipped.push(`${label}: operação desconhecida`)

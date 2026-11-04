@@ -83,6 +83,7 @@ const compactPosts = (posts: Post[], focus: { postId?: string; slideId?: string;
     width: sizeOf(p.format).width,
     height: sizeOf(p.format).height,
     caption: p.caption,
+    ...(p.motion ? { motion: p.motion } : {}),
     slides: p.slides.map((s) => {
       const full = p.id === focus.postId && (focus.scope === 'post' || focus.scope === 'set' || s.id === focus.slideId)
       return { id: s.id, background: s.background, layers: full ? s.layers : s.layers.map(slimLayer) }

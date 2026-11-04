@@ -70,6 +70,32 @@ interface LayerBase {
    * card na faixa; mudar uma cópia muda as outras.
    */
   span?: { id: string; index: number }
+  /** Como a camada entra no vídeo (aba Motion). Sem isto, ela já está na tela desde o começo. */
+  motion?: LayerMotion
+}
+
+/** Efeitos de entrada do motion (`motion.ts` desenha cada um). */
+export type MotionFx = 'fade' | 'rise' | 'drop' | 'left' | 'right' | 'pop' | 'zoom' | 'wipe' | 'wipe-up' | 'ken' | 'pulse'
+
+export interface LayerMotion {
+  fx: MotionFx
+  /** Segundos desde o começo do slide. */
+  start: number
+  /** Segundos da entrada. */
+  dur: number
+  /** Texto com número: conta de 0 até ele durante a entrada. */
+  count?: boolean
+}
+
+/** Transição de um slide para o próximo no vídeo do post. */
+export type MotionTransition = 'cut' | 'fade' | 'push' | 'zoom'
+
+export interface PostMotion {
+  /** Segundos de cada slide; 0 ou ausente = o tempo das entradas mais uma pausa para ler. */
+  slideDur?: number
+  transition?: MotionTransition
+  /** Segundos da transição. */
+  transitionDur?: number
 }
 
 export type TextAlign = 'left' | 'center' | 'right'
@@ -160,6 +186,8 @@ export interface Post {
   caption?: string
   /** Marcado como aprovado (é o padrão a seguir; o resto pode ser excluído). */
   approved?: boolean
+  /** Ritmo do vídeo do post (aba Motion). */
+  motion?: PostMotion
 }
 
 export interface SetBrand {

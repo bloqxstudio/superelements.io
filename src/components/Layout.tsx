@@ -64,7 +64,7 @@ const Layout: React.FC = () => {
   const { pathname, search } = useLocation();
   // Aberto numa prévia (iframe da tela Agentes): só o conteúdo, sem o menu
   const embedded = new URLSearchParams(search).get('embed') === '1';
-  const editorRoute = /^\/(copy|criativos)\/[^/]+/.test(pathname);
+  const editorRoute = /^\/(copy|criativos|motion)\/[^/]+/.test(pathname);
   const [open, setOpen] = useState(false);
   // Menu lateral recolhido (só ícones), lembrado neste navegador
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem(COLLAPSED_KEY) === '1' } catch { return false } });

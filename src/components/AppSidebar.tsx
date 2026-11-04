@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { navigationMatches } from '@/features/navigation/workspace'
 import { Link, NavLink } from 'react-router-dom'
-import { Activity, Bot, Building2, CalendarDays, Filter, Target, House, Building, FolderKanban, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
+import { Activity, Bot, Building2, CalendarDays, Filter, Target, House, Building, FolderKanban, Globe, ListChecks, Images, Clapperboard, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { PersonAvatar } from '@/features/profile/PersonAvatar'
 import { useAuth } from '@/contexts/AuthContext'
@@ -206,6 +206,7 @@ const ResultsNav: React.FC<{ on: (id: ModuleId) => boolean }> = ({ on }) => (
         {on('copy') && <Item to="/plano" icon={Target} label="Plano da empresa" />}
         {on('copy') && <Item to="/conteudos" icon={CalendarDays} label="Conteúdos" />}
         {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" />}
+        {on('criativos') && <Item to="/motion" icon={Clapperboard} label="Motion" />}
         {on('instagram') && <InstagramItem />}
         {on('copy') && <Item to="/copy" icon={PenLine} label="Textos" />}
       </Section>
@@ -235,6 +236,7 @@ const BuilderNav: React.FC<{ on: (id: ModuleId) => boolean; teams: number }> = (
         {teams > 0 && on('copy') && <Item to="/conteudos" icon={CalendarDays} label="Conteúdos" />}
         {on('copy') && <Item to="/copy" icon={PenLine} label="Textos" />}
         {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" />}
+        {on('criativos') && <Item to="/motion" icon={Clapperboard} label="Motion" />}
       </Section>
     )}
     <ExtraItems product="builder" on={on} />
@@ -307,6 +309,7 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
             {on('agentes') && <AgentsItem />}
             {on('copy') && <Item to="/copy" icon={PenLine} label="Textos" />}
             {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" />}
+            {on('criativos') && <Item to="/motion" icon={Clapperboard} label="Motion" />}
             {on('skills') && <Item to="/skills" icon={Wand2} label="Instruções de IA" />}
           </Section>
         )}

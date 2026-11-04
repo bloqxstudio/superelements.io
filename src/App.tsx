@@ -19,8 +19,10 @@ import AgentWorker from "@/pages/AgentWorker";
 import Prospects from "@/pages/Prospects";
 import Skills from "@/pages/Skills";
 import Creatives from "@/pages/Creatives";
+import Motion from "@/pages/Motion";
 import Copy from "@/pages/Copy";
 import { CreativeEditor } from "@/features/criativos/Editor";
+import { MotionStudio } from "@/features/criativos/MotionStudio";
 import { CopyEditorPage } from "@/features/copy/CopyEditorPage";
 import WordPressCallback from "@/pages/WordPressCallback";
 import PageApproval from "@/pages/PageApproval";
@@ -143,6 +145,8 @@ function App() {
                 <Route path="copy" element={<Copy />} />
                 <Route path="copy/:docId" element={<CopyEditorPage />} />
                 <Route path="criativos" element={<Creatives />} />
+                <Route path="motion" element={<Motion />} />
+                <Route path="motion/:setId" element={<MotionStudio />} />
                 <Route path="criativos/:setId" element={<CreativeEditor />} />
                 {/* CRM da equipe: funil, clientes, equipe e convites; só para quem é de uma equipe */}
                 <Route path="plano" element={<CrmGate><CrmPlan /></CrmGate>} />

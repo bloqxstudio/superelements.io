@@ -47,6 +47,20 @@ export interface LayerFields {
   strokeWidth?: number
   gap?: number
   dot?: number
+  /** Entrada no vídeo (aba Motion); `fx: "none"` tira a animação da camada. */
+  motion?: { fx: (typeof MOTION_FX_IDS)[number] | 'none'; start?: number; dur?: number; count?: boolean }
+}
+
+/** Efeitos de entrada e transições do motion (os mesmos de `types.ts`). */
+export const MOTION_FX_IDS = ['fade', 'rise', 'drop', 'left', 'right', 'pop', 'zoom', 'wipe', 'wipe-up', 'ken', 'pulse'] as const
+export const MOTION_TRANSITION_IDS = ['push', 'fade', 'zoom', 'cut'] as const
+
+/** update_post: ritmo do vídeo do post. */
+export interface PostMotionDef {
+  transition?: (typeof MOTION_TRANSITION_IDS)[number]
+  transitionDur?: number
+  /** Segundos por slide; 0 = automático. */
+  slideDur?: number
 }
 
 /** Um slide por camadas (sem modelo): o fundo e as camadas, de baixo para cima. */
@@ -83,6 +97,8 @@ export interface EditOp {
   format?: string
   /** add_slide: slide por camadas, no lugar de `spec`. */
   slide?: SlideDef
+  /** update_post: ritmo do vídeo (transição e tempo de cada slide). */
+  motion?: PostMotionDef
   /** add_post */
   post?: PostDef
 }
@@ -164,6 +180,12 @@ const layerProps = {
   strokeWidth: { type: 'number' },
   gap: { type: 'number' },
   dot: { type: 'number' },
+  motion: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['fx'],
+    properties: { fx: { type: 'string', enum: [...MOTION_FX_IDS, 'none'] }, start: { type: 'number' }, dur: { type: 'number' }, count: { type: 'boolean' } },
+  },
 } as const
 
 const specSchema = {
@@ -226,6 +248,11 @@ export const EDIT_SCHEMA = {
           direction: { type: 'string', enum: ['front', 'back', 'up', 'down'] },
           name: { type: 'string' },
           caption: { type: 'string' },
+          motion: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { transition: { type: 'string', enum: [...MOTION_TRANSITION_IDS] }, transitionDur: { type: 'number' }, slideDur: { type: 'number' } },
+          },
         },
       },
     },
