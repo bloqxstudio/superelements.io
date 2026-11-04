@@ -77,13 +77,16 @@ const FormsPage: React.FC = () => {
             <h2 id="novo" className="mb-3 text-sm font-semibold text-gray-900">
               Criar
             </h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
               {TEMPLATES.map((t) => (
                 <button
                   key={t.id}
                   type="button"
                   disabled={!!busy}
-                  onClick={() => void create(t.name, t.definition(), { ...SETTINGS_DEFAULT, ...t.settings }, t.id, t.theme)}
+                  onClick={() => {
+                    const built = t.build?.()
+                    void create(t.name, built?.definition ?? t.definition(), { ...SETTINGS_DEFAULT, ...(built?.settings ?? t.settings) }, t.id, t.theme)
+                  }}
                   className="group rounded-2xl bg-white p-4 text-left shadow-[0_0_0_1px_rgb(0_0_0/0.05),0_1px_2px_rgb(0_0_0/0.04),0_10px_28px_-14px_rgb(0_0_0/0.14)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_16px_36px_-14px_rgb(0_0_0/0.22)] active:scale-[0.97] disabled:opacity-60"
                 >
                   <span className="mb-3 flex h-24 flex-col justify-end gap-1.5 rounded-xl p-3" style={{ background: `linear-gradient(150deg, ${tint(t.id)[0]}, ${tint(t.id)[1]})` }} aria-hidden>

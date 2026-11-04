@@ -1,7 +1,27 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { alertText, campaignSnapshot, leadOrigin, type AdReports } from '../lead-webhook/origin.ts'
 import { hasContact, parseLead } from '../lead-webhook/parse.ts'
-import { checkAnswers, cleanDefinition, cleanSettings, cleanTheme, resultFor, scoreOf, summaryOf, allFields, answerText, type FormField } from '../_shared/forms.ts'
+import {
+  WEEKDAYS,
+  allFields,
+  answerText,
+  bookingDays,
+  bookingEligible,
+  checkAnswers,
+  cleanDefinition,
+  cleanSettings,
+  cleanTheme,
+  localDay,
+  localTime,
+  resultFor,
+  scoreOf,
+  slotInstant,
+  summaryOf,
+  type Answers,
+  type FormBooking,
+  type FormField,
+} from '../_shared/forms.ts'
+import { background, fbcFrom, requestUser, scheduleEvents, sendCapi, submitEvents } from './capi.ts'
 
 /**
  * Formulários e quizzes do CRM (`/crm/formularios`), lado público: o script `forms.js` que roda no
@@ -10,12 +30,15 @@ import { checkAnswers, cleanDefinition, cleanSettings, cleanTheme, resultFor, sc
  *
  *   GET  ?id=<form>[&view=1]  → { id, name, definition, theme, settings } (conta a visualização com `view=1`)
  *   POST (texto ou JSON)      → { id, answers, meta: { page, referrer, utm_*, gclid… }, hp }
+ *   POST { action: 'book', id, submission, token, start } → reserva um horário da agenda
  *
  * Tudo é refeito no servidor (validação, pontuação, faixa do quiz e qualificação). O lead entra pelo
  * mesmo caminho do webhook (`crm_receive_lead`): cliente, oportunidade "Novo lead", origem e aviso.
+ * Quem passa no filtro da agenda recebe junto os horários livres e um `token` (HMAC da resposta com a
+ * chave de serviço) que só serve para reservar com aquela resposta.
  */
 
-const VERSION = 1
+const VERSION = 2
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://app.avencestudio.com'
 const MAX_BODY = 64 * 1024
@@ -30,6 +53,24 @@ const sha = async (text: string) => {
 }
 
 const META_KEYS = ['page', 'referrer', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_id', 'gclid', 'gbraid', 'wbraid', 'fbclid', 'campaign_id', 'adset_id', 'ad_id', 'placement']
+
+const SECRET = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const bookingToken = async (submissionId: string) => {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`form-booking:${submissionId}`))
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 40)
+}
+
+/** Horários livres da agenda do formulário agora (sem os reservados). */
+async function freeDays(formId: string, booking: FormBooking) {
+  const { data } = await admin.from('crm_form_bookings').select('starts_at').eq('form_id', formId).eq('status', 'confirmado').gte('starts_at', new Date().toISOString())
+  return bookingDays(booking, new Date(), (data ?? []).map((r) => r.starts_at as string))
+}
+
+const dayLabel = (at: Date) => {
+  const { date, weekday } = localDay(at)
+  return `${WEEKDAYS[weekday]}, ${date.slice(8, 10)}/${date.slice(5, 7)} às ${localTime(at)}`
+}
 
 /** A conta está ativa e com o módulo Formulários ligado? (a página pública também para) */
 async function formsOn(teamId: string): Promise<boolean> {
@@ -67,6 +108,7 @@ Deno.serve(async (request) => {
   }
   const id = String(body.id ?? '')
   if (!UUID.test(id)) return json({ error: 'Formulário não encontrado.' }, 404)
+  if (body.action === 'book') return book(id, body, request)
   // Campo-isca que só robô preenche: finge sucesso e não grava
   if (typeof body.hp === 'string' && body.hp) return json({ ok: true })
 
@@ -97,7 +139,11 @@ Deno.serve(async (request) => {
 
   const score = definition.kind === 'quiz' ? scoreOf(definition, answers) : null
   const result = score === null ? undefined : resultFor(definition, score)
-  const qualified = definition.kind === 'quiz' ? Boolean(result?.qualified) : null
+  const quizQualified = definition.kind === 'quiz' ? Boolean(result?.qualified) : null
+  const booking = settings.booking
+  const eligible = bookingEligible(definition, booking, answers, quizQualified)
+  // Num formulário comum com filtro por resposta, o filtro é a qualificação (a Meta só recebe Lead de quem passa)
+  const qualified = quizQualified ?? (booking?.enabled && booking.gate.mode === 'answer' ? eligible : null)
 
   // O cartão do lead mostra a mensagem escrita e, abaixo, as respostas do quiz ou formulário
   const lines = extra.map((row) => `${row.label}: ${row.value}`)
@@ -110,7 +156,10 @@ Deno.serve(async (request) => {
   const { data: reports } = await admin.from('crm_ad_reports').select('preset, data, fetched_at').eq('team_id', teamId)
   const campaign = campaignSnapshot((reports ?? []) as AdReports, lead)
   const hash = await sha([id, lead.email, lead.phone, JSON.stringify(answers)].join('|'))
-  const origin = { ...leadOrigin(lead, campaign, hash), form: form.name as string, formId: id, ...(score !== null ? { score, result: result?.title, qualified } : {}) }
+  // `meta`: o que a API de Conversões precisa para mandar o ganho de volta quando o card fechar
+  const cookies = metaCookies(meta)
+  const metaMatch = settings.pixel?.id ? { pixel: settings.pixel.id, fbp: cookies.fbp, fbc: cookies.fbc, url: cookies.url } : undefined
+  const origin = { ...leadOrigin(lead, campaign, hash), form: form.name as string, formId: id, ...(metaMatch ? { meta: metaMatch } : {}), ...(score !== null ? { score, result: result?.title, qualified } : {}) }
 
   const { count } = await admin.from('crm_whatsapp_client_contacts').select('phone', { count: 'exact', head: true }).eq('account_id', teamId).eq('leads', true).eq('enabled', true)
   const { count: groupCount } = await admin.from('crm_whatsapp_groups').select('jid', { count: 'exact', head: true }).eq('leads_account_id', teamId)
@@ -123,8 +172,14 @@ Deno.serve(async (request) => {
   }
   const got = received as { opportunityId?: string; clientId?: string; duplicate?: boolean }
 
+  let submissionId: string | undefined
+  if (got.duplicate && got.opportunityId) {
+    // Reenvio: a resposta de antes continua valendo (inclusive para a agenda)
+    const { data: before } = await admin.from('crm_form_submissions').select('id').eq('form_id', id).eq('opportunity_id', got.opportunityId).order('created_at', { ascending: false }).limit(1)
+    submissionId = before?.[0]?.id as string | undefined
+  }
   if (!got.duplicate) {
-    const { error: saveError } = await admin.from('crm_form_submissions').insert({
+    const { data: saved, error: saveError } = await admin.from('crm_form_submissions').insert({
       form_id: id,
       team_id: teamId,
       answers,
@@ -138,8 +193,22 @@ Deno.serve(async (request) => {
       client_id: got.clientId ?? null,
       opportunity_id: got.opportunityId ?? null,
       origin,
-    })
+    }).select('id').single()
     if (saveError) console.error('crm_form_submissions:', saveError.message)
+    submissionId = saved?.id as string | undefined
+  }
+
+  // Passou no filtro: os horários livres e a chave para reservar vão junto
+  let agenda: { token: string; submission: string; days: Awaited<ReturnType<typeof freeDays>> } | undefined
+  if (eligible && booking && submissionId) {
+    const { count: booked } = await admin.from('crm_form_bookings').select('id', { count: 'exact', head: true }).eq('submission_id', submissionId).eq('status', 'confirmado')
+    if (!booked) agenda = { token: await bookingToken(submissionId), submission: submissionId, days: await freeDays(id, booking) }
+  }
+
+  // Pixel pelo servidor: os mesmos ids do navegador, a Meta junta os dois (reenvio duplicado não dispara de novo)
+  if (settings.pixel && submissionId && !got.duplicate) {
+    const data = { form_id: id, form_name: form.name as string, content_name: form.name as string, ...(score !== null ? { score } : {}), qualified }
+    await background(sendCapi(admin, id, settings.pixel, submitEvents(settings.pixel, submissionId, qualified, data), { email: lead.email, phone: lead.phone, name: lead.name, ...cookies, ...requestUser(request) }))
   }
 
   const wa = settings.whatsapp
@@ -151,7 +220,93 @@ Deno.serve(async (request) => {
     qualified,
     score,
     result: result ? { title: result.title, text: result.text, ctaLabel: result.ctaLabel, ctaUrl: result.ctaUrl } : undefined,
-    redirectUrl: settings.redirectUrl,
+    // Com agenda, o redirecionamento e o WhatsApp esperam a reserva (a tela de agradecimento é a da agenda)
+    redirectUrl: agenda ? undefined : settings.redirectUrl,
     whatsappUrl,
+    submissionId,
+    booking: agenda,
   })
 })
+
+/** Reserva um horário: confere a chave da resposta, o filtro e se o horário ainda está livre. */
+/** Cookies da Meta e a página, que o `forms.js` manda em `meta` (para a API de Conversões). */
+const metaCookies = (meta: Record<string, unknown>) => {
+  const str = (v: unknown) => (typeof v === 'string' && v ? v.slice(0, 300) : undefined)
+  return { fbp: str(meta.fbp), fbc: str(meta.fbc) ?? fbcFrom(str(meta.fbclid)), url: str(meta.url) ?? str(meta.page) }
+}
+
+async function book(id: string, body: Record<string, unknown>, request: Request) {
+  const submission = String(body.submission ?? '')
+  const token = String(body.token ?? '')
+  const start = String(body.start ?? '')
+  if (!UUID.test(submission) || !token || Number.isNaN(Date.parse(start))) return json({ error: 'Pedido de agendamento inválido.' }, 400)
+  if (token !== (await bookingToken(submission))) return json({ error: 'Pedido de agendamento inválido.' }, 403)
+
+  const { data: form } = await admin.from('crm_forms').select('id, team_id, name, status, definition, settings').eq('id', id).maybeSingle()
+  if (!form || form.status !== 'published' || !(await formsOn(form.team_id as string))) return json({ error: 'Formulário não encontrado.' }, 404)
+  const definition = cleanDefinition(form.definition)
+  const booking = cleanSettings(form.settings).booking
+  if (!booking?.enabled) return json({ error: 'A agenda deste formulário está fechada.' }, 409)
+
+  const { data: sub } = await admin.from('crm_form_submissions').select('id, form_id, answers, qualified, name, phone, email, client_id, opportunity_id').eq('id', submission).maybeSingle()
+  if (!sub || sub.form_id !== id) return json({ error: 'Resposta não encontrada.' }, 404)
+  // O filtro vale na hora de reservar também (a configuração pode ter mudado)
+  if (!bookingEligible(definition, booking, (sub.answers ?? {}) as Answers, definition.kind === 'quiz' ? (sub.qualified as boolean | null) : null)) {
+    return json({ error: 'Esta resposta não abre a agenda.' }, 403)
+  }
+
+  const days = await freeDays(id, booking)
+  const at = new Date(start)
+  const valid = days.some((d) => d.times.some((t) => slotInstant(d.date, t).getTime() === at.getTime()))
+  if (!valid) return json({ error: 'Este horário acabou de ser reservado. Escolha outro.', days }, 409)
+
+  const ends = new Date(at.getTime() + booking.durationMin * 60_000)
+  const { data: row, error } = await admin
+    .from('crm_form_bookings')
+    .insert({ form_id: id, team_id: form.team_id, submission_id: submission, client_id: sub.client_id, opportunity_id: sub.opportunity_id, starts_at: at.toISOString(), ends_at: ends.toISOString(), name: sub.name, phone: sub.phone, email: sub.email })
+    .select('id')
+    .single()
+  if (error) {
+    // Índice único: alguém pegou o horário no mesmo instante, ou esta resposta já reservou
+    if (error.code === '23505') {
+      const { count } = await admin.from('crm_form_bookings').select('id', { count: 'exact', head: true }).eq('submission_id', submission).eq('status', 'confirmado')
+      if (count) return json({ error: 'Você já tem uma reunião marcada.' }, 409)
+      return json({ error: 'Este horário acabou de ser reservado. Escolha outro.', days: await freeDays(id, booking) }, 409)
+    }
+    console.error('crm_form_bookings:', error.message)
+    return json({ error: 'Não consegui reservar. Tente de novo.' }, 500)
+  }
+
+  const label = dayLabel(at)
+  if (sub.opportunity_id) {
+    const { date } = localDay(at)
+    await admin.from('crm_opportunities').update({ next_step: `Reunião agendada: ${label}`, next_date: date }).eq('id', sub.opportunity_id)
+    if (sub.client_id) {
+      await admin.from('crm_activities').insert({ client_id: sub.client_id, opportunity_id: sub.opportunity_id, kind: 'meeting', body: `${booking.meetingName} agendada pelo formulário "${form.name}": ${label} (${booking.durationMin} min)`, data: { booking: row.id, starts_at: at.toISOString(), form: id } })
+    }
+  }
+
+  // O aviso sai pela mesma fila dos leads novos (o grupo da conta no WhatsApp)
+  const teamId = form.team_id as string
+  const { count: people } = await admin.from('crm_whatsapp_client_contacts').select('phone', { count: 'exact', head: true }).eq('account_id', teamId).eq('leads', true).eq('enabled', true)
+  const { count: groups } = await admin.from('crm_whatsapp_groups').select('jid', { count: 'exact', head: true }).eq('leads_account_id', teamId)
+  if (people || groups) {
+    const phone = typeof sub.phone === 'string' ? sub.phone.replace(/^55(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3') : ''
+    const lines = ['*📅 Reunião agendada*', '', `*${sub.name ?? 'Sem nome'}*`]
+    if (phone) lines.push(`📱 ${phone}`)
+    if (sub.email) lines.push(`✉️ ${sub.email}`)
+    lines.push('', `🗓️ ${label} (${booking.durationMin} min)`, `📝 ${booking.meetingName} · ${form.name}`)
+    if (sub.opportunity_id) lines.push('', `Abrir no CRM: ${APP_URL}/crm?oportunidade=${sub.opportunity_id}`)
+    const { error: alertError } = await admin.from('crm_lead_alerts').insert({ team_id: teamId, opportunity_id: sub.opportunity_id, text: lines.join('\n') })
+    if (alertError) console.error('crm_lead_alerts:', alertError.message)
+  }
+
+  const pixel = cleanSettings(form.settings).pixel
+  if (pixel) {
+    const meta = body.meta && typeof body.meta === 'object' ? (body.meta as Record<string, unknown>) : {}
+    const data = { form_id: id, form_name: form.name, content_name: booking.meetingName, starts_at: at.toISOString() }
+    await background(sendCapi(admin, id, pixel, scheduleEvents(pixel, row.id as string, data), { email: sub.email ?? undefined, phone: sub.phone ?? undefined, name: sub.name ?? undefined, ...metaCookies(meta), ...requestUser(request) }))
+  }
+
+  return json({ ok: true, bookingId: row.id, start: at.toISOString(), label })
+}

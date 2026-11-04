@@ -5,6 +5,7 @@ import { Switch } from '@/components/ui/switch'
 import { FIELD, Surface } from '@/features/crm/ui'
 import {
   FIELD_TYPES,
+  FONTS,
   allFields,
   hasOptions,
   newId,
@@ -41,18 +42,20 @@ const typeLabel = (type: FieldType) => FIELD_TYPES.find((t) => t.type === type)?
 
 // ---------- prévia ----------
 
-declare global {
-  interface Window {
-    AvenceForms?: { mount: (host: HTMLElement, config: unknown, opts?: { preview?: boolean; endpoint?: string }) => { update: (config: unknown) => void; destroy: () => void } }
-  }
-}
+export type PreviewScreen = 'welcome' | 'steps' | 'booking' | 'booked' | 'done'
+
+type Handle = { update: (config: unknown) => void; destroy: () => void; show?: (screen: PreviewScreen) => void; setTest?: (on: boolean) => void }
+
+// O mesmo `window.AvenceForms` que a página pública declara (lá só com `scan`): aqui lido com o tipo completo
+type Renderer = { mount: (host: HTMLElement, config: unknown, opts?: { preview?: boolean; endpoint?: string; test?: boolean }) => Handle }
+const renderer = () => (window as unknown as { AvenceForms?: Renderer }).AvenceForms
 
 let scriptPromise: Promise<void> | null = null
 const loadRenderer = () =>
   (scriptPromise ??= new Promise<void>((resolve, reject) => {
-    if (window.AvenceForms) return resolve()
+    if (renderer()) return resolve()
     const script = document.createElement('script')
-    script.src = '/forms.js'
+    script.src = `/forms.js?v=${Date.now().toString(36)}`
     script.onload = () => resolve()
     script.onerror = () => {
       scriptPromise = null
@@ -61,9 +64,9 @@ const loadRenderer = () =>
     document.head.appendChild(script)
   }))
 
-export const FormPreview: React.FC<{ id: string; name: string; definition: FormDefinition; theme: FormTheme; settings: FormSettings; dark?: boolean }> = ({ id, name, definition, theme, settings, dark }) => {
+export const FormPreview: React.FC<{ id: string; name: string; definition: FormDefinition; theme: FormTheme; settings: FormSettings; dark?: boolean; screen?: PreviewScreen; screenNonce?: number; phone?: boolean; test?: boolean }> = ({ id, name, definition, theme, settings, dark, screen, screenNonce, phone, test }) => {
   const host = useRef<HTMLDivElement>(null)
-  const handle = useRef<{ update: (c: unknown) => void; destroy: () => void }>()
+  const handle = useRef<Handle>()
   const [failed, setFailed] = useState(false)
   const config = { id, name, definition, theme, settings }
 
@@ -72,8 +75,10 @@ export const FormPreview: React.FC<{ id: string; name: string; definition: FormD
     const node = host.current
     loadRenderer()
       .then(() => {
-        if (!live || !node || !window.AvenceForms) return
-        handle.current = window.AvenceForms.mount(node, config, { preview: true })
+        const forms = renderer()
+        if (!live || !node || !forms) return
+        handle.current = forms.mount(node, config, { preview: true, test })
+        if (screen) handle.current.show?.(screen)
       })
       .catch(() => live && setFailed(true))
     return () => {
@@ -91,7 +96,29 @@ export const FormPreview: React.FC<{ id: string; name: string; definition: FormD
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(config)])
 
+  useEffect(() => {
+    if (screen) handle.current?.show?.(screen)
+  }, [screen, screenNonce])
+
+  useEffect(() => {
+    handle.current?.setTest?.(!!test)
+  }, [test])
+
   if (failed) return <p className="text-sm text-rose-700">Não consegui carregar a prévia (public/forms.js).</p>
+  if (phone) {
+    // Celular de 390 px (o que a maioria vê vindo do anúncio), com a página no fundo do tema
+    return (
+      <div className={cn('flex justify-center rounded-xl p-5', dark ? 'bg-zinc-900' : 'bg-zinc-100')}>
+        <div className="w-[390px] max-w-full rounded-[44px] bg-zinc-900 p-[10px] shadow-[0_24px_48px_-20px_rgb(0_0_0/0.45)]">
+          <div className="relative h-[740px] max-h-[75vh] overflow-y-auto rounded-[34px] px-5 pb-8 pt-12" style={{ background: theme.frame === 'plain' ? theme.background : dark ? '#09090b' : '#f4f4f5' }}>
+            <span className="absolute left-1/2 top-3 h-6 w-24 -translate-x-1/2 rounded-full bg-zinc-900" aria-hidden />
+            {/* A altura útil da tela (740 px menos os respiros de cima e de baixo): a capa usa para o alinhamento vertical */}
+            <div ref={host} className="[--avence-form-min-h:calc(min(740px,75vh)-80px)]" />
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className={cn('rounded-xl p-5 md:p-8', dark ? 'bg-zinc-900' : 'bg-zinc-100')}>
       <div className="mx-auto max-w-[520px]">
@@ -104,19 +131,22 @@ export const FormPreview: React.FC<{ id: string; name: string; definition: FormD
 // ---------- campo ----------
 
 const OptionsEditor: React.FC<{ field: FormField; quiz: boolean; onChange: (options: FieldOption[]) => void }> = ({ field, quiz, onChange }) => {
-  const options = optionsOf(field)
-  const fixed = field.type === 'yesno' || field.type === 'rating'
+  const yesno = field.type === 'yesno'
+  // Sim ou não: o texto vem do que foi escrito (vazio mostra o padrão como exemplo, e vale "Sim" / "Não")
+  const options = yesno && field.options?.length === 2 ? field.options : optionsOf(field)
+  const fixed = field.type === 'rating'
   const set = (i: number, patch: Partial<FieldOption>) => onChange(options.map((o, j) => (j === i ? { ...o, ...patch } : o)))
+  const custom = yesno && field.options?.length === 2 && field.options.some((o, i) => o.label.trim() && o.label.trim() !== ['Sim', 'Não'][i])
   return (
     <div>
-      <span className={LABEL}>{fixed ? 'Pontos por resposta' : 'Opções'}</span>
+      <span className={LABEL}>{fixed ? 'Pontos por resposta' : yesno ? 'Respostas (sempre duas)' : 'Opções'}</span>
       <ul className="grid gap-1.5">
         {options.map((o, i) => (
           <li key={o.id} className="flex items-center gap-1.5">
             {fixed ? (
               <span className="w-24 truncate text-sm text-gray-700">{o.label}</span>
             ) : (
-              <input className={cn(INPUT, 'min-w-0 flex-1')} value={o.label} placeholder={`Opção ${i + 1}`} onChange={(e) => set(i, { label: e.target.value })} aria-label={`Texto da opção ${i + 1}`} />
+              <input className={cn(INPUT, 'min-w-0 flex-1')} value={o.label} placeholder={yesno ? ['Sim', 'Não'][i] : `Opção ${i + 1}`} onChange={(e) => set(i, { label: e.target.value })} aria-label={yesno ? `Texto da resposta ${['Sim', 'Não'][i]}` : `Texto da opção ${i + 1}`} />
             )}
             {quiz && (
               <label className="flex shrink-0 items-center gap-1 text-xs text-gray-500">
@@ -124,7 +154,7 @@ const OptionsEditor: React.FC<{ field: FormField; quiz: boolean; onChange: (opti
                 <input type="number" className={cn(INPUT, 'w-16 px-2 tabular-nums')} value={o.score ?? ''} placeholder="0" onChange={(e) => set(i, { score: e.target.value === '' ? undefined : Number(e.target.value) })} aria-label={`Pontos da opção ${o.label || i + 1}`} />
               </label>
             )}
-            {!fixed && (
+            {!fixed && !yesno && (
               <button type="button" onClick={() => onChange(options.filter((_, j) => j !== i))} className="rounded p-1.5 text-gray-400 hover:bg-zinc-100 hover:text-rose-600" aria-label={`Tirar a opção ${i + 1}`}>
                 <X className="h-4 w-4" />
               </button>
@@ -132,10 +162,20 @@ const OptionsEditor: React.FC<{ field: FormField; quiz: boolean; onChange: (opti
           </li>
         ))}
       </ul>
-      {!fixed && (
+      {!fixed && !yesno && (
         <button type="button" onClick={() => onChange([...options, { id: newId('o'), label: '' }])} className="mt-2 text-sm font-medium text-violet-700 hover:underline">
           + Opção
         </button>
+      )}
+      {yesno && (
+        <p className="mt-1.5 text-[11px] text-gray-500">
+          Escreva a resposta do seu jeito (ex.: "Sim! Estou pronto para levar o meu negócio para o próximo nível") ou deixe "Sim" e "Não".{' '}
+          {custom && (
+            <button type="button" onClick={() => onChange(options.map((o, i) => ({ ...o, label: ['Sim', 'Não'][i] })))} className="font-medium text-violet-700 hover:underline">
+              Voltar a Sim / Não
+            </button>
+          )}
+        </p>
       )}
     </div>
   )
@@ -284,7 +324,8 @@ export const StepsEditor: React.FC<{ definition: FormDefinition; onChange: (defi
           <Surface key={step.id} className="!p-0 overflow-hidden">
             <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2">
               <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-gray-600">Etapa {si + 1}</span>
-              <input className={cn(INPUT, 'min-w-0 flex-1 border-transparent bg-transparent font-medium hover:border-gray-200')} value={step.title ?? ''} placeholder={quiz ? 'Título da pergunta (aparece na tela)' : 'Título da etapa (opcional)'} onChange={(e) => setStep(step.id, { title: e.target.value || undefined })} aria-label={`Título da etapa ${si + 1}`} />
+              {/* Enter quebra a linha no título (sai assim na tela); a caixa cresce com o texto */}
+              <textarea rows={1} className={cn(FIELD, 'min-h-9 min-w-0 flex-1 resize-none border-transparent bg-transparent py-2 font-medium leading-snug [field-sizing:content] hover:border-gray-200')} value={step.title ?? ''} placeholder={quiz ? 'Título da pergunta (aparece na tela)' : 'Título da etapa (opcional)'} onChange={(e) => setStep(step.id, { title: e.target.value || undefined })} aria-label={`Título da etapa ${si + 1}`} />
               <button type="button" disabled={si === 0} onClick={() => onChange({ ...definition, steps: move(definition.steps, si, si - 1) })} className="rounded p-1.5 text-gray-400 hover:bg-zinc-100 hover:text-gray-700 disabled:opacity-30" aria-label="Subir a etapa">
                 <ArrowUp className="h-4 w-4" />
               </button>
@@ -306,6 +347,14 @@ export const StepsEditor: React.FC<{ definition: FormDefinition; onChange: (defi
                 <input className={cn(INPUT, 'border-transparent bg-transparent text-gray-600 hover:border-gray-200')} value={step.description ?? ''} placeholder="Descrição (opcional)" onChange={(e) => setStep(step.id, { description: e.target.value || undefined })} aria-label={`Descrição da etapa ${si + 1}`} />
               </div>
             ) : null}
+            <div className="grid gap-2 px-3 pt-2">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <Switch checked={step.note !== undefined} onCheckedChange={(on) => setStep(step.id, { note: on ? '' : undefined })} aria-label={`Observação da etapa ${si + 1}`} /> Observação <span className="text-xs text-gray-400">texto leve entre a pergunta e as opções</span>
+              </label>
+              {step.note !== undefined && (
+                <textarea rows={2} className={cn(FIELD, 'min-h-[56px] py-2 text-gray-500')} value={step.note} placeholder="Esse investimento não inclui o valor da nossa mão de obra." onChange={(e) => setStep(step.id, { note: e.target.value })} aria-label={`Texto da observação da etapa ${si + 1}`} />
+              )}
+            </div>
             <ul className="grid gap-2 p-3">
               {step.fields.map((field, fi) => {
                 const expanded = open === field.id
@@ -444,9 +493,11 @@ export const DesignEditor: React.FC<{ theme: FormTheme; onChange: (theme: FormTh
       <label className="flex items-center justify-between gap-3 text-sm text-gray-700">
         Fonte
         <select className={cn(INPUT, 'w-auto')} value={theme.font} onChange={(e) => onChange({ ...theme, font: e.target.value as FormTheme['font'] })}>
-          <option value="inherit">A do site (recomendado)</option>
-          <option value="Inter">Inter</option>
-          <option value="system">Do sistema</option>
+          {FONTS.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.id === 'inherit' ? 'A do site' : f.label}
+            </option>
+          ))}
         </select>
       </label>
       <label className="flex items-center justify-between gap-3 text-sm text-gray-700">

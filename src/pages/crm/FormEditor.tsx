@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, Loader2, Moon, Sun } from 'lucide-react'
+import { ArrowLeft, Check, Loader2, Monitor, Moon, Smartphone, Sun } from 'lucide-react'
 import { toast } from 'sonner'
 import { Switch } from '@/components/ui/switch'
 import { useCrm } from '@/features/crm/crmStore'
-import { DesignEditor, FormPreview, ResultsEditor, SettingsEditor, StepsEditor } from '@/features/crm/FormBuilder'
+import { DesignEditor, FormPreview, ResultsEditor, SettingsEditor, StepsEditor, type PreviewScreen } from '@/features/crm/FormBuilder'
+import { BookingEditor, BookingsList, PixelEditor, WelcomeEditor } from '@/features/crm/FormFlowEditors'
 import { EmbedPanel, Submissions } from '@/features/crm/FormPanels'
-import { blankDefinition, loadForm, saveForm, type CrmForm } from '@/features/crm/forms'
+import { blankDefinition, loadForm, saveForm, setFormSlug, type CrmForm } from '@/features/crm/forms'
+import { PublishControl } from '@/features/crm/FormPublish'
 import { Page, Surface } from '@/features/crm/ui'
 import { cn } from '@/lib/utils'
 
@@ -15,13 +17,27 @@ import { cn } from '@/lib/utils'
  * respostas. Salva sozinho (um instante depois da última mudança); a prévia é o forms.js do site.
  */
 
-type Tab = 'construir' | 'aparencia' | 'config' | 'embed' | 'respostas'
+type Tab = 'inicio' | 'construir' | 'agenda' | 'aparencia' | 'config' | 'pixel' | 'embed' | 'respostas'
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'construir', label: 'Construir' },
+  { id: 'inicio', label: 'Início' },
+  { id: 'construir', label: 'Perguntas' },
+  { id: 'agenda', label: 'Agenda' },
   { id: 'aparencia', label: 'Aparência' },
   { id: 'config', label: 'Configurações' },
+  { id: 'pixel', label: 'Pixel da Meta' },
   { id: 'embed', label: 'Colocar no site' },
   { id: 'respostas', label: 'Respostas' },
+]
+
+/** Abas com a prévia ao lado e a tela que cada uma mostra primeiro. */
+const PREVIEW_OF: Partial<Record<Tab, PreviewScreen>> = { inicio: 'welcome', construir: 'steps', agenda: 'booking', aparencia: 'welcome', config: 'done' }
+
+const SCREENS: { id: PreviewScreen; label: string }[] = [
+  { id: 'welcome', label: 'Início' },
+  { id: 'steps', label: 'Perguntas' },
+  { id: 'booking', label: 'Agenda' },
+  { id: 'booked', label: 'Agendado' },
+  { id: 'done', label: 'Final' },
 ]
 
 type Draft = Pick<CrmForm, 'id' | 'teamId' | 'name' | 'status' | 'definition' | 'theme' | 'settings'>
@@ -33,9 +49,22 @@ const FormEditor: React.FC = () => {
   const manager = team?.role === 'owner' || team?.role === 'admin'
   const [form, setForm] = useState<CrmForm | null | undefined>(undefined)
   const [draft, setDraft] = useState<Draft>()
-  const [tab, setTab] = useState<Tab>('construir')
+  const [tab, setTabRaw] = useState<Tab>('construir')
   const [saving, setSaving] = useState<'idle' | 'dirty' | 'saving' | 'saved'>('idle')
   const [dark, setDark] = useState(false)
+  const [phone, setPhone] = useState(true)
+  // Modo teste da prévia: avança sem preencher (lembrado neste navegador)
+  const [test, setTestRaw] = useState(() => { try { return localStorage.getItem('forms-preview-test') === '1' } catch { return false } })
+  const setTest = (on: boolean) => { setTestRaw(on); try { localStorage.setItem('forms-preview-test', on ? '1' : '0') } catch { /* sem armazenamento */ } }
+  const [shot, setShot] = useState<{ id: PreviewScreen; n: number }>({ id: 'steps', n: 0 })
+  const screen = shot.id
+  // Clicar na mesma tela de novo também volta a ela (a pessoa pode ter avançado na prévia)
+  const setScreen = (id: PreviewScreen) => setShot((s) => ({ id, n: s.n + 1 }))
+  const setTab = (t: Tab) => {
+    setTabRaw(t)
+    const s = PREVIEW_OF[t]
+    if (s) setScreen(s)
+  }
   const timer = useRef<ReturnType<typeof setTimeout>>()
   const latest = useRef<Draft>()
 
@@ -84,6 +113,30 @@ const FormEditor: React.FC = () => {
     timer.current = setTimeout(() => void flush(), 900)
   }
 
+  /** Publicar (ou trocar o endereço): grava o endereço, depois o formulário publicado, na hora. */
+  const publish = async (slug: string) => {
+    const current = latest.current ?? draft
+    if (!current) return
+    if (slug !== form?.slug) {
+      await setFormSlug(current.id, slug)
+      setForm((f) => (f ? { ...f, slug } : f))
+    }
+    if (current.status === 'published') return
+    const next = { ...current, status: 'published' as const }
+    clearTimeout(timer.current)
+    timer.current = undefined
+    latest.current = next
+    setDraft(next)
+    setSaving('saving')
+    try {
+      await saveForm(next)
+      setSaving('saved')
+    } catch (e) {
+      setSaving('dirty')
+      throw e
+    }
+  }
+
   // Sair da tela com mudança pendente salva antes
   useEffect(
     () => () => {
@@ -119,7 +172,10 @@ const FormEditor: React.FC = () => {
   }
 
   const quiz = draft.definition.kind === 'quiz'
-  const preview = <FormPreview id={draft.id} name={draft.name} definition={draft.definition} theme={draft.theme} settings={draft.settings} dark={dark} />
+  const hasWelcome = !!draft.definition.welcome?.enabled
+  const hasBooking = !!draft.settings.booking?.enabled
+  const screens = SCREENS.filter((s) => (s.id === 'welcome' ? hasWelcome : s.id === 'booking' || s.id === 'booked' ? hasBooking : true))
+  const preview = <FormPreview key={phone ? 'phone' : 'desk'} id={draft.id} name={draft.name} definition={draft.definition} theme={draft.theme} settings={draft.settings} dark={dark} screen={screen} screenNonce={shot.n} phone={phone} test={test} />
 
   return (
     <Page wide>
@@ -138,10 +194,7 @@ const FormEditor: React.FC = () => {
           {saving === 'saved' && (<><Check className="h-3.5 w-3.5 text-emerald-600" /> Salvo</>)}
           {saving === 'dirty' && 'Alterações pendentes…'}
         </span>
-        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-          <Switch checked={draft.status === 'published'} onCheckedChange={(on) => change({ status: on ? 'published' : 'draft' })} />
-          {draft.status === 'published' ? 'Publicado' : 'Rascunho'}
-        </label>
+        <PublishControl form={{ ...form, ...draft }} onPublish={publish} onUnpublish={() => change({ status: 'draft' })} />
       </div>
 
       <div role="tablist" aria-label="Seções do formulário" className="se-tabs mt-5 flex gap-1 overflow-x-auto border-b border-gray-200">
@@ -159,9 +212,16 @@ const FormEditor: React.FC = () => {
       </div>
 
       <div className="mt-6">
-        {(tab === 'construir' || tab === 'aparencia' || tab === 'config') && (
+        {PREVIEW_OF[tab] && (
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)]">
             <div className="grid gap-4">
+              {tab === 'inicio' && <WelcomeEditor form={draft} definition={draft.definition} onChange={(definition) => change({ definition })} />}
+              {tab === 'agenda' && (
+                <>
+                  <BookingEditor definition={draft.definition} settings={draft.settings} onChange={(settings) => change({ settings })} />
+                  {draft.settings.booking && <BookingsList form={{ ...form, ...draft }} manager={manager} />}
+                </>
+              )}
               {tab === 'construir' && (
                 <>
                   <StepsEditor definition={draft.definition} onChange={(definition) => change({ definition })} />
@@ -179,14 +239,34 @@ const FormEditor: React.FC = () => {
               )}
             </div>
             <div className="lg:sticky lg:top-4">
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Prévia ao vivo</span>
-                <button type="button" onClick={() => setDark((d) => !d)} className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-gray-600 hover:bg-zinc-100" aria-pressed={dark}>
-                  {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />} Fundo {dark ? 'claro' : 'escuro'}
-                </button>
+                <span className="flex items-center gap-1">
+                  <label className="mr-1 flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-gray-600 hover:bg-zinc-100" title="Avança as etapas sem preencher os campos (só nesta prévia)">
+                    <Switch checked={test} onCheckedChange={setTest} className="scale-75" aria-label="Modo teste" /> Modo teste
+                  </label>
+                  <button type="button" onClick={() => setPhone((p) => !p)} className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-gray-600 hover:bg-zinc-100" aria-pressed={phone}>
+                    {phone ? <Monitor className="h-3.5 w-3.5" /> : <Smartphone className="h-3.5 w-3.5" />} {phone ? 'Computador' : 'Celular'}
+                  </button>
+                  <button type="button" onClick={() => setDark((d) => !d)} className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-gray-600 hover:bg-zinc-100" aria-pressed={dark}>
+                    {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />} Fundo {dark ? 'claro' : 'escuro'}
+                  </button>
+                </span>
+              </div>
+              <div role="tablist" aria-label="Tela da prévia" className="mb-2 flex flex-wrap gap-1 rounded-lg bg-zinc-100 p-1 text-xs">
+                {screens.map((s) => (
+                  <button key={s.id} type="button" role="tab" aria-selected={screen === s.id} onClick={() => setScreen(s.id)} className={cn('flex-1 rounded-md px-2 py-1 font-medium', screen === s.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900')}>
+                    {s.label}
+                  </button>
+                ))}
               </div>
               {preview}
             </div>
+          </div>
+        )}
+        {tab === 'pixel' && (
+          <div className="max-w-3xl">
+            <PixelEditor form={{ ...form, ...draft }} settings={draft.settings} manager={manager} onChange={(settings) => change({ settings })} />
           </div>
         )}
         {tab === 'embed' && (
