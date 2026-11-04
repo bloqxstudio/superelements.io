@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AtSign, Check, ClipboardPaste, Copy, CopyPlus, Download, GripVertical, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
+import { AtSign, Check, ClipboardPaste, Copy, CopyPlus, Download, GripVertical, Instagram, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { agentInfo, PHASE_LABEL, useAgent } from './agentStore'
@@ -188,9 +188,11 @@ interface Props {
   onDeleteSlide: (postId: string, slideId: string) => void
   /** Mostra só este post (a entrega que alguém abriu), não o conjunto todo. */
   onlyPostId?: string
+  /** Abre a publicação deste post no Instagram. */
+  onPublish?: (postId: string) => void
 }
 
-export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicateSlide, onDeleteSlide, onlyPostId }) => {
+export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicateSlide, onDeleteSlide, onlyPostId, onPublish }) => {
   const set = useEditor((s) => s.set)!
   const images = useEditor((s) => s.images)
   const postId = useEditor((s) => s.postId)
@@ -678,6 +680,18 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
             >
               <Copy style={{ width: 32, height: 32 }} />
             </button>
+            {onPublish && (
+              <button
+                type="button"
+                data-ui
+                onClick={() => { useEditor.getState().selectPost(row.postId); onPublish(row.postId) }}
+                title="Publicar este post no Instagram da conta (feed, carrossel, reels ou story)"
+                className="absolute flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-fuchsia-600 to-orange-500 font-semibold text-white hover:from-fuchsia-700 hover:to-orange-600"
+                style={{ left: Math.min(row.width - 60, 1180) + 152, top: row.y + 8, height: HEAD - 26, padding: '0 22px', fontSize: 26 }}
+              >
+                <Instagram style={{ width: 30, height: 30 }} /> Publicar
+              </button>
+            )}
             {row.slides.map((p) => (
               <div key={p.slideId} className="absolute bg-white" style={{ left: p.x, top: p.y, width: p.w, height: p.h, boxShadow: p.slideId === slideId || (rowSelected && p.postId === postId) ? `0 0 0 ${3 * inv}px #8b5cf6` : `0 0 0 ${1 * inv}px rgb(0 0 0 / 0.14), 0 ${16 * inv}px ${40 * inv}px -${12 * inv}px rgb(0 0 0 / 0.25)` }}>
                 {visible.has(p.slideId) ? (

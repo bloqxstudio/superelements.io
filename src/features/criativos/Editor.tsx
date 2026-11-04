@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Instagram, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
 import { LayersPanel } from './LayersPanel'
 import { MotionPanel, downloadMp4 } from './MotionPanel'
 import { videoSupported } from './video'
 import { copySelection, pasteClip } from './slideOps'
+import { PublishPost } from './MotionPublish'
 import { spreadSelected, unspreadSelected, alignLayers, currentLayers, distributeLayers, duplicateLayers, groupLayers, moveLayers, patchLayerFields, removeLayers, stackLayers, ungroupLayers, type AlignHow } from './layerOps'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -441,6 +442,8 @@ export const CreativeEditor: React.FC = () => {
   const canRedo = useEditor((s) => s.future.length > 0)
   const [exportType, setExportType] = useState<ExportType>('png')
   const [menu, setMenu] = useState<'add' | 'export' | 'slide' | null>(null)
+  /** O post aberto na publicação para o Instagram. */
+  const [publishing, setPublishing] = useState<string | null>(null)
   const ai = useAiAvailable()
   const [aiOpen, setAiOpen] = useState(false)
   const [view, setView] = useState<'canvas' | 'slide'>('canvas')
@@ -721,6 +724,9 @@ export const CreativeEditor: React.FC = () => {
             <Sparkles className="h-4 w-4 text-violet-600" /> IA
           </Button>
           <FormatField value={format} onChange={(f) => editPost((p) => reformat(p, f))} />
+          <Button variant="outline" size="sm" className="gap-1.5 bg-white" disabled={!post} title="Publicar o post escolhido no Instagram da conta" onClick={() => post && setPublishing(post.id)}>
+            <Instagram className="h-4 w-4 text-fuchsia-600" /> Publicar
+          </Button>
           <div className="relative">
             <Button size="sm" className="gap-1.5" onClick={() => setMenu(menu === 'export' ? null : 'export')}><Download className="h-4 w-4" /> Baixar</Button>
             {menu === 'export' && (
@@ -830,7 +836,11 @@ export const CreativeEditor: React.FC = () => {
               <button type="button" onClick={() => { const next = new URLSearchParams(query); next.delete('post'); setQuery(next, { replace: true }) }} className="pointer-events-auto rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white shadow-lg hover:bg-gray-700">Mostrando só este post · Ver todos</button>
             </div>
           )}
-          {view === 'canvas' ? <Board onlyPostId={onlyPost && set?.posts.some((p) => p.id === onlyPost) ? onlyPost : undefined} onAddSlide={addSlideTo} onDownloadSlide={() => void exportFiles('slide', exportType)} onDuplicateSlide={duplicateSlide} onDeleteSlide={deleteSlide} /> : <Stage />}
+          {view === 'canvas' ? <Board onlyPostId={onlyPost && set?.posts.some((p) => p.id === onlyPost) ? onlyPost : undefined} onAddSlide={addSlideTo} onDownloadSlide={() => void exportFiles('slide', exportType)} onDuplicateSlide={duplicateSlide} onDeleteSlide={deleteSlide} onPublish={setPublishing} /> : <Stage />}
+          {(() => {
+            const target = publishing ? set.posts.find((p) => p.id === publishing) : undefined
+            return target ? <PublishPost key={target.id} post={target} open onClose={() => setPublishing(null)} /> : null
+          })()}
         </main>
 
         <aside className={cn('w-80 shrink-0 flex-col border-l bg-white lg:flex', panel === 'motion' ? 'flex' : 'hidden')} onClick={(e) => e.stopPropagation()}>

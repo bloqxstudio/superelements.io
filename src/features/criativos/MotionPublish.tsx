@@ -8,19 +8,22 @@ import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { crmContext, useCrm } from '@/features/crm/crmStore'
 import { moduleOn } from '@/features/crm/modules'
-import { FEED_RATIO, loadAccounts, prepareImage, prepareVideo, publishPost, type IgAccount, type Prepared, type PublishStep } from '@/features/crm/instagram'
+import { FEED_RATIO, feedRatio, loadAccounts, prepareImage, prepareVideo, publishPost, type IgAccount, type Prepared, type PublishStep } from '@/features/crm/instagram'
 import { insertStories } from '@/features/crm/stories'
 import { approveStory } from '@/features/crm/storyPipeline'
 import type { StoryIdea } from '@/features/crm/storyPlan'
 import { useEditor } from './store'
-import { postOutput, slideAsPost, slideDuration, slideHasMotion, timeline } from './motion'
-import { audioFor, postToCarousel, postToMp4 } from './video'
+import { hasMotion, postOutput, slideAsPost, slideDuration, slideHasMotion, timeline } from './motion'
+import { slideToBlob } from './render'
+import { audioFor, postToCarousel, postToMp4, videoSupported } from './video'
 import { sizeOf, type Post } from './types'
 
 /**
- * Publicar o motion no Instagram da conta, direto do estúdio: gera o MP4 aqui,
- * e publica agora (reels ou story) ou entra na fila programada dos stories,
- * que o servidor publica no horário mesmo com este computador desligado.
+ * Publicar um post do Criativos no Instagram da conta, direto do editor, do
+ * canvas ou do estúdio de motion: feed (foto, carrossel de fotos ou carrossel
+ * misto com os slides animados em vídeo), reels (post animado) ou story. Gera
+ * aqui as imagens e o MP4 e publica agora; reels e story também entram na fila
+ * programada, que o servidor publica no horário mesmo com este computador desligado.
  */
 
 type When = 'agora' | 'programar'
@@ -49,7 +52,9 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
   const { width, height } = sizeOf(post.format)
   const vertical = height / width > 1.7
   const multi = post.slides.length > 1
-  const [kind, setKind] = useState<'reel' | 'story' | 'feed'>(() => (multi && postOutput(post) === 'carousel' ? 'feed' : 'reel'))
+  const animated = hasMotion(post)
+  const kinds = animated ? (['feed', 'reel', 'story'] as const) : (['feed', 'story'] as const)
+  const [kind, setKind] = useState<'reel' | 'story' | 'feed'>(() => (!animated ? (vertical ? 'story' : 'feed') : multi && postOutput(post) === 'carousel' ? 'feed' : 'reel'))
   const [caption, setCaption] = useState(post.caption ?? '')
   const [shareToFeed, setShareToFeed] = useState(true)
   const [when, setWhen] = useState<When>('agora')
@@ -88,11 +93,14 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
   const account = accounts?.find((a) => a.id === accountId)
   const busy = step !== null && !done
   const tooShort = kind === 'reel' && total < 3
-  const storyTooLong = kind === 'story' && total > 60
+  const storyTooLong = kind === 'story' && animated && total > 60
+  const noVideo = (kind === 'reel' || (animated && kind !== 'feed') || (kind === 'feed' && post.slides.some(slideHasMotion))) && !videoSupported()
   // Carrossel: cada slide um item; os animados viram vídeo (3 a 60 s cada), os parados, foto
   const ratio = width / height
-  const feedOff = kind === 'feed' && (ratio < FEED_RATIO.min - 0.01 || ratio > FEED_RATIO.max + 0.01)
   const videoSlides = post.slides.filter(slideHasMotion)
+  const outside = ratio < FEED_RATIO.min - 0.01 || ratio > FEED_RATIO.max + 0.01
+  // Foto fora da proporção do feed é cortada ao centro; vídeo não dá para cortar
+  const feedOff = kind === 'feed' && outside && videoSlides.length > 0
   const shortItem = kind === 'feed' && videoSlides.some((s) => slideDuration(post, s) < 3)
   const carouselBlocked = kind === 'feed' && (feedOff || shortItem || post.slides.length > 20)
 
@@ -107,11 +115,24 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
         const fresh = current?.posts.find((p) => p.id === post.id) ?? post
         const items = await postToCarousel(fresh, images, { onProgress: setProgress, audio: current ? await audioFor(fresh, current.assets) : undefined, base: post.name || 'slide' })
         const files: Prepared[] = []
-        for (const item of items) files.push(item.type === 'video' ? await prepareVideo(new File([item.blob], item.name, { type: 'video/mp4' })) : await prepareImage(item.blob, item.name, ratio))
+        for (const item of items) files.push(item.type === 'video' ? await prepareVideo(new File([item.blob], item.name, { type: 'video/mp4' })) : await prepareImage(item.blob, item.name, feedRatio(width, height)))
         const published = await publishPost({ teamId, accountId: account.id, kind: 'feed', caption, files, onStep: setStep })
         files.forEach((f) => URL.revokeObjectURL(f.url))
         setDone({ permalink: published.permalink })
-        toast.success('Carrossel publicado.')
+        toast.success(files.length > 1 ? 'Carrossel publicado.' : 'Post publicado.')
+        return
+      }
+      if (kind === 'story' && !animated && when === 'agora') {
+        // Story parado: a foto do primeiro slide
+        setStep('gerando')
+        await useEditor.getState().ensureAssets()
+        const { set: current, images } = useEditor.getState()
+        const fresh = current?.posts.find((p) => p.id === post.id) ?? post
+        const file = await prepareImage(await slideToBlob(fresh.slides[0], fresh.format, images, 'jpg'), `${post.name || 'story'}.jpg`)
+        const published = await publishPost({ teamId, accountId: account.id, kind: 'story', caption: '', files: [file], onStep: setStep })
+        URL.revokeObjectURL(file.url)
+        setDone({ permalink: published.permalink })
+        toast.success('Story publicado.')
         return
       }
       if (when === 'programar') {
@@ -125,8 +146,8 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
             teamId,
             accountId: account.id,
             publishAt,
-            pillar: 'motion',
-            title: `${post.name} (motion)`,
+            pillar: animated ? 'motion' : 'criativo',
+            title: animated ? `${post.name} (motion)` : post.name,
             idea: {} as StoryIdea,
             setId: set.id,
             setProjectId: set.shared ? set.projectId : undefined,
@@ -165,7 +186,7 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
         <DialogHeader>
           <DialogTitle>Publicar no Instagram</DialogTitle>
           <DialogDescription>
-            {post.name} · {total.toFixed(1)} s · {width}×{height}. O vídeo é gerado neste navegador.
+            {post.name} · {post.slides.length} {post.slides.length === 1 ? 'slide' : 'slides'} · {width}×{height}{animated ? ` · ${total.toFixed(1)} s de animação. O vídeo é gerado neste navegador.` : '.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -198,12 +219,15 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
                 </select>
               </label>
             )}
-            <div className={cn('grid gap-1.5', multi ? 'grid-cols-3' : 'grid-cols-2')}>
-              {(multi ? (['feed', 'reel', 'story'] as const) : (['reel', 'story'] as const)).map((k) => (
-                <button key={k} type="button" disabled={busy} onClick={() => { setKind(k); if (k === 'feed') setWhen('agora') }} className={cn('h-9 rounded-md border text-sm font-medium', kind === k ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50')}>{k === 'reel' ? 'Reels' : k === 'story' ? 'Story' : 'Carrossel'}</button>
+            <div className={cn('grid gap-1.5', kinds.length === 3 ? 'grid-cols-3' : 'grid-cols-2')}>
+              {kinds.map((k) => (
+                <button key={k} type="button" disabled={busy} onClick={() => { setKind(k); if (k === 'feed') setWhen('agora') }} className={cn('h-9 rounded-md border text-sm font-medium', kind === k ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50')}>{k === 'reel' ? 'Reels' : k === 'story' ? 'Story' : multi ? 'Carrossel' : 'Feed'}</button>
               ))}
             </div>
-            {kind === 'feed' && (
+            {!animated && kind === 'feed' && <p className="text-xs text-gray-600">{multi ? `Carrossel de ${post.slides.length} fotos.` : 'Uma foto no feed.'}{outside ? ` O feed vai de 4:5 a 1,91:1: ${multi ? 'as fotos saem cortadas' : 'a foto sai cortada'} ao centro.` : ''} Para um reels ou um carrossel com vídeo, anime o post na aba Motion.</p>}
+            {!animated && kind === 'story' && multi && <p className="text-xs text-gray-600">{when === 'agora' ? 'Story agora leva só o primeiro slide.' : `Programado, sai uma sequência de ${post.slides.length} stories.`}</p>}
+            {noVideo && <p className="text-xs text-amber-700">Este navegador não gera vídeo: use o Chrome ou o Edge atualizados.</p>}
+            {kind === 'feed' && animated && (
               <div className="space-y-1 text-xs text-gray-600">
                 <p>{post.slides.length} itens: {videoSlides.length ? `${videoSlides.map((s) => `slide ${post.slides.indexOf(s) + 1}`).join(', ')} em vídeo` : 'nenhum slide animado'}{videoSlides.length < post.slides.length ? `, ${post.slides.length - videoSlides.length} em foto` : ''}. Escolha o que anda na aba Motion (Animar só a capa, ou slide a slide).</p>
                 {feedOff && <p className="text-amber-700">O carrossel do feed vai de 4:5 a 1,91:1; este post é {width}×{height}. Use Reels ou Story, ou troque o formato.</p>}
@@ -246,8 +270,8 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
             {step && (
               <p className="flex items-center gap-2 text-sm text-gray-600"><Loader2 className="h-4 w-4 animate-spin" /> {STEP_LABEL[step]}{step === 'gerando' && when === 'agora' ? `… ${Math.round(progress * 100)}%` : '…'}</p>
             )}
-            <Button className="w-full gap-1.5" disabled={busy || !account || tooShort || storyTooLong || carouselBlocked || (kind === 'story' && !vertical && when === 'programar')} onClick={() => void run()}>
-              {when === 'agora' ? <Send className="h-4 w-4" /> : <CalendarClock className="h-4 w-4" />} {when === 'agora' ? `Publicar ${kind === 'reel' ? 'o reels' : kind === 'story' ? 'o story' : 'o carrossel'}` : 'Programar'}
+            <Button className="w-full gap-1.5" disabled={busy || !account || tooShort || storyTooLong || carouselBlocked || noVideo || (kind === 'story' && !vertical && when === 'programar')} onClick={() => void run()}>
+              {when === 'agora' ? <Send className="h-4 w-4" /> : <CalendarClock className="h-4 w-4" />} {when === 'agora' ? `Publicar ${kind === 'reel' ? 'o reels' : kind === 'story' ? 'o story' : multi ? 'o carrossel' : 'no feed'}` : 'Programar'}
             </Button>
           </div>
         )}
@@ -255,3 +279,6 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
     </Dialog>
   )
 }
+
+/** O mesmo diálogo, pelo nome de fora do motion (editor e canvas dos Criativos). */
+export const PublishPost = MotionPublish
