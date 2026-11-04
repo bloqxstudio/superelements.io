@@ -573,12 +573,11 @@
       return !first
     }
 
-    // Tela de uma pergunta só, de escolha única, com o avanço sozinho ligado (ou quiz): não precisa do botão
+    // Tela de uma pergunta só, de escolha única: escolher avança sozinho, sem o botão (botão só para digitar)
     function autoStep(step) {
       if (!step || step.fields.length !== 1) return false
       var t = step.fields[0].type
-      if (!isPick(t) || t === 'select' || t === 'multi') return false
-      return !!(cfg.settings.autoAdvance || cfg.definition.kind === 'quiz')
+      return isPick(t) && t !== 'select' && t !== 'multi'
     }
 
     function field(f, step) {

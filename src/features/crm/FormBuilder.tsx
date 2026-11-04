@@ -557,9 +557,7 @@ export const SettingsEditor: React.FC<{ settings: FormSettings; kind: 'form' | '
               <Switch checked={!!settings.showScore} onCheckedChange={(showScore) => onChange({ ...settings, showScore })} /> Mostrar a pontuação para quem responde
             </label>
           )}
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <Switch checked={settings.autoAdvance} onCheckedChange={(autoAdvance) => onChange({ ...settings, autoAdvance })} /> Avançar sozinho ao escolher (uma pergunta por tela)
-          </label>
+          <p className="text-[11px] text-gray-500">Uma pergunta de escolha única por tela avança sozinha ao escolher, sem botão. O botão aparece nas telas de digitar.</p>
         </div>
       </Surface>
       <Surface title="WhatsApp na tela final">
