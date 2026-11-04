@@ -9,7 +9,41 @@
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
 import { FPS, MotionRenderer } from './motion'
 import type { ImageMap } from './render'
-import { sizeOf, type Post } from './types'
+import { assetUrl } from './storage'
+import { sizeOf, type MotionAudio, type Post, type SetAsset } from './types'
+
+const RATE = 48000
+
+/** O arquivo da trilha do post (para o MP4), ou nada quando o post não tem áudio. */
+export async function audioFor(post: Post, assets: SetAsset[]): Promise<ArrayBuffer | undefined> {
+  const src = post.motion?.audio?.src
+  if (!src?.startsWith('asset:')) return undefined
+  const asset = assets.find((a) => a.id === src.slice(6))
+  if (!asset) return undefined
+  const res = await fetch(await assetUrl(asset))
+  if (!res.ok) throw new Error('Não consegui baixar o áudio do post.')
+  return res.arrayBuffer()
+}
+
+/** A trilha já cortada, no volume e com as entradas e saídas suaves, do tamanho exato do vídeo. */
+async function mixAudio(data: ArrayBuffer, audio: MotionAudio, total: number): Promise<AudioBuffer> {
+  const length = Math.max(1, Math.ceil(total * RATE))
+  const ctx = new OfflineAudioContext(2, length, RATE)
+  const buffer = await ctx.decodeAudioData(data.slice(0))
+  const source = ctx.createBufferSource()
+  source.buffer = buffer
+  const gain = ctx.createGain()
+  const volume = Math.min(1, Math.max(0, audio.volume))
+  const fadeIn = Math.min(total / 2, Math.max(0, audio.fadeIn))
+  const fadeOut = Math.min(total / 2, Math.max(0, audio.fadeOut))
+  gain.gain.setValueAtTime(fadeIn > 0 ? 0 : volume, 0)
+  if (fadeIn > 0) gain.gain.linearRampToValueAtTime(volume, fadeIn)
+  gain.gain.setValueAtTime(volume, Math.max(fadeIn, total - fadeOut))
+  if (fadeOut > 0) gain.gain.linearRampToValueAtTime(0, total)
+  source.connect(gain).connect(ctx.destination)
+  source.start(0, Math.max(0, Math.min(buffer.duration - 0.01, audio.offset)))
+  return ctx.startRendering()
+}
 
 export const videoSupported = () => typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoFrame' in window
 
@@ -44,6 +78,8 @@ async function silentAudio(): Promise<boolean> {
 export interface VideoOptions {
   onProgress?: (done: number) => void
   signal?: AbortSignal
+  /** O arquivo da trilha (`audioFor`); sem ele, áudio em silêncio. */
+  audio?: ArrayBuffer
 }
 
 export async function postToMp4(post: Post, images: ImageMap, opts: VideoOptions = {}): Promise<Blob> {
@@ -56,6 +92,7 @@ export async function postToMp4(post: Post, images: ImageMap, opts: VideoOptions
   const codec = await pickCodec(width, height, bitrate)
   if (!codec) throw new Error('O navegador não codifica H.264 nesse tamanho.')
   const audio = await silentAudio()
+  if (opts.audio && post.motion?.audio && !audio) throw new Error('Este navegador não codifica o áudio do vídeo. Use o Chrome ou o Edge atualizados, ou tire a trilha.')
 
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
@@ -79,6 +116,7 @@ export async function postToMp4(post: Post, images: ImageMap, opts: VideoOptions
     for (let i = 0; i < frames; i++) {
       if (opts.signal?.aborted) throw new DOMException('Cancelado', 'AbortError')
       if (failure) throw failure
+      if (renderer.hasVideo) await renderer.seek(i / FPS)
       renderer.draw(ctx, i / FPS)
       const frame = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / FPS), duration: Math.round(1e6 / FPS) })
       encoder.encode(frame, { keyFrame: i % (FPS * 2) === 0 })
@@ -101,11 +139,19 @@ export async function postToMp4(post: Post, images: ImageMap, opts: VideoOptions
     const aenc = new AudioEncoder({ output: (chunk, meta) => muxer.addAudioChunk(chunk, meta), error: (e) => (audioFailure = e) })
     aenc.configure({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 96000 })
     const chunk = 4800
-    const samples = Math.ceil(total * 48000)
-    const silence = new Float32Array(chunk * 2)
+    const samples = Math.ceil(total * RATE)
+    const mixed = opts.audio && post.motion?.audio ? await mixAudio(opts.audio, post.motion.audio, total) : undefined
+    const left = mixed?.getChannelData(0)
+    const right = mixed ? mixed.getChannelData(Math.min(1, mixed.numberOfChannels - 1)) : undefined
+    const planar = new Float32Array(chunk * 2)
     for (let at = 0; at < samples; at += chunk) {
       const n = Math.min(chunk, samples - at)
-      const data = new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round((at * 1e6) / 48000), data: silence.subarray(0, n * 2) })
+      const frame = planar.subarray(0, n * 2)
+      if (left && right) {
+        frame.set(left.subarray(at, at + n), 0)
+        frame.set(right.subarray(at, at + n), n)
+      } else frame.fill(0)
+      const data = new AudioData({ format: 'f32-planar', sampleRate: RATE, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round((at * 1e6) / RATE), data: frame })
       aenc.encode(data)
       data.close()
     }

@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client'
 import { publicAppUrl } from '@/features/approval/shares'
-import { EMPHASIS_FONT, loadFont, loadImage, slideToBlob, type ImageMap } from '@/features/criativos/render'
+import { EMPHASIS_FONT, loadFont, loadImage, loadVideo, slideToBlob, type ImageMap } from '@/features/criativos/render'
 import { assetUrl } from '@/features/criativos/storage'
 import { sizeOf, type CreativeSet, type Post, type Slide } from '@/features/criativos/types'
 
@@ -450,8 +450,9 @@ export async function creativeImages(set: CreativeSet, slides: Slide[]): Promise
         let url = src
         if (src.startsWith('asset:')) {
           const asset = set.assets.find((a) => a.id === src.slice(6))
-          if (!asset) return
+          if (!asset || asset.kind === 'audio') return
           url = await assetUrl(asset)
+          if (asset.kind === 'video') return void images.set(src, await loadVideo(url))
         }
         images.set(src, await loadImage(url))
       } catch (error) {

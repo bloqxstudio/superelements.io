@@ -26,6 +26,8 @@ export const STATUS_LABEL: Record<StoryStatus, string> = {
 
 export interface StoryFrame {
   path: string
+  /** Vídeo (o MP4 do motion) ou imagem; sem o campo, imagem. */
+  type?: 'image' | 'video'
   mediaId?: string
   permalink?: string
   publishedAt?: string
@@ -54,6 +56,10 @@ export interface Story {
   setProjectId?: string
   postId?: string
   frames: StoryFrame[]
+  /** `reel`: um vídeo com legenda, programado pela mesma fila. */
+  kind: 'story' | 'reel'
+  caption: string
+  shareToFeed: boolean
   attempts: number
   nextTryAt?: number
   error?: string
@@ -178,6 +184,9 @@ interface StoryRow {
   set_project_id: string | null
   post_id: string | null
   frames: unknown
+  kind?: string | null
+  caption?: string | null
+  share_to_feed?: boolean | null
   attempts: number
   next_try_at: string | null
   error: string | null
@@ -204,6 +213,9 @@ const toStory = (r: StoryRow): Story => ({
   setProjectId: r.set_project_id ?? undefined,
   postId: r.post_id ?? undefined,
   frames: Array.isArray(r.frames) ? (r.frames as StoryFrame[]) : [],
+  kind: r.kind === 'reel' ? 'reel' : 'story',
+  caption: r.caption ?? '',
+  shareToFeed: r.share_to_feed !== false,
   attempts: r.attempts,
   nextTryAt: time(r.next_try_at),
   error: r.error ?? undefined,
@@ -257,6 +269,12 @@ export interface NewStory {
   idea: StoryIdea
   setId?: string
   setProjectId?: string
+  postId?: string
+  /** Vem pronto do Criativos (motion): nasce `criativo`, para aprovar. */
+  status?: 'ideia' | 'criativo'
+  kind?: 'story' | 'reel'
+  caption?: string
+  shareToFeed?: boolean
 }
 
 export async function insertStories(list: NewStory[]): Promise<Story[]> {
@@ -268,7 +286,11 @@ export async function insertStories(list: NewStory[]): Promise<Story[]> {
         team_id: s.teamId,
         account_id: s.accountId ?? null,
         publish_at: new Date(s.publishAt).toISOString(),
-        status: 'ideia',
+        status: s.status ?? 'ideia',
+        kind: s.kind ?? 'story',
+        caption: (s.caption ?? '').slice(0, 2200),
+        share_to_feed: s.shareToFeed !== false,
+        post_id: s.postId ?? null,
         pillar: s.pillar.slice(0, 40),
         title: s.title.slice(0, 200),
         idea: s.idea as unknown as Json,

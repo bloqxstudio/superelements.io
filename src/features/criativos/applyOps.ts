@@ -1,5 +1,5 @@
 import { AV_CASES } from '@/features/avence/cases'
-import { MOTION_FX_IDS, MOTION_TRANSITION_IDS, type EditOp, type LayerFields, type PostMotionDef, type SlideDef } from './edit'
+import { MOTION_EASE_IDS, MOTION_EXIT_IDS, MOTION_FX_IDS, MOTION_TRANSITION_IDS, type EditOp, type LayerFields, type PostMotionDef, type SlideDef } from './edit'
 import { LIBRARY } from './library'
 import { alpha } from './color'
 import { paletteOf } from './brand'
@@ -44,7 +44,14 @@ function motionOf(value: unknown): LayerMotion | null | undefined {
   const v = value as Record<string, unknown>
   if (v.fx === 'none') return null
   if (!(MOTION_FX_IDS as readonly unknown[]).includes(v.fx)) return undefined
-  return { fx: v.fx as MotionFx, start: num(v.start, [0, 20], 0.3), dur: num(v.dur, [0.1, 5], 0.6), ...(v.count === true ? { count: true } : {}) }
+  return {
+    fx: v.fx as MotionFx,
+    start: num(v.start, [0, 20], 0.3),
+    dur: num(v.dur, [0.1, 5], 0.6),
+    ...(v.count === true ? { count: true } : {}),
+    ...((MOTION_EASE_IDS as readonly unknown[]).includes(v.ease) && v.ease !== 'suave' ? { ease: v.ease as LayerMotion['ease'] } : {}),
+    ...((MOTION_EXIT_IDS as readonly unknown[]).includes(v.exit) ? { exit: v.exit as LayerMotion['exit'], exitDur: num(v.exitDur, [0.1, 2], 0.4) } : {}),
+  }
 }
 
 /** `motion: null` (a IA pediu para tirar) não fica guardado na camada. */

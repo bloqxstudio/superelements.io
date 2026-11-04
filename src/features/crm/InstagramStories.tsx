@@ -616,7 +616,7 @@ const StoryPanel: React.FC<{
         )}
 
         <p className="text-[11px] leading-relaxed text-gray-500">
-          Aprovar gera as imagens das telas como estão agora no Criativos. O servidor publica na hora marcada, uma tela depois da outra, mesmo com este computador desligado. A API do Instagram não aceita figurinhas (enquete, perguntas, link): a última tela convida a responder o story.
+          Aprovar gera as imagens das telas como estão agora no Criativos (com motion no post, ou num reels, gera um vídeo MP4). O servidor publica na hora marcada, uma tela depois da outra, mesmo com este computador desligado. A API do Instagram não aceita figurinhas (enquete, perguntas, link): a última tela convida a responder o story.
         </p>
       </DialogContent>
     </Dialog>
@@ -645,7 +645,7 @@ const StoryCard: React.FC<{ story: Story; previews?: string[]; onOpen: () => voi
       )}
       <p className="line-clamp-2 text-xs font-medium text-gray-900">{story.title}</p>
       <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-gray-500">
-        <span>{plural(story.idea.frames?.length ?? story.frames.length, 'tela', 'telas')}</span>
+        {story.kind === 'reel' ? <span className="font-medium text-violet-700">Reels</span> : story.frames[0]?.type === 'video' ? <span className="font-medium text-violet-700">Vídeo</span> : <span>{plural(story.idea.frames?.length ?? story.frames.length, 'tela', 'telas')}</span>}
         {story.review?.ok === false && (
           <span className="inline-flex items-center gap-0.5 text-amber-700">
             <CircleAlert className="h-3 w-3" /> nota do editor

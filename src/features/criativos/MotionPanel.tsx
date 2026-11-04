@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { currentLayer, currentPost, currentSlide, useEditor } from './store'
 import { MOTION_FX, MOTION_TRANSITIONS, MotionRenderer, autoPostMotion, autoSlideMotion, clearPostMotion, hasMotion, numberIn, postMotionOf, slideDuration, timeline } from './motion'
-import { postToMp4, videoSupported } from './video'
+import { audioFor, postToMp4, videoSupported } from './video'
 import type { ImageMap } from './render'
 import { sizeOf, type Layer, type LayerMotion, type MotionFx, type MotionTransition, type Post } from './types'
 
@@ -66,6 +66,8 @@ export const MotionPlayer: React.FC<{ post: Post; images: ImageMap; startAt?: nu
   const [playing, setPlaying] = useState(!!autoPlay)
   const timeRef = useRef(time)
   timeRef.current = time
+  const playingRef = useRef(playing)
+  playingRef.current = playing
   const total = timeline(post).total
   const { width, height } = sizeOf(post.format)
 
@@ -79,6 +81,7 @@ export const MotionPlayer: React.FC<{ post: Post; images: ImageMap; startAt?: nu
     if (!canvas || !ctx) return
     ctx.save()
     ctx.setTransform(canvas.width / width, 0, 0, canvas.height / height, 0, 0)
+    renderer.sync(t, playingRef.current)
     renderer.draw(ctx, t)
     ctx.restore()
   }
@@ -133,7 +136,7 @@ export async function downloadMp4(post: Post, onProgress?: (p: number) => void):
   await useEditor.getState().ensureAssets()
   const { set, images } = useEditor.getState()
   const fresh = set?.posts.find((p) => p.id === post.id) ?? post
-  const blob = await postToMp4(fresh, images, { onProgress })
+  const blob = await postToMp4(fresh, images, { onProgress, audio: set ? await audioFor(fresh, set.assets) : undefined })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

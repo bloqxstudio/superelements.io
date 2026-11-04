@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, Clapperboard, Download, Pause, PenLine, Play, Redo2, SkipBack, Undo2, Wand2 } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Download, Film, Instagram, Music, Trash2, Pause, PenLine, Play, Redo2, SkipBack, Undo2, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { currentLayer, currentPost, currentSlide, useEditor } from './store'
-import { MOTION_FX, MOTION_STYLES, MOTION_TRANSITIONS, MotionRenderer, autoPostMotion, autoSlideMotion, clearPostMotion, hasMotion, numberIn, postMotionOf, slideDuration, timeline, type MotionStyle } from './motion'
+import { MOTION_EASES, MOTION_EXITS, MOTION_FX, MOTION_STYLES, MOTION_TRANSITIONS, MotionRenderer, SLIDE_CAMERAS, autoPostMotion, autoSlideMotion, clearPostMotion, hasMotion, numberIn, postMotionOf, slideDuration, timeline, type MotionStyle } from './motion'
 import { downloadMp4 } from './MotionPanel'
+import { MotionPublish } from './MotionPublish'
 import { videoSupported } from './video'
-import { sizeOf, type CreativeSet, type Layer, type LayerMotion, type MotionFx, type MotionTransition, type Post } from './types'
+import { assetUrl, uploadAsset } from './storage'
+import { sizeOf, type CreativeSet, type Layer, type LayerMotion, type MotionEase, type MotionExit, type MotionFx, type MotionAudio, type MotionTransition, type Post, type SlideCamera } from './types'
 
 /**
  * Estúdio de motion: tela só para animar um criativo. Palco grande no centro,
@@ -69,6 +71,7 @@ export const MotionStudio: React.FC = () => {
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
+  const [publishing, setPublishing] = useState(false)
   const timeRef = useRef(0)
   timeRef.current = time
   const autoDone = useRef(new Set<string>())
@@ -89,8 +92,10 @@ export const MotionStudio: React.FC = () => {
     // Abre tocando: em 0 s quase tudo ainda está para entrar
     setPlaying(true)
     if (hasMotion(post)) return
-    editPost((p) => autoPostMotion(p, 'suave'))
-    toast.success('Animado no estilo Suave. Troque o estilo à direita ou ajuste na linha do tempo.')
+    const brandMotion = useEditor.getState().set?.brand.motion
+    const style = brandMotion?.style ?? 'suave'
+    editPost((p) => autoPostMotion(p, style, brandMotion))
+    toast.success(`Animado no estilo ${MOTION_STYLES.find((x) => x.id === style)?.label ?? 'Suave'}${brandMotion ? ' (o padrão da marca)' : ''}. Troque o estilo à direita ou ajuste na linha do tempo.`)
   }, [status, post])
 
   const { segments, total } = post ? timeline(post) : { segments: [], total: 0 }
@@ -112,6 +117,45 @@ export const MotionStudio: React.FC = () => {
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
   }, [playing, total])
+
+  // A trilha toca junto na prévia (com o volume e os fades do vídeo)
+  const audioEl = useRef<HTMLAudioElement | null>(null)
+  const audioCfg = post?.motion?.audio
+  const audioAsset = audioCfg ? set?.assets.find((a) => `asset:${a.id}` === audioCfg.src) : undefined
+  useEffect(() => {
+    if (!audioAsset) {
+      audioEl.current?.pause()
+      audioEl.current = null
+      return
+    }
+    let alive = true
+    const el = new Audio()
+    el.preload = 'auto'
+    void assetUrl(audioAsset).then((url) => {
+      if (!alive) return
+      el.src = url
+      audioEl.current = el
+    })
+    return () => {
+      alive = false
+      el.pause()
+      if (audioEl.current === el) audioEl.current = null
+    }
+  }, [audioAsset?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const el = audioEl.current
+    if (!el || !audioCfg) return
+    const env = Math.min(1, audioCfg.fadeIn > 0 ? time / audioCfg.fadeIn : 1, audioCfg.fadeOut > 0 ? (total - time) / audioCfg.fadeOut : 1)
+    el.volume = Math.max(0, Math.min(1, audioCfg.volume * env))
+    const want = audioCfg.offset + time
+    if (playing) {
+      if (Math.abs(el.currentTime - want) > 0.25) el.currentTime = want
+      if (el.paused) void el.play().catch(() => undefined)
+    } else {
+      if (!el.paused) el.pause()
+      if (Math.abs(el.currentTime - want) > 0.05) el.currentTime = want
+    }
+  }, [time, playing, audioCfg, total])
 
   useEffect(() => {
     if (!post) return
@@ -185,6 +229,7 @@ export const MotionStudio: React.FC = () => {
           <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!canUndo} title="Desfazer (Ctrl+Z)" onClick={() => useEditor.getState().undo()}><Undo2 className="h-4 w-4" /></Button>
           <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!canRedo} title="Refazer (Ctrl+Shift+Z)" onClick={() => useEditor.getState().redo()}><Redo2 className="h-4 w-4" /></Button>
           <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 bg-white"><Link to={editorLink}><PenLine className="h-4 w-4" /> Editar o criativo</Link></Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" disabled={!videoSupported() || progress !== null} onClick={() => { setPlaying(false); setPublishing(true) }}><Instagram className="h-4 w-4" /> Publicar no Instagram</Button>
           <Button size="sm" className="h-8 gap-1.5" disabled={!videoSupported() || progress !== null} onClick={() => void exportVideo()} title={videoSupported() ? undefined : 'Use o Chrome ou o Edge atualizados'}>
             <Download className="h-4 w-4" /> {progress !== null ? `Gerando… ${Math.round(progress * 100)}%` : 'Baixar MP4'}
           </Button>
@@ -193,7 +238,7 @@ export const MotionStudio: React.FC = () => {
 
       <div className="flex min-h-0 flex-1">
         <main className="flex min-w-0 flex-1 flex-col">
-          <StagePreview post={post} images={images} time={time} />
+          <StagePreview post={post} images={images} time={time} playing={playing} />
           <div className="flex h-11 shrink-0 items-center justify-center gap-2 border-t bg-white">
             <Button variant="ghost" size="icon" className="h-8 w-8" title="Voltar ao começo (Home)" onClick={() => seek(0)}><SkipBack className="h-4 w-4" /></Button>
             <Button size="icon" className="h-9 w-9 rounded-full" aria-label={playing ? 'Pausar' : 'Tocar'} title="Tocar ou pausar (Espaço)" onClick={() => setPlaying((p) => !p)}>
@@ -207,6 +252,7 @@ export const MotionStudio: React.FC = () => {
         </aside>
       </div>
 
+      <MotionPublish post={post} open={publishing} onClose={() => setPublishing(false)} />
       <Timeline post={post} slideId={slide.id} layerId={layer?.id} time={time} onSeek={seek} onPause={() => setPlaying(false)} />
     </div>
   )
@@ -214,7 +260,7 @@ export const MotionStudio: React.FC = () => {
 
 // Palco
 
-const StagePreview: React.FC<{ post: Post; images: Map<string, CanvasImageSource & { width: number; height: number }>; time: number }> = ({ post, images, time }) => {
+const StagePreview: React.FC<{ post: Post; images: Map<string, CanvasImageSource & { width: number; height: number }>; time: number; playing: boolean }> = ({ post, images, time, playing }) => {
   const box = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const renderer = useMemo(() => new MotionRenderer(post, images), []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -234,6 +280,7 @@ const StagePreview: React.FC<{ post: Post; images: Map<string, CanvasImageSource
 
   useEffect(() => {
     renderer.update(post, images)
+    renderer.sync(time, playing)
     const c = canvas.current
     const ctx = c?.getContext('2d')
     if (!c || !ctx || !fit.w) return
@@ -241,7 +288,7 @@ const StagePreview: React.FC<{ post: Post; images: Map<string, CanvasImageSource
     ctx.setTransform(c.width / width, 0, 0, c.height / height, 0, 0)
     renderer.draw(ctx, time)
     ctx.restore()
-  }, [post, images, time, fit, renderer, width, height])
+  }, [post, images, time, playing, fit, renderer, width, height])
 
   const dpr = typeof window === 'undefined' ? 1 : Math.min(2, window.devicePixelRatio || 1)
   return (
@@ -259,13 +306,20 @@ const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => <p clas
 const SidePanel: React.FC<{ post: Post; slideId: string; layer?: Layer; slideDur: number }> = ({ post, slideId, layer, slideDur }) => {
   const pm = postMotionOf(post)
   const slideIndex = post.slides.findIndex((s) => s.id === slideId)
+  const slide = post.slides[slideIndex]
+  const brandMotion = useEditor((s) => s.set?.brand.motion)
+  const [style, setStyle] = useState<MotionStyle>(brandMotion?.style ?? 'suave')
+  const saveBrand = () => {
+    useEditor.getState().edit((s) => ({ ...s, brand: { ...s.brand, motion: { style, transition: pm.transition, transitionDur: pm.transitionDur } } }))
+    toast.success('Padrão de motion guardado na marca. Os próximos posts animados (e a produção com IA) saem assim.')
+  }
   return (
     <div className="space-y-5">
       <section>
         <Label>Animar automaticamente</Label>
         <div className="grid grid-cols-3 gap-1.5">
           {MOTION_STYLES.map((st) => (
-            <button key={st.id} type="button" title={st.hint} onClick={() => { editPost((p) => autoPostMotion(p, st.id as MotionStyle)); toast.success(`Post animado no estilo ${st.label}.`) }} className="rounded-lg border border-gray-200 px-2 py-2 text-left hover:border-violet-400 hover:bg-violet-50">
+            <button key={st.id} type="button" title={st.hint} onClick={() => { setStyle(st.id); editPost((p) => autoPostMotion(p, st.id, brandMotion?.style === st.id ? brandMotion : undefined)); toast.success(`Post animado no estilo ${st.label}.`) }} className={cn('rounded-lg border px-2 py-2 text-left hover:border-violet-400 hover:bg-violet-50', style === st.id ? 'border-violet-500 bg-violet-50' : 'border-gray-200')}>
               <Wand2 className="mb-1 h-3.5 w-3.5 text-violet-700" />
               <span className="block text-xs font-semibold text-gray-900">{st.label}</span>
             </button>
@@ -273,9 +327,13 @@ const SidePanel: React.FC<{ post: Post; slideId: string; layer?: Layer; slideDur
         </div>
         <p className="mt-1.5 text-[11px] leading-snug text-gray-500">Vale para o post todo. Suave = fade in de cada camada na ordem de leitura.</p>
         <div className="mt-2 flex gap-3 text-xs">
-          <button type="button" className="text-gray-600 underline-offset-2 hover:underline" onClick={() => editPost((p) => ({ ...p, slides: p.slides.map((s) => (s.id === slideId ? autoSlideMotion(s, p.format, 'suave') : s)) }))}>Refazer só o slide {slideIndex + 1}</button>
+          <button type="button" className="text-gray-600 underline-offset-2 hover:underline" onClick={() => editPost((p) => ({ ...p, slides: p.slides.map((s) => (s.id === slideId ? autoSlideMotion(s, p.format, style) : s)) }))}>Refazer só o slide {slideIndex + 1}</button>
           <button type="button" className="text-gray-500 underline-offset-2 hover:text-red-600 hover:underline" onClick={() => editPost(clearPostMotion)}>Tirar tudo</button>
         </div>
+      </section>
+
+      <section className="border-t border-gray-100 pt-4">
+        {layer ? <LayerFx key={layer.id} post={post} slideId={slideId} layer={layer} slideDur={slideDur} /> : <p className="text-xs text-gray-500">Clique numa faixa da linha do tempo para escolher a entrada da camada. Arraste a barra para mudar quando entra; puxe as pontas para mudar a duração. Duplo clique numa faixa parada anima a camada ali.</p>}
       </section>
 
       <section className="border-t border-gray-100 pt-4">
@@ -296,9 +354,24 @@ const SidePanel: React.FC<{ post: Post; slideId: string; layer?: Layer; slideDur
         </div>
       </section>
 
+      <AudioSection post={post} />
+      <VideoSection post={post} slideId={slideId} />
+
       <section className="border-t border-gray-100 pt-4">
-        {layer ? <LayerFx key={layer.id} post={post} slideId={slideId} layer={layer} slideDur={slideDur} /> : <p className="text-xs text-gray-500">Clique numa faixa da linha do tempo para escolher a entrada da camada. Arraste a barra para mudar quando entra; puxe as pontas para mudar a duração. Duplo clique numa faixa parada anima a camada ali.</p>}
+        <Label>Câmera do slide {slideIndex + 1}</Label>
+        <select aria-label="Câmera do slide" className={inputClass} value={slide?.camera ?? ''} onChange={(e) => editPost((p) => ({ ...p, slides: p.slides.map((s) => (s.id === slideId ? { ...s, camera: (e.target.value || undefined) as SlideCamera | undefined } : s)) }))}>
+          <option value="">Parada</option>
+          {SLIDE_CAMERAS.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
+        </select>
+        <p className="mt-1 text-[11px] text-gray-500">Mexe o slide inteiro devagar; o fundo continua cobrindo a tela.</p>
       </section>
+
+      <section className="border-t border-gray-100 pt-4">
+        <Label>Padrão da marca</Label>
+        <p className="text-[11px] leading-snug text-gray-500">{brandMotion ? `Hoje: ${MOTION_STYLES.find((x) => x.id === brandMotion.style)?.label}, ${MOTION_TRANSITIONS.find((x) => x.id === brandMotion.transition)?.label?.toLowerCase() ?? 'transição do estilo'}.` : 'A marca ainda não tem um padrão de motion.'} Guardar faz os próximos posts (e a produção com IA) saírem com este estilo e esta transição.</p>
+        <Button type="button" variant="outline" size="sm" className="mt-2 w-full bg-white" onClick={saveBrand}>Guardar {MOTION_STYLES.find((x) => x.id === style)?.label} como padrão da marca</Button>
+      </section>
+
     </div>
   )
 }
@@ -316,8 +389,8 @@ const LayerFx: React.FC<{ post: Post; slideId: string; layer: Layer; slideDur: n
       </div>
       <div className="grid grid-cols-2 gap-1.5">
         <button type="button" onClick={() => apply(undefined)} className={cn('rounded-md border px-2 py-1.5 text-left text-xs', !m ? 'border-violet-500 bg-violet-50 font-semibold text-violet-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50')}>Parada</button>
-        {MOTION_FX.map((f) => (
-          <button key={f.id} type="button" onClick={() => patch({ fx: f.id })} className={cn('rounded-md border px-2 py-1.5 text-left text-xs', m?.fx === f.id ? 'border-violet-500 bg-violet-50 font-semibold text-violet-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50')}>{f.label}</button>
+        {MOTION_FX.filter((f) => layer.type === 'text' || (f.id !== 'words' && f.id !== 'letters')).map((f) => (
+          <button key={f.id} type="button" onClick={() => patch({ fx: f.id, ...(f.id === 'move' && !m?.from ? { from: { dx: -Math.round(sizeOf(post.format).width * 0.3), dy: 0, scale: 1, rotate: 0 } } : {}) })} className={cn('rounded-md border px-2 py-1.5 text-left text-xs', m?.fx === f.id ? 'border-violet-500 bg-violet-50 font-semibold text-violet-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50')}>{f.label}</button>
         ))}
       </div>
       {m && (
@@ -328,8 +401,31 @@ const LayerFx: React.FC<{ post: Post; slideId: string; layer: Layer; slideDur: n
           <label className="text-[11px] text-gray-500">Duração (s)
             <input type="number" className={inputClass} step={SNAP} min={0.1} max={5} value={Math.round(m.dur * 100) / 100} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && patch({ dur: Math.min(5, Math.max(0.1, e.target.valueAsNumber)) })} />
           </label>
+          <label className="col-span-2 text-[11px] text-gray-500">Curva
+            <select className={inputClass} value={m.ease ?? 'suave'} onChange={(e) => patch({ ease: e.target.value === 'suave' ? undefined : (e.target.value as MotionEase) })}>
+              {MOTION_EASES.map((x) => (<option key={x.id} value={x.id}>{x.label}</option>))}
+            </select>
+          </label>
+          {m.fx === 'move' && (
+            <>
+              <p className="col-span-2 text-[11px] font-medium text-gray-600">Vem de (a partir do lugar dela)</p>
+              <label className="text-[11px] text-gray-500">Lado (px)<input type="number" className={inputClass} step={10} value={m.from?.dx ?? 0} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && patch({ from: { ...m.from, dx: e.target.valueAsNumber } })} /></label>
+              <label className="text-[11px] text-gray-500">Altura (px)<input type="number" className={inputClass} step={10} value={m.from?.dy ?? 0} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && patch({ from: { ...m.from, dy: e.target.valueAsNumber } })} /></label>
+              <label className="text-[11px] text-gray-500">Escala<input type="number" className={inputClass} step={0.05} min={0.1} max={4} value={m.from?.scale ?? 1} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && patch({ from: { ...m.from, scale: e.target.valueAsNumber } })} /></label>
+              <label className="text-[11px] text-gray-500">Giro (°)<input type="number" className={inputClass} step={5} value={m.from?.rotate ?? 0} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && patch({ from: { ...m.from, rotate: e.target.valueAsNumber } })} /></label>
+            </>
+          )}
           {canCount && (
             <label className="col-span-2 flex items-center justify-between gap-2 text-sm text-gray-700">Contar o número de 0 até ele<input type="checkbox" checked={!!m.count} onChange={(e) => patch({ count: e.target.checked || undefined })} /></label>
+          )}
+          <label className="text-[11px] text-gray-500">Saída
+            <select className={inputClass} value={m.exit ?? ''} onChange={(e) => patch({ exit: (e.target.value || undefined) as MotionExit | undefined })}>
+              <option value="">Fica até o fim</option>
+              {MOTION_EXITS.map((x) => (<option key={x.id} value={x.id}>{x.label}</option>))}
+            </select>
+          </label>
+          {m.exit && (
+            <label className="text-[11px] text-gray-500">Saída (s)<input type="number" className={inputClass} step={SNAP} min={0.1} max={2} value={m.exitDur ?? 0.4} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && patch({ exitDur: Math.min(2, Math.max(0.1, e.target.valueAsNumber)) })} /></label>
           )}
         </div>
       )}
@@ -459,7 +555,11 @@ const Timeline: React.FC<{ post: Post; slideId: string; layerId?: string; time: 
                     <span className="truncate px-2.5">{fxLabel(m.fx)}{m.count ? ' · conta' : ''}</span>
                     {m.fx !== 'ken' && <span onPointerDown={(e) => startDrag(e, l, 'end')} className="absolute inset-y-0 right-0 w-2 cursor-ew-resize bg-black/15" />}
                   </div>
-                ) : (
+                ) : null}
+                {m?.exit ? (
+                  <span title={`Saída: ${MOTION_EXITS.find((x) => x.id === m.exit)?.label}`} className="pointer-events-none absolute inset-y-1.5 rounded bg-gray-400/70" style={{ left: `${(Math.max(0, liveDur - (m.exitDur ?? 0.4) - 0.05) / viewDur) * 100}%`, width: `${(((m.exitDur ?? 0.4)) / viewDur) * 100}%` }} />
+                ) : null}
+                {m ? null : (
                   <span className="absolute inset-x-0 top-1/2 border-t border-dashed border-gray-300" title="Parada desde o começo. Duplo clique para animar." />
                 )}
                 {inSlide && <Playhead at={local / viewDur} />}
@@ -478,3 +578,92 @@ const Playhead: React.FC<{ at: number; head?: boolean }> = ({ at, head }) => (
     {head && <span className="absolute -left-1 top-0 h-2.5 w-2.5 rounded-sm bg-red-500" />}
   </span>
 )
+
+// Áudio e vídeo
+
+const AudioSection: React.FC<{ post: Post }> = ({ post }) => {
+  const input = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const audio = post.motion?.audio
+  const setAudio = (next: MotionAudio | undefined) => editPost((p) => ({ ...p, motion: { ...p.motion, audio: next } }))
+  const patch = (fields: Partial<MotionAudio>) => audio && setAudio({ ...audio, ...fields })
+  const send = async (file?: File) => {
+    const set = useEditor.getState().set
+    if (!file || !set) return
+    setBusy(true)
+    try {
+      const asset = await uploadAsset(set, file, file.name)
+      useEditor.getState().edit((s) => ({ ...s, assets: [...s.assets, asset] }))
+      setAudio({ src: `asset:${asset.id}`, name: file.name, volume: 0.8, offset: 0, fadeIn: 0.3, fadeOut: 1 })
+      toast.success('Trilha no post. Ela entra no MP4 e na publicação.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não consegui enviar o áudio.')
+    } finally {
+      setBusy(false)
+      if (input.current) input.current.value = ''
+    }
+  }
+  return (
+    <section className="border-t border-gray-100 pt-4">
+      <Label>Áudio do vídeo</Label>
+      <input ref={input} type="file" accept="audio/*" className="hidden" onChange={(e) => void send(e.target.files?.[0])} />
+      {audio ? (
+        <div className="space-y-2">
+          <p className="flex items-center gap-1.5 truncate text-sm text-gray-900"><Music className="h-3.5 w-3.5 shrink-0 text-violet-700" /> {audio.name}</p>
+          <label className="block text-[11px] text-gray-500">Volume ({Math.round(audio.volume * 100)}%)
+            <input type="range" min={0} max={1} step={0.05} value={audio.volume} onChange={(e) => patch({ volume: Number(e.target.value) })} className="w-full" />
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            <label className="text-[11px] text-gray-500">Começa em (s)<input type="number" className={inputClass} step={0.5} min={0} value={audio.offset} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && patch({ offset: Math.max(0, e.target.valueAsNumber) })} /></label>
+            <label className="text-[11px] text-gray-500">Entrada (s)<input type="number" className={inputClass} step={0.1} min={0} max={5} value={audio.fadeIn} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && patch({ fadeIn: Math.max(0, e.target.valueAsNumber) })} /></label>
+            <label className="text-[11px] text-gray-500">Saída (s)<input type="number" className={inputClass} step={0.1} min={0} max={5} value={audio.fadeOut} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && patch({ fadeOut: Math.max(0, e.target.valueAsNumber) })} /></label>
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" className="h-7 flex-1 bg-white text-xs" disabled={busy} onClick={() => input.current?.click()}>Trocar</Button>
+            <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-gray-500 hover:text-red-600" onClick={() => setAudio(undefined)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Tirar</Button>
+          </div>
+        </div>
+      ) : (
+        <Button type="button" variant="outline" size="sm" className="w-full gap-1.5 bg-white" disabled={busy} onClick={() => input.current?.click()}>
+          <Music className="h-4 w-4" /> {busy ? 'Enviando…' : 'Pôr trilha ou narração'}
+        </Button>
+      )}
+      <p className="mt-1.5 text-[11px] leading-snug text-gray-500">Use só áudio com licença para uso comercial (ou gravado por vocês). Música do próprio Instagram não entra pela API: ponha no app depois de publicar.</p>
+    </section>
+  )
+}
+
+const VideoSection: React.FC<{ post: Post; slideId: string }> = ({ post, slideId }) => {
+  const input = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const send = async (file?: File) => {
+    const set = useEditor.getState().set
+    if (!file || !set) return
+    setBusy(true)
+    try {
+      const asset = await uploadAsset(set, file, file.name)
+      const { width, height } = sizeOf(post.format)
+      // O vídeo cobre o slide (como uma foto de fundo), por baixo das outras camadas
+      const layer: Layer = { id: Math.random().toString(36).slice(2, 10), type: 'image', name: `Vídeo · ${file.name}`, src: `asset:${asset.id}`, x: 0, y: 0, w: width, h: height, fit: 'cover', radius: 0, frame: 'none', motion: { fx: 'fade', start: 0, dur: 0.4 } }
+      useEditor.getState().edit((s) => mapPost({ ...s, assets: [...s.assets, asset] }, post.id, (p) => ({ ...p, slides: p.slides.map((sl) => (sl.id === slideId ? { ...sl, layers: [layer, ...sl.layers] } : sl)) })))
+      await useEditor.getState().ensureImage(`asset:${asset.id}`)
+      useEditor.getState().selectLayer(layer.id)
+      toast.success('Vídeo no fundo do slide. Mude o tamanho e a posição em "Editar o criativo".')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não consegui enviar o vídeo.')
+    } finally {
+      setBusy(false)
+      if (input.current) input.current.value = ''
+    }
+  }
+  return (
+    <section className="border-t border-gray-100 pt-4">
+      <Label>Vídeo no slide</Label>
+      <input ref={input} type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" onChange={(e) => void send(e.target.files?.[0])} />
+      <Button type="button" variant="outline" size="sm" className="w-full gap-1.5 bg-white" disabled={busy} onClick={() => input.current?.click()}>
+        <Film className="h-4 w-4" /> {busy ? 'Enviando…' : 'Pôr um vídeo de fundo'}
+      </Button>
+      <p className="mt-1.5 text-[11px] leading-snug text-gray-500">Um clipe (produto, bastidor) que anda por baixo dos textos, em loop, mudo. Até 50 MB.</p>
+    </section>
+  )
+}

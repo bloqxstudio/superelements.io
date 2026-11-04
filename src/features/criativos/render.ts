@@ -79,6 +79,35 @@ export async function loadImage(url: string): Promise<HTMLImageElement> {
   return img
 }
 
+/**
+ * Vídeo para desenhar no canvas como uma imagem que anda: baixado como blob
+ * (a exportação não fica "tainted"), mudo, parado no primeiro quadro. `width`
+ * e `height` ficam no tamanho do vídeo, como numa imagem.
+ */
+export async function loadVideo(url: string): Promise<HTMLVideoElement> {
+  let href = url
+  if (!url.startsWith('blob:') && !url.startsWith('data:')) {
+    const res = await fetch(url, { mode: 'cors' })
+    if (!res.ok) throw new Error('Vídeo não carregou.')
+    href = URL.createObjectURL(await res.blob())
+  }
+  const video = document.createElement('video')
+  video.muted = true
+  video.playsInline = true
+  video.preload = 'auto'
+  video.loop = true
+  await new Promise<void>((resolve, reject) => {
+    video.onloadeddata = () => resolve()
+    video.onerror = () => reject(new Error('Vídeo não carregou.'))
+    video.src = href
+  })
+  video.width = video.videoWidth
+  video.height = video.videoHeight
+  return video
+}
+
+export const isVideo = (source: unknown): source is HTMLVideoElement => typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement
+
 // Texto
 
 interface Run {

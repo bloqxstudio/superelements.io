@@ -7,6 +7,8 @@ import { fillSetImages, type MissingImage } from '@/features/criativos/generate'
 import { callAiQuiet, useCreativeLink, type CreativeStep } from '@/features/criativos/link'
 import type { PlanResponse, PostPlan, SlideSpec } from '@/features/criativos/plan'
 import { loadSet, saveSet } from '@/features/criativos/storage'
+import { autoPostMotion, hasMotion } from '@/features/criativos/motion'
+import { audioFor, postToMp4 } from '@/features/criativos/video'
 import { buildPost, buildSlide } from '@/features/criativos/templates'
 import { sizeOf, type CreativeSet, type ImageLayer, type Post, type SetAsset } from '@/features/criativos/types'
 import { personaFor, profileNow } from '@/features/ia/perfis'
@@ -14,7 +16,7 @@ import { resolveIa } from '@/features/ia/porTarefa'
 import { announce, finishJob, noteJob, patchJob, recordDelivery, startJob, type Area } from '@/features/operations/jobs'
 import { CHAT_AGENTS, type ChatAgentId } from '@/features/space/chat/protocol'
 import { supabase } from '@/integrations/supabase/client'
-import { prepareImage, renderCreative } from './instagram'
+import { creativeImages, prepareImage, renderCreative } from './instagram'
 import {
   addWeeks,
   getStory,
@@ -480,7 +482,7 @@ export async function restyleStory(story: Story): Promise<Story> {
 // ---------- aprovar e o resto da mão da equipe ----------
 
 /** A pasta das telas aprovadas: dentro da pasta do Instagram da equipe, de onde a função publica. */
-const framePath = (teamId: string, storyId: string, index: number) => `crm/${teamId}/instagram/stories/${storyId}/${index + 1}-${Date.now().toString(36)}.jpg`
+const framePath = (teamId: string, storyId: string, index: number, ext: 'jpg' | 'mp4' = 'jpg') => `crm/${teamId}/instagram/stories/${storyId}/${index + 1}-${Date.now().toString(36)}.${ext}`
 
 const removeFiles = (paths: string[]) => (paths.length ? supabase.storage.from(BUCKET).remove(paths).then(() => undefined, () => undefined) : Promise.resolve())
 
@@ -501,10 +503,30 @@ export async function approveStory(story: Story, accountId: string | undefined):
   const post = set.posts.find((p) => p.id === story.postId)
   if (!post) throw new Error('O post deste story não está mais no conjunto. Refaça o criativo.')
   const { width, height } = sizeOf(post.format)
-  if (height / width < 1.7) throw new Error('O post não está em 9:16. Volte o formato para Story no Criativos.')
-  if (!post.slides.length || post.slides.length > 10) throw new Error('Um story vai de 1 a 10 telas.')
+  const reel = story.kind === 'reel'
+  if (!reel && height / width < 1.7) throw new Error('O post não está em 9:16. Volte o formato para Story no Criativos.')
+  if (!post.slides.length || (!reel && post.slides.length > 10)) throw new Error('Um story vai de 1 a 10 telas.')
   const hole = missingPhoto(post)
   if (hole >= 0) throw new Error(`A tela ${hole + 1} está com a foto por gerar. Gere a foto ou troque a tela no Criativos.`)
+
+  // Com motion (ou reels, que é sempre vídeo, ou a marca com padrão de motion): um MP4 só, gerado aqui no navegador
+  // A marca com padrão de motion: os stories programados também saem animados
+  if (reel || hasMotion(post) || set.brand.motion) {
+    const animated = hasMotion(post) ? post : autoPostMotion(post, set.brand.motion?.style ?? 'suave', set.brand.motion)
+    const video = await postToMp4(animated, await creativeImages(set, animated.slides), { audio: await audioFor(animated, set.assets) })
+    const path = framePath(story.teamId, story.id, 0, 'mp4')
+    const { error } = await supabase.storage.from(BUCKET).upload(path, video, { contentType: 'video/mp4', upsert: true })
+    if (error) throw new Error(`Não consegui enviar o vídeo: ${error.message}`)
+    try {
+      const old = story.frames.filter((f) => !f.mediaId).map((f) => f.path)
+      const saved = await updateStory(story.id, { status: 'agendado', frames: [{ path, type: 'video' }], accountId: story.accountId ?? accountId ?? null, attempts: 0, nextTryAt: null, error: null })
+      await removeFiles(old)
+      return saved
+    } catch (err) {
+      await removeFiles([path])
+      throw err
+    }
+  }
 
   const blobs = await renderCreative(set, post)
   const paths: string[] = []

@@ -75,7 +75,16 @@ interface LayerBase {
 }
 
 /** Efeitos de entrada do motion (`motion.ts` desenha cada um). */
-export type MotionFx = 'fade' | 'rise' | 'drop' | 'left' | 'right' | 'pop' | 'zoom' | 'wipe' | 'wipe-up' | 'ken' | 'pulse'
+export type MotionFx = 'fade' | 'rise' | 'drop' | 'left' | 'right' | 'pop' | 'zoom' | 'wipe' | 'wipe-up' | 'ken' | 'pulse' | 'words' | 'letters' | 'move'
+
+/** Saídas: a camada sai antes do fim do slide. */
+export type MotionExit = 'fade' | 'rise' | 'drop' | 'left' | 'right' | 'zoom' | 'pop'
+
+/** Curva da entrada. */
+export type MotionEase = 'suave' | 'forte' | 'linear' | 'elastico'
+
+/** Movimento de câmera no slide inteiro (o fundo fica parado). */
+export type SlideCamera = 'zoom-in' | 'zoom-out' | 'pan-left' | 'pan-right' | 'pan-up' | 'pan-down'
 
 export interface LayerMotion {
   fx: MotionFx
@@ -85,6 +94,14 @@ export interface LayerMotion {
   dur: number
   /** Texto com número: conta de 0 até ele durante a entrada. */
   count?: boolean
+  /** Curva da entrada; sem ela, suave. */
+  ease?: MotionEase
+  /** `move`: de onde a camada vem (px a partir do lugar dela, escala e giro iniciais). */
+  from?: { dx?: number; dy?: number; scale?: number; rotate?: number }
+  /** Sai antes do fim do slide. */
+  exit?: MotionExit
+  /** Segundos da saída (0,4 sem o campo). */
+  exitDur?: number
 }
 
 /** Transição de um slide para o próximo no vídeo do post. */
@@ -96,6 +113,28 @@ export interface PostMotion {
   transition?: MotionTransition
   /** Segundos da transição. */
   transitionDur?: number
+  /** Trilha ou narração do vídeo (um áudio enviado ao conjunto). */
+  audio?: MotionAudio
+}
+
+export interface MotionAudio {
+  /** `asset:<id>` de um áudio do conjunto. */
+  src: string
+  name: string
+  /** 0 a 1 */
+  volume: number
+  /** De onde a trilha começa (segundos dentro do arquivo). */
+  offset: number
+  fadeIn: number
+  fadeOut: number
+}
+
+export interface BrandMotion {
+  style: 'suave' | 'dinamico' | 'impacto'
+  transition?: MotionTransition
+  transitionDur?: number
+  /** Multiplica o tempo das entradas (0,7 mais rápido, 1,3 mais lento). */
+  pace?: number
 }
 
 export type TextAlign = 'left' | 'center' | 'right'
@@ -173,6 +212,8 @@ export interface Slide {
   id: string
   background: string
   layers: Layer[]
+  /** Câmera do slide no vídeo (aba Motion). */
+  camera?: SlideCamera
 }
 
 export interface Post {
@@ -212,6 +253,8 @@ export interface SetBrand {
    * clássica (anéis finos, grade de pontos, quadrado girado).
    */
   look?: 'editorial'
+  /** O motion da marca: estilo, transição e ritmo que os posts novos recebem ao animar (estúdio › "Guardar como padrão da marca"). */
+  motion?: BrandMotion
 }
 
 export interface SetAsset {
@@ -220,6 +263,10 @@ export interface SetAsset {
   path: string
   width: number
   height: number
+  /** Sem o campo, imagem. Vídeo vira camada de imagem que anda; áudio é a trilha do motion. */
+  kind?: 'video' | 'audio'
+  /** Segundos (vídeo e áudio). */
+  duration?: number
 }
 
 export interface CreativeSet {

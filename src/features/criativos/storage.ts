@@ -149,12 +149,39 @@ export async function uploadAsset(set: Where, file: File | Blob, name: string): 
   const id = Math.random().toString(36).slice(2, 10)
   const ext = (name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '')
   const path = `${await folderOf(placeOf(set))}/${set.id}/${id}.${ext}`
-  const { error } = await bucket().upload(path, file, { contentType: file.type || 'image/png', upsert: false })
+  const type = file.type || 'image/png'
+  if (type.startsWith('audio/') || type.startsWith('video/')) {
+    const meta = await mediaMeta(file, type.startsWith('video/') ? 'video' : 'audio')
+    const { error } = await bucket().upload(path, file, { contentType: type, upsert: false })
+    if (error) throw error
+    return { id, name, path, ...meta }
+  }
+  const { error } = await bucket().upload(path, file, { contentType: type, upsert: false })
   if (error) throw error
   const bitmap = await createImageBitmap(file)
   const asset = { id, name, path, width: bitmap.width, height: bitmap.height }
   bitmap.close()
   return asset
+}
+
+/** Tamanho e duração de um vídeo ou áudio, lidos pelo próprio navegador antes de enviar. */
+function mediaMeta(file: File | Blob, kind: 'video' | 'audio'): Promise<Pick<SetAsset, 'width' | 'height' | 'kind' | 'duration'>> {
+  if (file.size > 50 * 1024 * 1024) return Promise.reject(new Error('O arquivo passa de 50 MB.'))
+  const url = URL.createObjectURL(file)
+  return new Promise((resolve, reject) => {
+    const el = document.createElement(kind)
+    el.preload = 'metadata'
+    el.onloadedmetadata = () => {
+      const v = el as HTMLVideoElement
+      resolve({ kind, width: kind === 'video' ? v.videoWidth : 0, height: kind === 'video' ? v.videoHeight : 0, duration: Number.isFinite(el.duration) ? Math.round(el.duration * 100) / 100 : undefined })
+      URL.revokeObjectURL(url)
+    }
+    el.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error(kind === 'video' ? 'Não consegui ler esse vídeo (use MP4 ou WebM).' : 'Não consegui ler esse áudio (use MP3, M4A ou WAV).'))
+    }
+    el.src = url
+  })
 }
 
 /** Endereço temporário do arquivo, para desenhar no canvas. */

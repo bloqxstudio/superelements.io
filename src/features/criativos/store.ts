@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { toast } from 'sonner'
-import { EMPHASIS_FONT, loadFont, loadImage, type ImageMap } from './render'
+import { EMPHASIS_FONT, loadFont, loadImage, loadVideo, type ImageMap } from './render'
 import { loadSet, saveSet, assetUrl } from './storage'
 import { hasPending, materializePending } from './pending'
 import { mergePatch, type SyncPatch } from './syncPatch'
@@ -166,12 +166,14 @@ export const useEditor = create<EditorState>()((set, get) => {
       if (!src || images.has(src)) return
       try {
         let url = src
+        let video = false
         if (src.startsWith('asset:')) {
           const asset = current?.assets.find((a) => a.id === src.slice(6))
-          if (!asset) return
+          if (!asset || asset.kind === 'audio') return
           url = await assetUrl(asset)
+          video = asset.kind === 'video'
         }
-        const img = await loadImage(url)
+        const img = video ? await loadVideo(url) : await loadImage(url)
         set((s) => ({ images: new Map(s.images).set(src, img) }))
       } catch (err) {
         console.warn('[criativos] imagem', err)

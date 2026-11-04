@@ -898,6 +898,11 @@ async function sendDm(ctx: Ctx, account: AccountRow, token: string, recipient: R
 /** Uma tela de um story programado; o servidor grava o post e os números. */
 interface StoryFrame {
   path: string
+  /** Vídeo (o MP4 do motion) ou imagem; sem o campo, imagem. */
+  type?: 'image' | 'video'
+  /** Vídeo que a Meta ainda processa: o contêiner e desde quando. */
+  containerId?: string
+  processingSince?: string
   mediaId?: string
   permalink?: string
   publishedAt?: string
@@ -914,7 +919,13 @@ interface StoryRow {
   frames: StoryFrame[]
   attempts: number
   approved_by: string | null
+  kind?: 'story' | 'reel'
+  caption?: string
+  share_to_feed?: boolean
 }
+
+/** Vídeo que a Meta não termina de processar em 30 minutos: desiste. */
+const VIDEO_PROCESSING_MS = 30 * 60_000
 
 const STORY_MAX_ATTEMPTS = 3
 /** Passou disso do horário sem nenhuma tela no ar: não publica fora de hora. */
@@ -975,8 +986,23 @@ async function publishStory(admin: SupabaseClient, row: StoryRow, started: numbe
         await save({ status: 'agendado', frames, attempts: Math.max(0, row.attempts - 1), next_try_at: null })
         return 'continua'
       }
-      const result = await guarded(ctx, account, () => publish(ctx, account, token, { kind: 'story', files: [{ path: frame.path, type: 'image' }] }))
-      if (result.status !== 'published') throw new HttpError('O Instagram ainda está processando a tela.', 409, 'processing')
+      const type = frame.type === 'video' ? 'video' : 'image'
+      const reel = row.kind === 'reel'
+      const result = await guarded(ctx, account, () =>
+        frame.containerId
+          ? finish(ctx, account, token, metaId(frame.containerId, 'contêiner'), [frame.path], 20_000)
+          : publish(ctx, account, token, { kind: reel ? 'reel' : 'story', caption: reel ? row.caption ?? '' : undefined, shareToFeed: row.share_to_feed !== false, files: [{ path: frame.path, type }] })
+      )
+      if (result.status !== 'published') {
+        // Vídeo ainda processando na Meta: guarda o contêiner e volta no próximo minuto, sem contar tentativa
+        frame.containerId = result.containerId
+        frame.processingSince ??= new Date().toISOString()
+        if (Date.now() - Date.parse(frame.processingSince) > VIDEO_PROCESSING_MS) return fail('O Instagram não terminou de processar o vídeo em 30 minutos. Gere o vídeo de novo e aprove outra vez.').then(() => 'falhou')
+        await save({ status: 'agendado', frames, attempts: Math.max(0, row.attempts - 1), next_try_at: new Date(Date.now() + 60_000).toISOString() })
+        return 'processando'
+      }
+      delete frame.containerId
+      delete frame.processingSince
       frame.mediaId = result.mediaId
       if (result.permalink) frame.permalink = result.permalink
       frame.publishedAt = new Date().toISOString()
@@ -1011,6 +1037,7 @@ async function readStoryNumbers(admin: SupabaseClient, started: number) {
     .from('crm_stories')
     .select('id, team_id, account_id, publish_at, status, title, frames, attempts, approved_by')
     .eq('status', 'publicado')
+    .eq('kind', 'story')
     .is('insights_at', null)
     .lt('publish_at', new Date(now - 20 * 3_600_000).toISOString())
     .gt('publish_at', new Date(now - 23.5 * 3_600_000).toISOString())
@@ -1030,7 +1057,7 @@ async function readStoryNumbers(admin: SupabaseClient, started: number) {
       const frames = asFrames(row.frames).map((f) => ({ ...f }))
       for (const frame of frames) {
         if (!frame.mediaId) continue
-        const media: MediaItem = { id: frame.mediaId, media_type: 'IMAGE', media_product_type: 'STORY', timestamp: frame.publishedAt ?? row.publish_at }
+        const media: MediaItem = { id: frame.mediaId, media_type: frame.type === 'video' ? 'VIDEO' : 'IMAGE', media_product_type: 'STORY', timestamp: frame.publishedAt ?? row.publish_at }
         frame.insights = { ...(await mediaInsights(token, media)), ...(await storyNavigation(token, frame.mediaId)) }
         await admin.from('crm_instagram_media').update({ insights: frame.insights, updated_at: new Date().toISOString() }).eq('account_id', account.id).eq('media_id', frame.mediaId)
       }

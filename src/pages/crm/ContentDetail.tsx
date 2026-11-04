@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, CheckCircle2, CircleAlert, ExternalLink, FileText, Images, Info, Loader2, RefreshCw, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Clapperboard, CheckCircle2, CircleAlert, ExternalLink, FileText, Images, Info, Loader2, RefreshCw, Save, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useCrm } from '@/features/crm/crmStore'
@@ -18,6 +18,8 @@ import {
 } from '@/features/conteudos/rules'
 import { MaterialUnavailable, copyHash, docScript, forwardToCopy, forwardToCriativos, readCopy, readSet, scriptFromCopy, scriptToCopy, setHash } from '@/features/conteudos/forward'
 import { StatusChip } from '@/features/conteudos/StatusChip'
+import { PRODUCE_LABEL, produceWithAi, type ProduceStep } from '@/features/conteudos/produce'
+import { useAiAvailable } from '@/features/criativos/link'
 
 /**
  * Um conteúdo (/conteudos/:id): ideia, roteiro, briefing do Plano, estado e material ligado.
@@ -67,6 +69,8 @@ const ContentDetail: React.FC = () => {
   const [snapshots, setSnapshots] = useState<ApprovalSnapshot[]>([])
   const [material, setMaterial] = useState<Record<'copy' | 'criativos', MaterialState>>({ copy: { loading: false }, criativos: { loading: false } })
   const [busy, setBusy] = useState<string>()
+  const [producing, setProducing] = useState<ProduceStep>()
+  const aiOn = useAiAvailable()
   const [conflict, setConflict] = useState(false)
   const [problem, setProblem] = useState<string>()
   const [projectId, setProjectId] = useState('')
@@ -226,6 +230,27 @@ const ContentDetail: React.FC = () => {
     } catch (error) {
       if (error instanceof MaterialUnavailable) setProblem(error.message)
       else handle(error)
+      setBusy(undefined)
+    }
+  }
+
+  const produce = async () => {
+    if (!content || busy) return
+    if (dirty) return setProblem('Salve as mudanças antes de produzir: a IA parte do texto salvo.')
+    setBusy('produzir')
+    setProblem(undefined)
+    try {
+      const out = await produceWithAi(content, ctx, project ? { id: project.id, name: project.name } : undefined, setProducing)
+      if (stale(content.id)) return
+      setContent(out.content)
+      setDraft(draftOf(out.content))
+      toast.success('Roteiro, criativo e motion prontos. Revise no estúdio e publique quando aprovar.')
+      navigate(out.path)
+    } catch (error) {
+      if (error instanceof MaterialUnavailable) setProblem(error.message)
+      else handle(error)
+    } finally {
+      setProducing(undefined)
       setBusy(undefined)
     }
   }
@@ -520,6 +545,31 @@ const ContentDetail: React.FC = () => {
               </select>
               <span className="mt-1 block text-gray-500">Sem projeto, só quem criou abre o material. Vale para o que for criado agora.</span>
             </label>
+
+            {!(team && team.modules.criativos === false) && (
+              <div className="mt-4 rounded-lg border border-violet-200 bg-violet-50/60 p-3">
+                <p className="flex items-center gap-2 text-sm font-medium text-gray-900"><Clapperboard className="h-4 w-4 text-violet-700" aria-hidden /> Produzir com IA</p>
+                <p className="mt-1 text-xs text-gray-600">Do roteiro ao vídeo: {content.script.trim().length < 40 ? 'escreve o roteiro e a legenda, ' : ''}monta o criativo na marca da conta e anima. Abre no estúdio de motion para revisar, baixar o MP4 ou publicar no Instagram.</p>
+                {producing && (
+                  <ol className="mt-2 space-y-0.5 text-xs">
+                    {(['roteiro', 'criativo', 'motion'] as const).map((st) => {
+                      const order = ['roteiro', 'criativo', 'motion', 'pronto']
+                      const doneStep = order.indexOf(producing) > order.indexOf(st)
+                      const now = producing === st
+                      return (
+                        <li key={st} className={cn('flex items-center gap-1.5', doneStep ? 'text-emerald-700' : now ? 'font-medium text-gray-900' : 'text-gray-400')}>
+                          {now ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <CheckCircle2 className="h-3 w-3" aria-hidden />} {PRODUCE_LABEL[st]}
+                        </li>
+                      )
+                    })}
+                  </ol>
+                )}
+                <Button size="sm" className="mt-2 gap-1.5" disabled={!!busy || !aiOn} title={aiOn ? undefined : 'Conecte a IA desta máquina (o conector)'} onClick={() => void produce()}>
+                  {busy === 'produzir' ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Clapperboard className="h-3.5 w-3.5" aria-hidden />} {setLinkRow ? 'Animar e abrir no estúdio' : 'Produzir com IA'}
+                </Button>
+                {!aiOn && <p className="mt-1 text-[11px] text-gray-500">Precisa da IA desta máquina conectada (o conector).</p>}
+              </div>
+            )}
 
             {(['copy', 'criativos'] as const).map((kind) => {
               const link = kind === 'copy' ? copyLink : setLinkRow

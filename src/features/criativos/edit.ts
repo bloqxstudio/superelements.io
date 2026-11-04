@@ -48,11 +48,13 @@ export interface LayerFields {
   gap?: number
   dot?: number
   /** Entrada no vídeo (aba Motion); `fx: "none"` tira a animação da camada. */
-  motion?: { fx: (typeof MOTION_FX_IDS)[number] | 'none'; start?: number; dur?: number; count?: boolean }
+  motion?: { fx: (typeof MOTION_FX_IDS)[number] | 'none'; start?: number; dur?: number; count?: boolean; ease?: (typeof MOTION_EASE_IDS)[number]; exit?: (typeof MOTION_EXIT_IDS)[number]; exitDur?: number }
 }
 
 /** Efeitos de entrada e transições do motion (os mesmos de `types.ts`). */
-export const MOTION_FX_IDS = ['fade', 'rise', 'drop', 'left', 'right', 'pop', 'zoom', 'wipe', 'wipe-up', 'ken', 'pulse'] as const
+export const MOTION_FX_IDS = ['fade', 'rise', 'drop', 'left', 'right', 'pop', 'zoom', 'wipe', 'wipe-up', 'ken', 'pulse', 'words', 'letters'] as const
+export const MOTION_EXIT_IDS = ['fade', 'rise', 'drop', 'left', 'right', 'zoom', 'pop'] as const
+export const MOTION_EASE_IDS = ['suave', 'forte', 'linear', 'elastico'] as const
 export const MOTION_TRANSITION_IDS = ['push', 'fade', 'zoom', 'cut'] as const
 
 /** update_post: ritmo do vídeo do post. */
@@ -184,7 +186,7 @@ const layerProps = {
     type: 'object',
     additionalProperties: false,
     required: ['fx'],
-    properties: { fx: { type: 'string', enum: [...MOTION_FX_IDS, 'none'] }, start: { type: 'number' }, dur: { type: 'number' }, count: { type: 'boolean' } },
+    properties: { fx: { type: 'string', enum: [...MOTION_FX_IDS, 'none'] }, start: { type: 'number' }, dur: { type: 'number' }, count: { type: 'boolean' }, ease: { type: 'string', enum: [...MOTION_EASE_IDS] }, exit: { type: 'string', enum: [...MOTION_EXIT_IDS] }, exitDur: { type: 'number' } },
   },
 } as const
 

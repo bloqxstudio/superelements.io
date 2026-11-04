@@ -800,7 +800,7 @@ export const CreativeEditor: React.FC = () => {
 
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => upload.current?.click()}><ImagePlus className="h-4 w-4" /> Imagem</Button>
             <Button variant="ghost" size="sm" className={cn('h-8 gap-1.5', panel === 'motion' && 'bg-violet-50 text-violet-800')} title="Animar este post e baixar o vídeo MP4" onClick={() => setPanel(panel === 'motion' ? 'ia' : 'motion')}><Clapperboard className="h-4 w-4" /> Motion</Button>
-            <input ref={upload} type="file" accept="image/*" className="hidden" onChange={(e) => void sendLayerImage(e.target.files?.[0])} />
+            <input ref={upload} type="file" accept="image/*,video/mp4,video/webm,video/quicktime" className="hidden" onChange={(e) => void sendLayerImage(e.target.files?.[0])} />
             <label className="ml-auto flex items-center gap-2 text-xs text-gray-500">
               Fundo
               {slide && <input type="color" aria-label="Cor do fundo" value={/^#[0-9a-f]{6}$/i.test(slide.background) ? slide.background : '#ffffff'} onChange={(e) => editSlide((sl) => ({ ...sl, background: e.target.value }))} className="h-6 w-8 cursor-pointer rounded border border-gray-200 bg-white p-0.5" />}
