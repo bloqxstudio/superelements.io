@@ -129,14 +129,14 @@
       '.f{background:var(--bg);color:var(--tx);border-radius:calc(var(--r) * 1.6);padding:28px;position:relative;overflow:hidden}' +
       '.f.card{border:1px solid color-mix(in srgb,var(--tx) 10%,transparent);box-shadow:0 1px 2px rgba(0,0,0,.04),0 24px 48px -24px rgba(0,0,0,.22)}' +
       '.f.plain{padding:0;background:transparent}' +
-      '.bar{height:6px;border-radius:99px;background:color-mix(in srgb,var(--tx) 12%,transparent);margin-bottom:22px;overflow:hidden}' +
+      '.bar{height:6px;border-radius:99px;background:color-mix(in srgb,var(--tx) 12%,transparent);margin-bottom:24px;overflow:hidden}' +
       '.bar i{display:block;height:100%;background:linear-gradient(90deg,color-mix(in srgb,var(--p) 70%,#fff),var(--p));border-radius:99px;transition:width .35s cubic-bezier(.22,1,.36,1)}' +
-      'h3{font:inherit;font-size:1.5em;font-weight:650;letter-spacing:-.02em;margin:0 0 6px;line-height:1.2;white-space:pre-line}' +
-      '.d{margin:0 0 20px;opacity:.7}' +
+      'h3{font:inherit;font-size:1.5em;font-weight:650;letter-spacing:-.02em;margin:0 0 16px;line-height:1.2;white-space:pre-line}' +
+      '.d{margin:0 0 16px;opacity:.7}h3+.d{margin-top:-8px}' +
       // Observação da etapa: leve e cinza, só um aparte entre a pergunta e as opções
       '.nt{margin:4px 0 24px;font-size:.92em;font-weight:400;line-height:1.5;color:color-mix(in srgb,var(--tx) 56%,transparent);text-wrap:pretty}' +
-      'h3+.nt{margin-top:10px}.d+.nt{margin-top:-8px}' +
-      '.fl{margin:0 0 18px;border:0;padding:0;min-width:0}.fl[hidden]{display:none}' +
+      'h3+.nt{margin-top:0}.d+.nt{margin-top:-8px}' +
+      '.fl{margin:0 0 16px;border:0;padding:0;min-width:0}.fl[hidden]{display:none}' +
       'label.l,legend{display:block;font-weight:600;margin:0 0 8px;padding:0;font-size:1em}' +
       '.h{font-size:.86em;opacity:.65;margin:-4px 0 8px}' +
       '.req{color:var(--p);margin-left:3px}' +
