@@ -31,6 +31,7 @@ import {
   percent,
   redirectUri,
   startConnect,
+  createConnectLink,
   syncAccount,
   type AudienceKey,
   type IgAccount,
@@ -147,6 +148,43 @@ const TokenForm: React.FC<{ teamId: string; onDone: () => void }> = ({ teamId, o
   )
 }
 
+/** O gestor gera um link para o cliente conectar o Instagram dele sem entrar na plataforma. */
+const ClientLink: React.FC<{ teamId: string }> = ({ teamId }) => {
+  const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const make = async () => {
+    setBusy(true)
+    try {
+      setLink(await createConnectLink(teamId))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const copy = () => link && void navigator.clipboard.writeText(link.url).then(() => toast.success('Link copiado'))
+  const message = link ? `Oi! Para conectarmos o Instagram da sua empresa, abra este link e toque em "Conectar o Instagram" (a senha é digitada só no Instagram): ${link.url}` : ''
+  return (
+    <div className="mt-5 rounded-lg border border-dashed border-gray-300 p-3">
+      <p className="text-sm font-medium text-gray-900">O Instagram é do cliente?</p>
+      <p className="mt-0.5 text-xs text-gray-600">Mande um link: ele abre sem login, entra no Instagram dele e autoriza. Vale 7 dias e uma vez só.</p>
+      {link ? (
+        <div className="mt-2 space-y-2">
+          <input readOnly value={link.url} onFocus={(e) => e.currentTarget.select()} className="h-9 w-full rounded-md border border-gray-200 bg-zinc-50 px-2 text-xs text-gray-800" />
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={copy}>Copiar o link</Button>
+            <Button size="sm" variant="outline" asChild><a href={`https://wa.me/?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer">Mandar no WhatsApp</a></Button>
+            <Button size="sm" variant="ghost" onClick={() => void navigator.clipboard.writeText(message).then(() => toast.success('Mensagem copiada'))}>Copiar com mensagem</Button>
+          </div>
+          <p className="text-[11px] text-gray-500">Vence em {new Date(link.expiresAt).toLocaleDateString('pt-BR')}. Enquanto o app da Meta não é publicado, a conta do cliente precisa estar como testadora no app (o convite é aceito no Instagram dele).</p>
+        </div>
+      ) : (
+        <Button size="sm" variant="outline" className="mt-2" disabled={busy} onClick={() => void make()}>{busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}Gerar link para o cliente</Button>
+      )}
+    </div>
+  )
+}
+
 const ConnectCard: React.FC<{ teamId: string; manager: boolean; again?: boolean; onDone: () => void }> = ({ teamId, manager, again, onDone }) => {
   const [status, setStatus] = useState<{ configured: boolean } | { unavailable: string } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -201,6 +239,7 @@ const ConnectCard: React.FC<{ teamId: string; manager: boolean; again?: boolean;
             )}
           </div>
           {withToken && <TokenForm teamId={teamId} onDone={onDone} />}
+          {ready && <ClientLink teamId={teamId} />}
           {!ready && (
             <SetupGuide
               reason={

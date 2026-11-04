@@ -1094,6 +1094,94 @@ async function runScheduled(admin: SupabaseClient, dryRun: boolean) {
   return { stories: results, numbers }
 }
 
+// ---------- link para o cliente conectar ----------
+
+/** Validade do link de conexão. */
+const LINK_DAYS = 7
+
+const sha256 = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(text))), (b) => b.toString(16).padStart(2, '0')).join('')
+
+interface LinkRow {
+  id: string
+  team_id: string
+  created_by: string | null
+  expires_at: string
+  used_at: string | null
+  revoked_at: string | null
+  account_id: string | null
+}
+
+/** O link pelo segredo que veio no endereço; `ok` falso diz por quê. */
+async function linkOf(admin: SupabaseClient, token: unknown): Promise<{ link: LinkRow; state: 'ok' | 'used' | 'expired' | 'revoked' }> {
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{32,80}$/.test(token)) throw new HttpError('Link inválido. Peça um novo a quem enviou.', 404, 'link')
+  const { data, error } = await admin.from('crm_instagram_connect_links').select('id, team_id, created_by, expires_at, used_at, revoked_at, account_id').eq('token_hash', await sha256(token)).maybeSingle()
+  if (error) throw dbError(error)
+  if (!data) throw new HttpError('Link inválido. Peça um novo a quem enviou.', 404, 'link')
+  const link = data as LinkRow
+  const state = link.revoked_at ? 'revoked' : link.used_at ? 'used' : Date.parse(link.expires_at) < Date.now() ? 'expired' : 'ok'
+  return { link, state }
+}
+
+const LINK_PROBLEM: Record<'used' | 'expired' | 'revoked', string> = {
+  used: 'Este link já foi usado. Peça um novo a quem enviou.',
+  expired: 'Este link venceu. Peça um novo a quem enviou.',
+  revoked: 'Este link foi cancelado. Peça um novo a quem enviou.',
+}
+
+/** As ações sem login: o cliente que abriu o link. Tudo é conferido pelo segredo do link. */
+async function publicLink(admin: SupabaseClient, body: Record<string, unknown>) {
+  const appId = Deno.env.get('INSTAGRAM_APP_ID') ?? ''
+  const secret = Deno.env.get('INSTAGRAM_APP_SECRET') ?? ''
+  if (!appId || !secret) throw new HttpError('A conexão com o Instagram ainda não está configurada.', 503, 'not_configured')
+  const { link, state } = await linkOf(admin, body.token)
+  const { data: team } = await admin.from('crm_teams').select('name').eq('id', link.team_id).maybeSingle()
+  const teamName = (team as { name?: string } | null)?.name ?? ''
+
+  if (body.action === 'link_info') {
+    let username: string | undefined
+    if (link.account_id) {
+      const { data } = await admin.from('crm_instagram_accounts').select('username').eq('id', link.account_id).maybeSingle()
+      username = (data as { username?: string } | null)?.username
+    }
+    return { team: teamName, state, username, expiresAt: link.expires_at }
+  }
+  if (state !== 'ok') throw new HttpError(LINK_PROBLEM[state], 410, 'link_' + state)
+  const ctx: Ctx = { user: admin, admin, userId: link.created_by ?? '' }
+  await requireModule(ctx, link.team_id)
+
+  if (body.action === 'link_auth_url') {
+    const redirectUri = checkRedirect(body.redirectUri ?? (Deno.env.get('INSTAGRAM_REDIRECT_URIS') || 'https://app.avencestudio.com/instagram/retorno').split(',')[0].trim())
+    const packed = await packState({ t: link.team_id, u: `link:${link.id}`, r: redirectUri, e: Date.now() + 15 * 60_000, n: crypto.randomUUID() }, secret)
+    const auth = new URL('https://www.instagram.com/oauth/authorize')
+    auth.search = new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, response_type: 'code', scope: SCOPES.join(','), state: packed }).toString()
+    return { url: auth.toString() }
+  }
+
+  // link_connect
+  const login = await unpackState(body.state, secret)
+  if (login.u !== `link:${link.id}` || login.t !== link.team_id) throw new HttpError('Este retorno do Instagram não é deste link. Abra o link de novo.', 403, 'state')
+  if (checkRedirect(body.redirectUri) !== login.r) throw new HttpError('Endereço de volta diferente do pedido.', 400, 'state')
+  const code = typeof body.code === 'string' ? body.code.replace(/#_$/, '') : ''
+  if (!code) throw new HttpError('O Instagram não devolveu o código do login.')
+  // Marca o link como usado antes de trocar o código: dois cliques não conectam duas vezes
+  const { data: claimed, error: claimError } = await admin.from('crm_instagram_connect_links').update({ used_at: new Date().toISOString() }).eq('id', link.id).is('used_at', null).select('id')
+  if (claimError) throw dbError(claimError)
+  if (!claimed?.length) throw new HttpError(LINK_PROBLEM.used, 410, 'link_used')
+  try {
+    const short = await exchangeCode(code, login.r, appId, secret)
+    const long = await longLived(short.token, secret)
+    const saved = await saveConnection(ctx, link.team_id, { token: long.token, expiresAt: long.expiresAt, permissions: short.permissions })
+    await admin.from('crm_instagram_connect_links').update({ account_id: saved.accountId }).eq('id', link.id)
+    return { username: saved.username, team: teamName }
+  } catch (error) {
+    // Não conectou: o link volta a valer para tentar de novo
+    await admin.from('crm_instagram_connect_links').update({ used_at: null }).eq('id', link.id)
+    throw error
+  }
+}
+
+const PUBLIC_ACTIONS = new Set(['link_info', 'link_auth_url', 'link_connect'])
+
 // ---------- entrada ----------
 
 Deno.serve(async (req) => {
@@ -1114,6 +1202,21 @@ Deno.serve(async (req) => {
       console.error('[instagram] cron', error)
       if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status)
       return json({ error: error instanceof Error ? error.message : String(error), code: 'error' }, 500)
+    }
+  }
+
+  // Quem abriu o link de conexão não tem login: entra só com o segredo do link
+  {
+    const peek = ((await req.clone().json().catch(() => ({}))) ?? {}) as Record<string, unknown>
+    if (typeof peek.action === 'string' && PUBLIC_ACTIONS.has(peek.action)) {
+      try {
+        const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
+        return json(await publicLink(admin, peek))
+      } catch (error) {
+        if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status)
+        console.error('[instagram] link', error)
+        return json({ error: error instanceof Error ? error.message : String(error), code: 'error' }, 500)
+      }
     }
   }
 
@@ -1157,6 +1260,27 @@ Deno.serve(async (req) => {
         const short = await exchangeCode(code, state.r, appId, secret)
         const long = await longLived(short.token, secret)
         return json(await saveConnection(ctx, teamId, { token: long.token, expiresAt: long.expiresAt, permissions: short.permissions }))
+      }
+
+      case 'link_create': {
+        needsApp()
+        const teamId = await requireRole(ctx, body.teamId, true)
+        const token = toB64(crypto.getRandomValues(new Uint8Array(32)))
+        const expiresAt = new Date(Date.now() + LINK_DAYS * DAY * 1000).toISOString()
+        const label = typeof body.label === 'string' ? body.label.slice(0, 120) : ''
+        const { data, error } = await admin.from('crm_instagram_connect_links').insert({ team_id: teamId, token_hash: await sha256(token), label, created_by: ctx.userId, expires_at: expiresAt }).select('id').single()
+        if (error) throw dbError(error)
+        return json({ id: (data as { id: string }).id, token, expiresAt })
+      }
+
+      case 'link_revoke': {
+        if (typeof body.linkId !== 'string' || !/^[0-9a-f-]{36}$/.test(body.linkId)) throw new HttpError('Link inválido.')
+        const { data: row } = await admin.from('crm_instagram_connect_links').select('team_id').eq('id', body.linkId).maybeSingle()
+        if (!row) throw new HttpError('Link não encontrado.', 404)
+        await requireRole(ctx, (row as { team_id: string }).team_id, true)
+        const { error } = await admin.from('crm_instagram_connect_links').update({ revoked_at: new Date().toISOString() }).eq('id', body.linkId).is('used_at', null)
+        if (error) throw dbError(error)
+        return json({ ok: true })
       }
 
       case 'connect_token': {

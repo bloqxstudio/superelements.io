@@ -51,6 +51,7 @@ import CrmContentDetail from "@/pages/crm/ContentDetail";
 import CrmFunnels from "@/pages/crm/Funnels";
 import CrmFunnelDetail from "@/pages/crm/FunnelDetail";
 import InstagramCallback from "@/pages/InstagramCallback";
+import { ConnectInstagram, ConnectInstagramReturn, comesFromLink } from "@/pages/ConnectInstagram";
 import AdsCallback from "@/pages/AdsCallback";
 import { CrmGate } from "@/features/crm/CrmGate";
 import MenuzitoModel from "@/pages/MenuzitoModel";
@@ -89,7 +90,9 @@ function App() {
               {/* Volta da aprovação no WordPress; sem login no caminho para não perder a senha da URL */}
               <Route path="/wordpress/retorno" element={<WordPressCallback />} />
               {/* Volta do login do Instagram: troca o código pelo acesso da conta da equipe */}
-              <Route path="/instagram/retorno" element={<ProtectedRoute><InstagramCallback /></ProtectedRoute>} />
+              {/* Quem veio pelo link do cliente volta sem login; o resto, como antes */}
+              <Route path="/instagram/retorno" element={comesFromLink() ? <ConnectInstagramReturn /> : <ProtectedRoute><InstagramCallback /></ProtectedRoute>} />
+              <Route path="/conectar/instagram/:token" element={<ConnectInstagram />} />
               {/* Volta do login do Facebook: escolher as contas de anúncios da equipe */}
               <Route path="/anuncios/retorno" element={<ProtectedRoute><AdsCallback /></ProtectedRoute>} />
               {/* Link de aprovação: o cliente abre sem login */}

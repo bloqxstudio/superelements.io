@@ -274,6 +274,48 @@ export interface Connected {
 /** Na tela de volta: o endereço dela é o que foi pedido à Meta. */
 export const finishConnect = (code: string, state: string) => call<Connected>('connect', { code, state, redirectUri: `${window.location.origin}${CALLBACK_PATH}` })
 
+// ---------- link para o cliente conectar ----------
+
+/** Onde a página pública do link guarda o segredo enquanto a pessoa está no Instagram. */
+export const LINK_KEY = 'ig-link-conexao'
+export const LINK_PATH = '/conectar/instagram'
+
+export interface ConnectLink {
+  id: string
+  url: string
+  expiresAt: string
+}
+
+/** Um gestor cria o link (7 dias, uso único) para o cliente conectar o Instagram dele sem entrar na plataforma. */
+export async function createConnectLink(teamId: string, label = ''): Promise<ConnectLink> {
+  const { id, token, expiresAt } = await call<{ id: string; token: string; expiresAt: string }>('link_create', { teamId, label })
+  return { id, url: `${publicAppUrl()}${LINK_PATH}/${token}`, expiresAt }
+}
+
+export const revokeConnectLink = (linkId: string) => call<{ ok: true }>('link_revoke', { linkId })
+
+export interface LinkInfo {
+  team: string
+  state: 'ok' | 'used' | 'expired' | 'revoked'
+  username?: string
+  expiresAt: string
+}
+
+export const connectLinkInfo = (token: string) => call<LinkInfo>('link_info', { token })
+
+/** Na página do link: abre o login do Instagram; a volta cai em `/instagram/retorno`. */
+export async function startLinkConnect(token: string) {
+  const { url } = await call<{ url: string }>('link_auth_url', { token })
+  try {
+    sessionStorage.setItem(LINK_KEY, token)
+  } catch {
+    // sem armazenamento: a volta pede para abrir o link de novo
+  }
+  window.location.assign(url)
+}
+
+export const finishLinkConnect = (token: string, code: string, state: string) => call<{ username: string; team: string }>('link_connect', { token, code, state, redirectUri: `${window.location.origin}${CALLBACK_PATH}` })
+
 export const connectWithToken = (teamId: string, token: string) => call<Connected>('connect_token', { teamId, token })
 
 export const syncAccount = (accountId: string) => call<{ posts: number; missing: string[] }>('sync', { accountId })
