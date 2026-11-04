@@ -1,19 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { FORMS_ENDPOINT, FORMS_SCRIPT_VERSION, type FormTheme } from '@/features/crm/forms'
+import { FORMS_ENDPOINT, FORMS_SCRIPT_VERSION, configUrl, formBySlug, type FormTheme } from '@/features/crm/forms'
 
 /**
- * Link direto para um formulário (`/f/<id>`): abre só o formulário, sem WordPress e sem login, para
+ * Link direto para um formulário (`/f/<id>` ou `/f/<slug>`, o endereço bonito): abre só o formulário, sem WordPress e sem login, para
  * campanhas, WhatsApp e e-mail. Usa o mesmo `forms.js` do site (validação, quiz, envio ao CRM), então
  * a origem da campanha (UTM, gclid, fbclid) chega ao lead como em qualquer outro lugar.
  *
  * Rastreamento opcional, pelo próprio link (a página não tem onde guardar essas configurações):
  *   ?gtm=GTM-XXXXXXX   Tag Manager (recebe form_view, form_submit, lead_qualificado…)
- *   ?px=1234567890     pixel da Meta (PageView ao abrir; Lead quando o envio não é desqualificado)
+ *   ?px=1234567890     pixel da Meta (legado: o certo é o pixel nas configurações do formulário,
+ *                      que o próprio forms.js liga aqui e no site, com todos os eventos)
  */
 
 const GTM = /^GTM-[A-Z0-9]{4,12}$/
 const PIXEL = /^\d{8,20}$/
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 declare global {
   interface Window {
@@ -46,25 +48,6 @@ function startTagManager(id: string) {
   void loadScript(`https://www.googletagmanager.com/gtm.js?id=${id}`).catch(() => undefined)
 }
 
-function startPixel(id: string) {
-  const w = window
-  if (!w.fbq) {
-    const fbq = function (...args: unknown[]) {
-      if ((fbq as { callMethod?: (...a: unknown[]) => void }).callMethod) (fbq as { callMethod: (...a: unknown[]) => void }).callMethod(...args)
-      else (fbq.queue as unknown[]).push(args)
-    } as NonNullable<Window['fbq']>
-    fbq.push = fbq
-    fbq.loaded = true
-    fbq.version = '2.0'
-    fbq.queue = []
-    w.fbq = fbq
-    w._fbq = fbq
-    void loadScript('https://connect.facebook.net/en_US/fbevents.js').catch(() => undefined)
-  }
-  w.fbq!('init', id)
-  w.fbq!('track', 'PageView')
-}
-
 /** O fundo da página acompanha o formulário: claro e neutro, ou escuro se o tema do formulário for escuro. */
 function pageBackground(theme: FormTheme | undefined) {
   if (!theme) return '#f4f4f5'
@@ -76,11 +59,28 @@ function pageBackground(theme: FormTheme | undefined) {
 }
 
 const PublicForm: React.FC = () => {
-  const { id = '' } = useParams()
+  const { id: param = '' } = useParams()
   const [params] = useSearchParams()
   const host = useRef<HTMLDivElement>(null)
   const [theme, setTheme] = useState<FormTheme>()
   const [unavailable, setUnavailable] = useState(false)
+  // `/f/<id>` abre direto; `/f/<slug>` pergunta ao banco qual é o formulário publicado
+  const [target, setTarget] = useState<{ id: string; config?: string } | null>(UUID.test(param) ? { id: param } : null)
+  const id = target?.id ?? ''
+
+  useEffect(() => {
+    if (UUID.test(param)) return setTarget({ id: param })
+    setTarget(null)
+    let live = true
+    void formBySlug(param).then((hit) => {
+      if (!live) return
+      if (hit) setTarget({ id: hit.id, config: configUrl(hit.teamId, hit.id) })
+      else setUnavailable(true)
+    })
+    return () => {
+      live = false
+    }
+  }, [param])
   const gtm = params.get('gtm')?.toUpperCase()
   const pixel = params.get('px') ?? undefined
 
@@ -95,12 +95,11 @@ const PublicForm: React.FC = () => {
 
   useEffect(() => {
     if (gtm && GTM.test(gtm)) startTagManager(gtm)
-    if (pixel && PIXEL.test(pixel)) startPixel(pixel)
-  }, [gtm, pixel])
+  }, [gtm])
 
   useEffect(() => {
     const node = host.current
-    if (!node) return
+    if (!node || !id) return
     const onEvent = (e: Event) => {
       const d = (e as CustomEvent).detail as { event?: string; config?: { name?: string; theme?: FormTheme }; qualified?: boolean | null }
       if (d.event === 'form_config' && d.config) {
@@ -108,8 +107,6 @@ const PublicForm: React.FC = () => {
         setTheme(d.config.theme)
         setUnavailable(false)
       } else if (d.event === 'form_unavailable') setUnavailable(true)
-      // Meta: Lead quando o envio é de formulário comum ou de quiz qualificado
-      else if (d.event === 'form_submit' && d.qualified !== false) window.fbq?.('track', 'Lead')
     }
     node.addEventListener('avence-form', onEvent)
     let live = true
@@ -130,7 +127,8 @@ const PublicForm: React.FC = () => {
             <p className="mt-2 text-sm text-gray-600">Este link não está mais ativo. Confira o endereço com quem enviou.</p>
           </div>
         ) : (
-          <div ref={host} data-avence-form={id} data-endpoint={FORMS_ENDPOINT} style={{ color: dark ? '#fafafa' : undefined }} />
+          // A capa ocupa a altura da tela (menos o respiro da página), para o alinhamento vertical valer
+          <div key={id} ref={host} className="[--avence-form-min-h:calc(100dvh-4rem)] sm:[--avence-form-min-h:min(calc(100dvh-6rem),820px)]" data-avence-form={id || undefined} data-config={target?.config} data-endpoint={FORMS_ENDPOINT} data-pixel={pixel && PIXEL.test(pixel) ? pixel : undefined} style={{ color: dark ? '#fafafa' : undefined }} />
         )}
       </div>
     </main>

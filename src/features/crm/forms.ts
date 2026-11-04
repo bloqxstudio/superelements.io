@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
-import { SETTINGS_DEFAULT, THEME_DEFAULT, cleanDefinition, cleanSettings, cleanTheme, newId, type Answers, type FormDefinition, type FormField, type FormSettings, type FormStep, type FormTheme } from '../../../supabase/functions/_shared/forms.ts'
+import { BOOKING_DEFAULT, SETTINGS_DEFAULT, THEME_DEFAULT, cleanDefinition, cleanSettings, cleanTheme, newId, type Answers, type FormDefinition, type FormField, type FormSettings, type FormStep, type FormTheme } from '../../../supabase/functions/_shared/forms.ts'
 import { isLocalAppUrl, publicAppUrl } from '@/features/approval/shares'
 
 /**
@@ -20,7 +20,7 @@ export const FORMS_ENDPOINT = `${SUPABASE_URL}/functions/v1/form-submit`
  * Muda a cada alteração do `public/forms.js`: o servidor guarda o arquivo por 30 dias no navegador,
  * e o `?v=` faz as correções chegarem a quem já visitou o site.
  */
-export const FORMS_SCRIPT_VERSION = '8'
+export const FORMS_SCRIPT_VERSION = '14'
 
 /** O script sai sempre do app publicado (no app local, o endereço daqui não abre no site). */
 export const formsScriptUrl = () => `${isLocalAppUrl() ? 'https://app.avencestudio.com' : publicAppUrl()}/forms.js?v=${FORMS_SCRIPT_VERSION}`
@@ -36,6 +36,8 @@ export interface CrmForm {
   name: string
   kind: 'form' | 'quiz'
   status: 'draft' | 'published'
+  /** Endereço bonito do link direto (`/f/<slug>`), único na plataforma. */
+  slug?: string
   definition: FormDefinition
   theme: FormTheme
   settings: FormSettings
@@ -77,6 +79,7 @@ type FormRow = {
   name: string
   kind: 'form' | 'quiz'
   status: 'draft' | 'published'
+  slug?: string | null
   definition: unknown
   theme: unknown
   settings: unknown
@@ -91,6 +94,7 @@ const toForm = (row: FormRow): CrmForm => ({
   name: row.name,
   kind: row.kind,
   status: row.status,
+  slug: row.slug || undefined,
   definition: cleanDefinition(row.definition),
   theme: cleanTheme(row.theme),
   settings: cleanSettings(row.settings),
@@ -147,6 +151,43 @@ export async function saveForm(form: Pick<CrmForm, 'id' | 'teamId' | 'name' | 's
     .eq('id', form.id)
   if (error) fail(error)
   await syncPublic(form)
+}
+
+/** Minúsculas, sem acento, palavras com hífen: "Diagnóstico Grátis!" → "diagnostico-gratis". */
+export const slugify = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60)
+    .replace(/-+$/, '')
+
+export const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,58})[a-z0-9]$/
+
+export class SlugTakenError extends Error {
+  constructor() {
+    super('Esse endereço já está em uso. Escolha outro.')
+  }
+}
+
+/** Grava (ou tira, com vazio) o endereço bonito. O banco garante que é único. */
+export async function setFormSlug(id: string, slug: string | null) {
+  const { error } = await db.from('crm_forms').update({ slug: slug || null }).eq('id', id)
+  if (!error) return
+  if (error.code === '23505') throw new SlugTakenError()
+  if (error.code === '42703' || error.code === 'PGRST204') throw new Error('Falta aplicar a migração 20261104190000_crm_form_slug.sql no Supabase.')
+  if (error.code === '23514') throw new Error('Use de 3 a 60 letras minúsculas, números e hífens.')
+  fail(error)
+}
+
+/** A página pública `/f/<slug>`: acha o formulário publicado (sem login). */
+export async function formBySlug(slug: string): Promise<{ id: string; teamId: string } | null> {
+  const { data, error } = await db.rpc('crm_form_by_slug', { p_slug: slug })
+  const row = (data as { id: string; team_id: string }[] | null)?.[0]
+  if (error || !row) return null
+  return { id: row.id, teamId: row.team_id }
 }
 
 export async function deleteForm(form: Pick<CrmForm, 'id' | 'teamId'>) {
@@ -209,6 +250,82 @@ export async function deleteSubmission(id: string) {
   if (error) fail(error)
 }
 
+// ---------- pixel da Meta: token da API de Conversões (só gestor; fora da configuração pública) ----------
+
+export interface PixelSecret {
+  accessToken: string
+  testEventCode: string
+}
+
+/** null = ainda sem token (ou a migração 20261103180000 por aplicar). */
+export async function loadPixelSecret(formId: string): Promise<PixelSecret | null> {
+  const { data, error } = await db.from('crm_form_pixel_tokens').select('access_token, test_event_code').eq('form_id', formId).maybeSingle()
+  if (error) {
+    if (error.code === '42P01' || error.code === 'PGRST205') return null
+    throw new Error(error.message)
+  }
+  return data ? { accessToken: (data.access_token as string) ?? '', testEventCode: (data.test_event_code as string | null) ?? '' } : null
+}
+
+export async function savePixelSecret(form: Pick<CrmForm, 'id' | 'teamId'>, secret: PixelSecret) {
+  const test = secret.testEventCode.trim()
+  const { error } = await db.from('crm_form_pixel_tokens').upsert({ form_id: form.id, team_id: form.teamId, access_token: secret.accessToken.trim(), test_event_code: test || null, updated_at: new Date().toISOString() })
+  if (error) fail(error)
+}
+
+// ---------- agenda ----------
+
+export interface FormBookingRow {
+  id: string
+  formId: string
+  submissionId?: string
+  opportunityId?: string
+  startsAt: number
+  endsAt: number
+  name?: string
+  phone?: string
+  email?: string
+  status: 'confirmado' | 'cancelado'
+  createdAt: number
+}
+
+export async function listBookings(formId: string): Promise<FormBookingRow[]> {
+  const { data, error } = await db.from('crm_form_bookings').select('*').eq('form_id', formId).order('starts_at', { ascending: true }).limit(300)
+  if (error) {
+    if (error.code === '42P01' || error.code === 'PGRST205') throw new Error('Falta aplicar a migração 20261103180000_crm_form_bookings.sql no Supabase.')
+    throw new Error(error.message)
+  }
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    id: r.id as string,
+    formId: r.form_id as string,
+    submissionId: (r.submission_id as string | null) ?? undefined,
+    opportunityId: (r.opportunity_id as string | null) ?? undefined,
+    startsAt: Date.parse(r.starts_at as string),
+    endsAt: Date.parse(r.ends_at as string),
+    name: (r.name as string | null) ?? undefined,
+    phone: (r.phone as string | null) ?? undefined,
+    email: (r.email as string | null) ?? undefined,
+    status: r.status as FormBookingRow['status'],
+    createdAt: Date.parse(r.created_at as string),
+  }))
+}
+
+export async function setBookingStatus(id: string, status: FormBookingRow['status']) {
+  const { error } = await db.from('crm_form_bookings').update({ status }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** Logo da capa no bucket público do formulário (`<conta>/logos/<form>-<hora>.<ext>`). */
+export async function uploadFormLogo(form: Pick<CrmForm, 'id' | 'teamId'>, file: File): Promise<string> {
+  if (!/^image\/(png|webp|jpeg|svg\+xml)$/.test(file.type)) throw new Error('Use um PNG, WebP, JPG ou SVG.')
+  if (file.size > 2 * 1024 * 1024) throw new Error('O logo pode ter até 2 MB.')
+  const ext = file.type === 'image/svg+xml' ? 'svg' : file.type.split('/')[1].replace('jpeg', 'jpg')
+  const path = `${form.teamId}/logos/${form.id}-${Date.now()}.${ext}`
+  const { error } = await supabase.storage.from(CONFIG_BUCKET).upload(path, file, { contentType: file.type, cacheControl: '31536000', upsert: false })
+  if (error) throw new Error(/mime|type/i.test(error.message) ? 'Falta aplicar a migração 20261103180000_crm_form_bookings.sql (o bucket ainda não aceita imagens).' : error.message)
+  return `${SUPABASE_URL}/storage/v1/object/public/${CONFIG_BUCKET}/${path}`
+}
+
 /** O trecho que vai no widget HTML do Elementor, no lugar do formulário do WordPress. */
 export const embedOf = (form: Pick<CrmForm, 'id' | 'teamId'>) =>
   `<link rel="preconnect" href="${SUPABASE_URL}" crossorigin>\n<div data-avence-form="${form.id}" data-config="${configUrl(form.teamId, form.id)}" data-endpoint="${FORMS_ENDPOINT}"></div>\n<script defer src="${formsScriptUrl()}"></script>`
@@ -244,6 +361,8 @@ export interface FormTemplate {
   definition: () => FormDefinition
   settings?: Partial<FormSettings>
   theme?: FormTheme
+  /** Quando as configurações apontam para ids da definição (filtro da agenda), os dois nascem juntos */
+  build?: () => { definition: FormDefinition; settings: Partial<FormSettings> }
 }
 
 const opt = (label: string, score?: number) => ({ id: newId('o'), label, score })
@@ -332,8 +451,64 @@ const SITE_LEAD_SETTINGS: Partial<FormSettings> = { submitLabel: 'Pedir proposta
  */
 const DIAGNOSTICO_THEME: FormTheme = { primary: '#ff5900', background: '#ffffff', text: '#171a2c', field: '#ffffff', radius: 8, font: 'Inter', frame: 'plain', fieldStyle: 'outline' }
 
+/**
+ * Captação com agendamento (a estrutura do funil de reunião qualificada): capa com headline de até 10
+ * palavras, bullets de até 35 caracteres (promessa, meio 1, meio 2, autoridade) e o rodapé com o filtro;
+ * depois nome, @, WhatsApp e faturamento. Quem fatura acima de R$ 30 mil vai para a agenda; o resto
+ * recebe a resposta educada. Visual Avence: fundo branco, Inter Tight, azul só no que se clica.
+ */
+const CAPTACAO_THEME: FormTheme = { primary: '#2b3cf0', background: '#ffffff', text: '#111111', field: '#ffffff', radius: 6, font: 'Inter Tight', frame: 'plain', fieldStyle: 'outline' }
+
+function captacaoTemplate(): { definition: FormDefinition; settings: Partial<FormSettings> } {
+  const revenueId = newId('f')
+  const low = [opt('Até R$ 10 mil'), opt('De R$ 10 mil a R$ 30 mil')]
+  const high = [opt('De R$ 30 mil a R$ 100 mil'), opt('Acima de R$ 100 mil')]
+  const one = (title: string, field: Omit<FormField, 'id'>): FormStep => ({ id: newId('s'), title, fields: [{ id: newId('f'), ...field }] })
+  return {
+    definition: {
+      kind: 'form',
+      welcome: {
+        enabled: true,
+        icon: 'rocket',
+        title: 'Fazemos sua empresa **faturar mais** com um **método validado**',
+        bullets: [
+          { id: 'b1', icon: 'target', text: 'Mais retorno no investimento' },
+          { id: 'b2', icon: 'palette', text: 'Criativos por nossa conta' },
+          { id: 'b3', icon: 'circle-check', text: 'Resultados previsíveis' },
+          { id: 'b4', icon: 'trophy', text: 'Funil de vendas validado' },
+        ],
+        footnote: 'Exclusivo para empresas com faturamento acima de R$ 30 mil/mês que querem parar de patinar e começar a escalar.',
+        buttonLabel: 'Preciso de especialistas',
+      },
+      results: [],
+      steps: [
+        one('Qual o seu nome?', { type: 'short', label: 'Nome', required: true, map: 'name', placeholder: 'Digite sua resposta' }),
+        one('Qual o @ da sua empresa?', { type: 'short', label: 'Instagram da empresa', required: true, placeholder: '@suaempresa' }),
+        one('Qual o seu WhatsApp?', { type: 'phone', label: 'WhatsApp', required: true, map: 'phone', placeholder: '(51) 99999-9999' }),
+        { id: newId('s'), title: 'Qual o faturamento mensal da empresa?', fields: [{ id: revenueId, type: 'choice', label: 'Faturamento mensal', required: true, options: [...low, ...high] }] },
+      ],
+    },
+    settings: {
+      autoAdvance: true,
+      nextLabel: 'Continuar',
+      submitLabel: 'Continuar',
+      successTitle: 'Recebemos suas respostas',
+      successText: 'Neste momento atendemos empresas com faturamento acima de R$ 30 mil por mês. Vamos guardar seu contato e falar com você quando fizer sentido.',
+      booking: { ...BOOKING_DEFAULT, meetingName: 'Reunião de diagnóstico', gate: { mode: 'answer', field: revenueId, values: high.map((o) => o.id) } },
+    },
+  }
+}
+
 /** Pontos de partida: a equipe edita tudo depois. */
 export const TEMPLATES: FormTemplate[] = [
+  {
+    id: 'captacao-agenda',
+    name: 'Captação com agendamento',
+    text: 'Capa com headline e bullets, quatro perguntas e a agenda só para quem fatura acima de R$ 30 mil. Aviso no WhatsApp da equipe a cada reunião marcada.',
+    definition: () => captacaoTemplate().definition,
+    build: captacaoTemplate,
+    theme: CAPTACAO_THEME,
+  },
   {
     id: 'diagnostico',
     name: 'Diagnóstico (duas colunas)',
