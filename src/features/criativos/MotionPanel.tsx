@@ -5,8 +5,9 @@ import { Clapperboard, Download, Maximize2, Pause, Play, Sparkles, Wand2, X } fr
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { currentLayer, currentPost, currentSlide, useEditor } from './store'
-import { MOTION_FX, MOTION_TRANSITIONS, MotionRenderer, autoPostMotion, autoSlideMotion, clearPostMotion, hasMotion, numberIn, postMotionOf, slideDuration, timeline } from './motion'
-import { audioFor, postToMp4, videoSupported } from './video'
+import { MOTION_FX, MOTION_TRANSITIONS, MotionRenderer, autoPostMotion, autoSlideMotion, clearPostMotion, clearSlideMotion, coverOnlyMotion, hasMotion, numberIn, postMotionOf, postOutput, slideAsPost, slideDuration, slideHasMotion, timeline, type PostOutput } from './motion'
+import { audioFor, postToCarousel, postToMp4, videoSupported } from './video'
+import { zipFiles } from './zip'
 import type { ImageMap } from './render'
 import { sizeOf, type Layer, type LayerMotion, type MotionFx, type MotionTransition, type Post } from './types'
 
@@ -132,17 +133,65 @@ export const MotionPlayer: React.FC<{ post: Post; images: ImageMap; startAt?: nu
 
 // MP4
 
+/** Baixa o motion do post: um MP4, ou, no carrossel, um ZIP com os vídeos dos slides animados e as fotos dos outros. */
 export async function downloadMp4(post: Post, onProgress?: (p: number) => void): Promise<void> {
   await useEditor.getState().ensureAssets()
   const { set, images } = useEditor.getState()
   const fresh = set?.posts.find((p) => p.id === post.id) ?? post
-  const blob = await postToMp4(fresh, images, { onProgress, audio: set ? await audioFor(fresh, set.assets) : undefined })
+  const audio = set ? await audioFor(fresh, set.assets) : undefined
+  const base = `${slug(set?.name ?? 'criativo')}-${slug(fresh.name)}`
+  const carousel = postOutput(fresh) === 'carousel'
+  const blob = carousel ? await zipFiles(await postToCarousel(fresh, images, { audio, onProgress, base })) : await postToMp4(fresh, images, { onProgress, audio })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${slug(set?.name ?? 'criativo')}-${slug(fresh.name)}.mp4`
+  a.download = `${base}.${carousel ? 'zip' : 'mp4'}`
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 4000)
+}
+
+/** Liga ou desliga a animação de um slide (vídeo ou imagem no carrossel). */
+export const toggleSlideMotion = (slideId: string) =>
+  editPost((p) => ({ ...p, slides: p.slides.map((s) => (s.id !== slideId ? s : slideHasMotion(s) ? clearSlideMotion(s) : autoSlideMotion(s, p.format))) }))
+
+export const setPostOutput = (output: PostOutput) => editPost((p) => ({ ...p, motion: { ...p.motion, output } }))
+
+/** Um vídeo só ou carrossel misto, e o que cada slide vira. */
+export const OutputPicker: React.FC<{ post: Post; currentSlideId?: string; onSlide?: (id: string) => void }> = ({ post, currentSlideId, onSlide }) => {
+  if (post.slides.length < 2) return null
+  const out = postOutput(post)
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-1.5">
+        {([
+          ['video', 'Um vídeo só', 'Todos os slides em sequência (reels, story).'],
+          ['carousel', 'Carrossel', 'Slide animado vira vídeo, o resto vira foto.'],
+        ] as const).map(([id, label, hint]) => (
+          <button key={id} type="button" title={hint} onClick={() => setPostOutput(id)} className={cn('rounded-md border px-2 py-1.5 text-left', out === id ? 'border-violet-500 bg-violet-50' : 'border-gray-200 hover:bg-gray-50')}>
+            <span className={cn('block text-xs font-semibold', out === id ? 'text-violet-800' : 'text-gray-800')}>{label}</span>
+            <span className="block text-[10px] leading-tight text-gray-500">{hint}</span>
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {post.slides.map((s, i) => {
+          const on = slideHasMotion(s)
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => (onSlide && s.id !== currentSlideId ? onSlide(s.id) : toggleSlideMotion(s.id))}
+              title={onSlide && s.id !== currentSlideId ? `Abrir o slide ${i + 1}` : on ? 'Clique para deixar este slide parado (foto)' : 'Clique para animar este slide (vídeo)'}
+              className={cn('flex h-7 items-center gap-1 rounded-full border px-2 text-[11px] font-medium', on ? 'border-violet-300 bg-violet-50 text-violet-800' : 'border-gray-200 bg-white text-gray-600', s.id === currentSlideId && 'ring-2 ring-violet-400')}
+            >
+              {i + 1} · {on ? (out === 'carousel' ? 'vídeo' : 'animado') : out === 'carousel' ? 'foto' : 'parado'}
+            </button>
+          )
+        })}
+      </div>
+      <p className="text-[11px] leading-snug text-gray-500">{onSlide ? 'Clique no slide aberto para ligar ou desligar a animação dele.' : 'Clique num slide para ligar ou desligar a animação dele.'}{out === 'carousel' ? ' No Instagram, cada vídeo do carrossel precisa de pelo menos 3 s.' : ''}</p>
+    </div>
+  )
 }
 
 const inputClass = 'h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -180,6 +229,8 @@ export const MotionPanel: React.FC = () => {
   const dur = slideDuration(post, slide)
   const pm = postMotionOf(post)
   const animated = hasMotion(post)
+  const carousel = postOutput(post) === 'carousel'
+  const slideOn = slideHasMotion(slide)
   const ordered = [...slide.layers].reverse().filter((l) => !l.hidden)
 
   const exportVideo = async () => {
@@ -202,13 +253,39 @@ export const MotionPanel: React.FC = () => {
           <Link to={studioLink} className="ml-auto mr-1 text-xs font-medium text-violet-700 hover:underline">Abrir o estúdio</Link>
           <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Ampliar" onClick={() => setBig(true)}><Maximize2 className="h-3.5 w-3.5" /></Button>
         </div>
-        <MotionPlayer post={post} images={images} startAt={seg?.start} />
+        {carousel ? (
+          slideOn ? (
+            <MotionPlayer key={slide.id} post={slideAsPost(post, slide)} images={images} />
+          ) : (
+            <p className="rounded-md bg-gray-50 p-3 text-xs text-gray-500">O slide {post.slides.findIndex((s) => s.id === slide.id) + 1} está parado: no carrossel ele sai como foto.</p>
+          )
+        ) : (
+          <MotionPlayer post={post} images={images} startAt={seg?.start} />
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-1.5">
-        <Button type="button" size="sm" className="h-8 gap-1.5" onClick={() => { editPost(autoPostMotion); toast.success('Post animado. Ajuste o que quiser na linha do tempo.') }}><Wand2 className="h-4 w-4" /> Animar o post</Button>
-        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 bg-white" onClick={() => editPost((p) => ({ ...p, slides: p.slides.map((s) => (s.id === slide.id ? autoSlideMotion(s, p.format) : s)) }))}><Sparkles className="h-4 w-4" /> Só este slide</Button>
+        <Button type="button" size="sm" className="h-8 gap-1.5" onClick={() => { editPost((p) => autoPostMotion(p)); toast.success('Post animado. Ajuste o que quiser na linha do tempo.') }}><Wand2 className="h-4 w-4" /> Animar o post</Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 bg-white"
+          title="Anima só o slide aberto; os outros ficam como estão"
+          onClick={() => {
+            editPost((p) => ({ ...p, slides: p.slides.map((s) => (s.id === slide.id ? autoSlideMotion(s, p.format) : s)) }))
+            if (post.slides.length > 1 && !carousel) toast.message('Só este slide anima. Para postar os outros como foto, escolha "Carrossel" na saída.')
+          }}
+        >
+          <Sparkles className="h-4 w-4" /> Só este slide
+        </Button>
+        {post.slides.length > 1 && (
+          <Button type="button" variant="outline" size="sm" className="col-span-2 h-8 gap-1.5 bg-white" title="A capa em vídeo e os slides de dentro como fotos, num carrossel" onClick={() => { editPost((p) => coverOnlyMotion(p)); useEditor.getState().selectSlide(post.slides[0].id); toast.success('Só a capa anima: o post vira carrossel com a capa em vídeo e o resto em foto.') }}>
+            <Clapperboard className="h-4 w-4" /> Animar só a capa
+          </Button>
+        )}
       </div>
+      <OutputPicker post={post} />
       {animated && (
         <button type="button" className="-mt-2 text-xs text-gray-500 underline-offset-2 hover:text-red-600 hover:underline" onClick={() => editPost(clearPostMotion)}>Tirar a animação do post</button>
       )}
@@ -258,9 +335,9 @@ export const MotionPanel: React.FC = () => {
 
       <div className="space-y-1.5 border-t border-gray-100 pt-3">
         <Button type="button" className="w-full gap-1.5" disabled={!supported || progress !== null} onClick={() => void exportVideo()}>
-          <Download className="h-4 w-4" /> {progress !== null ? `Gerando… ${Math.round(progress * 100)}%` : 'Baixar MP4'}
+          <Download className="h-4 w-4" /> {progress !== null ? `Gerando… ${Math.round(progress * 100)}%` : carousel ? 'Baixar o carrossel (ZIP)' : 'Baixar MP4'}
         </Button>
-        <p className="text-[11px] leading-snug text-gray-500">{supported ? `${sizeOf(post.format).width}×${sizeOf(post.format).height}, 30 quadros por segundo, gerado neste navegador.` : 'Este navegador não gera vídeo: use o Chrome ou o Edge atualizados.'}</p>
+        <p className="text-[11px] leading-snug text-gray-500">{supported ? `${sizeOf(post.format).width}×${sizeOf(post.format).height}, 30 quadros por segundo, gerado neste navegador.${carousel ? ' Slides animados em MP4, os outros em JPG.' : ''}` : 'Este navegador não gera vídeo: use o Chrome ou o Edge atualizados.'}</p>
       </div>
 
       {big && (

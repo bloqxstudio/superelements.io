@@ -454,7 +454,7 @@ export async function publishPost(input: { teamId: string; accountId: string; ki
   input.onStep?.('enviando')
   const paths = await Promise.all(input.files.map((f) => upload(input.teamId, f)))
   input.onStep?.('preparando')
-  type Result = { status: 'published'; mediaId: string; permalink?: string } | { status: 'processing'; containerId: string }
+  type Result = { status: 'published'; mediaId: string; permalink?: string } | { status: 'processing'; containerId: string } | { status: 'children'; children: string[]; videos: string[] }
   let result = await call<Result>('publish', {
     accountId: input.accountId,
     kind: input.kind,
@@ -463,11 +463,18 @@ export async function publishPost(input: { teamId: string; accountId: string; ki
     files: input.files.map((f, i) => ({ path: paths[i], type: f.type })),
   })
   const until = Date.now() + 5 * 60_000
-  while (result.status === 'processing') {
+  while (result.status === 'processing' || result.status === 'children') {
     input.onStep?.('processando')
-    if (Date.now() > until) throw new InstagramError('O Instagram ainda está processando o vídeo. Ele pode sair sozinho em alguns minutos; confira no perfil antes de tentar de novo.', 'processing')
-    await sleep(10_000)
-    result = await call<Result>('publish_check', { accountId: input.accountId, containerId: result.containerId, paths })
+    if (Date.now() > until)
+      throw new InstagramError(
+        result.status === 'children' ? 'O Instagram ainda está processando os vídeos do carrossel. Tente publicar de novo em alguns minutos.' : 'O Instagram ainda está processando o vídeo. Ele pode sair sozinho em alguns minutos; confira no perfil antes de tentar de novo.',
+        'processing'
+      )
+    await sleep(result.status === 'children' ? 3_000 : 10_000)
+    result =
+      result.status === 'children'
+        ? await call<Result>('publish_carousel', { accountId: input.accountId, children: result.children, videos: result.videos, caption: input.caption, paths })
+        : await call<Result>('publish_check', { accountId: input.accountId, containerId: result.containerId, paths })
   }
   input.onStep?.('publicado')
   return { mediaId: result.mediaId, permalink: result.permalink }

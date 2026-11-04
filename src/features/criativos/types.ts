@@ -115,6 +115,11 @@ export interface PostMotion {
   transitionDur?: number
   /** Trilha ou narração do vídeo (um áudio enviado ao conjunto). */
   audio?: MotionAudio
+  /**
+   * O que o post vira: um vídeo só com todos os slides (reels e story; o padrão), ou um
+   * carrossel em que cada slide é um item: os animados viram vídeo, os parados, imagem.
+   */
+  output?: 'video' | 'carousel'
 }
 
 export interface MotionAudio {

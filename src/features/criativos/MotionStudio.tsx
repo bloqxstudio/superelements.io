@@ -5,8 +5,8 @@ import { ArrowLeft, Clapperboard, Download, Film, Instagram, Music, Trash2, Paus
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { currentLayer, currentPost, currentSlide, useEditor } from './store'
-import { MOTION_EASES, MOTION_EXITS, MOTION_FX, MOTION_STYLES, MOTION_TRANSITIONS, MotionRenderer, SLIDE_CAMERAS, autoPostMotion, autoSlideMotion, clearPostMotion, hasMotion, numberIn, postMotionOf, slideDuration, timeline, type MotionStyle } from './motion'
-import { downloadMp4 } from './MotionPanel'
+import { MOTION_EASES, MOTION_EXITS, MOTION_FX, MOTION_STYLES, MOTION_TRANSITIONS, MotionRenderer, SLIDE_CAMERAS, autoPostMotion, autoSlideMotion, clearPostMotion, coverOnlyMotion, hasMotion, postOutput, numberIn, postMotionOf, slideDuration, timeline, type MotionStyle } from './motion'
+import { OutputPicker, downloadMp4 } from './MotionPanel'
 import { MotionPublish } from './MotionPublish'
 import { videoSupported } from './video'
 import { assetUrl, uploadAsset } from './storage'
@@ -231,7 +231,7 @@ export const MotionStudio: React.FC = () => {
           <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 bg-white"><Link to={editorLink}><PenLine className="h-4 w-4" /> Editar o criativo</Link></Button>
           <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" disabled={!videoSupported() || progress !== null} onClick={() => { setPlaying(false); setPublishing(true) }}><Instagram className="h-4 w-4" /> Publicar no Instagram</Button>
           <Button size="sm" className="h-8 gap-1.5" disabled={!videoSupported() || progress !== null} onClick={() => void exportVideo()} title={videoSupported() ? undefined : 'Use o Chrome ou o Edge atualizados'}>
-            <Download className="h-4 w-4" /> {progress !== null ? `Gerando… ${Math.round(progress * 100)}%` : 'Baixar MP4'}
+            <Download className="h-4 w-4" /> {progress !== null ? `Gerando… ${Math.round(progress * 100)}%` : postOutput(post) === 'carousel' ? 'Baixar o carrossel' : 'Baixar MP4'}
           </Button>
         </div>
       </header>
@@ -328,9 +328,17 @@ const SidePanel: React.FC<{ post: Post; slideId: string; layer?: Layer; slideDur
         <p className="mt-1.5 text-[11px] leading-snug text-gray-500">Vale para o post todo. Suave = fade in de cada camada na ordem de leitura.</p>
         <div className="mt-2 flex gap-3 text-xs">
           <button type="button" className="text-gray-600 underline-offset-2 hover:underline" onClick={() => editPost((p) => ({ ...p, slides: p.slides.map((s) => (s.id === slideId ? autoSlideMotion(s, p.format, style) : s)) }))}>Refazer só o slide {slideIndex + 1}</button>
+          {post.slides.length > 1 && <button type="button" className="text-gray-600 underline-offset-2 hover:underline" title="A capa em vídeo e os slides de dentro como fotos, num carrossel" onClick={() => { editPost((p) => coverOnlyMotion(p, style, brandMotion?.style === style ? brandMotion : undefined)); toast.success('Só a capa anima: o post vira carrossel com a capa em vídeo e o resto em foto.') }}>Só a capa</button>}
           <button type="button" className="text-gray-500 underline-offset-2 hover:text-red-600 hover:underline" onClick={() => editPost(clearPostMotion)}>Tirar tudo</button>
         </div>
       </section>
+
+      {post.slides.length > 1 && (
+        <section className="border-t border-gray-100 pt-4">
+          <Label>O post vira</Label>
+          <OutputPicker post={post} currentSlideId={slideId} />
+        </section>
+      )}
 
       <section className="border-t border-gray-100 pt-4">
         {layer ? <LayerFx key={layer.id} post={post} slideId={slideId} layer={layer} slideDur={slideDur} /> : <p className="text-xs text-gray-500">Clique numa faixa da linha do tempo para escolher a entrada da camada. Arraste a barra para mudar quando entra; puxe as pontas para mudar a duração. Duplo clique numa faixa parada anima a camada ali.</p>}

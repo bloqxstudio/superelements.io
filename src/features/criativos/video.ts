@@ -7,8 +7,8 @@
  */
 
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
-import { FPS, MotionRenderer } from './motion'
-import type { ImageMap } from './render'
+import { FPS, MotionRenderer, slideAsPost, slideHasMotion } from './motion'
+import { slideToBlob, type ImageMap } from './render'
 import { assetUrl } from './storage'
 import { sizeOf, type MotionAudio, type Post, type SetAsset } from './types'
 
@@ -163,4 +163,33 @@ export async function postToMp4(post: Post, images: ImageMap, opts: VideoOptions
   muxer.finalize()
   opts.onProgress?.(1)
   return new Blob([muxer.target.buffer], { type: 'video/mp4' })
+}
+
+export interface CarouselItem {
+  name: string
+  blob: Blob
+  type: 'image' | 'video'
+}
+
+/**
+ * O post como carrossel: cada slide é um item, os animados em MP4 (cada um com a
+ * trilha do post, se houver) e os parados em JPEG. A capa animada com os internos
+ * em foto, por exemplo.
+ */
+export async function postToCarousel(post: Post, images: ImageMap, opts: { audio?: ArrayBuffer; onProgress?: (done: number) => void; base?: string } = {}): Promise<CarouselItem[]> {
+  const animated = post.slides.filter(slideHasMotion).length
+  let done = 0
+  const items: CarouselItem[] = []
+  const base = opts.base ?? 'slide'
+  for (const [i, slide] of post.slides.entries()) {
+    const n = String(i + 1).padStart(2, '0')
+    if (slideHasMotion(slide)) {
+      const at = done
+      const blob = await postToMp4(slideAsPost(post, slide), images, { audio: opts.audio, onProgress: (p) => opts.onProgress?.((at + p) / Math.max(1, animated)) })
+      done++
+      items.push({ name: `${base}-${n}.mp4`, blob, type: 'video' })
+    } else items.push({ name: `${base}-${n}.jpg`, blob: await slideToBlob(slide, post.format, images, 'jpg'), type: 'image' })
+  }
+  opts.onProgress?.(1)
+  return items
 }
