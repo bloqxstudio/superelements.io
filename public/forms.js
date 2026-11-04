@@ -284,7 +284,7 @@
   }
   function pixelNames(p) {
     var pre = (p && p.prefix) || 'Avence'
-    return { view: pre + 'View', first: pre + 'FirstInteraction', viewScheduled: pre + 'ViewScheduled', submit: pre + 'Submit', scheduled: pre + 'Scheduled' }
+    return { view: pre + 'View', first: pre + 'FirstInteraction', step: pre + 'Step', viewScheduled: pre + 'ViewScheduled', submit: pre + 'Submit', scheduled: pre + 'Scheduled' }
   }
   function fbqBoot() {
     if (window.fbq) return
@@ -974,7 +974,11 @@
       if (n < 0) submit()
       else {
         cur = n
-        if (!opts.preview) push('form_step', Object.assign(base(), { step: n + 1, steps: steps().length }))
+        if (!opts.preview) {
+          push('form_step', Object.assign(base(), { step: n + 1, steps: steps().length }))
+          // Uma conversão por pergunta na Meta: chegou na pergunta N (a 1ª já conta no FirstInteraction)
+          fb(pixel, names().step + (n + 1), Object.assign(base(), { step: n + 1, steps: steps().length, step_title: String(steps()[n].title || '').slice(0, 80) }))
+        }
         render(true)
       }
     }

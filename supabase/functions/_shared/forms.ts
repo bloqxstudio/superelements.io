@@ -195,6 +195,8 @@ export const PIXEL_DEFAULT: FormPixel = { enabled: true, id: '', prefix: 'Avence
 export const pixelEvents = (p: Pick<FormPixel, 'prefix'>) => ({
   view: `${p.prefix}View`,
   first: `${p.prefix}FirstInteraction`,
+  /** Mais o número da pergunta a que a pessoa chegou: AvenceStep2, AvenceStep3… */
+  step: `${p.prefix}Step`,
   viewScheduled: `${p.prefix}ViewScheduled`,
   submit: `${p.prefix}Submit`,
   scheduled: `${p.prefix}Scheduled`,

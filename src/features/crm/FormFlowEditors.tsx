@@ -826,6 +826,7 @@ export const PixelEditor: React.FC<{ form: CrmForm; settings: FormSettings; mana
   const events = [
     { name: names.view, when: 'O formulário apareceu na tela' },
     { name: names.first, when: 'Clicou em começar ou respondeu a primeira pergunta' },
+    ...(form.definition?.steps?.length ?? 0) > 1 ? [{ name: `${names.step}2 … ${names.step}${form.definition.steps.length}`, when: 'Chegou na pergunta 2, 3… (um evento por pergunta, para ver onde param)' }] : [],
     { name: p?.submitEvent && p.submitEvent !== 'custom' ? p.submitEvent : names.submit, when: 'Enviou as respostas', server: true },
     ...(p?.standardLead && p.submitEvent !== 'Lead' ? [{ name: 'Lead', when: 'Enviou e passou no filtro (quiz qualificado ou resposta da agenda)', server: true }] : []),
     ...(settings.booking?.enabled ? [{ name: names.viewScheduled, when: 'Viu a agenda' }, { name: names.scheduled, when: 'Marcou a reunião', server: true }] : []),
