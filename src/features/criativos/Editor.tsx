@@ -5,6 +5,7 @@ import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEn
 import { LayersPanel } from './LayersPanel'
 import { MotionPanel, downloadMp4 } from './MotionPanel'
 import { videoSupported } from './video'
+import { copySelection, pasteClip } from './slideOps'
 import { spreadSelected, unspreadSelected, alignLayers, currentLayers, distributeLayers, duplicateLayers, groupLayers, moveLayers, patchLayerFields, removeLayers, stackLayers, ungroupLayers, type AlignHow } from './layerOps'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -525,15 +526,33 @@ export const CreativeEditor: React.FC = () => {
   }, [status, sharedId, sharedProject])
 
   useEffect(() => {
+    const typing = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]')
+    const onCopy = (e: ClipboardEvent) => {
+      if (typing(e.target) || window.getSelection()?.toString()) return
+      const kind = copySelection(e.clipboardData)
+      if (!kind) return
+      e.preventDefault()
+      toast.success(`${kind === 'post' ? 'Post copiado' : kind === 'slide' ? 'Slide copiado' : 'Componentes copiados'}. Ctrl/⌘ + V cola ${kind === 'post' ? 'logo abaixo do post escolhido' : kind === 'slide' ? 'depois do slide escolhido, em qualquer post' : 'no slide escolhido'}.`)
+    }
     const onPaste = (e: ClipboardEvent) => {
-      if ((e.target as HTMLElement | null)?.closest('input, textarea, select')) return
+      if (typing(e.target)) return
+      const pasted = pasteClip(e.clipboardData?.getData('text/plain'))
+      if (pasted) {
+        e.preventDefault()
+        toast.success(pasted === 'post' ? 'Post colado.' : pasted === 'slide' ? 'Slide colado.' : 'Componentes colados.')
+        return
+      }
       const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'))
       if (!file) return
       e.preventDefault()
       pasteImage.current(file)
     }
+    window.addEventListener('copy', onCopy)
     window.addEventListener('paste', onPaste)
-    return () => window.removeEventListener('paste', onPaste)
+    return () => {
+      window.removeEventListener('copy', onCopy)
+      window.removeEventListener('paste', onPaste)
+    }
   }, [])
 
   useEffect(() => {

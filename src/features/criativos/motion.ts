@@ -39,13 +39,34 @@ const MAX_SLIDE = 20
 
 export const FPS = 30
 
-export const postMotionOf = (post: Post): Required<Omit<PostMotion, 'audio'>> => ({
+export const postMotionOf = (post: Post): Required<Omit<PostMotion, 'audio' | 'output'>> => ({
   slideDur: post.motion?.slideDur ?? 0,
   transition: post.motion?.transition ?? 'push',
   transitionDur: Math.min(1.2, Math.max(0.1, post.motion?.transitionDur ?? 0.5)),
 })
 
-export const hasMotion = (post: Post | undefined) => !!post?.slides.some((s) => s.layers.some((l) => l.motion))
+/** O slide anda: alguma camada tem entrada ou a câmera se move. */
+export const slideHasMotion = (slide: Slide) => !!slide.camera || slide.layers.some((l) => l.motion && !l.hidden)
+
+export const hasMotion = (post: Post | undefined) => !!post?.slides.some(slideHasMotion)
+
+export type PostOutput = 'video' | 'carousel'
+
+/** Um vídeo só (o padrão) ou carrossel em que cada slide é um item. Um slide só é sempre vídeo. */
+export const postOutput = (post: Post): PostOutput => (post.slides.length > 1 && post.motion?.output === 'carousel' ? 'carousel' : 'video')
+
+/** Um slide sozinho como post: o vídeo de um item do carrossel. */
+export const slideAsPost = (post: Post, slide: Slide): Post => ({ ...post, slides: [slide] })
+
+/** O slide volta a ser imagem: sem entradas e sem câmera. */
+export const clearSlideMotion = (slide: Slide): Slide => ({
+  ...slide,
+  camera: undefined,
+  layers: slide.layers.map((l) => {
+    const { motion: _drop, ...rest } = l
+    return rest as Layer
+  }),
+})
 
 /** Quando o slide termina as entradas (segundos). */
 export const entrancesEnd = (slide: Slide) => slide.layers.reduce((end, l) => (l.motion && !l.hidden ? Math.max(end, l.motion.start + l.motion.dur) : end), 0)
@@ -626,9 +647,22 @@ export const autoPostMotion = (post: Post, style: MotionStyle = 'dinamico', bran
   }
 }
 
+/**
+ * Só a capa anda: o primeiro slide ganha a animação, os outros ficam imagem, e o
+ * post vira carrossel (a capa em vídeo, os internos em foto).
+ */
+export const coverOnlyMotion = (post: Post, style: MotionStyle = 'dinamico', brand?: BrandMotion): Post => {
+  const animated = autoPostMotion({ ...post, slides: post.slides.slice(0, 1) }, style, brand)
+  return {
+    ...post,
+    motion: { ...post.motion, output: post.slides.length > 1 ? 'carousel' : post.motion?.output },
+    slides: post.slides.map((s, i) => (i === 0 ? animated.slides[0] : clearSlideMotion(s))),
+  }
+}
+
 export const clearPostMotion = (post: Post): Post => ({
   ...post,
-  motion: undefined,
+  motion: post.motion?.output ? { output: post.motion.output } : undefined,
   slides: post.slides.map((s) => ({
     ...s,
     camera: undefined,

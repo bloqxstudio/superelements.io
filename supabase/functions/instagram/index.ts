@@ -672,6 +672,27 @@ async function finish(ctx: Ctx, account: AccountRow, token: string, containerId:
   return { status: 'published' as const, mediaId: published.id, permalink }
 }
 
+/** Os vídeos de um carrossel prontos (cada item processado) dentro de `wait` ms. */
+async function childrenReady(token: string, ids: string[], wait: number): Promise<boolean> {
+  const until = Date.now() + wait
+  for (const id of ids) {
+    const left = Math.max(0, until - Date.now())
+    if ((await containerStatus(token, id, left)) === 'IN_PROGRESS') return false
+  }
+  return true
+}
+
+/** Segunda etapa do carrossel com vídeo: com os vídeos prontos, monta o álbum e publica. */
+async function publishCarousel(ctx: Ctx, account: AccountRow, token: string, body: Record<string, unknown>) {
+  const children = Array.isArray(body.children) ? body.children.map((c) => metaId(c, 'contêiner')) : []
+  const videos = Array.isArray(body.videos) ? body.videos.map((c) => metaId(c, 'contêiner')).filter((v) => children.includes(v)) : []
+  if (children.length < 2 || children.length > 20) throw new HttpError('O carrossel vai de 2 a 20 itens.')
+  if (!(await childrenReady(token, videos, 20_000))) return { status: 'children' as const, children, videos }
+  const caption = typeof body.caption === 'string' ? body.caption.slice(0, 2200) : undefined
+  const containerId = (await ig<{ id: string }>('me/media', token, { method: 'POST', params: { media_type: 'CAROUSEL', children: children.join(','), caption } })).id
+  return finish(ctx, account, token, containerId, body.paths, 20_000)
+}
+
 async function publish(ctx: Ctx, account: AccountRow, token: string, body: Record<string, unknown>) {
   const kind = body.kind === 'story' ? 'story' : body.kind === 'reel' ? 'reel' : 'feed'
   const caption = typeof body.caption === 'string' ? body.caption.slice(0, 2200) : undefined
@@ -691,9 +712,12 @@ async function publish(ctx: Ctx, account: AccountRow, token: string, body: Recor
     containerId = (await create({ image_url: files[0].url, caption })).id
   } else {
     if (files.length > 20) throw new HttpError('O carrossel vai até 20 itens.')
-    const children: string[] = []
-    for (const f of files) children.push((await create({ is_carousel_item: true, ...(f.type === 'video' ? { media_type: 'VIDEO' } : {}), ...media(f) })).id)
-    containerId = (await create({ media_type: 'CAROUSEL', children: children.join(','), caption })).id
+    const children: { id: string; video: boolean }[] = []
+    for (const f of files) children.push({ id: (await create({ is_carousel_item: true, ...(f.type === 'video' ? { media_type: 'VIDEO' } : {}), ...media(f) })).id, video: f.type === 'video' })
+    // Carrossel com vídeo: a Meta só monta o álbum depois que cada vídeo termina de processar
+    const videos = children.filter((c) => c.video).map((c) => c.id)
+    if (videos.length && !(await childrenReady(token, videos, 45_000))) return { status: 'children' as const, children: children.map((c) => c.id), videos }
+    containerId = (await create({ media_type: 'CAROUSEL', children: children.map((c) => c.id).join(','), caption })).id
   }
   // Foto fica pronta em segundos; vídeo pode levar minutos (a tela pergunta de novo)
   return finish(ctx, account, token, containerId, paths, files.some((f) => f.type === 'video') ? 20_000 : 30_000)
@@ -1319,6 +1343,12 @@ Deno.serve(async (req) => {
         const account = await accountOf(ctx, body.accountId)
         const token = await tokenOf(ctx, account)
         return json(await guarded(ctx, account, () => publish(ctx, account, token, body)))
+      }
+
+      case 'publish_carousel': {
+        const account = await accountOf(ctx, body.accountId)
+        const token = await tokenOf(ctx, account)
+        return json(await guarded(ctx, account, () => publishCarousel(ctx, account, token, body)))
       }
 
       case 'publish_check': {

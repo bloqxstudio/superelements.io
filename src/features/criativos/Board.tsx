@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AtSign, Check, Copy, Download, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
+import { AtSign, Check, ClipboardPaste, Copy, CopyPlus, Download, GripVertical, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { agentInfo, PHASE_LABEL, useAgent } from './agentStore'
 import { boundsOf, withGroups } from './layerOps'
@@ -8,6 +9,7 @@ import { gridOf, guidesOf, snapAxis, snapTargets, type PostGrid } from './grid'
 import { rememberPointer, sendPointer, useLive } from './live'
 import { drawLayer, drawSlide, fontCss, layerBox, type ImageMap } from './render'
 import { useEditor } from './store'
+import { copySelection, hasClip, moveSlide, pasteClip } from './slideOps'
 import { TEMPLATES } from './templates'
 import { sizeOf, type CreativeSet, type FormatId, type Layer, type Slide, type TextLayer } from './types'
 
@@ -163,6 +165,21 @@ type Drag =
   | { kind: 'pan'; sx: number; sy: number; view: View }
   | { kind: 'move' | 'resize'; postId: string; slideId: string; origin: Layer; /** Todos os escolhidos no começo do arrasto (o próprio incluso). */ group: Layer[]; px: number; py: number; before: CreativeSet | undefined }
   | { kind: 'marquee'; postId: string; slideId: string; slide: Placed; x0: number; y0: number; moved: boolean; base: string[]; additive: boolean }
+  /** Um slide arrastado pela alça: solta noutro lugar do mesmo post ou noutro post (Alt copia). */
+  | { kind: 'slide'; postId: string; slideId: string; w: number; h: number }
+
+interface SlideDrop {
+  postId: string
+  index: number
+  copy: boolean
+  /** Onde o ponteiro está (o fantasma do slide segue). */
+  px: number
+  py: number
+  /** A linha de encaixe. */
+  x: number
+  y: number
+  h: number
+}
 
 interface Props {
   onAddSlide: (postId: string, template: string) => void
@@ -205,6 +222,8 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   const [menu, setMenu] = useState<{ postId: string; x: number; y: number } | null>(null)
   const [panning, setPanning] = useState(false)
   const [marquee, setMarquee] = useState<{ slideId: string; x: number; y: number; w: number; h: number } | null>(null)
+  const [slideDrop, setSlideDrop] = useState<SlideDrop | null>(null)
+  const [, setClipTick] = useState(0)
   const layerIds = useEditor((s) => s.layerIds)
   const [snapped, setSnapped] = useState<{ slideId: string; v: number[]; h: number[] } | null>(null)
   const fitted = useRef(false)
@@ -402,6 +421,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
     }
     if (d.kind === 'pan') return setView({ ...d.view, x: d.view.x + e.clientX - d.sx, y: d.view.y + e.clientY - d.sy })
     const w = world(e)
+    if (d.kind === 'slide') return setSlideDrop(dropAt(w.x, w.y, e.altKey, d))
     if (d.kind === 'marquee') {
       const x1 = Math.min(d.slide.w, Math.max(0, w.x - d.slide.x))
       const y1 = Math.min(d.slide.h, Math.max(0, w.y - d.slide.y))
@@ -474,12 +494,54 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
     }
   }
 
-  const onUp = () => {
+  /** O lugar em que um slide arrastado cai: a fileira sob o ponteiro e o espaço entre dois cards. */
+  const dropAt = (wx: number, wy: number, copy: boolean, d: { postId: string; slideId: string }): SlideDrop | null => {
+    const row = rows.find((r) => wy >= r.y - ROW_GAP / 2 && wy < r.y + HEAD + sizeOf(r.format).height + ROW_GAP / 2)
+    if (!row) return null
+    const { width, height } = sizeOf(row.format)
+    const step = width + GAP
+    const index = Math.max(0, Math.min(row.slides.length, Math.floor((wx + step / 2) / step)))
+    // Soltar no mesmo lugar não muda nada
+    const at = row.postId === d.postId ? row.slides.findIndex((p) => p.slideId === d.slideId) : -1
+    const still = !copy && at >= 0 && (index === at || index === at + 1)
+    return { postId: row.postId, index: still ? -1 : index, copy, px: wx, py: wy, x: index * step - GAP / 2, y: row.y + HEAD, h: height }
+  }
+
+  const startSlideDrag = (e: React.PointerEvent, p: Placed) => {
+    e.stopPropagation()
+    e.preventDefault()
+    drag.current = { kind: 'slide', postId: p.postId, slideId: p.slideId, w: p.w, h: p.h }
+    const w = world(e)
+    setSlideDrop(dropAt(w.x, w.y, e.altKey, p))
+    host.current?.setPointerCapture(e.pointerId)
+  }
+
+  const dropSlide = (d: { postId: string; slideId: string }, drop: SlideDrop) => {
+    const st = useEditor.getState()
+    if (!st.set || drop.index < 0) return
+    const source = st.set.posts.find((x) => x.id === d.postId)
+    const forced = !drop.copy && drop.postId !== d.postId && (source?.slides.length ?? 0) < 2
+    const done = moveSlide(st.set, d, { postId: drop.postId, index: drop.index }, drop.copy)
+    if (!done) return
+    st.edit(() => done.set)
+    st.selectPost(drop.postId)
+    st.selectSlide(done.slideId)
+    const target = done.set.posts.find((x) => x.id === drop.postId)
+    if (drop.postId !== d.postId) toast.success(`${drop.copy || forced ? 'Slide copiado' : 'Slide movido'} para ${target?.name ?? 'o post'}.${forced ? ' O post de origem tinha um slide só, então ele ficou lá também.' : ''}`)
+  }
+
+  const onUp = (e?: React.PointerEvent) => {
     const d = drag.current
     drag.current = null
     setPanning(false)
     setSnapped(null)
     setMarquee(null)
+    if (d?.kind === 'slide') {
+      const drop = e ? dropAt(world(e).x, world(e).y, e.altKey, d) : null
+      setSlideDrop(null)
+      if (drop && e?.type === 'pointerup') dropSlide(d, drop)
+      return
+    }
     if (d && d.kind !== 'pan' && d.kind !== 'marquee' && d.before && useEditor.getState().set !== d.before) useEditor.getState().checkpoint(d.before)
   }
 
@@ -504,6 +566,24 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
       ...s,
       posts: s.posts.map((p) => (p.id !== pid ? p : { ...p, slides: p.slides.map((sl) => (sl.id !== sid ? sl : { ...sl, layers: sl.layers.map((l) => (l.id === id && l.type === 'text' && l.text !== value ? { ...l, text: value } : l)) })) })),
     }))
+  }
+
+  /** Copia pelo botão: o mesmo que Ctrl/⌘ + C (vai também para a área de transferência do sistema). */
+  const copyToClipboard = async () => {
+    const holder = new DataTransfer()
+    const kind = copySelection(holder)
+    if (!kind) return
+    setClipTick((n) => n + 1)
+    try {
+      await navigator.clipboard.writeText(holder.getData('text/plain'))
+    } catch {
+      // sem permissão: o botão Colar ainda funciona
+    }
+    toast.success(kind === 'post' ? 'Post copiado. Ctrl/⌘ + V (ou Colar) põe a cópia logo abaixo do post escolhido.' : 'Slide copiado. Escolha um slide de qualquer post e use Ctrl/⌘ + V (ou Colar): entra depois dele.')
+  }
+  const pasteHere = () => {
+    const kind = pasteClip(undefined, true)
+    if (kind) toast.success(kind === 'post' ? 'Post colado.' : kind === 'slide' ? 'Slide colado.' : 'Componentes colados.')
   }
 
   const placed = rows.flatMap((r) => r.slides)
@@ -587,6 +667,17 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
             >
               <AtSign style={{ width: 34, height: 34 }} />
             </button>
+            <button
+              type="button"
+              data-ui
+              onClick={() => { useEditor.getState().selectRow(row.postId); void copyToClipboard() }}
+              title="Copiar o post inteiro (Ctrl/⌘ + C com o post escolhido): Ctrl/⌘ + V cola uma cópia logo abaixo"
+              aria-label={`Copiar ${row.name}`}
+              className="absolute flex items-center justify-center rounded-xl text-zinc-500 hover:bg-violet-100 hover:text-violet-700"
+              style={{ left: Math.min(row.width - 60, 1180) + 72, top: row.y, width: 64, height: HEAD - 10 }}
+            >
+              <Copy style={{ width: 32, height: 32 }} />
+            </button>
             {row.slides.map((p) => (
               <div key={p.slideId} className="absolute bg-white" style={{ left: p.x, top: p.y, width: p.w, height: p.h, boxShadow: p.slideId === slideId || (rowSelected && p.postId === postId) ? `0 0 0 ${3 * inv}px #8b5cf6` : `0 0 0 ${1 * inv}px rgb(0 0 0 / 0.14), 0 ${16 * inv}px ${40 * inv}px -${12 * inv}px rgb(0 0 0 / 0.25)` }}>
                 {visible.has(p.slideId) ? (
@@ -599,7 +690,14 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
                   const mine = snapped?.slideId === p.slideId ? snapped : null
                   return pg.show || mine ? <GridOverlay format={p.format} grid={pg.show ? pg : { ...pg, margins: false, columns: 0, thirds: false, center: false, safe: false }} snap={mine} /> : null
                 })()}
-                <span className="pointer-events-none absolute left-0 whitespace-nowrap font-medium text-zinc-500" style={{ top: -34 * inv * 1.4, fontSize: 22, lineHeight: 1 }}>
+                <span
+                  data-ui
+                  onPointerDown={(e) => startSlideDrag(e, p)}
+                  title="Arraste para mudar de lugar ou levar a outro post (com Alt, copia)"
+                  className="absolute left-0 flex cursor-grab items-center whitespace-nowrap rounded font-medium text-zinc-500 hover:bg-zinc-200/70 hover:text-violet-700 active:cursor-grabbing"
+                  style={{ top: -34 * inv * 1.4 - 6 * inv, fontSize: 22, lineHeight: 1, padding: `${6 * inv}px ${8 * inv}px ${6 * inv}px 0` }}
+                >
+                  <GripVertical style={{ width: 22 * inv * 0.8, height: 22 * inv * 0.8 }} className="opacity-60" />
                   {p.index + 1}
                 </span>
               </div>
@@ -619,6 +717,19 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
             </button>
           </React.Fragment>
         ))}
+
+        {/* Slide arrastado: a linha onde ele cai e o fantasma seguindo o ponteiro */}
+        {slideDrop && drag.current?.kind === 'slide' && (() => {
+          const d = drag.current
+          return (
+            <>
+              {slideDrop.index >= 0 && <div className="pointer-events-none absolute rounded-full bg-violet-600" style={{ left: slideDrop.x - 5 * inv, top: slideDrop.y - 20 * inv, width: 10 * inv, height: slideDrop.h + 40 * inv }} />}
+              <div className="pointer-events-none absolute z-20 rounded-lg border-violet-500 bg-violet-200/40" style={{ left: slideDrop.px - d.w * 0.12, top: slideDrop.py - d.h * 0.12, width: d.w * 0.24, height: d.h * 0.24, borderWidth: 3 * inv, borderStyle: 'dashed' }}>
+                <span className="absolute left-0 whitespace-nowrap rounded bg-violet-600 px-1.5 py-0.5 font-semibold text-white" style={{ top: '100%', marginTop: 6 * inv, fontSize: 12 * inv * 1.6 }}>{slideDrop.index < 0 ? 'Mesmo lugar' : slideDrop.copy ? 'Copiar aqui' : 'Mover aqui · Alt copia'}</span>
+              </div>
+            </>
+          )
+        })()}
 
         {/* Realce ao passar o mouse e seleção */}
         {hoverLayer && hoverPlaced && (() => {
@@ -759,7 +870,10 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
               <BarButton label="Referenciar no chat (@): diga o que trazer daqui" onClick={() => useRefs.getState().add({ id: `slide:${selected.slideId}`, kind: 'slide', label: `${set.posts.find((x) => x.id === selected.postId)?.name ?? 'Post'} · slide ${selected.index + 1}`, postId: selected.postId, slideId: selected.slideId }, true)}><AtSign className="h-4 w-4" /></BarButton>
               <BarButton label="Ampliar" onClick={() => fit({ x: selected.x - 80, y: selected.y - 120, w: selected.w + 160, h: selected.h + 240 })}><Maximize2 className="h-4 w-4" /></BarButton>
               <BarButton label="Baixar slide" onClick={() => onDownloadSlide(selected.postId, selected.slideId)}><Download className="h-4 w-4" /></BarButton>
-              <BarButton label="Duplicar slide" onClick={() => onDuplicateSlide(selected.postId, selected.slideId)}><Copy className="h-4 w-4" /></BarButton>
+              <span data-ui title="Arraste para outro post ou outra posição (com Alt, copia)" aria-label="Arrastar slide" onPointerDown={(e) => startSlideDrag(e, selected)} className="flex h-8 w-8 cursor-grab items-center justify-center rounded-md text-gray-700 hover:bg-gray-100 active:cursor-grabbing"><GripVertical className="h-4 w-4" /></span>
+              <BarButton label="Duplicar slide" onClick={() => onDuplicateSlide(selected.postId, selected.slideId)}><CopyPlus className="h-4 w-4" /></BarButton>
+              <BarButton label="Copiar slide (Ctrl/⌘ + C): cole em qualquer post do conjunto" onClick={() => { useEditor.getState().selectLayers([]); void copyToClipboard() }}><Copy className="h-4 w-4" /></BarButton>
+              {hasClip() && <BarButton label="Colar aqui (Ctrl/⌘ + V)" onClick={() => pasteHere()}><ClipboardPaste className="h-4 w-4" /></BarButton>}
               <BarButton label="Excluir slide" danger onClick={() => onDeleteSlide(selected.postId, selected.slideId)}><Trash2 className="h-4 w-4" /></BarButton>
             </div>
           </div>

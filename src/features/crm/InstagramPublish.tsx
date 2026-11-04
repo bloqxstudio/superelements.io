@@ -18,6 +18,7 @@ import {
   prepareImage,
   prepareVideo,
   publishPost,
+  creativeImages,
   renderCreative,
   type IgAccount,
   type Prepared,
@@ -214,13 +215,33 @@ export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; 
     setRendering(true)
     setError(null)
     try {
-      const blobs = await renderCreative(set, post)
       const fits = creativeFits(post)
+      const { hasMotion, postOutput } = await import('@/features/criativos/motion')
+      const video = await import('@/features/criativos/video')
+      const animated = hasMotion(post) && video.videoSupported()
+      if (animated && postOutput(post) === 'video') {
+        // Post animado como um vídeo só: reels (ou story no 9:16)
+        const images = await creativeImages(set, post.slides)
+        const audio = await video.audioFor(post, set.assets)
+        const blob = await video.postToMp4(post, images, { audio })
+        const target: PublishKind = fits === 'story' ? 'story' : 'reel'
+        setKind(target)
+        setSources([{ id: uid(), blob, name: `${post.name}.mp4`, type: 'video' }])
+      } else if (animated && fits !== 'story') {
+        // Carrossel misto: os slides animados em vídeo, os outros em foto
+        const images = await creativeImages(set, post.slides)
+        const items = await video.postToCarousel(post, images, { audio: await video.audioFor(post, set.assets), base: post.name })
+        setKind('feed')
+        setSources(items.slice(0, 20).map((item) => ({ id: uid(), blob: item.blob, name: item.name, type: item.type })))
+      } else {
+        const blobs = await renderCreative(set, post)
+        const target: PublishKind = fits === 'story' ? 'story' : 'feed'
+        setKind(target)
+        setSources((target === 'story' ? blobs.slice(0, 1) : blobs.slice(0, 20)).map((blob, i) => ({ id: uid(), blob, name: `${post.name}-${i + 1}.jpg`, type: 'image' })))
+        if (target === 'story' && blobs.length > 1) toast.message('Story leva um slide só: foi o primeiro.')
+      }
       const target: PublishKind = fits === 'story' ? 'story' : 'feed'
-      setKind(target)
-      setSources((target === 'story' ? blobs.slice(0, 1) : blobs.slice(0, 20)).map((blob, i) => ({ id: uid(), blob, name: `${post.name}-${i + 1}.jpg`, type: 'image' })))
       if (target !== 'story' && post.caption && !caption.trim()) setCaption(post.caption)
-      if (target === 'story' && blobs.length > 1) toast.message('Story leva um slide só: foi o primeiro.')
       setFrom('arquivos')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
