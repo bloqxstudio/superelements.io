@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Images, Plus, Trash2 } from 'lucide-react'
+import { Images, Plus, Search, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,8 @@ import { generatePosts, type AiForm } from '@/features/criativos/ai'
 import { useAiAvailable } from '@/features/criativos/link'
 import { AiFields, EMPTY_AI } from '@/features/criativos/AiFields'
 import { uid, type CreativeSet, type SetBrand, type SetSummary } from '@/features/criativos/types'
+import { matchesSearch, useCovers } from '@/features/criativos/covers'
+import { CoverStrip } from '@/features/criativos/SetCovers'
 
 /**
  * Criativos: os conjuntos de posts de Instagram. Cada conjunto nasce na marca
@@ -141,7 +143,10 @@ const Creatives: React.FC = () => {
   const [error, setError] = useState(false)
   const [creating, setCreating] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [query, setQuery] = useState('')
   const navigate = useNavigate()
+  const covered = useCovers(sets)
+  const visible = covered.sets?.filter((s) => matchesSearch(s, query)) ?? null
   useProjectList()
   const projectIds = useProjectStore((s) => s.projects).map((p) => p.id).join(',')
 
@@ -197,17 +202,22 @@ const Creatives: React.FC = () => {
           </div>
         </div>
 
+        {(sets?.length ?? 0) > 3 && (
+          <label className="mt-6 flex h-9 max-w-sm items-center gap-2 rounded-lg bg-white px-3 shadow-[0_0_0_1px_rgb(0_0_0/0.08)]">
+            <Search className="h-4 w-4 text-gray-400" aria-hidden />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar conjunto, projeto ou post" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+          </label>
+        )}
+
         {error && <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">Não consegui ler os conjuntos da conta. <button className="underline" onClick={() => void load()}>Tentar de novo</button></p>}
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {sets === null && !error && [0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06)]" />)}
-          {sets?.map((s) => (
+          {visible?.map((s) => (
             <div key={s.id} className="group relative rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] transition-shadow hover:shadow-[0_0_0_1px_rgb(0_0_0/0.1),0_6px_16px_-6px_rgb(0_0_0/0.14)]">
               <Link to={setLink(s)} className="block rounded-xl p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <div className="flex gap-1">
-                  {s.colors.length ? s.colors.map((c) => <span key={c} className="h-5 w-5 rounded-md ring-1 ring-black/10" style={{ background: c }} />) : <span className="h-5 text-xs text-gray-400">Sem marca</span>}
-                </div>
-                <p className="mt-4 truncate text-sm font-semibold text-gray-900">{s.name}</p>
+                <CoverStrip summary={s} urls={covered.urls} />
+                <p className="mt-3 truncate text-sm font-semibold text-gray-900">{s.name}</p>
                 <p className="mt-0.5 text-xs text-gray-500">{s.projectName ? `${s.projectName}${s.shared ? ' (equipe)' : ''} · ` : ''}{s.posts} {s.posts === 1 ? 'post' : 'posts'} · {when(s.updatedAt)}</p>
               </Link>
               <button type="button" aria-label={`Excluir ${s.name}`} onClick={() => void remove(s)} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md text-gray-400 opacity-0 hover:bg-gray-100 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100">
@@ -216,6 +226,8 @@ const Creatives: React.FC = () => {
             </div>
           ))}
         </div>
+
+        {!!sets?.length && visible?.length === 0 && <p className="mt-6 text-sm text-gray-500">Nada com "{query}".</p>}
 
         {sets?.length === 0 && (
           <div className="mt-6 flex flex-col items-center rounded-xl border border-dashed border-gray-300 px-6 py-14 text-center">

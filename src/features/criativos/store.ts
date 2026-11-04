@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { toast } from 'sonner'
 import { EMPHASIS_FONT, loadFont, loadImage, loadVideo, type ImageMap } from './render'
 import { loadSet, saveSet, assetUrl } from './storage'
+import { refreshCovers } from './covers'
 import { hasPending, materializePending } from './pending'
 import { mergePatch, type SyncPatch } from './syncPatch'
 import { syncSpans } from './spanOps'
@@ -59,6 +60,7 @@ interface EditorState {
 }
 
 let timer: ReturnType<typeof setTimeout> | undefined
+let coverTimer: ReturnType<typeof setTimeout> | undefined
 
 export const useEditor = create<EditorState>()((set, get) => {
   const schedule = () => {
@@ -205,6 +207,12 @@ export const useEditor = create<EditorState>()((set, get) => {
       try {
         await saveSet(current)
         set((s) => ({ saving: s.set?.updatedAt === current.updatedAt ? 'saved' : 'dirty' }))
+        // As capas das listas acompanham, sem pressa: uma vez quando a edição para
+        clearTimeout(coverTimer)
+        coverTimer = setTimeout(() => {
+          const now = get().set
+          if (now && now.id === current.id) void refreshCovers(now, undefined, get().images).catch((err) => console.warn('[criativos] capas', err))
+        }, 12_000)
       } catch (err) {
         console.error('[criativos] salvar', err)
         toast.error('Não consegui salvar o conjunto. Vou tentar de novo.')

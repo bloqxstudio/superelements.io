@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Switch } from '@/components/ui/switch'
 import { listSets, loadSet } from '@/features/criativos/storage'
 import { sizeOf, type CreativeSet, type SetSummary } from '@/features/criativos/types'
+import { matchesSearch, useCovers } from '@/features/criativos/covers'
+import { CoverStrip, PostCover } from '@/features/criativos/SetCovers'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { Chip } from '@/features/prospects/ui'
 import { cn } from '@/lib/utils'
@@ -58,29 +60,34 @@ const CreativePicker: React.FC<{ onPick: (set: CreativeSet, postId: string) => v
   useProjectList()
   const projectIds = useProjectStore((s) => s.projects).map((p) => p.id).join(',')
   const [sets, setSets] = useState<SetSummary[] | null>(null)
-  const [setId, setSetId] = useState('')
+  const [setKey, setSetKey] = useState('')
   const [opened, setOpened] = useState<CreativeSet | null>(null)
   const [loading, setLoading] = useState(false)
+  const [query, setQuery] = useState('')
+  const covered = useCovers(sets)
+  const keyOf = (s: SetSummary) => `${s.projectId ?? ''}/${s.id}`
+  const visible = covered.sets?.filter((s) => matchesSearch(s, query)) ?? []
 
   useEffect(() => {
     listSets(projectIds ? projectIds.split(',') : [])
       .then((list) => {
         setSets(list)
-        setSetId((cur) => cur || list[0]?.id || '')
+        setSetKey((cur) => cur || (list[0] ? `${list[0].projectId ?? ''}/${list[0].id}` : ''))
       })
       .catch(() => setSets([]))
   }, [projectIds])
 
+  const summary = covered.sets?.find((s) => keyOf(s) === setKey)
   useEffect(() => {
-    const summary = sets?.find((s) => s.id === setId)
-    if (!summary) return
+    const found = sets?.find((s) => `${s.projectId ?? ''}/${s.id}` === setKey)
+    if (!found) return
     setLoading(true)
     setOpened(null)
-    loadSet(summary.id, summary.shared ? summary.projectId : undefined)
+    loadSet(found.id, found.shared ? found.projectId : undefined)
       .then((set) => setOpened(set ?? null))
       .catch(() => setOpened(null))
       .finally(() => setLoading(false))
-  }, [setId, sets])
+  }, [setKey, sets])
 
   if (sets === null)
     return (
@@ -91,42 +98,36 @@ const CreativePicker: React.FC<{ onPick: (set: CreativeSet, postId: string) => v
   if (!sets.length) return <p className="text-sm text-gray-500">Nenhum conjunto no Criativos ainda.</p>
   return (
     <div className="grid gap-3">
-      <label className="block">
-        <span className="text-xs font-medium text-gray-700">Conjunto</span>
-        <select value={setId} onChange={(e) => setSetId(e.target.value)} className={cn(FIELD, 'mt-1 h-9')}>
-          {sets.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-              {s.projectName ? ` · ${s.projectName}` : ''}
-            </option>
-          ))}
-        </select>
-      </label>
+      {sets.length > 3 && <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar conjunto ou post" className={cn(FIELD, 'h-9')} />}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {visible.map((s) => (
+          <button key={keyOf(s)} type="button" onClick={() => setSetKey(keyOf(s))} className={cn('w-44 shrink-0 rounded-lg p-2 text-left ring-1 ring-inset transition-colors', keyOf(s) === setKey ? 'bg-violet-50 ring-violet-500' : 'ring-gray-200 hover:bg-gray-50')}>
+            <CoverStrip summary={s} urls={covered.urls} max={3} className="h-20" />
+            <span className="mt-1.5 block truncate text-xs font-medium text-gray-900">{s.name}</span>
+            <span className="block truncate text-[11px] text-gray-500">{s.projectName ? `${s.projectName} · ` : ''}{plural(s.posts, 'post', 'posts')}</span>
+          </button>
+        ))}
+      </div>
       {loading && (
         <p className="flex items-center gap-2 text-sm text-gray-500">
           <Loader2 className="h-4 w-4 animate-spin" /> Abrindo o conjunto…
         </p>
       )}
       {opened && (
-        <ul className="grid max-h-56 gap-1.5 overflow-y-auto">
+        <ul className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
           {opened.posts.map((post) => {
             const size = sizeOf(post.format)
+            const info = summary?.postsInfo?.find((p) => p.id === post.id)
             return (
               <li key={post.id}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onPick(opened, post.id)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left ring-1 ring-inset ring-gray-200 transition-colors hover:bg-gray-50 disabled:opacity-50"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-gray-900">{post.name}</span>
-                    <span className="block truncate text-xs text-gray-500">
-                      {size.label} · {plural(post.slides.length, 'slide', 'slides')}
-                      {post.caption ? ' · com legenda' : ''}
-                    </span>
-                  </span>
-                  <span className="text-xs font-medium text-gray-700">Usar</span>
+                <button type="button" disabled={busy} onClick={() => onPick(opened, post.id)} title={`Usar ${post.name}`} className="group block w-full text-left disabled:opacity-50">
+                  {info ? (
+                    <PostCover post={info} url={info.cover ? covered.urls[info.cover] : undefined} colors={summary?.colors} className="w-full transition-shadow group-hover:ring-2 group-hover:ring-violet-500" />
+                  ) : (
+                    <span className="flex w-full items-center justify-center rounded-md bg-gray-100 text-[10px] text-gray-500 ring-1 ring-black/10" style={{ aspectRatio: `${size.width} / ${size.height}` }}>{size.label}</span>
+                  )}
+                  <span className="mt-1 block truncate text-[11px] font-medium text-gray-900">{post.name}</span>
+                  <span className="block truncate text-[10px] text-gray-500">{plural(post.slides.length, 'slide', 'slides')}{post.caption ? ' · legenda' : ''}</span>
                 </button>
               </li>
             )

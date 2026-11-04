@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { currentUserId } from '@/features/projects/storage'
 import { personalFolder } from '@/features/crm/accountScope'
 import { createOnce, isAlreadyExists } from '@/features/conteudos/exclusive'
-import type { CreativeSet, SetAsset, SetSummary } from './types'
+import type { CreativeSet, Post, PostInfo, SetAsset, SetSummary } from './types'
 
 /**
  * Os conjuntos ficam no bucket privado `space-projects`. Um conjunto pessoal vai
@@ -67,7 +67,28 @@ async function writeJson(path: string, value: unknown) {
   if (error) throw error
 }
 
-export const summaryOf = (set: CreativeSet): SetSummary => ({
+/** Assinatura curta (FNV-1a) do primeiro slide e do formato: muda quando a capa muda. */
+export function coverHash(post: Pick<Post, 'format' | 'slides'>): string {
+  const text = JSON.stringify([post.format, post.slides[0] ?? null])
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(36)
+}
+
+/** Até 40 posts por conjunto vão no índice, com a capa quando ela existe. */
+const MAX_POSTS_INFO = 40
+
+const postsInfoOf = (set: CreativeSet, previous?: PostInfo[]): PostInfo[] =>
+  set.posts.slice(0, MAX_POSTS_INFO).map((p) => {
+    const hash = coverHash(p)
+    const old = previous?.find((x) => x.id === p.id && x.hash === hash)
+    return { id: p.id, name: p.name, format: p.format, slides: p.slides.length, ...(p.slides.some((sl) => sl.layers.some((l) => l.motion)) ? { motion: true } : {}), ...(p.approved ? { approved: true } : {}), hash, ...(old?.cover ? { cover: old.cover } : {}) }
+  })
+
+export const summaryOf = (set: CreativeSet, previous?: SetSummary): SetSummary => ({
   id: set.id,
   name: set.name,
   projectId: set.projectId,
@@ -76,6 +97,7 @@ export const summaryOf = (set: CreativeSet): SetSummary => ({
   posts: set.posts.length,
   colors: set.brand.colors.slice(0, 5).map((c) => c.hex),
   updatedAt: set.updatedAt,
+  postsInfo: postsInfoOf(set, previous?.postsInfo),
 })
 
 /** Os conjuntos da conta e os dos projetos que ela abre (`projectIds`), do mais novo ao mais antigo. */
@@ -108,7 +130,88 @@ const writeIndex = async (projectId: string | undefined, fn: (list: SetSummary[]
 export async function saveSet(set: CreativeSet) {
   const where = placeOf(set)
   await writeJson(`${await folderOf(where)}/${set.id}/set.json`, set)
-  await writeIndex(where, (list) => [summaryOf(set), ...list.filter((s) => s.id !== set.id)])
+  await writeIndex(where, (list) => [summaryOf(set, list.find((s) => s.id === set.id)), ...list.filter((s) => s.id !== set.id)])
+}
+
+// Capas
+
+/** Pasta das capas do conjunto. Cada capa tem o `hash` no nome: o arquivo nunca muda, o navegador guarda. */
+const coversFolder = async (set: Where) => `${await folderOf(placeOf(set))}/${set.id}/capas`
+
+/** Sobe as capas novas e grava no índice; as que ficaram velhas saem da pasta. */
+export async function saveCovers(set: CreativeSet, made: { postId: string; hash: string; blob: Blob }[]): Promise<SetSummary> {
+  const folder = await coversFolder(set)
+  const paths = new Map<string, string>()
+  for (const c of made) {
+    const path = `${folder}/${c.postId}-${c.hash}.jpg`
+    const { error } = await bucket().upload(path, c.blob, { contentType: 'image/jpeg', upsert: true, cacheControl: '31536000' })
+    if (error) throw error
+    paths.set(`${c.postId}:${c.hash}`, path)
+  }
+  let keep = new Set<string>()
+  let saved: SetSummary = summaryOf(set)
+  await writeIndex(placeOf(set), (list) => {
+    const old = list.find((s) => s.id === set.id)
+    const next = summaryOf(set, old)
+    next.postsInfo = next.postsInfo?.map((p) => (paths.has(`${p.id}:${p.hash}`) ? { ...p, cover: paths.get(`${p.id}:${p.hash}`) } : p))
+    keep = new Set((next.postsInfo ?? []).flatMap((p) => (p.cover ? [p.cover] : [])))
+    saved = { ...next, ...(placeOf(set) ? { projectId: set.projectId, shared: true } : {}) }
+    return [next, ...list.filter((s) => s.id !== set.id)]
+  })
+  const { data } = await bucket().list(folder, { limit: 1000 })
+  const stale = (data ?? []).map((f) => `${folder}/${f.name}`).filter((p) => !keep.has(p))
+  if (stale.length) await bucket().remove(stale)
+  return saved
+}
+
+/** O resumo gravado deste conjunto (para saber que capas já existem). */
+export async function readSummary(set: Where): Promise<SetSummary | undefined> {
+  const list = (await readJson<SetSummary[]>(`${await folderOf(placeOf(set))}/index.json`)) ?? []
+  return list.find((s) => s.id === set.id)
+}
+
+const COVER_KEY = 'criativos-capas'
+const COVER_TTL = 7 * 86_400_000
+type CoverCache = Record<string, { url: string; until: number }>
+const readCoverCache = (): CoverCache => {
+  try {
+    return JSON.parse(localStorage.getItem(COVER_KEY) ?? '{}') as CoverCache
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Endereços das capas, assinados por 7 dias e guardados neste navegador: o mesmo
+ * endereço volta a cada abertura, então a imagem vem do cache e não do Storage.
+ */
+export async function coverUrls(paths: string[]): Promise<Record<string, string>> {
+  const cache = readCoverCache()
+  const now = Date.now()
+  const out: Record<string, string> = {}
+  const missing: string[] = []
+  for (const p of new Set(paths)) {
+    const hit = cache[p]
+    if (hit && hit.until > now + 3_600_000) out[p] = hit.url
+    else missing.push(p)
+  }
+  for (let i = 0; i < missing.length; i += 100) {
+    const chunk = missing.slice(i, i + 100)
+    const { data } = await bucket().createSignedUrls(chunk, COVER_TTL / 1000)
+    for (const row of data ?? []) {
+      if (!row.path || !row.signedUrl) continue
+      out[row.path] = row.signedUrl
+      cache[row.path] = { url: row.signedUrl, until: now + COVER_TTL }
+    }
+  }
+  try {
+    // Só as recentes: o cache não cresce sem fim
+    const entries = Object.entries(cache).filter(([, v]) => v.until > now).slice(-600)
+    localStorage.setItem(COVER_KEY, JSON.stringify(Object.fromEntries(entries)))
+  } catch {
+    // sem armazenamento: só não guarda
+  }
+  return out
 }
 
 /**
@@ -128,7 +231,7 @@ export async function createSetOnce(set: CreativeSet): Promise<{ set: CreativeSe
         if (isAlreadyExists(error)) return 'exists'
         throw error
       },
-      index: (value) => writeIndex(where, (list) => [summaryOf(value), ...list.filter((s) => s.id !== value.id)]),
+      index: (value) => writeIndex(where, (list) => [summaryOf(value, list.find((s) => s.id === value.id)), ...list.filter((s) => s.id !== value.id)]),
     },
     set
   )

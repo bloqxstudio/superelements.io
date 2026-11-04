@@ -305,6 +305,22 @@ export interface SetSummary {
   posts: number
   colors: string[]
   updatedAt: number
+  /** Os posts com a capa de cada um (o primeiro slide), para as listas acharem o criativo sem abrir o conjunto. */
+  postsInfo?: PostInfo[]
+}
+
+export interface PostInfo {
+  id: string
+  name: string
+  format: FormatId
+  slides: number
+  /** Tem animação (aba Motion). */
+  motion?: boolean
+  approved?: boolean
+  /** Assinatura do primeiro slide: a capa vale enquanto ela não muda. */
+  hash: string
+  /** Caminho da capa no Storage (JPEG pequeno), quando já foi gerada para esse `hash`. */
+  cover?: string
 }
 
 export const uid = () => Math.random().toString(36).slice(2, 10)
