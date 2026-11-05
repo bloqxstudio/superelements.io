@@ -20,7 +20,7 @@ export const FORMS_ENDPOINT = `${SUPABASE_URL}/functions/v1/form-submit`
  * Muda a cada alteração do `public/forms.js`: o servidor guarda o arquivo por 30 dias no navegador,
  * e o `?v=` faz as correções chegarem a quem já visitou o site.
  */
-export const FORMS_SCRIPT_VERSION = '21'
+export const FORMS_SCRIPT_VERSION = '22'
 
 /** O script sai sempre do app publicado (no app local, o endereço daqui não abre no site). */
 export const formsScriptUrl = () => `${isLocalAppUrl() ? 'https://app.avencestudio.com' : publicAppUrl()}/forms.js?v=${FORMS_SCRIPT_VERSION}`
@@ -144,11 +144,11 @@ export async function createForm(teamId: string, name: string, definition: FormD
  * nenhum arquivo (rascunho). É um ganho de velocidade, nunca um requisito: sem o arquivo, o `forms.js`
  * busca a mesma versão na função.
  */
-async function syncPublic(form: Pick<CrmForm, 'id' | 'teamId'>, live: LiveVersion | null) {
+async function syncPublic(form: Pick<CrmForm, 'id' | 'teamId'>, live: LiveVersion | null, liveAt = '') {
   const path = `${form.teamId}/${form.id}.json`
   try {
     if (live) {
-      const body = JSON.stringify({ id: form.id, name: live.name, definition: cleanDefinition(live.definition), theme: cleanTheme(live.theme), settings: cleanSettings(live.settings) })
+      const body = JSON.stringify({ id: form.id, name: live.name, liveAt, definition: cleanDefinition(live.definition), theme: cleanTheme(live.theme), settings: cleanSettings(live.settings) })
       const { error } = await supabase.storage.from(CONFIG_BUCKET).upload(path, new Blob([body], { type: 'application/json' }), { upsert: true, contentType: 'application/json', cacheControl: '30' })
       if (error) {
         // Um arquivo antigo no ar mostraria uma versão enquanto a função confere outra (o envio não passava).
@@ -192,7 +192,9 @@ export async function publishForm(form: Editable): Promise<LiveVersion> {
     if (error.code === '42703' || error.code === 'PGRST204') throw new Error('Falta aplicar a migração 20261105020000_crm_forms_live.sql no Supabase.')
     fail(error)
   }
-  await syncPublic(form, live)
+  // O mesmo texto que o banco devolve em live_at (a função compara com a versão que a página abriu)
+  const { data: row } = await db.from('crm_forms').select('live_at').eq('id', form.id).maybeSingle()
+  await syncPublic(form, live, (row as { live_at?: string } | null)?.live_at ?? now)
   return live
 }
 
