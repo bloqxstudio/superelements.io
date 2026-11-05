@@ -20,7 +20,7 @@ export const FORMS_ENDPOINT = `${SUPABASE_URL}/functions/v1/form-submit`
  * Muda a cada alteração do `public/forms.js`: o servidor guarda o arquivo por 30 dias no navegador,
  * e o `?v=` faz as correções chegarem a quem já visitou o site.
  */
-export const FORMS_SCRIPT_VERSION = '18'
+export const FORMS_SCRIPT_VERSION = '20'
 
 /** O script sai sempre do app publicado (no app local, o endereço daqui não abre no site). */
 export const formsScriptUrl = () => `${isLocalAppUrl() ? 'https://app.avencestudio.com' : publicAppUrl()}/forms.js?v=${FORMS_SCRIPT_VERSION}`
@@ -135,7 +135,12 @@ async function syncPublic(form: Pick<CrmForm, 'id' | 'teamId' | 'name' | 'status
     if (form.status === 'published') {
       const body = JSON.stringify({ id: form.id, name: form.name, definition: cleanDefinition(form.definition), theme: cleanTheme(form.theme), settings: cleanSettings(form.settings) })
       const { error } = await supabase.storage.from(CONFIG_BUCKET).upload(path, new Blob([body], { type: 'application/json' }), { upsert: true, contentType: 'application/json', cacheControl: '30' })
-      if (error) console.warn('forms: configuração pública não gravada:', error.message)
+      if (error) {
+        // Arquivo antigo no ar com a definição nova no banco: o site mostraria uma versão e a função conferiria
+        // outra (o envio nunca passava). Sem o arquivo, o forms.js busca a definição na função.
+        console.warn('forms: configuração pública não gravada:', error.message)
+        await supabase.storage.from(CONFIG_BUCKET).remove([path])
+      }
     } else {
       await supabase.storage.from(CONFIG_BUCKET).remove([path])
     }
@@ -191,8 +196,10 @@ export async function formBySlug(slug: string): Promise<{ id: string; teamId: st
 }
 
 export async function deleteForm(form: Pick<CrmForm, 'id' | 'teamId'>) {
-  const { error } = await db.from('crm_forms').delete().eq('id', form.id)
+  const { data, error } = await db.from('crm_forms').delete().eq('id', form.id).select('id')
   if (error) fail(error)
+  // A RLS não dá erro quando barra: só não apaga nada. Sem isso a lista tirava o item e ele voltava ao recarregar.
+  if (!data?.length) throw new Error('Não deu para apagar: só o gestor da conta apaga formulários.')
   await syncPublic({ ...form, name: '', status: 'draft', definition: cleanDefinition(null), theme: THEME_DEFAULT, settings: SETTINGS_DEFAULT })
 }
 

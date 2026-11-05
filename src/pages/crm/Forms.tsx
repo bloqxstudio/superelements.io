@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ListChecks, Loader2, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useCrm } from '@/features/crm/crmStore'
 import { Bars, Card, Donut } from '@/features/home/HomeCharts'
 import { FormsTablesError, TEMPLATES, blankDefinition, createForm, deleteForm, listForms, submissionCounts, type CrmForm } from '@/features/crm/forms'
@@ -28,6 +29,9 @@ const FormsPage: React.FC = () => {
   const [counts, setCounts] = useState<Record<string, { total: number; qualified: number }>>({})
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState<string>()
+  // Confirmação dentro do app: o window.confirm é bloqueado em janelas embutidas e o botão parecia não fazer nada
+  const [removing, setRemoving] = useState<CrmForm>()
+  const [deleting, setDeleting] = useState(false)
   const manager = team?.role === 'owner' || team?.role === 'admin'
   const live = useLiveCounts(team?.id)
 
@@ -167,10 +171,7 @@ const FormsPage: React.FC = () => {
                           type="button"
                           className="rounded p-2 text-gray-400 hover:bg-zinc-100 hover:text-rose-600"
                           aria-label={`Apagar ${f.name}`}
-                          onClick={() => {
-                            if (!window.confirm(`Apagar “${f.name}” e as ${c.total} respostas? Os leads já criados no funil continuam.`)) return
-                            deleteForm(f).then(() => setForms((list) => (list ?? []).filter((x) => x.id !== f.id)), (e) => toast.error(errorText(e)))
-                          }}
+                          onClick={() => setRemoving(f)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -183,6 +184,39 @@ const FormsPage: React.FC = () => {
           </section>
         </div>
       )}
+      <Dialog open={!!removing} onOpenChange={(open) => { if (!open && !deleting) setRemoving(undefined) }}>
+        <DialogContent size="sm">
+          <DialogHeader>
+            <DialogTitle>Apagar “{removing?.name}”?</DialogTitle>
+            <DialogDescription>
+              {removing && plural((counts[removing.id] ?? { total: 0 }).total, 'resposta', 'respostas')} e as reuniões marcadas por ele também saem. Os leads já criados no funil continuam.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" disabled={deleting} onClick={() => setRemoving(undefined)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={async () => {
+                if (!removing) return
+                setDeleting(true)
+                try {
+                  await deleteForm(removing)
+                  setForms((list) => (list ?? []).filter((x) => x.id !== removing.id))
+                  toast.success('Formulário apagado.')
+                  setRemoving(undefined)
+                } catch (e) {
+                  toast.error(errorText(e))
+                } finally {
+                  setDeleting(false)
+                }
+              }}
+            >
+              {deleting && <Loader2 className="h-4 w-4 animate-spin" />} Apagar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Page>
   )
 }

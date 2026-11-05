@@ -166,6 +166,8 @@
       '.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}' +
       '.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}' +
       '.out{text-align:center;padding:12px 0}' +
+      // Telas finais (enviado e reunião marcada): mesma altura da capa, conteúdo no centro
+      '.f.endf{display:flex;flex-direction:column;justify-content:center;min-height:var(--avence-form-min-h,auto)}' +
       '.out .ok{width:52px;height:52px;border-radius:50%;background:color-mix(in srgb,var(--p) 14%,transparent);color:var(--p);display:grid;place-items:center;margin:0 auto 16px;font-size:26px}' +
       '.out .cta{display:flex;flex-direction:column;gap:10px;margin-top:20px}' +
       '.out a.btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:56px;padding:14px 22px;border-radius:var(--r);font:inherit;font-weight:600;font-size:1em;letter-spacing:-.005em;text-decoration:none;transition:transform .12s,background-color .18s,color .18s,border-color .18s}' +
@@ -497,6 +499,11 @@
     var done = false
     var started = false
     var busy = false
+    // Avanço sozinho (escolha única) e a hora em que a etapa apareceu: um segundo toque (Continuar logo depois
+    // de escolher, ou toque duplo) não pode cair na etapa nova e acusar 'obrigatório' antes de a pessoa responder
+    var autoTimer = null
+    var shownAt = 0
+    var failed = false
     var origin = opts.preview ? {} : tracking()
     var pixel = opts.preview ? null : pixelOf(cfg, host)
     var tr = opts.preview ? null : tracker(cfg.id, opts.endpoint, origin)
@@ -573,11 +580,21 @@
       return !first
     }
 
-    // Tela de uma pergunta só, de escolha única: escolher avança sozinho, sem o botão (botão só para digitar)
+    // Com "Avançar sozinho ao escolher" ligado: tela de uma pergunta só, de escolha única, avança ao escolher
     function autoStep(step) {
-      if (!step || step.fields.length !== 1) return false
+      if (!cfg.settings.autoAdvance || !step || step.fields.length !== 1) return false
       var t = step.fields[0].type
       return isPick(t) && t !== 'select' && t !== 'multi'
+    }
+    // Sem o botão só quando a escolha é obrigatória: uma opcional precisa do botão para pular,
+    // e depois de uma falha no envio o botão volta para tentar de novo
+    function noButton(step) { return autoStep(step) && !!step.fields[0].required && !failed }
+
+    // Avança depois de uma escolha; só vale se a pessoa ainda estiver na mesma etapa
+    function autoNext(ms) {
+      var at = cur
+      clearTimeout(autoTimer)
+      autoTimer = setTimeout(function () { autoTimer = null; if (screen === 'steps' && cur === at && !done && !busy) next(true) }, ms)
     }
 
     function field(f, step) {
@@ -604,17 +621,24 @@
         var fs = el('fieldset', { style: 'margin:0;padding:0;border:0;min-width:0', 'aria-required': f.required ? 'true' : null }, [legend, help, wrap])
         box.appendChild(fs)
         box.appendChild(err)
+        // Setas do teclado só andam entre as opções (o navegador marca a opção ao andar): avançar fica para o Enter
+        var arrow = false
+        wrap.addEventListener('keydown', function (e) {
+          if (/^Arrow/.test(e.key)) arrow = true
+          else if (e.key === 'Enter' && autoStep(step)) { e.preventDefault(); next() }
+        })
         wrap.addEventListener('change', function () {
           firstTouch()
           read(step, root.querySelector('.st'))
           refresh()
           // Uma pergunta de escolha única por tela avança sozinha (o jeito do quiz)
-          if (autoStep(step)) setTimeout(function () { next() }, 220)
+          if (autoStep(step) && !arrow) autoNext(220)
+          arrow = false
         })
         // Sem o botão de avançar: tocar de novo na opção já marcada (ao voltar) também avança
         if (autoStep(step)) wrap.addEventListener('click', function (e) {
           var t = e.target
-          if (t && t.tagName === 'INPUT' && t.type === 'radio' && answers[f.id] === t.value) setTimeout(function () { next() }, 120)
+          if (t && t.tagName === 'INPUT' && t.type === 'radio' && answers[f.id] === t.value) autoNext(120)
         })
         return box
       }
@@ -835,7 +859,7 @@
         ]))
       }
       if (opts.preview) out.appendChild(el('p', { class: 'pv', text: 'Prévia: nada foi reservado.' }))
-      frame([out])
+      frame([out], 'endf')
     }
 
     function scrollIn() {
@@ -884,12 +908,13 @@
       if (s.showProgress && steps().length > 1) children.push(bar())
       children.push(wrap)
       children.push(el('div', { class: 'hp', 'aria-hidden': 'true' }, [el('input', { type: 'text', name: 'website', tabindex: '-1', autocomplete: 'off' })]))
-      // Escolha que avança sozinha fica sem o botão (só volta a aparecer enquanto envia, no último passo)
-      if (autoStep(step) && !busy) go = null
+      // Escolha obrigatória que avança sozinha fica sem o botão (ele aparece enquanto envia, no último passo)
+      if (noButton(step) && !busy) go = null
       if (back || go) children.push(el('div', { class: 'row' }, [back, go]))
       if (s.footnote) children.push(el('p', { class: 'fn', text: s.footnote }))
       if (opts.preview) children.push(el('p', { class: 'pv', text: opts.test ? 'Modo teste: avança sem preencher. Nada é enviado.' : 'Prévia: nada é enviado.' }))
       frame(children)
+      if (!busy) shownAt = Date.now()
       if (focus) {
         var f = root.querySelector('.st input:not([type=hidden]),.st textarea,.st select')
         if (f && step.fields.length) f.focus({ preventScroll: true })
@@ -910,14 +935,21 @@
       var cta = el('div', { class: 'cta' })
       if (res.whatsappUrl) {
         cta.appendChild(el('a', { class: 'btn wa', href: res.whatsappUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Continuar no WhatsApp (abre em uma nova aba)' }, [wa(), el('span', { text: 'Continuar no WhatsApp' }), arrow()]))
-        cta.appendChild(el('p', { class: 'sub', text: 'Suas respostas já vão na mensagem.' }))
       }
       if (res.result && res.result.ctaUrl) cta.appendChild(el('a', { class: 'btn ' + (res.whatsappUrl ? 'alt' : 'wa-off'), href: res.result.ctaUrl, text: res.result.ctaLabel || 'Continuar', style: res.whatsappUrl ? null : 'background:var(--p);color:#fff' }))
       if (cta.childNodes.length) out.appendChild(cta)
       if (opts.preview) out.appendChild(el('p', { class: 'pv', text: 'Prévia: nada foi enviado.' }))
-      frame([out])
+      frame([out], 'endf')
       var f = root.querySelector('.out')
       if (f && f.scrollIntoView && !opts.preview) f.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+    }
+
+    // Falha no envio: a etapa volta com o botão (para tentar de novo) e a mensagem acima dele
+    function failError(text) {
+      failed = true
+      render(false)
+      var row = root.querySelector('.row')
+      if (row) row.insertAdjacentElement('beforebegin', el('p', { class: 'er', role: 'alert', text: text }))
     }
 
     function submit() {
@@ -942,16 +974,18 @@
             // Erro de campo no servidor: volta para a etapa e mostra
             var errs = r.body.errors || {}
             var bad = Object.keys(errs)[0]
+            // Erro num campo que esta tela nem mostra: a página abriu uma versão antiga do formulário
+            var known = bad && steps().some(function (s) { return s.fields.some(function (f) { return f.id === bad }) })
+            if (bad && !known) { failError('Este formulário foi atualizado. Recarregue a página para continuar.'); return }
             if (bad) {
+              failed = true
               for (var i = 0; i < steps().length; i++) if (steps()[i].fields.some(function (f) { return f.id === bad })) { cur = i; break }
               render(false)
               var wrap = root.querySelector('.st')
               Object.keys(errs).forEach(function (k) { var b = wrap.querySelector('[data-f="' + k + '"]'); if (b) { b.classList.add('bad'); b.querySelector('.er').textContent = errs[k] } })
               return
             }
-            render(false)
-            var row = root.querySelector('.row')
-            if (row) row.insertAdjacentElement('beforebegin', el('p', { class: 'er', role: 'alert', text: r.body.error || 'Não deu para enviar. Tente de novo.' }))
+            failError(r.body.error || 'Não deu para enviar. Tente de novo.')
             return
           }
           var data = base()
@@ -972,16 +1006,18 @@
         })
         .catch(function () {
           busy = false
-          render(false)
-          var row = root.querySelector('.row')
-          if (row) row.insertAdjacentElement('beforebegin', el('p', { class: 'er', role: 'alert', text: 'Sem conexão. Confira a internet e tente de novo.' }))
+          failError('Sem conexão. Confira a internet e tente de novo.')
         })
     }
 
-    function next() {
+    function next(auto) {
       if (screen === 'welcome') return start()
       if (screen === 'booking') return confirmBooking()
       if (busy || done) return
+      clearTimeout(autoTimer)
+      autoTimer = null
+      // Um toque duplo não cai na etapa nova; o avanço da escolha já esperou o seu tempo
+      if (!auto && Date.now() - shownAt < 400) return
       var wrap = root.querySelector('.st')
       var step = steps()[cur]
       read(step, wrap)
@@ -990,6 +1026,7 @@
       if (n < 0) submit()
       else {
         cur = n
+        failed = false
         if (!opts.preview) push('form_step', Object.assign(base(), { step: n + 1, steps: steps().length }))
         render(true)
       }
