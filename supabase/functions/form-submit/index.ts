@@ -217,8 +217,9 @@ Deno.serve(async (request) => {
   }
 
   const wa = settings.whatsapp
+  // Só a mensagem de abertura: as respostas já estão no CRM (o card da oportunidade), não vão na conversa
   const whatsappUrl = wa
-    ? `https://wa.me/${wa.number}?text=${encodeURIComponent([wa.text, ...summary.map((r) => `${r.label}: ${r.value}`)].filter(Boolean).join('\n'))}`
+    ? `https://wa.me/${wa.number}${wa.text?.trim() ? `?text=${encodeURIComponent(wa.text.trim())}` : ''}`
     : undefined
   return json({
     ok: true,

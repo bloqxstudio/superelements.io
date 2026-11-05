@@ -20,7 +20,7 @@ export const FORMS_ENDPOINT = `${SUPABASE_URL}/functions/v1/form-submit`
  * Muda a cada alteração do `public/forms.js`: o servidor guarda o arquivo por 30 dias no navegador,
  * e o `?v=` faz as correções chegarem a quem já visitou o site.
  */
-export const FORMS_SCRIPT_VERSION = '18'
+export const FORMS_SCRIPT_VERSION = '19'
 
 /** O script sai sempre do app publicado (no app local, o endereço daqui não abre no site). */
 export const formsScriptUrl = () => `${isLocalAppUrl() ? 'https://app.avencestudio.com' : publicAppUrl()}/forms.js?v=${FORMS_SCRIPT_VERSION}`
@@ -191,8 +191,10 @@ export async function formBySlug(slug: string): Promise<{ id: string; teamId: st
 }
 
 export async function deleteForm(form: Pick<CrmForm, 'id' | 'teamId'>) {
-  const { error } = await db.from('crm_forms').delete().eq('id', form.id)
+  const { data, error } = await db.from('crm_forms').delete().eq('id', form.id).select('id')
   if (error) fail(error)
+  // A RLS não dá erro quando barra: só não apaga nada. Sem isso a lista tirava o item e ele voltava ao recarregar.
+  if (!data?.length) throw new Error('Não deu para apagar: só o gestor da conta apaga formulários.')
   await syncPublic({ ...form, name: '', status: 'draft', definition: cleanDefinition(null), theme: THEME_DEFAULT, settings: SETTINGS_DEFAULT })
 }
 
