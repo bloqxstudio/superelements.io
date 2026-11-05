@@ -71,6 +71,13 @@ export interface Content {
   format: ContentFormat
   script: string
   editorialDate?: string
+  /** Horário na Pauta, `HH:MM` (só com data). */
+  scheduledTime?: string
+  /** Canal na Pauta (`crm_contents.channel`, migração 20261105120000). */
+  channel?: string
+  /** O que o cliente respondeu ao último envio deste texto. */
+  clientStatus?: 'enviado' | 'aprovado' | 'ajuste'
+  clientAt?: number
   status: ContentStatus
   version: number
   contentHash: string
