@@ -42,7 +42,10 @@ test('transições: só os caminhos previstos', () => {
   assert.ok(ok('aprovado', 'producao'))
   assert.ok(!ok('ideia', 'aprovado'))
   assert.ok(!ok('ideia', 'revisao'))
-  assert.ok(!ok('producao', 'aprovado'))
+  // 2026-11-05: o gestor aprova direto da produção, desde que haja roteiro
+  assert.ok(ok('producao', 'aprovado'))
+  assert.ok(!ok('producao', 'aprovado', 'admin', ''))
+  assert.ok(!ok('producao', 'aprovado', 'seller'))
   assert.ok(!ok('aprovado', 'revisao'))
   assert.ok(!ok('aprovado', 'ideia'))
   assert.deepEqual(Object.keys(STATUS_LABEL), ['ideia', 'producao', 'revisao', 'aprovado'])
@@ -70,7 +73,7 @@ test('aprovação só vale com o hash atual (edição posterior derruba)', () =>
   assert.equal(approvalIsCurrent({ status: 'aprovado', approvedHash: undefined, contentHash: 'h1' }), false)
 })
 
-test('aprovar bloqueia com mudanças não salvas ou Copy diferente do roteiro', () => {
+test('aprovar bloqueia com mudanças não salvas; Copy diferente do roteiro só avisa', () => {
   const c = { status: 'revisao', script: 'Olá\n\nmundo' }
   const same = checkLink('copy', { script: c.script, docScript: 'Olá\n\n\nmundo ', available: true })
   const other = checkLink('copy', { script: c.script, docScript: 'Outro texto', available: true })
@@ -78,7 +81,8 @@ test('aprovar bloqueia com mudanças não salvas ou Copy diferente do roteiro', 
   assert.equal(other.state, 'diferente')
   assert.ok(canApprove(c, 'admin', [same], false).ok)
   assert.match(canApprove(c, 'admin', [same], true).reason, /Salve/)
-  assert.equal(canApprove(c, 'admin', [other], false).ok, false)
+  assert.ok(canApprove(c, 'admin', [other], false).ok)
+  assert.equal(other.blocksApproval, false)
   assert.equal(canApprove(c, 'seller', [same], false).ok, false)
 })
 
