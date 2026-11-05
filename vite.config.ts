@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { spaceBridge } from "./scripts/space/vitePlugin";
 import { spaceChat } from "./scripts/space/chatPlugin";
+import { iara } from "./scripts/iara/iaraPlugin";
 import { prospecting } from "./scripts/prospects/vitePlugin";
 import { criativos } from "./scripts/criativos/vitePlugin";
 
@@ -50,6 +51,7 @@ export default defineConfig(({ command, mode }) => ({
     spaceBridge(),
     // Chat com os agentes dentro do canvas: roda o Claude Code ou o Codex nesta máquina (só no dev)
     spaceChat(),
+    iara(),
     // Prospecção: busca empresas e lê os sites delas (só no dev, tela /prospeccao)
     prospecting(),
     criativos(),

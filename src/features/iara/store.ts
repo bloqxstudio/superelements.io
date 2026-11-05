@@ -17,6 +17,8 @@ export interface IaraDone {
   ok: boolean
   /** Endereço para abrir o que foi feito. */
   to?: string
+  /** Id do que foi criado (um conteúdo), para o agente seguir trabalhando nele. */
+  ref?: string
 }
 
 export interface IaraProposal {
@@ -35,6 +37,13 @@ export interface IaraMessage {
   at: number
   done?: IaraDone[]
   proposals?: IaraProposal[]
+  /** Passos do agente enquanto trabalha ("Vendo o criativo", "Pesquisando na web"…). */
+  steps?: string[]
+  /** Imagens que a Iara mostrou (prévia de slides). */
+  images?: string[]
+  /** Ainda respondendo. */
+  live?: boolean
+  error?: boolean
 }
 
 /** Uma ação que a tela aberta oferece à Iara. */
@@ -68,6 +77,8 @@ interface IaraState {
   queued?: string
   setOpen: (open: boolean) => void
   ask: (text: string) => void
+  /** O id da mensagem da Iara que está sendo escrita agora (modo agente). */
+  liveId?: string
 }
 
 export const uid = () => Math.random().toString(36).slice(2, 10)
@@ -85,7 +96,10 @@ export const readMessages = (team: string): IaraMessage[] => {
 
 export const writeMessages = (team: string, list: IaraMessage[]) => {
   try {
-    localStorage.setItem(KEY(team), JSON.stringify(list.slice(-50)))
+    // Prévias de slides pesam: só as das últimas 3 mensagens ficam guardadas
+    const keep = list.slice(-50)
+    const light = keep.map((m, i) => (m.images && i < keep.length - 3 ? { ...m, images: undefined } : m))
+    localStorage.setItem(KEY(team), JSON.stringify(light))
   } catch {
     // sem armazenamento: a conversa vale até fechar a aba
   }
@@ -122,4 +136,18 @@ export function useIaraScreen(screen: IaraScreen | null) {
       if (useIara.getState().screen === live) useIara.setState({ screen: undefined })
     }
   }, [id])
+}
+
+/** Muda uma mensagem e grava a conversa. */
+export function patchMessage(id: string, fn: (m: IaraMessage) => IaraMessage) {
+  const s = useIara.getState()
+  const list = s.messages.map((m) => (m.id === id ? fn(m) : m))
+  useIara.setState({ messages: list })
+  if (s.teamId) writeMessages(s.teamId, list)
+}
+
+export function saveMessages(list: IaraMessage[]) {
+  const s = useIara.getState()
+  useIara.setState({ messages: list })
+  if (s.teamId) writeMessages(s.teamId, list)
 }
