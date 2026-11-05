@@ -703,8 +703,8 @@
     function renderWelcome(focus) {
       var w = cfg.definition.welcome
       // Três partes (logo, texto, botão) numa coluna: o alinhamento escolhe onde elas ficam na altura da tela
-      // Altura escolhida no editor (16 a 64 px, padrão 32); a largura acompanha, até 5,6× a altura
-      var lh = Math.max(16, Math.min(64, Math.round(Number(w.logoSize) || 32)))
+      // Altura escolhida no editor (12 a 64 px, padrão 32); a largura acompanha, até 5,6× a altura
+      var lh = Math.max(12, Math.min(64, Math.round(Number(w.logoSize) || 32)))
       var lstyle = lh === 32 ? null : 'height:' + lh + 'px;max-width:min(100%,' + Math.round(lh * 5.6) + 'px)'
       var logo = w.logoUrl ? el('div', { class: 'wl wl-logo lg-' + (w.logoAlign || 'left') }, [el('img', { class: 'logo', src: w.logoUrl, alt: cfg.name, decoding: 'async', style: lstyle })]) : null
       var box = el('div', { class: 'wl wl-mid' })

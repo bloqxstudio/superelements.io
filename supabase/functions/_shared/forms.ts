@@ -103,7 +103,7 @@ export interface FormWelcome {
   valign?: WelcomeVAlign
   /** Posição só do logo; o texto segue à esquerda */
   logoAlign?: 'left' | 'center' | 'right'
-  /** Altura do logo em px (16 a 64); sem o campo, 32 */
+  /** Altura do logo em px (12 a 64); sem o campo, 32 */
   logoSize?: number
 }
 
@@ -373,6 +373,59 @@ export function resultFor(definition: FormDefinition, score: number): QuizResult
 }
 
 /** A pessoa que respondeu vai para a agenda? (o servidor decide; o `forms.js` só repete na prévia) */
+/** Um problema que impede publicar (`error`) ou que vale conferir antes (`warning`). */
+export interface FormIssue {
+  level: 'error' | 'warning'
+  text: string
+  /** A etapa (1, 2…) onde está, quando é numa pergunta */
+  step?: number
+}
+
+const DEFAULT_OPTION = /^Opção \d+$/
+
+/**
+ * Confere o formulário antes de ir para o ar: o que quebraria o envio para quem responde (etapa vazia,
+ * pergunta sem texto, opções ainda com o texto padrão, agenda com filtro numa pergunta que sumiu…).
+ * Com algum `error`, o editor não publica.
+ */
+export function formIssues(definition: FormDefinition, settings: FormSettings): FormIssue[] {
+  const out: FormIssue[] = []
+  const err = (text: string, step?: number) => out.push({ level: 'error', text, step })
+  const warn = (text: string, step?: number) => out.push({ level: 'warning', text, step })
+  if (!definition.steps.length) err('O formulário não tem nenhuma pergunta.')
+  definition.steps.forEach((st, i) => {
+    const n = i + 1
+    const name = st.title?.trim() ? `“${st.title.trim()}”` : `Etapa ${n}`
+    if (!st.fields.length) return err(`${name} está sem pergunta.`, n)
+    const lone = st.fields.length === 1 && !!st.title?.trim()
+    st.fields.forEach((f) => {
+      const label = f.label.trim()
+      if (!label && !lone) err(`${name} tem uma pergunta sem texto.`, n)
+      if (hasOptions(f.type)) {
+        const opts = f.options ?? []
+        if (opts.length < 2) err(`${label ? `“${label}”` : name}: a pergunta de escolha precisa de pelo menos 2 opções.`, n)
+        if (opts.some((o) => !o.label.trim())) err(`${label ? `“${label}”` : name} tem uma opção sem texto.`, n)
+        else if (opts.length && opts.every((o) => DEFAULT_OPTION.test(o.label.trim()))) err(`${label ? `“${label}”` : name} ainda está com as opções padrão (Opção 1, Opção 2…).`, n)
+      }
+      if (f.showIf && !allFields(definition).some((x) => x.id === f.showIf!.field)) err(`${label ? `“${label}”` : name} depende de uma pergunta que não existe mais.`, n)
+    })
+  })
+  if (settings.autoAdvance) {
+    definition.steps.forEach((st, i) => {
+      if (st.fields.length > 1 && st.fields.some((f) => f.type === 'choice')) warn(`“${st.title?.trim() || `Etapa ${i + 1}`}” tem mais de uma pergunta: ela mostra o botão em vez de avançar sozinha.`, i + 1)
+    })
+  }
+  const b = settings.booking
+  if (b?.enabled && b.gate.mode === 'answer') {
+    const field = allFields(definition).find((f) => f.id === b.gate.field)
+    if (!field) err('A agenda filtra por uma pergunta que não existe mais: ajuste o filtro na aba Agenda.')
+    else if (!b.gate.values.some((v) => (field.options ?? []).some((o) => o.id === v))) err('Nenhuma resposta marcada no filtro da agenda existe na pergunta: ninguém veria a agenda.')
+  }
+  if (definition.kind === 'quiz' && !definition.results.length) err('O quiz está sem resultados.')
+  if (settings.whatsapp && !settings.whatsapp.number.replace(/\D/g, '')) err('O botão do WhatsApp está ligado sem o número.')
+  return out
+}
+
 export function bookingEligible(definition: FormDefinition, booking: FormBooking | undefined, answers: Answers, qualified: boolean | null): boolean {
   if (!booking?.enabled) return false
   const gate = booking.gate
@@ -584,7 +637,7 @@ function cleanWelcome(raw: unknown): FormWelcome | undefined {
     buttonLabel: typeof w.buttonLabel === 'string' && w.buttonLabel.trim() ? w.buttonLabel.trim().slice(0, 40) : WELCOME_DEFAULT.buttonLabel,
     valign: w.valign === 'center' || w.valign === 'bottom' || w.valign === 'justify' ? w.valign : 'top',
     logoAlign: w.logoAlign === 'center' || w.logoAlign === 'right' ? w.logoAlign : 'left',
-    logoSize: typeof w.logoSize === 'number' && Number.isFinite(w.logoSize) ? Math.max(16, Math.min(64, Math.round(w.logoSize))) : undefined,
+    logoSize: typeof w.logoSize === 'number' && Number.isFinite(w.logoSize) ? Math.max(12, Math.min(64, Math.round(w.logoSize))) : undefined,
   }
 }
 

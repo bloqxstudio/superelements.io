@@ -251,6 +251,15 @@ export const WelcomeEditor: React.FC<{ form: Pick<CrmForm, 'id' | 'teamId'>; def
                 </button>
               )}
             </div>
+            {w.logoUrl && (
+              <label className="mt-3 flex items-center justify-between gap-3 text-sm text-gray-700">
+                Tamanho do logo
+                <span className="flex items-center gap-2">
+                  <input type="range" min={12} max={64} step={2} value={w.logoSize ?? 32} onChange={(e) => set({ logoSize: Number(e.target.value) })} className="w-36 accent-violet-600" aria-label="Altura do logo" />
+                  <span className="w-9 text-right tabular-nums text-gray-500">{w.logoSize ?? 32}px</span>
+                </span>
+              </label>
+            )}
           </div>
 
           <div>
@@ -327,7 +336,7 @@ export const WelcomeEditor: React.FC<{ form: Pick<CrmForm, 'id' | 'teamId'>; def
           </div>
           {w.logoUrl && (
             <div>
-              <span className={LABEL}>Logo</span>
+              <span className={LABEL}>Posição do logo</span>
               <Segmented
                 label="Posição do logo"
                 value={w.logoAlign ?? 'left'}
@@ -338,13 +347,6 @@ export const WelcomeEditor: React.FC<{ form: Pick<CrmForm, 'id' | 'teamId'>; def
                   { id: 'right', label: 'Direita', icon: AlignRight },
                 ]}
               />
-              <label className="mt-3 flex items-center justify-between gap-3 text-sm text-gray-700">
-                Tamanho do logo
-                <span className="flex items-center gap-2">
-                  <input type="range" min={16} max={64} step={2} value={w.logoSize ?? 32} onChange={(e) => set({ logoSize: Number(e.target.value) })} className="w-36 accent-violet-600" />
-                  <span className="w-9 text-right tabular-nums text-gray-500">{w.logoSize ?? 32}px</span>
-                </span>
-              </label>
             </div>
           )}
         </div>
