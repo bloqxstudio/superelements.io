@@ -3418,15 +3418,18 @@ var ACTION_LABEL = {
   aprovar_ideias: "Preparando a aprova\xE7\xE3o das ideias",
   aprovar_conteudos: "Preparando a aprova\xE7\xE3o",
   descartar: "Preparando o descarte",
-  produzir_criativo: "Produzindo o criativo",
+  produzir_criativo: "Preparando a troca de bast\xE3o (criativo)",
   ver_criativo: "Olhando o criativo",
-  editar_criativo: "Editando o criativo",
+  editar_criativo: "Preparando a troca de bast\xE3o (edi\xE7\xE3o)",
   legenda: "Escrevendo a legenda",
   ler_dados: "Lendo os n\xFAmeros",
   abrir_tela: "Abrindo a tela",
   abrir_peca: "Abrindo a pe\xE7a",
   mostrar: "Mudando a vis\xE3o da pauta",
-  enviar_cliente: "Preparando o envio ao cliente"
+  enviar_cliente: "Preparando o envio ao cliente",
+  consultar_agente: "Preparando a troca de bast\xE3o",
+  sugerir_melhoria: "Escrevendo a sugest\xE3o para o time de produto",
+  minhas_sugestoes: "Lendo suas sugest\xF5es"
 };
 var short2 = (s, n = 80) => s.length > n ? `${s.slice(0, n)}\u2026` : s;
 function stepOf(name, input) {
@@ -3716,7 +3719,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202611051521", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202611051641", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -3733,7 +3736,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202611051521" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202611051641" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);

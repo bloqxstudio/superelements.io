@@ -1,4 +1,4 @@
-import { allActions, catalog, execAction, isRisky } from './actions'
+import { agentName, allActions, catalog, execAction, isRisky } from './actions'
 import { patchMessage, uid, useIara } from './store'
 
 /**
@@ -21,11 +21,20 @@ export async function iaraCall(params: { action?: string; args?: Record<string, 
 
   if (isRisky(action, args)) {
     const label = action.label?.(args) ?? name
+    const handoff = action.handoff?.(args)
+    const reason = typeof args.motivo === 'string' ? args.motivo.slice(0, 300) : undefined
     if (liveId) {
       patchMessage(liveId, (m) => {
         const same = m.proposals?.some((p) => p.action === name && JSON.stringify(p.args) === JSON.stringify(args))
-        return same ? m : { ...m, proposals: [...(m.proposals ?? []), { id: uid(), action: name, args, label, state: 'pendente' }] }
+        return same ? m : { ...m, proposals: [...(m.proposals ?? []), { id: uid(), action: name, args, label, state: 'pendente', handoff, reason }] }
       })
+    }
+    if (handoff) {
+      return {
+        pendente: true,
+        bastao: agentName(handoff),
+        aviso: `Ficou no chat o pedido para passar o bastão ao ${agentName(handoff)} ("${label}"). A pessoa confirma. Termine sua resposta agora dizendo em uma frase que o ${agentName(handoff)} vai fazer isso e por quê. Quando ele terminar, você recebe o resultado numa nova mensagem e revisa. Não repita esta ação.`,
+      }
     }
     return { pendente: true, aviso: `"${label}" ficou como botão no chat: a pessoa confirma. Não repita esta ação.` }
   }

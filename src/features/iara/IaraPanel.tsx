@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowUp, Check, CircleAlert, Loader2, Sparkles, Square, Trash2, X } from 'lucide-react'
+import { ArrowRight, ArrowUp, Check, CircleAlert, Loader2, Sparkles, Square, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCrm } from '@/features/crm/crmStore'
 import { useAiAvailable } from '@/features/criativos/link'
-import { agentPrompt, agentSystem, proposalDetail, runAction, setIaraNavigate, talk } from './engine'
+import { agentPrompt, agentSystem, handbackRequest, proposalDetail, runAction, setIaraNavigate, talk } from './engine'
+import { AGENT_COLORS, IARA_ENGINE, agentName, execAction, localAgents } from './actions'
 import { onIaraEvent, sendToAgent, stopAgent, useIaraLink } from './link'
 import { patchMessage, readMessages, uid, useIara, writeMessages, type IaraMessage, type IaraProposal } from './store'
 
@@ -18,6 +19,7 @@ const SUGGESTIONS = [
   'Produz o criativo da próxima peça aprovada e me mostra',
   'Escreve o roteiro das ideias que estão sem roteiro',
   'Monta a pauta das próximas duas semanas, terças e quintas às 18h',
+  'Quero sugerir uma melhoria no produto',
 ]
 
 const SESSION_KEY = (team: string) => `iara-sessao:${team}`
@@ -38,7 +40,17 @@ const writeSession = (team: string | undefined, session: string | undefined) => 
   }
 }
 
-const Proposal: React.FC<{ p: IaraProposal; onConfirm: () => void; onRefuse: () => void; busy: boolean }> = ({ p, onConfirm, onRefuse, busy }) => {
+const AgentDot: React.FC<{ id?: string; className?: string }> = ({ id, className }) =>
+  id ? (
+    <span className={cn('inline-block h-2.5 w-2.5 shrink-0 rounded-full', className)} style={{ background: AGENT_COLORS[id] ?? '#6b7280' }} aria-hidden />
+  ) : (
+    <span className={cn('inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-gradient-to-br from-violet-400 to-fuchsia-500', className)} aria-hidden />
+  )
+
+/** As ações em que dá para escolher outro agente na hora de confirmar. */
+const PICKS_AGENT = new Set(['produzir_criativo', 'editar_criativo', 'consultar_agente'])
+
+const Proposal: React.FC<{ p: IaraProposal; onConfirm: (agent?: string) => void; onRefuse: () => void; busy: boolean }> = ({ p, onConfirm, onRefuse, busy }) => {
   const [names, setNames] = useState<string[]>([])
   useEffect(() => {
     let stop = false
@@ -47,13 +59,46 @@ const Proposal: React.FC<{ p: IaraProposal; onConfirm: () => void; onRefuse: () 
       stop = true
     }
   }, [p])
+
+  if (p.handoff) {
+    const color = AGENT_COLORS[p.handoff] ?? '#6b7280'
+    const others = PICKS_AGENT.has(p.action) ? localAgents().filter((a) => a !== p.handoff && (p.action !== 'consultar_agente' || a !== IARA_ENGINE)) : []
+    return (
+      <div className="mt-2 overflow-hidden rounded-xl border bg-white" style={{ borderColor: `${color}55` }}>
+        <p className="flex items-center gap-1.5 px-3 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          <AgentDot /> Iara <ArrowRight className="h-3 w-3" aria-hidden /> <AgentDot id={p.handoff} /> <span style={{ color }}>{agentName(p.handoff)}</span>
+          <span className="font-normal normal-case tracking-normal text-gray-400">· troca de bastão</span>
+        </p>
+        <p className="px-3 pt-1 text-sm font-medium text-gray-900">{p.label}</p>
+        {p.reason && <p className="px-3 pt-0.5 text-xs text-gray-600">{p.reason}</p>}
+        {p.state === 'pendente' ? (
+          <div className="flex flex-wrap gap-2 px-3 pb-3 pt-2.5">
+            <button type="button" disabled={busy} onClick={() => onConfirm(p.handoff)} className="inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-white disabled:opacity-60" style={{ background: color }}>
+              <Check className="h-3.5 w-3.5" aria-hidden /> Passar ao {agentName(p.handoff)}
+            </button>
+            {others.map((o) => (
+              <button key={o} type="button" disabled={busy} onClick={() => onConfirm(o)} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-medium text-gray-700 hover:border-gray-300 disabled:opacity-60">
+                <AgentDot id={o} /> Fazer com o {agentName(o)}
+              </button>
+            ))}
+            <button type="button" disabled={busy} onClick={onRefuse} className="h-8 rounded-lg px-2.5 text-xs font-medium text-gray-500 hover:bg-gray-50">
+              Agora não
+            </button>
+          </div>
+        ) : (
+          <p className={cn('px-3 pb-3 pt-1.5 text-xs', p.state === 'feito' ? 'text-emerald-700' : p.state === 'erro' ? 'text-red-700' : 'text-gray-500')}>{p.state === 'feito' ? p.result ?? 'Bastão passado.' : p.state === 'erro' ? p.result ?? 'Não deu certo.' : 'Deixado para depois.'}</p>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="mt-2 rounded-xl border border-violet-200 bg-violet-50/60 p-3">
       <p className="text-xs font-semibold text-violet-900">{p.label}</p>
       {names.length > 0 && (
-        <ul className="mt-1 list-disc pl-4 text-xs text-gray-700">
+        <ul className={cn('mt-1 text-xs text-gray-700', p.action === 'sugerir_melhoria' ? 'grid gap-1' : 'list-disc pl-4')}>
           {names.slice(0, 8).map((n, i) => (
-            <li key={i} className="truncate">
+            <li key={i} className={p.action === 'sugerir_melhoria' ? 'whitespace-pre-line' : 'truncate'}>
               {n}
             </li>
           ))}
@@ -62,8 +107,8 @@ const Proposal: React.FC<{ p: IaraProposal; onConfirm: () => void; onRefuse: () 
       )}
       {p.state === 'pendente' ? (
         <div className="mt-2 flex gap-2">
-          <button type="button" disabled={busy} onClick={onConfirm} className="inline-flex h-8 items-center gap-1 rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60">
-            <Check className="h-3.5 w-3.5" aria-hidden /> Confirmar
+          <button type="button" disabled={busy} onClick={() => onConfirm()} className="inline-flex h-8 items-center gap-1 rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60">
+            <Check className="h-3.5 w-3.5" aria-hidden /> {p.action === 'sugerir_melhoria' ? 'Enviar ao time' : 'Confirmar'}
           </button>
           <button type="button" disabled={busy} onClick={onRefuse} className="h-8 rounded-lg px-3 text-xs font-medium text-gray-600 hover:bg-white">
             Agora não
@@ -76,9 +121,26 @@ const Proposal: React.FC<{ p: IaraProposal; onConfirm: () => void; onRefuse: () 
   )
 }
 
-const Bubble: React.FC<{ m: IaraMessage; busy: boolean; onProposal: (msg: string, p: IaraProposal, ok: boolean) => void }> = ({ m, busy, onProposal }) => (
+const Bubble: React.FC<{ m: IaraMessage; busy: boolean; onProposal: (msg: string, p: IaraProposal, ok: boolean, agent?: string) => void }> = ({ m, busy, onProposal }) =>
+  m.role === 'note' ? (
+    <li className="flex items-center justify-center gap-1.5 py-0.5 text-[11px] text-gray-500">
+      <span className="h-px w-6 bg-gray-200" aria-hidden />
+      {m.agent && <AgentDot id={m.agent} />}
+      {m.text}
+      <span className="h-px w-6 bg-gray-200" aria-hidden />
+    </li>
+  ) : (
   <li className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
-    <div className={cn('max-w-[88%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed', m.role === 'user' ? 'rounded-br-md bg-gray-900 text-white' : m.error ? 'rounded-bl-md bg-red-50 text-red-900' : 'rounded-bl-md bg-gray-100 text-gray-900')}>
+    <div
+      className={cn('max-w-[88%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed', m.role === 'user' ? 'rounded-br-md bg-gray-900 text-white' : m.error ? 'rounded-bl-md bg-red-50 text-red-900' : m.agent ? 'rounded-bl-md border bg-white text-gray-900' : 'rounded-bl-md bg-gray-100 text-gray-900')}
+      style={m.agent && !m.error ? { borderColor: `${AGENT_COLORS[m.agent] ?? '#9ca3af'}66` } : undefined}
+    >
+      {m.agent && (
+        <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: AGENT_COLORS[m.agent] ?? '#4b5563' }}>
+          <AgentDot id={m.agent} /> {agentName(m.agent)}
+          {m.handoff && <span className="truncate font-normal text-gray-500">· com o bastão: {m.handoff.task}</span>}
+        </p>
+      )}
       {m.steps && m.steps.length > 0 && (
         <ol className={cn('grid gap-0.5 text-[11px] text-gray-500', m.text && 'mb-2')} aria-label="Passos">
           {m.steps.map((st, i) => (
@@ -115,10 +177,10 @@ const Bubble: React.FC<{ m: IaraMessage; busy: boolean; onProposal: (msg: string
           ))}
         </ul>
       )}
-      {m.proposals?.map((p) => <Proposal key={p.id} p={p} busy={busy} onConfirm={() => onProposal(m.id, p, true)} onRefuse={() => onProposal(m.id, p, false)} />)}
+      {m.proposals?.map((p) => <Proposal key={p.id} p={p} busy={busy} onConfirm={(agent) => onProposal(m.id, p, true, agent)} onRefuse={() => onProposal(m.id, p, false)} />)}
     </div>
   </li>
-)
+  )
 
 export const IaraPanel: React.FC = () => {
   const navigate = useNavigate()
@@ -259,9 +321,48 @@ export const IaraPanel: React.FC = () => {
     void send(queued)
   }, [queued, ready, send])
 
-  const decide = async (msgId: string, p: IaraProposal, ok: boolean) => {
+  /**
+   * Troca de bastão: o agente escolhido faz a ação aqui na aba (a IA forçada para ele), escreve a
+   * própria mensagem com os passos e as imagens, e no fim o bastão volta para a Iara, que confere.
+   */
+  const runHandoff = async (p: IaraProposal, agent: string) => {
+    const args = { ...(p.args as Record<string, unknown>), agente: agent }
+    const id = uid()
+    saveAll([
+      ...useIara.getState().messages,
+      { id: uid(), role: 'note', agent, text: `A Iara passou o bastão ao ${agentName(agent)}`, at: Date.now() },
+      { id, role: 'iara', agent, handoff: { to: agent, task: p.label }, text: '', at: Date.now(), live: true, steps: [] },
+    ])
+    useIara.setState({ busy: true, liveId: id, step: `${agentName(agent)} trabalhando` })
+    let summary = ''
+    let ok = false
+    try {
+      const r = await execAction(p.action, args)
+      ok = r.done.some((d) => d.ok)
+      const reply = (r.data as { resposta?: string; designer?: string } | undefined)?.resposta ?? (r.data as { designer?: string } | undefined)?.designer ?? ''
+      const text = reply || r.done.map((d) => d.label).join('\n') || 'Pronto.'
+      summary = `${r.done.map((d) => d.label).join('; ')}${reply ? `\n${reply}` : ''}${r.data && !reply ? `\nDados: ${JSON.stringify(r.data).slice(0, 1500)}` : ''}`
+      patchMessage(id, (m) => ({ ...m, text, done: r.done, images: r.images?.map((i) => i.data).slice(0, 6), live: false, error: !ok }))
+    } catch (e) {
+      summary = `Falhou: ${e instanceof Error ? e.message : String(e)}`
+      patchMessage(id, (m) => ({ ...m, text: summary, live: false, error: true }))
+    }
+    useIara.setState({ busy: false, step: undefined, liveId: undefined })
+    // O bastão volta: a Iara confere e conta à pessoa (só no modo agente)
+    saveAll([...useIara.getState().messages, { id: uid(), role: 'note', text: `O bastão voltou para a Iara${ok ? '' : ' (o trabalho não terminou)'}`, at: Date.now() }])
+    if (useIaraLink.getState().agent) void sendAgent(handbackRequest(agent, p.label, summary))
+  }
+
+  const decide = async (msgId: string, p: IaraProposal, ok: boolean, agent?: string) => {
     const patch = (next: Partial<IaraProposal>) => save(useIara.getState().messages.map((m) => (m.id === msgId ? { ...m, proposals: m.proposals?.map((x) => (x.id === p.id ? { ...x, ...next } : x)) } : m)))
     if (!ok) return patch({ state: 'recusado' })
+    if (useIara.getState().busy) return
+    const who = agent ?? p.handoff
+    if (p.handoff && who) {
+      if (who === IARA_ENGINE && p.action === 'consultar_agente') return patch({ state: 'recusado' })
+      patch({ state: 'feito', result: `Bastão com o ${agentName(who)}` })
+      return runHandoff(p, who)
+    }
     useIara.setState({ busy: true, step: 'Fazendo' })
     try {
       const done = await runAction(p.action, p.args as Record<string, unknown>)
@@ -330,7 +431,7 @@ export const IaraPanel: React.FC = () => {
             ) : (
               <ol ref={listRef} className="grid gap-3" aria-live="polite">
                 {messages.map((m) => (
-                  <Bubble key={m.id} m={m} busy={busy} onProposal={(id, p, ok) => void decide(id, p, ok)} />
+                  <Bubble key={m.id} m={m} busy={busy} onProposal={(id, p, ok, agent) => void decide(id, p, ok, agent)} />
                 ))}
                 {busy && !useIara.getState().liveId && (
                   <li className="flex items-center gap-2 text-xs text-gray-500" role="status">

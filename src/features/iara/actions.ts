@@ -7,7 +7,9 @@ import { scheduleContent } from '@/features/pauta/api'
 import { CHANNELS, STAGE_LABEL, channelOfFormat, stageOf } from '@/features/pauta/rules'
 import { loadSet, saveSet } from '@/features/criativos/storage'
 import type { CreativeSet, Post } from '@/features/criativos/types'
-import { useIara, type IaraAction, type IaraDone } from './store'
+import { resolveIa, withIa } from '@/features/ia/porTarefa'
+import { useCreativeLink } from '@/features/criativos/link'
+import { reportStep, useIara, type IaraAction, type IaraDone } from './store'
 
 /**
  * O que a Iara sabe fazer. Uma lista só, usada nos dois modos:
@@ -57,6 +59,28 @@ const fresh = async (id: string): Promise<Content> => {
 export const titleOf = async (id: string) => (await loadContent(id).catch(() => null))?.title ?? id
 
 const one = (d: IaraDone | IaraDone[]): IaraResult => ({ done: Array.isArray(d) ? d : [d] })
+
+// ---------- agentes desta máquina (troca de bastão) ----------
+
+/** A Iara roda no Claude Code; os outros agentes conectados recebem o bastão com a confirmação da pessoa. */
+export const IARA_ENGINE = 'claude'
+const AGENT_NAMES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex' }
+export const agentName = (id?: string) => (id ? (AGENT_NAMES[id] ?? id) : 'Iara')
+export const AGENT_COLORS: Record<string, string> = { claude: '#D97757', codex: '#10A37F' }
+
+/** Os agentes conectados nesta máquina agora. */
+export const localAgents = () => useCreativeLink.getState().agents.filter((a) => a.available).map((a) => a.id as string)
+
+const validAgent = (v: unknown) => (typeof v === 'string' && localAgents().includes(v) ? (v as 'claude' | 'codex') : undefined)
+
+/** Quem faz os criativos: o agente pedido, ou o escolhido para Criativos (o Codex por padrão). */
+const creativeAgent = (a: Record<string, unknown>) => validAgent(a.agente) ?? (resolveIa('criativos') as 'claude' | 'codex')
+
+/** Troca de bastão quando quem faz não é a própria Iara. */
+const handoffOf = (a: Record<string, unknown>) => {
+  const who = creativeAgent(a)
+  return who !== IARA_ENGINE ? who : undefined
+}
 
 /** O conjunto de Criativos ligado ao conteúdo. */
 async function setOf(contentId: string): Promise<{ content: Content; set: CreativeSet; projectId?: string }> {
@@ -244,14 +268,25 @@ const CONTENT_ACTIONS: Full[] = [
 const CREATIVE_ACTIONS: Full[] = [
   {
     name: 'produzir_criativo',
-    doc: '{"id":ID} — produz o criativo do conteúdo com o pipeline completo do app: escreve o roteiro se faltar, monta o post na marca da conta (designer), gera as fotos e anima. Demora 1 a 4 minutos. Depois use ver_criativo para conferir.',
+    doc: '{"id":ID,"agente"?:AGENTE} — produz o criativo do conteúdo com o pipeline completo do app: escreve o roteiro se faltar, monta o post na marca da conta, gera as fotos e anima. Feito pelo agente de criativos (o Codex por padrão): é uma troca de bastão, a pessoa confirma no chat. Demora 1 a 4 minutos; quando acabar você recebe o resultado com as imagens.',
+    handoff: handoffOf,
+    label: (a) => `Produzir o criativo de "${known.get(String(a.id))?.title ?? 'um conteúdo'}"`,
     run: async () => ({ label: 'Criativo produzido.', ok: true }),
     exec: async (a) => {
-      const c = await fresh(String(a.id))
-      const { produceWithAi } = await import('@/features/conteudos/produce')
-      const ctx = await loadContext(team().id).catch(() => null)
-      const out = await produceWithAi(c, ctx, undefined, (s) => useIara.setState({ step: `Criativo: ${s}` }))
-      return { done: [{ label: `Criativo pronto: ${c.title}`, ok: true, to: out.path }], data: { abrir: out.path } }
+      const who = creativeAgent(a)
+      return withIa(who, async () => {
+        const c = await fresh(String(a.id))
+        const { produceWithAi, PRODUCE_LABEL } = await import('@/features/conteudos/produce')
+        const ctx = await loadContext(team().id).catch(() => null)
+        const out = await produceWithAi(c, ctx, undefined, (s) => reportStep(PRODUCE_LABEL[s] ?? s))
+        const made = await setOf(c.id).catch(() => undefined)
+        const post = made?.set.posts[0]
+        return {
+          done: [{ label: `Criativo pronto: ${c.title}`, ok: true, to: out.path }],
+          data: { feito_por: agentName(who), abrir: out.path, slides: post ? slideTexts(post) : [] },
+          images: made && post ? await previews(made.set, post) : undefined,
+        }
+      })
     },
   },
   {
@@ -270,30 +305,31 @@ const CREATIVE_ACTIONS: Full[] = [
   },
   {
     name: 'editar_criativo',
-    doc: '{"id":ID,"pedido":string,"post"?:number,"slide"?:number} — pede ao designer do app para mudar o design do criativo (textos, cores, layout, ordem, fotos novas por descrição). Seja específico no pedido. Devolve as imagens de como ficou.',
+    doc: '{"id":ID,"pedido":string,"post"?:number,"slide"?:number,"agente"?:AGENTE} — pede ao designer do app para mudar o design do criativo (textos, cores, layout, ordem, fotos novas por descrição). Seja específico no pedido. Feito pelo agente de criativos (o Codex por padrão): troca de bastão, a pessoa confirma. Devolve as imagens de como ficou.',
+    handoff: handoffOf,
+    label: (a) => `Editar o criativo de "${known.get(String(a.id))?.title ?? 'um conteúdo'}": ${clip(String(a.pedido ?? ''), 140)}`,
     run: async () => ({ label: 'Criativo editado.', ok: true }),
-    exec: async (a) => {
+    exec: async (a) => withIa(creativeAgent(a), async () => {
       const { content, set, projectId } = await setOf(String(a.id))
       const post = pickPost(set, a.post)
       const n = typeof a.slide === 'number' ? a.slide : Number(a.slide)
       const slide = Number.isFinite(n) && n >= 1 ? post.slides[n - 1] : undefined
       const pedido = str(a.pedido, 3000)
       if (!pedido) throw new Error('Diga o que mudar no criativo.')
-      const [{ requestEdit }, { applyOps }, { creativeImages }, { fillSetImages }, { useCreativeLink }] = await Promise.all([
+      const [{ requestEdit }, { applyOps }, { creativeImages }, { fillSetImages }] = await Promise.all([
         import('@/features/criativos/ai'),
         import('@/features/criativos/applyOps'),
         import('@/features/crm/instagram'),
         import('@/features/criativos/generate'),
-        import('@/features/criativos/link'),
       ])
-      useIara.setState({ step: 'Designer editando o criativo' })
+      reportStep(`${agentName(creativeAgent(a))} editando o criativo`)
       const images = await creativeImages(set, post.slides)
       const fonts = [...new Set([set.brand.headingFont, set.brand.bodyFont, 'Inter', 'Inter Tight', 'Geist', 'Playfair Display', 'DM Sans', 'Manrope', 'Montserrat', 'Space Grotesk', 'Fraunces', 'Archivo'])]
-      const answer = await requestEdit({ message: pedido, scope: slide ? 'slide' : 'post', set, postId: post.id, slideId: slide?.id ?? post.slides[0]?.id, images, history: [], canGenerateImages: !!useCreativeLink.getState().images }, fonts)
+      const answer = await requestEdit({ message: pedido, scope: slide ? 'slide' : 'post', set, postId: post.id, slideId: slide?.id ?? post.slides[0]?.id, images, history: [], agent: creativeAgent(a), canGenerateImages: !!useCreativeLink.getState().images }, fonts)
       const result = applyOps(set, answer.ops, { postId: post.id, slideId: slide?.id ?? post.slides[0]?.id })
       let next = { ...result.set, updatedAt: Date.now() }
       if (result.toGenerate.length && useCreativeLink.getState().providers.length) {
-        useIara.setState({ step: 'Gerando as fotos' })
+        reportStep('Gerando as fotos')
         next = (await fillSetImages(next, [post.id], { signal: AbortSignal.timeout(300_000) }).catch(() => ({ set: next }))).set
       }
       await saveSet(next)
@@ -301,10 +337,10 @@ const CREATIVE_ACTIONS: Full[] = [
       const after = next.posts.find((p) => p.id === post.id) ?? post
       return {
         done: [{ label: `Criativo editado: ${content.title} (${result.applied} mudanças)`, ok: true, to: setPath(content, projectId) }],
-        data: { designer: answer.reply, mudancas: result.applied, ignoradas: result.skipped, slides: slideTexts(after) },
+        data: { feito_por: agentName(creativeAgent(a)), designer: answer.reply, mudancas: result.applied, ignoradas: result.skipped, slides: slideTexts(after) },
         images: await previews(next, after),
       }
-    },
+    }),
   },
   {
     name: 'legenda',
@@ -319,6 +355,35 @@ const CREATIVE_ACTIONS: Full[] = [
       await saveSet(next)
       await linkContent(content.id, 'criativos', next.id, projectId, await setHash(next)).catch(() => undefined)
       return { done: [{ label: `Legenda gravada: ${content.title}`, ok: true, to: setPath(content, projectId) }] }
+    },
+  },
+  {
+    name: 'consultar_agente',
+    doc: '{"agente":AGENTE,"pedido":string,"id"?:ID,"post"?:number} — passa uma tarefa de texto ou de olhar a outro agente desta máquina (por exemplo o Codex para roteiro de criativo, conceito visual ou crítica de design). Com "id", ele recebe as imagens dos slides do criativo. Troca de bastão: a pessoa confirma; quando ele responder, você recebe a resposta.',
+    handoff: (a) => {
+      const who = validAgent(a.agente)
+      return who && who !== IARA_ENGINE ? who : undefined
+    },
+    label: (a) => clip(String(a.pedido ?? ''), 160),
+    run: async () => ({ label: 'Agente respondeu.', ok: true }),
+    exec: async (a) => {
+      const who = validAgent(a.agente)
+      if (!who) throw new Error(`Esse agente não está conectado nesta máquina. Conectados: ${localAgents().map(agentName).join(', ') || 'nenhum'}.`)
+      const pedido = str(a.pedido, 8000)
+      if (!pedido) throw new Error('Diga o que o agente deve fazer.')
+      let images: { name: string; data: string }[] = []
+      if (a.id) {
+        const made = await setOf(String(a.id)).catch(() => undefined)
+        if (made) images = await previews(made.set, pickPost(made.set, a.post), 720)
+      }
+      const { callAiQuiet } = await import('@/features/criativos/link')
+      const t = team()
+      const ctx = await loadContext(t.id).catch(() => null)
+      const system = `Você é ${agentName(who)}, chamado pela Iara (a assistente da plataforma) para uma tarefa da equipe de marketing de ${t.name}. Faça a tarefa com qualidade de agência sênior, específica da empresa, sem fatos inventados. Responda em português do Brasil: \`reply\` com o resultado completo; \`items\` pode ficar vazio.`
+      const prompt = `## Empresa\n${t.name}${ctx ? `\nOferta: ${clip(ctx.offer, 700)}\nPúblico: ${clip(ctx.audience, 500)}\nTom: ${clip(ctx.tone, 300)}\nRestrições: ${clip(ctx.restrictions, 400)}` : ''}\n\n## Tarefa\n${pedido}${images.length ? '\n\nAs imagens anexadas são os slides do criativo, em ordem.' : ''}`
+      reportStep(`${agentName(who)} trabalhando`)
+      const out = await callAiQuiet<{ reply: string; items: { ref: string; text: string }[] }>('agent', { engine: who, system, prompt, images: images.map((i) => i.data) }, undefined, (step, detail) => reportStep(detail || (step === 'reading' ? 'Pesquisando' : step === 'writing' ? 'Escrevendo' : 'Pensando')))
+      return { done: [{ label: `${agentName(who)} respondeu`, ok: true }], data: { agente: agentName(who), resposta: out.reply ?? '' } }
     },
   },
 ]
@@ -363,6 +428,48 @@ const DATA_ACTIONS: Full[] = [
   },
 ]
 
+// ---------- sugestões para o time de produto ----------
+
+const KINDS = ['melhoria', 'problema', 'ideia']
+
+const PRODUCT_ACTIONS: Full[] = [
+  {
+    name: 'sugerir_melhoria',
+    doc: '{"titulo":string,"descricao":string,"area"?:string,"tipo"?:"melhoria"|"problema"|"ideia","impacto"?:string,"original":string} — manda ao time de produto da plataforma uma sugestão de melhoria, um problema ou uma ideia de função. Título curto e claro; descrição com o que acontece hoje, o que a pessoa quer e por quê; área = a tela ou parte do produto; original = o que a pessoa disse, como disse. A tela aberta vai junto sozinha. A pessoa confere o texto e confirma.',
+    risky: true,
+    label: (a) => `Enviar ao time de produto: ${clip(String(a.titulo ?? ''), 120)}`,
+    run: async (a) => {
+      const title = str(a.titulo, 160)
+      if (!title) return { label: 'Faltou o título da sugestão.', ok: false }
+      const { createSuggestion } = await import('@/features/sugestoes/api')
+      const screen = useIara.getState().screen
+      await createSuggestion({
+        title,
+        description: str(a.descricao, 4000) ?? '',
+        area: str(a.area, 120) ?? screen?.title ?? '',
+        kind: (KINDS.includes(String(a.tipo)) ? a.tipo : 'melhoria') as 'melhoria' | 'problema' | 'ideia',
+        impact: str(a.impacto, 1000) ?? '',
+        original: str(a.original, 4000) ?? '',
+        teamId: useCrm.getState().team?.id,
+        screenPath: `${window.location.pathname}${window.location.search}`.slice(0, 300),
+        screenTitle: screen?.title ?? document.title,
+        via: 'iara',
+      })
+      return { label: `Sugestão enviada ao time de produto: ${title}`, ok: true }
+    },
+  },
+  {
+    name: 'minhas_sugestoes',
+    doc: '{} — as sugestões que esta pessoa já mandou ao time de produto, com o status de cada uma (nova, avaliando, planejada, feita, descartada) e a nota do time.',
+    run: async () => ({ label: 'Li as sugestões.', ok: true }),
+    exec: async () => {
+      const { listSuggestions, STATUS_LABEL: ST } = await import('@/features/sugestoes/api')
+      const mine = (await listSuggestions()).slice(0, 40)
+      return { done: [], data: mine.map((x) => ({ titulo: x.title, status: ST[x.status], nota_do_time: x.note || undefined, quando: new Date(x.createdAt).toLocaleDateString('pt-BR') })) }
+    },
+  },
+]
+
 // ---------- navegação ----------
 
 const PLACES: Record<string, string> = {
@@ -378,6 +485,7 @@ const PLACES: Record<string, string> = {
   leads: '/crm',
   whatsapp: '/crm/whatsapp',
   inicio: '/inicio',
+  sugestoes: '/sugestoes',
 }
 
 let navigateRef: ((to: string) => void) | undefined
@@ -398,9 +506,9 @@ const NAV_ACTIONS: Full[] = [
   },
 ]
 
-export const allActions = (): Full[] => [...CONTENT_ACTIONS, ...CREATIVE_ACTIONS, ...DATA_ACTIONS, ...NAV_ACTIONS, ...(useIara.getState().screen?.actions ?? [])]
+export const allActions = (): Full[] => [...CONTENT_ACTIONS, ...CREATIVE_ACTIONS, ...DATA_ACTIONS, ...PRODUCT_ACTIONS, ...NAV_ACTIONS, ...(useIara.getState().screen?.actions ?? [])]
 
-export const isRisky = (a: IaraAction, args: Record<string, unknown>) => (typeof a.risky === 'function' ? a.risky(args) : !!a.risky)
+export const isRisky = (a: IaraAction, args: Record<string, unknown>) => !!a.handoff?.(args) || (typeof a.risky === 'function' ? a.risky(args) : !!a.risky)
 
 /** Executa uma ação (sem conferir se é arriscada: quem chama decide). */
 export async function execAction(name: string, args: Record<string, unknown>): Promise<IaraResult> {
@@ -418,6 +526,6 @@ export const ETAPAS = 'ideia | producao | gestor | pronto | cliente | ajuste | a
 
 /** O catálogo para a IA. */
 export const catalog = () =>
-  `FORMATO = ${CONTENT_FORMATS.map((f) => f.id).join(' | ')}\nCANAL = ${CHANNELS.map((c) => c.id).join(' | ')}\nETAPA = ${ETAPAS}\nID = o id de um conteúdo\n${allActions()
+  `AGENTE = ${localAgents().join(' | ') || 'claude'}\nFORMATO = ${CONTENT_FORMATS.map((f) => f.id).join(' | ')}\nCANAL = ${CHANNELS.map((c) => c.id).join(' | ')}\nETAPA = ${ETAPAS}\nID = o id de um conteúdo\n${allActions()
     .map((a) => `- ${a.name}${isRisky(a, {}) || typeof a.risky === 'function' ? ' (pede confirmação)' : ''}: ${a.doc}`)
     .join('\n')}`

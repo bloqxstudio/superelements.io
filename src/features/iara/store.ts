@@ -28,11 +28,20 @@ export interface IaraProposal {
   label: string
   state: 'pendente' | 'feito' | 'recusado' | 'erro'
   result?: string
+  /** Troca de bastão: o agente que vai fazer (codex, claude). */
+  handoff?: string
+  /** Por que a Iara quer passar o bastão. */
+  reason?: string
 }
 
 export interface IaraMessage {
   id: string
-  role: 'user' | 'iara'
+  /** `note`: linha do sistema na conversa (o bastão voltou, por exemplo). */
+  role: 'user' | 'iara' | 'note'
+  /** Quem escreveu, quando não foi a Iara (o Codex com o bastão). */
+  agent?: string
+  /** A mensagem é o trabalho de um agente que recebeu o bastão. */
+  handoff?: { to: string; task: string }
   text: string
   at: number
   done?: IaraDone[]
@@ -55,6 +64,8 @@ export interface IaraAction {
   risky?: boolean | ((args: Record<string, unknown>) => boolean)
   /** Frase da proposta (quando precisa confirmar). */
   label?: (args: Record<string, unknown>) => string
+  /** A ação vai para outro agente (troca de bastão, confirmada pela pessoa): devolve o id dele. */
+  handoff?: (args: Record<string, unknown>) => string | undefined
   run: (args: Record<string, unknown>) => Promise<IaraDone | IaraDone[]>
 }
 
@@ -150,4 +161,11 @@ export function saveMessages(list: IaraMessage[]) {
   const s = useIara.getState()
   useIara.setState({ messages: list })
   if (s.teamId) writeMessages(s.teamId, list)
+}
+
+/** Um passo do trabalho em andamento: aparece na mensagem que está sendo escrita. */
+export function reportStep(text: string) {
+  useIara.setState({ step: text })
+  const id = useIara.getState().liveId
+  if (id) patchMessage(id, (m) => ({ ...m, steps: (m.steps?.at(-1) === text ? m.steps : [...(m.steps ?? []), text]).slice(-14) }))
 }

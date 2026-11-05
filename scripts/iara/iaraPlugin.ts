@@ -40,15 +40,18 @@ const ACTION_LABEL: Record<string, string> = {
   aprovar_ideias: 'Preparando a aprovação das ideias',
   aprovar_conteudos: 'Preparando a aprovação',
   descartar: 'Preparando o descarte',
-  produzir_criativo: 'Produzindo o criativo',
+  produzir_criativo: 'Preparando a troca de bastão (criativo)',
   ver_criativo: 'Olhando o criativo',
-  editar_criativo: 'Editando o criativo',
+  editar_criativo: 'Preparando a troca de bastão (edição)',
   legenda: 'Escrevendo a legenda',
   ler_dados: 'Lendo os números',
   abrir_tela: 'Abrindo a tela',
   abrir_peca: 'Abrindo a peça',
   mostrar: 'Mudando a visão da pauta',
   enviar_cliente: 'Preparando o envio ao cliente',
+  consultar_agente: 'Preparando a troca de bastão',
+  sugerir_melhoria: 'Escrevendo a sugestão para o time de produto',
+  minhas_sugestoes: 'Lendo suas sugestões',
 }
 
 const short = (s: string, n = 80) => (s.length > n ? `${s.slice(0, n)}…` : s)
