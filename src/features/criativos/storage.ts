@@ -170,6 +170,11 @@ export async function readSummary(set: Where): Promise<SetSummary | undefined> {
   return list.find((s) => s.id === set.id)
 }
 
+/** Todos os resumos de uma pasta (a do projeto, ou a pessoal sem projeto): uma leitura do `index.json`. */
+export async function readSummaries(projectId?: string): Promise<SetSummary[]> {
+  return (await readJson<SetSummary[]>(`${await folderOf(projectId)}/index.json`)) ?? []
+}
+
 const COVER_KEY = 'criativos-capas'
 const COVER_TTL = 7 * 86_400_000
 type CoverCache = Record<string, { url: string; until: number }>

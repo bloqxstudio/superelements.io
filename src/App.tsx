@@ -48,6 +48,8 @@ import CrmFormEditor from "@/pages/crm/FormEditor";
 import CrmPlan from "@/pages/crm/Plan";
 import CrmContents from "@/pages/crm/Contents";
 import CrmContentDetail from "@/pages/crm/ContentDetail";
+import CrmPauta from "@/pages/crm/Pauta";
+import PautaApproval from "@/pages/PautaApproval";
 import CrmFunnels from "@/pages/crm/Funnels";
 import CrmFunnelDetail from "@/pages/crm/FunnelDetail";
 import InstagramCallback from "@/pages/InstagramCallback";
@@ -97,6 +99,8 @@ function App() {
               <Route path="/anuncios/retorno" element={<ProtectedRoute><AdsCallback /></ProtectedRoute>} />
               {/* Link de aprovação: o cliente abre sem login */}
               <Route path="/aprovar/:shareId" element={<PageApproval />} />
+              {/* Pauta: o cliente aprova e comenta as peças de um envio, sem login */}
+              <Route path="/pauta/aprovar/:id" element={<PautaApproval />} />
               {/* Convite para editar um projeto junto: mostra o convite antes do login */}
               <Route path="/convite/:inviteId" element={<ProjectInvite />} />
               {/* Convite para a equipe do CRM: mostra o convite antes do login */}
@@ -153,6 +157,7 @@ function App() {
                 <Route path="criativos/:setId" element={<CreativeEditor />} />
                 {/* CRM da equipe: funil, clientes, equipe e convites; só para quem é de uma equipe */}
                 <Route path="plano" element={<CrmGate><CrmPlan /></CrmGate>} />
+                <Route path="pauta" element={<CrmGate><CrmPauta /></CrmGate>} />
                 <Route path="conteudos" element={<CrmGate><CrmContents /></CrmGate>} />
                 <Route path="conteudos/:id" element={<CrmGate><CrmContentDetail /></CrmGate>} />
                 <Route path="crm" element={<CrmGate><CrmOpportunities /></CrmGate>} />
