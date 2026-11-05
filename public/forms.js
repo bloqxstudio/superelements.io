@@ -580,9 +580,9 @@
       return !first
     }
 
-    // Tela de uma pergunta só, de escolha única: escolher avança sozinho (botão só para digitar)
+    // Com "Avançar sozinho ao escolher" ligado: tela de uma pergunta só, de escolha única, avança ao escolher
     function autoStep(step) {
-      if (!step || step.fields.length !== 1) return false
+      if (!cfg.settings.autoAdvance || !step || step.fields.length !== 1) return false
       var t = step.fields[0].type
       return isPick(t) && t !== 'select' && t !== 'multi'
     }
@@ -974,6 +974,9 @@
             // Erro de campo no servidor: volta para a etapa e mostra
             var errs = r.body.errors || {}
             var bad = Object.keys(errs)[0]
+            // Erro num campo que esta tela nem mostra: a página abriu uma versão antiga do formulário
+            var known = bad && steps().some(function (s) { return s.fields.some(function (f) { return f.id === bad }) })
+            if (bad && !known) { failError('Este formulário foi atualizado. Recarregue a página para continuar.'); return }
             if (bad) {
               failed = true
               for (var i = 0; i < steps().length; i++) if (steps()[i].fields.some(function (f) { return f.id === bad })) { cur = i; break }

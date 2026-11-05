@@ -557,7 +557,16 @@ export const SettingsEditor: React.FC<{ settings: FormSettings; kind: 'form' | '
               <Switch checked={!!settings.showScore} onCheckedChange={(showScore) => onChange({ ...settings, showScore })} /> Mostrar a pontuação para quem responde
             </label>
           )}
-          <p className="text-[11px] text-gray-500">Uma pergunta de escolha única por tela avança sozinha ao escolher. Se ela for obrigatória, a tela fica sem botão; nas telas de digitar e nas escolhas opcionais o botão continua.</p>
+          <div>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <Switch checked={settings.autoAdvance} onCheckedChange={(autoAdvance) => onChange({ ...settings, autoAdvance })} /> Avançar sozinho ao escolher (sem o botão)
+            </label>
+            <p className="mt-1 pl-[52px] text-[11px] text-gray-500">
+              {settings.autoAdvance
+                ? 'Uma pergunta de escolha única por tela avança ao tocar na opção. Se for obrigatória, a tela fica sem botão; nas telas de digitar e nas escolhas opcionais o botão continua.'
+                : 'Toda tela mostra o botão de continuar, e a pessoa confirma cada resposta.'}
+            </p>
+          </div>
         </div>
       </Surface>
       <Surface title="WhatsApp na tela final">
