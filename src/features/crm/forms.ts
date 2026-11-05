@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
-import { BOOKING_DEFAULT, SETTINGS_DEFAULT, THEME_DEFAULT, cleanDefinition, cleanSettings, cleanTheme, newId, type Answers, type FormDefinition, type FormField, type FormSettings, type FormStep, type FormTheme } from '../../../supabase/functions/_shared/forms.ts'
+import { BOOKING_DEFAULT, SETTINGS_DEFAULT, THEME_DEFAULT, cleanDefinition, formIssues, cleanSettings, cleanTheme, newId, type Answers, type FormDefinition, type FormField, type FormSettings, type FormStep, type FormTheme } from '../../../supabase/functions/_shared/forms.ts'
 import { isLocalAppUrl, publicAppUrl } from '@/features/approval/shares'
 
 /**
@@ -20,7 +20,7 @@ export const FORMS_ENDPOINT = `${SUPABASE_URL}/functions/v1/form-submit`
  * Muda a cada alteração do `public/forms.js`: o servidor guarda o arquivo por 30 dias no navegador,
  * e o `?v=` faz as correções chegarem a quem já visitou o site.
  */
-export const FORMS_SCRIPT_VERSION = '20'
+export const FORMS_SCRIPT_VERSION = '21'
 
 /** O script sai sempre do app publicado (no app local, o endereço daqui não abre no site). */
 export const formsScriptUrl = () => `${isLocalAppUrl() ? 'https://app.avencestudio.com' : publicAppUrl()}/forms.js?v=${FORMS_SCRIPT_VERSION}`
@@ -38,12 +38,22 @@ export interface CrmForm {
   status: 'draft' | 'published'
   /** Endereço bonito do link direto (`/f/<slug>`), único na plataforma. */
   slug?: string
+  /** A versão no ar (o que o site mostra e a função confere); definition, theme e settings são o rascunho */
+  live?: LiveVersion
+  liveAt?: number
   definition: FormDefinition
   theme: FormTheme
   settings: FormSettings
   views: number
   createdAt: number
   updatedAt: number
+}
+
+export interface LiveVersion {
+  name: string
+  definition: FormDefinition
+  theme: FormTheme
+  settings: FormSettings
 }
 
 export interface FormSubmission {
@@ -83,6 +93,8 @@ type FormRow = {
   definition: unknown
   theme: unknown
   settings: unknown
+  live?: { name?: string; definition?: unknown; theme?: unknown; settings?: unknown } | null
+  live_at?: string | null
   views: number | string
   created_at: string
   updated_at: string
@@ -98,6 +110,8 @@ const toForm = (row: FormRow): CrmForm => ({
   definition: cleanDefinition(row.definition),
   theme: cleanTheme(row.theme),
   settings: cleanSettings(row.settings),
+  live: row.live ? { name: row.live.name || row.name, definition: cleanDefinition(row.live.definition), theme: cleanTheme(row.live.theme), settings: cleanSettings(row.live.settings) } : undefined,
+  liveAt: row.live_at ? Date.parse(row.live_at) : undefined,
   views: Number(row.views) || 0,
   createdAt: Date.parse(row.created_at),
   updatedAt: Date.parse(row.updated_at),
@@ -126,18 +140,19 @@ export async function createForm(teamId: string, name: string, definition: FormD
 }
 
 /**
- * Mantém o arquivo público da configuração em dia: publicado grava, rascunho apaga. É um ganho de
- * velocidade, nunca um requisito: sem o bucket (migração por aplicar) o `forms.js` busca na função.
+ * O arquivo público da configuração (`crm-forms/<conta>/<formulário>.json`) com a versão no ar, ou
+ * nenhum arquivo (rascunho). É um ganho de velocidade, nunca um requisito: sem o arquivo, o `forms.js`
+ * busca a mesma versão na função.
  */
-async function syncPublic(form: Pick<CrmForm, 'id' | 'teamId' | 'name' | 'status' | 'definition' | 'theme' | 'settings'>) {
+async function syncPublic(form: Pick<CrmForm, 'id' | 'teamId'>, live: LiveVersion | null) {
   const path = `${form.teamId}/${form.id}.json`
   try {
-    if (form.status === 'published') {
-      const body = JSON.stringify({ id: form.id, name: form.name, definition: cleanDefinition(form.definition), theme: cleanTheme(form.theme), settings: cleanSettings(form.settings) })
+    if (live) {
+      const body = JSON.stringify({ id: form.id, name: live.name, definition: cleanDefinition(live.definition), theme: cleanTheme(live.theme), settings: cleanSettings(live.settings) })
       const { error } = await supabase.storage.from(CONFIG_BUCKET).upload(path, new Blob([body], { type: 'application/json' }), { upsert: true, contentType: 'application/json', cacheControl: '30' })
       if (error) {
-        // Arquivo antigo no ar com a definição nova no banco: o site mostraria uma versão e a função conferiria
-        // outra (o envio nunca passava). Sem o arquivo, o forms.js busca a definição na função.
+        // Um arquivo antigo no ar mostraria uma versão enquanto a função confere outra (o envio não passava).
+        // Sem o arquivo, o forms.js busca a versão certa na função.
         console.warn('forms: configuração pública não gravada:', error.message)
         await supabase.storage.from(CONFIG_BUCKET).remove([path])
       }
@@ -149,14 +164,54 @@ async function syncPublic(form: Pick<CrmForm, 'id' | 'teamId' | 'name' | 'status
   }
 }
 
-export async function saveForm(form: Pick<CrmForm, 'id' | 'teamId' | 'name' | 'status' | 'definition' | 'theme' | 'settings'>) {
+type Editable = Pick<CrmForm, 'id' | 'teamId' | 'name' | 'definition' | 'theme' | 'settings'>
+
+/** Salva o rascunho (o editor chama sozinho a cada mudança). Nada muda no ar: para isso, `publishForm`. */
+export async function saveForm(form: Editable) {
   const { error } = await db
     .from('crm_forms')
-    .update({ name: form.name.trim() || 'Sem nome', kind: form.definition.kind, status: form.status, definition: form.definition, theme: form.theme, settings: form.settings, updated_at: new Date().toISOString() })
+    .update({ name: form.name.trim() || 'Sem nome', kind: form.definition.kind, definition: form.definition, theme: form.theme, settings: form.settings, updated_at: new Date().toISOString() })
     .eq('id', form.id)
   if (error) fail(error)
-  await syncPublic(form)
 }
+
+/** Erros que impedem publicar (a mesma conferência do MCP). */
+export const publishErrors = (form: Pick<CrmForm, 'definition' | 'settings'>) => formIssues(form.definition, form.settings).filter((i) => i.level === 'error')
+
+/** Põe o rascunho no ar: confere, grava a versão no ar e o arquivo do site. */
+export async function publishForm(form: Editable): Promise<LiveVersion> {
+  const errors = publishErrors(form)
+  if (errors.length) throw new Error(`Corrija antes de publicar: ${errors.map((e) => e.text).join(' ')}`)
+  const live: LiveVersion = { name: form.name.trim() || 'Sem nome', definition: form.definition, theme: form.theme, settings: form.settings }
+  const now = new Date().toISOString()
+  const { error } = await db
+    .from('crm_forms')
+    .update({ name: live.name, kind: form.definition.kind, status: 'published', definition: form.definition, theme: form.theme, settings: form.settings, live, live_at: now, updated_at: now })
+    .eq('id', form.id)
+  if (error) {
+    if (error.code === '42703' || error.code === 'PGRST204') throw new Error('Falta aplicar a migração 20261105020000_crm_forms_live.sql no Supabase.')
+    fail(error)
+  }
+  await syncPublic(form, live)
+  return live
+}
+
+/** Tira do ar: o link para de abrir. A última versão publicada fica guardada para publicar de novo. */
+export async function unpublishForm(form: Pick<CrmForm, 'id' | 'teamId'>) {
+  const { error } = await db.from('crm_forms').update({ status: 'draft', updated_at: new Date().toISOString() }).eq('id', form.id)
+  if (error) fail(error)
+  await syncPublic(form, null)
+}
+
+/** O rascunho é diferente do que está no ar? (nome, perguntas, aparência ou configurações) */
+export const hasUnpublished = (form: Pick<CrmForm, 'name' | 'definition' | 'theme' | 'settings' | 'live'>) =>
+  !form.live || versionKey(form.name.trim() || 'Sem nome', form) !== versionKey(form.live.name, form.live)
+
+// Mesma versão com as chaves em outra ordem (o jsonb do banco reordena) conta como igual
+const canon = (v: unknown): unknown =>
+  Array.isArray(v) ? v.map(canon) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().filter((k) => (v as Record<string, unknown>)[k] !== undefined).map((k) => [k, canon((v as Record<string, unknown>)[k])])) : v
+const versionKey = (name: string, v: Pick<LiveVersion, 'definition' | 'theme' | 'settings'>) =>
+  JSON.stringify(canon([name, cleanDefinition(v.definition), cleanTheme(v.theme), cleanSettings(v.settings)]))
 
 /** Minúsculas, sem acento, palavras com hífen: "Diagnóstico Grátis!" → "diagnostico-gratis". */
 export const slugify = (text: string) =>
@@ -200,7 +255,7 @@ export async function deleteForm(form: Pick<CrmForm, 'id' | 'teamId'>) {
   if (error) fail(error)
   // A RLS não dá erro quando barra: só não apaga nada. Sem isso a lista tirava o item e ele voltava ao recarregar.
   if (!data?.length) throw new Error('Não deu para apagar: só o gestor da conta apaga formulários.')
-  await syncPublic({ ...form, name: '', status: 'draft', definition: cleanDefinition(null), theme: THEME_DEFAULT, settings: SETTINGS_DEFAULT })
+  await syncPublic(form, null)
 }
 
 /** Quantas respostas cada formulário já recebeu (para a taxa de conversão da lista). */

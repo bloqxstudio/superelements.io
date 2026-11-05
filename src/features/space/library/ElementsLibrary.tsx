@@ -31,7 +31,7 @@ import { INSERT_KEYS } from '../editor/useEditorShortcuts'
 import { createBlankSection } from '../editor/tree'
 import { toast } from 'sonner'
 import { useCrm } from '@/features/crm/crmStore'
-import { listForms, saveForm, type CrmForm } from '@/features/crm/forms'
+import { listForms, publishForm, type CrmForm } from '@/features/crm/forms'
 import { formElement } from './formWidget'
 
 interface ElementEntry {
@@ -111,7 +111,7 @@ const warnDraft = (form: CrmForm, onPublished: () => void) => {
     action: {
       label: 'Publicar formulário',
       onClick: () =>
-        saveForm({ ...form, status: 'published' }).then(
+        publishForm(form).then(
           () => {
             onPublished()
             toast.success('Formulário publicado')

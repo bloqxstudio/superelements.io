@@ -1,6 +1,6 @@
 import postgres from 'npm:postgres@3.4.5'
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
-import { cleanDefinition, cleanSettings, cleanTheme, SETTINGS_DEFAULT, THEME_DEFAULT } from '../_shared/forms.ts'
+import { cleanDefinition, cleanSettings, cleanTheme, formIssues, SETTINGS_DEFAULT, THEME_DEFAULT } from '../_shared/forms.ts'
 
 /**
  * A plataforma inteira pelo MCP, como a pessoa da chave. Cada leitura e gravação abre uma transação
@@ -478,10 +478,17 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
         const settings = cleanSettings({ ...SETTINGS_DEFAULT, ...(current?.settings ?? {}), ...((a.config as object) ?? {}) })
         const status = a.publicar === true ? 'published' : a.publicar === false ? 'draft' : current?.status ?? 'draft'
         const name = String(a.nome ?? current?.name ?? 'Novo formulário').trim().slice(0, 120) || 'Novo formulário'
+        // Publicar passa pela mesma conferência do editor: com erro, não vai para o ar
+        const problems = formIssues(definition, settings).filter((i) => i.level === 'error')
+        if (status === 'published' && problems.length) fail(`Não publiquei: ${problems.map((i) => i.text).join(' ')}`)
+        // `live` é a versão no ar (as outras colunas são o rascunho do editor); publicar grava as duas
+        const live = status === 'published' ? { name, definition, theme, settings } : null
         const row = await asUser(caller, async (tx) =>
           current
-            ? (await tx`update crm_forms set name = ${name}, kind = ${definition.kind}, status = ${status}, definition = ${tx.json(definition as never)}, theme = ${tx.json(theme as never)}, settings = ${tx.json(settings as never)}, updated_at = now() where id = ${current.id} returning id`)[0]
-            : (await tx`insert into crm_forms (team_id, name, kind, status, definition, theme, settings, created_by) values (${caller.team.id}, ${name}, ${definition.kind}, ${status}, ${tx.json(definition as never)}, ${tx.json(theme as never)}, ${tx.json(settings as never)}, ${caller.userId}) returning id`)[0]
+            ? live
+              ? (await tx`update crm_forms set name = ${name}, kind = ${definition.kind}, status = ${status}, definition = ${tx.json(definition as never)}, theme = ${tx.json(theme as never)}, settings = ${tx.json(settings as never)}, live = ${tx.json(live as never)}, live_at = now(), updated_at = now() where id = ${current.id} returning id`)[0]
+              : (await tx`update crm_forms set name = ${name}, kind = ${definition.kind}, status = ${status}, definition = ${tx.json(definition as never)}, theme = ${tx.json(theme as never)}, settings = ${tx.json(settings as never)}, updated_at = now() where id = ${current.id} returning id`)[0]
+            : (await tx`insert into crm_forms (team_id, name, kind, status, definition, theme, settings, live, live_at, created_by) values (${caller.team.id}, ${name}, ${definition.kind}, ${status}, ${tx.json(definition as never)}, ${tx.json(theme as never)}, ${tx.json(settings as never)}, ${live ? tx.json(live as never) : null}, ${live ? new Date() : null}, ${caller.userId}) returning id`)[0]
         )
         if (!row) fail('Sem permissão para salvar formulários nesta conta.')
         // A configuração pública (o mesmo arquivo que a tela grava): publicado grava, rascunho apaga
