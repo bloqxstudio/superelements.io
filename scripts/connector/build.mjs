@@ -19,6 +19,8 @@ await build({
   // O space.mjs vai dentro: o conector grava ele na pasta de trabalho do agente
   define: {
     __SPACE_CLI__: JSON.stringify(readFileSync(path.join(root, 'scripts/space/space.mjs'), 'utf8')),
+    // E o servidor MCP das ações da Iara
+    __IARA_MCP__: JSON.stringify(readFileSync(path.join(root, 'scripts/iara/iara-mcp.mjs'), 'utf8')),
     __CONECTOR_VERSION__: JSON.stringify(version),
   },
   banner: { js: '#!/usr/bin/env node\n// Conector dos agentes do Superelements. Gerado por scripts/connector/build.mjs: não edite aqui.' },

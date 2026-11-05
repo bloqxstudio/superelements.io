@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Check, CircleAlert, ExternalLink, Images, Loader2, Lock, MessageSquare, Trash2, Undo2, X } from 'lucide-react'
+import { Check, CircleAlert, ExternalLink, Images, Loader2, Lock, MessageSquare, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { FIELD } from '@/features/crm/ui'
-import { formatLabel, type Content, type ContentLink } from '@/features/conteudos/rules'
+import { formatLabel, type Content, type ContentLink, type ContentStatus } from '@/features/conteudos/rules'
+import { deleteContent, saveContent, transitionContent } from '@/features/conteudos/api'
+import { useIara } from '@/features/iara/store'
 import { setHash, setPath } from '@/features/conteudos/forward'
 import { loadSet } from '@/features/criativos/storage'
 import { addComment, deleteComment, listComments, mediaUrl, resolveComment, scheduleContent, type Comment, type CoverInfo, type SentItem } from './api'
@@ -28,7 +30,57 @@ export const PautaPanel: React.FC<{
   manager: boolean
   onClose: () => void
   onChanged: (c: Content) => void
-}> = ({ content, creative, cover, sent, me, manager, onClose, onChanged }) => {
+  onDeleted: (id: string) => void
+  onSend: (id: string) => void
+}> = ({ content, creative, cover, sent, me, manager, onClose, onChanged, onDeleted, onSend }) => {
+  const [script, setScript] = useState(content.script)
+  const [idea, setIdea] = useState(content.idea)
+  const [acting, setActing] = useState<string>()
+  const askIara = useIara((s) => s.ask)
+  useEffect(() => {
+    setScript(content.script)
+    setIdea(content.idea)
+  }, [content.id, content.script, content.idea])
+  const textDirty = script !== content.script || idea !== content.idea
+
+  const saveText = async () => {
+    setActing('texto')
+    try {
+      onChanged(await saveContent(content.id, content.version, { script, idea }))
+      toast.success('Texto salvo.')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não consegui salvar.')
+    } finally {
+      setActing(undefined)
+    }
+  }
+
+  const go = async (to: ContentStatus, label: string) => {
+    setActing(to)
+    try {
+      let cur = content
+      if (textDirty) cur = await saveContent(content.id, content.version, { script, idea })
+      onChanged(await transitionContent(cur.id, cur.version, to))
+      toast.success(label)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não consegui mudar.')
+    } finally {
+      setActing(undefined)
+    }
+  }
+
+  const discard = async () => {
+    setActing('apagar')
+    try {
+      await deleteContent(content.id)
+      onDeleted(content.id)
+      toast.success('Ideia descartada.')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não consegui descartar.')
+      setActing(undefined)
+    }
+  }
+
   const [date, setDate] = useState(content.editorialDate ?? '')
   const [time, setTime] = useState(content.scheduledTime ?? '')
   const [channel, setChannel] = useState(content.channel ?? channelOfFormat(content.format) ?? '')
@@ -167,6 +219,102 @@ export const PautaPanel: React.FC<{
             </Button>
           )}
         </div>
+
+        <section aria-label="Próximo passo" className="mt-5 rounded-xl bg-gray-50 p-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Próximo passo</h3>
+          <p className="mt-1 text-xs text-gray-600">
+            {content.status === 'ideia'
+              ? manager
+                ? 'Aprove a ideia para ela virar conteúdo e entrar em produção.'
+                : 'Esperando o gestor aprovar a ideia.'
+              : content.status === 'producao'
+                ? !script.trim()
+                  ? 'Falta o roteiro. Escreva aqui ou peça à Iara.'
+                  : manager
+                    ? 'Com roteiro: aprove para poder enviar ao cliente.'
+                    : 'Envie ao gestor quando estiver pronto.'
+                : content.status === 'revisao'
+                  ? manager
+                    ? 'O time entregou: aprove ou peça ajustes.'
+                    : 'Com o gestor.'
+                  : 'Aprovado pelo gestor: pode ir ao cliente.'}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {content.status === 'ideia' && manager && (
+              <>
+                <Button size="sm" onClick={() => void go('producao', 'Ideia aprovada: agora é conteúdo.')} disabled={!!acting}>
+                  {acting === 'producao' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> : <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden />}
+                  Aprovar ideia
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => void discard()} disabled={!!acting}>
+                  <X className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Descartar
+                </Button>
+              </>
+            )}
+            {content.status === 'producao' && (
+              <>
+                {manager ? (
+                  <Button size="sm" onClick={() => void go('aprovado', 'Aprovado.')} disabled={!!acting || !script.trim()}>
+                    {acting === 'aprovado' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> : <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden />}
+                    Aprovar
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={() => void go('revisao', 'Enviado ao gestor.')} disabled={!!acting || !script.trim()}>
+                    <Send className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Enviar ao gestor
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" onClick={() => void go('ideia', 'Voltou para ideia.')} disabled={!!acting}>
+                  Voltar para ideia
+                </Button>
+              </>
+            )}
+            {content.status === 'revisao' && manager && (
+              <>
+                <Button size="sm" onClick={() => void go('aprovado', 'Aprovado.')} disabled={!!acting}>
+                  {acting === 'aprovado' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> : <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden />}
+                  Aprovar
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => void go('producao', 'Voltou para produção.')} disabled={!!acting}>
+                  <Undo2 className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Pedir ajustes
+                </Button>
+              </>
+            )}
+            {content.status === 'aprovado' && (
+              <>
+                {manager && (
+                  <Button size="sm" onClick={() => onSend(content.id)}>
+                    <Send className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Enviar ao cliente
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" onClick={() => void go('producao', 'Reaberto para editar.')} disabled={!!acting}>
+                  Reabrir para editar
+                </Button>
+              </>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => askIara(content.status === 'ideia' || !script.trim() ? `Escreva o roteiro do conteúdo "${content.title}" (id ${content.id}).` : `O que você melhoraria no conteúdo "${content.title}" (id ${content.id})?`)}>
+              <Sparkles className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Pedir à Iara
+            </Button>
+          </div>
+        </section>
+
+        <section aria-label="Texto" className="mt-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Texto</h3>
+          <label className="mt-2 block text-xs text-gray-600">
+            Ideia
+            <textarea rows={2} value={idea} maxLength={4000} onChange={(e) => setIdea(e.target.value)} className={cn(FIELD, 'mt-1 py-2')} />
+          </label>
+          <label className="mt-2 block text-xs text-gray-600">
+            Roteiro
+            <textarea rows={5} value={script} maxLength={20000} onChange={(e) => setScript(e.target.value)} placeholder="Slide a slide, ou o texto do post." className={cn(FIELD, 'mt-1 py-2')} />
+          </label>
+          {content.status === 'aprovado' && textDirty && <p className="mt-1 text-[11px] text-amber-800">Salvar muda o texto aprovado: a aprovação cai e volta para produção.</p>}
+          {textDirty && (
+            <Button size="sm" className="mt-2" onClick={() => void saveText()} disabled={!!acting}>
+              {acting === 'texto' && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />}
+              Salvar texto
+            </Button>
+          )}
+        </section>
 
         <section aria-label="Agenda" className="mt-5">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Agenda</h3>

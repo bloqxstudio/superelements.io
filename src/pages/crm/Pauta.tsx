@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Ban, CalendarRange, ChevronLeft, ChevronRight, CircleAlert, Copy, Link2, Loader2, MessageSquare, Plus, Send } from 'lucide-react'
+import { Ban, CalendarRange, Check, ChevronLeft, ChevronRight, CircleAlert, Copy, Lightbulb, Link2, Loader2, MessageSquare, Plus, Send, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { supabase } from '@/integrations/supabase/client'
@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils'
 import { useCrm } from '@/features/crm/crmStore'
 import { FIELD, Page, PageHeader } from '@/features/crm/ui'
 import type { Content } from '@/features/conteudos/rules'
+import { deleteContent, transitionContent } from '@/features/conteudos/api'
+import { useIara, useIaraScreen } from '@/features/iara/store'
 import { approvalUrl, listApprovalLinks, loadCovers, loadPauta, revokeApprovalLink, scheduleContent, type ApprovalLink, type CoverInfo, type PautaData } from '@/features/pauta/api'
 import { CHANNELS, STAGES, STAGE_LABEL, STAGE_TONE, addDays, byTime, isoOf, monthGrid, monthTitle, rangeLabel, sameMonth, stageOf, weekDays, weekStart, type Stage } from '@/features/pauta/rules'
 import { PautaPanel } from '@/features/pauta/PautaPanel'
@@ -171,7 +173,9 @@ const Pauta: React.FC = () => {
   const [error, setError] = useState<string>()
   const [data, setData] = useState<PautaData | null>(null)
   const [covers, setCovers] = useState<Record<string, CoverInfo>>({})
-  const [sending, setSending] = useState(false)
+  const [sending, setSending] = useState<false | { ids?: string[]; title?: string }>(false)
+  const [quick, setQuick] = useState<string>()
+  const askIara = useIara((s) => s.ask)
   const [linksOpen, setLinksOpen] = useState(false)
   const [links, setLinks] = useState<ApprovalLink[] | null>(null)
   const [me, setMe] = useState<string>()
@@ -262,7 +266,8 @@ const Pauta: React.FC = () => {
     return map
   }, [visible])
 
-  const unscheduled = visible.filter((c) => !c.editorialDate)
+  const ideas = visible.filter((c) => c.status === 'ideia').sort((a, b) => b.createdAt - a.createdAt)
+  const unscheduled = visible.filter((c) => !c.editorialDate && c.status !== 'ideia')
   const weeks = view === 'mes' ? monthGrid(anchor) : [weekDays(anchor)]
   const range = view === 'mes' ? { from: `${anchor.slice(0, 7)}-01`, to: weeks[weeks.length - 1].filter((d) => sameMonth(d, anchor)).pop()! } : { from: weekStart(anchor), to: addDays(weekStart(anchor), 6) }
 
@@ -300,6 +305,83 @@ const Pauta: React.FC = () => {
     }
   }
 
+  const quickApprove = async (c: Content) => {
+    setQuick(c.id)
+    try {
+      replace(await transitionContent(c.id, c.version, 'producao'))
+      toast.success('Ideia aprovada: agora é conteúdo.')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não consegui aprovar.')
+    } finally {
+      setQuick(undefined)
+    }
+  }
+
+  const quickDiscard = async (c: Content) => {
+    setQuick(c.id)
+    try {
+      await deleteContent(c.id)
+      setData((d) => (d ? { ...d, contents: d.contents.filter((x) => x.id !== c.id) } : d))
+      toast.success('Ideia descartada.')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não consegui descartar.')
+    } finally {
+      setQuick(undefined)
+    }
+  }
+
+  // O que a Iara vê e pode fazer nesta tela
+  useIaraScreen(
+    team && data
+      ? {
+          id: 'pauta',
+          title: `Pauta · ${view === 'mes' ? monthTitle(anchor) : rangeLabel(range.from, range.to)}`,
+          describe: () =>
+            [
+              `Visão: ${view === 'mes' ? 'mês' : 'semana'} de ${range.from} a ${range.to}.`,
+              stageFilter ? `Filtro de etapa: ${STAGE_LABEL[stageFilter]}.` : '',
+              channelFilter ? `Filtro de canal: ${channelFilter}.` : '',
+              openId ? `Peça aberta no painel: id ${openId}.` : '',
+              `Ideias esperando aprovação: ${ideas.length}. Sem data: ${unscheduled.length}.`,
+            ]
+              .filter(Boolean)
+              .join('\n'),
+          actions: [
+            {
+              name: 'abrir_peca',
+              doc: '{"id":ID} — abre o painel de uma peça na Pauta.',
+              run: async (a) => {
+                setParam({ peca: String(a.id) })
+                return { label: 'Abri a peça.', ok: true }
+              },
+            },
+            {
+              name: 'mostrar',
+              doc: '{"dia"?:"AAAA-MM-DD","visao"?:"mes"|"semana","etapa"?:ETAPA|"","canal"?:CANAL|""} — muda o que a Pauta mostra (mês, semana, filtros). ETAPA = ideia|producao|gestor|pronto|cliente|ajuste|aprovado.',
+              run: async (a) => {
+                const patch: Record<string, string | undefined> = {}
+                if (typeof a.dia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(a.dia)) patch.dia = a.dia
+                if (a.visao === 'semana' || a.visao === 'mes') patch.visao = a.visao === 'semana' ? 'semana' : undefined
+                if (typeof a.etapa === 'string') patch.etapa = (STAGES as string[]).includes(a.etapa) ? a.etapa : undefined
+                if (typeof a.canal === 'string') patch.canal = a.canal || undefined
+                setParam(patch)
+                return { label: 'Mudei a visão da Pauta.', ok: true }
+              },
+            },
+            {
+              name: 'enviar_cliente',
+              doc: '{"ids"?:[ID],"titulo"?:string} — abre o envio ao cliente com essas peças marcadas (só as aprovadas pelo gestor entram). A pessoa confere e gera o link.',
+              run: async (a) => {
+                if (!manager) return { label: 'Só dono e gestor enviam ao cliente.', ok: false }
+                setSending({ ids: Array.isArray(a.ids) ? (a.ids as string[]) : undefined, title: typeof a.titulo === 'string' ? a.titulo : undefined })
+                return { label: 'Abri o envio ao cliente para você conferir.', ok: true }
+              },
+            },
+          ],
+        }
+      : null
+  )
+
   if (teamStatus === 'ready' && !team) {
     return (
       <Page>
@@ -326,7 +408,7 @@ const Pauta: React.FC = () => {
           </Link>
         </Button>
         {manager && (
-          <Button size="sm" onClick={() => setSending(true)} disabled={state !== 'ready'}>
+          <Button size="sm" onClick={() => setSending({})} disabled={state !== 'ready'}>
             <Send className="mr-1.5 h-4 w-4" aria-hidden /> Enviar ao cliente
           </Button>
         )}
@@ -448,6 +530,39 @@ const Pauta: React.FC = () => {
               ))}
             </div>
 
+            <div className="grid content-start gap-4">
+            <section aria-label="Ideias para aprovar" className="rounded-xl border border-gray-200 bg-white p-2.5">
+              <h3 className="flex items-center justify-between px-0.5 text-xs font-semibold text-gray-700">
+                <span className="flex items-center gap-1.5">
+                  <Lightbulb className="h-3.5 w-3.5" aria-hidden /> Ideias
+                </span>
+                <span className="tabular-nums text-gray-500">{ideas.length}</span>
+              </h3>
+              <button type="button" onClick={() => askIara('Me dá 6 ideias novas de conteúdo para as próximas semanas, já com data sugerida.')} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-violet-300 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-50">
+                <Sparkles className="h-3.5 w-3.5" aria-hidden /> Gerar ideias com a Iara
+              </button>
+              <ul className="mt-2 grid max-h-[340px] gap-1.5 overflow-y-auto">
+                {ideas.map((c) => (
+                  <li key={c.id} className="rounded-md border border-gray-200 p-2">
+                    <button type="button" onClick={() => setParam({ peca: c.id })} className="block w-full text-left">
+                      <span className="line-clamp-2 text-xs font-medium text-gray-900">{c.title}</span>
+                      {c.idea && <span className="mt-0.5 line-clamp-2 block text-[11px] text-gray-500">{c.idea}</span>}
+                    </button>
+                    {manager && (
+                      <div className="mt-1.5 flex gap-1">
+                        <button type="button" disabled={quick === c.id} onClick={() => void quickApprove(c)} className="inline-flex h-6 items-center gap-1 rounded-md bg-gray-900 px-2 text-[11px] font-semibold text-white hover:bg-black disabled:opacity-50">
+                          {quick === c.id ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Check className="h-3 w-3" aria-hidden />} Aprovar
+                        </button>
+                        <button type="button" disabled={quick === c.id} onClick={() => void quickDiscard(c)} aria-label={`Descartar ${c.title}`} className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50">
+                          <X className="h-3 w-3" aria-hidden /> Descartar
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+                {ideas.length === 0 && <li className="px-0.5 py-1 text-[11px] text-gray-400">Nenhuma ideia esperando.</li>}
+              </ul>
+            </section>
             <DayCell day="" onDrop={(id) => void move(id, null)} label="Sem data" className="self-start rounded-xl border border-dashed border-gray-300 bg-white p-2.5">
               <h3 className="flex items-center justify-between px-0.5 text-xs font-semibold text-gray-700">
                 <span className="flex items-center gap-1.5">
@@ -463,6 +578,7 @@ const Pauta: React.FC = () => {
                 {unscheduled.length === 0 && <p className="px-0.5 py-2 text-[11px] text-gray-400">Tudo com data.</p>}
               </div>
             </DayCell>
+            </div>
           </div>
 
           <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-gray-500" aria-label="Legenda">
@@ -491,10 +607,15 @@ const Pauta: React.FC = () => {
           manager={manager}
           onClose={() => setParam({ peca: undefined })}
           onChanged={replace}
+          onDeleted={(id) => {
+            setData((d) => (d ? { ...d, contents: d.contents.filter((x) => x.id !== id) } : d))
+            setParam({ peca: undefined })
+          }}
+          onSend={(id) => setSending({ ids: [id], title: opened.title })}
         />
       )}
 
-      {team && data && <SendDialog open={sending} teamId={team.id} contents={data.contents} creatives={data.creatives} range={range} onClose={() => setSending(false)} onSent={() => void load(true)} />}
+      {team && data && <SendDialog open={!!sending} preselect={sending ? sending.ids : undefined} presetTitle={sending ? sending.title : undefined} teamId={team.id} contents={data.contents} creatives={data.creatives} range={range} onClose={() => setSending(false)} onSent={() => void load(true)} />}
       <LinksDialog open={linksOpen} links={links} titles={titles} manager={manager} onClose={() => setLinksOpen(false)} onRevoke={(id) => void revoke(id)} />
     </Page>
   )

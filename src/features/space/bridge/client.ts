@@ -1351,6 +1351,8 @@ async function projectImage(params: { data?: string; action?: 'audit' }) {
 const METHODS: Record<string, (params: never, ctx: CallContext) => unknown> = {
   status, pull, apply, focus, say, work, plan, render, view, projects, open, create, brand, creatives, whatsappSend,
   brief, approval, invite, wordpress, details, publish, restore, component, componentPlan, prospect, projectImage,
+  // A Iara (o iara.mjs do agente): ações da conta, fora do canvas
+  iara: async (params: { action?: string; args?: Record<string, unknown> }) => (await import('@/features/iara/bridge')).iaraCall(params),
 }
 
 // ---------- projetos em segundo plano (só na tela de uma pessoa) ----------

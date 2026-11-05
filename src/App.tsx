@@ -50,6 +50,7 @@ import CrmContents from "@/pages/crm/Contents";
 import CrmContentDetail from "@/pages/crm/ContentDetail";
 import CrmPauta from "@/pages/crm/Pauta";
 import PautaApproval from "@/pages/PautaApproval";
+import ProductSuggestions from "@/pages/ProductSuggestions";
 import CrmFunnels from "@/pages/crm/Funnels";
 import CrmFunnelDetail from "@/pages/crm/FunnelDetail";
 import InstagramCallback from "@/pages/InstagramCallback";
@@ -166,6 +167,8 @@ function App() {
                 <Route path="crm/equipe" element={<CrmGate><CrmTeam /></CrmGate>} />
                 {/* As contas (empresas-cliente) e os módulos de cada uma; só o admin da plataforma */}
                 <Route path="contas" element={<CrmAccounts />} />
+                {/* Sugestões ao time de produto (pela Iara): o admin vê todas; cada pessoa, as suas */}
+                <Route path="sugestoes" element={<ProductSuggestions />} />
                 <Route path="contas/nova" element={<AccountWizard />} />
                 {/* Social selling: a fila do dia nas redes; quem segue e envia é a pessoa */}
                 <Route path="crm/social" element={<CrmGate><CrmSocial /></CrmGate>} />

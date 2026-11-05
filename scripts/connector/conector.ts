@@ -7,6 +7,7 @@ import type { Plugin } from 'vite'
 import { CHAT_AGENTS } from '../../src/features/space/chat/protocol'
 import { criativos } from '../criativos/vitePlugin'
 import { checkAgents, spaceChat } from '../space/chatPlugin'
+import { iara } from '../iara/iaraPlugin'
 import { spaceBridge } from '../space/vitePlugin'
 
 /**
@@ -25,6 +26,7 @@ import { spaceBridge } from '../space/vitePlugin'
  */
 
 declare const __SPACE_CLI__: string
+declare const __IARA_MCP__: string
 declare const __CONECTOR_VERSION__: string
 
 const DEFAULT_PORT = 47823
@@ -81,6 +83,7 @@ const write = (file: string, content: string) => {
   writeFileSync(full, content)
 }
 write('scripts/space/space.mjs', __SPACE_CLI__)
+write('scripts/iara/iara-mcp.mjs', __IARA_MCP__)
 write('AGENTS.md', AGENTS_MD)
 // O Claude Code lê o CLAUDE.md; o Codex, o AGENTS.md
 write('CLAUDE.md', '@AGENTS.md\n')
@@ -150,6 +153,7 @@ const fakeServer = {
 const mount = (plugin: Plugin) => (plugin.configureServer as (server: unknown) => void)(fakeServer)
 mount(spaceBridge())
 mount(spaceChat({ guide: GUIDE }))
+mount(iara())
 mount(criativos())
 
 // ---------- HTTP ----------

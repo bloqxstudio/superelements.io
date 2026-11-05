@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, ChevronsUpDown, Plus, Settings2 } from 'lucide-react'
+import { Check, ChevronsUpDown, Lightbulb, Plus, Settings2 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
@@ -100,6 +100,9 @@ export const AccountSwitcher: React.FC<{ inline?: boolean; compact?: boolean; on
               <DropdownMenuItem onSelect={() => navigate('/contas')} className="gap-2.5">
                 <Settings2 className="h-4 w-4" aria-hidden /> Gerenciar contas e módulos
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate('/sugestoes')} className="gap-2.5">
+                <Lightbulb className="h-4 w-4" aria-hidden /> Sugestões do produto
+              </DropdownMenuItem>
             </>
           )}
         </DropdownMenuContent>
@@ -170,6 +173,11 @@ const InlineSwitcher: React.FC<{ onPicked?: () => void }> = ({ onPicked }) => {
               <li>
                 <button type="button" onClick={() => go('/contas')} className="flex min-h-11 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm active:bg-gray-100">
                   <Settings2 className="h-4 w-4" aria-hidden /> Gerenciar contas e módulos
+                </button>
+              </li>
+              <li>
+                <button type="button" onClick={() => go('/sugestoes')} className="flex min-h-11 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm active:bg-gray-100">
+                  <Lightbulb className="h-4 w-4" aria-hidden /> Sugestões do produto
                 </button>
               </li>
             </>

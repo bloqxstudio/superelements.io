@@ -10,6 +10,7 @@ import { hasNews, useMenuBadges } from '@/features/crm/menuBadges';
 import { useRoutineScheduler } from '@/features/ia/rotinas';
 import { PreviewDrawer } from '@/features/operations/Preview';
 import { GuardedOutlet } from '@/features/crm/GuardedOutlet';
+import { IaraPanel } from '@/features/iara/IaraPanel';
 
 /**
  * Telas da conta: menu lateral com Produção e CRM (no celular, uma barra com
@@ -121,6 +122,7 @@ const Layout: React.FC = () => {
           <GuardedOutlet />
         </main>
         <PreviewDrawer />
+        <IaraPanel />
       </div>
     </div>
   );

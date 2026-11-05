@@ -22,9 +22,12 @@ export const SendDialog: React.FC<{
   contents: Content[]
   creatives: Record<string, ContentLink>
   range: { from: string; to: string }
+  /** Peças já escolhidas (a Iara ou o botão do painel). */
+  preselect?: string[]
+  presetTitle?: string
   onClose: () => void
   onSent: () => void
-}> = ({ open, teamId, contents, creatives, range, onClose, onSent }) => {
+}> = ({ open, teamId, contents, creatives, range, preselect, presetTitle, onClose, onSent }) => {
   const ready = useMemo(() => contents.filter(canSendToClient).sort((a, b) => (a.editorialDate ?? '9999').localeCompare(b.editorialDate ?? '9999') || byTime(a, b)), [contents])
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [title, setTitle] = useState('')
@@ -37,14 +40,14 @@ export const SendDialog: React.FC<{
   useEffect(() => {
     if (!open) return
     const inRange = ready.filter((c) => c.editorialDate && c.editorialDate >= range.from && c.editorialDate <= range.to && c.clientStatus !== 'aprovado' && c.clientStatus !== 'enviado')
-    setPicked(new Set(inRange.map((c) => c.id)))
-    setTitle(`Pauta ${rangeLabel(range.from, range.to)}`)
+    setPicked(new Set(preselect?.length ? ready.filter((c) => preselect.includes(c.id)).map((c) => c.id) : inRange.map((c) => c.id)))
+    setTitle(presetTitle || `Pauta ${rangeLabel(range.from, range.to)}`)
     setMessage('')
     setStep(undefined)
     setBusy(false)
     setLinkId(undefined)
     setCopied(false)
-  }, [open, ready, range.from, range.to])
+  }, [open, ready, range.from, range.to, preselect, presetTitle])
 
   const toggle = (id: string) =>
     setPicked((s) => {
