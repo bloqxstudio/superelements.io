@@ -361,6 +361,8 @@ export interface Prepared {
   name: string
   /** O que mudou para caber no Instagram ("cortada para 4:5"). */
   note?: string
+  /** Vídeo: o quadro da capa em milissegundos (vídeo dentro de carrossel). */
+  thumbOffset?: number
 }
 
 export const FEED_RATIO = { min: 4 / 5, max: 1.91 }
@@ -450,9 +452,11 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
  * Sobe os arquivos e publica. Foto sai na hora; vídeo o Instagram processa e
  * a tela pergunta a cada 10 segundos, por até 5 minutos.
  */
-export async function publishPost(input: { teamId: string; accountId: string; kind: PublishKind; caption: string; files: Prepared[]; shareToFeed?: boolean; onStep?: (step: PublishStep) => void }): Promise<Published> {
+export async function publishPost(input: { teamId: string; accountId: string; kind: PublishKind; caption: string; files: Prepared[]; shareToFeed?: boolean; /** Capa do reels (JPEG). */ cover?: Prepared; onStep?: (step: PublishStep) => void }): Promise<Published> {
   input.onStep?.('enviando')
-  const paths = await Promise.all(input.files.map((f) => upload(input.teamId, f)))
+  const filePaths = await Promise.all(input.files.map((f) => upload(input.teamId, f)))
+  const coverPath = input.cover ? await upload(input.teamId, input.cover) : undefined
+  const paths = [...filePaths, ...(coverPath ? [coverPath] : [])]
   input.onStep?.('preparando')
   type Result = { status: 'published'; mediaId: string; permalink?: string } | { status: 'processing'; containerId: string } | { status: 'children'; children: string[]; videos: string[] }
   let result = await call<Result>('publish', {
@@ -460,7 +464,8 @@ export async function publishPost(input: { teamId: string; accountId: string; ki
     kind: input.kind,
     caption: input.caption,
     shareToFeed: input.shareToFeed,
-    files: input.files.map((f, i) => ({ path: paths[i], type: f.type })),
+    files: input.files.map((f, i) => ({ path: filePaths[i], type: f.type, ...(f.type === 'video' && f.thumbOffset !== undefined ? { thumbOffset: f.thumbOffset } : {}) })),
+    cover: coverPath,
   })
   const until = Date.now() + 5 * 60_000
   while (result.status === 'processing' || result.status === 'children') {

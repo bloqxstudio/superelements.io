@@ -190,7 +190,7 @@ export const PautaPanel: React.FC<{
   }
 
   return (
-    <aside aria-label={`Peça: ${content.title}`} className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[440px] flex-col border-l border-gray-200 bg-white shadow-[-12px_0_32px_-16px_rgb(0_0_0/0.18)]">
+    <aside aria-label={`Peça: ${content.title}`} className="se-side-panel fixed inset-y-0 right-0 z-40 flex w-full max-w-[440px] flex-col border-l border-gray-200 bg-white shadow-[-12px_0_32px_-16px_rgb(0_0_0/0.18)]">
       <header className="flex items-start gap-3 border-b border-gray-100 px-5 py-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">

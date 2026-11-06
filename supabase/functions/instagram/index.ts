@@ -617,6 +617,8 @@ async function saveConnection(ctx: Ctx, teamId: string, grant: Grant) {
 interface PublishFile {
   path: string
   type: 'image' | 'video'
+  /** Vídeo: o quadro da capa, em milissegundos (no carrossel, onde a Meta não aceita imagem de capa). */
+  thumbOffset?: number
 }
 
 /** Arquivos enviados pela equipe para a pasta do Instagram dela, viram endereços temporários para a Meta baixar. */
@@ -628,9 +630,10 @@ async function filesOf(ctx: Ctx, account: AccountRow, files: unknown): Promise<(
       const path = String(file?.path ?? '')
       if (!path.startsWith(prefix) || path.includes('..') || !/^[\w/.-]+$/.test(path)) throw new HttpError('Arquivo fora da pasta do Instagram da equipe.')
       const type = file?.type === 'video' ? 'video' : 'image'
+      const thumbOffset = type === 'video' && Number.isFinite(file?.thumbOffset) ? Math.max(0, Math.round(Number(file?.thumbOffset))) : undefined
       const { data, error } = await ctx.admin.storage.from(BUCKET).createSignedUrl(path, 3600)
       if (error || !data?.signedUrl) throw new HttpError('Não encontrei o arquivo enviado. Tente de novo.', 404)
-      return { path, type, url: data.signedUrl }
+      return { path, type, url: data.signedUrl, thumbOffset }
     })
   )
 }
@@ -697,7 +700,9 @@ async function publish(ctx: Ctx, account: AccountRow, token: string, body: Recor
   const kind = body.kind === 'story' ? 'story' : body.kind === 'reel' ? 'reel' : 'feed'
   const caption = typeof body.caption === 'string' ? body.caption.slice(0, 2200) : undefined
   const files = await filesOf(ctx, account, body.files)
-  const paths = files.map((f) => f.path)
+  // Capa do reels: uma imagem enviada à mesma pasta (um quadro do vídeo, um slide ou uma foto)
+  const cover = typeof body.cover === 'string' && body.cover ? (await filesOf(ctx, account, [{ path: body.cover, type: 'image' }]))[0] : undefined
+  const paths = [...files.map((f) => f.path), ...(cover ? [cover.path] : [])]
   const create = (params: Params) => ig<{ id: string }>('me/media', token, { method: 'POST', params })
   const media = (f: { type: string; url: string }) => (f.type === 'video' ? { video_url: f.url } : { image_url: f.url })
 
@@ -707,13 +712,13 @@ async function publish(ctx: Ctx, account: AccountRow, token: string, body: Recor
     containerId = (await create({ media_type: 'STORIES', ...media(files[0]) })).id
   } else if (kind === 'reel' || (files.length === 1 && files[0].type === 'video')) {
     if (files.length !== 1 || files[0].type !== 'video') throw new HttpError('O reels é um vídeo só.')
-    containerId = (await create({ media_type: 'REELS', video_url: files[0].url, caption, share_to_feed: body.shareToFeed !== false })).id
+    containerId = (await create({ media_type: 'REELS', video_url: files[0].url, caption, share_to_feed: body.shareToFeed !== false, ...(cover ? { cover_url: cover.url } : {}) })).id
   } else if (files.length === 1) {
     containerId = (await create({ image_url: files[0].url, caption })).id
   } else {
     if (files.length > 20) throw new HttpError('O carrossel vai até 20 itens.')
     const children: { id: string; video: boolean }[] = []
-    for (const f of files) children.push({ id: (await create({ is_carousel_item: true, ...(f.type === 'video' ? { media_type: 'VIDEO' } : {}), ...media(f) })).id, video: f.type === 'video' })
+    for (const f of files) children.push({ id: (await create({ is_carousel_item: true, ...(f.type === 'video' ? { media_type: 'VIDEO', ...(f.thumbOffset !== undefined ? { thumb_offset: f.thumbOffset } : {}) } : {}), ...media(f) })).id, video: f.type === 'video' })
     // Carrossel com vídeo: a Meta só monta o álbum depois que cada vídeo termina de processar
     const videos = children.filter((c) => c.video).map((c) => c.id)
     if (videos.length && !(await childrenReady(token, videos, 45_000))) return { status: 'children' as const, children: children.map((c) => c.id), videos }

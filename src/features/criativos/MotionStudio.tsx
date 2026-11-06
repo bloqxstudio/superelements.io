@@ -1,16 +1,21 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, Clapperboard, Download, Film, Instagram, Music, Trash2, Pause, PenLine, Play, Redo2, SkipBack, Undo2, Wand2 } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Code2, Diamond, Download, Film, Instagram, Music, Trash2, Pause, PenLine, Play, Redo2, SkipBack, Undo2, Wand2, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { currentLayer, currentPost, currentSlide, useEditor } from './store'
-import { MOTION_EASES, MOTION_EXITS, MOTION_FX, MOTION_STYLES, MOTION_TRANSITIONS, MotionRenderer, SLIDE_CAMERAS, autoPostMotion, autoSlideMotion, clearPostMotion, coverOnlyMotion, hasMotion, postOutput, numberIn, postMotionOf, slideDuration, timeline, type MotionStyle } from './motion'
+import { KEY_EASES, MOTION_EASES, MOTION_EXITS, MOTION_FX, MOTION_LOOPS, MOTION_STYLES, MOTION_TRANSITIONS, MotionRenderer, SLIDE_CAMERAS, autoPostMotion, autoSlideMotion, clearPostMotion, coverOnlyMotion, filledKeys, hasMotion, keysAt, keysSpan, postOutput, numberIn, postMotionOf, slideDuration, snapPostToBeats, timeline, type MotionStyle } from './motion'
+import { detectBeats, gridBeats } from './beats'
+import { foodAdPost } from './foodAd'
+import { advancedMotionLink } from './scenePost'
+import { ELEVATE_STYLES, elevatePost } from './elevate'
+import { audioFor } from './video'
 import { OutputPicker, downloadMp4 } from './MotionPanel'
 import { MotionPublish } from './MotionPublish'
 import { videoSupported } from './video'
 import { assetUrl, uploadAsset } from './storage'
-import { sizeOf, type CreativeSet, type Layer, type LayerMotion, type MotionEase, type MotionExit, type MotionFx, type MotionAudio, type MotionTransition, type Post, type SlideCamera } from './types'
+import { sizeOf, type CreativeSet, type KeyEase, type Layer, type LayerMotion, type MotionEase, type MotionExit, type MotionFx, type MotionAudio, type MotionKey, type MotionLoop, type MotionTransition, type Post, type Slide, type SlideCamera } from './types'
 
 /**
  * Estúdio de motion: tela só para animar um criativo. Palco grande no centro,
@@ -49,7 +54,7 @@ const editPost = (fn: (p: Post) => Post) => {
   if (postId) useEditor.getState().edit((s) => mapPost(s, postId, fn))
 }
 
-const FX_COLOR: Partial<Record<MotionFx, string>> = { ken: 'bg-sky-500', pulse: 'bg-amber-500', wipe: 'bg-emerald-500', 'wipe-up': 'bg-emerald-500', pop: 'bg-pink-500', fade: 'bg-violet-400' }
+const FX_COLOR: Partial<Record<MotionFx, string>> = { keys: 'bg-orange-500', ken: 'bg-sky-500', pulse: 'bg-amber-500', wipe: 'bg-emerald-500', 'wipe-up': 'bg-emerald-500', pop: 'bg-pink-500', fade: 'bg-violet-400' }
 const fxLabel = (fx: MotionFx) => MOTION_FX.find((f) => f.id === fx)?.label ?? fx
 
 // Tela
@@ -229,6 +234,7 @@ export const MotionStudio: React.FC = () => {
           <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!canUndo} title="Desfazer (Ctrl+Z)" onClick={() => useEditor.getState().undo()}><Undo2 className="h-4 w-4" /></Button>
           <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!canRedo} title="Refazer (Ctrl+Shift+Z)" onClick={() => useEditor.getState().redo()}><Redo2 className="h-4 w-4" /></Button>
           <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 bg-white"><Link to={editorLink}><PenLine className="h-4 w-4" /> Editar o criativo</Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 bg-white" title="Para ir além: a IA escreve a animação inteira em código a partir deste post"><Link to={advancedMotionLink(set, post.id)}><Code2 className="h-4 w-4" /> Cena em código (beta)</Link></Button>
           <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" disabled={!videoSupported() || progress !== null} onClick={() => { setPlaying(false); setPublishing(true) }}><Instagram className="h-4 w-4" /> Publicar no Instagram</Button>
           <Button size="sm" className="h-8 gap-1.5" disabled={!videoSupported() || progress !== null} onClick={() => void exportVideo()} title={videoSupported() ? undefined : 'Use o Chrome ou o Edge atualizados'}>
             <Download className="h-4 w-4" /> {progress !== null ? `Gerando… ${Math.round(progress * 100)}%` : postOutput(post) === 'carousel' ? 'Baixar o carrossel' : 'Baixar MP4'}
@@ -248,7 +254,7 @@ export const MotionStudio: React.FC = () => {
           </div>
         </main>
         <aside className="hidden w-80 shrink-0 overflow-y-auto border-l bg-white p-4 lg:block">
-          <SidePanel post={post} slideId={slide.id} layer={layer} slideDur={seg.dur} />
+          <SidePanel post={post} slideId={slide.id} layer={layer} slideDur={seg.dur} local={Math.max(0, Math.min(seg.dur, time - seg.start))} onSeek={seek} />
         </aside>
       </div>
 
@@ -303,7 +309,7 @@ const StagePreview: React.FC<{ post: Post; images: Map<string, CanvasImageSource
 const inputClass = 'h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500">{children}</p>
 
-const SidePanel: React.FC<{ post: Post; slideId: string; layer?: Layer; slideDur: number }> = ({ post, slideId, layer, slideDur }) => {
+const SidePanel: React.FC<{ post: Post; slideId: string; layer?: Layer; slideDur: number; local: number; onSeek: (t: number) => void }> = ({ post, slideId, layer, slideDur, local, onSeek }) => {
   const pm = postMotionOf(post)
   const slideIndex = post.slides.findIndex((s) => s.id === slideId)
   const slide = post.slides[slideIndex]
@@ -315,8 +321,21 @@ const SidePanel: React.FC<{ post: Post; slideId: string; layer?: Layer; slideDur
   }
   return (
     <div className="space-y-5">
+      <section className="rounded-lg border border-violet-200 bg-violet-50/60 p-3">
+        <p className="text-sm font-semibold text-violet-900">Elevar o motion</p>
+        <p className="mt-0.5 text-[11px] leading-snug text-violet-900/70">Pega a animação que o post já tem e transforma numa peça avançada, para qualquer negócio: cada camada vira keyframes (veja os losangos na linha do tempo), com rastro, impactos e loops.</p>
+        <div className="mt-2 grid grid-cols-3 gap-1.5">
+          {ELEVATE_STYLES.map((st) => (
+            <button key={st.id} type="button" title={st.hint} onClick={() => { editPost((p) => elevatePost(p, st.id)); onSeek(0); toast.success(`Motion elevado (${st.label}). Ctrl+Z desfaz; clique numa faixa para ajustar os keyframes.`) }} className="rounded-lg border border-violet-200 bg-white px-2 py-2 text-left hover:border-violet-500">
+              <Zap className="mb-1 h-3.5 w-3.5 text-violet-700" />
+              <span className="block text-xs font-semibold text-gray-900">{st.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section>
-        <Label>Animar automaticamente</Label>
+        <Label>Animação simples (só entradas)</Label>
         <div className="grid grid-cols-3 gap-1.5">
           {MOTION_STYLES.map((st) => (
             <button key={st.id} type="button" title={st.hint} onClick={() => { setStyle(st.id); editPost((p) => autoPostMotion(p, st.id, brandMotion?.style === st.id ? brandMotion : undefined)); toast.success(`Post animado no estilo ${st.label}.`) }} className={cn('rounded-lg border px-2 py-2 text-left hover:border-violet-400 hover:bg-violet-50', style === st.id ? 'border-violet-500 bg-violet-50' : 'border-gray-200')}>
@@ -340,8 +359,10 @@ const SidePanel: React.FC<{ post: Post; slideId: string; layer?: Layer; slideDur
         </section>
       )}
 
+      <AdTemplate post={post} />
+
       <section className="border-t border-gray-100 pt-4">
-        {layer ? <LayerFx key={layer.id} post={post} slideId={slideId} layer={layer} slideDur={slideDur} /> : <p className="text-xs text-gray-500">Clique numa faixa da linha do tempo para escolher a entrada da camada. Arraste a barra para mudar quando entra; puxe as pontas para mudar a duração. Duplo clique numa faixa parada anima a camada ali.</p>}
+        {layer ? <LayerFx key={layer.id} post={post} slideId={slideId} layer={layer} slideDur={slideDur} local={local} /> : <p className="text-xs text-gray-500">Clique numa faixa da linha do tempo para escolher a entrada da camada. Arraste a barra para mudar quando entra; puxe as pontas para mudar a duração. Duplo clique numa faixa parada anima a camada ali.</p>}
       </section>
 
       <section className="border-t border-gray-100 pt-4">
@@ -363,6 +384,8 @@ const SidePanel: React.FC<{ post: Post; slideId: string; layer?: Layer; slideDur
       </section>
 
       <AudioSection post={post} />
+      <BeatSection post={post} />
+      {slide && <SlideFx post={post} slide={slide} slideIndex={slideIndex} local={local} slideDur={slideDur} onSeek={onSeek} />}
       <VideoSection post={post} slideId={slideId} />
 
       <section className="border-t border-gray-100 pt-4">
@@ -384,10 +407,18 @@ const SidePanel: React.FC<{ post: Post; slideId: string; layer?: Layer; slideDur
   )
 }
 
-const LayerFx: React.FC<{ post: Post; slideId: string; layer: Layer; slideDur: number }> = ({ post, slideId, layer, slideDur }) => {
+const LayerFx: React.FC<{ post: Post; slideId: string; layer: Layer; slideDur: number; local: number }> = ({ post, slideId, layer, slideDur, local }) => {
   const m = layer.motion
   const apply = (motion: LayerMotion | undefined) => useEditor.getState().edit(withMotion(post.id, slideId, layer.id, motion))
-  const patch = (fields: Partial<LayerMotion>) => apply({ fx: 'fade', start: 0.3, dur: 0.6, ...m, ...fields })
+  const patch = (fields: Partial<LayerMotion>) => {
+    const next: LayerMotion = { fx: 'fade', start: 0.3, dur: 0.6, ...m, ...fields }
+    // Keyframes: a barra da linha do tempo segue os pontos
+    if (next.fx === 'keys') {
+      if (!next.keys?.length) next.keys = [{ t: next.start, y: 260, scale: 0.6, opacity: 0 }, { t: next.start + Math.max(0.3, next.dur), y: 0, scale: 1, opacity: 1, ease: 'salto' }]
+      Object.assign(next, keysSpan(next.keys))
+    }
+    apply(next)
+  }
   const canCount = layer.type === 'text' && !!numberIn(layer.text)
   return (
     <div className="space-y-3">
@@ -437,7 +468,165 @@ const LayerFx: React.FC<{ post: Post; slideId: string; layer: Layer; slideDur: n
           )}
         </div>
       )}
+      {m && <AdvancedFx m={m} patch={patch} local={local} />}
     </div>
+  )
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100
+
+/** Keyframes, loop, rastro e tremidas da camada. */
+const AdvancedFx: React.FC<{ m: LayerMotion; patch: (f: Partial<LayerMotion>) => void; local: number }> = ({ m, patch, local }) => {
+  const keys = m.fx === 'keys' ? filledKeys(m.keys ?? []) : []
+  const setKeys = (next: MotionKey[]) => patch({ keys: next })
+  const editKey = (i: number, fields: Partial<MotionKey>) => setKeys(keys.map((k, j) => (j === i ? { ...k, ...fields } : k)))
+  const addHere = () => {
+    const now = keysAt(m.keys ?? [], local)
+    const t = r2(local)
+    setKeys([...keys.filter((k) => Math.abs(k.t - t) > 0.01), { t, ...now, ease: 'suave' as KeyEase }].sort((a, b) => a.t - b.t))
+  }
+  const num = (label: string, value: number, on: (n: number) => void, step: number) => (
+    <label className="text-[10px] text-gray-500">{label}<input type="number" className={cn(inputClass, 'h-7 px-1 text-xs')} step={step} value={r2(value)} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && on(e.target.valueAsNumber)} /></label>
+  )
+  return (
+    <div className="space-y-3 border-t border-gray-100 pt-3">
+      {m.fx === 'keys' && (
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Keyframes</p>
+            <button type="button" className="flex items-center gap-1 text-xs font-medium text-violet-700 hover:underline" onClick={addHere}><Diamond className="h-3 w-3" /> Ponto em {local.toFixed(2)} s</button>
+          </div>
+          <p className="mb-2 text-[11px] leading-snug text-gray-500">Cada ponto diz onde a camada está naquele segundo (px a partir do lugar dela). A curva vale do ponto anterior até este: Salto passa e volta, Acelera cai, Segura corta seco.</p>
+          <div className="space-y-2">
+            {keys.map((k, i) => (
+              <div key={i} className="rounded-md border border-gray-200 p-2">
+                <div className="grid grid-cols-4 gap-1">
+                  {num('Seg.', k.t, (n) => editKey(i, { t: Math.max(0, n) }), 0.05)}
+                  {num('X', k.x, (n) => editKey(i, { x: n }), 10)}
+                  {num('Y', k.y, (n) => editKey(i, { y: n }), 10)}
+                  {num('Escala', k.scale, (n) => editKey(i, { scale: n }), 0.05)}
+                  {num('Giro °', k.rotate, (n) => editKey(i, { rotate: n }), 5)}
+                  {num('Larg.', k.sx, (n) => editKey(i, { sx: n }), 0.05)}
+                  {num('Alt.', k.sy, (n) => editKey(i, { sy: n }), 0.05)}
+                  {num('Opac.', k.opacity, (n) => editKey(i, { opacity: Math.min(1, Math.max(0, n)) }), 0.1)}
+                </div>
+                <div className="mt-1 flex items-center gap-1">
+                  <select className={cn(inputClass, 'h-7 text-xs')} value={k.ease ?? 'suave'} disabled={i === 0} onChange={(e) => editKey(i, { ease: e.target.value as KeyEase })}>
+                    {KEY_EASES.map((x) => (<option key={x.id} value={x.id}>{i === 0 ? 'Primeiro ponto' : x.label}</option>))}
+                  </select>
+                  <button type="button" aria-label="Tirar o ponto" disabled={keys.length <= 1} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30" onClick={() => setKeys(keys.filter((_, j) => j !== i))}><Trash2 className="h-3.5 w-3.5" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-[11px] text-gray-500">Depois da entrada
+          <select className={inputClass} value={m.loop ?? ''} onChange={(e) => patch({ loop: (e.target.value || undefined) as MotionLoop | undefined })}>
+            <option value="">Fica parada</option>
+            {MOTION_LOOPS.map((x) => (<option key={x.id} value={x.id}>{x.label}</option>))}
+          </select>
+        </label>
+        <label className="text-[11px] text-gray-500">Velocidade
+          <input type="number" className={inputClass} step={0.1} min={0.1} max={5} value={m.loopSpeed ?? 1} disabled={!m.loop} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && patch({ loopSpeed: e.target.valueAsNumber })} />
+        </label>
+      </div>
+      <label className="flex items-center justify-between gap-2 text-sm text-gray-700">Rastro de velocidade (motion blur)<input type="checkbox" checked={!!m.blur} onChange={(e) => patch({ blur: e.target.checked || undefined })} /></label>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm text-gray-700">Tremidas: {m.shakes?.length ?? 0}</span>
+        <div className="flex gap-2 text-xs">
+          <button type="button" className="font-medium text-violet-700 hover:underline" onClick={() => patch({ shakes: [...(m.shakes ?? []), { t: r2(local), amp: 14, dur: 0.3 }] })}>Tremer em {local.toFixed(2)} s</button>
+          {!!m.shakes?.length && <button type="button" className="text-gray-500 hover:text-red-600" onClick={() => patch({ shakes: undefined })}>Tirar</button>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const editSlide = (postId: string, slideId: string, fn: (s: Slide) => Slide) => useEditor.getState().edit((set) => mapPost(set, postId, (p) => ({ ...p, slides: p.slides.map((s) => (s.id === slideId ? fn(s) : s)) })))
+
+/** Clarões, tremidas da tela e a duração do slide. */
+const SlideFx: React.FC<{ post: Post; slide: Slide; slideIndex: number; local: number; slideDur: number; onSeek: (t: number) => void }> = ({ post, slide, slideIndex, local, slideDur }) => {
+  const at = r2(local)
+  return (
+    <section className="border-t border-gray-100 pt-4">
+      <Label>Impactos no slide {slideIndex + 1}</Label>
+      <div className="grid grid-cols-2 gap-1.5">
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1 bg-white text-xs" onClick={() => editSlide(post.id, slide.id, (s) => ({ ...s, flashes: [...(s.flashes ?? []), { t: at, dur: 0.2 }] }))}><Zap className="h-3.5 w-3.5" /> Clarão em {at.toFixed(2)} s</Button>
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1 bg-white text-xs" onClick={() => editSlide(post.id, slide.id, (s) => ({ ...s, shakes: [...(s.shakes ?? []), { t: at, amp: 16, dur: 0.3 }] }))}>Tremer a tela</Button>
+      </div>
+      {(!!slide.flashes?.length || !!slide.shakes?.length) && (
+        <ul className="mt-2 space-y-1 text-xs text-gray-600">
+          {(slide.flashes ?? []).map((f, i) => (<li key={`f${i}`} className="flex items-center justify-between">Clarão em {f.t.toFixed(2)} s<button type="button" className="text-gray-400 hover:text-red-600" onClick={() => editSlide(post.id, slide.id, (s) => ({ ...s, flashes: s.flashes?.filter((_, j) => j !== i) }))}><Trash2 className="h-3.5 w-3.5" /></button></li>))}
+          {(slide.shakes ?? []).map((f, i) => (<li key={`s${i}`} className="flex items-center justify-between">Tela treme em {f.t.toFixed(2)} s<button type="button" className="text-gray-400 hover:text-red-600" onClick={() => editSlide(post.id, slide.id, (s) => ({ ...s, shakes: s.shakes?.filter((_, j) => j !== i) }))}><Trash2 className="h-3.5 w-3.5" /></button></li>))}
+        </ul>
+      )}
+      <label className="mt-3 block text-[11px] text-gray-500">Duração deste slide (s)
+        <input type="number" className={inputClass} step={0.25} min={0.3} max={20} value={slide.dur ?? ''} placeholder={`Automática (${slideDur.toFixed(1)} s)`} onChange={(e) => editSlide(post.id, slide.id, (s) => ({ ...s, dur: Number.isFinite(e.target.valueAsNumber) && e.target.valueAsNumber > 0 ? e.target.valueAsNumber : undefined }))} />
+      </label>
+    </section>
+  )
+}
+
+/** Batidas da trilha: lidas do áudio ou por BPM; o post se encaixa nelas. */
+const BeatSection: React.FC<{ post: Post }> = ({ post }) => {
+  const [busy, setBusy] = useState(false)
+  const beats = post.motion?.beats
+  const [bpm, setBpm] = useState(post.motion?.bpm ?? 120)
+  const read = async () => {
+    const set = useEditor.getState().set
+    if (!set || !post.motion?.audio) return
+    setBusy(true)
+    try {
+      const data = await audioFor(post, set.assets)
+      if (!data) throw new Error('Não achei o arquivo da trilha.')
+      const map = await detectBeats(data, post.motion.audio.offset, timeline(post).total + 2)
+      editPost((p) => ({ ...p, motion: { ...p.motion, beats: map.beats, bpm: map.bpm } }))
+      setBpm(map.bpm)
+      toast.success(`${map.beats.length} batidas, ${Math.round(map.bpm)} BPM. Agora "Encaixar na batida".`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não consegui ler as batidas.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <section className="border-t border-gray-100 pt-4">
+      <Label>Batidas</Label>
+      <div className="grid grid-cols-2 gap-1.5">
+        <Button type="button" variant="outline" size="sm" className="h-8 bg-white text-xs" disabled={busy || !post.motion?.audio} title={post.motion?.audio ? undefined : 'Ponha uma trilha antes'} onClick={() => void read()}>{busy ? 'Lendo…' : 'Ler da trilha'}</Button>
+        <div className="flex items-center gap-1">
+          <input type="number" aria-label="BPM" className={cn(inputClass, 'h-8')} min={40} max={240} value={bpm} onChange={(e) => setBpm(e.target.valueAsNumber || 120)} />
+          <Button type="button" variant="outline" size="sm" className="h-8 bg-white px-2 text-xs" onClick={() => editPost((p) => ({ ...p, motion: { ...p.motion, bpm, beats: gridBeats(bpm, timeline(p).total + 2) } }))}>BPM</Button>
+        </div>
+      </div>
+      <Button type="button" size="sm" className="mt-2 w-full" disabled={!beats?.length} onClick={() => { editPost(snapPostToBeats); toast.success('Entradas, keyframes, clarões e tremidas encaixados na batida mais perto.') }}>Encaixar na batida</Button>
+      <p className="mt-1.5 text-[11px] leading-snug text-gray-500">{beats?.length ? `${beats.length} batidas (${Math.round(post.motion?.bpm ?? 0)} BPM), marcadas na régua.` : 'Leia as batidas da trilha (ou digite o BPM) para cortar e bater no ritmo.'} "Pulsar na batida" usa o mesmo ritmo.</p>
+    </section>
+  )
+}
+
+/** Os modelos publicitários prontos: criam um post novo no conjunto. */
+const AdTemplate: React.FC<{ post: Post }> = () => {
+  const create = () => {
+    const set = useEditor.getState().set
+    if (!set) return
+    const colors = set.brand.colors.map((c) => c.hex)
+    const ad = foodAdPost({ brand: set.brand.name || 'Sua marca', color: colors[0], accent: colors[1] })
+    useEditor.getState().edit((s) => ({ ...s, posts: [...s.posts, ad] }))
+    useEditor.getState().selectPost(ad.id)
+    void useEditor.getState().ensureAssets()
+    toast.success('Comercial criado como um post novo. Troque os pratos pelas fotos do cardápio em "Editar o criativo".')
+  }
+  return (
+    <section className="border-t border-gray-100 pt-4">
+      <Label>Comercial pronto</Label>
+      <button type="button" onClick={create} className="w-full rounded-lg border border-gray-200 p-3 text-left hover:border-violet-400 hover:bg-violet-50">
+        <span className="block text-sm font-semibold text-gray-900">Delivery · cardápio em movimento</span>
+        <span className="mt-0.5 block text-[11px] leading-snug text-gray-500">Hamburgueria, pizzaria, restaurante. 9:16, ~25 s, na batida: frase escrita à mão, marca, celular, pratos voando com preço, moto, mapa, pedido entregue.</span>
+      </button>
+    </section>
   )
 }
 
@@ -481,6 +670,11 @@ const Timeline: React.FC<{ post: Post; slideId: string; layerId?: string; time: 
       const start = Math.min(f.start + f.dur - 0.1, Math.max(0, snap(f.start + dt)))
       next = { ...f, start, dur: Math.round((f.start + f.dur - start) * 100) / 100 }
     }
+    if (f.fx === 'keys' && f.keys?.length) {
+      // Os keyframes andam com a barra (mover) ou se esticam junto (pontas)
+      const k = f.dur > 0 ? next.dur / f.dur : 1
+      next = { ...next, keys: f.keys.map((key) => ({ ...key, t: Math.round((next.start + (key.t - f.start) * k) * 100) / 100 })) }
+    }
     useEditor.getState().draft(withMotion(post.id, slideId, drag.layerId, next))
   }
 
@@ -516,12 +710,14 @@ const Timeline: React.FC<{ post: Post; slideId: string; layerId?: string; time: 
       </div>
 
       {/* Régua do slide */}
-      <div className="flex h-7 shrink-0 overflow-y-hidden border-b" style={{ scrollbarGutter: 'stable' }}>
+      <div className="flex h-7 shrink-0 overflow-hidden border-b" style={{ scrollbarGutter: 'stable' }}>
         <div className="shrink-0 border-r px-3 text-[11px] leading-7 text-gray-500" style={{ width: NAME_W }}>Camadas</div>
         <div className="relative min-w-0 flex-1 cursor-col-resize select-none" onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture(e.pointerId); seekFromLane(e.clientX) }} onPointerMove={(e) => e.buttons === 1 && seekFromLane(e.clientX)}>
           {ticks.map((t) => (
             <span key={t} className="absolute top-0 h-full border-l border-gray-200 pl-1 text-[10px] leading-7 text-gray-400" style={{ left: `${(t / viewDur) * 100}%` }}>{Number.isInteger(t) ? `${t}s` : ''}</span>
           ))}
+          {(post.motion?.beats ?? []).map((b, i) => { const lb = b - seg.start; return lb >= 0 && lb <= viewDur ? <span key={i} className="pointer-events-none absolute bottom-0 h-2 w-px bg-orange-400" style={{ left: `${(lb / viewDur) * 100}%` }} /> : null })}
+          {[...(slide.flashes ?? []), ...(slide.shakes ?? [])].map((f, i) => (<span key={`fx${i}`} title="Impacto" className="pointer-events-none absolute top-1 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-amber-400" style={{ left: `${(f.t / viewDur) * 100}%` }} />))}
           {inSlide && <Playhead at={local / viewDur} head />}
         </div>
       </div>
@@ -560,7 +756,8 @@ const Timeline: React.FC<{ post: Post; slideId: string; layerId?: string; time: 
                     style={{ left: `${(m.start / viewDur) * 100}%`, width: `${Math.max(1.5, ((end - m.start) / viewDur) * 100)}%` }}
                   >
                     <span onPointerDown={(e) => startDrag(e, l, 'start')} className="absolute inset-y-0 left-0 w-2 cursor-ew-resize bg-black/15" />
-                    <span className="truncate px-2.5">{fxLabel(m.fx)}{m.count ? ' · conta' : ''}</span>
+                    <span className="truncate px-2.5">{fxLabel(m.fx)}{m.count ? ' · conta' : ''}{m.loop ? ' · loop' : ''}</span>
+                    {m.fx === 'keys' && (m.keys ?? []).map((k, i) => (<span key={i} className="pointer-events-none absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-white ring-1 ring-black/30" style={{ left: `${((k.t - m.start) / Math.max(0.01, end - m.start)) * 100}%` }} />))}
                     {m.fx !== 'ken' && <span onPointerDown={(e) => startDrag(e, l, 'end')} className="absolute inset-y-0 right-0 w-2 cursor-ew-resize bg-black/15" />}
                   </div>
                 ) : null}

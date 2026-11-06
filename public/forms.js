@@ -444,7 +444,7 @@
       return localStorage.getItem('visitas_off') === '1' || !!navigator.webdriver
     } catch (e) { return !!navigator.webdriver }
   }
-  function tracker(formId, endpoint, origin) {
+  function tracker(formId, endpoint, origin, version) {
     if (!endpoint || trackOff()) return null
     var visit = rid(), first = true, last = '', pos = {}, timer = null, gone = false
     var ms = 0, since = document.visibilityState === 'visible' ? Date.now() : 0
@@ -459,6 +459,8 @@
         var tz
         try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone } catch (e) {}
         body.first = { visitor: visitorId(), origin: origin, embed: embed, touch: navigator.maxTouchPoints || 0, tz: tz }
+        // A versão do formulário que esta página abriu: a função confere com a que está no ar
+        body.cv = version || ''
       }
       var text = JSON.stringify(body)
       try {
@@ -506,7 +508,7 @@
     var failed = false
     var origin = opts.preview ? {} : tracking()
     var pixel = opts.preview ? null : pixelOf(cfg, host)
-    var tr = opts.preview ? null : tracker(cfg.id, opts.endpoint, origin)
+    var tr = opts.preview ? null : tracker(cfg.id, opts.endpoint, origin, cfg.liveAt)
     // Telas: welcome (capa) → steps (perguntas) → result (fim) | booking (agenda) → booked (agradecimento)
     var screen = welcomeOn() ? 'welcome' : 'steps'
     var agenda = null // { token, submission, days }

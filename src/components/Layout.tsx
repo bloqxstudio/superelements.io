@@ -85,13 +85,20 @@ const Layout: React.FC = () => {
   useEffect(() => setOpen(false), [pathname]);
   const gutters = usePageGutters(mainRef, barRef, [pathname, collapsed, inProject, embedded, editorRoute]);
 
-  if (inProject || embedded) return <div className="se-product se-project"><GuardedOutlet /></div>;
+  // Dentro de um projeto a Iara também está (o iframe embutido de um agente fica sem ela)
+  if (inProject || embedded)
+    return (
+      <div className="se-product se-project" style={embedded ? undefined : { paddingRight: 'var(--iara-dock, 0px)' }}>
+        <GuardedOutlet />
+        {!embedded && <IaraPanel />}
+      </div>
+    );
 
   return (
     <div className={`se-product se-app min-h-screen w-full${collapsed ? ' se-menu-collapsed' : ''}`}>
       <AppSidebar open={open} onClose={close} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       <a href="#workspace-content" className="se-skip-link">Pular para o conteúdo</a>
-      <div className={`se-workspace flex min-h-screen min-w-0 flex-col transition-[padding] duration-200 ease-out motion-reduce:transition-none ${collapsed ? 'md:pl-[88px]' : 'md:pl-[264px]'}`}>
+      <div style={{ paddingRight: 'var(--iara-dock, 0px)' }} className={`se-workspace flex min-h-screen min-w-0 flex-col transition-[padding] duration-200 ease-out motion-reduce:transition-none ${collapsed ? 'md:pl-[88px]' : 'md:pl-[264px]'}`}>
         <header className="se-mobile-bar sticky top-0 z-30 box-content flex h-14 items-center gap-3 px-4 md:hidden">
           <button
             type="button"

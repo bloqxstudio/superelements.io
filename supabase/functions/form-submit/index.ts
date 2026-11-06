@@ -88,12 +88,12 @@ async function formsOn(teamId: string): Promise<boolean> {
 function onAir(row: Record<string, unknown> | null): Record<string, unknown> | null {
   if (!row) return null
   const live = row.live && typeof row.live === 'object' ? (row.live as Record<string, unknown>) : null
-  return live ? { ...row, name: live.name ?? row.name, definition: live.definition, theme: live.theme, settings: live.settings } : row
+  return live ? { ...row, name: live.name ?? row.name, definition: live.definition, theme: live.theme, settings: live.settings, liveAt: row.live_at ?? '' } : row
 }
 
 /** Grava o arquivo público da configuração (`crm-forms/<conta>/<formulário>.json`) com a versão do banco. */
 async function refreshPublic(form: Record<string, unknown>) {
-  const body = JSON.stringify({ id: form.id, name: form.name, definition: cleanDefinition(form.definition), theme: cleanTheme(form.theme), settings: cleanSettings(form.settings) })
+  const body = JSON.stringify({ id: form.id, name: form.name, liveAt: form.liveAt ?? '', definition: cleanDefinition(form.definition), theme: cleanTheme(form.theme), settings: cleanSettings(form.settings) })
   const { error } = await admin.storage
     .from('crm-forms')
     .upload(`${form.team_id}/${form.id}.json`, new Blob([body], { type: 'application/json' }), { upsert: true, contentType: 'application/json', cacheControl: '30' })
@@ -108,11 +108,11 @@ Deno.serve(async (request) => {
     const id = url.searchParams.get('id') ?? ''
     if (!id) return json({ ok: true, version: VERSION })
     if (!UUID.test(id)) return json({ error: 'Formulário não encontrado.' }, 404)
-    const form = onAir((await admin.from('crm_forms').select('id, team_id, name, status, definition, theme, settings, live').eq('id', id).maybeSingle()).data)
+    const form = onAir((await admin.from('crm_forms').select('id, team_id, name, status, definition, theme, settings, live, live_at').eq('id', id).maybeSingle()).data)
     if (!form || form.status !== 'published' || !(await formsOn(form.team_id as string))) return json({ error: 'Formulário não encontrado.' }, 404)
     if (url.searchParams.get('view') === '1') await admin.rpc('crm_form_view', { p_form: id })
     return json(
-      { id: form.id, name: form.name, definition: cleanDefinition(form.definition), theme: cleanTheme(form.theme), settings: cleanSettings(form.settings) },
+      { id: form.id, name: form.name, liveAt: form.liveAt ?? '', definition: cleanDefinition(form.definition), theme: cleanTheme(form.theme), settings: cleanSettings(form.settings) },
       200,
       { 'cache-control': 'public, max-age=30' }
     )
@@ -130,11 +130,19 @@ Deno.serve(async (request) => {
   const id = String(body.id ?? '')
   if (!UUID.test(id)) return json({ error: 'Formulário não encontrado.' }, 404)
   if (body.action === 'book') return book(id, body, request)
-  if (body.action === 'track') return track(admin, id, body, request, json)
+  if (body.action === 'track') {
+    // Primeira batida da visita: a página diz qual versão abriu (`cv`). Diferente da versão no ar, o arquivo
+    // público ficou para trás (publicado por outro caminho, ou gravação que falhou): regrava agora.
+    if (body.first && typeof body.cv === 'string') {
+      const form = onAir((await admin.from('crm_forms').select('id, team_id, name, status, definition, theme, settings, live, live_at').eq('id', id).maybeSingle()).data)
+      if (form && form.status === 'published' && form.liveAt && form.liveAt !== body.cv) await refreshPublic(form)
+    }
+    return track(admin, id, body, request, json)
+  }
   // Campo-isca que só robô preenche: finge sucesso e não grava
   if (typeof body.hp === 'string' && body.hp) return json({ ok: true })
 
-  const form = onAir((await admin.from('crm_forms').select('id, team_id, name, status, definition, theme, settings, live').eq('id', id).maybeSingle()).data)
+  const form = onAir((await admin.from('crm_forms').select('id, team_id, name, status, definition, theme, settings, live, live_at').eq('id', id).maybeSingle()).data)
   if (!form || form.status !== 'published' || !(await formsOn(form.team_id as string))) return json({ error: 'Formulário não encontrado.' }, 404)
   const teamId = form.team_id as string
   const definition = cleanDefinition(form.definition)
@@ -273,7 +281,7 @@ async function book(id: string, body: Record<string, unknown>, request: Request)
   if (!UUID.test(submission) || !token || Number.isNaN(Date.parse(start))) return json({ error: 'Pedido de agendamento inválido.' }, 400)
   if (token !== (await bookingToken(submission))) return json({ error: 'Pedido de agendamento inválido.' }, 403)
 
-  const form = onAir((await admin.from('crm_forms').select('id, team_id, name, status, definition, theme, settings, live').eq('id', id).maybeSingle()).data)
+  const form = onAir((await admin.from('crm_forms').select('id, team_id, name, status, definition, theme, settings, live, live_at').eq('id', id).maybeSingle()).data)
   if (!form || form.status !== 'published' || !(await formsOn(form.team_id as string))) return json({ error: 'Formulário não encontrado.' }, 404)
   const definition = cleanDefinition(form.definition)
   const booking = cleanSettings(form.settings).booking

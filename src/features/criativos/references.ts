@@ -155,6 +155,24 @@ async function describeProject(ref: Ref): Promise<ResolvedRef & { logos: { src: 
   return { kind: 'project', label: ref.label, text, images: crops, logos: [...logos, ...photos] }
 }
 
+/** Uma imagem do app (endereço ou caminho) como data URL JPEG, reduzida: vai junto para a IA ver. */
+async function imageData(src: string, side: number): Promise<string | undefined> {
+  try {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.src = src
+    await img.decode()
+    const k = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * k))
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * k))
+    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+    return canvas.toDataURL('image/jpeg', 0.8)
+  } catch {
+    return undefined
+  }
+}
+
 export async function resolveRefs(refs: Ref[], set: CreativeSet, images: ImageMap, projectName: (id: string) => string | undefined): Promise<{ refs: ResolvedRef[]; extra: { src: string; label: string }[] }> {
   const out: ResolvedRef[] = []
   const extra: { src: string; label: string }[] = []
@@ -173,8 +191,9 @@ export async function resolveRefs(refs: Ref[], set: CreativeSet, images: ImageMa
       out.push({
         kind: 'case',
         label: ref.label,
-        text: list.map((c) => `Case ${c.name} (slug ${c.slug}): ${c.segment}${c.place ? `, ${c.place}` : ''}. ${c.summary} (${c.stack}). Imagens (src): capa ${caseImage(c, 'capa').src}, página do computador ${caseImage(c, 'pagina').src}, celular ${caseImage(c, 'celular').src}`).join('\n'),
-        images: [],
+        text: `${list.map((c) => `Case ${c.name} (slug ${c.slug}): ${c.segment}${c.place ? `, ${c.place}` : ''}. ${c.summary} (${c.stack}). Imagens (src): capa ${caseImage(c, 'capa').src}, página do computador ${caseImage(c, 'pagina').src}, celular ${caseImage(c, 'celular').src}`).join('\n')}\nAs capas dos cases vão junto como imagem, na ordem acima: não precisa abrir os arquivos. Para pôr uma no slide, use o src.`,
+        // As capas vão como imagem: o agente vê sem precisar abrir arquivo nem baixar nada
+        images: (await Promise.all(list.slice(0, 6).map((c) => imageData(caseImage(c, 'capa').src, 540)))).filter((x): x is string => !!x),
       })
     } else if (ref.kind === 'project' && ref.projectId) {
       try {

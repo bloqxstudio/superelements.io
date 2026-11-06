@@ -6,7 +6,7 @@
  */
 
 import { drawLayer, isVideo, layerBox, placeText, type ImageMap, type PlacedRun } from './render'
-import { sizeOf, type BrandMotion, type FormatId, type Layer, type LayerMotion, type MotionEase, type MotionExit, type MotionFx, type MotionTransition, type Post, type PostMotion, type Slide, type SlideCamera, type TextLayer } from './types'
+import { sizeOf, type BrandMotion, type FormatId, type Layer, type LayerMotion, type KeyEase, type MotionEase, type MotionExit, type MotionFx, type MotionKey, type MotionLoop, type MotionShake, type MotionTransition, type Post, type PostMotion, type Slide, type SlideCamera, type TextLayer } from './types'
 
 export const MOTION_FX: { id: MotionFx; label: string }[] = [
   { id: 'rise', label: 'Subir' },
@@ -23,6 +23,7 @@ export const MOTION_FX: { id: MotionFx; label: string }[] = [
   { id: 'words', label: 'Palavra por palavra' },
   { id: 'letters', label: 'Letra por letra' },
   { id: 'move', label: 'Mover de um ponto' },
+  { id: 'keys', label: 'Keyframes (livre)' },
 ]
 
 export const MOTION_TRANSITIONS: { id: MotionTransition; label: string }[] = [
@@ -39,14 +40,14 @@ const MAX_SLIDE = 20
 
 export const FPS = 30
 
-export const postMotionOf = (post: Post): Required<Omit<PostMotion, 'audio' | 'output'>> => ({
+export const postMotionOf = (post: Post): Required<Omit<PostMotion, 'audio' | 'output' | 'beats' | 'bpm'>> => ({
   slideDur: post.motion?.slideDur ?? 0,
   transition: post.motion?.transition ?? 'push',
   transitionDur: Math.min(1.2, Math.max(0.1, post.motion?.transitionDur ?? 0.5)),
 })
 
 /** O slide anda: alguma camada tem entrada ou a câmera se move. */
-export const slideHasMotion = (slide: Slide) => !!slide.camera || slide.layers.some((l) => l.motion && !l.hidden)
+export const slideHasMotion = (slide: Slide) => !!slide.camera || !!slide.flashes?.length || !!slide.shakes?.length || slide.layers.some((l) => l.motion && !l.hidden)
 
 export const hasMotion = (post: Post | undefined) => !!post?.slides.some(slideHasMotion)
 
@@ -62,6 +63,8 @@ export const slideAsPost = (post: Post, slide: Slide): Post => ({ ...post, slide
 export const clearSlideMotion = (slide: Slide): Slide => ({
   ...slide,
   camera: undefined,
+  flashes: undefined,
+  shakes: undefined,
   layers: slide.layers.map((l) => {
     const { motion: _drop, ...rest } = l
     return rest as Layer
@@ -69,9 +72,15 @@ export const clearSlideMotion = (slide: Slide): Slide => ({
 })
 
 /** Quando o slide termina as entradas (segundos). */
-export const entrancesEnd = (slide: Slide) => slide.layers.reduce((end, l) => (l.motion && !l.hidden ? Math.max(end, l.motion.start + l.motion.dur) : end), 0)
+export const entrancesEnd = (slide: Slide) =>
+  Math.max(
+    slide.layers.reduce((end, l) => (l.motion && !l.hidden ? Math.max(end, l.motion.start + l.motion.dur, ...(l.motion.keys ?? []).map((k) => k.t)) : end), 0),
+    ...(slide.flashes ?? []).map((f) => f.t + (f.dur ?? 0.25)),
+    ...(slide.shakes ?? []).map((f) => f.t + (f.dur ?? 0.35))
+  )
 
 export function slideDuration(post: Post, slide: Slide): number {
+  if (slide.dur && slide.dur > 0) return Math.min(MAX_SLIDE, Math.max(0.3, slide.dur))
   const fixed = postMotionOf(post).slideDur
   if (fixed > 0) return Math.min(MAX_SLIDE, Math.max(1, fixed))
   return Math.min(MAX_SLIDE, Math.max(MIN_SLIDE, entrancesEnd(slide) + HOLD))
@@ -157,6 +166,114 @@ function countText(text: string, p: number): string {
   return text.replace(NUMBER, shown)
 }
 
+// Keyframes, loops e impactos
+
+const easeIn = (t: number) => t * t * t
+const easeHold = (t: number) => (t < 1 ? 0 : 1)
+
+export const KEY_EASES: { id: KeyEase; label: string }[] = [
+  { id: 'suave', label: 'Suave (freia)' },
+  { id: 'salto', label: 'Salto (passa e volta)' },
+  { id: 'elastico', label: 'Elástico' },
+  { id: 'forte', label: 'Forte' },
+  { id: 'acelera', label: 'Acelera (cai)' },
+  { id: 'linear', label: 'Linear' },
+  { id: 'segura', label: 'Segura (corte seco)' },
+]
+
+const KEY_EASE: Record<KeyEase, (t: number) => number> = { ...EASE, salto: easeBack, acelera: easeIn, segura: easeHold }
+
+export const MOTION_LOOPS: { id: MotionLoop; label: string }[] = [
+  { id: 'respirar', label: 'Respirar (cresce e volta)' },
+  { id: 'flutuar', label: 'Flutuar' },
+  { id: 'balancar', label: 'Balançar' },
+  { id: 'pulsar', label: 'Pulsar na batida' },
+  { id: 'girar', label: 'Girar sem parar' },
+]
+
+type KeyProps = Required<Omit<MotionKey, 't' | 'ease'>>
+const KEY_REST: KeyProps = { x: 0, y: 0, scale: 1, sx: 1, sy: 1, rotate: 0, opacity: 1 }
+const KEY_FIELDS = Object.keys(KEY_REST) as (keyof KeyProps)[]
+
+/** Os keyframes em ordem, cada um com todos os valores (o que falta repete o anterior). */
+export function filledKeys(keys: MotionKey[]): (KeyProps & { t: number; ease?: KeyEase })[] {
+  const sorted = [...keys].sort((a, b) => a.t - b.t)
+  let prev: KeyProps = { ...KEY_REST }
+  return sorted.map((k) => {
+    const full = { ...prev }
+    for (const f of KEY_FIELDS) if (typeof k[f] === 'number' && Number.isFinite(k[f])) full[f] = k[f] as number
+    prev = full
+    return { ...full, t: k.t, ease: k.ease }
+  })
+}
+
+/** Os valores da animação livre no instante `t`. */
+export function keysAt(keys: MotionKey[], t: number): KeyProps {
+  const k = filledKeys(keys)
+  if (!k.length) return { ...KEY_REST }
+  if (t <= k[0].t) return k[0]
+  const last = k[k.length - 1]
+  if (t >= last.t) return last
+  const i = k.findIndex((x) => x.t > t)
+  const a = k[i - 1]
+  const b = k[i]
+  const span = Math.max(1e-4, b.t - a.t)
+  const e = (KEY_EASE[b.ease ?? 'suave'] ?? easeOut)(clamp01((t - a.t) / span))
+  const out = { ...a }
+  for (const f of KEY_FIELDS) out[f] = a[f] + (b[f] - a[f]) * e
+  return out
+}
+
+/** Começo e duração da barra na linha do tempo a partir dos keyframes. */
+export function keysSpan(keys: MotionKey[]): { start: number; dur: number } {
+  if (!keys.length) return { start: 0, dur: 0.1 }
+  const ts = keys.map((k) => k.t)
+  const start = Math.max(0, Math.min(...ts))
+  return { start: Math.round(start * 100) / 100, dur: Math.max(0.1, Math.round((Math.max(...ts) - start) * 100) / 100) }
+}
+
+/** Ruído determinístico (o mesmo quadro sempre treme igual). */
+const wobble = (t: number, seed: number) => Math.sin(t * 91.3 + seed * 12.9) * 0.6 + Math.sin(t * 57.1 + seed * 3.7) * 0.4
+
+/** Deslocamento de tremidas no instante `t`. */
+export function shakeAt(shakes: MotionShake[] | undefined, t: number): { dx: number; dy: number; rot: number } {
+  let dx = 0
+  let dy = 0
+  let rot = 0
+  for (const [i, s] of (shakes ?? []).entries()) {
+    const dur = s.dur ?? 0.35
+    const local = t - s.t
+    if (local < 0 || local > dur) continue
+    const k = Math.pow(1 - local / dur, 2) * (s.amp ?? 18)
+    dx += wobble(local, i + 1) * k
+    dy += wobble(local + 3.1, i + 7) * k
+    rot += wobble(local + 5.3, i + 2) * k * 0.08
+  }
+  return { dx, dy, rot }
+}
+
+function loopPose(m: LayerMotion, t: number, beat: number): { dy: number; scale: number; rotate: number } {
+  const since = t - (m.start + m.dur)
+  if (!m.loop || since <= 0) return { dy: 0, scale: 1, rotate: 0 }
+  const sp = m.loopSpeed ?? 1
+  const ramp = Math.min(1, since / 0.3)
+  switch (m.loop) {
+    case 'respirar':
+      return { dy: 0, scale: 1 + 0.03 * Math.sin(since * sp * Math.PI) * ramp, rotate: 0 }
+    case 'flutuar':
+      return { dy: -14 * Math.sin(since * sp * Math.PI * 0.8) * ramp, scale: 1, rotate: 0 }
+    case 'balancar':
+      return { dy: 0, scale: 1, rotate: 5 * Math.sin(since * sp * Math.PI * 1.2) * ramp }
+    case 'girar':
+      return { dy: 0, scale: 1, rotate: since * sp * 120 }
+    case 'pulsar': {
+      // Um soco a cada batida (ou a cada 0,5 s) que volta rápido
+      const ph = (since % beat) / beat
+      return { dy: 0, scale: 1 + 0.07 * Math.pow(1 - ph, 3) * ramp, rotate: 0 }
+    }
+  }
+}
+
 // Uma camada num instante
 
 interface Pose {
@@ -171,6 +288,9 @@ interface Pose {
   inner?: number
   /** Texto por palavra ou por letra: o andamento da entrada (0 a 1). */
   split?: { by: 'words' | 'letters'; p: number }
+  /** Amassar e esticar (keyframes). */
+  sx?: number
+  sy?: number
 }
 
 const REST: Pose = { alpha: 1, dx: 0, dy: 0, scale: 1 }
@@ -217,6 +337,10 @@ function enterPose(m: LayerMotion, t: number, slideDur: number, width: number): 
       const f = m.from ?? {}
       return { alpha: 1, dx: (f.dx ?? 0) * (1 - p), dy: (f.dy ?? 0) * (1 - p), scale: 1 + ((f.scale ?? 1) - 1) * (1 - p), rotate: (f.rotate ?? 0) * (1 - p) }
     }
+    case 'keys': {
+      const k = keysAt(m.keys ?? [], t)
+      return { alpha: clamp01(k.opacity), dx: k.x, dy: k.y, scale: k.scale, rotate: k.rotate, sx: k.sx, sy: k.sy }
+    }
   }
 }
 
@@ -247,11 +371,19 @@ function exitPose(m: LayerMotion, t: number, slideDur: number, width: number): P
   }
 }
 
-function poseOf(m: LayerMotion, t: number, slideDur: number, width: number): Pose {
-  const enter = enterPose(m, t, slideDur, width)
+function poseOf(m: LayerMotion, t: number, slideDur: number, width: number, beat = 0.5): Pose {
+  let pose = enterPose(m, t, slideDur, width)
   const out = exitPose(m, t, slideDur, width)
-  if (!out) return enter
-  return { ...enter, alpha: enter.alpha * out.alpha, dx: enter.dx + out.dx, dy: enter.dy + out.dy, scale: enter.scale * out.scale }
+  if (out) pose = { ...pose, alpha: pose.alpha * out.alpha, dx: pose.dx + out.dx, dy: pose.dy + out.dy, scale: pose.scale * out.scale }
+  if (m.loop) {
+    const l = loopPose(m, t, beat)
+    pose = { ...pose, dy: pose.dy + l.dy, scale: pose.scale * l.scale, rotate: (pose.rotate ?? 0) + l.rotate }
+  }
+  if (m.shakes?.length) {
+    const s = shakeAt(m.shakes, t)
+    pose = { ...pose, dx: pose.dx + s.dx, dy: pose.dy + s.dy, rotate: (pose.rotate ?? 0) + s.rot }
+  }
+  return pose
 }
 
 /** Texto entrando por palavra ou por letra: cada pedaço com o seu atraso, desenhado com as contas do `drawText`. */
@@ -296,10 +428,31 @@ function drawSplitText(ctx: CanvasRenderingContext2D, layer: TextLayer, split: N
   ctx.restore()
 }
 
-function drawLayerAt(ctx: CanvasRenderingContext2D, layer: Layer, images: ImageMap, t: number, slideDur: number, width: number) {
+/** Rastro de velocidade: cópias mais fracas nos instantes de antes, quando a camada anda rápido. */
+const BLUR_SAMPLES = 5
+const BLUR_SPAN = 1.6 / FPS
+
+function drawLayerAt(ctx: CanvasRenderingContext2D, layer: Layer, images: ImageMap, t: number, slideDur: number, width: number, beat = 0.5) {
+  const m = layer.motion
+  if (m?.blur) {
+    const now = poseOf(m, t, slideDur, width, beat)
+    const before = poseOf(m, t - BLUR_SPAN, slideDur, width, beat)
+    const box = layerBox(layer)
+    const moved = Math.hypot(now.dx - before.dx, now.dy - before.dy) + Math.abs(now.scale - before.scale) * Math.max(box.w, box.h) + Math.abs((now.rotate ?? 0) - (before.rotate ?? 0)) * 6
+    if (moved > 6) {
+      for (let i = BLUR_SAMPLES; i >= 1; i--) {
+        drawLayerPose(ctx, layer, images, t - (BLUR_SPAN * i) / BLUR_SAMPLES, slideDur, width, beat, 0.22 * (1 - i / (BLUR_SAMPLES + 1)))
+      }
+    }
+  }
+  drawLayerPose(ctx, layer, images, t, slideDur, width, beat)
+}
+
+function drawLayerPose(ctx: CanvasRenderingContext2D, layer: Layer, images: ImageMap, t: number, slideDur: number, width: number, beat: number, fade = 1) {
   const m = layer.motion
   if (!m) return drawLayer(ctx, layer, images)
-  const pose = poseOf(m, t, slideDur, width)
+  const raw = poseOf(m, t, slideDur, width, beat)
+  const pose = fade === 1 ? raw : { ...raw, alpha: raw.alpha * fade }
   if (pose.alpha <= 0.001 || (pose.wipe && pose.wipe.p <= 0.001)) return
   let draw: Layer = pose.alpha < 1 ? ({ ...layer, opacity: (layer.opacity ?? 1) * pose.alpha } as Layer) : layer
   if (m.count && layer.type === 'text') {
@@ -333,10 +486,12 @@ function drawLayerAt(ctx: CanvasRenderingContext2D, layer: Layer, images: ImageM
     ctx.translate(-cx, -cy)
   }
   if (pose.dx || pose.dy) ctx.translate(pose.dx, pose.dy)
-  if (pose.scale !== 1 || pose.rotate) {
+  const sx = pose.scale * (pose.sx ?? 1)
+  const sy = pose.scale * (pose.sy ?? 1)
+  if (sx !== 1 || sy !== 1 || pose.rotate) {
     ctx.translate(cx, cy)
     if (pose.rotate) ctx.rotate((pose.rotate * Math.PI) / 180)
-    ctx.scale(pose.scale, pose.scale)
+    ctx.scale(Math.max(0.001, sx), Math.max(0.001, sy))
     ctx.translate(-cx, -cy)
   }
   if (pose.split && draw.type === 'text') {
@@ -369,15 +524,37 @@ function cameraTransform(ctx: CanvasRenderingContext2D, camera: SlideCamera, k: 
 }
 
 /** O slide no instante `t` (segundos desde o começo dele). */
-export function drawSlideAt(ctx: CanvasRenderingContext2D, slide: Slide, format: FormatId, images: ImageMap, t: number, slideDur: number) {
+export function drawSlideAt(ctx: CanvasRenderingContext2D, slide: Slide, format: FormatId, images: ImageMap, t: number, slideDur: number, beat = 0.5) {
   const { width, height } = sizeOf(format)
   ctx.save()
   ctx.fillStyle = slide.background
   ctx.fillRect(0, 0, width, height)
+  if (slide.shakes?.length) {
+    // A tela treme: um pouco maior, para a borda não aparecer
+    const s = shakeAt(slide.shakes, t)
+    const k = 1 + Math.min(0.08, (Math.abs(s.dx) + Math.abs(s.dy)) / width)
+    ctx.translate(width / 2 + s.dx, height / 2 + s.dy)
+    ctx.rotate((s.rot * Math.PI) / 180)
+    ctx.scale(k, k)
+    ctx.translate(-width / 2, -height / 2)
+  }
   if (slide.camera) cameraTransform(ctx, slide.camera, t / Math.max(0.1, slideDur), width, height)
-  for (const layer of slide.layers) if (!layer.hidden) drawLayerAt(ctx, layer, images, t, slideDur, width)
+  for (const layer of slide.layers) if (!layer.hidden) drawLayerAt(ctx, layer, images, t, slideDur, width, beat)
   ctx.restore()
+  for (const f of slide.flashes ?? []) {
+    const dur = f.dur ?? 0.25
+    const local = t - f.t
+    if (local < 0 || local > dur) continue
+    ctx.save()
+    ctx.globalAlpha = 0.85 * Math.pow(1 - local / dur, 2)
+    ctx.fillStyle = f.color ?? '#ffffff'
+    ctx.fillRect(0, 0, width, height)
+    ctx.restore()
+  }
 }
+
+/** O intervalo entre batidas do post (0,5 s sem trilha lida). */
+export const beatOf = (post: Post) => (post.motion?.bpm ? 60 / post.motion.bpm : 0.5)
 
 /**
  * Desenha o post inteiro como vídeo. Guarda dois canvases de apoio para as
@@ -481,15 +658,15 @@ export class MotionRenderer {
     const { transition, transitionDur } = postMotionOf(post)
     const T = Math.min(transitionDur, seg.dur * 0.5)
     if (i === 0 || transition === 'cut' || local >= T) {
-      drawSlideAt(ctx, seg.slide, post.format, images, local, seg.dur)
+      drawSlideAt(ctx, seg.slide, post.format, images, local, seg.dur, beatOf(post))
       return
     }
     const prev = segments[i - 1]
     const p = easeInOut(local / T)
     const ca = this.a.getContext('2d')!
     const cb = this.b.getContext('2d')!
-    drawSlideAt(ca, prev.slide, post.format, images, prev.dur, prev.dur)
-    drawSlideAt(cb, seg.slide, post.format, images, local, seg.dur)
+    drawSlideAt(ca, prev.slide, post.format, images, prev.dur, prev.dur, beatOf(post))
+    drawSlideAt(cb, seg.slide, post.format, images, local, seg.dur, beatOf(post))
     ctx.save()
     if (transition === 'push') {
       ctx.drawImage(this.a, -width * p, 0)
@@ -666,9 +843,59 @@ export const clearPostMotion = (post: Post): Post => ({
   slides: post.slides.map((s) => ({
     ...s,
     camera: undefined,
+    flashes: undefined,
+    shakes: undefined,
     layers: s.layers.map((l) => {
       const { motion: _drop, ...rest } = l
       return rest as Layer
     }),
   })),
 })
+
+// Batidas
+
+/** A batida mais perto de `t` (segundos do vídeo), se estiver a menos de `max`. */
+export function nearestBeat(beats: number[], t: number, max = 0.25): number | undefined {
+  let best: number | undefined
+  for (const b of beats) if (Math.abs(b - t) <= max && (best === undefined || Math.abs(b - t) < Math.abs(best - t))) best = b
+  return best
+}
+
+/**
+ * Encaixa o post nas batidas: o começo de cada entrada, cada keyframe, clarão e
+ * tremida vai para a batida mais perto (até 0,25 s). Os keyframes de uma camada
+ * andam juntos (o primeiro encaixa e os outros seguem), para não deformar o movimento.
+ */
+export function snapPostToBeats(post: Post): Post {
+  const beats = post.motion?.beats
+  if (!beats?.length) return post
+  const { segments } = timeline(post)
+  const snapLocal = (seg: Segment, t: number) => {
+    const b = nearestBeat(beats, seg.start + t)
+    return b === undefined ? t : Math.max(0, Math.round((b - seg.start) * 100) / 100)
+  }
+  return {
+    ...post,
+    slides: post.slides.map((slide) => {
+      const seg = segments.find((x) => x.slide.id === slide.id)
+      if (!seg) return slide
+      return {
+        ...slide,
+        flashes: slide.flashes?.map((f) => ({ ...f, t: snapLocal(seg, f.t) })),
+        shakes: slide.shakes?.map((f) => ({ ...f, t: snapLocal(seg, f.t) })),
+        layers: slide.layers.map((l) => {
+          const m = l.motion
+          if (!m) return l
+          if (m.fx === 'keys' && m.keys?.length) {
+            // Encaixa o keyframe de impacto (o que chega com "salto" ou "acelera"), senão o primeiro
+            const hit = m.keys.find((k) => k.ease === 'salto' || k.ease === 'acelera') ?? [...m.keys].sort((a, b) => a.t - b.t)[0]
+            const shift = snapLocal(seg, hit.t) - hit.t
+            const keys = m.keys.map((k) => ({ ...k, t: Math.max(0, Math.round((k.t + shift) * 100) / 100) }))
+            return { ...l, motion: { ...m, keys, ...keysSpan(keys), shakes: m.shakes?.map((x) => ({ ...x, t: Math.max(0, x.t + shift) })) } } as Layer
+          }
+          return { ...l, motion: { ...m, start: snapLocal(seg, m.start), shakes: m.shakes?.map((x) => ({ ...x, t: snapLocal(seg, x.t) })) } } as Layer
+        }),
+      }
+    }),
+  }
+}

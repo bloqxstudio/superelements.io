@@ -5,11 +5,15 @@ import { CONTENT_FORMATS, STATUS_LABEL, type Content, type ContentFormat } from 
 import { setHash, setPath } from '@/features/conteudos/forward'
 import { scheduleContent } from '@/features/pauta/api'
 import { CHANNELS, STAGE_LABEL, channelOfFormat, stageOf } from '@/features/pauta/rules'
-import { loadSet, saveSet } from '@/features/criativos/storage'
-import type { CreativeSet, Post } from '@/features/criativos/types'
-import { resolveIa, withIa } from '@/features/ia/porTarefa'
+import { listSets, loadSet, saveSet, uploadAsset } from '@/features/criativos/storage'
+import { uid, type CreativeSet, type ImageLayer, type Post, type SetSummary } from '@/features/criativos/types'
+import { withIa } from '@/features/ia/porTarefa'
+import { useChat } from '@/features/space/chat/chatStore'
 import { useCreativeLink } from '@/features/criativos/link'
-import { reportStep, useIara, type IaraAction, type IaraDone } from './store'
+import { attachmentFiles, reportStep, useIara, type IaraAction, type IaraDone } from './store'
+import { useEditor } from '@/features/criativos/store'
+import type { ResolvedRef } from '@/features/criativos/references'
+import { agentBegin, agentEnd, agentPhase, applyInEditor, editorHas, followOn, goTo, liveSet, openInEditor } from './follow'
 
 /**
  * O que a Iara sabe fazer. Uma lista só, usada nos dois modos:
@@ -62,8 +66,15 @@ const one = (d: IaraDone | IaraDone[]): IaraResult => ({ done: Array.isArray(d) 
 
 // ---------- agentes desta máquina (troca de bastão) ----------
 
-/** A Iara roda no Claude Code; os outros agentes conectados recebem o bastão com a confirmação da pessoa. */
-export const IARA_ENGINE = 'claude'
+/**
+ * O agente escolhido no chat (Claude Code ou Codex) é quem faz tudo, sem perguntar (2026-11-05, o usuário: "se eu chamar
+ * um chat com o Codex selecionado, deve apenas usar o Codex… a não ser que veja que seja uma tarefa melhor com outra LLM").
+ * Só vira troca de bastão, com cartão para a pessoa decidir, quando a Iara pede outro agente de propósito (`agente` + `motivo`).
+ */
+export const chatAgent = (): 'claude' | 'codex' => {
+  const a = useChat.getState().agent as string
+  return a === 'codex' || a === 'claude' ? a : 'claude'
+}
 const AGENT_NAMES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex' }
 export const agentName = (id?: string) => (id ? (AGENT_NAMES[id] ?? id) : 'Iara')
 export const AGENT_COLORS: Record<string, string> = { claude: '#D97757', codex: '#10A37F' }
@@ -73,13 +84,13 @@ export const localAgents = () => useCreativeLink.getState().agents.filter((a) =>
 
 const validAgent = (v: unknown) => (typeof v === 'string' && localAgents().includes(v) ? (v as 'claude' | 'codex') : undefined)
 
-/** Quem faz os criativos: o agente pedido, ou o escolhido para Criativos (o Codex por padrão). */
-const creativeAgent = (a: Record<string, unknown>) => validAgent(a.agente) ?? (resolveIa('criativos') as 'claude' | 'codex')
+/** Quem faz os criativos: o agente pedido de propósito, senão o escolhido no chat. */
+export const creativeAgent = (a: Record<string, unknown>) => validAgent(a.agente) ?? chatAgent()
 
-/** Troca de bastão quando quem faz não é a própria Iara. */
+/** Troca de bastão só quando a Iara pediu outro agente que não o do chat. */
 const handoffOf = (a: Record<string, unknown>) => {
   const who = creativeAgent(a)
-  return who !== IARA_ENGINE ? who : undefined
+  return who !== chatAgent() ? who : undefined
 }
 
 /** O conjunto de Criativos ligado ao conteúdo. */
@@ -92,9 +103,334 @@ async function setOf(contentId: string): Promise<{ content: Content; set: Creati
   return { content, set, projectId: link.projectId }
 }
 
+// ---------- conjuntos da conta (qualquer conjunto, não só os ligados a um conteúdo) ----------
+
+let setsCache: { at: number; team: string; list: SetSummary[] } | undefined
+
+/** Os conjuntos da conta aberta: os pessoais e os dos projetos dela. */
+async function accountSets(): Promise<SetSummary[]> {
+  const t = team()
+  if (setsCache && setsCache.team === t.id && Date.now() - setsCache.at < 60_000) return setsCache.list
+  const q = supabase.from('space_projects').select('id')
+  const { data } = await (t.isHome ? q.or(`team_id.eq.${t.id},team_id.is.null`) : q.eq('team_id', t.id))
+  const list = await listSets(((data ?? []) as { id: string }[]).map((p) => p.id))
+  setsCache = { at: Date.now(), team: t.id, list }
+  return list
+}
+
+/** Um conjunto pelo id ou pelo nome (ou parte dele). */
+async function findSet(ref: string): Promise<SetSummary> {
+  const list = await accountSets()
+  const lower = ref.trim().toLowerCase()
+  const hit = list.find((x) => x.id === ref) ?? list.find((x) => x.name.toLowerCase() === lower) ?? list.filter((x) => x.name.toLowerCase().includes(lower))[0]
+  if (!hit) throw new Error(`Conjunto não encontrado: "${ref}". Use listar_conjuntos.`)
+  return hit
+}
+
+interface Target {
+  set: CreativeSet
+  content?: Content
+  projectId?: string
+  title: string
+  open: string
+}
+
+/** O criativo de que o pedido fala: um conjunto ({"conjunto"}) ou o de um conteúdo ({"id"}). */
+async function target(a: Record<string, unknown>): Promise<Target> {
+  if (typeof a.conjunto === 'string' && a.conjunto.trim()) {
+    const sum = await findSet(a.conjunto)
+    const loaded = await loadSet(sum.id, sum.projectId)
+    if (!loaded) throw new Error('Não consegui abrir esse conjunto.')
+    const set = liveSet(loaded)
+    return { set, projectId: sum.projectId, title: set.name, open: `/criativos/${set.id}${sum.projectId ? `?projeto=${sum.projectId}` : ''}` }
+  }
+  if (a.id) {
+    const { content, set, projectId } = await setOf(String(a.id))
+    return { set: liveSet(set), content, projectId, title: content.title, open: setPath(content, projectId) }
+  }
+  // Sem conjunto nem conteúdo: o que está aberto no editor desta aba (o "este post" da pessoa)
+  const ed = useEditor.getState()
+  if (ed.status === 'ready' && ed.set) {
+    const projectId = new URLSearchParams(window.location.search).get('projeto') ?? undefined
+    return { set: ed.set, projectId, title: ed.set.name, open: `/criativos/${ed.set.id}${projectId ? `?projeto=${projectId}` : ''}` }
+  }
+  throw new Error('Diga o conjunto ("conjunto") ou o conteúdo ("id"): não há criativo aberto no editor.')
+}
+
+/**
+ * Grava o conjunto e mantém o vínculo com o conteúdo em dia. Com o editor aberto nele (modo
+ * Acompanhar), a mudança entra pelo editor: aparece na hora, desfazível e ao vivo para os outros.
+ */
+async function persist(t: Target, next: CreativeSet, touchedSlides: string[] = [], selectPostId?: string) {
+  if (!applyInEditor(next, touchedSlides, selectPostId)) await saveSet(next)
+  t.set = next
+  setsCache = undefined
+  if (t.content) await linkContent(t.content.id, 'criativos', next.id, t.projectId, await setHash(next)).catch(() => undefined)
+}
+
+/** Abre o conjunto no editor (modo Acompanhar) e relê o que está nele, para trabalhar sobre o mais novo. */
+async function follow(t: Target, postId?: string) {
+  if (await openInEditor(t.set.id, t.projectId, postId)) t.set = liveSet(t.set)
+}
+
+/** Os slides que mudaram de um post para outro (para piscar no canvas). */
+const changedSlides = (before: Post | undefined, after: Post | undefined) =>
+  (after?.slides ?? []).filter((sl) => JSON.stringify(sl) !== JSON.stringify(before?.slides.find((x) => x.id === sl.id))).map((sl) => sl.id)
+
+/** O que o orquestrador precisa de um conjunto: montar, corrigir, ver e decidir um post. */
+export interface CreativeTarget {
+  set: CreativeSet
+  open: string
+  compose: (ask: string, files: { name: string; data: string }[], exemplo?: number) => Promise<Post | undefined>
+  fix: (post: Post, ask: string) => Promise<Post | undefined>
+  previews: (post: Post, side: number) => Promise<string[]>
+}
+
+/** Sobe imagens prontas (data URL) ao conjunto como assets, para o designer usar nos slides. */
+async function uploadFiles(set: CreativeSet, files: { name: string; data: string }[]) {
+  let next = set
+  const list: { name: string; src: string; data: string }[] = []
+  for (const f of files.slice(0, 8)) {
+    const blob = await (await fetch(f.data)).blob()
+    const asset = await uploadAsset(next, blob, f.name)
+    next = { ...next, assets: [...next.assets, asset] }
+    list.push({ name: f.name, src: `asset:${asset.id}`, data: f.data })
+  }
+  return { set: next, list }
+}
+
+export async function creativeTarget(a: Record<string, unknown>): Promise<CreativeTarget> {
+  const t = await target(a)
+  await follow(t)
+  const who = chatAgent()
+  const current = (id: string) => t.set.posts.find((p) => p.id === id)
+  return {
+    get set() {
+      return t.set
+    },
+    open: t.open,
+    compose: (ask, files, exemplo) =>
+      withIa(who, async () => {
+        const up = await uploadFiles(t.set, files)
+        if (exemplo) {
+          const example = pickPost(up.set, exemplo)
+          const clone = clonePost(example, `${example.name} · ${new Date().toLocaleDateString('pt-BR')}`)
+          const at = up.set.posts.findIndex((p) => p.id === example.id) + 1
+          const withClone = { ...up.set, posts: [...up.set.posts.slice(0, at), clone, ...up.set.posts.slice(at)] }
+          await persist(t, withClone, [], clone.id)
+          const { next } = await designEdit(withClone, clone, ask, { agent: who, attachments: up.list })
+          const done = next.posts.find((p) => p.id === clone.id)
+          await persist(t, next, done?.slides.map((sl) => sl.id) ?? [], clone.id)
+          return done
+        }
+        const base = up.set.posts[0]
+        if (!base) throw new Error('O conjunto está vazio: crie um post nele antes.')
+        const before = new Set(up.set.posts.map((p) => p.id))
+        const { next } = await designEdit(up.set, base, ask, { agent: who, scope: 'set', attachments: up.list })
+        const created = next.posts.find((p) => !before.has(p.id))
+        await persist(t, next, created?.slides.map((sl) => sl.id) ?? [], created?.id)
+        return created
+      }),
+    fix: (post, ask) =>
+      withIa(who, async () => {
+        const base = current(post.id) ?? post
+        const { next } = await designEdit(t.set, base, `Corrija este post sem mudar o que já está bom: ${ask}`, { agent: who })
+        const after = next.posts.find((p) => p.id === post.id)
+        await persist(t, next, changedSlides(base, after), post.id)
+        return after
+      }),
+    previews: async (post, side) => (await previews(t.set, current(post.id) ?? post, side)).map((i) => i.data),
+  }
+}
+
+/** A decisão da pessoa sobre o post montado pela equipe. */
+export async function decidePost(setId: string, postId: string, decision: 'aprovar' | 'descartar') {
+  const t = await target({ conjunto: setId })
+  const next =
+    decision === 'aprovar'
+      ? { ...t.set, posts: t.set.posts.map((p) => (p.id === postId ? { ...p, approved: true } : p)), updatedAt: Date.now() }
+      : { ...t.set, posts: t.set.posts.filter((p) => p.id !== postId), updatedAt: Date.now() }
+  await persist(t, next, [], decision === 'aprovar' ? postId : undefined)
+}
+
+/** Um post igual ao exemplo, com ids novos (post e slides; as camadas mantêm os ids dentro do slide). */
+const clonePost = (post: Post, name: string): Post => {
+  const copy = JSON.parse(JSON.stringify(post)) as Post
+  return { ...copy, id: uid(), name, slides: copy.slides.map((sl) => ({ ...sl, id: uid() })) }
+}
+
+/** Sobe as imagens anexadas no chat ao conjunto (viram assets) para o designer ver e poder usar num slide. */
+async function attachmentsFor(set: CreativeSet, refs: unknown): Promise<{ set: CreativeSet; list: { name: string; src: string; data: string }[] }> {
+  const wanted = (Array.isArray(refs) ? refs : typeof refs === 'string' ? [refs] : []).map(String).slice(0, 6)
+  let next = set
+  const list: { name: string; src: string; data: string }[] = []
+  for (const ref of wanted) {
+    const file = attachmentFiles.get(ref)
+    if (!file) throw new Error(`Não achei o ${ref}: a imagem vale só nesta aba; peça para anexar de novo.`)
+    const blob = await (await fetch(file.data)).blob()
+    const asset = await uploadAsset(next, blob, file.name.includes('.') ? file.name : `${file.name}.jpg`)
+    next = { ...next, assets: [...next.assets, asset] }
+    list.push({ name: file.name, src: `asset:${asset.id}`, data: file.data })
+  }
+  return { set: next, list }
+}
+
+/** Uma edição pelo designer do app (a mesma IA do chat do editor), com o padrão do conjunto. */
+async function designEdit(
+  set: CreativeSet,
+  post: Post,
+  message: string,
+  opts: { agent: 'claude' | 'codex'; slide?: Post['slides'][number]; scope?: 'layer' | 'slide' | 'post' | 'set'; layerIds?: string[]; attachments?: { name: string; src: string; data: string }[]; references?: ResolvedRef[] }
+) {
+  const [{ requestEdit }, { applyOps }, { creativeImages }, { fillSetImages }] = await Promise.all([
+    import('@/features/criativos/ai'),
+    import('@/features/criativos/applyOps'),
+    import('@/features/crm/instagram'),
+    import('@/features/criativos/generate'),
+  ])
+  // Referências de página sobem fotos e a captura ao conjunto aberto no editor: entram aqui também
+  if (editorHas(set.id)) {
+    const extra = (useEditor.getState().set?.assets ?? []).filter((x) => !set.assets.some((y) => y.id === x.id))
+    if (extra.length) set = { ...set, assets: [...set.assets, ...extra] }
+  }
+  const images = await creativeImages(set, post.slides)
+  const fonts = [...new Set([set.brand.headingFont, set.brand.bodyFont, 'Inter', 'Inter Tight', 'Geist', 'Playfair Display', 'DM Sans', 'Manrope', 'Montserrat', 'Space Grotesk', 'Fraunces', 'Archivo'])]
+  const layers = opts.layerIds?.length ? opts.layerIds : undefined
+  const scope = opts.scope ?? (layers ? 'layer' : opts.slide ? 'slide' : 'post')
+  const layerId = scope === 'layer' ? layers?.at(-1) : undefined
+  const answer = await requestEdit(
+    {
+      message,
+      scope,
+      set,
+      postId: post.id,
+      slideId: opts.slide?.id ?? post.slides[0]?.id,
+      layerId,
+      layerIds: scope === 'layer' && layers && layers.length > 1 ? layers : undefined,
+      images,
+      history: [],
+      agent: opts.agent,
+      attachments: opts.attachments,
+      references: opts.references?.length ? opts.references : undefined,
+      canGenerateImages: !!useCreativeLink.getState().images,
+    },
+    fonts
+  )
+  const result = applyOps(set, answer.ops, { postId: post.id, slideId: opts.slide?.id ?? post.slides[0]?.id, layerId })
+  let next = { ...result.set, updatedAt: Date.now() }
+  if (result.toGenerate.length && useCreativeLink.getState().providers.length) {
+    reportStep('Gerando as fotos')
+    const touched = [...new Set(next.posts.filter((p) => !set.posts.some((o) => o.id === p.id) || p.id === post.id).map((p) => p.id))]
+    next = (await fillSetImages(next, touched, { signal: AbortSignal.timeout(300_000) }).catch(() => ({ set: next }))).set
+  }
+  return { next, answer, result }
+}
+
+/** O post pelo número; sem número, o escolhido no editor (quando é este conjunto), senão o primeiro. */
+/**
+ * As referências do pedido (o @ do editor, pela Iara): posts de qualquer conjunto da conta, com a
+ * imagem de cada slide, e os cases da Avence com as capas. O designer vê tudo junto com o pedido,
+ * sem abrir arquivo nem baixar nada (2026-11-05: o Codex tentava abrir as capturas e era barrado).
+ */
+/** Um projeto do Space da conta pelo id ou pelo nome (ou parte dele). */
+async function findProject(ref: string): Promise<{ id: string; name: string }> {
+  const t = team()
+  const q = supabase.from('space_projects').select('id, name')
+  const { data } = await (t.isHome ? q.or(`team_id.eq.${t.id},team_id.is.null`) : q.eq('team_id', t.id))
+  const list = (data ?? []) as { id: string; name: string }[]
+  const lower = ref.trim().toLowerCase()
+  const hit = list.find((p) => p.id === ref) ?? list.find((p) => p.name.toLowerCase() === lower) ?? list.find((p) => p.name.toLowerCase().includes(lower))
+  if (!hit) throw new Error(`Projeto não encontrado: "${ref}". Projetos: ${list.slice(0, 20).map((p) => p.name).join(', ')}.`)
+  return hit
+}
+
+async function referencesFor(base: CreativeSet, raw: unknown): Promise<ResolvedRef[]> {
+  const list = (Array.isArray(raw) ? raw : raw ? [raw] : []).slice(0, 6) as Record<string, unknown>[]
+  if (!list.length) return []
+  const [{ resolveRefs }, { creativeImages }, { slidePreview }] = await Promise.all([import('@/features/criativos/references'), import('@/features/crm/instagram'), import('@/features/criativos/ai')])
+  const out: ResolvedRef[] = []
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue
+    if (typeof item.case === 'string') {
+      const slug = /^(todos|\*)$/i.test(item.case) ? '*' : item.case
+      const { refs } = await resolveRefs([{ id: uid(), kind: 'case', label: slug === '*' ? 'Cases' : `Case ${slug}`, slug }], base, new Map(), () => undefined)
+      out.push(...refs)
+      continue
+    }
+    // Uma página (ou o projeto inteiro) do Space: textos, fotos e a captura da página, como o @ de projeto do editor
+    if (typeof item.projeto === 'string' && item.projeto.trim()) {
+      const project = await findProject(item.projeto)
+      let pageId: string | undefined
+      let label = project.name
+      if (typeof item.pagina === 'string' && item.pagina.trim()) {
+        const { loadProjectDoc } = await import('@/features/projects/storage')
+        const pages = (await loadProjectDoc(project.id))?.doc?.canvas.pages ?? []
+        const want = item.pagina.trim().toLowerCase()
+        const page = pages.find((pg) => pg.name.toLowerCase() === want) ?? pages.find((pg) => pg.name.toLowerCase().includes(want))
+        if (!page) throw new Error(`Página "${item.pagina}" não encontrada no projeto ${project.name}. Páginas: ${pages.map((pg) => pg.name).join(', ')}.`)
+        pageId = page.id
+        label = `${project.name} › ${page.name}`
+        // A captura e as fotos da página entram no conjunto aberto no editor: abre o de destino antes
+        if (!(await openInEditor(base.id)) && !editorHas(base.id)) throw new Error('Para trazer uma página, o conjunto de destino precisa estar aberto no editor: ligue o Acompanhar ou abra o conjunto.')
+      }
+      const { refs } = await resolveRefs([{ id: uid(), kind: 'project', label, projectId: project.id, pageId }], base, useEditor.getState().images, () => project.name)
+      out.push(...refs)
+      continue
+    }
+    try {
+      let set = base
+      if (typeof item.conjunto === 'string' && item.conjunto.trim()) {
+        const sum = await findSet(item.conjunto)
+        set = (await loadSet(sum.id, sum.projectId)) ?? base
+      }
+      const ref = item.post
+      const n = typeof ref === 'number' ? ref : Number(ref)
+      const post = Number.isFinite(n) && n >= 1 ? set.posts[n - 1] : set.posts.find((p) => typeof ref === 'string' && p.name.toLowerCase().includes(ref.trim().toLowerCase()))
+      if (!post) continue
+      const images = await creativeImages(set, post.slides.slice(0, 8))
+      out.push({
+        kind: 'post',
+        label: `${post.name} (${set.name})`,
+        text: `Referência: post "${post.name}" do conjunto "${set.name}" (formato ${post.format}), com os slides em ordem como imagem. Textos: ${JSON.stringify(slideTexts(post)).slice(0, 3000)}`,
+        images: post.slides.slice(0, 8).map((sl) => slidePreview(sl, post.format, images, 420)),
+      })
+    } catch {
+      // referência que não abriu: segue sem ela
+    }
+  }
+  return out
+}
+
+/** O que está escolhido no editor, em palavras ("Título · slide 2 · post Capa"). */
+export function selectionLabel(): string {
+  const ed = useEditor.getState()
+  if (ed.status !== 'ready' || !ed.set) return ''
+  const post = ed.set.posts.find((p) => p.id === ed.postId)
+  if (!post) return ''
+  const i = post.slides.findIndex((s) => s.id === ed.slideId)
+  const slide = post.slides[i]
+  const layers = slide && !ed.row ? slide.layers.filter((l) => ed.layerIds.includes(l.id)) : []
+  const where = `${i >= 0 && !ed.row ? `slide ${i + 1} · ` : ''}post "${post.name}"`
+  if (layers.length > 1) return `${layers.length} componentes · ${where}`
+  if (layers.length === 1) return `${layers[0].name || 'componente'} · ${where}`
+  return where
+}
+
+/** O que está escolhido no editor, quando ele está com este conjunto e este post. */
+function editorSelection(setId: string, postId: string): { slide?: Post['slides'][number]; layerIds?: string[] } {
+  const ed = useEditor.getState()
+  if (ed.set?.id !== setId || ed.postId !== postId || ed.row) return {}
+  const post = ed.set.posts.find((p) => p.id === postId)
+  const slide = post?.slides.find((s) => s.id === ed.slideId)
+  const layerIds = slide ? ed.layerIds.filter((id) => slide.layers.some((l) => l.id === id)) : []
+  return { slide, layerIds: layerIds.length ? layerIds : undefined }
+}
+
 const pickPost = (set: CreativeSet, ref: unknown): Post => {
   const n = typeof ref === 'number' ? ref : Number(ref)
-  const post = Number.isFinite(n) && n >= 1 ? set.posts[n - 1] : set.posts[0]
+  const ed = useEditor.getState()
+  const selected = ed.set?.id === set.id ? set.posts.find((p) => p.id === ed.postId) : undefined
+  const post = Number.isFinite(n) && n >= 1 ? set.posts[n - 1] : (selected ?? set.posts[0])
   if (!post) throw new Error('Esse post não existe no criativo.')
   return post
 }
@@ -163,6 +499,8 @@ const CONTENT_ACTIONS: Full[] = [
           out.push({ label: `Não criei "${title}": ${e instanceof Error ? e.message : 'erro'}`, ok: false })
         }
       }
+      // Acompanhar: a Pauta mostra as ideias chegando (ao vivo pela Realtime)
+      if (out.some((d) => d.ok) && followOn() && !window.location.pathname.startsWith('/pauta')) goTo('/pauta')
       return out.length ? out : { label: 'Nenhuma ideia válida veio na resposta.', ok: false }
     },
   },
@@ -268,7 +606,7 @@ const CONTENT_ACTIONS: Full[] = [
 const CREATIVE_ACTIONS: Full[] = [
   {
     name: 'produzir_criativo',
-    doc: '{"id":ID,"agente"?:AGENTE} — produz o criativo do conteúdo com o pipeline completo do app: escreve o roteiro se faltar, monta o post na marca da conta, gera as fotos e anima. Feito pelo agente de criativos (o Codex por padrão): é uma troca de bastão, a pessoa confirma no chat. Demora 1 a 4 minutos; quando acabar você recebe o resultado com as imagens.',
+    doc: '{"id":ID,"agente"?:AGENTE} — produz o criativo do conteúdo com o pipeline completo do app: escreve o roteiro se faltar, monta o post na marca da conta, gera as fotos e anima. Feito pelo agente escolhido no chat, sem pedir confirmação. Demora 1 a 4 minutos; quando acabar você recebe o resultado com as imagens.',
     handoff: handoffOf,
     label: (a) => `Produzir o criativo de "${known.get(String(a.id))?.title ?? 'um conteúdo'}"`,
     run: async () => ({ label: 'Criativo produzido.', ok: true }),
@@ -279,6 +617,7 @@ const CREATIVE_ACTIONS: Full[] = [
         const { produceWithAi, PRODUCE_LABEL } = await import('@/features/conteudos/produce')
         const ctx = await loadContext(team().id).catch(() => null)
         const out = await produceWithAi(c, ctx, undefined, (s) => reportStep(PRODUCE_LABEL[s] ?? s))
+        if (followOn()) goTo(out.path)
         const made = await setOf(c.id).catch(() => undefined)
         const post = made?.set.posts[0]
         return {
@@ -290,79 +629,432 @@ const CREATIVE_ACTIONS: Full[] = [
     },
   },
   {
-    name: 'ver_criativo',
-    doc: '{"id":ID,"post"?:number} — mostra o criativo de um conteúdo: imagem de cada slide, textos de cada slide e a legenda. Use para revisar o design antes de editar.',
-    run: async () => ({ label: 'Vi o criativo.', ok: true }),
+    name: 'listar_conjuntos',
+    doc: '{"busca"?:string} — os conjuntos de criativos da conta (id, nome, projeto, quantos posts, quando mudou).',
+    run: async () => ({ label: 'Li os conjuntos.', ok: true }),
     exec: async (a) => {
-      const { set } = await setOf(String(a.id))
-      const post = pickPost(set, a.post)
+      const q = str(a.busca, 80)?.toLowerCase()
+      const list = (await accountSets()).filter((x) => !q || x.name.toLowerCase().includes(q) || (x.projectName ?? '').toLowerCase().includes(q))
+      return { done: [], data: list.slice(0, 60).map((x) => ({ conjunto: x.id, nome: x.name, projeto: x.projectName, posts: x.posts, mudou: new Date(x.updatedAt).toLocaleDateString('pt-BR') })) }
+    },
+  },
+  {
+    name: 'ver_conjunto',
+    doc: '{"conjunto":string} — o conjunto inteiro: cada post (número, nome, formato, slides, textos da capa), as regras do padrão visual aprendidas e a imagem da capa de cada post. Use para entender o estilo antes de criar ou editar.',
+    run: async () => ({ label: 'Vi o conjunto.', ok: true }),
+    exec: async (a) => {
+      const t = await target(a)
+      await follow(t)
+      const { creativeImages } = await import('@/features/crm/instagram')
+      const { slidePreview } = await import('@/features/criativos/ai')
+      const posts = t.set.posts.slice(0, 12)
+      const imgs = await creativeImages(t.set, posts.map((p) => p.slides[0]).filter(Boolean))
       return {
         done: [],
-        data: { conjunto: set.name, posts: set.posts.map((p, i) => ({ post: i + 1, nome: p.name, formato: p.format, slides: p.slides.length })), post: { nome: post.name, formato: post.format, legenda: post.caption ?? '', slides: slideTexts(post) } },
-        images: await previews(set, post),
+        data: {
+          conjunto: t.set.id,
+          nome: t.set.name,
+          marca: { nome: t.set.brand.name, titulos: t.set.brand.headingFont, texto: t.set.brand.bodyFont, cores: t.set.brand.colors?.map((c) => c.hex) },
+          padrao_aprendido: t.set.styleRules ?? [],
+          posts: t.set.posts.map((p, i) => ({ post: i + 1, nome: p.name, formato: p.format, slides: p.slides.length, capa: slideTexts(p)[0]?.textos ?? [], legenda: clip(p.caption, 160) })),
+          abrir: t.open,
+        },
+        images: posts.map((p, i) => ({ name: `post-${i + 1}-capa.jpg`, data: slidePreview(p.slides[0], p.format, imgs, 360) })),
+      }
+    },
+  },
+  {
+    name: 'ver_criativo',
+    doc: '{"conjunto"?:string,"id"?:ID,"post"?:number} — um post inteiro: imagem de cada slide, textos de cada slide e a legenda. Use para revisar o design antes de editar.',
+    run: async () => ({ label: 'Vi o criativo.', ok: true }),
+    exec: async (a) => {
+      const t = await target(a)
+      await follow(t, pickPost(t.set, a.post).id)
+      const post = pickPost(t.set, a.post)
+      return {
+        done: [],
+        data: { conjunto: t.set.id, nome: t.set.name, padrao_aprendido: t.set.styleRules ?? [], posts: t.set.posts.map((p, i) => ({ post: i + 1, nome: p.name, formato: p.format, slides: p.slides.length })), post: { nome: post.name, formato: post.format, legenda: post.caption ?? '', slides: slideTexts(post) } },
+        images: await previews(t.set, post),
       }
     },
   },
   {
     name: 'editar_criativo',
-    doc: '{"id":ID,"pedido":string,"post"?:number,"slide"?:number,"agente"?:AGENTE} — pede ao designer do app para mudar o design do criativo (textos, cores, layout, ordem, fotos novas por descrição). Seja específico no pedido. Feito pelo agente de criativos (o Codex por padrão): troca de bastão, a pessoa confirma. Devolve as imagens de como ficou.',
+    doc: '{"conjunto"?:string,"id"?:ID,"pedido":string,"post"?:number,"slide"?:number,"escopo"?:"selecao"|"post"|"conjunto","anexos"?:["anexo-1"],"referencias"?:[{"conjunto"?:string,"post":number|string}|{"projeto":string,"pagina"?:string}|{"case":"slug"|"todos"}],"agente"?:AGENTE} — pede ao designer do app para mudar o design de um post. Sem conjunto/post/slide vale o que está aberto e escolhido no editor (o componente ou o slide selecionado; "escopo":"post" para o post inteiro, "conjunto" para criar ou mudar vários posts) (textos, cores, layout, ordem, fotos novas por descrição). Seja específico. Com "referencias", posts de qualquer conjunto da conta e os cases da Avence vão como imagem para o designer ver (é o @ do editor: use quando o pedido citar outro post ou os cases). Com "anexos", as imagens que a pessoa colou vão como referência e podem entrar num slide. O padrão aprendido do conjunto vai junto. Feito pelo agente escolhido no chat, sem pedir confirmação.',
     handoff: handoffOf,
-    label: (a) => `Editar o criativo de "${known.get(String(a.id))?.title ?? 'um conteúdo'}": ${clip(String(a.pedido ?? ''), 140)}`,
+    label: (a) => `Editar ${a.conjunto ? `o conjunto "${a.conjunto}"` : a.id ? `o criativo de "${known.get(String(a.id))?.title ?? 'um conteúdo'}"` : `o criativo aberto${selectionLabel() ? ` (${selectionLabel()})` : ''}`}${a.post ? `, post ${a.post}` : ''}: ${clip(String(a.pedido ?? ''), 140)}`,
     run: async () => ({ label: 'Criativo editado.', ok: true }),
-    exec: async (a) => withIa(creativeAgent(a), async () => {
-      const { content, set, projectId } = await setOf(String(a.id))
-      const post = pickPost(set, a.post)
-      const n = typeof a.slide === 'number' ? a.slide : Number(a.slide)
-      const slide = Number.isFinite(n) && n >= 1 ? post.slides[n - 1] : undefined
-      const pedido = str(a.pedido, 3000)
-      if (!pedido) throw new Error('Diga o que mudar no criativo.')
-      const [{ requestEdit }, { applyOps }, { creativeImages }, { fillSetImages }] = await Promise.all([
-        import('@/features/criativos/ai'),
-        import('@/features/criativos/applyOps'),
-        import('@/features/crm/instagram'),
-        import('@/features/criativos/generate'),
-      ])
-      reportStep(`${agentName(creativeAgent(a))} editando o criativo`)
-      const images = await creativeImages(set, post.slides)
-      const fonts = [...new Set([set.brand.headingFont, set.brand.bodyFont, 'Inter', 'Inter Tight', 'Geist', 'Playfair Display', 'DM Sans', 'Manrope', 'Montserrat', 'Space Grotesk', 'Fraunces', 'Archivo'])]
-      const answer = await requestEdit({ message: pedido, scope: slide ? 'slide' : 'post', set, postId: post.id, slideId: slide?.id ?? post.slides[0]?.id, images, history: [], agent: creativeAgent(a), canGenerateImages: !!useCreativeLink.getState().images }, fonts)
-      const result = applyOps(set, answer.ops, { postId: post.id, slideId: slide?.id ?? post.slides[0]?.id })
-      let next = { ...result.set, updatedAt: Date.now() }
-      if (result.toGenerate.length && useCreativeLink.getState().providers.length) {
-        reportStep('Gerando as fotos')
-        next = (await fillSetImages(next, [post.id], { signal: AbortSignal.timeout(300_000) }).catch(() => ({ set: next }))).set
-      }
-      await saveSet(next)
-      await linkContent(content.id, 'criativos', next.id, projectId, await setHash(next)).catch(() => undefined)
-      const after = next.posts.find((p) => p.id === post.id) ?? post
-      return {
-        done: [{ label: `Criativo editado: ${content.title} (${result.applied} mudanças)`, ok: true, to: setPath(content, projectId) }],
-        data: { feito_por: agentName(creativeAgent(a)), designer: answer.reply, mudancas: result.applied, ignoradas: result.skipped, slides: slideTexts(after) },
-        images: await previews(next, after),
-      }
-    }),
+    exec: async (a) =>
+      withIa(creativeAgent(a), async () => {
+        const t = await target(a)
+        await follow(t, pickPost(t.set, a.post).id)
+        const post = pickPost(t.set, a.post)
+        const n = typeof a.slide === 'number' ? a.slide : Number(a.slide)
+        // Sem slide: o que está escolhido no editor (o componente, o slide), a não ser que o pedido seja o post inteiro
+        const sel = editorSelection(t.set.id, post.id)
+        const wide = a.escopo === 'post' || a.escopo === 'conjunto'
+        const slide = Number.isFinite(n) && n >= 1 ? post.slides[n - 1] : wide ? undefined : sel.slide
+        const layerIds = !wide && (!Number.isFinite(n) || slide?.id === sel.slide?.id) ? sel.layerIds : undefined
+        const pedido = str(a.pedido, 3000)
+        if (!pedido) throw new Error('Diga o que mudar no criativo.')
+        const who = creativeAgent(a)
+        reportStep(`${agentName(who)} editando o criativo`)
+        agentBegin(post, `${agentName(who)}: ${clip(pedido, 60)}`, who)
+        try {
+          agentPhase('thinking')
+          const att = await attachmentsFor(t.set, a.anexos)
+          const { next, answer, result } = await designEdit(att.set, post, pedido, { agent: who, slide, layerIds, scope: a.escopo === 'conjunto' ? 'set' : a.escopo === 'post' ? 'post' : undefined, attachments: att.list, references: await referencesFor(att.set, a.referencias) })
+          agentPhase('applying')
+          const after = next.posts.find((p) => p.id === post.id) ?? post
+          await persist(t, next, changedSlides(post, after), post.id)
+          return {
+            done: [{ label: `Criativo editado: ${t.title} (${result.applied} mudanças)`, ok: true, to: t.open }],
+            data: { feito_por: agentName(who), designer: answer.reply, mudancas: result.applied, ignoradas: result.skipped, slides: slideTexts(after) },
+            images: await previews(next, after),
+          }
+        } finally {
+          agentEnd()
+        }
+      }),
   },
   {
-    name: 'legenda',
-    doc: '{"id":ID,"post"?:number,"texto":string} — grava a legenda do post do criativo (o que vai no Instagram).',
-    run: async () => ({ label: 'Legenda gravada.', ok: true }),
-    exec: async (a) => {
-      const { content, set, projectId } = await setOf(String(a.id))
-      const post = pickPost(set, a.post)
-      const text = str(a.texto, 2200)
-      if (!text) throw new Error('Mande o texto da legenda.')
-      const next = { ...set, posts: set.posts.map((p) => (p.id === post.id ? { ...p, caption: text } : p)), updatedAt: Date.now() }
-      await saveSet(next)
-      await linkContent(content.id, 'criativos', next.id, projectId, await setHash(next)).catch(() => undefined)
-      return { done: [{ label: `Legenda gravada: ${content.title}`, ok: true, to: setPath(content, projectId) }] }
+    name: 'equipe_rapida',
+    doc: '{"tarefas":[{"papel":"texto"|"imagem"|"icones"|"layout"|"livre","pedido":string,"slide"?:number}],"conjunto"?:string,"id"?:ID,"post"?:number,"projeto"?:string} — divide o pedido em 2 a 4 tarefas pequenas que rodam AO MESMO TEMPO, cada uma com o seu agente, cursor e cor na tela e um minichat próprio no chat. Use para pedidos com várias partes, para entregar rápido em partes menores. Num criativo (o aberto no editor, ou "conjunto"/"id" + "post"): "texto" reescreve e ajusta os textos, "imagem" gera ou trata a foto principal, "icones" põe ícones (biblioteca de ícones, PNG na cor pedida), "layout" mexe em posição, tamanho, cores e fundo, "livre" faz outra parte. Cada faixa só muda a parte dela (o que uma muda a outra não desfaz). Num projeto de site (o aberto no Space, ou "projeto"): cada tarefa é uma faixa com o próprio agente no canvas; dê a cada uma partes diferentes da página (seções diferentes) e use "livre". Começa na hora; o resultado volta numa nova mensagem.',
+    handoff: handoffOf,
+    label: (a) => `Equipe rápida: ${Array.isArray(a.tarefas) ? (a.tarefas as { papel?: string }[]).map((t) => t.papel ?? 'tarefa').join(', ') : ''}`,
+    run: async () => ({ label: 'Equipe montada.', ok: true }),
+  },
+  {
+    name: 'controlar_trabalho',
+    doc: '{"acao":"pausar"|"continuar"|"parar"} — pausa, continua ou para o trabalho longo em andamento na tela (criativos, equipe de agentes). Pausar: o passo que está rodando termina e o próximo espera. Parar: cancela na hora; o que já ficou pronto fica salvo. Use quando a pessoa pedir para pausar, esperar, seguir ou cancelar uma entrega.',
+    label: (a) => `${String(a.acao ?? '')} o trabalho`,
+    run: async (a) => {
+      const { pauseWork, resumeWork, stopWork, useWork } = await import('@/features/ia/work')
+      const { running, label } = useWork.getState()
+      if (!running) return { label: 'Não há trabalho em andamento para controlar.', ok: false }
+      const ok = a.acao === 'parar' ? stopWork() : a.acao === 'continuar' ? resumeWork() : pauseWork()
+      const verb = a.acao === 'parar' ? 'Parado' : a.acao === 'continuar' ? 'Seguindo' : 'Pausado'
+      return { label: ok ? `${verb}: ${label ?? 'o trabalho'}` : 'Nada mudou (o trabalho já estava assim).', ok }
     },
   },
   {
+    name: 'tratar_imagem',
+    doc: '{"conjunto"?:string,"id"?:ID,"post"?:number,"slide"?:number,"camada"?:number|string,"pedido":string,"recorte"?:boolean,"agente"?:AGENTE} — trata os pixels de uma foto que JÁ está no criativo, mantendo a mesma foto: recortar (tirar o fundo, "recorte":true devolve PNG transparente com bordas limpas), melhorar um recorte mal feito, trocar a cor de um objeto ou do fundo, corrigir luz, nitidez, tirar um elemento, retocar. Sem post/slide/camada vale a imagem escolhida no editor (ou a maior foto do slide escolhido). "camada" = número da imagem no slide (1 = a primeira) ou o nome. A original fica no conjunto (desfazer volta). Use esta ação, não editar_criativo, sempre que o pedido for sobre a própria foto.',
+    handoff: handoffOf,
+    label: (a) => `${a.recorte ? 'Recortar' : 'Tratar'} a foto${selectionLabel() && !a.post ? ` (${selectionLabel()})` : a.post ? ` do post ${a.post}` : ''}: ${clip(String(a.pedido ?? ''), 140)}`,
+    run: async () => ({ label: 'Foto tratada.', ok: true }),
+    exec: async (a) => {
+      const t = await target(a)
+      await follow(t, pickPost(t.set, a.post).id)
+      const post = pickPost(t.set, a.post)
+      const pedido = str(a.pedido, 2000)
+      if (!pedido) throw new Error('Diga o que mudar na foto.')
+      const recorte = a.recorte === true
+      // Qual imagem: a camada pedida, a escolhida no editor, ou a maior foto do slide
+      const n = typeof a.slide === 'number' ? a.slide : Number(a.slide)
+      const sel = editorSelection(t.set.id, post.id)
+      const slide = (Number.isFinite(n) && n >= 1 ? post.slides[n - 1] : sel.slide) ?? post.slides.find((sl) => sl.layers.some((l) => l.type === 'image' && l.src)) ?? post.slides[0]
+      if (!slide) throw new Error('Esse post não tem slides.')
+      const photos = slide.layers.filter((l): l is ImageLayer => l.type === 'image' && !!l.src)
+      const byArg = typeof a.camada === 'number' || /^\d+$/.test(String(a.camada ?? '')) ? photos[Number(a.camada) - 1] : typeof a.camada === 'string' ? photos.find((l) => (l.name ?? '').toLowerCase().includes(String(a.camada).toLowerCase())) : undefined
+      const picked = photos.find((l) => sel.slide?.id === slide.id && sel.layerIds?.includes(l.id))
+      const layer = byArg ?? picked ?? [...photos].sort((x, y) => y.w * y.h - x.w * x.h)[0]
+      if (!layer) throw new Error(`O slide ${post.slides.indexOf(slide) + 1} não tem foto para tratar.`)
+
+      const { useCreativeLink: link, imageProviderChoice, callAiQuiet } = await import('@/features/criativos/link')
+      const providers = link.getState().providers
+      if (!providers.length) throw new Error('Nenhum serviço de imagem pronto neste computador: entre no Codex ou guarde uma chave do OpenAI ou do Google em Criativos.')
+      // Recorte sai melhor pelo OpenAI (fundo transparente de verdade) quando houver chave
+      const provider = recorte && providers.includes('openai') ? 'openai' : imageProviderChoice()
+
+      reportStep('Lendo a foto')
+      agentBegin(post, `Tratando a foto: ${clip(pedido, 50)}`, creativeAgent(a))
+      try {
+        agentPhase('thinking')
+        const { creativeImages } = await import('@/features/crm/instagram')
+        const img = (await creativeImages(t.set, [{ ...slide, layers: [layer] }])).get(layer.src)
+        if (!img) throw new Error('Não consegui abrir a foto original.')
+        const k = Math.min(1, 1536 / Math.max(img.width, img.height))
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.max(1, Math.round(img.width * k))
+        canvas.height = Math.max(1, Math.round(img.height * k))
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+        const source = canvas.toDataURL('image/png')
+        const r = canvas.width / canvas.height
+        const ratio = r > 1.15 ? 'landscape' : r < 0.87 ? 'portrait' : 'square'
+        reportStep(recorte ? 'Recortando a foto' : 'Tratando a foto')
+        const out = await callAiQuiet<{ data: string; model?: string }>('image', { prompt: `${pedido}${recorte ? '\nRemova todo o fundo: só o assunto principal, com bordas precisas.' : ''}`, ratio, provider, references: [source], edit: true, transparent: recorte }, new AbortController().signal)
+
+        // O fundo saiu mesmo transparente? (o serviço pode ignorar o pedido)
+        let alpha = false
+        if (recorte) {
+          const check = new Image()
+          check.src = out.data
+          await check.decode()
+          const c = document.createElement('canvas')
+          c.width = 64
+          c.height = 64
+          const ctx = c.getContext('2d')!
+          ctx.drawImage(check, 0, 0, 64, 64)
+          const px = ctx.getImageData(0, 0, 64, 64).data
+          let clear = 0
+          for (let i = 3; i < px.length; i += 4) if (px[i] < 16) clear++
+          alpha = clear > 64 * 64 * 0.05
+        }
+
+        agentPhase('applying')
+        const blob = await (await fetch(out.data)).blob()
+        const asset = await uploadAsset(t.set, blob, recorte ? 'foto-recortada.png' : 'foto-tratada.png')
+        const next: CreativeSet = {
+          ...t.set,
+          assets: [...t.set.assets, asset],
+          posts: t.set.posts.map((p) =>
+            p.id !== post.id
+              ? p
+              : { ...p, slides: p.slides.map((sl) => (sl.id !== slide.id ? sl : { ...sl, layers: sl.layers.map((l) => (l.id === layer.id ? ({ ...l, src: `asset:${asset.id}`, ...(recorte && alpha ? { fit: 'contain' } : {}) } as ImageLayer) : l)) })) }
+          ),
+        }
+        await persist(t, next, [slide.id], post.id)
+        const after = next.posts.find((p) => p.id === post.id) ?? post
+        const warn = recorte && !alpha ? ' O serviço de imagens devolveu a foto ainda com fundo (não transparente).' : ''
+        return {
+          done: [{ label: `Foto ${recorte ? 'recortada' : 'tratada'}: slide ${post.slides.indexOf(slide) + 1} de "${post.name}"${warn}`, ok: !warn, to: t.open }],
+          data: { servico: out.model ?? provider, fundo_transparente: recorte ? alpha : undefined, aviso: warn || undefined, original_guardada: true },
+          images: [{ name: 'foto-tratada.png', data: out.data }, ...(await previews(next, after)).slice(post.slides.indexOf(slide), post.slides.indexOf(slide) + 1)],
+        }
+      } finally {
+        agentEnd()
+      }
+    },
+  },
+  {
+    name: 'buscar_icones',
+    doc: '{"busca"?:string} — a biblioteca de ícones dos criativos: os 30 ícones da casa (os mesmos do cadastro dos formulários) e o Lucide inteiro (~1.500 ícones de traço). Sem busca devolve os da casa; com busca ("entrega, calendário, whatsapp", português ou inglês) devolve os nomes que combinam. Use antes de inserir_icones quando não souber o nome.',
+    run: async () => ({ label: 'Busquei ícones.', ok: true }),
+    exec: async (a) => {
+      const { FORM_ICONS, searchIcons } = await import('@/features/criativos/icons')
+      const busca = str(a.busca, 200) ?? ''
+      const found = await searchIcons(busca, 40)
+      return { done: [], data: { da_casa: FORM_ICONS, ...(busca ? { busca, encontrados: found } : {}), observacao: 'Os da casa são os mesmos dos formulários; qualquer nome do Lucide funciona em inserir_icones.' } }
+    },
+  },
+  {
+    name: 'inserir_icones',
+    doc: '{"conjunto"?:string,"id"?:ID,"post"?:number,"slide"?:number,"icones":[{"nome":string,"x":number,"y":number,"tamanho"?:number,"cor"?:"#rrggbb","traco"?:number}]} — põe ícones de traço num slide, cada um como camada de imagem "Ícone <nome>" (PNG na cor pedida; sem cor, a primeira da marca). x/y/tamanho em px do slide (veja o tamanho e as camadas em ver_criativo). Nomes de buscar_icones (os da casa = os dos formulários, ou qualquer um do Lucide). Até 12 por vez. Sem post/slide vale o slide escolhido no editor. Alinhe aos títulos e itens de lista, sem cobrir texto nem foto.',
+    label: (a) => `Pôr ${Array.isArray(a.icones) ? a.icones.length : ''} ícone(s) no criativo`,
+    run: async () => ({ label: 'Ícones no criativo.', ok: true }),
+    exec: async (a) => {
+      const { iconPng } = await import('@/features/criativos/icons')
+      const t = await target(a)
+      await follow(t, pickPost(t.set, a.post).id)
+      const post = pickPost(t.set, a.post)
+      const n = typeof a.slide === 'number' ? a.slide : Number(a.slide)
+      const sel = editorSelection(t.set.id, post.id)
+      const slide = (Number.isFinite(n) && n >= 1 ? post.slides[n - 1] : sel.slide) ?? post.slides[0]
+      if (!slide) throw new Error('Esse post não tem slides.')
+      const list = (Array.isArray(a.icones) ? a.icones : []).slice(0, 12) as { nome?: unknown; x?: unknown; y?: unknown; tamanho?: unknown; cor?: unknown; traco?: unknown }[]
+      if (!list.length) throw new Error('Diga quais ícones pôr ("icones":[{"nome","x","y"}]). Os nomes estão em buscar_icones.')
+      const brand = t.set.brand.colors[0]?.hex || '#111111'
+      reportStep(`Desenhando ${list.length} ícone(s)`)
+      const layers: ImageLayer[] = []
+      const assets = []
+      const missing: string[] = []
+      for (const ic of list) {
+        const name = String(ic.nome ?? '').trim().toLowerCase()
+        const size = Math.max(16, Math.min(600, Number(ic.tamanho) || 72))
+        const color = typeof ic.cor === 'string' && /^#[0-9a-f]{6}$/i.test(ic.cor) ? ic.cor : brand
+        const stroke = Math.max(0.75, Math.min(3, Number(ic.traco) || 1.75))
+        const blob = await iconPng(name, color, size, stroke).catch(() => undefined)
+        if (!blob) {
+          missing.push(name)
+          continue
+        }
+        const asset = await uploadAsset(t.set, blob, `icone-${name}.png`)
+        assets.push(asset)
+        layers.push({ id: uid(), type: 'image', name: `Ícone ${name}`, x: Math.round(Number(ic.x) || 0), y: Math.round(Number(ic.y) || 0), w: size, h: size, src: `asset:${asset.id}`, fit: 'contain', radius: 0, frame: 'none' } as ImageLayer)
+      }
+      if (!layers.length) throw new Error(`Nenhum desses ícones existe: ${missing.join(', ')}. Use buscar_icones.`)
+      const next: CreativeSet = {
+        ...t.set,
+        assets: [...t.set.assets, ...assets],
+        posts: t.set.posts.map((p) => (p.id !== post.id ? p : { ...p, slides: p.slides.map((sl) => (sl.id !== slide.id ? sl : { ...sl, layers: [...sl.layers, ...layers] })) })),
+      }
+      await persist(t, next, [slide.id], post.id)
+      const after = next.posts.find((p) => p.id === post.id) ?? post
+      const i = post.slides.indexOf(slide)
+      return {
+        done: [{ label: `${layers.length} ícone(s) no slide ${i + 1} de "${post.name}"${missing.length ? ` (não existem: ${missing.join(', ')})` : ''}`, ok: true, to: t.open }],
+        data: { inseridos: layers.map((l) => l.name), nao_encontrados: missing.length ? missing : undefined },
+        images: (await previews(next, after)).slice(i, i + 1),
+      }
+    },
+  },
+  {
+    name: 'criar_parecidos',
+    doc: '{"conjunto"?:string,"id"?:ID,"post":number,"pedidos":[string],"referencias"?:[{"conjunto"?:string,"post":number|string}|{"projeto":string,"pagina"?:string}|{"case":"slug"|"todos"}],"agente"?:AGENTE} — reproduz um post de exemplo: para cada pedido (o tema ou o texto do post novo) cria uma cópia fiel do exemplo, logo depois dele no conjunto, com o mesmo layout, fontes, cores e estilo, e o designer troca só os textos e as fotos. Até 6 por vez. Feito pelo agente escolhido no chat.',
+    handoff: handoffOf,
+    label: (a) => `Criar ${Array.isArray(a.pedidos) ? a.pedidos.length : 1} post(s) no padrão do post ${a.post ?? 1}${a.conjunto ? ` de "${a.conjunto}"` : ''}`,
+    run: async () => ({ label: 'Posts criados.', ok: true }),
+    exec: async (a) =>
+      withIa(creativeAgent(a), async () => {
+        const t = await target(a)
+        const refs = await referencesFor(t.set, a.referencias)
+        await follow(t, pickPost(t.set, a.post).id)
+        const example = pickPost(t.set, a.post)
+        const pedidos = (Array.isArray(a.pedidos) ? a.pedidos : [a.pedidos]).map((x) => str(x, 1500)).filter((x): x is string => !!x).slice(0, 6)
+        if (!pedidos.length) throw new Error('Diga o tema de cada post novo em "pedidos".')
+        const who = creativeAgent(a)
+        let cur = t.set
+        const made: Post[] = []
+        try {
+          for (const [i, pedido] of pedidos.entries()) {
+            reportStep(`${agentName(who)}: post ${i + 1} de ${pedidos.length}`)
+            const clone = clonePost(example, `${example.name} · ${pedido.split(/[.:\n]/)[0].slice(0, 40)}`)
+            const at = cur.posts.findIndex((p) => p.id === example.id) + 1 + made.length
+            cur = { ...cur, posts: [...cur.posts.slice(0, at), clone, ...cur.posts.slice(at)] }
+            // A cópia aparece na hora no canvas; depois o agente reescreve em cima dela
+            await persist(t, cur, [], clone.id)
+            agentBegin(clone, `${agentName(who)}: ${clip(pedido, 60)}`, who)
+            agentPhase('thinking')
+            const message = `Este post é uma cópia exata do post de exemplo "${example.name}". Mantenha o design igual: a mesma quantidade e ordem de slides, as mesmas camadas nas mesmas posições e tamanhos, as mesmas fontes, cores, pesos e estilo das fotos. Troque só os textos (e a descrição das fotos, quando houver) para este novo post: ${pedido}\nCada texto novo deve ter tamanho parecido com o do exemplo, para caber no mesmo layout. Escreva também a legenda do post.`
+            const { next } = await designEdit(cur, clone, message, { agent: who, references: refs })
+            agentPhase('applying')
+            cur = next
+            const done = cur.posts.find((p) => p.id === clone.id) ?? clone
+            await persist(t, cur, done.slides.map((sl) => sl.id), clone.id)
+            made.push(done)
+          }
+        } finally {
+          agentEnd()
+        }
+        const images = (await Promise.all(made.map((p) => previews(cur, { ...p, slides: p.slides.slice(0, 2) }, 360)))).flat().slice(0, 10)
+        return {
+          done: [{ label: `${made.length} post(s) novo(s) no padrão de "${example.name}"`, ok: true, to: t.open }],
+          data: { feito_por: agentName(who), exemplo: example.name, novos: made.map((p) => ({ post: cur.posts.findIndex((x) => x.id === p.id) + 1, nome: p.name, slides: slideTexts(p) })) },
+          images,
+        }
+      }),
+  },
+  {
+    name: 'aplicar_design',
+    doc: '{"de":{"conjunto"?:string,"post":number|string}|{"projeto":string,"pagina":string},"conjunto"?:string,"id"?:ID,"posts"?:[number],"pedido"?:string,"agente"?:AGENTE} — reaplica o design de uma referência (um post de qualquer conjunto da conta, ou uma página de um projeto do Space) em posts de outro conjunto: o designer refaz cada post no layout, na hierarquia, no ritmo e no estilo da referência, mantendo os textos, as fotos e a marca do conjunto de destino. Sem "posts", vale o post escolhido no editor (ou o primeiro). Até 6 posts. Feito pelo agente escolhido no chat.',
+    handoff: handoffOf,
+    label: (a) => {
+      const de = (a.de ?? {}) as Record<string, unknown>
+      const from = de.projeto ? `da página ${de.pagina ?? ''} de ${de.projeto}` : `do post ${de.post ?? ''}${de.conjunto ? ` de "${de.conjunto}"` : ''}`
+      const n = Array.isArray(a.posts) ? a.posts.length : 1
+      return `Reaplicar o design ${from} em ${n} post${n > 1 ? 's' : ''}${a.conjunto ? ` de "${a.conjunto}"` : ' do conjunto aberto'}`
+    },
+    run: async () => ({ label: 'Design reaplicado.', ok: true }),
+    exec: async (a) =>
+      withIa(creativeAgent(a), async () => {
+        const t = await target(a)
+        await follow(t, pickPost(t.set, Array.isArray(a.posts) ? a.posts[0] : undefined).id)
+        const refs = await referencesFor(t.set, [a.de])
+        if (!refs.length) throw new Error('Não achei a referência: diga {"de":{"conjunto","post"}} ou {"de":{"projeto","pagina"}}.')
+        const posts = (Array.isArray(a.posts) && a.posts.length ? a.posts.map((n) => pickPost(t.set, n)) : [pickPost(t.set, undefined)]).slice(0, 6)
+        const who = creativeAgent(a)
+        const extra = str(a.pedido, 1500)
+        let cur = t.set
+        const changed: Post[] = []
+        try {
+          for (const [i, post] of posts.entries()) {
+            reportStep(`${agentName(who)}: reaplicando o design no post ${i + 1} de ${posts.length}`)
+            agentBegin(post, `${agentName(who)}: design da referência`, who)
+            agentPhase('thinking')
+            const live = cur.posts.find((p) => p.id === post.id) ?? post
+            const message = `Refaça o design deste post inteiro (todos os slides) seguindo a referência marcada: o mesmo layout, a hierarquia, o ritmo entre os slides, o tamanho e o peso dos títulos, o uso de fotos e molduras, as margens e o estilo. Mantenha os textos, as fotos e a marca (cores, fontes e logo) deste conjunto; não copie textos, logo nem cores de outra empresa. Se a referência for uma página, traduza as seções dela para slides deste formato.${extra ? `\nPedido da pessoa: ${extra}` : ''}`
+            const { next } = await designEdit(cur, live, message, { agent: who, scope: 'post', references: refs })
+            agentPhase('applying')
+            const after = next.posts.find((p) => p.id === post.id) ?? live
+            await persist(t, next, changedSlides(live, after), post.id)
+            cur = next
+            changed.push(after)
+          }
+        } finally {
+          agentEnd()
+        }
+        return {
+          done: [{ label: `Design reaplicado em ${changed.length} post${changed.length > 1 ? 's' : ''} de ${t.title}`, ok: true, to: t.open }],
+          data: { feito_por: agentName(who), referencia: refs.map((r) => r.label), posts: changed.map((p) => ({ nome: p.name, slides: slideTexts(p) })) },
+          images: changed[0] ? await previews(cur, changed[0]) : [],
+        }
+      }),
+  },
+  {
+    name: 'criar_de_referencia',
+    doc: '{"conjunto"?:string,"id"?:ID,"anexo":"anexo-1","pedido":string,"formato"?:"4x5"|"1x1"|"9x16","referencias"?:[{"conjunto"?:string,"post":number|string}|{"projeto":string,"pagina"?:string}|{"case":"slug"|"todos"}],"agente"?:AGENTE} — cria UM post novo no conjunto reproduzindo o layout, a hierarquia e o estilo de uma imagem que a pessoa anexou (um post de outro perfil, um print), na marca do conjunto e com o conteúdo do pedido. Feito pelo agente escolhido no chat.',
+    handoff: handoffOf,
+    label: (a) => `Criar um post a partir do ${a.anexo ?? 'anexo'}: ${clip(String(a.pedido ?? ''), 120)}`,
+    run: async () => ({ label: 'Post criado.', ok: true }),
+    exec: async (a) =>
+      withIa(creativeAgent(a), async () => {
+        const t = await target(a)
+        await follow(t)
+        const pedido = str(a.pedido, 2000)
+        if (!pedido) throw new Error('Diga o conteúdo do post novo.')
+        const att = await attachmentsFor(t.set, a.anexo)
+        const base = t.set.posts[0]
+        if (!base) throw new Error('O conjunto está vazio: crie um post nele antes.')
+        const before = new Set(att.set.posts.map((p) => p.id))
+        agentBegin(base, `${agentName(creativeAgent(a))}: post da referência`, creativeAgent(a))
+        agentPhase('thinking')
+        const message = `Crie UM post novo neste conjunto (add_post), formato ${typeof a.formato === 'string' ? a.formato : base.format}, reproduzindo o layout, a hierarquia, as proporções e o estilo da imagem anexada (${att.list[0]?.name}), mas nas cores, fontes e marca deste conjunto. Não copie logos, nomes nem textos de outra empresa. Conteúdo do post: ${pedido}. Escreva a legenda.`
+        let next: CreativeSet
+        try {
+          ;({ next } = await designEdit(att.set, base, message, { agent: creativeAgent(a), scope: 'set', attachments: att.list, references: await referencesFor(att.set, a.referencias) }))
+        } finally {
+          agentEnd()
+        }
+        const created = next.posts.filter((p) => !before.has(p.id))
+        await persist(t, next, created.flatMap((p) => p.slides.map((sl) => sl.id)), created[0]?.id)
+        return {
+          done: [{ label: created.length ? `Post novo a partir da referência: ${created[0].name}` : 'O designer não criou o post.', ok: created.length > 0, to: t.open }],
+          data: { feito_por: agentName(creativeAgent(a)), novos: created.map((p) => ({ post: next.posts.findIndex((x) => x.id === p.id) + 1, nome: p.name, slides: slideTexts(p) })) },
+          images: created[0] ? await previews(next, created[0], 480) : undefined,
+        }
+      }),
+  },
+  {
+    name: 'aprender_padrao',
+    doc: '{"conjunto"?:string,"id"?:ID,"regras":[string],"remover"?:[string]} — grava no conjunto as regras do padrão visual que a pessoa ensinou (frases curtas e gerais, que valem para os próximos posts: "título em no máximo duas linhas", "foto sempre ocupa a metade de cima"). Elas vão em toda edição deste conjunto, no editor e por você.',
+    run: async () => ({ label: 'Padrão gravado.', ok: true }),
+    exec: async (a) => {
+      const t = await target(a)
+      const add = (Array.isArray(a.regras) ? a.regras : [a.regras]).map((x) => str(x, 200)).filter((x): x is string => !!x)
+      const drop = new Set((Array.isArray(a.remover) ? a.remover : []).map((x) => String(x).trim().toLowerCase()))
+      const rules = [...(t.set.styleRules ?? []).filter((r) => !drop.has(r.toLowerCase())), ...add]
+      const unique = rules.filter((r, i) => rules.findIndex((x) => x.toLowerCase() === r.toLowerCase()) === i).slice(-30)
+      await persist(t, { ...t.set, styleRules: unique, updatedAt: Date.now() })
+      return { done: add.map((r) => ({ label: `Aprendi: ${r}`, ok: true })), data: { padrao_aprendido: unique } }
+    },
+  },
+  {
+    name: 'legenda',
+    doc: '{"conjunto"?:string,"id"?:ID,"post"?:number,"texto":string} — grava a legenda do post (o que vai no Instagram).',
+    run: async () => ({ label: 'Legenda gravada.', ok: true }),
+    exec: async (a) => {
+      const t = await target(a)
+      const post = pickPost(t.set, a.post)
+      const text = str(a.texto, 2200)
+      if (!text) throw new Error('Mande o texto da legenda.')
+      await persist(t, { ...t.set, posts: t.set.posts.map((p) => (p.id === post.id ? { ...p, caption: text } : p)), updatedAt: Date.now() })
+      return { done: [{ label: `Legenda gravada: ${t.title}`, ok: true, to: t.open }] }
+    },
+  },
+  {
+    name: 'orquestrar_criativo',
+    doc: '{"conjunto"?:string,"id"?:ID,"briefing":string,"exemplo"?:number,"slides"?:number,"formato"?:"4x5"|"1x1"|"9x16","fotos"?:boolean,"objeto3d"?:string} — monta uma equipe de agentes para um criativo completo: redator (roteiro e legenda), fotos e objeto 3D em paralelo (serviço de imagens), designer (layout na marca, copiando o post "exemplo" quando houver), e um revisor de IA que confere cada parte e manda refazer o que estiver fraco (recorte, nitidez, texto cortado, contraste). A pessoa aprova o post no fim. Use para pedidos de criativo novo e caprichado. A pessoa confirma o início.',
+    risky: true,
+    label: (a) => `Montar a equipe para: ${clip(String(a.briefing ?? ''), 140)}`,
+    run: async () => ({ label: 'Equipe montada.', ok: true }),
+  },
+  {
     name: 'consultar_agente',
-    doc: '{"agente":AGENTE,"pedido":string,"id"?:ID,"post"?:number} — passa uma tarefa de texto ou de olhar a outro agente desta máquina (por exemplo o Codex para roteiro de criativo, conceito visual ou crítica de design). Com "id", ele recebe as imagens dos slides do criativo. Troca de bastão: a pessoa confirma; quando ele responder, você recebe a resposta.',
+    doc: '{"agente":AGENTE,"pedido":string,"id"?:ID,"post"?:number} — passa uma tarefa de texto ou de olhar a outro agente desta máquina (por exemplo o Codex para roteiro de criativo, conceito visual ou crítica de design). Com "id", ele recebe as imagens dos slides do criativo. Só para um agente diferente do seu, quando ele for claramente melhor nisso: vira um cartão para a pessoa decidir (diga o "motivo"); quando ele responder, você recebe a resposta.',
     handoff: (a) => {
       const who = validAgent(a.agente)
-      return who && who !== IARA_ENGINE ? who : undefined
+      return who && who !== chatAgent() ? who : undefined
     },
     label: (a) => clip(String(a.pedido ?? ''), 160),
     run: async () => ({ label: 'Agente respondeu.', ok: true }),
@@ -529,3 +1221,7 @@ export const catalog = () =>
   `AGENTE = ${localAgents().join(' | ') || 'claude'}\nFORMATO = ${CONTENT_FORMATS.map((f) => f.id).join(' | ')}\nCANAL = ${CHANNELS.map((c) => c.id).join(' | ')}\nETAPA = ${ETAPAS}\nID = o id de um conteúdo\n${allActions()
     .map((a) => `- ${a.name}${isRisky(a, {}) || typeof a.risky === 'function' ? ' (pede confirmação)' : ''}: ${a.doc}`)
     .join('\n')}`
+
+/** O que a equipe rápida (`squad.ts`) usa daqui. */
+export { target as squadTarget, follow as squadFollow, persist as squadPersist, pickPost as squadPickPost, previews as squadPreviews, designEdit as squadDesignEdit }
+export type { Target as SquadTarget }

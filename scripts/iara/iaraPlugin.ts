@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto'
+import { mkdirSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import type { Plugin, ViteDevServer } from 'vite'
 import { findBin, kill, launch } from '../space/chatPlugin'
 import { bridgeAddress } from '../space/vitePlugin'
+import { ACTION_LABEL } from './labels'
 
 /**
  * A Iara agente (2026-11-05). O usuário: "a ia está limitada, não conseguimos gerar criativos,
@@ -28,31 +31,26 @@ interface SendPayload {
   text?: string
   system?: string
   resume?: string
+  /** `rapida` (padrão): modelo rápido e pouco esforço; `caprichada`: o modelo mais forte, mais esforço. */
+  mode?: 'rapida' | 'caprichada'
+  /** Imagens que a pessoa anexou nesta mensagem (data URL JPEG/PNG/WebP). */
+  images?: string[]
 }
 
-const ACTION_LABEL: Record<string, string> = {
-  acoes: 'Vendo o que posso fazer',
-  listar_conteudos: 'Lendo os conteúdos',
-  ler_conteudo: 'Lendo o conteúdo',
-  criar_ideias: 'Criando ideias',
-  editar_conteudo: 'Escrevendo o texto',
-  agendar: 'Organizando a pauta',
-  aprovar_ideias: 'Preparando a aprovação das ideias',
-  aprovar_conteudos: 'Preparando a aprovação',
-  descartar: 'Preparando o descarte',
-  produzir_criativo: 'Preparando a troca de bastão (criativo)',
-  ver_criativo: 'Olhando o criativo',
-  editar_criativo: 'Preparando a troca de bastão (edição)',
-  legenda: 'Escrevendo a legenda',
-  ler_dados: 'Lendo os números',
-  abrir_tela: 'Abrindo a tela',
-  abrir_peca: 'Abrindo a peça',
-  mostrar: 'Mudando a visão da pauta',
-  enviar_cliente: 'Preparando o envio ao cliente',
-  consultar_agente: 'Preparando a troca de bastão',
-  sugerir_melhoria: 'Escrevendo a sugestão para o time de produto',
-  minhas_sugestoes: 'Lendo suas sugestões',
-}
+const MAX_IMAGES = 6
+const IMAGE = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/
+
+/**
+ * Velocidade (2026-11-05, o usuário: "o agente demora muito pra responder"). A Iara conduz a
+ * conversa e chama ações; o trabalho pesado (criativos) vai ao Codex. Então, por padrão, o modelo
+ * rápido com pouco esforço (`IARA_MODEL`/`IARA_EFFORT` mudam) e sem a busca de ferramentas do
+ * Claude Code (as da Iara vão direto, sem a volta extra do ToolSearch).
+ */
+const MODES = {
+  rapida: { model: process.env.IARA_MODEL ?? 'sonnet', effort: process.env.IARA_EFFORT ?? 'low' },
+  caprichada: { model: process.env.IARA_MODEL_CAPRICHADA ?? 'opus', effort: 'high' },
+} as const
+
 
 const short = (s: string, n = 80) => (s.length > n ? `${s.slice(0, n)}…` : s)
 
@@ -100,7 +98,8 @@ export function iara(): Plugin {
         const bin = findBin('claude')
         if (!bin) return emit({ id, type: 'error', text: 'O Claude Code não foi encontrado nesta máquina.' })
 
-        const env: NodeJS.ProcessEnv = { ...process.env, SPACE_AGENT: 'Iara', SPACE_SESSION: `iara-${id}`, NO_COLOR: '1', FORCE_COLOR: '0' }
+        const env: NodeJS.ProcessEnv = { ...process.env, SPACE_AGENT: 'Iara', SPACE_SESSION: `iara-${id}`, NO_COLOR: '1', FORCE_COLOR: '0', ENABLE_TOOL_SEARCH: 'false' }
+        const mode = MODES[payload.mode === 'caprichada' ? 'caprichada' : 'rapida']
         const bridge = bridgeAddress()
         if (bridge) Object.assign(env, { SPACE_BRIDGE_URL: bridge.url, SPACE_BRIDGE_TOKEN: bridge.token })
         for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT', 'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'SPACE_PROJECT']) delete env[k]
@@ -110,11 +109,19 @@ export function iara(): Plugin {
             iara: { command: process.execPath, args: [path.join(root, 'scripts/iara/iara-mcp.mjs')], env: { SPACE_BRIDGE_URL: String(env.SPACE_BRIDGE_URL ?? ''), SPACE_BRIDGE_TOKEN: String(env.SPACE_BRIDGE_TOKEN ?? ''), SPACE_SESSION: String(env.SPACE_SESSION) } },
           },
         }
+        // Com imagens, o pedido vai como mensagem stream-json: texto e imagens no mesmo turno
+        const images = (Array.isArray(payload.images) ? payload.images : [])
+          .map((d) => IMAGE.exec(String(d)))
+          .filter((m): m is RegExpExecArray => !!m)
+          .slice(0, MAX_IMAGES)
         const resume = typeof payload.resume === 'string' && /^[\w-]{8,80}$/.test(payload.resume) ? payload.resume : undefined
         const args = [
           '-p',
           '--output-format', 'stream-json',
           '--verbose',
+          ...(images.length ? ['--input-format', 'stream-json'] : []),
+          '--model', mode.model,
+          '--effort', mode.effort,
           '--permission-mode', 'acceptEdits',
           '--strict-mcp-config',
           '--mcp-config', JSON.stringify(mcp),
@@ -124,9 +131,13 @@ export function iara(): Plugin {
           ...(resume ? ['--resume', resume] : []),
         ]
 
+        // Pasta vazia, fora do projeto: na raiz do repositório o Claude Code carregava o CLAUDE.md e o
+        // AGENTS.md inteiros a cada mensagem (centenas de KB), o que fazia a Iara demorar para começar.
+        const work = path.join(os.tmpdir(), 'superelements-iara')
+        mkdirSync(work, { recursive: true })
         let child: ChildProcess
         try {
-          child = launch(bin, args, { cwd: root, env })
+          child = launch(bin, args, { cwd: work, env })
         } catch (error) {
           return emit({ id, type: 'error', text: `Não consegui abrir o Claude Code: ${error instanceof Error ? error.message : String(error)}` })
         }
@@ -139,7 +150,10 @@ export function iara(): Plugin {
           }, TIMEOUT),
         }
         runs.set(id, run)
-        child.stdin?.end(text)
+        if (images.length) {
+          const content = [{ type: 'text', text }, ...images.map((m) => ({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }))]
+          child.stdin?.end(`${JSON.stringify({ type: 'user', message: { role: 'user', content } })}\n`)
+        } else child.stdin?.end(text)
 
         let buffer = ''
         let finished = false

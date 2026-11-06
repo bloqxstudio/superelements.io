@@ -51,4 +51,8 @@ export interface CreativeImageRequest {
   ratio: 'square' | 'portrait' | 'landscape'
   /** Imagens de referência (data URLs, até 4): o Codex segue a forma do que elas mostram. */
   references?: string[]
+  /** Tratar a primeira referência (recorte, cores, luz, retoque) em vez de criar uma foto nova. */
+  edit?: boolean
+  /** PNG com fundo transparente (recorte). */
+  transparent?: boolean
 }

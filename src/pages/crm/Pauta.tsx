@@ -336,12 +336,16 @@ const Pauta: React.FC = () => {
       ? {
           id: 'pauta',
           title: `Pauta · ${view === 'mes' ? monthTitle(anchor) : rangeLabel(range.from, range.to)}`,
+          selection: () => {
+            const c = openId ? data.contents.find((x) => x.id === openId) : undefined
+            return c ? `Peça: ${c.title}` : ''
+          },
           describe: () =>
             [
               `Visão: ${view === 'mes' ? 'mês' : 'semana'} de ${range.from} a ${range.to}.`,
               stageFilter ? `Filtro de etapa: ${STAGE_LABEL[stageFilter]}.` : '',
               channelFilter ? `Filtro de canal: ${channelFilter}.` : '',
-              openId ? `Peça aberta no painel: id ${openId}.` : '',
+              openId ? `Peça aberta no painel (é "esta peça", "isto"): id ${openId}${data.contents.find((c) => c.id === openId) ? `, "${data.contents.find((c) => c.id === openId)!.title}", etapa ${STAGE_LABEL[stageOf(data.contents.find((c) => c.id === openId)!)]}` : ''}. Para mudar o texto, a data ou a etapa dela use o id.` : '',
               `Ideias esperando aprovação: ${ideas.length}. Sem data: ${unscheduled.length}.`,
             ]
               .filter(Boolean)

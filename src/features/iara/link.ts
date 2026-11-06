@@ -20,6 +20,10 @@ export interface IaraSendPayload {
   text: string
   system: string
   resume?: string
+  /** `rapida` (padrão) ou `caprichada` (modelo mais forte, mais esforço). */
+  mode?: 'rapida' | 'caprichada'
+  /** Imagens anexadas (data URL), na ordem dos anexos. */
+  images?: string[]
 }
 
 export type IaraEvent =

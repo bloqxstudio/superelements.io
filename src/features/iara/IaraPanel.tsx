@@ -1,17 +1,33 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, ArrowUp, Check, CircleAlert, Loader2, Sparkles, Square, Trash2, X } from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useLocation, useMatch, useNavigate } from 'react-router-dom'
+import { ArrowRight, Check, CircleAlert, Eye, EyeOff, Lightbulb, Loader2, MousePointer2, PanelRight, PanelRightClose, Sparkles, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCrm } from '@/features/crm/crmStore'
-import { useAiAvailable } from '@/features/criativos/link'
-import { agentPrompt, agentSystem, handbackRequest, proposalDetail, runAction, setIaraNavigate, talk } from './engine'
-import { AGENT_COLORS, IARA_ENGINE, agentName, execAction, localAgents } from './actions'
-import { onIaraEvent, sendToAgent, stopAgent, useIaraLink } from './link'
-import { patchMessage, readMessages, uid, useIara, writeMessages, type IaraMessage, type IaraProposal } from './store'
+import { useProjectStore } from '@/features/projects/projectStore'
+import { useProjectSync } from '@/features/projects/useProjectSession'
+import { ClaudePanel } from '@/features/space/bridge/ClaudePanel'
+import { SpaceChat, type IaraChatHooks } from '@/features/space/chat/SpaceChat'
+import { agentSystem, handbackRequest, iaraScreen, proposalDetail, runAction, setIaraNavigate } from './engine'
+import { AGENT_COLORS, agentName, chatAgent, execAction, localAgents } from './actions'
+import { addCard, cardsAfter, patchCard, sendWhenFree, useIaraFeed } from './feed'
+import { useIara, type IaraMessage, type IaraProposal } from './store'
+import { registerAttachment, workCommand } from './workControl'
+import { isStopped, runWork } from '@/features/ia/work'
+import { SuggestionForm, wantsSuggestion } from './SuggestionForm'
+import { followOn, setFollow, setFollowNavigate } from './follow'
+import { TeamBoard } from './TeamBoard'
+import { WorkBar } from './WorkBar'
+import { SquadBoard } from './SquadBoard'
+import { runOrchestra, type OrchestraArgs } from './orchestra'
+import { ROLES, readRole, writeRole, type IaraRole } from './roles'
+import { IaraWelcome } from './IaraWelcome'
+import { clearPickedText, describeScreen, pickedText, rememberScreen, screenOf } from './screens'
 
 /**
- * O chat da Iara: botão no canto e uma janela por cima da tela. A conversa é por conta e fica neste
- * navegador. Atalho: ⌘/Ctrl + J. Precisa da IA desta máquina (o conector), por escolha do usuário.
+ * A Iara: botão no canto, janela ou barra lateral, em qualquer tela (⌘/Ctrl + J). Desde 2026-11-05
+ * o chat dela é o mesmo do canvas (`SpaceChat`: Claude Code ou Codex, skills, imagens, /usage,
+ * /login, conversas anteriores), com as ações do produto como ferramentas. Num projeto a conversa
+ * é a do projeto e o canvas vai junto; no resto do produto, a da conta.
  */
 
 const SUGGESTIONS = [
@@ -22,23 +38,8 @@ const SUGGESTIONS = [
   'Quero sugerir uma melhoria no produto',
 ]
 
-const SESSION_KEY = (team: string) => `iara-sessao:${team}`
-const readSession = (team?: string) => {
-  try {
-    return team ? (localStorage.getItem(SESSION_KEY(team)) ?? undefined) : undefined
-  } catch {
-    return undefined
-  }
-}
-const writeSession = (team: string | undefined, session: string | undefined) => {
-  if (!team) return
-  try {
-    if (session) localStorage.setItem(SESSION_KEY(team), session)
-    else localStorage.removeItem(SESSION_KEY(team))
-  } catch {
-    // sem armazenamento: a conversa recomeça a cada pedido
-  }
-}
+/** Projetos em que a pessoa fechou a Iara (não reabre sozinha até recarregar). */
+const closedIn = new Set<string>()
 
 const AgentDot: React.FC<{ id?: string; className?: string }> = ({ id, className }) =>
   id ? (
@@ -48,7 +49,7 @@ const AgentDot: React.FC<{ id?: string; className?: string }> = ({ id, className
   )
 
 /** As ações em que dá para escolher outro agente na hora de confirmar. */
-const PICKS_AGENT = new Set(['produzir_criativo', 'editar_criativo', 'consultar_agente'])
+const PICKS_AGENT = new Set(['tratar_imagem', 'produzir_criativo', 'editar_criativo', 'aplicar_design', 'criar_parecidos', 'criar_de_referencia', 'consultar_agente'])
 
 const Proposal: React.FC<{ p: IaraProposal; onConfirm: (agent?: string) => void; onRefuse: () => void; busy: boolean }> = ({ p, onConfirm, onRefuse, busy }) => {
   const [names, setNames] = useState<string[]>([])
@@ -62,7 +63,7 @@ const Proposal: React.FC<{ p: IaraProposal; onConfirm: (agent?: string) => void;
 
   if (p.handoff) {
     const color = AGENT_COLORS[p.handoff] ?? '#6b7280'
-    const others = PICKS_AGENT.has(p.action) ? localAgents().filter((a) => a !== p.handoff && (p.action !== 'consultar_agente' || a !== IARA_ENGINE)) : []
+    const others = PICKS_AGENT.has(p.action) ? localAgents().filter((a) => a !== p.handoff && (p.action !== 'consultar_agente' || a !== chatAgent())) : []
     return (
       <div className="mt-2 overflow-hidden rounded-xl border bg-white" style={{ borderColor: `${color}55` }}>
         <p className="flex items-center gap-1.5 px-3 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
@@ -121,8 +122,12 @@ const Proposal: React.FC<{ p: IaraProposal; onConfirm: (agent?: string) => void;
   )
 }
 
-const Bubble: React.FC<{ m: IaraMessage; busy: boolean; onProposal: (msg: string, p: IaraProposal, ok: boolean, agent?: string) => void }> = ({ m, busy, onProposal }) =>
-  m.role === 'note' ? (
+const Bubble: React.FC<{ m: IaraMessage; busy: boolean; onProposal: (msg: string, p: IaraProposal, ok: boolean, agent?: string) => void; onAskAi: (text: string) => void; onAdjust: (text: string) => void }> = ({ m, busy, onProposal, onAskAi, onAdjust }) =>
+  m.squad ? (
+    <li className="w-full">
+      <SquadBoard m={m} />
+    </li>
+  ) : m.role === 'note' ? (
     <li className="flex items-center justify-center gap-1.5 py-0.5 text-[11px] text-gray-500">
       <span className="h-px w-6 bg-gray-200" aria-hidden />
       {m.agent && <AgentDot id={m.agent} />}
@@ -138,9 +143,10 @@ const Bubble: React.FC<{ m: IaraMessage; busy: boolean; onProposal: (msg: string
       {m.agent && (
         <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: AGENT_COLORS[m.agent] ?? '#4b5563' }}>
           <AgentDot id={m.agent} /> {agentName(m.agent)}
-          {m.handoff && <span className="truncate font-normal text-gray-500">· com o bastão: {m.handoff.task}</span>}
+          {m.handoff && <span className="truncate font-normal text-gray-500">· {m.handoff.self ? '' : 'com o bastão: '}{m.handoff.task}</span>}
         </p>
       )}
+      {m.live && m.handoff && <WorkBar />}
       {m.steps && m.steps.length > 0 && (
         <ol className={cn('grid gap-0.5 text-[11px] text-gray-500', m.text && 'mb-2')} aria-label="Passos">
           {m.steps.map((st, i) => (
@@ -151,7 +157,17 @@ const Bubble: React.FC<{ m: IaraMessage; busy: boolean; onProposal: (msg: string
           ))}
         </ol>
       )}
-      {m.text ? <p className="whitespace-pre-line">{m.text}</p> : m.live && !m.steps?.length ? <p className="flex items-center gap-1.5 text-gray-500"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Pensando</p> : null}
+      {m.attachments && m.attachments.length > 0 && (
+        <div className={cn('grid grid-cols-3 gap-1.5', m.text && 'mb-2')}>
+          {m.attachments.map((a) => (
+            <figure key={a.ref} className="overflow-hidden rounded-md bg-white/10">
+              <img src={a.preview} alt={a.name} className="w-full" />
+              <figcaption className="truncate px-1 py-0.5 text-[10px] opacity-70">{a.ref}</figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+      {m.team ? <TeamBoard m={m} onAdjust={onAdjust} /> : m.form ? <SuggestionForm m={m} onAskAi={onAskAi} /> : m.text ? <p className="whitespace-pre-line">{m.text}</p> : m.live && !m.steps?.length ? <p className="flex items-center gap-1.5 text-gray-500"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Pensando</p> : null}
       {m.images && m.images.length > 0 && (
         <div className="mt-2 grid grid-cols-3 gap-1.5">
           {m.images.map((src, i) => (
@@ -182,42 +198,123 @@ const Bubble: React.FC<{ m: IaraMessage; busy: boolean; onProposal: (msg: string
   </li>
   )
 
+/**
+ * O chip da caixa: o que vai junto com o pedido. Como a seleção do canvas: o item escolhido na
+ * tela (componente, slide, post…), ou o texto selecionado na página, ou só a tela aberta.
+ */
+const ScreenChip: React.FC<{ title?: string; selection?: () => string }> = ({ title, selection }) => {
+  const [now, setNow] = useState({ item: '', text: '' })
+  useEffect(() => {
+    const read = () => setNow((prev) => {
+      const next = { item: selection?.() ?? '', text: pickedText() }
+      return prev.item === next.item && prev.text === next.text ? prev : next
+    })
+    read()
+    const timer = setInterval(read, 600)
+    return () => clearInterval(timer)
+  }, [selection])
+  const on = !!(now.item || now.text)
+  const label = now.text ? `“${now.text}”` : now.item || title
+  if (!label) return null
+  return (
+    <span
+      title={now.text ? 'Texto que você selecionou na página: vai junto com o pedido' : on ? 'O que está selecionado nesta tela: vai junto com o pedido' : 'A Iara sabe o que está nesta tela'}
+      className={cn('inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px]', on ? 'border-violet-200 bg-violet-50 text-violet-800' : 'border-gray-200 bg-gray-50 text-gray-600')}
+    >
+      {on ? <MousePointer2 className="h-3 w-3 shrink-0" aria-hidden /> : <Eye className="h-3 w-3 shrink-0" aria-hidden />}
+      <span className="truncate font-medium">{label}</span>
+      {now.text && (
+        <button
+          type="button"
+          aria-label="Não mandar o texto selecionado"
+          className="-mr-0.5 rounded p-px opacity-60 hover:bg-violet-100 hover:opacity-100"
+          onClick={() => {
+            clearPickedText()
+            setNow((n) => ({ ...n, text: '' }))
+          }}
+        >
+          <X className="h-3 w-3" aria-hidden />
+        </button>
+      )}
+    </span>
+  )
+}
+
+/** "Era outra coisa" no formulário de sugestão: o mesmo texto vai à IA, sem cair de novo no formulário. */
+let skipIntercept = false
+/** Os anexos da mensagem que está saindo (o intercept nomeia, o payload conta ao agente). */
+let pendingAttachments: { ref: string; name: string }[] = []
+
 export const IaraPanel: React.FC = () => {
   const navigate = useNavigate()
   const team = useCrm((s) => s.team)
   const open = useIara((s) => s.open)
   const busy = useIara((s) => s.busy)
-  const step = useIara((s) => s.step)
-  const messages = useIara((s) => s.messages)
   const screen = useIara((s) => s.screen)
   const queued = useIara((s) => s.queued)
-  const ai = useAiAvailable()
-  const agentMode = useIaraLink((s) => s.agent)
-  const ready = agentMode || !!ai
-  const [text, setText] = useState('')
-  const listRef = useRef<HTMLOListElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  const abort = useRef<AbortController>()
+  const cards = useIaraFeed((s) => s.items)
+  const chatSend = useIaraFeed((s) => s.send)
 
-  useEffect(() => setIaraNavigate((to) => navigate(to)), [navigate])
-
-  // A conversa é da conta aberta
+  // Num projeto, a conversa é a do projeto (com o canvas); no resto do produto, a da conta
+  const projectMatch = useMatch('/projetos/:projectId')
+  const openProject = useProjectSync((s) => s.openId)
+  const inProject = !!projectMatch && !!openProject && projectMatch.params.projectId === openProject
+  const chatId = inProject ? openProject : team ? `conta-${team.id}` : undefined
+  const projectName = useProjectStore((s) => s.projects.find((p) => p.id === openProject)?.name)
   useEffect(() => {
-    if (!team) return
-    useIara.setState({ teamId: team.id, messages: readMessages(team.id) })
-  }, [team])
+    useIaraFeed.setState({ chat: chatId })
+  }, [chatId])
+  // O caminho até aqui (as últimas telas) vai junto com o pedido
+  const { pathname } = useLocation()
+  useEffect(() => rememberScreen(pathname), [pathname])
+  const here = screenOf(pathname)
 
-  const saveAll = (list: IaraMessage[]) => {
-    const id = useIara.getState().teamId
-    useIara.setState({ messages: list })
-    if (id) writeMessages(id, list)
+  useEffect(() => {
+    setIaraNavigate((to) => navigate(to))
+    setFollowNavigate((to) => navigate(to))
+  }, [navigate])
+  const [following, setFollowing] = useState(followOn)
+  const [role, setRole] = useState<IaraRole>(readRole)
+  const roleRef = useRef(role)
+  roleRef.current = role
+  const [dock, setDock] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('iara-lateral') === '1'
+    } catch {
+      return false
+    }
+  })
+  // Um painel lateral aberto (a peça da Pauta, o cartão da oportunidade): a Iara vira coluna e ele fica à esquerda dela
+  const [sidePanel, setSidePanel] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    const check = () => setSidePanel(!!document.querySelector('.se-side-panel'))
+    check()
+    const timer = setInterval(check, 400)
+    return () => clearInterval(timer)
+  }, [open])
+  // Num projeto a Iara é a coluna da direita (o chat do canvas mora nela) e abre ao entrar
+  const docked = dock || inProject || sidePanel
+  useEffect(() => {
+    if (inProject && openProject && !closedIn.has(openProject)) useIara.setState({ open: true })
+  }, [inProject, openProject])
+  // Barra lateral: as telas abrem espaço para ela (a variável --iara-dock empurra o conteúdo)
+  useEffect(() => {
+    document.documentElement.style.setProperty('--iara-dock', open && docked ? '400px' : '0px')
+    return () => {
+      document.documentElement.style.setProperty('--iara-dock', '0px')
+    }
+  }, [open, docked])
+  const toggleDock = () => {
+    setDock((d) => {
+      try {
+        localStorage.setItem('iara-lateral', d ? '0' : '1')
+      } catch {
+        // vale até recarregar
+      }
+      return !d
+    })
   }
-
-  const save = useCallback((list: IaraMessage[]) => {
-    const id = useIara.getState().teamId
-    useIara.setState({ messages: list })
-    if (id) writeMessages(id, list)
-  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -225,141 +322,65 @@ export const IaraPanel: React.FC = () => {
         e.preventDefault()
         useIara.setState((s) => ({ open: !s.open }))
       }
-      if (e.key === 'Escape' && useIara.getState().open && !useIara.getState().busy) useIara.setState({ open: false })
+      // Esc só fecha a janela flutuante com o foco nela (no canvas o Esc é da seleção)
+      if (e.key === 'Escape' && useIara.getState().open && !useIara.getState().busy && !docked && (e.target as HTMLElement | null)?.closest?.('[data-iara-panel]')) useIara.setState({ open: false })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [docked])
 
+  // "Pedir à Iara" de outras telas: vai como mensagem quando o chat estiver pronto
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 30)
-  }, [open])
-
-  useEffect(() => {
-    listRef.current?.lastElementChild?.scrollIntoView({ block: 'end' })
-  }, [messages, busy, open])
-
-  // Modo agente: os eventos do Claude Code chegam aqui e escrevem a mensagem da Iara
-  const retried = useRef(new Set<string>())
-  const lastRequest = useRef<{ id: string; text: string }>()
-  useEffect(
-    () =>
-      onIaraEvent((e) => {
-        const live = useIara.getState().liveId
-        if (e.id !== live) return
-        const team = useIara.getState().teamId
-        if (e.type === 'step') patchMessage(e.id, (m) => ({ ...m, steps: (m.steps?.at(-1) === e.text ? m.steps : [...(m.steps ?? []), e.text]).slice(-14) }))
-        if (e.type === 'text') patchMessage(e.id, (m) => ({ ...m, text: e.text }))
-        if (e.type === 'session') writeSession(team, e.session)
-        if (e.type === 'done') {
-          if (e.session) writeSession(team, e.session)
-          patchMessage(e.id, (m) => ({ ...m, text: e.text || m.text || 'Pronto.', live: false }))
-          useIara.setState({ busy: false, step: undefined, liveId: undefined })
-        }
-        if (e.type === 'error') {
-          // A sessão guardada sumiu (outra máquina, conector novo): recomeça uma vez sem ela
-          const req = lastRequest.current
-          if (/no conversation found|session/i.test(e.text) && req && !retried.current.has(e.id) && readSession(team)) {
-            retried.current.add(e.id)
-            writeSession(team, undefined)
-            void agentPrompt(req.text, true).then((prompt) => sendToAgent({ id: e.id, text: prompt, system: agentSystem() }))
-            return
-          }
-          patchMessage(e.id, (m) => ({ ...m, text: m.text ? `${m.text}\n\n${e.text}` : e.text, live: false, error: !m.text }))
-          useIara.setState({ busy: false, step: undefined, liveId: undefined })
-        }
-      }),
-    []
-  )
-
-  const sendAgent = useCallback(async (request: string) => {
-    const id = uid()
-    const team = useIara.getState().teamId
-    saveAll([...useIara.getState().messages, { id, role: 'iara', text: '', at: Date.now(), live: true, steps: [] }])
-    useIara.setState({ busy: true, liveId: id })
-    lastRequest.current = { id, text: request }
-    const resume = readSession(team)
-    try {
-      const prompt = await agentPrompt(request, !resume)
-      sendToAgent({ id, text: prompt, system: agentSystem(), resume })
-    } catch (e) {
-      patchMessage(id, (m) => ({ ...m, text: e instanceof Error ? e.message : 'Não consegui montar o pedido.', live: false, error: true }))
-      useIara.setState({ busy: false, liveId: undefined })
-    }
-  }, [])
-
-  const send = useCallback(
-    async (raw: string) => {
-      const request = raw.trim()
-      if (!request || useIara.getState().busy) return
-      const history = useIara.getState().messages
-      const mine: IaraMessage = { id: uid(), role: 'user', text: request, at: Date.now() }
-      save([...history, mine])
-      setText('')
-      if (useIaraLink.getState().agent) return void sendAgent(request)
-      const controller = new AbortController()
-      abort.current = controller
-      useIara.setState({ busy: true, step: 'Pensando' })
-      try {
-        const reply = await talk(history, request, controller.signal, (s) => useIara.setState({ step: s }))
-        save([...useIara.getState().messages, reply])
-      } catch (e) {
-        const stopped = controller.signal.aborted
-        save([...useIara.getState().messages, { id: uid(), role: 'iara', text: stopped ? 'Parei.' : e instanceof Error ? e.message : 'Não consegui responder agora.', at: Date.now() }])
-      } finally {
-        useIara.setState({ busy: false, step: undefined })
-        abort.current = undefined
-      }
-    },
-    [save, sendAgent]
-  )
-
-  // "Pedir à Iara" de outras telas
-  useEffect(() => {
-    if (!queued || !ready) return
+    if (!queued || !chatSend) return
     useIara.setState({ queued: undefined })
-    void send(queued)
-  }, [queued, ready, send])
+    chatSend(queued)
+  }, [queued, chatSend])
 
   /**
-   * Troca de bastão: o agente escolhido faz a ação aqui na aba (a IA forçada para ele), escreve a
-   * própria mensagem com os passos e as imagens, e no fim o bastão volta para a Iara, que confere.
+   * Troca de bastão confirmada: o agente escolhido faz a ação aqui na aba (a IA forçada para ele),
+   * num cartão com os passos e as imagens; no fim o resultado volta à conversa para a Iara conferir.
    */
-  const runHandoff = async (p: IaraProposal, agent: string) => {
+  const runHandoff = async (p: Pick<IaraProposal, 'action' | 'args' | 'label'>, agent: string, self = false) => {
     const args = { ...(p.args as Record<string, unknown>), agente: agent }
-    const id = uid()
-    saveAll([
-      ...useIara.getState().messages,
-      { id: uid(), role: 'note', agent, text: `A Iara passou o bastão ao ${agentName(agent)}`, at: Date.now() },
-      { id, role: 'iara', agent, handoff: { to: agent, task: p.label }, text: '', at: Date.now(), live: true, steps: [] },
-    ])
+    const id = addCard({ role: 'iara', agent, handoff: { to: agent, task: p.label, self }, text: '', live: true, steps: [] })
     useIara.setState({ busy: true, liveId: id, step: `${agentName(agent)} trabalhando` })
     let summary = ''
-    let ok = false
+    let stopped = false
     try {
-      const r = await execAction(p.action, args)
-      ok = r.done.some((d) => d.ok)
+      const r = await runWork(p.label, () => execAction(p.action, args))
+      const ok = r.done.some((d) => d.ok)
       const reply = (r.data as { resposta?: string; designer?: string } | undefined)?.resposta ?? (r.data as { designer?: string } | undefined)?.designer ?? ''
-      const text = reply || r.done.map((d) => d.label).join('\n') || 'Pronto.'
       summary = `${r.done.map((d) => d.label).join('; ')}${reply ? `\n${reply}` : ''}${r.data && !reply ? `\nDados: ${JSON.stringify(r.data).slice(0, 1500)}` : ''}`
-      patchMessage(id, (m) => ({ ...m, text, done: r.done, images: r.images?.map((i) => i.data).slice(0, 6), live: false, error: !ok }))
+      patchCard(id, (m) => ({ ...m, text: reply || r.done.map((d) => d.label).join('\n') || 'Pronto.', done: r.done, images: r.images?.map((i) => i.data).slice(0, 6), live: false, error: !ok }))
     } catch (e) {
-      summary = `Falhou: ${e instanceof Error ? e.message : String(e)}`
-      patchMessage(id, (m) => ({ ...m, text: summary, live: false, error: true }))
+      stopped = isStopped(e)
+      summary = stopped ? 'Você parou este trabalho. O que já tinha ficado pronto continua salvo.' : `Falhou: ${e instanceof Error ? e.message : String(e)}`
+      patchCard(id, (m) => ({ ...m, text: summary, live: false, error: !stopped }))
     }
-    useIara.setState({ busy: false, step: undefined, liveId: undefined })
-    // O bastão volta: a Iara confere e conta à pessoa (só no modo agente)
-    saveAll([...useIara.getState().messages, { id: uid(), role: 'note', text: `O bastão voltou para a Iara${ok ? '' : ' (o trabalho não terminou)'}`, at: Date.now() }])
-    if (useIaraLink.getState().agent) void sendAgent(handbackRequest(agent, p.label, summary))
+    useIara.setState({ busy: false, liveId: undefined, step: undefined })
+    // Parado pela pessoa: a conversa não recebe nada (ela mesma decide o próximo passo)
+    if (!stopped) void sendWhenFree(handbackRequest(agent, p.label, summary, self))
   }
+  const runHandoffRef = useRef(runHandoff)
+  runHandoffRef.current = runHandoff
+  // As ações de criativo no agente do chat começam aqui direto, sem cartão de confirmar
+  useEffect(() => {
+    useIaraFeed.setState({ work: (p, agent) => void runHandoffRef.current(p, agent, true) })
+    return () => useIaraFeed.setState({ work: undefined })
+  }, [])
 
-  const decide = async (msgId: string, p: IaraProposal, ok: boolean, agent?: string) => {
-    const patch = (next: Partial<IaraProposal>) => save(useIara.getState().messages.map((m) => (m.id === msgId ? { ...m, proposals: m.proposals?.map((x) => (x.id === p.id ? { ...x, ...next } : x)) } : m)))
+  const decide = async (cardId: string, p: IaraProposal, ok: boolean, agent?: string) => {
+    const patch = (next: Partial<IaraProposal>) => patchCard(cardId, (m) => ({ ...m, proposals: m.proposals?.map((x) => (x.id === p.id ? { ...x, ...next } : x)) }))
     if (!ok) return patch({ state: 'recusado' })
     if (useIara.getState().busy) return
+    if (p.action === 'orquestrar_criativo') {
+      patch({ state: 'feito', result: 'Equipe montada' })
+      const r = await runOrchestra(p.args as OrchestraArgs)
+      void sendWhenFree(`[A equipe de agentes terminou] ${r.summary}`)
+      return
+    }
     const who = agent ?? p.handoff
     if (p.handoff && who) {
-      if (who === IARA_ENGINE && p.action === 'consultar_agente') return patch({ state: 'recusado' })
       patch({ state: 'feito', result: `Bastão com o ${agentName(who)}` })
       return runHandoff(p, who)
     }
@@ -373,7 +394,67 @@ export const IaraPanel: React.FC = () => {
     }
   }
 
-  if (!team) return null
+  const hooks = useMemo<IaraChatHooks>(
+    () => ({
+      payload: async () => {
+        const named = pendingAttachments
+        pendingAttachments = []
+        const attached = named.length ? `## Imagens anexadas a esta mensagem\n${named.map((a) => `- ${a.ref} (${a.name})`).join('\n')}\nVocê as vê junto do pedido. Para usar nas ações de criativo, passe o nome em "anexos" (editar_criativo) ou "anexo" (criar_de_referencia).\n\n` : ''
+        try {
+          return { system: agentSystem(), screen: attached + (await iaraScreen(roleRef.current)) }
+        } catch (e) {
+          // Sem o material da conta (rede, permissão): a tela e a seleção vão mesmo assim
+          console.warn('[Iara] não li o material da conta', e)
+          const sel = useIara.getState().screen?.selection?.()
+          return { system: agentSystem(), screen: `${attached}## Tela aberta agora\n${describeScreen()}${sel ? `\nSelecionado agora: ${sel}` : ''}${useIara.getState().screen ? `\n${useIara.getState().screen!.describe()}` : ''}` }
+        }
+      },
+      cards: (after) => {
+        const list = chatId ? cardsAfter(useIaraFeed.getState().items, chatId, after) : []
+        return list.length ? (
+          <ul className="grid gap-3">
+            {list.map((m) => (
+              <Bubble
+                key={m.id}
+                m={m}
+                busy={useIara.getState().busy}
+                onProposal={(id, p, ok, agent) => void decide(id, p, ok, agent)}
+                onAskAi={(t) => {
+                  skipIntercept = true
+                  useIaraFeed.getState().send?.(t)
+                }}
+                onAdjust={(t) => useIaraFeed.getState().send?.(t)}
+              />
+            ))}
+          </ul>
+        ) : null
+      },
+      intercept: ({ text, images, skill, command }) => {
+        // Fluxo sem IA: a sugestão ao time de produto abre o formulário na hora
+        if (skipIntercept) {
+          skipIntercept = false
+          return false
+        }
+        // "pausa", "continua", "para": controla o trabalho em andamento, sem passar pelo agente
+        if (!command && !images.length && workCommand(text)) return true
+        // As imagens anexadas viram anexo-1, anexo-2…: as ações de criativo da Iara usam por esse nome
+        if (images.length) pendingAttachments = images.map((img) => registerAttachment(img.name, img.data))
+        if (command || images.length || skill || !wantsSuggestion(text)) return false
+        addCard({ role: 'iara', text: '', form: { kind: 'sugestao', state: 'aberto', text } })
+        return true
+      },
+      onReady: (send) => useIaraFeed.setState({ send }),
+      intro: <IaraWelcome />,
+      // Primeiro o que costumam querer nesta tela; depois o da função escolhida
+      suggestions: [...new Set([...(here?.suggestions ?? []), ...ROLES[role].suggestions, ...SUGGESTIONS.slice(-1)])].slice(0, 5),
+      chips: <ScreenChip title={screen?.title} selection={screen?.selection} />,
+    }),
+    // Os cartões mudam: o chat redesenha com a lista nova
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chatId, role, screen, cards, busy, here]
+  )
+
+  if (!team || !chatId) return null
 
   return (
     <>
@@ -393,7 +474,13 @@ export const IaraPanel: React.FC = () => {
       {open && (
         <section
           aria-label="Iara, assistente"
-          className="fixed bottom-4 right-4 z-50 flex h-[min(640px,calc(100vh-32px))] w-[min(400px,calc(100vw-32px))] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_24px_64px_-16px_rgb(0_0_0/0.35)]"
+          data-iara-panel
+          className={cn(
+            'fixed z-50 flex flex-col overflow-hidden bg-white',
+            docked
+              ? 'inset-y-0 right-0 w-[min(400px,100vw)] border-l border-gray-200'
+              : 'bottom-4 right-4 h-[min(680px,calc(100vh-32px))] w-[min(400px,calc(100vw-32px))] rounded-2xl shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_24px_64px_-16px_rgb(0_0_0/0.35)]'
+          )}
         >
           <header className="flex items-center gap-2.5 border-b border-gray-100 px-4 py-3">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-400 to-fuchsia-500 text-white">
@@ -401,96 +488,70 @@ export const IaraPanel: React.FC = () => {
             </span>
             <div className="min-w-0 flex-1">
               <h2 className="text-sm font-semibold text-gray-900">Iara</h2>
-              <p className="truncate text-[11px] text-gray-500">{screen ? `Vendo: ${screen.title}` : team.name}{ready && !agentMode ? ' · modo simples (atualize o conector)' : ''}</p>
+              <p className="truncate text-[11px] text-gray-500">{inProject ? `No projeto${projectName ? `: ${projectName}` : ''}` : screen ? `Vendo: ${screen.title}` : team.name}</p>
             </div>
-            {messages.length > 0 && (
-              <button type="button" disabled={busy} onClick={() => {
-                  save([])
-                  writeSession(useIara.getState().teamId, undefined)
-                }} aria-label="Limpar a conversa" title="Limpar a conversa" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-40">
-                <Trash2 className="h-4 w-4" aria-hidden />
+            <button
+              type="button"
+              role="switch"
+              aria-checked={following}
+              onClick={() => {
+                setFollow(!following)
+                setFollowing(!following)
+              }}
+              title={following ? 'Acompanhando: a Iara abre a tela em que está trabalhando e você vê tudo ao vivo' : 'Sem acompanhar: a Iara trabalha sem trocar a sua tela'}
+              className={cn('flex h-8 items-center gap-1 rounded-md px-2 text-[11px] font-medium', following ? 'bg-violet-50 text-violet-700 hover:bg-violet-100' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900')}
+            >
+              {following ? <Eye className="h-3.5 w-3.5" aria-hidden /> : <EyeOff className="h-3.5 w-3.5" aria-hidden />}
+              Acompanhar
+            </button>
+            <button
+              type="button"
+              onClick={() => addCard({ role: 'iara', text: '', form: { kind: 'sugestao', state: 'aberto' } })}
+              aria-label="Sugerir uma melhoria ao time de produto"
+              title="Sugerir uma melhoria ao time de produto"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            >
+              <Lightbulb className="h-4 w-4" aria-hidden />
+            </button>
+            {!inProject && !sidePanel && (
+              <button type="button" onClick={toggleDock} aria-label={dock ? 'Voltar para a janela flutuante' : 'Abrir como barra lateral'} title={dock ? 'Voltar para a janela flutuante' : 'Abrir como barra lateral'} className="hidden h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 md:flex">
+                {dock ? <PanelRightClose className="h-4 w-4" aria-hidden /> : <PanelRight className="h-4 w-4" aria-hidden />}
               </button>
             )}
-            <button type="button" onClick={() => useIara.setState({ open: false })} aria-label="Fechar" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+            <button
+              type="button"
+              onClick={() => {
+                if (inProject && openProject) closedIn.add(openProject)
+                useIara.setState({ open: false })
+              }}
+              aria-label="Fechar"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            >
               <X className="h-4 w-4" aria-hidden />
             </button>
           </header>
-
-          <div className="flex-1 overflow-y-auto px-4 py-4">
-            {messages.length === 0 ? (
-              <div>
-                <p className="text-sm text-gray-800">Oi! Sou a Iara. Crio ideias a partir dos seus números, escrevo roteiros e legendas, produzo e ajusto os criativos, organizo a pauta e deixo aprovações e envios prontos para você confirmar.</p>
-                <div className="mt-4 grid gap-2">
-                  {SUGGESTIONS.map((s) => (
-                    <button key={s} type="button" disabled={!ready || busy} onClick={() => void send(s)} className="rounded-xl border border-gray-200 px-3 py-2 text-left text-sm text-gray-700 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50">
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <ol ref={listRef} className="grid gap-3" aria-live="polite">
-                {messages.map((m) => (
-                  <Bubble key={m.id} m={m} busy={busy} onProposal={(id, p, ok, agent) => void decide(id, p, ok, agent)} />
-                ))}
-                {busy && !useIara.getState().liveId && (
-                  <li className="flex items-center gap-2 text-xs text-gray-500" role="status">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> {step ?? 'Pensando'}
-                  </li>
-                )}
-              </ol>
-            )}
-          </div>
-
-          {!ready && (
-            <p className="mx-4 mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              A Iara usa a IA deste computador. <Link to="/agentes" className="font-semibold underline underline-offset-2">Conecte o conector</Link> para conversar.
-            </p>
-          )}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              void send(text)
-            }}
-            className="border-t border-gray-100 p-3"
-          >
-            <div className="flex items-end gap-2 rounded-xl border border-gray-200 bg-white p-1.5 pl-3 focus-within:border-gray-400">
-              <label htmlFor="iara-input" className="sr-only">
-                Mensagem para a Iara
-              </label>
-              <textarea
-                id="iara-input"
-                ref={inputRef}
-                rows={1}
-                value={text}
-                maxLength={4000}
-                disabled={!ready}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    void send(text)
-                  }
+          <div role="radiogroup" aria-label="A Iara está copilotando" className="flex gap-1 overflow-x-auto border-b border-gray-100 px-3 py-1.5">
+            {(Object.keys(ROLES) as IaraRole[]).map((r) => (
+              <button
+                key={r}
+                type="button"
+                role="radio"
+                aria-checked={role === r}
+                title={ROLES[r].hint}
+                onClick={() => {
+                  setRole(r)
+                  writeRole(r)
                 }}
-                placeholder={ready ? 'Peça ideias, criativos, roteiros, análises…' : 'Conecte o conector para conversar'}
-                className="max-h-32 min-h-[36px] flex-1 resize-none bg-transparent py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
-              />
-              {busy ? (
-                <button type="button" onClick={() => {
-                    const live = useIara.getState().liveId
-                    if (live) stopAgent(live)
-                    else abort.current?.abort()
-                  }} aria-label="Parar" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">
-                  <Square className="h-3.5 w-3.5" aria-hidden />
-                </button>
-              ) : (
-                <button type="submit" disabled={!text.trim() || !ready} aria-label="Enviar" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white hover:bg-black disabled:opacity-30">
-                  <ArrowUp className="h-4 w-4" aria-hidden />
-                </button>
-              )}
-            </div>
-            <p className="mt-1.5 px-1 text-[10px] text-gray-400">Aprovar, descartar e enviar sempre pedem sua confirmação · ⌘J</p>
-          </form>
+                className={cn('h-6 shrink-0 rounded-full px-2.5 text-[11px] font-medium', role === r ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100')}
+              >
+                {ROLES[r].label}
+              </button>
+            ))}
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col">
+            {inProject && <ClaudePanel inline />}
+            <SpaceChat chatId={chatId} chatName={inProject ? projectName : `Iara · ${team.name}`} iara={hooks} />
+          </div>
         </section>
       )}
     </>

@@ -124,6 +124,14 @@ export interface EditCall {
 /** Conjunto de outra marca (veio de Conteúdos, ou a marca não é a Avence): nada da identidade da Avence entra. */
 const otherBrand = (set: CreativeSet) => !!set.source || !/avence/i.test(set.brand.name)
 
+/** O padrão aprendido do conjunto (`styleRules`) entra em toda edição, junto da skill escolhida. */
+const withStyleRules = (skill: EditRequest['skill'], rules?: string[]): EditRequest['skill'] => {
+  const list = (rules ?? []).map((r) => r.trim()).filter(Boolean)
+  if (!list.length) return skill
+  const block = `Padrão visual deste conjunto (aprendido com a equipe; siga sempre, a menos que o pedido diga o contrário):\n${list.map((r) => `- ${r}`).join('\n')}`
+  return skill ? { name: skill.name, instructions: `${skill.instructions}\n\n${block}` } : { name: 'Padrão do conjunto', instructions: block }
+}
+
 export async function requestEdit(call: EditCall, fonts: string[], signal?: AbortSignal, onStep?: (step: CreativeStep) => void): Promise<EditResponse> {
   const { set } = call
   const post = set.posts.find((p) => p.id === call.postId)
@@ -158,7 +166,7 @@ export async function requestEdit(call: EditCall, fonts: string[], signal?: Abor
     previews: post && call.scope === 'post' ? post.slides.slice(0, 10).map((sl) => slidePreview(sl, post.format, call.images, 540)) : undefined,
     history: call.history,
     attachments: call.attachments,
-    skill: call.skill,
+    skill: withStyleRules(call.skill, set.styleRules),
   }
   const json = await callAi<Partial<EditResponse>>('edit', body, signal, onStep)
   if (!json.ops) throw new Error('A IA não respondeu.')

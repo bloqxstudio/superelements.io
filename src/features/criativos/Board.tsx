@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AtSign, Check, ClipboardPaste, Copy, CopyPlus, Download, GripVertical, Instagram, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
+import { AtSign, Check, ClipboardPaste, Copy, CopyPlus, Download, GripVertical, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { agentInfo, PHASE_LABEL, useAgent } from './agentStore'
@@ -188,11 +188,9 @@ interface Props {
   onDeleteSlide: (postId: string, slideId: string) => void
   /** Mostra só este post (a entrega que alguém abriu), não o conjunto todo. */
   onlyPostId?: string
-  /** Abre a publicação deste post no Instagram. */
-  onPublish?: (postId: string) => void
 }
 
-export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicateSlide, onDeleteSlide, onlyPostId, onPublish }) => {
+export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicateSlide, onDeleteSlide, onlyPostId }) => {
   const set = useEditor((s) => s.set)!
   const images = useEditor((s) => s.images)
   const postId = useEditor((s) => s.postId)
@@ -202,6 +200,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   const working = useAgent((s) => s.working)
   const flash = useAgent((s) => s.flash)
   const cursor = useAgent((s) => s.cursor)
+  const crew = useAgent((s) => s.crew)
   const people = useLive((s) => s.people)
   const peerCursors = useLive((s) => s.cursors)
   const peerAgents = useLive((s) => s.agents)
@@ -680,18 +679,6 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
             >
               <Copy style={{ width: 32, height: 32 }} />
             </button>
-            {onPublish && (
-              <button
-                type="button"
-                data-ui
-                onClick={() => { useEditor.getState().selectPost(row.postId); onPublish(row.postId) }}
-                title="Publicar este post no Instagram da conta (feed, carrossel, reels ou story)"
-                className="absolute flex items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-fuchsia-600 to-orange-500 font-semibold text-white hover:from-fuchsia-700 hover:to-orange-600"
-                style={{ left: Math.min(row.width - 60, 1180) + 152, top: row.y + 8, height: HEAD - 26, padding: '0 22px', fontSize: 26 }}
-              >
-                <Instagram style={{ width: 30, height: 30 }} /> Publicar
-              </button>
-            )}
             {row.slides.map((p) => (
               <div key={p.slideId} className="absolute bg-white" style={{ left: p.x, top: p.y, width: p.w, height: p.h, boxShadow: p.slideId === slideId || (rowSelected && p.postId === postId) ? `0 0 0 ${3 * inv}px #8b5cf6` : `0 0 0 ${1 * inv}px rgb(0 0 0 / 0.14), 0 ${16 * inv}px ${40 * inv}px -${12 * inv}px rgb(0 0 0 / 0.25)` }}>
                 {visible.has(p.slideId) ? (
@@ -830,6 +817,33 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
             </div>
           )
         })()}
+
+        {/* A equipe rápida: vários agentes ao mesmo tempo, cada um com a sua cor, nas camadas dele */}
+        {Object.values(crew).map((m, i) => {
+          const p = placed.find((x) => x.slideId === m.slideId)
+          if (!p) return null
+          const boxes = m.layerIds.map((id) => p.slide.layers.find((l) => l.id === id)).filter((l): l is NonNullable<typeof l> => !!l).map((l) => layerBox(l))
+          const first = boxes[0]
+          const cx = first ? p.x + first.x + Math.min(first.w * 0.5, 380) : p.x + p.w * (0.3 + 0.2 * (i % 3))
+          const cy = first ? p.y + first.y + Math.min(first.h * 0.5, 140) + i * 6 : p.y + p.h * (0.25 + 0.2 * (i % 3))
+          return (
+            <React.Fragment key={m.id}>
+              {(boxes.length ? boxes.map((b) => ({ x: p.x + b.x, y: p.y + b.y, w: b.w, h: b.h })) : m.working ? [{ x: p.x, y: p.y, w: p.w, h: p.h }] : []).map((r, k) => (
+                <div key={k} className="pointer-events-none absolute" style={{ left: r.x, top: r.y, width: r.w, height: r.h, outline: `${3 * inv}px ${m.working ? 'dashed' : 'solid'} ${m.color}`, animation: m.working ? 'agentPulse 1.4s ease-in-out infinite' : undefined }} />
+              ))}
+              <div className="pointer-events-none absolute left-0 top-0 z-20" style={{ transform: `translate(${cx}px, ${cy}px) scale(${inv * 1.25})`, transformOrigin: '0 0', transition: 'transform .8s cubic-bezier(.22,1,.36,1)' }}>
+                <div style={{ animation: m.working ? 'agentBob 1.6s ease-in-out infinite' : undefined }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden style={{ filter: 'drop-shadow(0 2px 3px rgb(0 0 0 / 0.35))' }}>
+                    <path d="M3 2l17 8.2-7.4 2.1L9.6 20z" fill={m.color} stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
+                  </svg>
+                  <span className="absolute left-5 top-5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold text-white shadow-lg" style={{ background: m.color }}>
+                    {m.label}{m.text ? ` · ${m.text}` : ''}
+                  </span>
+                </div>
+              </div>
+            </React.Fragment>
+          )
+        })}
 
         {/* As outras pessoas: seleção, mouse e o agente que cada uma está usando */}
         {people.map((person) => {

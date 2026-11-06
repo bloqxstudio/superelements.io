@@ -38,6 +38,8 @@ interface Source {
   blob: Blob
   name: string
   type: 'image' | 'video'
+  /** Vídeo vindo do Criativos: o quadro da capa em ms (carrossel). */
+  thumbOffset?: number
 }
 
 const KIND_LABEL: Record<PublishKind, string> = { feed: 'Feed', story: 'Story', reel: 'Reels' }
@@ -167,7 +169,7 @@ export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; 
       let ratio: number | undefined
       for (const s of sources) {
         if (s.type === 'video') {
-          out.push(await prepareVideo(new File([s.blob], s.name, { type: s.blob.type })))
+          out.push({ ...(await prepareVideo(new File([s.blob], s.name, { type: s.blob.type }))), thumbOffset: s.thumbOffset })
           continue
         }
         if (kind === 'feed' && ratio === undefined) {
@@ -232,7 +234,7 @@ export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; 
         const images = await creativeImages(set, post.slides)
         const items = await video.postToCarousel(post, images, { audio: await video.audioFor(post, set.assets), base: post.name })
         setKind('feed')
-        setSources(items.slice(0, 20).map((item) => ({ id: uid(), blob: item.blob, name: item.name, type: item.type })))
+        setSources(items.slice(0, 20).map((item) => ({ id: uid(), blob: item.blob, name: item.name, type: item.type, thumbOffset: item.thumbOffset })))
       } else {
         const blobs = await renderCreative(set, post)
         const target: PublishKind = fits === 'story' ? 'story' : 'feed'

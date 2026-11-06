@@ -23,6 +23,7 @@ import Motion from "@/pages/Motion";
 import Copy from "@/pages/Copy";
 import { CreativeEditor } from "@/features/criativos/Editor";
 import { MotionStudio } from "@/features/criativos/MotionStudio";
+import { SceneStudio } from "@/features/criativos/SceneStudio";
 import { CopyEditorPage } from "@/features/copy/CopyEditorPage";
 import WordPressCallback from "@/pages/WordPressCallback";
 import PageApproval from "@/pages/PageApproval";
@@ -155,6 +156,7 @@ function App() {
                 <Route path="criativos" element={<Creatives />} />
                 <Route path="motion" element={<Motion />} />
                 <Route path="motion/:setId" element={<MotionStudio />} />
+                <Route path="motion/:setId/cena" element={<SceneStudio />} />
                 <Route path="criativos/:setId" element={<CreativeEditor />} />
                 {/* CRM da equipe: funil, clientes, equipe e convites; só para quem é de uma equipe */}
                 <Route path="plano" element={<CrmGate><CrmPlan /></CrmGate>} />

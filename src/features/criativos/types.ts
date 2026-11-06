@@ -75,7 +75,46 @@ interface LayerBase {
 }
 
 /** Efeitos de entrada do motion (`motion.ts` desenha cada um). */
-export type MotionFx = 'fade' | 'rise' | 'drop' | 'left' | 'right' | 'pop' | 'zoom' | 'wipe' | 'wipe-up' | 'ken' | 'pulse' | 'words' | 'letters' | 'move'
+export type MotionFx = 'fade' | 'rise' | 'drop' | 'left' | 'right' | 'pop' | 'zoom' | 'wipe' | 'wipe-up' | 'ken' | 'pulse' | 'words' | 'letters' | 'move' | 'keys'
+
+/** Curva de um trecho entre keyframes (do anterior até este). */
+export type KeyEase = MotionEase | 'salto' | 'acelera' | 'segura'
+
+/**
+ * Um ponto da animação livre (`fx: 'keys'`): no segundo `t` do slide a camada está
+ * deslocada `x`/`y` px do lugar dela, na escala e no giro dados. `sx`/`sy` amassam
+ * e esticam (o pão que cai e achata). O que não vem repete o ponto anterior.
+ */
+export interface MotionKey {
+  t: number
+  x?: number
+  y?: number
+  scale?: number
+  sx?: number
+  sy?: number
+  rotate?: number
+  opacity?: number
+  ease?: KeyEase
+}
+
+/** Movimento contínuo depois da entrada (o lanche que respira, a etiqueta que balança). */
+export type MotionLoop = 'girar' | 'flutuar' | 'respirar' | 'balancar' | 'pulsar'
+
+/** Um impacto: a camada (ou a tela) treme a partir de `t`. */
+export interface MotionShake {
+  t: number
+  /** Segundos (0,35 sem o campo). */
+  dur?: number
+  /** Px (18 sem o campo). */
+  amp?: number
+}
+
+/** Clarão da tela inteira (corte publicitário na batida). */
+export interface MotionFlash {
+  t: number
+  dur?: number
+  color?: string
+}
 
 /** Saídas: a camada sai antes do fim do slide. */
 export type MotionExit = 'fade' | 'rise' | 'drop' | 'left' | 'right' | 'zoom' | 'pop'
@@ -102,6 +141,16 @@ export interface LayerMotion {
   exit?: MotionExit
   /** Segundos da saída (0,4 sem o campo). */
   exitDur?: number
+  /** `fx: 'keys'`: os pontos da animação livre, em segundos do slide. */
+  keys?: MotionKey[]
+  /** Movimento contínuo depois da entrada. */
+  loop?: MotionLoop
+  /** Velocidade do loop (1 sem o campo). */
+  loopSpeed?: number
+  /** Rastro de velocidade (motion blur) nos movimentos rápidos. */
+  blur?: boolean
+  /** Tremidas da camada. */
+  shakes?: MotionShake[]
 }
 
 /** Transição de um slide para o próximo no vídeo do post. */
@@ -120,6 +169,9 @@ export interface PostMotion {
    * carrossel em que cada slide é um item: os animados viram vídeo, os parados, imagem.
    */
   output?: 'video' | 'carousel'
+  /** Batidas da trilha (segundos do vídeo), lidas do áudio: os cortes e impactos se encaixam nelas. */
+  beats?: number[]
+  bpm?: number
 }
 
 export interface MotionAudio {
@@ -219,6 +271,12 @@ export interface Slide {
   layers: Layer[]
   /** Câmera do slide no vídeo (aba Motion). */
   camera?: SlideCamera
+  /** Segundos do slide no vídeo; sem o campo, o ritmo do post (ou as entradas mais a pausa). */
+  dur?: number
+  /** Clarões da tela inteira (segundos do slide). */
+  flashes?: MotionFlash[]
+  /** A tela inteira treme (impacto), em segundos do slide. */
+  shakes?: MotionShake[]
 }
 
 export interface Post {
@@ -234,6 +292,11 @@ export interface Post {
   approved?: boolean
   /** Ritmo do vídeo do post (aba Motion). */
   motion?: PostMotion
+  /**
+   * Capa do vídeo no Instagram (reels): um momento do vídeo (`at`, segundos) ou uma
+   * imagem enviada ao conjunto (`src`, `asset:<id>`). Sem ela, o fim das entradas do primeiro slide.
+   */
+  cover?: { at: number } | { src: string }
 }
 
 export interface SetBrand {
@@ -296,6 +359,13 @@ export interface CreativeSet {
   pendingBrand?: boolean
   /** Quem criou fora da tela: `mcp` (uma IA conectada pela chave de uma pessoa). */
   origin?: 'mcp'
+  /** Cenas de motion escritas em código (pela IA ou à mão), no estúdio de cena. */
+  scenes?: CodeScene[]
+  /**
+   * O padrão visual do conjunto, aprendido com a pessoa (a Iara grava a cada ajuste: "título nunca
+   * passa de duas linhas", "foto sempre à direita"). Vai em toda edição pela IA deste conjunto.
+   */
+  styleRules?: string[]
   createdAt: number
   updatedAt: number
 }
@@ -329,3 +399,27 @@ export interface PostInfo {
 }
 
 export const uid = () => Math.random().toString(36).slice(2, 10)
+
+/**
+ * Uma cena de motion escrita em código: uma função que desenha cada quadro num
+ * canvas (`scene.ts`), rodada num worker isolado e gravada em MP4 como os posts.
+ */
+export interface CodeScene {
+  id: string
+  name: string
+  format: FormatId
+  /** Segundos. */
+  duration: number
+  /** O código da cena (o contrato está em `scene.ts`). */
+  code: string
+  /** Imagens do conjunto que a cena usa: `asset:<id>` → nome pelo qual o código as chama. */
+  images: { src: string; name: string }[]
+  audio?: MotionAudio
+  beats?: number[]
+  bpm?: number
+  /** O último pedido feito à IA. */
+  prompt?: string
+  /** O criativo de onde a cena nasceu: as camadas desses slides entram na cena como peças (`env.post`). */
+  source?: { postId: string; slideIds: string[] }
+  updatedAt: number
+}

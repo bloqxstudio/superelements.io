@@ -7,7 +7,7 @@
  */
 
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
-import { FPS, MotionRenderer, slideAsPost, slideHasMotion } from './motion'
+import { FPS, MotionRenderer, entrancesEnd, slideAsPost, slideHasMotion, timeline } from './motion'
 import { slideToBlob, type ImageMap } from './render'
 import { assetUrl } from './storage'
 import { sizeOf, type MotionAudio, type Post, type SetAsset } from './types'
@@ -15,8 +15,10 @@ import { sizeOf, type MotionAudio, type Post, type SetAsset } from './types'
 const RATE = 48000
 
 /** O arquivo da trilha do post (para o MP4), ou nada quando o post não tem áudio. */
-export async function audioFor(post: Post, assets: SetAsset[]): Promise<ArrayBuffer | undefined> {
-  const src = post.motion?.audio?.src
+export const audioFor = (post: Post, assets: SetAsset[]) => audioOfSrc(post.motion?.audio?.src, assets)
+
+/** O arquivo de um áudio do conjunto (`asset:<id>`). */
+export async function audioOfSrc(src: string | undefined, assets: SetAsset[]): Promise<ArrayBuffer | undefined> {
   if (!src?.startsWith('asset:')) return undefined
   const asset = assets.find((a) => a.id === src.slice(6))
   if (!asset) return undefined
@@ -80,19 +82,59 @@ export interface VideoOptions {
   signal?: AbortSignal
   /** O arquivo da trilha (`audioFor`); sem ele, áudio em silêncio. */
   audio?: ArrayBuffer
+  /**
+   * Um quadro de capa antes do vídeo (1/30 s com o post neste instante): no carrossel a
+   * Meta usa o primeiro quadro como miniatura e ignora o `thumb_offset`.
+   */
+  coverAt?: number
 }
 
 export async function postToMp4(post: Post, images: ImageMap, opts: VideoOptions = {}): Promise<Blob> {
-  if (!videoSupported()) throw new Error('Este navegador não gera vídeo. Use o Chrome ou o Edge atualizados.')
   const size = sizeOf(post.format)
-  // H.264 pede lados pares
+  const renderer = new MotionRenderer(post, images)
+  const lead = opts.coverAt !== undefined ? 1 : 0
   const width = size.width - (size.width % 2)
   const height = size.height - (size.height % 2)
+  const canvas = Object.assign(document.createElement('canvas'), { width, height })
+  const ctx = canvas.getContext('2d', { alpha: false })!
+  return encodeMp4({
+    width: size.width,
+    height: size.height,
+    frames: Math.max(1, Math.round(renderer.total * FPS)) + lead,
+    audio: opts.audio && post.motion?.audio ? { data: opts.audio, cfg: post.motion.audio } : undefined,
+    onProgress: opts.onProgress,
+    signal: opts.signal,
+    frame: async (i) => {
+      const t = lead && i === 0 ? opts.coverAt! : (i - lead) / FPS
+      if (renderer.hasVideo) await renderer.seek(t)
+      renderer.draw(ctx, t)
+      return canvas
+    },
+  })
+}
+
+export interface EncodeOptions {
+  width: number
+  height: number
+  frames: number
+  /** O quadro `i` (o tempo é i / FPS), do tamanho do vídeo. */
+  frame: (i: number) => Promise<CanvasImageSource & { width: number; height: number }>
+  audio?: { data: ArrayBuffer; cfg: MotionAudio }
+  onProgress?: (done: number) => void
+  signal?: AbortSignal
+}
+
+/** Codifica quadros em MP4 (H.264 30 fps + AAC, em silêncio sem trilha). Usado pelos posts e pelas cenas em código. */
+export async function encodeMp4(opts: EncodeOptions): Promise<Blob> {
+  if (!videoSupported()) throw new Error('Este navegador não gera vídeo. Use o Chrome ou o Edge atualizados.')
+  // H.264 pede lados pares
+  const width = opts.width - (opts.width % 2)
+  const height = opts.height - (opts.height % 2)
   const bitrate = Math.round(Math.min(16_000_000, Math.max(4_000_000, width * height * FPS * 0.15)))
   const codec = await pickCodec(width, height, bitrate)
   if (!codec) throw new Error('O navegador não codifica H.264 nesse tamanho.')
   const audio = await silentAudio()
-  if (opts.audio && post.motion?.audio && !audio) throw new Error('Este navegador não codifica o áudio do vídeo. Use o Chrome ou o Edge atualizados, ou tire a trilha.')
+  if (opts.audio && !audio) throw new Error('Este navegador não codifica o áudio do vídeo. Use o Chrome ou o Edge atualizados, ou tire a trilha.')
 
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
@@ -106,9 +148,9 @@ export async function postToMp4(post: Post, images: ImageMap, opts: VideoOptions
   const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => (failure = e) })
   encoder.configure({ codec, width, height, bitrate, framerate: FPS, avc: { format: 'avc' } })
 
-  const renderer = new MotionRenderer(post, images)
-  const total = renderer.total
-  const frames = Math.max(1, Math.round(total * FPS))
+  const frames = Math.max(1, opts.frames)
+  const total = frames / FPS
+  // Um canvas do tamanho exato do vídeo: a fonte pode ter um pixel a mais (lado ímpar)
   const canvas = Object.assign(document.createElement('canvas'), { width, height })
   const ctx = canvas.getContext('2d', { alpha: false })!
 
@@ -116,9 +158,13 @@ export async function postToMp4(post: Post, images: ImageMap, opts: VideoOptions
     for (let i = 0; i < frames; i++) {
       if (opts.signal?.aborted) throw new DOMException('Cancelado', 'AbortError')
       if (failure) throw failure
-      if (renderer.hasVideo) await renderer.seek(i / FPS)
-      renderer.draw(ctx, i / FPS)
-      const frame = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / FPS), duration: Math.round(1e6 / FPS) })
+      const source = await opts.frame(i)
+      let input: CanvasImageSource = source
+      if (source.width !== width || source.height !== height) {
+        ctx.drawImage(source, 0, 0)
+        input = canvas
+      }
+      const frame = new VideoFrame(input, { timestamp: Math.round((i * 1e6) / FPS), duration: Math.round(1e6 / FPS) })
       encoder.encode(frame, { keyFrame: i % (FPS * 2) === 0 })
       frame.close()
       // Não deixa a fila crescer: o codificador vai no ritmo dele
@@ -140,7 +186,7 @@ export async function postToMp4(post: Post, images: ImageMap, opts: VideoOptions
     aenc.configure({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 96000 })
     const chunk = 4800
     const samples = Math.ceil(total * RATE)
-    const mixed = opts.audio && post.motion?.audio ? await mixAudio(opts.audio, post.motion.audio, total) : undefined
+    const mixed = opts.audio ? await mixAudio(opts.audio.data, opts.audio.cfg, total) : undefined
     const left = mixed?.getChannelData(0)
     const right = mixed ? mixed.getChannelData(Math.min(1, mixed.numberOfChannels - 1)) : undefined
     const planar = new Float32Array(chunk * 2)
@@ -169,6 +215,17 @@ export interface CarouselItem {
   name: string
   blob: Blob
   type: 'image' | 'video'
+  /** Vídeo: o quadro da capa em milissegundos (o slide já montado, ou a capa escolhida no primeiro). */
+  thumbOffset?: number
+}
+
+/** O quadro da capa de cada vídeo do carrossel: a capa escolhida no primeiro slide, ou o slide já montado. */
+export function carouselThumbAt(post: Post, slideIndex: number): number {
+  const slide = post.slides[slideIndex]
+  const single = slideAsPost(post, slide)
+  const dur = timeline(single).total
+  const chosen = slideIndex === 0 && post.cover && 'at' in post.cover && post.cover.at < dur ? post.cover.at : undefined
+  return Math.min(Math.max(0, dur - 0.05), chosen ?? defaultCoverAt(single))
 }
 
 /**
@@ -185,11 +242,49 @@ export async function postToCarousel(post: Post, images: ImageMap, opts: { audio
     const n = String(i + 1).padStart(2, '0')
     if (slideHasMotion(slide)) {
       const at = done
-      const blob = await postToMp4(slideAsPost(post, slide), images, { audio: opts.audio, onProgress: (p) => opts.onProgress?.((at + p) / Math.max(1, animated)) })
+      // O primeiro quadro do arquivo é a capa (o Instagram ignora o thumb_offset no carrossel); o offset 0 aponta para ele
+      const blob = await postToMp4(slideAsPost(post, slide), images, { audio: opts.audio, coverAt: carouselThumbAt(post, i), onProgress: (p) => opts.onProgress?.((at + p) / Math.max(1, animated)) })
       done++
-      items.push({ name: `${base}-${n}.mp4`, blob, type: 'video' })
+      items.push({ name: `${base}-${n}.mp4`, blob, type: 'video', thumbOffset: 0 })
     } else items.push({ name: `${base}-${n}.jpg`, blob: await slideToBlob(slide, post.format, images, 'jpg'), type: 'image' })
   }
   opts.onProgress?.(1)
   return items
+}
+
+/** O momento padrão da capa: o primeiro slide já montado (no segundo zero quase nada entrou ainda). */
+export function defaultCoverAt(post: Post): number {
+  const first = timeline(post).segments[0]
+  if (!first) return 0
+  return Math.min(first.dur - 0.05, entrancesEnd(first.slide) + 0.3)
+}
+
+/** O momento da capa escolhida (ou o padrão), dentro do vídeo. */
+export function coverAtOf(post: Post): number {
+  const total = timeline(post).total
+  const at = post.cover && 'at' in post.cover ? post.cover.at : defaultCoverAt(post)
+  return Math.min(Math.max(0, total - 0.05), Math.max(0, at))
+}
+
+/** Um quadro do vídeo do post em JPEG, no tamanho do formato (a capa do reels). */
+export async function frameAt(post: Post, images: ImageMap, time: number): Promise<Blob> {
+  const { width, height } = sizeOf(post.format)
+  const canvas = Object.assign(document.createElement('canvas'), { width, height })
+  const ctx = canvas.getContext('2d', { alpha: false })!
+  const renderer = new MotionRenderer(post, images)
+  if (renderer.hasVideo) await renderer.seek(time)
+  renderer.draw(ctx, time)
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Não consegui gerar a capa.'))), 'image/jpeg', 0.92))
+}
+
+/** Uma imagem enviada como capa, cortada ao centro no tamanho do formato. */
+export async function imageCover(post: Post, image: CanvasImageSource & { width: number; height: number }): Promise<Blob> {
+  const { width, height } = sizeOf(post.format)
+  const canvas = Object.assign(document.createElement('canvas'), { width, height })
+  const ctx = canvas.getContext('2d', { alpha: false })!
+  const k = Math.max(width / image.width, height / image.height)
+  const w = image.width * k
+  const h = image.height * k
+  ctx.drawImage(image, (width - w) / 2, (height - h) / 2, w, h)
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Não consegui gerar a capa.'))), 'image/jpeg', 0.92))
 }

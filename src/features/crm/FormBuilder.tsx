@@ -321,7 +321,8 @@ export const StepsEditor: React.FC<{ definition: FormDefinition; onChange: (defi
       {definition.steps.map((step, si) => {
         const before = definition.steps.slice(0, si).flatMap((s) => s.fields)
         return (
-          <Surface key={step.id} className="!p-0 overflow-hidden">
+          <div key={step.id} id={`etapa-${si + 1}`} className="scroll-mt-4">
+          <Surface className="!p-0 overflow-hidden">
             <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2">
               <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-gray-600">Etapa {si + 1}</span>
               {/* Enter quebra a linha no título (sai assim na tela); a caixa cresce com o texto */}
@@ -358,13 +359,23 @@ export const StepsEditor: React.FC<{ definition: FormDefinition; onChange: (defi
             <ul className="grid gap-2 p-3">
               {step.fields.map((field, fi) => {
                 const expanded = open === field.id
+                // O mesmo que a conferência de publicar acusa: aparece em vermelho aqui, onde se corrige
+                const opts = field.options ?? []
+                const problem = !field.label.trim() && !(step.fields.length === 1 && step.title?.trim())
+                  ? 'Pergunta sem texto'
+                  : hasOptions(field.type) && opts.length && opts.every((o) => /^Opção \d+$/.test(o.label.trim()))
+                    ? 'Opções ainda com o texto padrão'
+                    : hasOptions(field.type) && opts.length < 2
+                      ? 'Precisa de 2 opções ou mais'
+                      : undefined
                 const setField = (patch: Partial<FormField>) => setStep(step.id, { fields: step.fields.map((f) => (f.id === field.id ? { ...f, ...patch } : f)) })
                 return (
-                  <li key={field.id} className={cn('overflow-hidden rounded-lg border bg-white', expanded ? 'border-violet-300 ring-1 ring-violet-200' : 'border-gray-200')}>
+                  <li key={field.id} className={cn('overflow-hidden rounded-lg border bg-white', expanded ? 'border-violet-300 ring-1 ring-violet-200' : problem ? 'border-rose-300 ring-1 ring-rose-200' : 'border-gray-200')}>
                     <div className="flex items-center gap-1">
                       <button type="button" onClick={() => setOpen(expanded ? undefined : field.id)} aria-expanded={expanded} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left">
                         <GripVertical className="h-4 w-4 shrink-0 text-gray-300" aria-hidden />
                         <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">{field.label || <span className="text-gray-400">Sem pergunta</span>}{field.required && <span className="ml-1 text-violet-600">*</span>}</span>
+                        {problem && <span className="shrink-0 rounded bg-rose-50 px-1.5 py-0.5 text-xs font-medium text-rose-700">{problem}</span>}
                         <span className="shrink-0 text-xs text-gray-500">{typeLabel(field.type)}</span>
                         {field.showIf && <CircleHelp className="h-3.5 w-3.5 shrink-0 text-violet-500" aria-label="Tem lógica" />}
                       </button>
@@ -402,6 +413,7 @@ export const StepsEditor: React.FC<{ definition: FormDefinition; onChange: (defi
               }}
             />
           </Surface>
+          </div>
         )
       })}
       <Button type="button" variant="outline" onClick={() => onChange({ ...definition, steps: [...definition.steps, { id: newId('s'), fields: [] }] })}>

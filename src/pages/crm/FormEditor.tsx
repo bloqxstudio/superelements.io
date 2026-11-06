@@ -321,7 +321,10 @@ const FormEditor: React.FC = () => {
                 {i.text}
               </span>
               {i.step && (
-                <button type="button" className="ml-auto shrink-0 text-xs font-medium text-violet-700 hover:underline" onClick={() => { setTab('construir'); setScreen('steps') }}>
+                <button type="button" className="ml-auto shrink-0 text-xs font-medium text-violet-700 hover:underline" onClick={() => {
+                    setTab('construir')
+                    setTimeout(() => document.getElementById(`etapa-${i.step}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+                  }}>
                   Ver na etapa {i.step}
                 </button>
               )}
