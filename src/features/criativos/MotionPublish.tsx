@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { CalendarClock, ExternalLink, Loader2, Send } from 'lucide-react'
+import { CalendarClock, ExternalLink, Loader2, Send, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
@@ -13,9 +13,13 @@ import { insertStories } from '@/features/crm/stories'
 import { approveStory } from '@/features/crm/storyPipeline'
 import type { StoryIdea } from '@/features/crm/storyPlan'
 import { useEditor } from './store'
-import { hasMotion, postOutput, slideAsPost, slideDuration, slideHasMotion, timeline } from './motion'
+import { useAiAvailable } from './link'
+import { writeCaption } from './captionAi'
+import { clearSlideMotion, hasMotion, postOutput, slideAsPost, slideDuration, slideHasMotion, timeline } from './motion'
 import { slideToBlob } from './render'
-import { audioFor, postToCarousel, postToMp4, videoSupported } from './video'
+import { audioFor, coverAtOf, frameAt, imageCover, postToCarousel, postToMp4, videoSupported } from './video'
+import { CoverPicker } from './CoverPicker'
+import type { ImageMap } from './render'
 import { sizeOf, type Post } from './types'
 
 /**
@@ -44,6 +48,15 @@ const localInput = (ms: number) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+/** A capa do reels em JPEG: a imagem enviada, ou o quadro escolhido do vídeo (o sugerido, sem escolha). */
+async function coverFile(post: Post, images: ImageMap): Promise<Prepared> {
+  const src = post.cover && 'src' in post.cover ? post.cover.src : undefined
+  if (src) await useEditor.getState().ensureImage(src)
+  const image = src ? useEditor.getState().images.get(src) : undefined
+  const blob = image ? await imageCover(post, image) : await frameAt(post, images, coverAtOf(post))
+  return prepareImage(blob, 'capa.jpg')
+}
+
 export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () => void }> = ({ post, open, onClose }) => {
   const [accounts, setAccounts] = useState<IgAccount[] | null>(null)
   const [teamId, setTeamId] = useState<string>()
@@ -52,9 +65,17 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
   const { width, height } = sizeOf(post.format)
   const vertical = height / width > 1.7
   const multi = post.slides.length > 1
-  const animated = hasMotion(post)
+  const motionOn = hasMotion(post)
+  // Post animado também sai parado, como foto ou carrossel de fotos (o usuário, 2026-11-06)
+  const [still, setStill] = useState(false)
+  const animated = motionOn && !still
   const kinds = animated ? (['feed', 'reel', 'story'] as const) : (['feed', 'story'] as const)
-  const [kind, setKind] = useState<'reel' | 'story' | 'feed'>(() => (!animated ? (vertical ? 'story' : 'feed') : multi && postOutput(post) === 'carousel' ? 'feed' : 'reel'))
+  const [kind, setKind] = useState<'reel' | 'story' | 'feed'>(() => (!motionOn ? (vertical ? 'story' : 'feed') : multi && (postOutput(post) === 'carousel' || !vertical) ? 'feed' : 'reel'))
+  const chooseStill = (on: boolean) => {
+    setStill(on)
+    if (on && kind === 'reel') setKind(vertical ? 'story' : 'feed')
+    if (on) setWhen('agora')
+  }
   const [caption, setCaption] = useState(post.caption ?? '')
   const [shareToFeed, setShareToFeed] = useState(true)
   const [when, setWhen] = useState<When>('agora')
@@ -62,6 +83,7 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
   const [step, setStep] = useState<PublishStep | 'gerando' | null>(null)
   const [progress, setProgress] = useState(0)
   const [done, setDone] = useState<{ permalink?: string; scheduled?: number } | null>(null)
+  const images = useEditor((s) => s.images)
   const total = timeline(post).total
 
   useEffect(() => {
@@ -94,10 +116,10 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
   const busy = step !== null && !done
   const tooShort = kind === 'reel' && total < 3
   const storyTooLong = kind === 'story' && animated && total > 60
-  const noVideo = (kind === 'reel' || (animated && kind !== 'feed') || (kind === 'feed' && post.slides.some(slideHasMotion))) && !videoSupported()
+  const noVideo = (kind === 'reel' || (animated && kind !== 'feed') || (kind === 'feed' && !still && post.slides.some(slideHasMotion))) && !videoSupported()
   // Carrossel: cada slide um item; os animados viram vídeo (3 a 60 s cada), os parados, foto
   const ratio = width / height
-  const videoSlides = post.slides.filter(slideHasMotion)
+  const videoSlides = still ? [] : post.slides.filter(slideHasMotion)
   const outside = ratio < FEED_RATIO.min - 0.01 || ratio > FEED_RATIO.max + 0.01
   // Foto fora da proporção do feed é cortada ao centro; vídeo não dá para cortar
   const feedOff = kind === 'feed' && outside && videoSlides.length > 0
@@ -112,11 +134,14 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
         setProgress(0)
         await useEditor.getState().ensureAssets()
         const { set: current, images } = useEditor.getState()
-        const fresh = current?.posts.find((p) => p.id === post.id) ?? post
+        const latest = current?.posts.find((p) => p.id === post.id) ?? post
+        const fresh = still ? { ...latest, slides: latest.slides.map(clearSlideMotion) } : latest
         const items = await postToCarousel(fresh, images, { onProgress: setProgress, audio: current ? await audioFor(fresh, current.assets) : undefined, base: post.name || 'slide' })
         const files: Prepared[] = []
-        for (const item of items) files.push(item.type === 'video' ? await prepareVideo(new File([item.blob], item.name, { type: 'video/mp4' })) : await prepareImage(item.blob, item.name, feedRatio(width, height)))
-        const published = await publishPost({ teamId, accountId: account.id, kind: 'feed', caption, files, onStep: setStep })
+        for (const item of items) files.push(item.type === 'video' ? { ...(await prepareVideo(new File([item.blob], item.name, { type: 'video/mp4' }))), thumbOffset: item.thumbOffset } : await prepareImage(item.blob, item.name, feedRatio(width, height)))
+        const cover = files.length === 1 && files[0].type === 'video' ? await coverFile(fresh, images) : undefined
+        const published = await publishPost({ teamId, accountId: account.id, kind: 'feed', caption, files, cover, onStep: setStep })
+        if (cover) URL.revokeObjectURL(cover.url)
         files.forEach((f) => URL.revokeObjectURL(f.url))
         setDone({ permalink: published.permalink })
         toast.success(files.length > 1 ? 'Carrossel publicado.' : 'Post publicado.')
@@ -170,8 +195,10 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
       const fresh = current?.posts.find((p) => p.id === post.id) ?? post
       const blob = await postToMp4(fresh, images, { onProgress: setProgress, audio: current ? await audioFor(fresh, current.assets) : undefined })
       const file = await prepareVideo(new File([blob], `${post.name || 'motion'}.mp4`, { type: 'video/mp4' }))
-      const published = await publishPost({ teamId, accountId: account.id, kind, caption: kind === 'reel' ? caption : '', files: [file], shareToFeed, onStep: setStep })
+      const cover = kind === 'reel' ? await coverFile(fresh, images) : undefined
+      const published = await publishPost({ teamId, accountId: account.id, kind, caption: kind === 'reel' ? caption : '', files: [file], shareToFeed, cover, onStep: setStep })
       URL.revokeObjectURL(file.url)
+      if (cover) URL.revokeObjectURL(cover.url)
       setDone({ permalink: published.permalink })
       toast.success(kind === 'reel' ? 'Reels publicado.' : 'Story publicado.')
     } catch (err) {
@@ -182,7 +209,7 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Publicar no Instagram</DialogTitle>
           <DialogDescription>
@@ -219,12 +246,18 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
                 </select>
               </label>
             )}
+            {motionOn && (
+              <label className="flex items-center justify-between gap-2 text-sm text-gray-700">
+                <span>Publicar parado<span className="block text-xs text-gray-500">{still ? 'Sai como foto (ou carrossel de fotos), sem a animação.' : 'O post tem motion e sai em vídeo. Ligue para sair como imagem.'}</span></span>
+                <Switch checked={still} onCheckedChange={chooseStill} disabled={busy} />
+              </label>
+            )}
             <div className={cn('grid gap-1.5', kinds.length === 3 ? 'grid-cols-3' : 'grid-cols-2')}>
               {kinds.map((k) => (
                 <button key={k} type="button" disabled={busy} onClick={() => { setKind(k); if (k === 'feed') setWhen('agora') }} className={cn('h-9 rounded-md border text-sm font-medium', kind === k ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50')}>{k === 'reel' ? 'Reels' : k === 'story' ? 'Story' : multi ? 'Carrossel' : 'Feed'}</button>
               ))}
             </div>
-            {!animated && kind === 'feed' && <p className="text-xs text-gray-600">{multi ? `Carrossel de ${post.slides.length} fotos.` : 'Uma foto no feed.'}{outside ? ` O feed vai de 4:5 a 1,91:1: ${multi ? 'as fotos saem cortadas' : 'a foto sai cortada'} ao centro.` : ''} Para um reels ou um carrossel com vídeo, anime o post na aba Motion.</p>}
+            {!animated && kind === 'feed' && <p className="text-xs text-gray-600">{multi ? `Carrossel de ${post.slides.length} fotos.` : 'Uma foto no feed.'}{outside ? ` O feed vai de 4:5 a 1,91:1: ${multi ? 'as fotos saem cortadas' : 'a foto sai cortada'} ao centro.` : ''}{motionOn ? '' : ' Para um reels ou um carrossel com vídeo, anime o post na aba Motion.'}</p>}
             {!animated && kind === 'story' && multi && <p className="text-xs text-gray-600">{when === 'agora' ? 'Story agora leva só o primeiro slide.' : `Programado, sai uma sequência de ${post.slides.length} stories.`}</p>}
             {noVideo && <p className="text-xs text-amber-700">Este navegador não gera vídeo: use o Chrome ou o Edge atualizados.</p>}
             {kind === 'feed' && animated && (
@@ -241,21 +274,38 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
             {storyTooLong && <p className="text-xs text-amber-700">Story em vídeo vai até 60 segundos.</p>}
             {kind === 'feed' && (
               <label className="block text-xs font-medium text-gray-700">Legenda
-                <textarea className={cn(field, 'mt-1 h-28 py-1.5 leading-snug')} maxLength={2200} value={caption} onChange={(e) => setCaption(e.target.value)} disabled={busy} placeholder="A legenda do carrossel." />
+                <CaptionInput post={post} value={caption} onChange={setCaption} disabled={busy} placeholder={multi ? 'A legenda do carrossel.' : 'A legenda do post.'} />
               </label>
             )}
             {kind === 'reel' && (
               <>
                 <label className="block text-xs font-medium text-gray-700">Legenda
-                  <textarea className={cn(field, 'mt-1 h-28 py-1.5 leading-snug')} maxLength={2200} value={caption} onChange={(e) => setCaption(e.target.value)} disabled={busy} placeholder="A legenda do reels." />
+                  <CaptionInput post={post} value={caption} onChange={setCaption} disabled={busy} placeholder="A legenda do reels." />
                 </label>
                 <label className="flex items-center justify-between gap-2 text-sm text-gray-700">Mostrar também no feed<Switch checked={shareToFeed} onCheckedChange={setShareToFeed} disabled={busy} /></label>
               </>
             )}
-            {kind === 'story' && <p className="text-xs text-gray-500">Story não leva legenda pela API.</p>}
+            {(kind === 'reel' || (kind === 'feed' && !multi && animated)) && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-700">Capa do vídeo</p>
+                {when === 'programar' && kind === 'reel' ? (
+                  <p className="text-xs text-gray-500">No programado, o Instagram usa o primeiro quadro como capa. Para escolher a capa, publique agora.</p>
+                ) : (
+                  <CoverPicker post={post} images={images} disabled={busy} />
+                )}
+              </div>
+            )}
+            {kind === 'feed' && multi && !still && slideHasMotion(post.slides[0]) && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-700">Capa do carrossel (o vídeo do slide 1)</p>
+                <CoverPicker post={slideAsPost(post, post.slides[0])} images={images} disabled={busy} allowImage={false} />
+                {videoSlides.length > 1 && <p className="text-[11px] text-gray-500">Os outros vídeos do carrossel usam o quadro com o slide já montado.</p>}
+              </div>
+            )}
+            {kind === 'story' && <p className="text-xs text-gray-500">Story não leva legenda pela API.{still ? ' Parado, sai agora a foto do primeiro slide (a fila programada gera vídeo de post animado).' : ''}</p>}
 
             {kind === 'feed' && <p className="text-xs text-gray-500">O carrossel publica agora; a fila programada recebe reels e stories.</p>}
-            <div className={cn('grid grid-cols-2 gap-1.5', kind === 'feed' && 'hidden')}>
+            <div className={cn('grid grid-cols-2 gap-1.5', (kind === 'feed' || still) && 'hidden')}>
               {(['agora', 'programar'] as const).map((w) => (
                 <button key={w} type="button" disabled={busy} onClick={() => setWhen(w)} className={cn('h-9 rounded-md border text-sm font-medium', when === w ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50')}>{w === 'agora' ? 'Publicar agora' : 'Programar'}</button>
               ))}
@@ -277,6 +327,61 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** A legenda guardada no post (vale para a próxima vez e para quem abrir o conjunto). */
+const saveCaption = (postId: string, caption: string) => {
+  const current = useEditor.getState().set?.posts.find((p) => p.id === postId)
+  if (!current || (current.caption ?? '') === caption) return
+  useEditor.getState().edit((s) => ({ ...s, posts: s.posts.map((p) => (p.id === postId ? { ...p, caption } : p)) }))
+}
+
+/** O campo da legenda, com "Escrever com IA" quando o post ainda não tem copy. */
+const CaptionInput: React.FC<{ post: Post; value: string; onChange: (v: string) => void; disabled?: boolean; placeholder: string }> = ({ post, value, onChange, disabled, placeholder }) => {
+  const ai = useAiAvailable()
+  const [writing, setWriting] = useState(false)
+  const [info, setInfo] = useState<{ used: string[]; missing: string[]; angle?: string } | null>(null)
+  const write = async () => {
+    const set = useEditor.getState().set
+    if (!set) return
+    setWriting(true)
+    try {
+      const fresh = set.posts.find((p) => p.id === post.id) ?? post
+      const result = await writeCaption(set, fresh)
+      onChange(result.caption)
+      saveCaption(post.id, result.caption)
+      setInfo(result)
+      toast.success('Legenda escrita. Revise antes de publicar.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Não consegui escrever a legenda.')
+    } finally {
+      setWriting(false)
+    }
+  }
+  return (
+    <div className="mt-1 space-y-1">
+      <textarea className={cn(field, 'h-28 py-1.5 leading-snug')} maxLength={2200} value={value} onChange={(e) => onChange(e.target.value)} onBlur={(e) => saveCaption(post.id, e.target.value)} disabled={disabled || writing} placeholder={writing ? 'A IA está escrevendo a legenda…' : placeholder} />
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 bg-white text-xs" disabled={disabled || writing || !ai} onClick={() => void write()} title={ai ? 'A IA escreve a legenda a partir do texto dos slides e do Plano da conta' : 'Conecte a IA desta máquina (o conector) para escrever com IA'}>
+          {writing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-violet-600" />} {value.trim() ? 'Reescrever com IA' : 'Escrever com IA'}
+        </Button>
+        {!ai && <span className="text-[11px] font-normal text-gray-500">Conecte a IA desta máquina para escrever com ela.</span>}
+        <span className="ml-auto text-[11px] font-normal tabular-nums text-gray-400">{value.length}/2200</span>
+      </div>
+      {writing && <p className="text-[11px] font-normal text-gray-500">Lendo o Plano, a marca, o Instagram da conta e o texto dos slides…</p>}
+      {info && !writing && (
+        <div className="space-y-0.5 rounded-md bg-gray-50 p-2 text-[11px] font-normal leading-snug text-gray-600">
+          {info.angle && <p><span className="font-medium text-gray-800">Ângulo:</span> {info.angle}</p>}
+          {info.used.length > 0 && <p><span className="font-medium text-gray-800">Usou:</span> {info.used.join(', ')}.</p>}
+          {info.missing.length > 0 && (
+            <p className="text-amber-700">
+              Faltou {info.missing.join(' e ')}: a legenda sai menos aplicada. <Link to="/plano" className="underline">Preencher o Plano</Link>
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

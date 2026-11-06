@@ -1,4 +1,5 @@
 import { codexModelArgs } from './codex.ts'
+import { codexIsolationArgs } from './codexIsolation.ts'
 import type { ChildProcess } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -77,11 +78,44 @@ const fail = async (res: Response, who: string): Promise<never> => {
   throw new Error(`${who} respondeu ${res.status}.${detail ? ` ${detail}` : ''}`)
 }
 
-async function viaOpenAI(prompt: string, ratio: ImageRatio, signal?: AbortSignal) {
+/**
+ * Tratar uma foto que já existe (2026-11-05, o usuário: "não estou conseguindo tratar imagens… melhorar recortes, trocar
+ * cores"): antes toda foto nascia de novo a partir de um texto, e a IA dos criativos só mexe nas camadas, nunca nos pixels.
+ * `edit`: a primeira referência é a foto a mudar e o pedido diz só o que muda; `transparent`: devolver PNG sem fundo.
+ */
+export interface ImageEditOptions {
+  edit?: boolean
+  transparent?: boolean
+}
+
+const dataPart = (data: string) => {
+  const m = /^data:(image\/(?:png|jpe?g|webp));base64,(.+)$/.exec(data)
+  return m ? { mime: m[1], b64: m[2] } : undefined
+}
+
+async function viaOpenAI(prompt: string, ratio: ImageRatio, signal?: AbortSignal, references: string[] = [], opts: ImageEditOptions = {}) {
+  const source = opts.edit ? dataPart(references[0] ?? '') : undefined
+  if (source) {
+    // Edição de verdade: o endpoint de edição recebe a foto e devolve a mesma foto mudada (com fundo transparente, se pedido)
+    const form = new FormData()
+    form.append('model', OPENAI_MODEL())
+    form.append('prompt', prompt)
+    form.append('size', OPENAI_SIZE[ratio])
+    form.append('quality', 'high')
+    form.append('input_fidelity', 'high')
+    if (opts.transparent) form.append('background', 'transparent')
+    form.append('image', new Blob([Buffer.from(source.b64, 'base64')], { type: source.mime }), `foto.${source.mime.split('/')[1]}`)
+    const res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { authorization: `Bearer ${keyOf('openai')}` }, body: form, signal })
+    if (!res.ok) return fail(res, 'O OpenAI')
+    const body = (await res.json()) as { data?: { b64_json?: string }[] }
+    const b64 = body.data?.[0]?.b64_json
+    if (!b64) throw new Error('O OpenAI não devolveu a imagem.')
+    return { data: `data:image/png;base64,${b64}`, model: OPENAI_MODEL() }
+  }
   const res = await fetch('https://api.openai.com/v1/images/generations', {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${keyOf('openai')}` },
-    body: JSON.stringify({ model: OPENAI_MODEL(), prompt, size: OPENAI_SIZE[ratio], n: 1, quality: 'medium' }),
+    body: JSON.stringify({ model: OPENAI_MODEL(), prompt, size: OPENAI_SIZE[ratio], n: 1, quality: 'medium', ...(opts.transparent ? { background: 'transparent' } : {}) }),
     signal,
   })
   if (!res.ok) return fail(res, 'O OpenAI')
@@ -91,12 +125,13 @@ async function viaOpenAI(prompt: string, ratio: ImageRatio, signal?: AbortSignal
   return { data: `data:image/png;base64,${b64}`, model: OPENAI_MODEL() }
 }
 
-async function viaGemini(prompt: string, ratio: ImageRatio, signal?: AbortSignal) {
+async function viaGemini(prompt: string, ratio: ImageRatio, signal?: AbortSignal, references: string[] = [], opts: ImageEditOptions = {}) {
+  const source = opts.edit ? dataPart(references[0] ?? '') : undefined
   const model = GEMINI_MODEL()
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': keyOf('gemini') ?? '' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: GEMINI_RATIO[ratio] } } }),
+    body: JSON.stringify({ contents: [{ parts: [...(source ? [{ inlineData: { mimeType: source.mime, data: source.b64 } }] : []), { text: prompt }] }], generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: GEMINI_RATIO[ratio] } } }),
     signal,
   })
   if (!res.ok) return fail(res, 'O Google')
@@ -139,7 +174,7 @@ function newestImage(dir: string, since: number, depth = 1): { file: string; at:
   return best
 }
 
-async function viaCodex(prompt: string, ratio: ImageRatio, signal?: AbortSignal, references: string[] = []): Promise<{ data: string; model: string }> {
+async function viaCodex(prompt: string, ratio: ImageRatio, signal?: AbortSignal, references: string[] = [], opts: ImageEditOptions = {}): Promise<{ data: string; model: string }> {
   const bin = findBin('codex')
   if (!bin) throw new Error('O Codex não foi encontrado neste computador.')
   // Imagens de referência (2026-11-03: fotos de produto fiéis ao painel de cada modelo): numa pasta à parte,
@@ -153,11 +188,21 @@ async function viaCodex(prompt: string, ratio: ImageRatio, signal?: AbortSignal,
     return [f]
   })
   const refArgs = refFiles.flatMap((f) => ['-i', f])
+  const editing = opts.edit && refFiles.length > 0
   const text = [
-    'Use your built-in image generation tool (image_gen) to create exactly ONE image, and nothing else.',
-    ...(refFiles.length ? ['The attached image(s) are references: follow them for the exact shape and details they show, as the description says. Create a new original photo; do not copy logos, watermarks or text from the references.'] : []),
+    ...(editing
+      ? [
+          'Use your built-in image generation tool (image_gen) to EDIT the first attached image (referencia-1) and produce exactly ONE edited image, and nothing else.',
+          'This is a retouch, not a new picture: keep the same subject, people, product, shape, details, framing, camera angle, composition and proportions. Change only what the instruction asks. Never add text, logos or watermarks. Output the full image at the highest resolution available.',
+          ...(refFiles.length > 1 ? ['The other attached images are only style references for the change.'] : []),
+        ]
+      : [
+          'Use your built-in image generation tool (image_gen) to create exactly ONE image, and nothing else.',
+          ...(refFiles.length ? ['The attached image(s) are references: follow them for the exact shape and details they show, as the description says. Create a new original photo; do not copy logos, watermarks or text from the references.'] : []),
+        ]),
+    ...(opts.transparent ? ['The result must be a PNG with a fully transparent background (real alpha channel): only the subject, with clean, precise edges, no halo, no fringe, no leftover background, no drop shadow, no checkerboard pattern drawn in.'] : []),
     'Do not write code, do not create or edit project files, do not search the web, do not ask questions.',
-    `Image description: ${prompt}`,
+    `${editing ? 'Edit instruction' : 'Image description'}: ${prompt}`,
     `Orientation: ${SHAPE[ratio]}.`,
     'When the image is generated, reply with the single word OK.',
   ].join('\n')
@@ -170,7 +215,7 @@ async function viaCodex(prompt: string, ratio: ImageRatio, signal?: AbortSignal,
       for (const key of ['CODEX_THREAD_ID', 'CODEX_SESSION_ID']) delete env[key]
       let child: ChildProcess
       try {
-        child = launch(bin, ['exec', ...refArgs, '--json', '--skip-git-repo-check', '-s', 'workspace-write', '-c', 'approval_policy="never"', ...codexModelArgs(), ...extra, '-'], { cwd, env })
+        child = launch(bin, ['exec', ...refArgs, '--json', '--skip-git-repo-check', '-s', 'workspace-write', '-c', 'approval_policy="never"', ...codexModelArgs(), ...codexIsolationArgs(), ...extra, '-'], { cwd, env })
       } catch (error) {
         rmSync(cwd, { recursive: true, force: true })
         return reject(new Error(`Não consegui abrir o Codex: ${error instanceof Error ? error.message : String(error)}`))
@@ -271,13 +316,13 @@ export interface GeneratedImage {
   model: string
 }
 
-export async function generateImage(prompt: string, ratio: ImageRatio, signal?: AbortSignal, prefer?: ImageProvider, references: string[] = []): Promise<GeneratedImage> {
+export async function generateImage(prompt: string, ratio: ImageRatio, signal?: AbortSignal, prefer?: ImageProvider, references: string[] = [], opts: ImageEditOptions = {}): Promise<GeneratedImage> {
   const ready = imageProviders()
   const provider = prefer && ready.includes(prefer) ? prefer : ready[0]
   if (!provider) throw new Error('Nenhum serviço de imagem pronto neste computador: instale e entre no Codex, ou guarde uma chave do OpenAI ou do Google.')
   const clean = prompt.trim().slice(0, 3500)
   if (!clean) throw new Error('Faltou descrever a imagem.')
-  const out = provider === 'codex' ? await viaCodex(clean, ratio, signal, references) : provider === 'openai' ? await viaOpenAI(clean, ratio, signal) : await viaGemini(clean, ratio, signal)
+  const out = provider === 'codex' ? await viaCodex(clean, ratio, signal, references, opts) : provider === 'openai' ? await viaOpenAI(clean, ratio, signal, references, opts) : await viaGemini(clean, ratio, signal, references, opts)
   return { ...out, provider }
 }
 

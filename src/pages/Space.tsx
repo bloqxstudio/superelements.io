@@ -21,7 +21,7 @@ const NO_INSETS = { left: 0, right: 0 }
 /**
  * O projeto aberto, no desenho do Framer: a barra em cima, à esquerda as
  * páginas, as camadas e a Biblioteca, no meio o canvas com todas as páginas
- * lado a lado, e à direita o agente e o estilo do que está selecionado.
+ * lado a lado, e à direita o estilo do que está selecionado. O agente do projeto fica na Iara.
  */
 const Space: React.FC = () => {
   const { projectId = '' } = useParams()

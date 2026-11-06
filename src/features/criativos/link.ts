@@ -3,6 +3,7 @@ import { personaFor, profileNow } from '@/features/ia/perfis'
 import { create } from 'zustand'
 import type { AgentChannel } from '@/features/space/connector/channel'
 import { finishJob, noteJob, patchJob, startJob } from '@/features/operations/jobs'
+import { checkpoint, joinSignals, workSignal } from '@/features/ia/work'
 import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageProvider, type CreativeCall, type CreativeProgress, type CreativeResult, type CreativeStep } from './protocol'
 
 /**
@@ -151,11 +152,21 @@ export function callAi<T>(kind: CreativeCall['kind'], rawRequest: unknown, signa
 export const callAiQuiet = <T>(kind: CreativeCall['kind'], rawRequest: unknown, signal?: AbortSignal, onStep?: (step: CreativeStep, detail?: string) => void): Promise<T> =>
   callAiRaw<T>(kind, withProfile(kind, rawRequest), signal, onStep)
 
+/** Com um trabalho da Iara em andamento: espera enquanto ele está pausado e cancela junto se ele for parado (`ia/work.ts`). */
 function callAiRaw<T>(kind: CreativeCall['kind'], request: unknown, signal?: AbortSignal, onStep?: (step: CreativeStep, detail?: string) => void): Promise<T> {
+  const work = workSignal()
+  if (!work) return callAiNow<T>(kind, request, signal, onStep)
+  return checkpoint().then(() => callAiNow<T>(kind, request, joinSignals(signal, work), onStep))
+}
+
+function callAiNow<T>(kind: CreativeCall['kind'], request: unknown, signal?: AbortSignal, onStep?: (step: CreativeStep, detail?: string) => void): Promise<T> {
   const { channel, connected, stale } = useCreativeLink.getState()
   if (!channel || !connected) return Promise.reject(new Error('A IA não está conectada. Abra o app local ou o conector.'))
   if (stale) return Promise.reject(new Error(STALE_MESSAGE))
   const id = crypto.randomUUID()
+  const r = (request ?? {}) as { engine?: string; agent?: string }
+  const engine = r.engine ?? r.agent
+  const who = engine === 'codex' ? 'Codex' : engine === 'claude' ? 'Claude Code' : 'agente'
   return new Promise<T>((resolve, reject) => {
     const abort = () => {
       if (!pending.delete(id)) return
@@ -180,7 +191,9 @@ function callAiRaw<T>(kind: CreativeCall['kind'], request: unknown, signal?: Abo
     }
     const alive = (step: CreativeStep, detail?: string) => {
       clearTimeout(silence)
-      if (watch) silence = setTimeout(() => fail('O Claude Code parou de responder. Tente de novo.'), SILENCE * 2)
+      // Depois do primeiro sinal o conector está vivo: o servidor tem o próprio limite de silêncio por agente,
+      // e o Codex (gpt-6.1-sol) pode pensar minutos entre um sinal e outro (2026-11-05: a série falhava aos 90 s)
+      if (watch) silence = setTimeout(() => fail(`O ${who} parou de responder (sem sinal há 5 minutos). Tente de novo.`), 5 * 60_000)
       onStep?.(step, detail)
     }
     pending.set(id, {

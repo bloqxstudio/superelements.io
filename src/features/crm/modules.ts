@@ -99,7 +99,7 @@ export function moduleOfPath(pathname: string): ModuleId | undefined {
   if (p === '/' || p.startsWith('/projetos')) return 'projetos'
   if (p.startsWith('/agentes')) return 'agentes'
   // Plano e Conteúdos moram no módulo Copy: o banco usa o mesmo módulo (migração 20261031041728)
-  if (p.startsWith('/copy') || p === '/plano' || p.startsWith('/conteudos')) return 'copy'
+  if (p.startsWith('/copy') || p === '/plano' || p === '/pauta' || p.startsWith('/conteudos')) return 'copy'
   if (p.startsWith('/criativos') || p.startsWith('/motion')) return 'criativos'
   if (p.startsWith('/skills')) return 'skills'
   if (p.startsWith('/crm/whatsapp') || p.startsWith('/crm/fluxos')) return 'whatsapp'

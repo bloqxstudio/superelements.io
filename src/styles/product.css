@@ -198,6 +198,13 @@ body:has(.se-product) .se-dialog-content h2 + p { font-size: 13px; line-height: 
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .se-side-panel { border-color: #c8cbd2; }
 }
+/* Com a Iara na lateral, o painel fica à esquerda dela (os dois à vista, sem um cobrir o outro). */
+@media (min-width: 768px) {
+  .se-side-panel { right: calc(12px + var(--iara-dock, 0px)); max-width: calc(100vw - 24px - var(--iara-dock, 0px)); transition: right 200ms ease-out; }
+}
+@media (min-width: 768px) and (prefers-reduced-motion: reduce) {
+  .se-side-panel { transition: none; }
+}
 
 /* Menu lateral recolhido: só os ícones, o nome fica no title */
 .se-sidebar-collapsed .se-sidebar-brand { justify-content: center; padding-inline: 0; }

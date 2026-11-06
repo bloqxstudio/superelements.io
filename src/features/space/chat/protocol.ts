@@ -246,10 +246,20 @@ export interface ChatSendPayload {
   images?: ChatImageUpload[]
   skill?: ChatSkillRef
   task?: ChatTask
+  /**
+   * A Iara (2026-11-05): o chat do projeto é o chat da Iara. `system` são as regras e as ações do
+   * produto (vão na primeira mensagem); `screen`, a tela aberta agora. Na conversa da conta, fora
+   * de um projeto, `projectId` é `conta-<id da conta>`.
+   */
+  iara?: { system?: string; screen?: string }
 }
 
 /** Sessão da ponte (SPACE_SESSION) de um agente no chat de um projeto. */
-export const chatSession = (projectId: string, agent: ChatAgentId, epoch: number) => `chat-${agent}-${projectId.slice(0, 8)}-${epoch.toString(36)}`
+/** A sessão da ponte de uma conversa; cada faixa da equipe rápida (`<projeto>#faixa-N`) tem a sua (um cursor por faixa). */
+export const chatSession = (projectId: string, agent: ChatAgentId, epoch: number) => {
+  const [id, lane] = projectId.split('#')
+  return `chat-${agent}-${id.slice(0, 8)}${lane ? `-${lane.replace(/[^\w-]/g, '').slice(0, 16)}` : ''}-${epoch.toString(36)}`
+}
 
 export const agentInfoByName = (name: string | undefined): ChatAgentInfo | undefined =>
   Object.values(CHAT_AGENTS).find((a) => a.name === name) ??

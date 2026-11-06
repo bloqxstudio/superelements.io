@@ -71,6 +71,13 @@ export interface Content {
   format: ContentFormat
   script: string
   editorialDate?: string
+  /** Horário na Pauta, `HH:MM` (só com data). */
+  scheduledTime?: string
+  /** Canal na Pauta (`crm_contents.channel`, migração 20261105120000). */
+  channel?: string
+  /** O que o cliente respondeu ao último envio deste texto. */
+  clientStatus?: 'enviado' | 'aprovado' | 'ajuste'
+  clientAt?: number
   status: ContentStatus
   version: number
   contentHash: string
@@ -97,7 +104,7 @@ export interface ContentLink {
 
 const TRANSITIONS: Record<ContentStatus, ContentStatus[]> = {
   ideia: ['producao'],
-  producao: ['ideia', 'revisao'],
+  producao: ['ideia', 'revisao', 'aprovado'],
   revisao: ['producao', 'aprovado'],
   aprovado: ['producao'],
 }
@@ -112,7 +119,7 @@ export interface TransitionCheck {
 export function checkTransition(content: Pick<Content, 'status' | 'script'>, to: ContentStatus, role: TeamRoleLike): TransitionCheck {
   if (!TRANSITIONS[content.status].includes(to)) return { ok: false, reason: 'Este caminho não existe: o conteúdo segue de ideia a produção, revisão e aprovação.' }
   if (to === 'aprovado' && !canManage(role)) return { ok: false, reason: 'Só dono e gestor da conta aprovam.' }
-  if (to === 'revisao' && !content.script.trim()) return { ok: false, reason: 'Escreva o roteiro antes de enviar para revisão.' }
+  if ((to === 'revisao' || to === 'aprovado') && !content.script.trim()) return { ok: false, reason: to === 'aprovado' ? 'Escreva o roteiro antes de aprovar.' : 'Escreva o roteiro antes de enviar para revisão.' }
   return { ok: true }
 }
 
@@ -121,6 +128,7 @@ export const TRANSITION_ACTIONS: Record<ContentStatus, { to: ContentStatus; labe
   ideia: [{ to: 'producao', label: 'Começar a produzir', tone: 'primary' }],
   producao: [
     { to: 'revisao', label: 'Enviar para revisão', tone: 'primary' },
+    { to: 'aprovado', label: 'Aprovar direto', tone: 'plain' },
     { to: 'ideia', label: 'Voltar para ideia', tone: 'plain' },
   ],
   revisao: [
@@ -196,7 +204,7 @@ export interface LinkCheck {
   state: LinkState
   /** Frase para a tela. */
   note: string
-  /** Impede aprovar o texto? Só o Copy impede: o roteiro dele precisa ser o aprovado. */
+  /** Impede aprovar o texto? Desde 2026-11-05 nada impede: a diferença com o Copy vira só aviso. */
   blocksApproval: boolean
 }
 
@@ -213,7 +221,7 @@ export function checkLink(kind: 'copy' | 'criativos', args: { script: string; do
     const same = sameScript(args.script, args.docScript ?? '')
     return same
       ? { state: 'igual', note: 'O texto do Copy é o mesmo do roteiro.', blocksApproval: false }
-      : { state: 'diferente', note: 'O texto do documento do Copy é diferente do roteiro deste conteúdo. Traga o texto do Copy ou envie o roteiro antes de aprovar.', blocksApproval: true }
+      : { state: 'diferente', note: 'O texto do documento do Copy é diferente do roteiro deste conteúdo. A aprovação vale para o roteiro; traga o texto do Copy se ele for o certo.', blocksApproval: false }
   }
   const changed = !!args.linkedHash && !!args.currentHash && args.linkedHash !== args.currentHash
   return changed

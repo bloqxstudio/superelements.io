@@ -24,7 +24,8 @@ export const IA_TASKS: { id: IaTask; label: string; hint: string }[] = [
 ]
 
 /** Sem escolha feita, a tarefa prefere esta IA quando ela está instalada (os stories nasceram para o Codex). */
-const PREFERRED: Partial<Record<IaTask, ChatAgentId>> = { stories: 'codex' }
+// Criativos: o Codex por padrão (2026-11-05, o usuário: "para criativos o claude code não é bom")
+const PREFERRED: Partial<Record<IaTask, ChatAgentId>> = { stories: 'codex', criativos: 'codex' }
 
 const KEY = 'ia-por-tarefa'
 /** Onde cada escolha ficava antes desta tela. */
@@ -70,8 +71,24 @@ export const useIaChoice = create<State>()((set, get) => ({
 const firstAvailable = (agents: { id: ChatAgentId; available: boolean }[]) => agents.find((a) => a.available)?.id
 
 /** A IA da tarefa: a escolhida, se estiver instalada; senão, a preferida da tarefa ou a que existir. */
+/**
+ * A IA forçada enquanto um trabalho roda (a Iara passa o bastão a um agente: tudo o que esse
+ * trabalho pedir à IA, roteiro, carrossel, edição, vai para ele). Um trabalho por vez.
+ */
+let forced: ChatAgentId | undefined
+export async function withIa<T>(id: ChatAgentId, fn: () => Promise<T>): Promise<T> {
+  const before = forced
+  forced = id
+  try {
+    return await fn()
+  } finally {
+    forced = before
+  }
+}
+
 export const resolveIa = (task: IaTask): ChatAgentId => {
   const agents = useCreativeLink.getState().agents
+  if (forced && task !== 'sites' && agents.find((a) => a.id === forced)?.available) return forced
   const chosen = task === 'sites' ? useChat.getState().agent : useIaChoice.getState().choice[task] ?? PREFERRED[task]
   return (chosen && agents.find((a) => a.id === chosen)?.available ? chosen : firstAvailable(agents)) ?? chosen ?? 'claude'
 }

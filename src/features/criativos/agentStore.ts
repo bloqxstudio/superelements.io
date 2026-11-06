@@ -31,7 +31,24 @@ interface Target {
   layerId?: string
 }
 
+/**
+ * Um agente da equipe rápida no canvas (2026-11-05, o usuário: "mostrando mesmo na tela + de 1 agente trabalhando no
+ * criativo"): cada faixa tem a sua cor, a sua etiqueta e as camadas em que está mexendo.
+ */
+export interface CrewMember {
+  id: string
+  label: string
+  color: string
+  slideId?: string
+  layerIds: string[]
+  text?: string
+  working: boolean
+}
+
 interface AgentState {
+  crew: Record<string, CrewMember>
+  crewSet: (m: CrewMember) => void
+  crewDone: (id: string) => void
   working?: { target: Target; phase: AgentPhase; since: number; label: string; agent: ChatAgentId }
   /** Onde o cursor do agente está: um slide e, se for o caso, uma camada (o canvas calcula a posição). */
   cursor?: { slideId: string; layerId?: string; agent: ChatAgentId; text?: string }
@@ -49,6 +66,17 @@ let cursorTimer: ReturnType<typeof setTimeout> | undefined
 
 export const useAgent = create<AgentState>()((set, get) => ({
   flash: [],
+  crew: {},
+  crewSet: (m) => set({ crew: { ...get().crew, [m.id]: m } }),
+  crewDone: (id) => {
+    const m = get().crew[id]
+    if (!m) return
+    set({ crew: { ...get().crew, [id]: { ...m, working: false, text: 'Pronto' } } })
+    setTimeout(() => {
+      const { [id]: _gone, ...rest } = get().crew
+      if (get().crew[id] && !get().crew[id].working) set({ crew: rest })
+    }, 2500)
+  },
   begin: (target, label, agent) => set({ working: { target, phase: 'sending', since: Date.now(), label, agent }, cursor: target.slideId ? { slideId: target.slideId, layerId: target.layerId, agent } : undefined }),
   point: (cursor) => set({ cursor }),
   phase: (phase) => {

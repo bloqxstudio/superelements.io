@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
+import { ELEVATE_STYLES, elevatePost } from './elevate'
 import { Clapperboard, Download, Maximize2, Pause, Play, Sparkles, Wand2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -250,7 +251,7 @@ export const MotionPanel: React.FC = () => {
       <div>
         <div className="mb-1.5 flex items-center justify-between">
           <p className="text-sm font-semibold text-gray-900">Prévia do vídeo</p>
-          <Link to={studioLink} className="ml-auto mr-1 text-xs font-medium text-violet-700 hover:underline">Abrir o estúdio</Link>
+          <Link to={studioLink} className="ml-auto mr-2 text-xs font-medium text-violet-700 hover:underline">Abrir o estúdio</Link>
           <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Ampliar" onClick={() => setBig(true)}><Maximize2 className="h-3.5 w-3.5" /></Button>
         </div>
         {carousel ? (
@@ -264,8 +265,19 @@ export const MotionPanel: React.FC = () => {
         )}
       </div>
 
+      <div className="rounded-lg border border-violet-200 bg-violet-50/60 p-2.5">
+        <p className="text-sm font-semibold text-violet-900">Elevar o motion</p>
+        <p className="mt-0.5 text-[11px] leading-snug text-violet-900/70">Transforma a animação deste post numa peça avançada: keyframes, rastro, impactos, loops. Tudo editável na linha do tempo do estúdio.</p>
+        <div className="mt-2 grid grid-cols-3 gap-1.5">
+          {ELEVATE_STYLES.map((st) => (
+            <Button key={st.id} type="button" size="sm" variant={st.id === 'impacto' ? 'default' : 'outline'} className={cn('h-8 px-1 text-xs', st.id !== 'impacto' && 'bg-white')} title={st.hint} onClick={() => { editPost((p) => elevatePost(p, st.id)); toast.success(`Motion elevado (${st.label}). Ctrl+Z desfaz; ajuste no estúdio.`) }}>{st.label}</Button>
+          ))}
+        </div>
+        <Link to={studioLink} className="mt-2 inline-block text-xs font-medium text-violet-700 hover:underline">Ver e ajustar na linha do tempo →</Link>
+      </div>
+
       <div className="grid grid-cols-2 gap-1.5">
-        <Button type="button" size="sm" className="h-8 gap-1.5" onClick={() => { editPost((p) => autoPostMotion(p)); toast.success('Post animado. Ajuste o que quiser na linha do tempo.') }}><Wand2 className="h-4 w-4" /> Animar o post</Button>
+        <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 bg-white" onClick={() => { editPost((p) => autoPostMotion(p)); toast.success('Post animado. Ajuste o que quiser na linha do tempo.') }}><Wand2 className="h-4 w-4" /> Animar o post</Button>
         <Button
           type="button"
           variant="outline"

@@ -1,17 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
-  ArrowUp,
   Check,
   Crosshair,
   Eye,
   FileText,
-  ExternalLink,
-  Gauge,
   ImagePlus,
   Images,
   Loader2,
-  LogIn,
+  MessagesSquare,
   MousePointer2,
   PenLine,
   RectangleHorizontal,
@@ -19,10 +16,8 @@ import {
   Plus,
   Search,
   Sparkles,
-  Square,
   Terminal,
   Trash2,
-  Wand2,
   X,
 } from 'lucide-react'
 import { useProjectStore } from '@/features/projects/projectStore'
@@ -36,7 +31,7 @@ import { useSpaceStore } from '@/store/spaceStore'
 import type { SectionNodeData } from '@/types/space'
 import { ConnectorPrompt } from './ConnectorPrompt'
 import { useConnector } from '@/features/space/connector/connectorStore'
-import { isChatImage, readChatImage } from './attachments'
+import { ChatComposer, ManageSkillsLink, hasFiles, type ChatComposerHandle, type ComposerMessage } from './ChatComposer'
 import { useChat } from './chatStore'
 import {
   CHAT_AGENTS,
@@ -46,7 +41,6 @@ import {
   type ChatAgentId,
   type ChatContext,
   type ChatHistoryItem,
-  type ChatImageUpload,
   type ChatMessage,
   type ChatSkillRef,
   type ChatPart,
@@ -333,22 +327,6 @@ const UserMessage: React.FC<{ message: ChatMessage }> = ({ message }) => {
   )
 }
 
-/** Os comandos do chat, no mesmo menu do "/" que as skills. */
-const COMMANDS = [
-  { id: 'usage', name: '/usage', hint: 'Quanto do plano do agente já foi usado', icon: Gauge },
-  { id: 'login', name: '/login', hint: 'Entrar de novo na conta do agente', icon: LogIn },
-] as const
-
-type MenuItem = { type: 'skill'; skill: ChatSkill } | { type: 'command'; command: (typeof COMMANDS)[number] }
-
-/** Os grupos do menu, na ordem da lista. */
-const MENU_GROUP: Record<ChatSkill['source'] | 'command', string> = {
-  personal: 'Suas skills',
-  global: 'Da equipe',
-  builtin: 'Padrão',
-  command: 'Comandos',
-}
-
 /** Quantas cabem no grid da conversa vazia; o resto fica no menu. */
 const GRID_SKILLS = 8
 
@@ -358,31 +336,6 @@ const skillRef = (skill: ChatSkill): ChatSkillRef =>
     ? { id: skill.id, name: skill.name }
     : { id: skill.id, name: skill.name, instructions: skill.instructions, version: String(skill.updatedAt ?? '') }
 
-/** A tela Skills numa aba nova: o canvas continua aberto. */
-const ManageSkillsLink: React.FC<{ className?: string }> = ({ className }) => (
-  <a
-    href="/skills"
-    target="_blank"
-    rel="noreferrer"
-    className={`inline-flex items-center gap-1 font-medium text-gray-500 transition-colors hover:text-gray-900 ${className ?? ''}`}
-  >
-    Gerenciar skills
-    <ExternalLink className="h-3 w-3" />
-  </a>
-)
-
-const fold = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-
-/** O que o "/" mostra: skills e comandos que começam (ou têm uma palavra que começa) com o que foi digitado. */
-const menuItems = (query: string, skills: ChatSkill[]): MenuItem[] => {
-  const q = fold(query)
-  const hit = (...names: string[]) => !q || names.some((n) => fold(n).split(/[\s/-]+/).some((word) => word.startsWith(q)) || fold(n).startsWith(q))
-  return [
-    ...skills.filter((s) => hit(s.name, ...(s.source === 'builtin' ? [s.id] : []))).map((skill): MenuItem => ({ type: 'skill', skill })),
-    ...COMMANDS.filter((c) => hit(c.id)).map((command): MenuItem => ({ type: 'command', command })),
-  ]
-}
-
 const suggestionsFor = (context: ChatContext) => {
   if (context.element) return ['Deixe este texto mais curto e direto', 'Sugira três versões para este texto, sem mudar ainda']
   if (context.sections.length) return ['Deixe esta seção mais compacta no celular', 'Reescreva os textos desta seção com o tom da marca', 'Crie uma seção de perguntas frequentes logo abaixo']
@@ -391,40 +344,49 @@ const suggestionsFor = (context: ChatContext) => {
 
 // ---------- o chat ----------
 
-/** Imagem na caixa, antes de mandar: a prévia local aparece na hora, enquanto a aba reduz a imagem. */
-interface Attachment {
-  id: string
-  name: string
-  url: string
-  state: 'reading' | 'ready'
-  upload?: ChatImageUpload
-}
-
-const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files')
-
-/** Atrás da prévia na caixa: um logo branco recortado continua visível. */
-const CHECKER: React.CSSProperties = { background: 'repeating-conic-gradient(#d1d5db 0% 25%, #f3f4f6 0% 50%) 0 0 / 8px 8px' }
-
 /**
  * A aba Agente do painel da direita, como no Framer: a conversa ocupa o
  * painel e a caixa fica embaixo. Só aparecem os agentes que existem neste
  * computador (Claude Code, Codex), pelo nome; sem nenhum, a aba explica.
  */
-export const SpaceChat: React.FC = () => {
-  const projectId = useProjectSync((s) => s.openId)
-  const projectName = useProjectStore((s) => s.projects.find((p) => p.id === projectId)?.name)
+/**
+ * Quando o chat é a Iara (2026-11-05, o usuário: "aquele campo do projeto deve ser o campo da
+ * Iara… a Iara precisa conseguir acessar tudo e na escolha que o usuário fizer"): o mesmo chat, com
+ * Claude Code ou Codex, skills, imagens, /usage e /login, mais as ações do produto (ferramentas MCP
+ * da Iara, montadas pelo servidor do chat) e os cartões que elas deixam. Fora de um projeto a
+ * conversa é a da conta (`conta-<id>`), sem o canvas.
+ */
+export interface IaraChatHooks {
+  /** As regras e as ações (primeira mensagem) e a tela aberta (toda mensagem). */
+  payload: () => Promise<{ system: string; screen: string }>
+  /** Os cartões da Iara depois de uma mensagem ('' = antes de todas). */
+  cards: (afterId: string) => React.ReactNode
+  /** Fluxo sem IA (a sugestão ao time de produto): devolve true quando tratou a mensagem. */
+  intercept?: (message: ComposerMessage) => boolean
+  /** Recebe a função que manda um texto pronto à conversa (o bastão de volta, "Pedir à Iara"). */
+  onReady?: (send: ((text: string) => void) | undefined) => void
+  intro?: React.ReactNode
+  suggestions?: string[]
+  chips?: React.ReactNode
+}
+
+export const SpaceChat: React.FC<{ chatId?: string; chatName?: string; iara?: IaraChatHooks }> = ({ chatId, chatName, iara }) => {
+  const openId = useProjectSync((s) => s.openId)
+  const projectId = chatId ?? openId
+  // O canvas vai junto só na conversa do projeto aberto
+  const canvas = !!projectId && projectId === openId
+  const openName = useProjectStore((s) => s.projects.find((p) => p.id === projectId)?.name)
+  const projectName = chatName ?? openName
   const { connected, agents, agent, setAgent } = useChat(
     useShallow((s) => ({ connected: s.connected, agents: s.agents, agent: s.agent, setAgent: s.setAgent }))
   )
   const conversation = useChat((s) => (projectId ? s.conversations[projectId] : undefined))
   const context = useSelectionContext()
-  const [draft, setDraft] = useState('')
+  const composer = useRef<ChatComposerHandle>(null)
   const [withSelection, setWithSelection] = useState(true)
   // A lista das conversas anteriores no lugar da conversa
   const [showHistory, setShowHistory] = useState(false)
-  const input = useRef<HTMLTextAreaElement>(null)
   const list = useRef<HTMLDivElement>(null)
-  const form = useRef<HTMLFormElement>(null)
   const skillId = useChat((s) => s.skill)
   const setSkill = useChat((s) => s.setSkill)
   // As padrão, as globais da equipe e as suas (tela Skills)
@@ -437,80 +399,21 @@ export const SpaceChat: React.FC = () => {
     if (skillId && !skill && (skillsStatus === 'ready' || skillsStatus === 'missing')) setSkill(null)
   }, [skillId, skill, skillsStatus, setSkill])
 
-  // Imagens da próxima mensagem (botão, Ctrl+V ou arrastar)
-  const [attachments, setAttachments] = useState<Attachment[]>([])
-  const attachmentsRef = useRef(attachments)
-  attachmentsRef.current = attachments
-  const [note, setNote] = useState<string | null>(null)
-  const fileInput = useRef<HTMLInputElement>(null)
+  // Arrastar imagens para o chat: a caixa recebe
   const [dragging, setDragging] = useState(false)
   const dragDepth = useRef(0)
 
-  // Skills e comandos: o menu abre pelo botão ou pelo "/" no começo da caixa
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [menuIndex, setMenuIndex] = useState(0)
-  const slash = /^\/(\S*)$/.exec(draft)
-  const menuQuery = slash?.[1] ?? ''
-  const showMenu = menuOpen || !!slash
-  const items = useMemo(() => (showMenu ? menuItems(menuQuery, skills) : []), [showMenu, menuQuery, skills])
-  useEffect(() => setMenuIndex(0), [menuQuery, showMenu])
-
-  // Clique fora fecha o menu aberto pelo botão
+  // A conversa da conta (ou de outro projeto) não vem com o projeto aberto: pede ao servidor
+  const connectedNow = useChat((s) => s.connected)
   useEffect(() => {
-    if (!menuOpen) return
-    const onDown = (e: MouseEvent) => {
-      if (!form.current?.contains(e.target as Node)) setMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [menuOpen])
-
-  // O aviso (arquivo que não é imagem, imagem demais) some sozinho
+    if (connectedNow && projectId && projectId !== openId) useChat.getState().watch?.(projectId)
+  }, [connectedNow, projectId, openId])
+  const onReady = iara?.onReady
   useEffect(() => {
-    if (!note) return
-    const timer = setTimeout(() => setNote(null), 5000)
-    return () => clearTimeout(timer)
-  }, [note])
-
-  // As prévias locais saem da memória quando a aba fecha
-  useEffect(() => () => attachmentsRef.current.forEach((a) => URL.revokeObjectURL(a.url)), [])
-
-  const addFiles = (files: File[]) => {
-    if (!files.length) return
-    const images = files.filter(isChatImage)
-    const taken = images.slice(0, Math.max(0, CHAT_IMAGE_LIMIT - attachmentsRef.current.length))
-    const notes = [
-      images.length < files.length ? 'Só imagens: PNG, JPG, WebP ou GIF.' : '',
-      taken.length < images.length ? `Até ${CHAT_IMAGE_LIMIT} imagens por mensagem.` : '',
-    ].filter(Boolean)
-    setNote(notes.length ? notes.join(' ') : null)
-    for (const file of taken) {
-      const item: Attachment = { id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file), state: 'reading' }
-      attachmentsRef.current = [...attachmentsRef.current, item]
-      setAttachments(attachmentsRef.current)
-      readChatImage(file).then(
-        (upload) => setAttachments((list) => list.map((a) => (a.id === item.id ? { ...a, state: 'ready', upload, name: upload.name } : a))),
-        (error) => {
-          URL.revokeObjectURL(item.url)
-          setAttachments((list) => list.filter((a) => a.id !== item.id))
-          setNote(error instanceof Error ? error.message : 'O navegador não conseguiu abrir essa imagem.')
-        }
-      )
-    }
-    input.current?.focus()
-  }
-
-  const removeAttachment = (id: string) =>
-    setAttachments((list) => {
-      const gone = list.find((a) => a.id === id)
-      if (gone) URL.revokeObjectURL(gone.url)
-      return list.filter((a) => a.id !== id)
-    })
-
-  const clearAttachments = () => {
-    attachmentsRef.current.forEach((a) => URL.revokeObjectURL(a.url))
-    setAttachments([])
-  }
+    if (!onReady) return
+    onReady((text) => composer.current?.send(text))
+    return () => onReady(undefined)
+  }, [onReady])
 
   // Seleção nova volta a ir junto
   const selectionKey = `${context.sections.map((s) => s.id).join(',')}|${context.element?.elementId ?? ''}`
@@ -538,14 +441,6 @@ export const SpaceChat: React.FC = () => {
     if (el && pinned.current) el.scrollTop = el.scrollHeight
   }, [tail])
 
-  // Autoaltura da caixa de texto
-  useEffect(() => {
-    const el = input.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
-  }, [draft])
-
   if (!projectId) return null
   // No dev quem roda os agentes é o servidor do Vite; publicado, o conector na máquina de quem usa
   if (!connected) {
@@ -571,37 +466,31 @@ export const SpaceChat: React.FC = () => {
     )
   }
 
-  const shown = withSelection ? context : { pageId: context.pageId, pageName: context.pageName, sections: [] }
+  const shown: ChatContext = !canvas ? { sections: [] } : withSelection ? context : { pageId: context.pageId, pageName: context.pageName, sections: [] }
   const label = contextLabel(shown)
   const LabelIcon = label.icon
-  const hasSelection = context.sections.length > 0 || !!context.element
+  const hasSelection = canvas && (context.sections.length > 0 || !!context.element)
   const names = available.map((id) => CHAT_AGENTS[id].name)
 
-  const ready = attachments.filter((a) => a.state === 'ready' && a.upload)
-  const reading = attachments.some((a) => a.state === 'reading')
   const SkillIcon = skill ? skillIcon(skill) : null
 
-  const send = (text = draft) => {
-    const clean = text.trim()
-    // /usage e /login são comandos: as imagens e a skill ficam para o próximo pedido
-    const command = /^\/(usage|login)\b/i.test(clean)
-    const images = command ? [] : ready.map((a) => a.upload!)
+  const send = (message: ComposerMessage) => {
+    const { text: clean, images, skill: chosen, command } = message
     const { send } = useChat.getState()
-    if ((!clean && !images.length) || busy || !send || status?.available === false || (!command && reading)) return
-    send({ projectId, projectName, agent, text: clean, context: shown, ...(images.length ? { images } : {}), ...(skill && !command ? { skill: skillRef(skill) } : {}) })
-    // O /usage da barrinha não apaga o que a pessoa estava escrevendo
-    if (text === draft) setDraft('')
-    if (images.length) clearAttachments()
+    if (!send || status?.available === false) return false
+    if (iara?.intercept?.(message)) return true
+    const payload = { projectId, projectName, agent, text: clean, context: shown, ...(images.length ? { images } : {}), ...(chosen && !command ? { skill: skillRef(chosen) } : {}) }
     pinned.current = true
-  }
-
-  /** Item do menu: a skill fica na caixa até a pessoa tirar; o comando vai na hora. */
-  const pick = (item: MenuItem) => {
-    setMenuOpen(false)
-    if (slash) setDraft('')
-    if (item.type === 'command') return send(item.command.name)
-    setSkill(item.skill.id)
-    input.current?.focus()
+    if (!iara || command) {
+      send(payload)
+      return true
+    }
+    // A Iara manda junto as regras, as ações e a tela aberta (lidas na hora)
+    void iara.payload().then(
+      (extra) => send({ ...payload, iara: extra }),
+      () => send(payload)
+    )
+    return true
   }
 
   const stop = () => useChat.getState().stop?.(projectId, agent)
@@ -642,7 +531,7 @@ export const SpaceChat: React.FC = () => {
         e.preventDefault()
         dragDepth.current = 0
         setDragging(false)
-        addFiles(Array.from(e.dataTransfer.files))
+        composer.current?.addFiles(Array.from(e.dataTransfer.files))
       }}
     >
       {dragging && (
@@ -661,7 +550,7 @@ export const SpaceChat: React.FC = () => {
         onHistory={() => setShowHistory((open) => !open)}
         onNew={startNew}
       />
-      <PlanUsageBar agent={agent} onShow={() => send('/usage')} disabled={busy} />
+      <PlanUsageBar agent={agent} onShow={() => composer.current?.send('/usage')} disabled={busy} />
 
       {showHistory ? (
         <HistoryList
@@ -683,17 +572,17 @@ export const SpaceChat: React.FC = () => {
       >
         {messages.length === 0 ? (
           <div className="space-y-3 py-1">
-            <p className="text-[13px] leading-relaxed text-gray-600">
-              Peça ao <strong className="font-semibold text-gray-900">{names[0]}</strong>
+            {iara?.intro ? iara.intro : <p className="text-[13px] leading-relaxed text-gray-600">
+              Peça à Iara neste projeto: quem faz é o <strong className="font-semibold text-gray-900">{names[0]}</strong>
               {names.length > 1 && (
                 <>
                   {' '}
-                  ou ao <strong className="font-semibold text-gray-900">{names[1]}</strong>
+                  ou o <strong className="font-semibold text-gray-900">{names[1]}</strong>
                 </>
               )}
               . Selecione uma seção ou uma camada no canvas: o agente trabalha só ali, e você vê o cursor dele. Mande também uma imagem de
               referência: pelo botão, com Ctrl+V ou arrastando para cá.
-            </p>
+            </p>}
             {skill && SkillIcon ? (
               <div className="rounded-lg bg-gray-50 px-2.5 py-2">
                 <p className="flex items-center gap-1.5 text-[12px] font-medium text-gray-900">
@@ -722,7 +611,7 @@ export const SpaceChat: React.FC = () => {
                         className="flex min-w-0 items-center gap-1.5 rounded-lg border border-gray-200 px-2 py-1.5 text-left text-[12px] text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 active:scale-[0.98]"
                         onClick={() => {
                           setSkill(s.id)
-                          input.current?.focus()
+                          composer.current?.focus()
                         }}
                       >
                         <Icon className="h-3.5 w-3.5 shrink-0 text-gray-500" />
@@ -739,258 +628,129 @@ export const SpaceChat: React.FC = () => {
               <code className="rounded bg-gray-100 px-1 font-mono text-gray-600">/login</code> entra de novo na conta do agente.
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {(skill?.starters.length ? skill.starters : suggestionsFor(shown)).map((text) => (
+              {(skill?.starters.length ? skill.starters : iara?.suggestions && !hasSelection ? iara.suggestions : suggestionsFor(shown)).map((text) => (
                 <button
                   key={text}
                   className="rounded-full border border-gray-200 px-2.5 py-1 text-left text-[12px] text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
                   onClick={() => {
-                    setDraft(text)
-                    input.current?.focus()
+                    composer.current?.setDraft(text)
+                    composer.current?.focus()
                   }}
                 >
                   {text}
                 </button>
               ))}
             </div>
+            {iara?.cards('')}
           </div>
         ) : (
-          messages.map((message) => (message.role === 'user' ? <UserMessage key={message.id} message={message} /> : <AgentMessage key={message.id} message={message} />))
+          <>
+            {iara?.cards('')}
+            {messages.map((message) => (
+              <React.Fragment key={message.id}>
+                {message.role === 'user' ? <UserMessage message={message} /> : <AgentMessage message={message} />}
+                {iara?.cards(message.id)}
+              </React.Fragment>
+            ))}
+          </>
         )}
       </div>
       )}
 
-      <form
-        ref={form}
-        className="relative m-2 shrink-0 rounded-xl border border-gray-200 bg-white transition-[border-color,box-shadow] focus-within:border-gray-300 focus-within:shadow-[0_4px_16px_-6px_rgb(0_0_0/0.16)]"
-        onSubmit={(e) => {
-          e.preventDefault()
-          send()
-        }}
-      >
-        {showMenu && (
-          <SkillMenu items={items} query={menuQuery} active={menuIndex} chosen={skillId} onActive={setMenuIndex} onPick={pick} />
-        )}
-        <div className="flex items-center gap-1.5 px-2 pt-2">
-          {skill && SkillIcon && (
-            <span title={skill.hint} className="inline-flex h-[26px] shrink-0 items-center gap-1 rounded-lg bg-gray-900 pl-2 pr-1 text-[11px] font-medium text-white">
-              <SkillIcon className="h-3 w-3" />
-              {skill.name}
-              <button
-                type="button"
-                aria-label={`Tirar a skill ${skill.name}`}
-                className="rounded p-px opacity-70 transition-opacity hover:bg-white/15 hover:opacity-100"
-                onClick={() => setSkill(null)}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          )}
-          <button
-            type="button"
-            className={`inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors ${
-              withSelection && hasSelection ? 'border-violet-200 bg-violet-50 text-violet-800' : 'border-gray-200 bg-gray-50 text-gray-600'
-            }`}
-            title={hasSelection && !withSelection ? 'Mandar a seleção junto de novo' : 'Vai junto com a mensagem'}
-            onClick={() => hasSelection && setWithSelection(true)}
-          >
-            <LabelIcon className="h-3 w-3 shrink-0" />
-            <span className="truncate font-medium">{label.text}</span>
-            {label.sub && <span className="shrink-0 truncate opacity-60">· {label.sub}</span>}
-            {withSelection && hasSelection && (
-              <span
-                role="button"
-                tabIndex={0}
-                aria-label="Não mandar a seleção"
-                className="-mr-0.5 rounded p-px opacity-60 hover:bg-violet-100 hover:opacity-100"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setWithSelection(false)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
+      <ChatComposer
+        ref={composer}
+        skills={skills}
+        skillId={skillId}
+        onSkill={setSkill}
+        commands
+        chips={
+          !canvas ? iara?.chips : <button
+              type="button"
+              className={`inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors ${
+                withSelection && hasSelection ? 'border-violet-200 bg-violet-50 text-violet-800' : 'border-gray-200 bg-gray-50 text-gray-600'
+              }`}
+              title={hasSelection && !withSelection ? 'Mandar a seleção junto de novo' : 'Vai junto com a mensagem'}
+              onClick={() => hasSelection && setWithSelection(true)}
+            >
+              <LabelIcon className="h-3 w-3 shrink-0" />
+              <span className="truncate font-medium">{label.text}</span>
+              {label.sub && <span className="shrink-0 truncate opacity-60">· {label.sub}</span>}
+              {withSelection && hasSelection && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Não mandar a seleção"
+                  className="-mr-0.5 rounded p-px opacity-60 hover:bg-violet-100 hover:opacity-100"
+                  onClick={(e) => {
                     e.stopPropagation()
                     setWithSelection(false)
-                  }
-                }}
-              >
-                <X className="h-3 w-3" />
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setWithSelection(false)
+                    }
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </span>
+              )}
+            </button>
+        }
+        footer={
+          <>
+          {available.length > 1 ? (
+              <div role="radiogroup" aria-label="Agente" className="flex items-center gap-0.5 rounded-lg bg-gray-100 p-0.5">
+                {available.map((id) => {
+                  const chosen = id === agent
+                  const working = running.includes(id)
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="radio"
+                      aria-checked={chosen}
+                      title={agents.find((a) => a.id === id)?.version}
+                      className={`relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-[background-color,color,box-shadow] active:scale-[0.97] ${
+                        chosen ? 'bg-white text-gray-900 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_rgb(0_0_0/0.08)]' : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                      onClick={() => setAgent(id)}
+                    >
+                      <AgentDot agent={id} working={working} />
+                      {CHAT_AGENTS[id].name}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <span className="inline-flex h-6 items-center gap-1.5 px-1 text-[11px] font-medium text-gray-600" title={status?.version}>
+                <AgentDot agent={agent} working={busy} />
+                {info.name}
               </span>
             )}
-          </button>
-        </div>
-        {(attachments.length > 0 || note) && (
-          <div className="px-2 pt-2">
-            {attachments.length > 0 && (
-              <ul className="flex flex-wrap gap-1.5" aria-label="Imagens que vão com a mensagem">
-                {attachments.map((a) => (
-                  <li key={a.id} title={a.name} className="relative h-14 w-14 overflow-hidden rounded-lg border border-gray-200" style={CHECKER}>
-                    <img src={a.url} alt={a.name} className="h-full w-full object-cover" />
-                    {a.state === 'reading' && (
-                      <span className="absolute inset-0 flex items-center justify-center bg-white/60">
-                        <Loader2 className="h-4 w-4 animate-spin text-gray-600" />
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      aria-label={`Tirar ${a.name}`}
-                      className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900/75 text-white transition-colors hover:bg-gray-900"
-                      onClick={() => removeAttachment(a.id)}
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {note && (
-              <p role="status" className="mt-1.5 text-[11px] leading-snug text-amber-700">
-                {note}
-              </p>
-            )}
-          </div>
-        )}
-        <textarea
-          ref={input}
-          rows={2}
-          value={draft}
-          aria-label={`Mensagem para o ${info.name}`}
-          placeholder={
-            busy
-              ? `${info.name} está trabalhando…`
-              : attachments.length
-                ? `O que fazer com ${attachments.length > 1 ? 'as imagens' : 'a imagem'}?`
-                : skill?.needsImage
-                  ? 'Anexe ou cole a imagem e diga o que levar dela…'
-                  : hasSelection
-                    ? 'O que mudar aqui?'
-                    : `Peça ao ${info.name}…`
-          }
-          className="block max-h-40 w-full resize-none bg-transparent px-3 pb-1 pt-2 text-[13px] leading-relaxed text-gray-900 placeholder:text-gray-400 focus:outline-none"
-          onChange={(e) => setDraft(e.target.value)}
-          onPaste={(e) => {
-            const files = Array.from(e.clipboardData.files)
-            if (!files.some(isChatImage)) return
-            // Imagem copiada: vai como anexo; texto junto (de uma página, de um documento) continua colando
-            if (!e.clipboardData.getData('text/plain')) e.preventDefault()
-            addFiles(files.filter(isChatImage))
-          }}
-          onKeyDown={(e) => {
-            if (showMenu && items.length) {
-              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                e.preventDefault()
-                const step = e.key === 'ArrowDown' ? 1 : -1
-                setMenuIndex((i) => (i + step + items.length) % items.length)
-                return
-              }
-              if ((e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) || e.key === 'Tab') {
-                e.preventDefault()
-                pick(items[menuIndex] ?? items[0])
-                return
-              }
-            }
-            if (e.key === 'Escape' && showMenu) {
-              e.preventDefault()
-              setMenuOpen(false)
-              if (slash) setDraft('')
-              return
-            }
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault()
-              send()
-            }
-            if (e.key === 'Escape') e.currentTarget.blur()
-          }}
-        />
-        <div className="flex items-center gap-1 px-2 pb-2">
-          {available.length > 1 ? (
-            <div role="radiogroup" aria-label="Agente" className="flex items-center gap-0.5 rounded-lg bg-gray-100 p-0.5">
-              {available.map((id) => {
-                const chosen = id === agent
-                const working = running.includes(id)
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={chosen}
-                    title={agents.find((a) => a.id === id)?.version}
-                    className={`relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-[background-color,color,box-shadow] active:scale-[0.97] ${
-                      chosen ? 'bg-white text-gray-900 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_rgb(0_0_0/0.08)]' : 'text-gray-500 hover:text-gray-900'
-                    }`}
-                    onClick={() => setAgent(id)}
-                  >
-                    <AgentDot agent={id} working={working} />
-                    {CHAT_AGENTS[id].name}
-                  </button>
-                )
-              })}
-            </div>
-          ) : (
-            <span className="inline-flex h-6 items-center gap-1.5 px-1 text-[11px] font-medium text-gray-600" title={status?.version}>
-              <AgentDot agent={agent} working={busy} />
-              {info.name}
-            </span>
-          )}
-          <div className="flex-1" />
-          <button
-            type="button"
-            disabled={attachments.length >= CHAT_IMAGE_LIMIT}
-            aria-label="Anexar imagem"
-            title={attachments.length >= CHAT_IMAGE_LIMIT ? `Até ${CHAT_IMAGE_LIMIT} imagens por mensagem` : 'Anexar imagem (ou cole com Ctrl+V, ou arraste para cá)'}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:pointer-events-none disabled:opacity-40"
-            onClick={() => fileInput.current?.click()}
-          >
-            <ImagePlus className="h-4 w-4" />
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              addFiles(Array.from(e.target.files ?? []))
-              e.target.value = ''
-            }}
-          />
-          <button
-            type="button"
-            aria-label="Skills e comandos"
-            aria-expanded={showMenu}
-            title="Skills e comandos (ou digite / na caixa)"
-            className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-gray-100 hover:text-gray-900 ${showMenu ? 'bg-gray-100 text-gray-900' : 'text-gray-500'}`}
-            onClick={() => {
-              setMenuOpen((open) => !open)
-              input.current?.focus()
-            }}
-          >
-            <Wand2 className="h-4 w-4" />
-          </button>
-          {busy ? (
-            <button
-              type="button"
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-white transition-transform hover:bg-gray-700 active:scale-[0.94]"
-              aria-label={`Parar o ${info.name}`}
-              title={`Parar o ${info.name}`}
-              onClick={stop}
-            >
-              <Square className="h-3 w-3 fill-current" />
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={(!draft.trim() && !ready.length) || reading || status?.available === false}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-white transition-[transform,background-color] active:scale-[0.94] disabled:bg-gray-200 disabled:text-gray-400"
-              style={(draft.trim() || ready.length) && !reading ? { background: info.color } : undefined}
-              aria-label={`Enviar para o ${info.name}`}
-              title={reading ? 'Preparando a imagem…' : undefined}
-            >
-              <ArrowUp className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-      </form>
+          </>
+        }
+        busy={busy}
+        onStop={stop}
+        blocked={status?.available === false}
+        sendColor={info.color}
+        sendLabel={`Enviar para o ${info.name}`}
+        stopLabel={`Parar o ${info.name}`}
+        ariaLabel={`Mensagem para o ${info.name}`}
+        placeholder={({ attachments, skill: chosen }) =>
+          busy
+            ? `${info.name} está trabalhando…`
+            : attachments
+              ? `O que fazer com ${attachments > 1 ? 'as imagens' : 'a imagem'}?`
+              : chosen?.needsImage
+                ? 'Anexe ou cole a imagem e diga o que levar dela…'
+                : hasSelection
+                  ? 'O que mudar aqui?'
+                  : 'Peça à Iara neste projeto…'
+        }
+        onSend={send}
+      />
     </div>
   )
 }
@@ -1219,79 +979,17 @@ const HistoryList: React.FC<HistoryListProps> = ({ items, current, locked, onOpe
           ))}
         </ul>
       ) : (
-        <p className="px-3 py-8 text-center text-[11px] leading-relaxed text-gray-400">
-          Ainda não há conversas anteriores. Ao começar uma nova, esta fica guardada aqui para você voltar e continuar.
-        </p>
+        <div className="flex flex-col items-center px-6 py-10 text-center">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+            <MessagesSquare className="h-5 w-5" aria-hidden />
+          </span>
+          <p className="mt-3 text-[13px] font-medium text-gray-800">Nenhuma conversa anterior</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-gray-500">Quando você começar uma conversa nova, a de agora fica guardada aqui para você voltar e continuar de onde parou.</p>
+          <button type="button" onClick={onCurrent} className="mt-3 inline-flex h-8 items-center rounded-lg border border-gray-200 px-3 text-[12px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50">
+            {current ? 'Voltar para a conversa' : 'Começar uma conversa'}
+          </button>
+        </div>
       )}
-    </div>
-  )
-}
-
-interface SkillMenuProps {
-  items: MenuItem[]
-  query: string
-  active: number
-  chosen: string | null
-  onActive: (index: number) => void
-  onPick: (item: MenuItem) => void
-}
-
-/** Acima da caixa: as skills (ficam ligadas até tirar) e os comandos do chat. Setas, Enter e Esc pelo teclado. */
-const SkillMenu: React.FC<SkillMenuProps> = ({ items, query, active, chosen, onActive, onPick }) => {
-  const listRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' })
-  }, [active])
-  return (
-    <div
-      ref={listRef}
-      role="listbox"
-      aria-label="Skills e comandos"
-      className="absolute inset-x-0 bottom-full z-20 mb-1.5 max-h-[340px] overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.28)]"
-    >
-      {items.length === 0 ? (
-        <p className="px-2.5 py-2 text-[12px] text-gray-500">Nenhuma skill ou comando com “{query}”.</p>
-      ) : (
-        items.map((item, i) => {
-          const group = (it: MenuItem) => (it.type === 'skill' ? it.skill.source : 'command')
-          const header = i === 0 || group(items[i - 1]) !== group(item) ? MENU_GROUP[group(item)] : null
-          const Icon = item.type === 'skill' ? skillIcon(item.skill) : item.command.icon
-          const name = item.type === 'skill' ? item.skill.name : item.command.name
-          const hint = item.type === 'skill' ? item.skill.hint : item.command.hint
-          const on = item.type === 'skill' && item.skill.id === chosen
-          return (
-            <div key={item.type === 'skill' ? item.skill.id : item.command.id}>
-              {header && <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">{header}</p>}
-              <button
-                type="button"
-                role="option"
-                aria-selected={i === active}
-                data-index={i}
-                className={`flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${i === active ? 'bg-gray-100' : ''}`}
-                onMouseEnter={() => onActive(i)}
-                // A caixa de texto continua com o foco (as setas seguem valendo)
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => onPick(item)}
-              >
-                <span className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700">
-                  <Icon className="h-3.5 w-3.5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className={`flex items-center gap-1 text-[12px] font-medium text-gray-900 ${item.type === 'command' ? 'font-mono' : ''}`}>
-                    {name}
-                    {on && <Check className="h-3 w-3 text-emerald-600" aria-label="escolhida" />}
-                  </span>
-                  <span className="block text-[11px] leading-snug text-gray-500">{hint}</span>
-                </span>
-              </button>
-            </div>
-          )
-        })
-      )}
-      <div className="mt-1 flex items-center justify-between border-t border-gray-100 px-2 pb-0.5 pt-1.5 text-[11px] text-gray-400">
-        <span>Crie as suas ou importe um SKILL.md</span>
-        <ManageSkillsLink />
-      </div>
     </div>
   )
 }

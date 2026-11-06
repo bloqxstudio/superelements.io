@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Instagram, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, Wand2, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Instagram, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
 import { LayersPanel } from './LayersPanel'
 import { MotionPanel, downloadMp4 } from './MotionPanel'
 import { videoSupported } from './video'
@@ -21,7 +21,6 @@ import { zipFiles } from './zip'
 import { useAiAvailable } from './link'
 import { AiDialog } from './AiDialog'
 import { LIBRARY } from './library'
-import { AiChat } from './AiChat'
 import { Board } from './Board'
 import { joinSetLive, useLive } from './live'
 import { shareSet } from './storage'
@@ -32,6 +31,8 @@ import { useRefs } from './refStore'
 import { FormatField } from './FormatField'
 import { generateLayerImage } from './generate'
 import { useCreativeLink } from './link'
+import { useIara, useIaraScreen } from '@/features/iara/store'
+import { selectionLabel } from '@/features/iara/actions'
 
 const FONTS = ['Inter', 'Inter Tight', 'Geist', 'Instrument Serif', 'Playfair Display', 'DM Sans', 'Manrope', 'Poppins', 'Montserrat', 'Space Grotesk', 'Fraunces', 'Archivo', 'Bebas Neue']
 
@@ -456,13 +457,42 @@ export const CreativeEditor: React.FC = () => {
   const live = useLive((s) => s.live)
   const sharedId = set?.shared ? set.id : undefined
   const sharedProject = set?.projectId
-  const [panel, setPanel] = useState<'ia' | 'props' | 'layers' | 'motion'>('ia')
+  const [panel, setPanel] = useState<'props' | 'layers' | 'motion'>('props')
   const [gridOpen, setGridOpen] = useState(false)
   const refFocus = useRefs((r) => r.focus)
   const layerIds = useEditor((s) => s.layerIds)
   useEffect(() => {
-    if (refFocus) setPanel('ia')
+    // O chat de IA do criativo é a Iara (2026-11-05): ela edita o conjunto aberto pelas ações dela
+    if (refFocus) useIara.setState({ open: true })
   }, [refFocus])
+  // A Iara sabe o conjunto, o post e o slide abertos (é ela quem edita, pelas ações de criativo)
+  useIaraScreen(
+    set
+      ? {
+          id: `criativo:${set.id}`,
+          title: `Criativo: ${set.name}`,
+          describe: () => {
+            const st = useEditor.getState()
+            const p = currentPost(st)
+            const sl = currentSlide(st)
+            const chosen = sl && !st.row ? sl.layers.filter((l) => st.layerIds.includes(l.id)) : []
+            const layers = chosen.map((l) => `- ${l.name || l.type} (${l.type}${l.type === 'text' ? `: "${String((l as { text?: string }).text ?? '').slice(0, 160)}"` : ''})`).join('\n')
+            return [
+              `Editor dos Criativos com o conjunto "${st.set?.name}" (conjunto ${st.set?.id}) aberto: ${st.set?.posts.length ?? 0} posts.`,
+              p ? `Post escolhido: "${p.name}" (post ${st.set!.posts.findIndex((x) => x.id === p.id) + 1}, ${p.format}, ${p.slides.length} slides).` : 'Nenhum post escolhido.',
+              sl && p && !st.row ? `Slide aberto: ${p.slides.findIndex((x) => x.id === sl.id) + 1}.` : '',
+              st.row ? 'A pessoa escolheu o post inteiro (a fileira).' : '',
+              layers ? `Componentes selecionados:\n${layers}` : '',
+              '"Este post", "isto", "aqui" = o que está escolhido acima. As ações de criativo sem "conjunto" usam o conjunto, o post e a seleção abertos aqui: editar_criativo muda o componente ou o slide selecionado (escopo "post" para o post todo), ver_criativo mostra o post, criar_parecidos copia o post escolhido.',
+            ]
+              .filter(Boolean)
+              .join('\n')
+          },
+          selection: () => selectionLabel(),
+          actions: [],
+        }
+      : null
+  )
   // Vindo do item Motion do menu: abre direto na aba Motion
   const motionParam = query.get('motion')
   useEffect(() => {
@@ -824,7 +854,8 @@ export const CreativeEditor: React.FC = () => {
             </div>
 
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => upload.current?.click()}><ImagePlus className="h-4 w-4" /> Imagem</Button>
-            <Button variant="ghost" size="sm" className={cn('h-8 gap-1.5', panel === 'motion' && 'bg-violet-50 text-violet-800')} title="Animar este post e baixar o vídeo MP4" onClick={() => setPanel(panel === 'motion' ? 'ia' : 'motion')}><Clapperboard className="h-4 w-4" /> Motion</Button>
+            <Button variant="ghost" size="sm" className={cn('h-8 gap-1.5', panel === 'motion' && 'bg-violet-50 text-violet-800')} title="Animar este post e baixar o vídeo MP4" onClick={() => setPanel(panel === 'motion' ? 'props' : 'motion')}><Clapperboard className="h-4 w-4" /> Motion</Button>
+            {set && post && <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5" title="Elevar o motion deste post no estúdio: keyframes, rastro, impactos, tudo na linha do tempo"><Link to={`/motion/${set.id}?${new URLSearchParams({ ...(set.shared && set.projectId ? { projeto: set.projectId } : {}), post: post.id }).toString()}`}><Wand2 className="h-4 w-4" /> Motion avançado</Link></Button>}
             <input ref={upload} type="file" accept="image/*,video/mp4,video/webm,video/quicktime" className="hidden" onChange={(e) => void sendLayerImage(e.target.files?.[0])} />
             <label className="ml-auto flex items-center gap-2 text-xs text-gray-500">
               Fundo
@@ -836,7 +867,7 @@ export const CreativeEditor: React.FC = () => {
               <button type="button" onClick={() => { const next = new URLSearchParams(query); next.delete('post'); setQuery(next, { replace: true }) }} className="pointer-events-auto rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white shadow-lg hover:bg-gray-700">Mostrando só este post · Ver todos</button>
             </div>
           )}
-          {view === 'canvas' ? <Board onlyPostId={onlyPost && set?.posts.some((p) => p.id === onlyPost) ? onlyPost : undefined} onAddSlide={addSlideTo} onDownloadSlide={() => void exportFiles('slide', exportType)} onDuplicateSlide={duplicateSlide} onDeleteSlide={deleteSlide} onPublish={setPublishing} /> : <Stage />}
+          {view === 'canvas' ? <Board onlyPostId={onlyPost && set?.posts.some((p) => p.id === onlyPost) ? onlyPost : undefined} onAddSlide={addSlideTo} onDownloadSlide={() => void exportFiles('slide', exportType)} onDuplicateSlide={duplicateSlide} onDeleteSlide={deleteSlide} /> : <Stage />}
           {(() => {
             const target = publishing ? set.posts.find((p) => p.id === publishing) : undefined
             return target ? <PublishPost key={target.id} post={target} open onClose={() => setPublishing(null)} /> : null
@@ -845,13 +876,13 @@ export const CreativeEditor: React.FC = () => {
 
         <aside className={cn('w-80 shrink-0 flex-col border-l bg-white lg:flex', panel === 'motion' ? 'flex' : 'hidden')} onClick={(e) => e.stopPropagation()}>
           <div className="flex h-10 shrink-0 border-b" role="tablist">
-            {([['ia', 'IA', Sparkles], ['layers', 'Camadas', LayersIcon], ['props', 'Ajustes', SlidersHorizontal], ['motion', 'Motion', Clapperboard]] as const).map(([id, label, Icon]) => (
+            {([['layers', 'Camadas', LayersIcon], ['props', 'Ajustes', SlidersHorizontal], ['motion', 'Motion', Clapperboard]] as const).map(([id, label, Icon]) => (
               <button key={id} type="button" role="tab" aria-selected={panel === id} onClick={() => setPanel(id)} className={cn('flex flex-1 items-center justify-center gap-1.5 border-b-2 text-xs font-semibold', panel === id ? 'border-violet-600 text-violet-800' : 'border-transparent text-gray-500 hover:text-gray-800')}>
                 <Icon className="h-3.5 w-3.5" /> {label}
               </button>
             ))}
           </div>
-          {panel === 'ia' ? <div className="min-h-0 flex-1"><AiChat available={ai} /></div> : panel === 'motion' ? <div className="min-h-0 flex-1 overflow-y-auto p-3" data-scroll><MotionPanel /></div> : panel === 'layers' ? <div className="min-h-0 flex-1"><LayersPanel /></div> : <div className="min-h-0 flex-1 overflow-y-auto p-3" data-scroll>
+          {panel === 'motion' ? <div className="min-h-0 flex-1 overflow-y-auto p-3" data-scroll><MotionPanel /></div> : panel === 'layers' ? <div className="min-h-0 flex-1"><LayersPanel /></div> : <div className="min-h-0 flex-1 overflow-y-auto p-3" data-scroll>
           {layerIds.length > 1 ? (
             <MultiInspector ids={layerIds} />
           ) : layer ? (

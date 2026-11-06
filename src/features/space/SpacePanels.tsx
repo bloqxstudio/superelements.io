@@ -1,12 +1,11 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
-import { ClaudePanel } from './bridge/ClaudePanel'
-import { SpaceChat } from './chat/SpaceChat'
 import { StyleTab } from './inspector/StyleTab'
 import { LibraryPanel } from './library/LibraryPanel'
 import { LayersTree } from './navigator/LayersTree'
 import { PagesList } from './pages/PagesList'
-import { useSpaceUi, type LeftTab, type RightTab } from './spaceUi'
+import { useSpaceUi, type LeftTab } from './spaceUi'
+
 
 export const SIDEBAR_WIDTH = 264
 export const INSPECTOR_WIDTH = 320
@@ -40,11 +39,6 @@ const LEFT_TABS: { id: LeftTab; label: string }[] = [
   { id: 'library', label: 'Biblioteca' },
 ]
 
-const RIGHT_TABS: { id: RightTab; label: string }[] = [
-  { id: 'agent', label: 'Agente' },
-  { id: 'style', label: 'Estilo' },
-]
-
 /** Painel da esquerda: as páginas do projeto, as camadas da página ativa e a Biblioteca. */
 export const SpaceSidebar: React.FC = () => {
   const tab = useSpaceUi((s) => s.left)
@@ -65,28 +59,23 @@ export const SpaceSidebar: React.FC = () => {
   )
 }
 
-/** Painel da direita: o agente (chat) e o estilo do que está selecionado. */
+/**
+ * O agente do projeto mora na Iara (2026-11-05, o usuário: "a IA de projetos pode ficar imersa na
+ * Iara"): o chat do canvas é o chat da Iara, e o painel da direita fica só com o estilo.
+ */
+/** Painel da direita: o estilo do que está selecionado. */
 export const SpaceInspector: React.FC = () => {
-  const tab = useSpaceUi((s) => s.right)
-  const onTab = useSpaceUi((s) => s.setRight)
   return (
   <aside
-    aria-label="Agente e estilo"
+    aria-label="Estilo"
     className="relative z-40 flex h-full shrink-0 flex-col border-l border-gray-200 bg-white"
     style={{ width: INSPECTOR_WIDTH }}
     onWheel={(e) => e.stopPropagation()}
   >
-    <Tabs tabs={RIGHT_TABS} value={tab} onChange={onTab} label="Painel da direita" />
-    {tab === 'agent' ? (
-      <div className="flex min-h-0 flex-1 flex-col border-t border-gray-100">
-        <ClaudePanel inline />
-        <SpaceChat />
-      </div>
-    ) : (
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto border-t border-gray-100">
-        <StyleTab />
-      </div>
-    )}
+    <p className="flex h-11 shrink-0 items-center px-4 text-[13px] font-medium text-gray-900">Estilo</p>
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto border-t border-gray-100">
+      <StyleTab />
+    </div>
   </aside>
   )
 }

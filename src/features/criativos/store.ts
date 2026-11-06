@@ -63,6 +63,22 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let coverTimer: ReturnType<typeof setTimeout> | undefined
 
 export const useEditor = create<EditorState>()((set, get) => {
+  /** As imagens do conjunto que ainda não estão carregadas (uma foto nova, um logo trocado). Só as que faltam: não redesenha à toa. */
+  const tried = new Map<string, number>()
+  const loadNewImages = () => {
+    const { set: current, images } = get()
+    if (!current) return
+    const srcs = new Set<string>()
+    for (const post of current.posts) for (const slide of post.slides) for (const layer of slide.layers) if (layer.type === 'image' && layer.src && !images.has(layer.src)) srcs.add(layer.src)
+    for (const key of ['logoOnLight', 'logoOnDark'] as const) if (current.brand[key] && !images.has(current.brand[key]!)) srcs.add(current.brand[key]!)
+    const now = Date.now()
+    for (const src of srcs) {
+      // Uma tentativa por imagem a cada 30 s (enquanto carrega, ou se falhou)
+      if (now - (tried.get(src) ?? 0) < 30_000) continue
+      tried.set(src, now)
+      void get().ensureImage(src)
+    }
+  }
   const schedule = () => {
     set({ saving: 'dirty' })
     clearTimeout(timer)
@@ -130,6 +146,8 @@ export const useEditor = create<EditorState>()((set, get) => {
       set((s) => ({ past: [...s.past, current].slice(-HISTORY), future: [] }))
       apply(syncSpans(current, fn(current)))
       schedule()
+      // Uma edição pode trazer imagem nova (a foto que a Iara ou o Codex gerou): carrega na hora
+      loadNewImages()
     },
     undo: () => {
       const { past, set: current } = get()
@@ -137,6 +155,7 @@ export const useEditor = create<EditorState>()((set, get) => {
       if (!previous || !current) return
       set((s) => ({ past: s.past.slice(0, -1), future: [current, ...s.future], set: previous }))
       schedule()
+      loadNewImages()
     },
     redo: () => {
       const { future, set: current } = get()
@@ -144,6 +163,7 @@ export const useEditor = create<EditorState>()((set, get) => {
       if (!next || !current) return
       set((s) => ({ future: s.future.slice(1), past: [...s.past, current], set: next }))
       schedule()
+      loadNewImages()
     },
 
     persist: () => schedule(),

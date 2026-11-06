@@ -44,7 +44,7 @@ const toContext = (r: ContextRow): AccountContext => ({
   updatedAt: Date.parse(r.updated_at),
 })
 
-type ContentRow = {
+export type ContentRow = {
   id: string
   team_id: string
   title: string
@@ -53,6 +53,10 @@ type ContentRow = {
   format: ContentFormat
   script: string
   editorial_date: string | null
+  scheduled_time?: string | null
+  channel?: string | null
+  client_status?: 'enviado' | 'aprovado' | 'ajuste' | null
+  client_at?: string | null
   status: ContentStatus
   version: number
   content_hash: string
@@ -65,7 +69,7 @@ type ContentRow = {
   updated_at: string
 }
 
-const toContent = (r: ContentRow): Content => ({
+export const toContent = (r: ContentRow): Content => ({
   id: r.id,
   teamId: r.team_id,
   title: r.title,
@@ -74,6 +78,10 @@ const toContent = (r: ContentRow): Content => ({
   format: r.format,
   script: r.script,
   editorialDate: r.editorial_date ?? undefined,
+  scheduledTime: r.scheduled_time ? r.scheduled_time.slice(0, 5) : undefined,
+  channel: r.channel ?? undefined,
+  clientStatus: r.client_status ?? undefined,
+  clientAt: r.client_at ? Date.parse(r.client_at) : undefined,
   status: r.status,
   version: r.version,
   contentHash: r.content_hash,
@@ -86,9 +94,9 @@ const toContent = (r: ContentRow): Content => ({
   updatedAt: Date.parse(r.updated_at),
 })
 
-type LinkRow = { id: string; content_id: string; kind: 'copy' | 'criativos'; artifact_id: string; project_id: string | null; linked_hash: string; created_by: string | null }
+export type LinkRow = { id: string; content_id: string; kind: 'copy' | 'criativos'; artifact_id: string; project_id: string | null; linked_hash: string; created_by: string | null }
 
-const toLink = (r: LinkRow): ContentLink => ({ id: r.id, contentId: r.content_id, kind: r.kind, artifactId: r.artifact_id, projectId: r.project_id ?? undefined, linkedHash: r.linked_hash, createdBy: r.created_by ?? undefined })
+export const toLink = (r: LinkRow): ContentLink => ({ id: r.id, contentId: r.content_id, kind: r.kind, artifactId: r.artifact_id, projectId: r.project_id ?? undefined, linkedHash: r.linked_hash, createdBy: r.created_by ?? undefined })
 
 /** `.rpc()` devolve a linha da função; só `error` precisa de tratamento. */
 async function call<T>(fn: string, args: Record<string, unknown>, required?: string[]): Promise<T> {

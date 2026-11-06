@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import os from 'node:os'
 import path from 'node:path'
 import { findBin, kill, launch } from '../space/chatPlugin.ts'
+import { codexIsolationArgs } from './codexIsolation.ts'
 
 /**
  * Uma pergunta ao Codex desta máquina (`codex exec`), numa pasta vazia e só com
@@ -73,7 +74,7 @@ export function extractJson<T>(text: string): T | undefined {
   return undefined
 }
 
-export const askCodex = <T>({ prompt, images = [], timeoutMs = 360_000, idleMs = 90_000, web = false, signal, onStep }: Ask): Promise<T> =>
+export const askCodex = <T>({ prompt, images = [], timeoutMs = 480_000, idleMs = 240_000, web = false, signal, onStep }: Ask): Promise<T> =>
   new Promise((resolve, reject) => {
     const bin = findBin('codex')
     if (!bin) return reject(new Error('O Codex não foi encontrado nesta máquina (ou diga onde está em SPACE_CODEX_BIN).'))
@@ -87,7 +88,17 @@ export const askCodex = <T>({ prompt, images = [], timeoutMs = 360_000, idleMs =
     })
     const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }
     for (const key of ['CODEX_THREAD_ID', 'CODEX_SESSION_ID']) delete env[key]
-    const args = ['exec', '--json', '-s', 'read-only', '--skip-git-repo-check', ...codexModelArgs(), ...(web ? ['-c', 'web_search="live"'] : []), ...files.map((f) => `--image=${f}`), '-']
+    /*
+     * Pasta temporária própria, com rede e sem pedir aprovação (2026-11-05, o usuário: "libere isso",
+     * quando a revisão automática de permissões do Codex barrou a leitura das capturas dos cases).
+     * Ele só escreve nesta pasta, que é apagada no fim.
+     */
+    const args = [
+      'exec', '--json', '-s', 'workspace-write',
+      '-c', 'sandbox_workspace_write.network_access=true',
+      '-c', 'approval_policy="never"',
+      '--skip-git-repo-check', ...codexModelArgs(), ...codexIsolationArgs(), ...(web ? ['-c', 'web_search="live"'] : []), ...files.map((f) => `--image=${f}`), '-',
+    ]
     let child: ChildProcess
     try {
       child = launch(bin, args, { cwd, env })
@@ -127,7 +138,7 @@ export const askCodex = <T>({ prompt, images = [], timeoutMs = 360_000, idleMs =
     signal?.addEventListener('abort', abort, { once: true })
     const timer = setTimeout(() => finish(new Error(`A IA passou de ${Math.round(timeoutMs / 60000)} minutos sem responder.`)), timeoutMs)
     const idle = setInterval(() => {
-      if (Date.now() - lastOutput > idleMs) finish(new Error('O Codex parou de responder (sem sinal há mais de 90 s). Tente de novo.'))
+      if (Date.now() - lastOutput > idleMs) finish(new Error(`O Codex parou de responder (sem sinal há mais de ${Math.round(idleMs / 1000)} s). Tente de novo.`))
     }, 5000)
 
     child.stdout?.setEncoding('utf8')
@@ -150,6 +161,8 @@ export const askCodex = <T>({ prompt, images = [], timeoutMs = 360_000, idleMs =
             message = String(item.text ?? '')
           } else if (event.type === 'turn.failed') failure = String(event.error?.message ?? 'O Codex parou com erro.').slice(0, 400)
           else if (event.type === 'error') failure = String(event.message ?? 'O Codex parou com erro.').slice(0, 400)
+          // Qualquer outro evento (raciocínio terminado, ferramenta, comando) também é sinal de vida para a aba
+          else onStep?.('thinking')
         } catch {
           // linha que não é evento
         }
