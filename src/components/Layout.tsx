@@ -61,6 +61,8 @@ const usePageGutters = (main: React.RefObject<HTMLElement>, bar: React.RefObject
 
 const Layout: React.FC = () => {
   const inProject = !!useMatch('/projetos/:projectId');
+  // O editor de um site em código também ocupa a tela inteira, com a Iara ao lado
+  const inCodeSite = !!useMatch('/sites/:siteId');
   const accountName = useCrm((s) => s.team?.name);
   const { pathname, search } = useLocation();
   // Aberto numa prévia (iframe da tela Agentes): só o conteúdo, sem o menu
@@ -86,7 +88,7 @@ const Layout: React.FC = () => {
   const gutters = usePageGutters(mainRef, barRef, [pathname, collapsed, inProject, embedded, editorRoute]);
 
   // Dentro de um projeto a Iara também está (o iframe embutido de um agente fica sem ela)
-  if (inProject || embedded)
+  if (inProject || inCodeSite || embedded)
     return (
       <div className="se-product se-project" style={embedded ? undefined : { paddingRight: 'var(--iara-dock, 0px)' }}>
         <GuardedOutlet />

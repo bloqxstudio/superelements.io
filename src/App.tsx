@@ -20,6 +20,8 @@ import Prospects from "@/pages/Prospects";
 import Skills from "@/pages/Skills";
 import Creatives from "@/pages/Creatives";
 import Motion from "@/pages/Motion";
+import CodeSites from "@/pages/sites/CodeSites";
+import SiteEditor from "@/pages/sites/SiteEditor";
 import Copy from "@/pages/Copy";
 import { CreativeEditor } from "@/features/criativos/Editor";
 import { MotionStudio } from "@/features/criativos/MotionStudio";
@@ -154,6 +156,8 @@ function App() {
                 <Route path="copy" element={<Copy />} />
                 <Route path="copy/:docId" element={<CopyEditorPage />} />
                 <Route path="criativos" element={<Creatives />} />
+                <Route path="sites" element={<CodeSites />} />
+                <Route path="sites/:siteId" element={<SiteEditor />} />
                 <Route path="motion" element={<Motion />} />
                 <Route path="motion/:setId" element={<MotionStudio />} />
                 <Route path="motion/:setId/cena" element={<SceneStudio />} />

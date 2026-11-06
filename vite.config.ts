@@ -6,6 +6,7 @@ import { spaceChat } from "./scripts/space/chatPlugin";
 import { iara } from "./scripts/iara/iaraPlugin";
 import { prospecting } from "./scripts/prospects/vitePlugin";
 import { criativos } from "./scripts/criativos/vitePlugin";
+import { codeSites } from "./scripts/sites/vitePlugin";
 
 // Login automático do dev server (ver AuthContext). Sem prefixo VITE_ de propósito:
 // algumas dependências leem import.meta.env inteiro, o que colaria toda VITE_* no bundle.
@@ -55,6 +56,8 @@ export default defineConfig(({ command, mode }) => ({
     // Prospecção: busca empresas e lê os sites delas (só no dev, tela /prospeccao)
     prospecting(),
     criativos(),
+    // Sites em código (Astro): prévia, edição visual e publicação pelo GitHub desta máquina
+    codeSites(),
   ].filter(Boolean),
   resolve: {
     alias: {
