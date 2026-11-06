@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useIara, useIaraScreen } from '@/features/iara/store'
 import { callSites, clearLog, useSitesLink } from '@/features/sites/link'
-import type { ElementInfo, PickedElement, SitePage, SiteStatus, TextHit } from '@/features/sites/protocol'
+import type { ElementInfo, PickedElement, SiteEnv, SitePage, SiteStatus, TextHit } from '@/features/sites/protocol'
 import { PublishDialog } from '@/features/sites/PublishDialog'
 import { PREVIEW_TEXT, errorText, relFile } from '@/features/sites/ui'
 
@@ -64,6 +64,13 @@ const SiteEditor: React.FC = () => {
   useEffect(() => {
     if (preview?.state === 'erro' || preview?.state === 'instalando') setTerminal(true)
   }, [preview?.state])
+
+  // Variáveis do .env que o clone não trouxe (o .env não vai para o GitHub)
+  const [env, setEnv] = useState<SiteEnv | null>(null)
+  useEffect(() => {
+    if (!site || !ready) return
+    void callSites<SiteEnv>('env', { siteId: site.id }).then(setEnv).catch(() => {})
+  }, [site?.id, ready]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!site || !ready) return
@@ -262,6 +269,8 @@ const SiteEditor: React.FC = () => {
         </div>
       </header>
 
+      {env && env.missing.length > 0 && <EnvBanner siteId={site.id} env={env} onSaved={setEnv} />}
+
       {behind > 0 && (
         <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs text-amber-900">
           O GitHub tem {behind} mudança(s) mais nova(s) que esta máquina.
@@ -380,6 +389,55 @@ const SiteEditor: React.FC = () => {
         />
       )}
     </div>
+  )
+}
+
+// ---------- variáveis de ambiente ----------
+
+const EnvBanner: React.FC<{ siteId: string; env: SiteEnv; onSaved: (env: SiteEnv) => void }> = ({ siteId, env, onSaved }) => {
+  const [values, setValues] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const save = async () => {
+    setSaving(true)
+    try {
+      onSaved(await callSites<SiteEnv>('env-set', { siteId, values }))
+      toast.success('Variáveis salvas no .env desta máquina. Reiniciando a prévia.')
+    } catch (error) {
+      toast.error(errorText(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <form
+      className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void save()
+      }}
+    >
+      <p>
+        O site espera variáveis de ambiente que não vêm do GitHub (o <code>.env</code> fica fora do repositório). Faltam {env.missing.length} do <code>{env.example}</code>; sem elas, partes do site podem dar erro na prévia.
+      </p>
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        {env.missing.map((key) => (
+          <label key={key} className="flex min-w-[220px] flex-1 flex-col gap-0.5">
+            <span className="font-mono text-[11px]">{key}</span>
+            <input
+              value={values[key] ?? ''}
+              onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
+              autoComplete="off"
+              spellCheck={false}
+              className="h-8 rounded-md border border-amber-300 bg-white px-2 font-mono text-xs text-gray-900"
+            />
+          </label>
+        ))}
+        <Button size="sm" type="submit" disabled={saving || !Object.values(values).some((v) => v.trim())}>
+          {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />} Salvar e reiniciar a prévia
+        </Button>
+      </div>
+      <p className="mt-1.5 text-[11px] text-amber-800">Fica só no .env desta máquina, que o git ignora: nunca é publicado.</p>
+    </form>
   )
 }
 

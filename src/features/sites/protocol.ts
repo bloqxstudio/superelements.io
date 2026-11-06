@@ -35,6 +35,8 @@ export type SiteCallKind =
   | 'publish'
   | 'pull'
   | 'discard'
+  | 'env'
+  | 'env-set'
 
 export interface SiteCall {
   id: string
@@ -153,4 +155,11 @@ export interface PublishResult {
   pr?: string
   /** Subiu, mas algo ficou por fazer à mão (o PR não abriu). */
   warning?: string
+}
+
+/** As variáveis que o site espera (do .env.example) e as que ainda faltam no .env desta máquina. */
+export interface SiteEnv {
+  example: string | null
+  keys: string[]
+  missing: string[]
 }

@@ -76,3 +76,16 @@ test('nunca fora da pasta do site', () => {
   assert.throws(() => inside(s, 'node_modules/astro/x.astro'), /fora/)
   assert.throws(() => inside(s, '/etc/passwd'), /fora/)
 })
+
+test('.env: falta o que o exemplo pede, e grava só essas chaves', async () => {
+  const { envStatus, setEnv } = await import('../sites/source.ts')
+  const s = site({ '.env.example': 'PUBLIC_URL=https://x\nPUBLIC_KEY=abc\n', '.env': 'OUTRA=1\n' })
+  assert.deepEqual(envStatus(s).missing, ['PUBLIC_URL', 'PUBLIC_KEY'])
+  assert.throws(() => setEnv(s, { PUBLIC_URL: 'u' }, false), /gitignore/)
+  const after = setEnv(s, { PUBLIC_URL: 'https://a.co', PUBLIC_KEY: 'k k', INTRUSA: 'x' }, true)
+  assert.deepEqual(after.missing, [])
+  const text = readFileSync(path.join(s.dir, '.env'), 'utf8')
+  assert.match(text, /OUTRA=1/)
+  assert.match(text, /PUBLIC_KEY="k k"/)
+  assert.doesNotMatch(text, /INTRUSA/)
+})

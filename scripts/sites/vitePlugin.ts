@@ -3,7 +3,7 @@ import { SITE_EVENTS, type PickedElement, type PublishMode, type SiteCall, type 
 import { cloneRepo, discard, git, githubUser, listRepos, publish, pull, siteDiff, siteStatus } from './git.ts'
 import { previews, startPreview, stopAll, stopPreview } from './preview.ts'
 import { addSite, getSite, readSites, removeSite, updateSite } from './registry.ts'
-import { findText, inspect, listPages, replaceText, saveImage, setAttr, setText } from './source.ts'
+import { envStatus, findText, inspect, listPages, replaceText, saveImage, setAttr, setEnv, setText } from './source.ts'
 
 /**
  * Sites em código (Astro) no mesmo canal do chat do Space: o websocket do Vite no
@@ -88,6 +88,19 @@ export const codeSites = (): Plugin => ({
               case 'stop':
                 stopPreview(str(r.siteId, 40), notify)
                 return { ok: true }
+              case 'env':
+                return envStatus(getSite(r.siteId))
+              case 'env-set': {
+                const site = getSite(r.siteId)
+                const ignored = await git(site.dir, 'check-ignore', '-q', '.env').then(() => true, () => false)
+                const values = r.values && typeof r.values === 'object' ? Object.fromEntries(Object.entries(r.values as Record<string, unknown>).slice(0, 60).map(([k, v]) => [str(k, 80), str(v, 4000)])) : {}
+                const status = setEnv(site, values, ignored)
+                // O Astro só lê o .env ao abrir: a prévia reinicia
+                stopPreview(site.id, notify)
+                await new Promise((resolve) => setTimeout(resolve, 3500))
+                void startPreview(site, notify, log)
+                return status
+              }
               case 'pages':
                 return listPages(getSite(r.siteId))
               case 'inspect':

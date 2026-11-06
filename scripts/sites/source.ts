@@ -447,3 +447,44 @@ export function listPages(site: CodeSite): SitePage[] {
   visit(root)
   return pages.sort((a, b) => (a.route === '/' ? -1 : b.route === '/' ? 1 : a.route.localeCompare(b.route)))
 }
+
+// ---------- variáveis de ambiente (.env) ----------
+
+const ENV_EXAMPLES = ['.env.example', '.env.sample', '.env.template']
+const envKeys = (text: string) =>
+  text
+    .split('\n')
+    .map((l) => /^\s*(?:export\s+)?([A-Za-z_][\w]*)\s*=\s*(.*)$/.exec(l))
+    .filter((m): m is RegExpExecArray => !!m)
+    .map((m) => ({ key: m[1], value: m[2].trim().replace(/^(['"])(.*)\1$/, '$2') }))
+
+/**
+ * O `.env` não vem do GitHub (fica no .gitignore): um clone novo nasce sem ele e o site quebra
+ * (2026-11-06, a Vizor: "supabaseUrl is required"). O exemplo do repositório diz o que falta.
+ */
+export function envStatus(site: CodeSite) {
+  const example = ENV_EXAMPLES.map((f) => path.join(site.dir, f)).find((f) => existsSync(f))
+  if (!example) return { example: null as string | null, missing: [] as string[], keys: [] as string[] }
+  const keys = envKeys(readFileSync(example, 'utf8')).map((k) => k.key)
+  const envFile = path.join(site.dir, '.env')
+  const set = new Set(existsSync(envFile) ? envKeys(readFileSync(envFile, 'utf8')).filter((k) => k.value).map((k) => k.key) : [])
+  return { example: path.basename(example), keys, missing: keys.filter((k) => !set.has(k) && !process.env[k]) }
+}
+
+/** Grava só as chaves do exemplo no `.env`, mantendo o resto. `ignored` diz se o git ignora o .env. */
+export function setEnv(site: CodeSite, values: Record<string, string>, ignored: boolean) {
+  if (!ignored) throw new Error('O .env deste site não está no .gitignore: gravar ali mandaria as chaves para o GitHub. Ponha .env no .gitignore antes.')
+  const { keys } = envStatus(site)
+  const envFile = path.join(site.dir, '.env')
+  let text = existsSync(envFile) ? readFileSync(envFile, 'utf8') : ''
+  for (const [key, raw] of Object.entries(values)) {
+    if (!keys.includes(key)) continue
+    const value = String(raw ?? '').replace(/[\r\n]/g, '').trim()
+    if (!value) continue
+    const line = `${key}=${/[\s#"']/.test(value) ? JSON.stringify(value) : value}`
+    const re = new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=.*$`, 'm')
+    text = re.test(text) ? text.replace(re, line) : `${text}${text && !text.endsWith('\n') ? '\n' : ''}${line}\n`
+  }
+  writeFileSync(envFile, text)
+  return envStatus(site)
+}

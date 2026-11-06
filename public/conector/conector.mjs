@@ -4571,6 +4571,33 @@ function listPages(site) {
   visit(root);
   return pages.sort((a, b) => a.route === "/" ? -1 : b.route === "/" ? 1 : a.route.localeCompare(b.route));
 }
+var ENV_EXAMPLES = [".env.example", ".env.sample", ".env.template"];
+var envKeys = (text3) => text3.split("\n").map((l) => /^\s*(?:export\s+)?([A-Za-z_][\w]*)\s*=\s*(.*)$/.exec(l)).filter((m) => !!m).map((m) => ({ key: m[1], value: m[2].trim().replace(/^(['"])(.*)\1$/, "$2") }));
+function envStatus(site) {
+  const example = ENV_EXAMPLES.map((f) => path11.join(site.dir, f)).find((f) => existsSync10(f));
+  if (!example) return { example: null, missing: [], keys: [] };
+  const keys = envKeys(readFileSync8(example, "utf8")).map((k) => k.key);
+  const envFile = path11.join(site.dir, ".env");
+  const set = new Set(existsSync10(envFile) ? envKeys(readFileSync8(envFile, "utf8")).filter((k) => k.value).map((k) => k.key) : []);
+  return { example: path11.basename(example), keys, missing: keys.filter((k) => !set.has(k) && !process.env[k]) };
+}
+function setEnv(site, values, ignored) {
+  if (!ignored) throw new Error("O .env deste site n\xE3o est\xE1 no .gitignore: gravar ali mandaria as chaves para o GitHub. Ponha .env no .gitignore antes.");
+  const { keys } = envStatus(site);
+  const envFile = path11.join(site.dir, ".env");
+  let text3 = existsSync10(envFile) ? readFileSync8(envFile, "utf8") : "";
+  for (const [key, raw] of Object.entries(values)) {
+    if (!keys.includes(key)) continue;
+    const value = String(raw ?? "").replace(/[\r\n]/g, "").trim();
+    if (!value) continue;
+    const line = `${key}=${/[\s#"']/.test(value) ? JSON.stringify(value) : value}`;
+    const re = new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=.*$`, "m");
+    text3 = re.test(text3) ? text3.replace(re, line) : `${text3}${text3 && !text3.endsWith("\n") ? "\n" : ""}${line}
+`;
+  }
+  writeFileSync8(envFile, text3);
+  return envStatus(site);
+}
 
 // scripts/sites/vitePlugin.ts
 var str = (v, max = 2e3) => String(v ?? "").slice(0, max);
@@ -4646,6 +4673,18 @@ var codeSites = () => ({
               case "stop":
                 stopPreview(str(r.siteId, 40), notify);
                 return { ok: true };
+              case "env":
+                return envStatus(getSite(r.siteId));
+              case "env-set": {
+                const site = getSite(r.siteId);
+                const ignored = await git(site.dir, "check-ignore", "-q", ".env").then(() => true, () => false);
+                const values = r.values && typeof r.values === "object" ? Object.fromEntries(Object.entries(r.values).slice(0, 60).map(([k, v]) => [str(k, 80), str(v, 4e3)])) : {};
+                const status = setEnv(site, values, ignored);
+                stopPreview(site.id, notify);
+                await new Promise((resolve) => setTimeout(resolve, 3500));
+                void startPreview(site, notify, log);
+                return status;
+              }
               case "pages":
                 return listPages(getSite(r.siteId));
               case "inspect":
@@ -5006,7 +5045,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202611062105", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202611062109", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -5023,7 +5062,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202611062105" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202611062109" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);
