@@ -20,6 +20,8 @@ import Prospects from "@/pages/Prospects";
 import Skills from "@/pages/Skills";
 import Creatives from "@/pages/Creatives";
 import Motion from "@/pages/Motion";
+import CodeSites from "@/pages/sites/CodeSites";
+import SiteEditor from "@/pages/sites/SiteEditor";
 import Copy from "@/pages/Copy";
 import { CreativeEditor } from "@/features/criativos/Editor";
 import { MotionStudio } from "@/features/criativos/MotionStudio";
@@ -52,6 +54,7 @@ import CrmContentDetail from "@/pages/crm/ContentDetail";
 import CrmPauta from "@/pages/crm/Pauta";
 import PautaApproval from "@/pages/PautaApproval";
 import ProductSuggestions from "@/pages/ProductSuggestions";
+import Cerebro from "@/pages/Cerebro";
 import CrmFunnels from "@/pages/crm/Funnels";
 import CrmFunnelDetail from "@/pages/crm/FunnelDetail";
 import InstagramCallback from "@/pages/InstagramCallback";
@@ -154,6 +157,8 @@ function App() {
                 <Route path="copy" element={<Copy />} />
                 <Route path="copy/:docId" element={<CopyEditorPage />} />
                 <Route path="criativos" element={<Creatives />} />
+                <Route path="sites" element={<CodeSites />} />
+                <Route path="sites/:siteId" element={<SiteEditor />} />
                 <Route path="motion" element={<Motion />} />
                 <Route path="motion/:setId" element={<MotionStudio />} />
                 <Route path="motion/:setId/cena" element={<SceneStudio />} />
@@ -171,6 +176,8 @@ function App() {
                 <Route path="contas" element={<CrmAccounts />} />
                 {/* Sugestões ao time de produto (pela Iara): o admin vê todas; cada pessoa, as suas */}
                 <Route path="sugestoes" element={<ProductSuggestions />} />
+                {/* Segundo cérebro (cerebro/ do repositório): só o admin da plataforma; no dev edita os arquivos */}
+                <Route path="cerebro" element={<Cerebro />} />
                 <Route path="contas/nova" element={<AccountWizard />} />
                 {/* Social selling: a fila do dia nas redes; quem segue e envia é a pessoa */}
                 <Route path="crm/social" element={<CrmGate><CrmSocial /></CrmGate>} />

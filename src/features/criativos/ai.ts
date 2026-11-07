@@ -8,6 +8,8 @@ import { LIBRARY } from './library'
 import { drawSlide, type ImageMap } from './render'
 import type { CreativeSet, Layer, Post, SetBrand, Slide } from './types'
 import { FORMATS, sizeOf } from './types'
+import { useCrm } from '@/features/crm/crmStore'
+import { standardBlock } from '@/features/cerebro/standard'
 
 export interface AiForm {
   brief: string
@@ -29,8 +31,10 @@ export const AI_EXAMPLES = [
 ]
 
 export async function generatePosts(form: AiForm, brand: SetBrand, signal?: AbortSignal): Promise<Post[]> {
+  // O padrão de design do Cérebro da conta (marca e padrão de post marcado) vai em todo pedido
+  const standard = await standardBlock(useCrm.getState().team?.id, form.format)
   const request: PlanRequest = {
-    brief: form.brief,
+    brief: standard ? `${form.brief}\n\n${standard}` : form.brief,
     format: form.format,
     slides: form.slides,
     posts: form.posts,
@@ -132,6 +136,9 @@ const withStyleRules = (skill: EditRequest['skill'], rules?: string[]): EditRequ
   return skill ? { name: skill.name, instructions: `${skill.instructions}\n\n${block}` } : { name: 'Padrão do conjunto', instructions: block }
 }
 
+const withStandard = (skill: EditRequest['skill'], block: string): EditRequest['skill'] =>
+  !block ? skill : skill ? { name: skill.name, instructions: `${skill.instructions}\n\n${block}` } : { name: 'Padrão da conta', instructions: block }
+
 export async function requestEdit(call: EditCall, fonts: string[], signal?: AbortSignal, onStep?: (step: CreativeStep) => void): Promise<EditResponse> {
   const { set } = call
   const post = set.posts.find((p) => p.id === call.postId)
@@ -166,7 +173,7 @@ export async function requestEdit(call: EditCall, fonts: string[], signal?: Abor
     previews: post && call.scope === 'post' ? post.slides.slice(0, 10).map((sl) => slidePreview(sl, post.format, call.images, 540)) : undefined,
     history: call.history,
     attachments: call.attachments,
-    skill: withStyleRules(call.skill, set.styleRules),
+    skill: withStandard(withStyleRules(call.skill, set.styleRules), await standardBlock(useCrm.getState().team?.id, post?.format)),
   }
   const json = await callAi<Partial<EditResponse>>('edit', body, signal, onStep)
   if (!json.ops) throw new Error('A IA não respondeu.')

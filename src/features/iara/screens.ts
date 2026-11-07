@@ -20,6 +20,8 @@ export interface ScreenInfo {
 const SCREENS: Array<[string, ScreenInfo]> = [
   ['/inicio', { name: 'Visão geral', purpose: 'o resumo do caminho anúncio → site → contato → venda da conta', suggestions: ['Me explica o que mudou nos números desta semana', 'Onde estamos perdendo mais gente no caminho?', 'Que três coisas eu faço hoje para vender mais?'] }],
   ['/projetos/:projectId', { name: 'Projeto no Space', purpose: 'o canvas com as páginas do site do cliente, para criar e ajustar seções', suggestions: ['Revise os títulos desta página e diga o que melhorar', 'Crie uma seção de perguntas frequentes no fim da página', 'Deixe a primeira dobra mais clara no celular'] }],
+  ['/sites/:siteId', { name: 'Editor de site em código', purpose: 'o editor visual de um site Astro: prévia do astro dev, o elemento escolhido com arquivo e linha, e a publicação pelo GitHub', suggestions: ['Deixa o elemento escolhido mais destacado no celular', 'Cria uma seção de perguntas frequentes antes do rodapé', 'Revisa os textos desta página e melhora os títulos'] }],
+  ['/sites', { name: 'Sites em código', purpose: 'os sites em Astro ligados por repositório do GitHub, para editar e publicar', suggestions: ['Liga o repositório do site da Vizor', 'Qual site tem edição sem publicar?'] }],
   ['/', { name: 'Projetos', purpose: 'a lista de projetos (sites) da conta', suggestions: ['Qual projeto está mais atrasado?', 'Abre o projeto do site principal', 'Cria um projeto novo para um cliente'] }],
   ['/plano', { name: 'Plano', purpose: 'o plano de conteúdo da empresa: oferta, público, tom, pilares e restrições', suggestions: ['Revise o Plano e diga o que está fraco', 'Sugira pilares de conteúdo a partir da oferta', 'Escreve o público ideal com base no que já postamos'] }],
   ['/pauta', { name: 'Pauta', purpose: 'o calendário editorial: ideias, peças com data e horário, aprovação do gestor e do cliente', suggestions: ['Gera 6 ideias para as próximas duas semanas', 'Monta a pauta das próximas duas semanas, terças e quintas às 18h', 'O que está parado esperando aprovação?'] }],
@@ -52,6 +54,7 @@ const SCREENS: Array<[string, ScreenInfo]> = [
   ['/agentes', { name: 'Agentes', purpose: 'os agentes da máquina e as rotinas', suggestions: ['Quais rotinas estão ligadas?'] }],
   ['/skills', { name: 'Skills', purpose: 'as skills (instruções) que os agentes seguem', suggestions: ['Cria uma skill com o tom da nossa marca'] }],
   ['/sugestoes', { name: 'Sugestões do produto', purpose: 'as sugestões de melhoria enviadas ao time de produto', suggestions: ['Quais sugestões chegaram esta semana?'] }],
+  ['/cerebro', { name: 'Cérebro', purpose: 'a base de conhecimento da empresa aberta: quem é, o que vende, produtos com fotos, decisões e logs, mais o cadastro, o Plano, a marca e os criativos da conta (pasta Da plataforma)', suggestions: ['Preencha a visão geral da empresa com o que você já sabe', 'Monte a nota de produtos e serviços', 'O que ainda falta saber sobre esta empresa?'] }],
   ['/contas', { name: 'Contas', purpose: 'as contas de clientes da plataforma e os módulos de cada uma', suggestions: ['Quais contas estão com módulos desligados?'] }],
   ['/perfil', { name: 'Meu perfil', purpose: 'nome, foto, e-mail, senha e sessões da pessoa', suggestions: [] }],
 ]

@@ -180,8 +180,8 @@ export const useConnector = create<ConnectorState>()((set, get) => {
           useCreativeLink.setState({ connected: false })
         }
       })
-      const [{ startSpaceBridge }, { startSpaceChat }, { startIaraLink }] = await Promise.all([import('@/features/space/bridge/client'), import('@/features/space/chat/connection'), import('@/features/iara/link')])
-      stops = [startSpaceBridge(channel), startSpaceChat(channel), startCreativeLink(channel), startIaraLink(channel), () => channel.close()]
+      const [{ startSpaceBridge }, { startSpaceChat }, { startIaraLink }, { startSitesLink }] = await Promise.all([import('@/features/space/bridge/client'), import('@/features/space/chat/connection'), import('@/features/iara/link'), import('@/features/sites/link')])
+      stops = [startSpaceBridge(channel), startSpaceChat(channel), startCreativeLink(channel), startIaraLink(channel), startSitesLink(channel), () => channel.close()]
       linked = live
       set({ pairing: live, error: undefined, version: found.version })
       return true

@@ -2,6 +2,11 @@
 export const ACTION_LABEL: Record<string, string> = {
   acoes: 'Vendo o que posso fazer',
   listar_conteudos: 'Lendo os conteúdos',
+  cerebro_ler: 'Lendo o cérebro da empresa',
+  cerebro_buscar: 'Buscando no cérebro',
+  cerebro_escrever: 'Escrevendo no cérebro',
+  cerebro_log: 'Registrando no log do cérebro',
+  salvar_padrao: 'Salvando o padrão de post no cérebro',
   ler_conteudo: 'Lendo o conteúdo',
   criar_ideias: 'Criando ideias',
   editar_conteudo: 'Escrevendo o texto',

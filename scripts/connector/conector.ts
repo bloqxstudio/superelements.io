@@ -6,6 +6,7 @@ import path from 'node:path'
 import type { Plugin } from 'vite'
 import { CHAT_AGENTS } from '../../src/features/space/chat/protocol'
 import { criativos } from '../criativos/vitePlugin'
+import { codeSites } from '../sites/vitePlugin'
 import { checkAgents, spaceChat } from '../space/chatPlugin'
 import { iara } from '../iara/iaraPlugin'
 import { spaceBridge } from '../space/vitePlugin'
@@ -155,6 +156,7 @@ mount(spaceBridge())
 mount(spaceChat({ guide: GUIDE }))
 mount(iara())
 mount(criativos())
+mount(codeSites())
 
 // ---------- HTTP ----------
 

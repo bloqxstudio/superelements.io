@@ -25,7 +25,7 @@ const PERSONA = `Você é a Iara, a assistente da plataforma. Você trabalha com
 Como trabalhar:
 - Português do Brasil, direto, como uma colega de agência sênior. Sem introdução longa.
 - Faça, não descreva: quando uma ação resolve o pedido, use a ação. Encadeie quantas forem precisas (criar a ideia, escrever o roteiro, produzir o criativo, olhar o resultado, ajustar o que estiver ruim).
-- Ideias e textos específicos da empresa, com ângulo, gancho e formato; nunca genéricos ("dicas de marketing", "conheça nossos serviços"). Use só fatos do Plano, do cadastro, dos conteúdos e dos dados; não invente números, clientes, preços ou resultados.
+- Ideias e textos específicos da empresa, com ângulo, gancho e formato; nunca genéricos ("dicas de marketing", "conheça nossos serviços"). Use só fatos do Plano, do cadastro, do cérebro da empresa, dos conteúdos e dos dados; não invente números, clientes, preços ou resultados.
 - Quando fizer sentido, leia os dados (o que performou no Instagram, as campanhas, o que o site converte) antes de propor.
 - Roteiro de carrossel: um parágrafo por slide, começando por "Slide N:"; post simples: legenda pronta.
 - Criativos: produzir e editar criativo roda no agente que a pessoa escolheu no chat, sem pedir confirmação nem perguntar qual agente usar: a escolha já foi feita. A ação começa o trabalho na tela e volta na hora; diga em uma frase o que está sendo feito e encerre a resposta: não espere nem finja o resultado.
@@ -51,6 +51,29 @@ Como trabalhar:
 const clip = (s: string | undefined, n: number) => {
   const t = (s ?? '').replace(/\s+/g, ' ').trim()
   return t.length > n ? `${t.slice(0, n)}…` : t
+}
+
+/**
+ * O cérebro da empresa ativa (base de conhecimento da conta, guardada no app; `cerebro/scope.ts`): a
+ * lista das notas e a visão geral. O resto a Iara lê com cerebro_ler e cerebro_buscar.
+ */
+async function brainContext(team: { id: string; name: string; isHome?: boolean }): Promise<string> {
+  try {
+    const { loadScoped } = await import('@/features/cerebro/scope')
+    const { titleOf: noteTitle } = await import('@/features/cerebro/vault')
+    const { vault, scope } = await Promise.race([loadScoped(team), new Promise<never>((_, no) => setTimeout(() => no(new Error('tempo')), 4000))])
+    const own = vault.notes.filter((n) => !n.auto)
+    const overview = vault.notes.find((n) => n.path === 'README.md')
+    const list = vault.notes.slice(0, 60).map((n) => `- ${n.path} · ${clip(noteTitle(n), 80)}${n.auto ? ' (da plataforma)' : ''}`).join('\n')
+    const { patternsOf, FORMAT_LABEL } = await import('@/features/cerebro/standard')
+    const pats = patternsOf(vault)
+    const patText = pats.length
+      ? `\nPadrões de post (os marcados com ★ já vão sozinhos em toda criação e edição de criativo do formato): ${pats.map((p) => `${p.isDefault ? '★ ' : ''}${p.name} (${FORMAT_LABEL[p.format] ?? 'sem formato'})`).join('; ')}`
+      : '\nAinda não há padrão de post: quando um post ficar bom, ofereça salvar_padrao.'
+    return `## Cérebro da empresa (${scope.label}; só desta empresa)${patText}\n\n${own.length ? '' : 'A equipe ainda não escreveu notas: quando souber quem é a empresa, o que vende ou os produtos, ofereça registrar no cérebro.\n'}Notas (leia com cerebro_ler, registre com cerebro_log, edite com cerebro_escrever):\n${list}${overview ? `\n\nVisão geral (README.md):\n${clip(overview.content, 2500)}` : ''}`
+  } catch {
+    return ''
+  }
 }
 
 /** Conta, Plano, conteúdos e tela: o que a Iara precisa saber em cada pedido. */
@@ -80,13 +103,14 @@ export async function material(opts: { contents: number; withCatalog: boolean })
       .slice(0, opts.contents)
       .map((c) => `- id ${c.id} · "${clip(c.title, 90)}" · ${STAGE_LABEL[stageOf(c)]} · ${c.format}${c.editorialDate ? ` · ${c.editorialDate}${c.scheduledTime ? ` ${c.scheduledTime}` : ''}` : ' · sem data'}${c.script.trim() ? '' : ' · sem roteiro'}`)
     parts.push(`## Conteúdos da conta (${contents.length}; os mais recentes)\n${rows.join('\n') || '(nenhum)'}`)
+    parts.push(await brainContext(team))
   }
   const agents = localAgents()
   parts.push(
     `## Agentes desta máquina\nVocê (Iara) roda no agente que a pessoa escolheu no chat (Claude Code ou Codex). Conectados: ${agents.map(agentName).join(', ') || 'nenhum'}. Agora você é: ${agentName(chatAgent())}; os criativos também saem por você.`
   )
   if (opts.withCatalog) parts.push(`## Ações\n${catalog()}`)
-  return parts.join('\n\n')
+  return parts.filter(Boolean).join('\n\n')
 }
 
 // ---------- modo agente ----------

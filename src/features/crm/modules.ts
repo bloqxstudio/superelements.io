@@ -96,7 +96,7 @@ export function moduleOn(team: Pick<Team, 'status' | 'modules'> | undefined, id:
 /** A tela de uma rota, para saber qual módulo a guarda. */
 export function moduleOfPath(pathname: string): ModuleId | undefined {
   const p = pathname.replace(/\/+$/, '') || '/'
-  if (p === '/' || p.startsWith('/projetos')) return 'projetos'
+  if (p === '/' || p.startsWith('/projetos') || p.startsWith('/sites')) return 'projetos'
   if (p.startsWith('/agentes')) return 'agentes'
   // Plano e Conteúdos moram no módulo Copy: o banco usa o mesmo módulo (migração 20261031041728)
   if (p.startsWith('/copy') || p === '/plano' || p === '/pauta' || p.startsWith('/conteudos')) return 'copy'

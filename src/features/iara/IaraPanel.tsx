@@ -7,6 +7,7 @@ import { useProjectStore } from '@/features/projects/projectStore'
 import { useProjectSync } from '@/features/projects/useProjectSession'
 import { ClaudePanel } from '@/features/space/bridge/ClaudePanel'
 import { SpaceChat, type IaraChatHooks } from '@/features/space/chat/SpaceChat'
+import { useSitesLink } from '@/features/sites/link'
 import { agentSystem, handbackRequest, iaraScreen, proposalDetail, runAction, setIaraNavigate } from './engine'
 import { AGENT_COLORS, agentName, chatAgent, execAction, localAgents } from './actions'
 import { addCard, cardsAfter, patchCard, sendWhenFree, useIaraFeed } from './feed'
@@ -259,7 +260,11 @@ export const IaraPanel: React.FC = () => {
   const projectMatch = useMatch('/projetos/:projectId')
   const openProject = useProjectSync((s) => s.openId)
   const inProject = !!projectMatch && !!openProject && projectMatch.params.projectId === openProject
-  const chatId = inProject ? openProject : team ? `conta-${team.id}` : undefined
+  // Num site em código (Astro) a conversa é a do site: o agente roda na pasta do repositório dele
+  const siteMatch = useMatch('/sites/:siteId')
+  const codeSite = useSitesLink((s) => s.state?.sites.find((x) => x.id === siteMatch?.params.siteId))
+  const inSite = !!siteMatch && !!codeSite
+  const chatId = inProject ? openProject : inSite ? `site-${codeSite.id}` : team ? `conta-${team.id}` : undefined
   const projectName = useProjectStore((s) => s.projects.find((p) => p.id === openProject)?.name)
   useEffect(() => {
     useIaraFeed.setState({ chat: chatId })
@@ -294,7 +299,7 @@ export const IaraPanel: React.FC = () => {
     return () => clearInterval(timer)
   }, [open])
   // Num projeto a Iara é a coluna da direita (o chat do canvas mora nela) e abre ao entrar
-  const docked = dock || inProject || sidePanel
+  const docked = dock || inProject || inSite || sidePanel
   useEffect(() => {
     if (inProject && openProject && !closedIn.has(openProject)) useIara.setState({ open: true })
   }, [inProject, openProject])
@@ -488,7 +493,7 @@ export const IaraPanel: React.FC = () => {
             </span>
             <div className="min-w-0 flex-1">
               <h2 className="text-sm font-semibold text-gray-900">Iara</h2>
-              <p className="truncate text-[11px] text-gray-500">{inProject ? `No projeto${projectName ? `: ${projectName}` : ''}` : screen ? `Vendo: ${screen.title}` : team.name}</p>
+              <p className="truncate text-[11px] text-gray-500">{inProject ? `No projeto${projectName ? `: ${projectName}` : ''}` : inSite ? `No código do site: ${codeSite.name}` : screen ? `Vendo: ${screen.title}` : team.name}</p>
             </div>
             <button
               type="button"
@@ -513,7 +518,7 @@ export const IaraPanel: React.FC = () => {
             >
               <Lightbulb className="h-4 w-4" aria-hidden />
             </button>
-            {!inProject && !sidePanel && (
+            {!inProject && !inSite && !sidePanel && (
               <button type="button" onClick={toggleDock} aria-label={dock ? 'Voltar para a janela flutuante' : 'Abrir como barra lateral'} title={dock ? 'Voltar para a janela flutuante' : 'Abrir como barra lateral'} className="hidden h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 md:flex">
                 {dock ? <PanelRightClose className="h-4 w-4" aria-hidden /> : <PanelRight className="h-4 w-4" aria-hidden />}
               </button>
@@ -550,7 +555,7 @@ export const IaraPanel: React.FC = () => {
           </div>
           <div className="flex min-h-0 flex-1 flex-col">
             {inProject && <ClaudePanel inline />}
-            <SpaceChat chatId={chatId} chatName={inProject ? projectName : `Iara · ${team.name}`} iara={hooks} />
+            <SpaceChat chatId={chatId} chatName={inProject ? projectName : inSite ? codeSite.name : `Iara · ${team.name}`} iara={hooks} />
           </div>
         </section>
       )}
