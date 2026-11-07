@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { navigationMatches } from '@/features/navigation/workspace'
 import { Link, NavLink } from 'react-router-dom'
-import { Activity, Bot, Building2, Code2, CalendarDays, CalendarRange, Filter, Target, House, Building, FolderKanban, Globe, ListChecks, Images, Clapperboard, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
+import { Activity, Bot, Brain, Building2, Code2, CalendarDays, CalendarRange, Filter, Target, House, Building, FolderKanban, Globe, ListChecks, Images, Clapperboard, Instagram, Megaphone, PenLine, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { PersonAvatar } from '@/features/profile/PersonAvatar'
 import { useAuth } from '@/contexts/AuthContext'
@@ -204,6 +204,7 @@ const ResultsNav: React.FC<{ on: (id: ModuleId) => boolean }> = ({ on }) => (
     {(on('copy') || on('criativos') || on('instagram')) && (
       <Section title="Conteúdo">
         {on('copy') && <Item to="/plano" icon={Target} label="Plano da empresa" />}
+        <Item to="/cerebro" icon={Brain} label="Cérebro" />
         {on('copy') && <Item to="/pauta" icon={CalendarRange} label="Pauta" />}
         {on('copy') && <Item to="/conteudos" icon={CalendarDays} label="Conteúdos" />}
         {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" />}
@@ -235,6 +236,7 @@ const BuilderNav: React.FC<{ on: (id: ModuleId) => boolean; teams: number }> = (
     {(on('copy') || on('criativos')) && (
       <Section title="Conteúdo">
         {teams > 0 && on('copy') && <Item to="/plano" icon={Target} label="Plano da empresa" />}
+        {teams > 0 && <Item to="/cerebro" icon={Brain} label="Cérebro" />}
         {teams > 0 && on('copy') && <Item to="/pauta" icon={CalendarRange} label="Pauta" />}
         {teams > 0 && on('copy') && <Item to="/conteudos" icon={CalendarDays} label="Conteúdos" />}
         {on('copy') && <Item to="/copy" icon={PenLine} label="Textos" />}
@@ -309,6 +311,7 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
             {on('projetos') && <Item to="/" end icon={FolderKanban} label="Projetos" />}
             {on('projetos') && <Item to="/sites" icon={Code2} label="Sites em código" />}
             {teams.length > 0 && on('copy') && <Item to="/plano" icon={Target} label="Plano da empresa" />}
+            {teams.length > 0 && <Item to="/cerebro" icon={Brain} label="Cérebro" />}
             {teams.length > 0 && on('copy') && <Item to="/pauta" icon={CalendarRange} label="Pauta" />}
             {teams.length > 0 && on('copy') && <Item to="/conteudos" icon={CalendarDays} label="Conteúdos" />}
             {on('agentes') && <AgentsItem />}

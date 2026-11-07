@@ -88,7 +88,19 @@ export function slidesFromScript(content: Pick<Content, 'title' | 'goal' | 'scri
  */
 export async function accountBrand(): Promise<SetBrand | undefined> {
   const team = useCrm.getState().team
-  // Conta de cliente: os projetos dela (a conta da casa guarda os projetos sem conta, de todos os clientes)
+  // 1. A marca do Cérebro da conta (marca/DESIGN.md = `crm_account_context.brand_md`): é o padrão
+  //    escolhido pela equipe (2026-11-07, "um padrão de design via cérebro")
+  if (team) {
+    try {
+      const { data } = await (supabase as unknown as SupabaseClient).from('crm_account_context').select('brand_md').eq('team_id', team.id).maybeSingle()
+      const source = (data as { brand_md?: string } | null)?.brand_md
+      const parsed = source?.trim() ? parseDesignMd(source).brand : null
+      if (parsed && (parsed.colors.length || parsed.logo)) return setBrandFrom(parsed, team.name)
+    } catch {
+      // Coluna ausente (migração não aplicada): segue para os projetos
+    }
+  }
+  // 2. Conta de cliente: os projetos dela (a conta da casa guarda os projetos sem conta, de todos os clientes)
   if (team && !team.isHome) {
     try {
       const { data } = await supabase.from('space_projects').select('id, name').eq('team_id', team.id).is('archived_at', null).order('updated_at', { ascending: false }).limit(3)
@@ -98,16 +110,7 @@ export async function accountBrand(): Promise<SetBrand | undefined> {
         if (parsed && (parsed.colors.length || parsed.logo)) return setBrandFrom(parsed, project.name)
       }
     } catch {
-      // Sem acesso aos projetos: segue para a marca da conta
-    }
-    // Conta sem projeto (Sinfy): o DESIGN.md guardado na conta (`crm_account_context.brand_md`)
-    try {
-      const { data } = await (supabase as unknown as SupabaseClient).from('crm_account_context').select('brand_md').eq('team_id', team.id).maybeSingle()
-      const source = (data as { brand_md?: string } | null)?.brand_md
-      const parsed = source?.trim() ? parseDesignMd(source).brand : null
-      if (parsed && (parsed.colors.length || parsed.logo)) return setBrandFrom(parsed, team.name)
-    } catch {
-      // Coluna ausente (migração não aplicada): segue para os conjuntos
+      // Sem acesso aos projetos: segue para os conjuntos
     }
   }
   try {

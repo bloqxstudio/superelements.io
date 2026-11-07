@@ -1120,6 +1120,124 @@ const DATA_ACTIONS: Full[] = [
   },
 ]
 
+// ---------- cérebro (base de conhecimento da conta) ----------
+// Sempre fechado à empresa ativa (src/features/cerebro/scope.ts): cada conta tem o seu, guardado no app.
+// A pasta plataforma/ é montada sozinha (cadastro, Plano, marca, criativos) e não é gravada.
+
+const brain = async () => {
+  const { loadScoped } = await import('@/features/cerebro/scope')
+  return loadScoped(team())
+}
+const brainPath = (v: unknown) => (typeof v === 'string' ? v.trim().replace(/^\/+/, '').replace(/^cerebro\//, '') : '')
+
+const BRAIN_ACTIONS: Full[] = [
+  {
+    name: 'cerebro_ler',
+    doc: '{"nota"?:string} — o cérebro (base de conhecimento) da empresa ativa: sem "nota", a lista das notas (caminho, título, data), os arquivos e a visão geral (README.md); com "nota" (caminho, ex. "produtos/README.md" ou "plataforma/marca.md"), o texto inteiro. Quem é a empresa, o que vende, produtos, marca (marca/DESIGN.md), padrões de post (marca/padroes/), Plano, criativos, decisões e logs.',
+    run: async () => ({ label: 'Li o cérebro.', ok: true }),
+    exec: async (a) => {
+      const { vault, scope } = await brain()
+      const { titleOf: noteTitle, dateOf } = await import('@/features/cerebro/vault')
+      const path = brainPath(a.nota)
+      if (path) {
+        const note = vault.notes.find((n) => n.path === path) ?? vault.notes.find((n) => n.path === `${path}/README.md`)
+        if (!note) return { done: [], data: `Nota não encontrada no cérebro de ${scope.label}: ${path}` }
+        return { done: [], data: { nota: note.path, somente_leitura: note.auto ? `montada pela plataforma (${note.auto.label}); mude na tela de origem` : undefined, texto: note.content.slice(0, 20000) } }
+      }
+      const overview = vault.notes.find((n) => n.path === 'README.md')
+      return {
+        done: [],
+        data: {
+          empresa: scope.label,
+          notas: vault.notes.map((n) => ({ nota: n.path, titulo: noteTitle(n), data: dateOf(n.path) ?? undefined, plataforma: n.auto ? true : undefined })),
+          arquivos: vault.media.filter((m) => !m.url).map((m) => m.path).slice(0, 80),
+          visao_geral: overview ? { nota: overview.path, texto: overview.content.slice(0, 6000) } : '(sem README.md: crie a visão geral da empresa com cerebro_escrever)',
+        },
+      }
+    },
+  },
+  {
+    name: 'cerebro_buscar',
+    doc: '{"texto":string} — busca no cérebro da empresa ativa; devolve as notas que falam disso, com um trecho.',
+    run: async () => ({ label: 'Busquei no cérebro.', ok: true }),
+    exec: async (a) => {
+      const { vault } = await brain()
+      const { search } = await import('@/features/cerebro/vault')
+      return { done: [], data: search(vault, String(a.texto ?? '')).slice(0, 15).map((h) => ({ nota: h.path, titulo: h.title, trecho: h.snippet })) }
+    },
+  },
+  {
+    name: 'cerebro_escrever',
+    doc: '{"nota":string,"texto":string,"nova"?:boolean} — grava uma nota .md do cérebro da empresa ativa (o texto inteiro em Markdown substitui o anterior; leia antes com cerebro_ler e mantenha o que não muda). "nova": true para criar. Pastas livres (ex. "produtos/linha-x.md"); "plataforma/" é só leitura. Atualize **Atualizado em:** com a data de hoje quando a nota tiver essa linha.',
+    label: (a) => `Gravar no cérebro: ${String(a.nota ?? '')}`,
+    run: async (a) => {
+      const { saveNote } = await import('@/features/cerebro/data')
+      const { scope } = await brain()
+      const path = brainPath(a.nota)
+      const text = typeof a.texto === 'string' ? a.texto : ''
+      if (!path.endsWith('.md') || path.includes('..')) return { label: 'Caminho de nota inválido.', ok: false }
+      if (!scope.allowed(path)) return { label: `${path} é montada pela plataforma: mude na tela de origem.`, ok: false }
+      if (!text.trim()) return { label: 'Faltou o texto da nota.', ok: false }
+      await saveNote(team().id, path, text.endsWith('\n') ? text : text + '\n', a.nova === true)
+      ;(await import('@/features/cerebro/scope')).forgetBrain()
+      return { label: `${a.nova ? 'Criei' : 'Atualizei'} no cérebro: ${path}`, ok: true }
+    },
+  },
+  {
+    name: 'salvar_padrao',
+    doc: '{"conjunto"?:string,"id"?:ID,"post"?:number,"nome":string,"regras":[string],"padrao"?:boolean} — guarda um post dos Criativos como padrão de post no Cérebro da conta (marca/padroes/): a capa vira o exemplo e as "regras" (frases curtas do que se repete: grade, títulos, fotos, cores, ritmo) entram em toda criação e edição de criativo deste formato quando ele for o padrão. "padrao": true (o normal) desmarca o padrão anterior do mesmo formato. Olhe o post com ver_criativo antes de escrever as regras.',
+    label: (a) => `Salvar como padrão: ${String(a.nome ?? '')}`,
+    run: async (a) => {
+      const t = await target(a)
+      const post = pickPost(t.set, a.post)
+      const name = str(a.nome, 80) ?? post.name
+      const rules = (Array.isArray(a.regras) ? a.regras : [a.regras]).map((x) => str(x, 200)).filter((x): x is string => !!x)
+      const { saveNote, uploadFiles } = await import('@/features/cerebro/data')
+      const { PATTERN_DIR, patternNote, withStatus, parsePattern, forgetStandard } = await import('@/features/cerebro/standard')
+      const { readSummary } = await import('@/features/criativos/storage')
+      const teamId = team().id
+      const slug = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'padrao'
+      let example: string | undefined
+      const cover = (await readSummary(t.set).catch(() => undefined))?.postsInfo?.find((x) => x.id === post.id)?.cover
+      if (cover) {
+        const { data } = await supabase.storage.from('space-projects').download(cover)
+        if (data) example = (await uploadFiles(teamId, PATTERN_DIR, [new File([data], `${slug}.jpg`, { type: 'image/jpeg' })]))[0]?.slice(PATTERN_DIR.length + 1)
+      }
+      const isDefault = a.padrao !== false
+      if (isDefault) {
+        const { data } = await supabase.from('crm_knowledge_notes' as never).select('path, content').eq('team_id', teamId).like('path', `${PATTERN_DIR}/%`)
+        for (const n of (data ?? []) as { path: string; content: string }[]) {
+          const p = parsePattern(n)
+          if (p.isDefault && p.format === post.format) await saveNote(teamId, n.path, withStatus(n.content, false))
+        }
+      }
+      const href = `/criativos/${t.set.id}?${t.set.shared && t.set.projectId ? `projeto=${t.set.projectId}&` : ''}post=${post.id}`
+      const path = `${PATTERN_DIR}/${slug}.md`
+      await saveNote(teamId, path, patternNote({ name, format: post.format, isDefault, rules, example, source: { label: `${t.set.name} · ${post.name}`, href } }))
+      forgetStandard()
+      ;(await import('@/features/cerebro/scope')).forgetBrain()
+      return { label: `${isDefault ? 'Padrão' : 'Padrão alternativo'} salvo no Cérebro: ${name}`, ok: true, to: `/cerebro?nota=${encodeURIComponent(path)}` }
+    },
+  },
+  {
+    name: 'cerebro_log',
+    doc: '{"titulo":string,"texto":string} — registra no log do cérebro da empresa ativa o que aconteceu hoje (entrega, decisão, aprovação, resultado). "texto" em Markdown com O que aconteceu, O que entregamos, O que aprendemos e Próximo passo.',
+    label: (a) => `Registrar no log: ${String(a.titulo ?? '')}`,
+    run: async (a) => {
+      const { saveNote } = await import('@/features/cerebro/data')
+      const title = str(a.titulo, 120)
+      if (!title) return { label: 'Faltou o título do log.', ok: false }
+      const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+      const slug = title.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
+      const path = `log/${day}-${slug || 'log'}.md`
+      const body = `# ${title}\n\n**Data:** ${day} · **Quem:** Iara\n\n${String(a.texto ?? '').trim()}\n`
+      await saveNote(team().id, path, body, true)
+      ;(await import('@/features/cerebro/scope')).forgetBrain()
+      return { label: `Registrei no log: ${path}`, ok: true }
+    },
+  },
+]
+
 // ---------- sugestões para o time de produto ----------
 
 const KINDS = ['melhoria', 'problema', 'ideia']
@@ -1178,6 +1296,7 @@ const PLACES: Record<string, string> = {
   whatsapp: '/crm/whatsapp',
   inicio: '/inicio',
   sugestoes: '/sugestoes',
+  cerebro: '/cerebro',
 }
 
 let navigateRef: ((to: string) => void) | undefined
@@ -1198,7 +1317,7 @@ const NAV_ACTIONS: Full[] = [
   },
 ]
 
-export const allActions = (): Full[] => [...CONTENT_ACTIONS, ...CREATIVE_ACTIONS, ...DATA_ACTIONS, ...PRODUCT_ACTIONS, ...NAV_ACTIONS, ...(useIara.getState().screen?.actions ?? [])]
+export const allActions = (): Full[] => [...CONTENT_ACTIONS, ...CREATIVE_ACTIONS, ...DATA_ACTIONS, ...BRAIN_ACTIONS, ...PRODUCT_ACTIONS, ...NAV_ACTIONS, ...(useIara.getState().screen?.actions ?? [])]
 
 export const isRisky = (a: IaraAction, args: Record<string, unknown>) => !!a.handoff?.(args) || (typeof a.risky === 'function' ? a.risky(args) : !!a.risky)
 

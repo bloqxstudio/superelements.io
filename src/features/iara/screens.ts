@@ -54,6 +54,7 @@ const SCREENS: Array<[string, ScreenInfo]> = [
   ['/agentes', { name: 'Agentes', purpose: 'os agentes da máquina e as rotinas', suggestions: ['Quais rotinas estão ligadas?'] }],
   ['/skills', { name: 'Skills', purpose: 'as skills (instruções) que os agentes seguem', suggestions: ['Cria uma skill com o tom da nossa marca'] }],
   ['/sugestoes', { name: 'Sugestões do produto', purpose: 'as sugestões de melhoria enviadas ao time de produto', suggestions: ['Quais sugestões chegaram esta semana?'] }],
+  ['/cerebro', { name: 'Cérebro', purpose: 'a base de conhecimento da empresa aberta: quem é, o que vende, produtos com fotos, decisões e logs, mais o cadastro, o Plano, a marca e os criativos da conta (pasta Da plataforma)', suggestions: ['Preencha a visão geral da empresa com o que você já sabe', 'Monte a nota de produtos e serviços', 'O que ainda falta saber sobre esta empresa?'] }],
   ['/contas', { name: 'Contas', purpose: 'as contas de clientes da plataforma e os módulos de cada uma', suggestions: ['Quais contas estão com módulos desligados?'] }],
   ['/perfil', { name: 'Meu perfil', purpose: 'nome, foto, e-mail, senha e sessões da pessoa', suggestions: [] }],
 ]
