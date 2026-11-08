@@ -83,19 +83,21 @@ export function outBeats(data: ExplainerData, total: number): ExplainerBeat[] {
   if (!isNarration(data)) return data.beats
   const segs = segments(data)
   const mapped = data.beats.map((b) => ({ ...b, start: r2(toOut(segs, b.start)), end: r2(toOut(segs, b.end)) }))
+  const endAt = data.endCard ? r2(keptLength(segs)) : total
   // Momento que ficou inteiro dentro de um corte some; os outros fecham os buracos
   const kept = mapped.filter((b, i) => i === 0 || b.end - b.start > 0.3)
   kept.forEach((b, i) => {
     if (i === 0) b.start = 0
-    b.end = i < kept.length - 1 ? kept[i + 1].start : total
+    b.end = i < kept.length - 1 ? kept[i + 1].start : endAt
   })
+  if (data.endCard) kept.push({ id: 'end-card', start: endAt, end: total, pattern: 'cta', headline: data.endCard.headline, sub: data.endCard.sub, fullScreen: true, transition: 'corte', sfx: 'swish' })
   return kept
 }
 
 /** Duração do vídeo: a fala mantida (narração) ou o fim do último momento (briefing). */
 export function videoLength(data: ExplainerData): number {
   if (!isNarration(data)) return r2(Math.max(3, data.beats.at(-1)?.end ?? 10))
-  return r2(keptLength(segments(data)) + 0.25)
+  return r2(keptLength(segments(data)) + (data.endCard ? Math.max(1, Math.min(15, data.endCard.duration)) : 0.25))
 }
 
 // ——— Cortes automáticos ———

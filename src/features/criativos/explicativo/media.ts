@@ -49,7 +49,7 @@ export function loadVoice(set: CreativeSet, data: ExplainerData): Promise<Voice>
   return p
 }
 
-export const usesVideo = (data: ExplainerData) => (data.mode ?? 'narracao') === 'narracao' && data.media?.kind === 'video' && (data.layout !== 'animacao' || (!!data.look && data.look !== 'editorial'))
+export const usesVideo = (data: ExplainerData) => (data.mode ?? 'narracao') === 'narracao' && data.media?.kind === 'video' && (data.composition ? data.composition.video.visible : data.layout !== 'animacao' || (!!data.look && data.look !== 'editorial'))
 /** No modo briefing a fala não vai para o vídeo. */
 export const usesVoice = (data: ExplainerData) => (data.mode ?? 'narracao') === 'narracao' && !!data.media
 
@@ -76,7 +76,7 @@ export function envData(data: ExplainerData, brand: SetBrand, total: number, vid
   const icons: ExplainerEnvData['icons'] = {}
   for (const name of new Set([...beats.map((b) => b.icon).filter(Boolean) as string[], 'brilho', 'seta', 'check', 'erro'])) if (ICONS[name]) icons[name] = ICONS[name] as ExplainerEnvData['icons'][string]
   const theme = data.theme === 'marca' ? 'alternado' : data.theme
-  return { look: data.look ?? 'editorial', words: outWords(data), beats, layout: hasVideo ? (data.layout === 'animacao' ? 'dividido' : data.layout) : 'animacao', captions: data.captions, theme, brand: brandTokens(brand), icons, treatment: data.treatment, mirror: !!data.mirror, hasVideo, videoSize: video }
+  return { composition: data.composition, look: data.look ?? 'editorial', words: outWords(data), beats, layout: hasVideo ? (data.layout === 'animacao' ? 'dividido' : data.layout) : 'animacao', captions: data.captions, theme, brand: brandTokens(brand), icons, treatment: data.treatment, mirror: !!data.mirror, videoPositionY: data.videoPositionY, hasVideo, videoSize: video }
 }
 
 /** Uma imagem pelo endereço do conjunto (`asset:`) ou pública (`/brands/...`), para o worker. */

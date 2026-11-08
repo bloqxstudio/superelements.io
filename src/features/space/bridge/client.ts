@@ -1214,6 +1214,26 @@ async function creatives(params: { action?: string; teamId?: string; provider?: 
     }
     return { id: saved.id, name: saved.name, posts: saved.posts.length, assets: assets.length, linked: !!params.contentId }
   }
+  // Conjuntos da conta e dos projetos (2026-11-03)
+  if (params.action === 'list') {
+    const { listSets } = await import('@/features/criativos/storage')
+    return listSets(params.projectId ? [params.projectId] : useProjectStore.getState().projects.map((p) => p.id))
+  }
+  // Conjunto novo e vazio, como o "Novo conjunto" da tela: marca do DESIGN.md do projeto, compartilhado nele
+  if (params.action === 'new') {
+    const project = useProjectStore.getState().projects.find((p) => p.id === params.projectId)
+    if (!project) throw new Error('Informe um projeto desta conta (projectId).')
+    const { saveSet } = await import('@/features/criativos/storage')
+    const { setBrandFrom } = await import('@/features/criativos/brand')
+    const { parseDesignMd } = await import('@/features/space/brand/designMd')
+    const { loadProjectDoc } = await import('@/features/projects/storage')
+    const source = (await loadProjectDoc(project.id))?.doc?.brand?.source
+    const parsed = source?.trim() ? parseDesignMd(source).brand : null
+    const now = Date.now()
+    const created: CreativeSet = { id: Math.random().toString(36).slice(2, 10), name: params.projectName ?? `${project.name} · criativos`, projectId: project.id, projectName: project.name, shared: true, brand: setBrandFrom(parsed, project.name), posts: [], assets: [], createdAt: now, updatedAt: now }
+    await saveSet(created)
+    return { id: created.id, name: created.name, brand: !!parsed, href: `/criativos/${created.id}?projeto=${project.id}` }
+  }
   // Conta aberta nesta aba (2026-11-03): o conjunto vai para a pasta da conta aberta, então o agente
   // confere (e, com `teamId`, troca) antes de gravar. Devolve também os serviços de imagem prontos.
   if (params.action === 'account') {
@@ -1335,6 +1355,162 @@ async function whatsappSend(params: { team?: string; jid?: string; items?: { dat
   return { sent }
 }
 
+/**
+ * Formulários do CRM (CRM › Formulários) pela sessão desta aba (2026-11-03): um agente cria ou
+ * atualiza o formulário da conta aberta (ou de `teamId`), pelas mesmas funções da tela, e pega o
+ * widget para pôr na página do Space. `list`, `create`, `save` (mescla nos campos), `element`.
+ */
+async function forms(params: { action?: string; teamId?: string; id?: string; name?: string; status?: 'draft' | 'published'; definition?: unknown; theme?: unknown; settings?: unknown }) {
+  const api = await import('@/features/crm/forms')
+  const { useCrm } = await import('@/features/crm/crmStore')
+  const teamId = params.teamId ?? useCrm.getState().team?.id
+  if (!teamId) throw new Error('Nenhuma conta aberta nesta aba.')
+  const info = (form: Awaited<ReturnType<typeof api.createForm>>) => ({ id: form.id, teamId: form.teamId, name: form.name, status: form.status, kind: form.kind, url: `${location.origin}/f/${form.id}` })
+  if (params.action === 'list') return (await api.listForms(teamId)).map(info)
+  if (params.action === 'create') {
+    const definition = api.cleanDefinition(params.definition)
+    const form = await api.createForm(teamId, params.name ?? 'Novo formulário', definition, api.cleanTheme(params.theme ?? api.THEME_DEFAULT), api.cleanSettings(params.settings ?? api.SETTINGS_DEFAULT))
+    if (params.status === 'published') await api.publishForm(form)
+    return info({ ...form, status: params.status ?? form.status })
+  }
+  if (!params.id) throw new Error('Informe o formulário (id).')
+  const form = await api.loadForm(params.id)
+  if (!form) throw new Error('Formulário não encontrado.')
+  if (params.action === 'save') {
+    const next = {
+      ...form,
+      name: params.name ?? form.name,
+      definition: params.definition ? api.cleanDefinition(params.definition) : form.definition,
+      theme: params.theme ? api.cleanTheme(params.theme) : form.theme,
+      settings: params.settings ? api.cleanSettings(params.settings) : form.settings,
+    }
+    // Rascunho e publicado são separados (2026-11-05): salvar não muda o que está no ar
+    await api.saveForm(next)
+    if (params.status === 'published') await api.publishForm(next)
+    else if (params.status === 'draft' && form.status === 'published') await api.unpublishForm(next)
+    return info({ ...next, status: params.status ?? form.status })
+  }
+  if (params.action === 'element') {
+    const { formElement } = await import('@/features/space/library/formWidget')
+    return { element: formElement(form) }
+  }
+  return { ...info(form), definition: form.definition, theme: form.theme, settings: form.settings }
+}
+
+/**
+ * Copy pela sessão desta aba (2026-11-03), como o Escritório faz: um agente de fora cria o
+ * documento (compartilhado no projeto, numa pasta) e pede o trabalho aos agentes do próprio app
+ * (Pesquisador, Redator, Editor, Estrategista). O pedido fica na conversa do documento e roda
+ * como um job; `run` espera o fim. Depois `criativos` e `project` usam os envios da tela.
+ */
+/** Pedidos da Copy em andamento nesta aba (o agente acompanha com `task`). */
+const copyTasks = new Map<string, { state: 'running' | 'done' | 'error'; kind: string; role?: string; at: number; result?: unknown; error?: string }>()
+
+async function copy(params: {
+  action?: string
+  docId?: string
+  projectId?: string
+  title?: string
+  format?: string
+  niche?: string
+  folderId?: string
+  folderName?: string
+  brief?: Record<string, string>
+  role?: string
+  message?: string
+  web?: boolean
+  setId?: string
+  count?: number
+  /** Texto pronto do documento novo (sem ele, o esqueleto do formato) */
+  blocks?: { type: string; text?: string; label?: string }[]
+}) {
+  const storage = await import('@/features/copy/storage')
+  const types = await import('@/features/copy/types')
+  const { formatById } = await import('@/features/copy/knowledge')
+  const { escapeHtml } = await import('@/features/copy/html')
+  const project = params.projectId ? useProjectStore.getState().projects.find((p) => p.id === params.projectId) : undefined
+  if (params.projectId && !project) throw new Error('Este projeto não está na lista desta aba.')
+  const text = (doc: Awaited<ReturnType<typeof storage.loadDoc>>) => (doc ? { id: doc.id, title: doc.title, format: doc.format, folderId: doc.folderId, folderName: doc.folderName, projectId: doc.projectId, href: `/copy/${doc.id}${doc.shared && doc.projectId ? `?projeto=${doc.projectId}` : ''}`, blocks: doc.blocks.length, sources: doc.sources?.length ?? 0 } : null)
+  if (params.action === 'list') return (await storage.listDocs(params.projectId ? [params.projectId] : [])).filter((d) => !params.folderId || d.folderId === params.folderId)
+  if (params.action === 'create') {
+    const format = (params.format ?? 'livre') as import('@/features/copy/types').FormatId
+    const spec = formatById(format)
+    const now = Date.now()
+    const doc = {
+      id: types.uid(),
+      title: params.title ?? spec.label,
+      format,
+      niche: params.niche,
+      projectId: project?.id,
+      projectName: project?.name,
+      shared: !!project,
+      folderId: params.folderId,
+      folderName: params.folderName,
+      brief: { ...types.EMPTY_BRIEF, ...(params.brief ?? {}) },
+      blocks: (params.blocks?.length ? params.blocks : spec.skeleton).map((b) => types.block(b.type as import('@/features/copy/types').BlockType, escapeHtml(b.text ?? ''), b.label)),
+      comments: [],
+      createdAt: now,
+      updatedAt: now,
+    } as import('@/features/copy/types').CopyDoc
+    await storage.saveDoc(doc)
+    return text(doc)
+  }
+  if (!params.docId) throw new Error('Informe o documento (docId).')
+  if (params.action === 'fresh') {
+    // Lê o arquivo por um link assinado novo, sem cache do navegador (diagnóstico)
+    const { supabase } = await import('@/integrations/supabase/client')
+    const owner = project ? (await supabase.from('space_projects').select('owner_id').eq('id', project.id).maybeSingle()).data?.owner_id : undefined
+    const path = `${owner}/${project?.id}/copy/${params.docId}.json`
+    const { data, error } = await supabase.storage.from('space-projects').createSignedUrl(path, 60)
+    if (error || !data) throw new Error(error?.message ?? 'sem link')
+    const found = await (await fetch(data.signedUrl, { cache: 'no-store' })).json()
+    return { path, title: found.title, updatedAt: found.updatedAt, blocks: found.blocks.length, words: found.blocks.map((b: { html: string }) => b.html.length).reduce((a: number, b: number) => a + b, 0) }
+  }
+  const doc = await storage.loadDoc(params.docId, project?.id)
+  if (!doc) throw new Error('Documento não encontrado.')
+  if (params.action === 'run') {
+    if (!params.message) throw new Error('Escreva o pedido (message).')
+    const { runCopyAgent, useCopyChat } = await import('@/features/copy/runner')
+    const { agentById } = await import('@/features/copy/agents')
+    const { resolveIa } = await import('@/features/ia/porTarefa')
+    const role = agentById(params.role)
+    const engine = resolveIa('copy')
+    useCopyChat.getState().ensure(doc.id)
+    useCopyChat.getState().push(doc.id, { id: crypto.randomUUID(), role: 'user', text: params.message, note: `${role.name} · pedido pelo agente (Claude Code)` })
+    copyTasks.set(doc.id, { state: 'running', kind: 'run', role: role.name, at: Date.now() })
+    void runCopyAgent({ message: params.message, role: role.id, engine, web: params.web ?? role.web }, undefined, doc)
+      .then((result) => {
+        useCopyChat.getState().push(doc.id, { id: crypto.randomUUID(), role: 'ai', text: result.reply || 'Pronto.', changed: result.applied, ops: result.applied ? result.summary : undefined })
+        copyTasks.set(doc.id, { state: 'done', kind: 'run', role: role.name, at: Date.now(), result })
+      })
+      .catch((error) => copyTasks.set(doc.id, { state: 'error', kind: 'run', role: role.name, at: Date.now(), error: String(error) }))
+    return { started: role.name, engine, doc: text(doc) }
+  }
+  if (params.action === 'task') return copyTasks.get(doc.id) ?? { state: 'idle' }
+  if (params.action === 'criativos') {
+    if (!params.setId) throw new Error('Informe o conjunto (setId).')
+    const { sendToCriativos } = await import('@/features/copy/send')
+    const { listSets } = await import('@/features/criativos/storage')
+    const target = (await listSets(project ? [project.id] : [])).find((s) => s.id === params.setId)
+    if (!target) throw new Error('Conjunto não encontrado.')
+    copyTasks.set(doc.id, { state: 'running', kind: 'criativos', at: Date.now() })
+    // Com `message`: um post por ângulo, pelo pedido direto ao agente de criativos (o texto do documento vai junto)
+    const { postsFromRequest, docText } = await import('@/features/copy/send')
+    const run = params.message ? postsFromRequest(`${params.message}\n\n${docText(doc)}`, target, params.count ?? 3) : sendToCriativos(doc, target, undefined, params.count ?? 3)
+    void run
+      .then((result) => copyTasks.set(doc.id, { state: 'done', kind: 'criativos', at: Date.now(), result }))
+      .catch((error) => copyTasks.set(doc.id, { state: 'error', kind: 'criativos', at: Date.now(), error: String(error) }))
+    return { started: 'criativos', set: target.name }
+  }
+  if (params.action === 'project') {
+    if (!project) throw new Error('Informe o projeto.')
+    const { sendToProject } = await import('@/features/copy/send')
+    return sendToProject(doc, project.id)
+  }
+  const { docText } = await import('@/features/copy/send')
+  return { ...text(doc), brief: doc.brief, text: docText(doc), sourceList: doc.sources, raw: doc.blocks }
+}
+
 async function projectImage(params: { data?: string; action?: 'audit' }) {
   const projectId = requireProject()
   if (params.action === 'audit') {
@@ -1352,7 +1528,7 @@ async function projectImage(params: { data?: string; action?: 'audit' }) {
 
 const METHODS: Record<string, (params: never, ctx: CallContext) => unknown> = {
   status, pull, apply, focus, say, work, plan, render, view, projects, open, create, brand, creatives, whatsappSend,
-  brief, approval, invite, wordpress, details, publish, restore, component, componentPlan, prospect, projectImage,
+  brief, approval, invite, wordpress, details, publish, restore, component, componentPlan, prospect, projectImage, forms, copy,
   // A Iara (o iara.mjs do agente): ações da conta, fora do canvas
   iara: async (params: { action?: string; args?: Record<string, unknown> }) => (await import('@/features/iara/bridge')).iaraCall(params),
 }
