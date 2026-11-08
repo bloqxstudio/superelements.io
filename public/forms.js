@@ -262,7 +262,7 @@
       '.pb img{width:44px;height:44px;object-fit:contain;display:block}.pb .ini{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--fd);font-weight:700;font-size:1.05em}' +
       '@media (hover:hover){.pb button:hover{border-color:color-mix(in srgb,var(--p) 55%,transparent)}}' +
       '.pb button[aria-pressed=true]{border-color:var(--p);background:color-mix(in srgb,var(--p) 8%,var(--bg));box-shadow:0 0 0 3px color-mix(in srgb,var(--p) 18%,transparent)}' +
-      '.ps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.ps label{display:block;font-weight:600;font-size:.9em;margin:0 0 6px}.ps select:disabled{opacity:.5}.ps>[hidden]{display:none}.ps:has(>[hidden]){grid-template-columns:1fr}' +
+      '.ps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.ps label{display:block;font-weight:600;font-size:.9em;margin:0 0 6px}.ps select:disabled{opacity:.5}.ps>[hidden]{display:none}.ps .nudge select{animation:nudge 1s ease-out 2;border-color:var(--p)}@keyframes nudge{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--p) 45%,transparent)}100%{box-shadow:0 0 0 10px color-mix(in srgb,var(--p) 0%,transparent)}}@media (prefers-reduced-motion:reduce){.ps .nudge select{animation:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--p) 30%,transparent)}}.ps:has(>[hidden]){grid-template-columns:1fr}' +
       'button.nm{background:none;color:var(--tx);opacity:.65;padding:10px 0 0;font-weight:500;font-size:.88em;text-decoration:underline;text-underline-offset:3px}button.nm:hover{opacity:1}' +
       '.pr{text-align:left}.pr h3{margin-bottom:14px}.pr h3+.d{margin-top:0}.pr>.d{margin-bottom:18px}' +
       '.pcard{border:1.5px solid color-mix(in srgb,var(--tx) 10%,transparent);border-radius:calc(var(--r) * 1.4);overflow:hidden;margin:0 0 16px;background:var(--bg)}' +
@@ -596,6 +596,7 @@
     var booked = null
     var picks = {} // localizador de produto: { campo: { brand, model, year } }
     var refCode = ''
+    var warmed = {} // fotos de produto já pedidas ao navegador
     var ticking = null // contagem para abrir o WhatsApp (some quando a tela muda)
     loadFont(cfg.theme.font)
 
@@ -792,7 +793,17 @@
         var m = p.brand && p.model && (p.year || !years.length) ? cMatches(c, p.brand, p.model, p.year)[0] : null
         if (m) answers[f.id] = m.id
         else delete answers[f.id]
+        if (m) warm()
         if (m && box.classList.contains('bad')) { box.classList.remove('bad'); err.textContent = '' }
+      }
+      // Baixa antes a foto do produto (de todos os anos do modelo escolhido), para o card abrir já com ela
+      function warm() {
+        if (!p.model) return
+        cMatches(c, p.brand, p.model, '').forEach(function (i) { if (i.image && !warmed[i.image]) { warmed[i.image] = 1; new Image().src = i.image } })
+      }
+      function nudge(w) {
+        w.classList.remove('nudge'); void w.offsetWidth; w.classList.add('nudge')
+        setTimeout(function () { w.classList.remove('nudge') }, 2200)
       }
       function fill(sel, label, list, value) {
         sel.innerHTML = ''
@@ -810,7 +821,7 @@
       cBrands(c).forEach(function (b) {
         var on = lc(b.name) === lc(p.brand)
         var btn = el('button', { type: 'button', 'aria-pressed': on ? 'true' : 'false' }, [
-          b.logo ? el('img', { src: b.logo, alt: '', loading: 'lazy', decoding: 'async' }) : el('span', { class: 'ini', 'aria-hidden': 'true', text: b.name.charAt(0).toUpperCase() }),
+          b.logo ? el('img', { src: b.logo, alt: '', decoding: 'async' }) : el('span', { class: 'ini', 'aria-hidden': 'true', text: b.name.charAt(0).toUpperCase() }),
           el('span', { text: b.name }),
         ])
         btn.addEventListener('click', function () {
@@ -818,11 +829,12 @@
           if (lc(p.brand) !== lc(b.name)) { p.brand = b.name; p.model = ''; p.year = '' }
           ;[].forEach.call(grid.children, function (x) { x.setAttribute('aria-pressed', x === btn ? 'true' : 'false') })
           settle(); lists()
-          if (!mSel.disabled) { mSel.focus({ preventScroll: true }); anchor(pick) }
+          // Leva até o modelo e chama a atenção para ele, sem abrir a lista (no iPhone o foco abre o seletor sozinho)
+          if (!mSel.disabled) { anchor(pick); nudge(mWrap) }
         })
         grid.appendChild(btn)
       })
-      mSel.addEventListener('change', function () { firstTouch(); p.model = mSel.value; p.year = ''; settle(); lists(); if (!yWrap.hidden) ySel.focus() })
+      mSel.addEventListener('change', function () { firstTouch(); p.model = mSel.value; p.year = ''; settle(); lists(); if (!yWrap.hidden) nudge(yWrap); warm() })
       ySel.addEventListener('change', function () { p.year = ySel.value; settle() })
       var mWrap = el('div', null, [el('label', { for: id + '-m', text: c.modelLabel || PD.modelLabel }), mSel])
       var yWrap = el('div', null, [el('label', { for: id + '-y', text: c.yearLabel || PD.yearLabel }), ySel])
