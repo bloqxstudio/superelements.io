@@ -10,6 +10,7 @@ import { newScene } from '../scene'
 import { assetUrl, uploadAsset } from '../storage'
 import type { CodeScene, CreativeSet, SetAsset } from '../types'
 import { EXPLAINER_SCENE } from './engine'
+import { COMMERCIAL_SCENE, commercialData } from './comercial'
 import { rememberVoice } from './media'
 import { Recorder } from './Recorder'
 import { narrate, type VoiceAI } from './narracao'
@@ -221,6 +222,15 @@ export const NewExplainer: React.FC<{ set: CreativeSet; onCreated: (id: string) 
     }
   }
 
+  // Modelo pronto: o comercial animado (recriação do reel de agência), já no roteiro e na marca do conjunto
+  const startCommercial = () => {
+    const explainer = commercialData(set.brand.name || 'Sua marca')
+    const scene: CodeScene = { ...newScene(COMMERCIAL_SCENE, `Comercial animado · ${set.brand.name || 'marca'}`), format: '9x16', duration: videoLength(explainer), explainer }
+    useEditor.getState().edit((cur) => ({ ...cur, scenes: [...(cur.scenes ?? []), scene] }))
+    onCreated(scene.id)
+    toast.success('Comercial montado. Troque os textos na aba Roteiro e gere a narração em Estilo › Som.')
+  }
+
   if (screen !== 'pick')
     return (
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -242,6 +252,14 @@ export const NewExplainer: React.FC<{ set: CreativeSet; onCreated: (id: string) 
       <div className="mx-auto max-w-3xl px-6 py-8">
         <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-violet-700"><Wand2 className="h-4 w-4" /> Vídeo explicativo</p>
         <h1 className="mt-1 text-xl font-semibold text-gray-900">Um vídeo animado no design system da marca{set.brand.name ? ` ${set.brand.name}` : ''}</h1>
+
+        <button type="button" disabled={busy} onClick={startCommercial} className="mt-4 flex w-full items-center gap-3 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 to-white p-3 text-left transition hover:border-violet-400">
+          <Sparkles className="h-5 w-5 shrink-0 text-violet-700" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-gray-900">Modelo pronto: comercial animado</span>
+            <span className="block text-xs leading-snug text-gray-600">Anúncio de 31 s com tipografia cinética, objeto 3D, cartões numerados, celular, ranking e orçamento, já na marca. Depois é só trocar os textos e narrar.</span>
+          </span>
+        </button>
 
         <div className="mt-5">
           <Label>O que você vai mandar é…</Label>

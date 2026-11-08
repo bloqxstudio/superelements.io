@@ -53,7 +53,7 @@ const tokens = (s: string) => s.split(/\s+/).map(norm).filter(Boolean)
  * Onde cada cena começa na narração: procura a primeira palavra da fala da cena na transcrição,
  * andando sempre para a frente; sem achar, usa a proporção de palavras faladas até ali.
  */
-export function alignBeats(beats: ExplainerBeat[], words: ExplainerWord[], duration: number): ExplainerBeat[] {
+export function alignBeats(beats: ExplainerBeat[], words: ExplainerWord[], duration: number, minGap = 0.8): ExplainerBeat[] {
   const texts = beats.map((b) => tokens(spokenText(b)))
   const total = texts.reduce((a, t) => a + t.length, 0) || 1
   const spoken = words.map((w) => norm(w.w))
@@ -76,15 +76,16 @@ export function alignBeats(beats: ExplainerBeat[], words: ExplainerWord[], durat
     ptr = idx + 1
     return words[idx] ? Math.max(0, words[idx].s - 0.05) : (before / total) * duration
   })
-  // Sempre em ordem, com pelo menos 0,8 s por cena
-  for (let i = 1; i < starts.length; i++) starts[i] = Math.max(starts[i], starts[i - 1] + 0.8)
+  // Sempre em ordem, com um mínimo por cena (0,8 s; o comercial corta mais rápido)
+  for (let i = 1; i < starts.length; i++) starts[i] = Math.max(starts[i], starts[i - 1] + minGap)
   return beats.map((b, i) => ({ ...b, start: Math.round(starts[i] * 100) / 100, end: Math.round((i < beats.length - 1 ? starts[i + 1] : duration) * 100) / 100 }))
 }
 
 export async function narrate(set: CreativeSet, data: ExplainerData, opts: VoiceAI & { brand?: SetBrand; onStep?: (s: string) => void; signal?: AbortSignal }): Promise<{ patch: Partial<ExplainerData>; asset: SetAsset }> {
   // 1) A fala de cada cena como um monólogo falado e conectado (a voz soava robótica lendo texto de tela)
   let beatsIn = data.beats
-  if (opts.rewrite !== false && opts.brand) {
+  // O comercial fala exatamente o roteiro (cada palavra entra na tela quando é dita)
+  if (opts.rewrite !== false && opts.brand && data.look !== 'comercial') {
     opts.onStep?.('A IA escreve a fala para soar natural…')
     try {
       const falas = await writeNarration(set, data, { brand: opts.brand, direction: opts.direction, signal: opts.signal, onStep: opts.onStep })
@@ -93,6 +94,12 @@ export async function narrate(set: CreativeSet, data: ExplainerData, opts: Voice
       if (!data.beats.some((b) => b.fala)) throw err
       // Sem a IA, segue com as falas que o roteiro já tem
     }
+  }
+  // O comercial termina na assinatura (o logo, sem fala): vira a tela final depois da voz
+  let tail: ExplainerBeat | undefined
+  if (data.look === 'comercial' && beatsIn.at(-1)?.shot === 'assinatura') {
+    tail = beatsIn.at(-1)
+    beatsIn = beatsIn.slice(0, -1)
   }
   // 2) Um parágrafo corrido, sem quebra de linha: a voz não "recomeça" a cada cena
   const text = beatsIn.map(spokenText).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
@@ -124,10 +131,14 @@ export async function narrate(set: CreativeSet, data: ExplainerData, opts: Voice
     }
   }
   if (!words) words = (await transcribe(data2, { onStep: (s: TranscribeStep) => s.kind === 'download' && opts.onStep?.(`Baixando o modelo de transcrição ${s.total ? Math.round((s.loaded / s.total) * 100) : 0}% (só na primeira vez)`) })).words
-  const beats = alignBeats(beatsIn, words, duration)
+  const beats = alignBeats(beatsIn, words, duration, data.look === 'comercial' ? 0.45 : 0.8)
   return {
     asset,
-    patch: patchFor(beats, fixWords(beats, words), src, out.voice, duration, data, opts),
+    patch: {
+      ...patchFor(beats, fixWords(beats, words), src, out.voice, duration, data, opts),
+      ...(tail ? { endCard: { duration: Math.max(2.5, Math.min(6, tail.end - tail.start)), headline: tail.headline, sub: tail.sub } } : {}),
+      ...(data.look === 'comercial' ? { captions: 'nenhuma' as const } : {}),
+    },
   }
 }
 

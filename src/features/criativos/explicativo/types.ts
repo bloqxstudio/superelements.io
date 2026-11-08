@@ -75,6 +75,10 @@ export interface ExplainerBeat {
   photo?: string
   transition: TransitionId
   sfx: SfxId
+  /** Estilo comercial: o plano da cena (`SHOTS` em `comercial.ts`). */
+  shot?: string
+  /** Estilo comercial: o fundo da cena (tinta, papel, branco, tom, destaque). */
+  surface?: string
 }
 
 export const LAYOUTS = {
@@ -96,6 +100,7 @@ export const LOOKS = {
   'palavra-heroi': { label: 'Palavra-herói', hint: 'Degradê da marca, rótulo com ícone e uma palavra de destaque, cartão com brilho.' },
   'legenda-forte': { label: 'Legenda forte', hint: 'Você em tela cheia, uma palavra gigante na cor de destaque e o cartão por cima.' },
   contraste: { label: 'Contraste', hint: 'Metade de cima na cor forte da marca com rótulo e cartão; você embaixo.' },
+  comercial: { label: 'Comercial animado', hint: 'Tipografia cinética de anúncio: objeto 3D, selo, cartões numerados, celular, ranking e orçamento, um plano por cena.' },
 } as const
 export type LookId = keyof typeof LOOKS
 

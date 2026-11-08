@@ -23,6 +23,7 @@ import { retime } from './transcribe'
 import { narrate, spokenText, type VoiceAI } from './narracao'
 import { DEFAULT_VOICE, VoicePicker } from './VoicePicker'
 import { CompositionPanel } from './CompositionPanel'
+import { SHOTS, SURFACES, type ShotId, type SurfaceId } from './comercial'
 import { CAPTIONS, LAYOUTS, LOOKS, PATTERNS, SFX, THEMES, TRANSITIONS, TREATMENTS, type ExplainerBeat, type ExplainerData, type PatternId } from './types'
 import { Label, PATTERN_COLOR, editExplainer, field, fmt, isBriefing, slug, uid } from './shared'
 
@@ -84,7 +85,7 @@ export const ScriptPanel: React.FC<{ set: CreativeSet; scene: CodeScene; current
       return { beats: d.beats.map((b, j) => (j === i ? { ...b, start: at } : j === i - 1 ? { ...b, end: at } : b)) }
     })
   const setDuration = (id: string, v: number) =>
-    editExplainer(scene.id, (d) => ({ beats: resequence(d.beats.map((b) => (b.id === id ? { ...b, end: b.start + Math.min(8, Math.max(1, v)) } : b))) }))
+    editExplainer(scene.id, (d) => ({ beats: resequence(d.beats.map((b) => (b.id === id ? { ...b, end: b.start + Math.min(8, Math.max(d.look === 'comercial' ? 0.3 : 1, v)) } : b))) }))
 
   return (
     <div className="space-y-2">
@@ -102,7 +103,66 @@ export const ScriptPanel: React.FC<{ set: CreativeSet; scene: CodeScene; current
               <span className="text-[11px] tabular-nums text-gray-500">{fmt(b.start)}</span>
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">{b.headline.replace(/\*/g, '')}</span>
             </button>
-            {on && (
+            {on && data.look === 'comercial' && (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <label className="text-[11px] text-gray-500">Plano
+                  <select className={field} value={b.shot ?? ''} onChange={(e) => patch(b.id, { shot: e.target.value || undefined })}>
+                    <option value="">Pelo tipo da cena</option>
+                    {(Object.keys(SHOTS) as ShotId[]).map((p) => (<option key={p} value={p}>{SHOTS[p].label}</option>))}
+                  </select>
+                </label>
+                <label className="text-[11px] text-gray-500">Fundo
+                  <select className={field} value={b.surface ?? ''} onChange={(e) => patch(b.id, { surface: e.target.value || undefined })}>
+                    <option value="">O do plano</option>
+                    {(Object.keys(SURFACES) as SurfaceId[]).map((p) => (<option key={p} value={p}>{SURFACES[p]}</option>))}
+                  </select>
+                </label>
+                {b.shot && SHOTS[b.shot as ShotId] && <p className="col-span-2 -mt-1 text-[11px] leading-snug text-gray-500">{SHOTS[b.shot as ShotId].hint} A palavra entre *asteriscos* sai em destaque.</p>}
+                {briefing ? (
+                  <label className="text-[11px] text-gray-500">Duração (s)<input type="number" step={0.05} min={0.3} max={8} className={field} value={Math.round((b.end - b.start) * 100) / 100} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && setDuration(b.id, e.target.valueAsNumber)} /></label>
+                ) : (
+                  <label className="text-[11px] text-gray-500">Começa em (s)<input type="number" step={0.05} disabled={i === 0} className={field} value={b.start} onChange={(e) => Number.isFinite(e.target.valueAsNumber) && moveStart(b.id, e.target.valueAsNumber)} /></label>
+                )}
+                <label className="text-[11px] text-gray-500">Símbolo 3D<input className={field} placeholder="$" maxLength={2} value={b.kicker ?? ''} onChange={(e) => patch(b.id, { kicker: e.target.value || undefined })} /></label>
+                <label className="col-span-2 text-[11px] text-gray-500">Texto principal<input className={field} value={b.headline} onChange={(e) => patch(b.id, { headline: e.target.value })} /></label>
+                <label className="col-span-2 text-[11px] text-gray-500">Segunda linha<input className={field} value={b.sub ?? ''} onChange={(e) => patch(b.id, { sub: e.target.value || undefined })} /></label>
+                {(b.shot === 'cartao' || b.shot === 'ranking') && (
+                  <label className="col-span-2 text-[11px] text-gray-500">{b.shot === 'cartao' ? 'Texto pequeno do cartão' : 'Os outros (um por linha)'}
+                    <textarea className="min-h-[52px] w-full rounded-md border border-gray-200 p-2 text-sm" value={(b.items ?? []).join('\n')} onChange={(e) => patch(b.id, { items: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} />
+                  </label>
+                )}
+                {b.shot === 'cartao' && <label className="text-[11px] text-gray-500">Número<input type="number" className={field} value={b.number?.value ?? 1} onChange={(e) => patch(b.id, { number: { value: e.target.valueAsNumber || 1 } })} /></label>}
+                {(briefing || data.voiceAI) && (
+                  <label className="col-span-2 text-[11px] text-gray-500">Fala da narração{data.voiceAI ? ' (depois, "Refazer a narração" em Estilo)' : ''}
+                    <textarea className="min-h-[52px] w-full rounded-md border border-gray-200 p-2 text-sm" placeholder={spokenText({ ...b, fala: undefined })} value={b.fala ?? ''} onChange={(e) => patch(b.id, { fala: e.target.value || undefined })} />
+                  </label>
+                )}
+                <label className="text-[11px] text-gray-500">Ícone
+                  <select className={field} value={ic ?? ''} onChange={(e) => patch(b.id, { icon: e.target.value || undefined, emoji: undefined })}>
+                    <option value="">Sem ícone</option>
+                    {ICON_NAMES.map((n) => (<option key={n} value={n}>{n.replace(/_/g, ' ')}</option>))}
+                  </select>
+                </label>
+                <label className="text-[11px] text-gray-500">Foto na tela
+                  <select className={field} value={b.photo ?? ''} onChange={(e) => patch(b.id, { photo: e.target.value || undefined })}>
+                    <option value="">Sem foto</option>
+                    {data.photos.map((p) => (<option key={p.src} value={p.name}>{p.name}</option>))}
+                  </select>
+                </label>
+                <label className="text-[11px] text-gray-500">Transição
+                  <select className={field} value={b.transition} onChange={(e) => patch(b.id, { transition: e.target.value as ExplainerBeat['transition'] })}>
+                    {Object.entries(TRANSITIONS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
+                  </select>
+                </label>
+                <label className="text-[11px] text-gray-500">Som
+                  <select className={field} value={b.sfx} onChange={(e) => patch(b.id, { sfx: e.target.value as ExplainerBeat['sfx'] })}>
+                    {Object.entries(SFX).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
+                  </select>
+                </label>
+                {beats.length > 1 && <button type="button" className="col-span-2 flex items-center gap-1 justify-self-start text-[11px] text-gray-500 hover:text-red-600" onClick={() => remove(b.id)}><Trash2 className="h-3 w-3" /> {briefing ? 'Tirar esta cena' : 'Juntar com o anterior'}</button>}
+              </div>
+            )}
+            {on && data.look !== 'comercial' && (
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <label className="text-[11px] text-gray-500">Animação
                   <select className={field} value={b.pattern} onChange={(e) => patch(b.id, { pattern: e.target.value as PatternId })}>
@@ -394,7 +454,7 @@ export const StylePanel: React.FC<{ set: CreativeSet; scene: CodeScene }> = ({ s
       <section>
         <Label>Estilo do vídeo</Label>
         <Chips value={data.look ?? 'editorial'} options={LOOKS} onPick={(v) => set1({ look: v })} />
-        <p className="mt-1 text-[11px] text-gray-500">{LOOKS[data.look ?? 'editorial'].hint}{data.look && data.look !== 'editorial' ? ' Ponha um print em cada cena (aba Roteiro, "Print no cartão"); sem print, o cartão mostra a animação da cena.' : ''}</p>
+        <p className="mt-1 text-[11px] text-gray-500">{LOOKS[data.look ?? 'editorial'].hint}{data.look && data.look !== 'editorial' && data.look !== 'comercial' ? ' Ponha um print em cada cena (aba Roteiro, "Print no cartão"); sem print, o cartão mostra a animação da cena.' : ''}</p>
       </section>
       <BrandBox set={set} scene={scene} />
       <CompositionPanel scene={scene} hasVideo={hasVideo} />

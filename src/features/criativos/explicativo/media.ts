@@ -8,6 +8,7 @@ import { paletteOf } from '../brand'
 import type { SetBrand } from '../types'
 import { useEditor } from '../store'
 import { EXPLAINER_SCENE } from './engine'
+import { COMMERCIAL_SCENE } from './comercial'
 import { ICONS } from './icons'
 import { outBeats, outWords, segments, toSrc } from './timeline'
 import { mixExplainer } from './sfx'
@@ -49,7 +50,7 @@ export function loadVoice(set: CreativeSet, data: ExplainerData): Promise<Voice>
   return p
 }
 
-export const usesVideo = (data: ExplainerData) => (data.mode ?? 'narracao') === 'narracao' && data.media?.kind === 'video' && (data.composition ? data.composition.video.visible : data.layout !== 'animacao' || (!!data.look && data.look !== 'editorial'))
+export const usesVideo = (data: ExplainerData) => (data.mode ?? 'narracao') === 'narracao' && data.media?.kind === 'video' && (data.composition ? data.composition.video.visible : data.layout !== 'animacao' || (!!data.look && data.look !== 'editorial' && data.look !== 'comercial'))
 /** No modo briefing a fala não vai para o vídeo. */
 export const usesVoice = (data: ExplainerData) => (data.mode ?? 'narracao') === 'narracao' && !!data.media
 
@@ -116,14 +117,22 @@ export async function photoBitmaps(data: ExplainerData, images: ImageMap, brand?
   for (const p of data.photos) {
     const img = images.get(p.src)
     if (img && !(img instanceof HTMLVideoElement)) out[p.name] = await createImageBitmap(img as ImageBitmapSource)
+    // Imagem pública do app (as telas dos cases da marca, `/brands/...`)
+    else if (p.src.startsWith('/') && p.kind !== 'video') {
+      const bmp = await bitmapOf(p.src, images)
+      if (bmp) out[p.name] = bmp
+    }
   }
   return out
 }
 
+/** O motor do vídeo: o comercial animado tem o seu; os outros estilos, o motor do explicativo. */
+export const sceneCodeOf = (data: ExplainerData) => (data.look === 'comercial' ? COMMERCIAL_SCENE : EXPLAINER_SCENE)
+
 export function runnerFor(scene: CodeScene, set: CreativeSet, images: Record<string, ImageBitmap>) {
   const { width, height } = sizeOf(scene.format)
   const brand = brandOfExplainer(set, scene.explainer!)
-  return new SceneRunner({ code: EXPLAINER_SCENE, width, height, duration: scene.duration, images, brand: { name: brand.name, colors: brand.colors.map((c) => c.hex), font: brand.headingFont }, data: envData(scene.explainer!, brand, scene.duration) })
+  return new SceneRunner({ code: sceneCodeOf(scene.explainer!), width, height, duration: scene.duration, images, brand: { name: brand.name, colors: brand.colors.map((c) => c.hex), font: brand.headingFont }, data: envData(scene.explainer!, brand, scene.duration) })
 }
 
 /** As imagens do motor (fotos e logo) para este vídeo. */
