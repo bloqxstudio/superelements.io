@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { useCrm } from '@/features/crm/crmStore'
 import { DesignEditor, FormPreview, ResultsEditor, SettingsEditor, StepsEditor, type PreviewScreen } from '@/features/crm/FormBuilder'
-import { BookingEditor, BookingsList, PixelEditor, WelcomeEditor } from '@/features/crm/FormFlowEditors'
+import { BookingEditor, BookingsList, CoverEditor, PixelEditor, WelcomeEditor } from '@/features/crm/FormFlowEditors'
 import { EmbedPanel, Submissions } from '@/features/crm/FormPanels'
 import { FormLive } from '@/features/crm/FormLive'
 import { blankDefinition, formIssues, hasUnpublished, loadForm, publishForm, saveForm, setFormSlug, unpublishForm, type CrmForm } from '@/features/crm/forms'
@@ -351,7 +351,12 @@ const FormEditor: React.FC = () => {
         {PREVIEW_OF[tab] && (
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)]">
             <div className="grid gap-4">
-              {tab === 'inicio' && <WelcomeEditor form={draft} definition={draft.definition} onChange={(definition) => change({ definition })} />}
+              {tab === 'inicio' && (
+                <>
+                  <CoverEditor form={draft} definition={draft.definition} onChange={(definition) => change({ definition })} />
+                  <WelcomeEditor form={draft} definition={draft.definition} onChange={(definition) => change({ definition })} />
+                </>
+              )}
               {tab === 'agenda' && (
                 <>
                   <BookingEditor definition={draft.definition} settings={draft.settings} onChange={(settings) => change({ settings })} />

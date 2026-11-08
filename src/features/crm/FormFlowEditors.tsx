@@ -60,6 +60,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { FIELD, Surface } from '@/features/crm/ui'
 import {
   BOOKING_DEFAULT,
+  COVER_DEFAULT,
   SHIFTS_DEFAULT,
   shiftOrder,
   type BookingShift,
@@ -86,6 +87,7 @@ import {
   type CrmForm,
   type FormBooking,
   type FormBookingRow,
+  type FormCover,
   type FormDefinition,
   type FormPixel,
   type FormSettings,
@@ -370,6 +372,92 @@ export const WelcomeEditor: React.FC<{ form: Pick<CrmForm, 'id' | 'teamId'>; def
         </ul>
       </Surface>
     </div>
+  )
+}
+
+// ---------- capa pequena ----------
+
+const ImagePick: React.FC<{ label: string; value?: string; dark?: boolean; onPick: (f: File) => Promise<void>; onClear: () => void }> = ({ label, value, dark, onPick, onClear }) => {
+  const ref = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const pick = async (f?: File) => {
+    if (!f) return
+    setBusy(true)
+    try { await onPick(f) } catch (e) { toast.error(e instanceof Error ? e.message : String(e)) } finally { setBusy(false); if (ref.current) ref.current.value = '' }
+  }
+  return (
+    <div>
+      <span className={LABEL}>{label}</span>
+      <div className="flex items-center gap-2">
+        <div className={cn('flex h-10 w-24 items-center justify-center overflow-hidden rounded-lg border border-dashed border-gray-300 px-1.5', dark ? 'bg-gray-900' : 'bg-white')}>
+          {value ? <img src={value} alt="" className="max-h-8 max-w-full object-contain" /> : <span className="text-[11px] text-gray-400">Nenhuma</span>}
+        </div>
+        <input ref={ref} type="file" accept="image/png,image/webp,image/jpeg,image/svg+xml" className="hidden" onChange={(e) => void pick(e.target.files?.[0])} />
+        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => ref.current?.click()} aria-label={`${value ? 'Trocar' : 'Enviar'}: ${label}`}>
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+        </Button>
+        {value && <button type="button" onClick={onClear} className="text-xs text-gray-500 hover:text-rose-600">Tirar</button>}
+      </div>
+    </div>
+  )
+}
+
+/** Faixa pequena acima das perguntas (estilo checkout de evento), sem ser uma tela a mais. */
+export const CoverEditor: React.FC<{ form: Pick<CrmForm, 'id' | 'teamId'>; definition: FormDefinition; onChange: (definition: FormDefinition) => void }> = ({ form, definition, onChange }) => {
+  const c = definition.cover
+  const set = (patch: Partial<FormCover>) => onChange({ ...definition, cover: { ...(c ?? COVER_DEFAULT), ...patch } })
+  if (!c) {
+    return (
+      <Surface title="Capa pequena">
+        <p className="mb-3 text-sm text-gray-600">Uma faixa no topo das perguntas, como num checkout de evento: logo, título com um destaque e uma foto. Não é uma tela a mais.</p>
+        <Button type="button" variant="outline" onClick={() => onChange({ ...definition, cover: { ...COVER_DEFAULT } })}>
+          <Plus className="mr-1.5 h-4 w-4" /> Criar capa pequena
+        </Button>
+      </Surface>
+    )
+  }
+  const color = (label: string, key: 'background' | 'accent', fallback: string) => (
+    <label className="flex items-center justify-between gap-2 text-sm text-gray-700">
+      {label}
+      <input type="color" value={c[key] ?? fallback} onChange={(e) => set({ [key]: e.target.value })} className="h-8 w-10 cursor-pointer rounded border border-gray-200 bg-white p-0.5" aria-label={label} />
+    </label>
+  )
+  return (
+    <Surface title="Capa pequena" action={<label className="flex items-center gap-2 text-sm text-gray-700"><Switch checked={c.enabled} onCheckedChange={(enabled) => set({ enabled })} /> {c.enabled ? 'Ligada' : 'Desligada'}</label>}>
+      <div className="grid gap-3">
+        <p className="text-xs text-gray-500">Aparece acima das perguntas (veja em Perguntas, na prévia) e some na tela final.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <ImagePick label="Logo (versão clara)" dark value={c.logoUrl} onPick={async (f) => set({ logoUrl: await uploadFormLogo(form, f) })} onClear={() => set({ logoUrl: undefined })} />
+          <ImagePick label="Foto (PNG sem fundo)" dark value={c.image} onPick={async (f) => set({ image: await uploadFormLogo(form, f) })} onClear={() => set({ image: undefined })} />
+        </div>
+        <div>
+          <label className={LABEL}>Linha pequena</label>
+          <input className={INPUT} maxLength={60} placeholder="Ex.: Localizador de películas" value={c.eyebrow ?? ''} onChange={(e) => set({ eyebrow: e.target.value || undefined })} />
+        </div>
+        <div>
+          <label className={LABEL}>Título (use **assim** para o destaque)</label>
+          <input className={INPUT} maxLength={90} value={c.title} onChange={(e) => set({ title: e.target.value })} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={LABEL}>Linha abaixo</label>
+            <input className={INPUT} maxLength={90} value={c.text ?? ''} onChange={(e) => set({ text: e.target.value || undefined })} />
+          </div>
+          <div>
+            <label className={LABEL}>Palavra ao fundo</label>
+            <input className={INPUT} maxLength={20} placeholder="Ex.: a marca" value={c.watermark ?? ''} onChange={(e) => set({ watermark: e.target.value || undefined })} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {color('Fundo', 'background', COVER_DEFAULT.background ?? '#0b0f14')}
+          {color('Destaque', 'accent', COVER_DEFAULT.accent ?? '#5b9bff')}
+        </div>
+        <label className="flex items-center justify-between gap-3 text-sm text-gray-700">
+          Título condensado, em maiúsculas (estilo post)
+          <Switch checked={!!c.display} onCheckedChange={(display) => set({ display })} />
+        </label>
+      </div>
+    </Surface>
   )
 }
 

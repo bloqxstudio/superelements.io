@@ -79,6 +79,36 @@
     return c.op === 'eq' ? hit : !hit
   }
 
+  // Catálogo do localizador de produto (a mesma regra de `_shared/forms.ts`)
+  var PD = {
+    message: 'Olá! Encontrei no site: *{produto}* ({ano})\n{codigos}\n{link}\n\nRef. {ref}',
+    buttonLabel: 'Comprar pelo WhatsApp', modelLabel: 'Modelo', yearLabel: 'Ano', resultTitle: 'Encontramos o produto para você',
+    noMatchLabel: 'Não encontrei a minha', noMatchTitle: 'Vamos achar com você', noMatchText: 'Fale com a gente no WhatsApp e diga o que você procura.',
+    noMatchMessage: 'Olá! Não encontrei no site o produto para {marca} {modelo} {ano}. Podem me ajudar?',
+    redirectSeconds: 12,
+  }
+  function lc(v) { return String(v || '').trim().toLowerCase() }
+  function uniq(list) { var o = []; list.forEach(function (x) { if (x && o.indexOf(x) < 0) o.push(x) }); return o }
+  function cBrands(c) {
+    var used = uniq(c.items.map(function (i) { return lc(i.brand) }))
+    var known = (c.brands || []).filter(function (b) { return used.indexOf(lc(b.name)) >= 0 })
+    var names = known.map(function (b) { return lc(b.name) })
+    var rest = uniq(c.items.map(function (i) { return i.brand })).filter(function (b) { return names.indexOf(lc(b)) < 0 }).sort(function (a, b) { return a.localeCompare(b, 'pt-BR') })
+    return known.concat(rest.map(function (n) { return { name: n } }))
+  }
+  function cModels(c, brand) { return uniq(c.items.filter(function (i) { return lc(i.brand) === lc(brand) }).map(function (i) { return i.model })).sort(function (a, b) { return a.localeCompare(b, 'pt-BR', { numeric: true }) }) }
+  function cYears(c, brand, model) { return uniq(c.items.filter(function (i) { return lc(i.brand) === lc(brand) && i.model === model }).map(function (i) { return i.year || '' })).sort().reverse() }
+  function cMatches(c, brand, model, year) { return c.items.filter(function (i) { return lc(i.brand) === lc(brand) && i.model === model && (!year || (i.year || '') === year) }) }
+  function cMessage(c, item, pick, ref) {
+    var tpl = item ? c.message || PD.message : c.noMatchMessage || PD.noMatchMessage
+    var v = {
+      produto: item ? item.name || item.brand + ' ' + item.model : '', marca: (item && item.brand) || pick.brand || '', modelo: (item && item.model) || pick.model || '',
+      ano: (item && item.year) || pick.year || '', codigos: ((item && item.codes) || []).map(function (x) { return x.label + ': ' + x.code }).join('\n'), link: (item && item.url) || '', ref: ref || '',
+    }
+    return tpl.replace(/\{(\w+)\}/g, function (_, k) { return v[k] || '' }).replace(/\(\s*\)/g, '').replace(/\n{3,}/g, '\n\n').replace(/[ \t]+\n/g, '\n').trim()
+  }
+  function waUrl(number, text) { return number ? 'https://wa.me/' + String(number).replace(/\D/g, '') + '?text=' + encodeURIComponent(text) : '' }
+
   function score(def, answers) {
     var total = 0
     def.steps.forEach(function (s) {
@@ -226,6 +256,53 @@
       '.none{padding:18px;border:1.5px dashed color-mix(in srgb,var(--tx) 16%,transparent);border-radius:var(--r);text-align:center;opacity:.8;margin:0 0 18px}' +
       '.out .ok svg{width:26px;height:26px}' +
       '.when{display:inline-flex;align-items:center;gap:8px;margin:2px 0 14px;padding:8px 14px;border-radius:99px;background:color-mix(in srgb,var(--p) 10%,transparent);color:var(--p);font-weight:600;font-size:.92em;font-variant-numeric:tabular-nums}.when svg{width:16px;height:16px}' +
+      // Localizador de produto: marcas em cartões com logo, modelo e ano em listas, e o card do produto no fim
+      '.pb{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;margin:0 0 14px}' +
+      '.pb button{display:grid;justify-items:center;align-content:center;gap:6px;min-height:84px;padding:10px 4px;background:var(--bg);color:var(--tx);border:1.5px solid color-mix(in srgb,var(--tx) 14%,transparent);font-weight:600;font-size:.86em;line-height:1.2;box-shadow:none;transition:border-color .15s,background .15s,transform .1s}' +
+      '.pb img{width:44px;height:44px;object-fit:contain;display:block}.pb .ini{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--fd);font-weight:700;font-size:1.05em}' +
+      '@media (hover:hover){.pb button:hover{border-color:color-mix(in srgb,var(--p) 55%,transparent)}}' +
+      '.pb button[aria-pressed=true]{border-color:var(--p);background:color-mix(in srgb,var(--p) 8%,var(--bg));box-shadow:0 0 0 3px color-mix(in srgb,var(--p) 18%,transparent)}' +
+      '.ps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.ps label{display:block;font-weight:600;font-size:.9em;margin:0 0 6px}.ps select:disabled{opacity:.5}.ps>[hidden]{display:none}.ps:has(>[hidden]){grid-template-columns:1fr}' +
+      'button.nm{background:none;color:var(--tx);opacity:.65;padding:10px 0 0;font-weight:500;font-size:.88em;text-decoration:underline;text-underline-offset:3px}button.nm:hover{opacity:1}' +
+      '.pr{text-align:left}.pr h3{margin-bottom:14px}.pr h3+.d{margin-top:0}.pr>.d{margin-bottom:18px}' +
+      '.pcard{border:1.5px solid color-mix(in srgb,var(--tx) 10%,transparent);border-radius:calc(var(--r) * 1.4);overflow:hidden;margin:0 0 16px;background:var(--bg)}' +
+      '.pcard .im{aspect-ratio:4/3;background:#fff;overflow:hidden;border-bottom:1px solid color-mix(in srgb,var(--tx) 8%,transparent)}.pcard .im img{width:100%;height:100%;object-fit:cover;display:block}' +
+      '.pcard .bd{padding:16px 18px 18px}' +
+      '.pcard .fit{display:flex;align-items:flex-start;gap:6px;font-size:.84em;font-weight:600;line-height:1.35;color:#0f7a3d;margin:0 0 6px}.pcard .fit svg{flex:none;width:16px;height:16px;margin-top:1px;stroke-width:2.6}' +
+      '.pcard b{display:block;font-size:1.22em;line-height:1.25;letter-spacing:-.01em;text-wrap:balance}' +
+      '.pcard .cds{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:14px}' +
+      '.pcard .cds>div{padding:10px 12px;border-radius:var(--r);background:var(--fd)}.pcard .cds span{display:block;font-size:.76em;opacity:.65;margin-bottom:2px}.pcard .cds strong{display:block;font-size:.98em;font-weight:650;letter-spacing:.02em;font-variant-numeric:tabular-nums}' +
+      '.pcard a.vp{display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-size:.9em;color:var(--p);font-weight:600;text-decoration:none}.pcard a.vp svg{width:15px;height:15px;transition:transform .2s}' +
+      '@media (hover:hover){.pcard a.vp:hover svg{transform:translateX(3px)}}' +
+      '.pr .cta{display:flex;flex-direction:column;gap:10px;margin-top:4px}' +
+      '.pr a.btn{position:relative;overflow:hidden;isolation:isolate;display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:56px;padding:14px 22px;border-radius:var(--r);font:inherit;font-weight:650;text-decoration:none;background:#128c4a;color:#fff;transition:transform .1s,filter .15s}.pr a.btn:hover{filter:brightness(1.07)}.pr a.btn:active{transform:scale(.98)}.pr a.btn svg{flex:none;width:22px;height:22px}' +
+      '.pr a.btn>span,.pr a.btn>svg{position:relative;z-index:1}' +
+      '.pr a.btn:focus-visible{outline:3px solid color-mix(in srgb,var(--p) 40%,transparent);outline-offset:2px}' +
+      // Contagem até abrir o WhatsApp: o botão escurece da esquerda para a direita, ou uma barra fina corre abaixo dele
+      '.pr a.btn .fillx{position:absolute;inset:0;z-index:0;background:rgba(0,0,0,.3);transform:scaleX(0);transform-origin:left;pointer-events:none}' +
+      '.pr a.btn.cd-fill .fillx{animation:cd var(--cd,12s) linear forwards}.pr a.btn.hold .fillx,.cdbar.hold i{animation-play-state:paused}' +
+      '.cdbar{height:4px;border-radius:99px;background:color-mix(in srgb,#128c4a 16%,transparent);overflow:hidden;margin-top:-2px}.cdbar i{display:block;height:100%;background:#128c4a;transform:scaleX(0);transform-origin:left;animation:cd var(--cd,12s) linear forwards}' +
+      '@keyframes cd{to{transform:scaleX(1)}}' +
+      '.auto{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px 10px;margin:0;font-size:.86em;opacity:.75;font-variant-numeric:tabular-nums}.auto b{font-weight:650}' +
+      'button.cx{background:none;color:inherit;padding:4px 2px;font-weight:600;font-size:1em;text-decoration:underline;text-underline-offset:3px;border-radius:4px}' +
+      '.row.cen{justify-content:center}button.go.cen{display:inline-flex;align-items:center;justify-content:center;gap:10px;margin:0 auto;min-width:min(100%,260px)}button.go.cen svg{width:18px;height:18px;flex:none;transition:transform .2s}' +
+      '@media (hover:hover){button.go.cen:hover svg{transform:translateX(3px)}}' +
+      '@media (max-width:480px){.ps{grid-template-columns:1fr}.pcard .bd{padding:14px 14px 16px}button.go.cen{width:100%}}' +
+      // Capa pequena (estilo checkout de evento): faixa que encosta nas bordas do cartão, acima das perguntas
+      // A faixa mede a própria largura (container query): no celular, na prévia do editor ou numa coluna estreita
+      // do site o texto e a foto se ajustam, sem depender da largura da janela
+      '.cov{--cb:#0b0f14;--ca:#5b9bff;container-type:inline-size;position:relative;overflow:hidden;isolation:isolate;margin:-28px -28px 24px;padding:18px 22px;min-height:120px;display:flex;align-items:center;color:#fff;background:radial-gradient(90% 130% at 88% 40%,color-mix(in srgb,var(--ca) 30%,transparent),transparent 62%),linear-gradient(180deg,color-mix(in srgb,var(--cb) 94%,#fff),var(--cb));background-color:var(--cb)}' +
+      '.f.plain .cov{margin:0 0 24px;border-radius:calc(var(--r) * 1.4)}' +
+      ".cov .wm{position:absolute;z-index:-1;left:-.04em;bottom:-.22em;font-family:'Barlow Condensed',inherit;font-style:italic;font-weight:900;font-size:clamp(3.6em,24cqi,6em);line-height:1;letter-spacing:-.01em;text-transform:uppercase;white-space:nowrap;color:rgba(255,255,255,.06);pointer-events:none}" +
+      '.cov .ph{position:absolute;z-index:-1;right:-4%;top:52%;height:140%;width:auto;max-width:46%;object-fit:contain;transform:translateY(-50%) rotate(-5deg);filter:drop-shadow(0 16px 24px rgba(0,0,0,.6))}' +
+      '.cov .cvi{position:relative;min-width:0;max-width:100%}.cov.wph .cvi{max-width:60%}' +
+      '.cov .lg{display:block;height:18px;width:auto;max-width:130px;object-fit:contain;object-position:left;margin:0 0 10px}' +
+      '.cov .ey{margin:0 0 4px;font-size:.62em;font-weight:700;letter-spacing:.14em;line-height:1.3;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:color-mix(in srgb,var(--ca) 75%,#fff)}' +
+      '.cov .ct{margin:0;font-size:clamp(1.05em,5cqi,1.35em);font-weight:800;line-height:1.08;letter-spacing:-.01em;color:#fff;text-wrap:balance}.cov .ct b{color:var(--ca);font-weight:inherit}' +
+      ".cov.dsp .ct{font-family:'Barlow Condensed',inherit;font-style:italic;font-weight:900;font-size:clamp(1.3em,6.4cqi,1.75em);line-height:.95;letter-spacing:.005em;text-transform:uppercase}" +
+      '.cov .tx{margin:6px 0 0;font-size:.74em;line-height:1.35;color:rgba(255,255,255,.72)}' +
+      '@container (max-width:420px){.cov .ph{height:118%;right:-14%;max-width:48%}.cov.wph .cvi{max-width:64%}.cov .lg{height:16px;margin-bottom:8px}.cov .ey{font-size:.56em;letter-spacing:.12em}.cov .tx{font-size:.7em}}' +
+      '@media (max-width:480px){.cov{margin:-20px -20px 20px;padding:16px 18px}}' +
       '@keyframes in{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}' +
       '@media (prefers-reduced-motion:reduce){.st,.wl,.ag{animation:none}.bar i,.op,button,button.start svg{transition:none}}' +
       '@media (max-width:480px){.f{padding:20px}.st>.fl.half{grid-column:1/-1}.wl h1{font-size:1.55em}.days{gap:6px}}'
@@ -261,6 +338,8 @@
     'Inter Tight': 'https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,400..700;1,400..700&display=swap',
     Lato: 'https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;1,400&display=swap',
     Inter: 'https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400..700;1,400..700&display=swap',
+    Barlow: 'https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap',
+    'Barlow Condensed': 'https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,700;1,400;1,900&display=swap',
   }
   function loadFont(name) {
     var href = FONT_URL[name]
@@ -515,6 +594,9 @@
     var picked = { day: 0, time: null }
     var lastRes = null
     var booked = null
+    var picks = {} // localizador de produto: { campo: { brand, model, year } }
+    var refCode = ''
+    var ticking = null // contagem para abrir o WhatsApp (some quando a tela muda)
     loadFont(cfg.theme.font)
 
     function welcomeOn() { var w = cfg.definition.welcome; return !!(w && w.enabled && (w.title || (w.bullets && w.bullets.length))) }
@@ -546,7 +628,7 @@
       step.fields.forEach(function (f) {
         if (!visible(f, answers)) { delete answers[f.id]; return }
         var box = wrap.querySelector('[data-f="' + f.id + '"]')
-        if (!box) return
+        if (!box || f.type === 'product') return
         if (f.type === 'multi') answers[f.id] = [].map.call(box.querySelectorAll('input:checked'), function (i) { return i.value })
         else if (isPick(f.type) && f.type !== 'select') { var c = box.querySelector('input:checked'); if (c) answers[f.id] = c.value; else delete answers[f.id] }
         else { var i = box.querySelector('input,textarea,select'); if (i) answers[f.id] = i.value.trim() }
@@ -566,7 +648,7 @@
         var msg = ''
         if (visible(f, answers)) {
           var v = asList(answers[f.id]).filter(Boolean)
-          if (!v.length) { if (f.required) msg = isPick(f.type) ? 'Escolha uma opção.' : 'Preencha este campo.' }
+          if (!v.length) { if (f.required) msg = f.type === 'product' ? 'Escolha a marca, o modelo e o ano.' : isPick(f.type) ? 'Escolha uma opção.' : 'Preencha este campo.' }
           else if (f.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v[0])) msg = 'Confira o e-mail.'
           else if (f.type === 'phone' && v[0].replace(/\D/g, '').length < 10) msg = 'Digite o telefone com DDD.'
           else if (f.type === 'number' && isNaN(Number(v[0].replace(',', '.')))) msg = 'Digite só números.'
@@ -574,7 +656,7 @@
         var er = box.querySelector('.er')
         er.textContent = msg
         box.classList.toggle('bad', !!msg)
-        var control = box.querySelector('input,textarea,select')
+        var control = box.querySelector('input,textarea,select:not(:disabled),.pb button')
         if (control) control.setAttribute('aria-invalid', msg ? 'true' : 'false')
         if (msg && !first) first = control
       })
@@ -609,6 +691,7 @@
       var saved = answers[f.id]
       // Pergunta única com título na tela (uma por tela): o rótulo repetiria o título, fica só para leitor de tela
       var lone = !!step.title && step.fields.length === 1
+      if (f.type === 'product') return productBox(f, box, lone, req, help, err)
 
       if (isPick(f.type) && f.type !== 'select') {
         var choices = optionsOf(f)
@@ -674,6 +757,196 @@
       return box
     }
 
+    // Leva a pessoa à pergunta seguinte (o modelo, depois de tocar na marca): o bloco sobe para o topo da
+    // tela, no rolador da página ou no da prévia do editor. Se ele e o botão já estão à vista, não mexe.
+    function anchor(target) {
+      var go = root.querySelector('button.go')
+      var r = target.getBoundingClientRect()
+      var bottom = go ? go.getBoundingClientRect().bottom : r.bottom
+      var sc = null
+      for (var e = host.parentElement; e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+        var o = getComputedStyle(e).overflowY
+        if ((o === 'auto' || o === 'scroll') && e.scrollHeight > e.clientHeight + 1) { sc = e; break }
+      }
+      var top = sc ? sc.getBoundingClientRect().top : 0
+      var h = sc ? sc.clientHeight : window.innerHeight
+      if (r.top - top >= 8 && bottom - top <= h - 8) return
+      var by = r.top - top - 20
+      var behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+      if (sc) sc.scrollTo({ top: sc.scrollTop + by, behavior: behavior })
+      else window.scrollTo({ top: window.pageYOffset + by, behavior: behavior })
+    }
+
+    // Localizador: a marca por cartões com logo, depois o modelo e o ano (cada lista só com o que existe)
+    function productBox(f, box, lone, req, help, err) {
+      var c = f.catalog || { items: [], brands: [] }
+      var p = picks[f.id] || (picks[f.id] = { brand: '', model: '', year: '' })
+      var id = 'q-' + f.id
+      var grid = el('div', { class: 'pb', role: 'group', 'aria-label': f.label || 'Marca' })
+      var mSel = el('select', { id: id + '-m' })
+      var ySel = el('select', { id: id + '-y' })
+      function settle() {
+        var years = p.model ? cYears(c, p.brand, p.model) : []
+        // Um ano só (ou nenhum cadastrado): já vale
+        if (p.model && years.length <= 1) p.year = years[0] || ''
+        var m = p.brand && p.model && (p.year || !years.length) ? cMatches(c, p.brand, p.model, p.year)[0] : null
+        if (m) answers[f.id] = m.id
+        else delete answers[f.id]
+        if (m && box.classList.contains('bad')) { box.classList.remove('bad'); err.textContent = '' }
+      }
+      function fill(sel, label, list, value) {
+        sel.innerHTML = ''
+        sel.appendChild(el('option', { value: '', text: list.length ? 'Selecione…' : label }))
+        list.forEach(function (x) { sel.appendChild(el('option', { value: x, text: x, selected: x === value })) })
+        sel.disabled = !list.length
+      }
+      function lists() {
+        fill(mSel, 'Escolha a marca', p.brand ? cModels(c, p.brand) : [], p.model)
+        var years = p.model ? cYears(c, p.brand, p.model) : []
+        // O ano só aparece quando o modelo tem mais de um (com um ano só, ele já vale); nunca some depois de aparecer à toa
+        fill(ySel, 'Escolha o modelo', years, p.year)
+        yWrap.hidden = !(p.model && years.length > 1)
+      }
+      cBrands(c).forEach(function (b) {
+        var on = lc(b.name) === lc(p.brand)
+        var btn = el('button', { type: 'button', 'aria-pressed': on ? 'true' : 'false' }, [
+          b.logo ? el('img', { src: b.logo, alt: '', loading: 'lazy', decoding: 'async' }) : el('span', { class: 'ini', 'aria-hidden': 'true', text: b.name.charAt(0).toUpperCase() }),
+          el('span', { text: b.name }),
+        ])
+        btn.addEventListener('click', function () {
+          firstTouch()
+          if (lc(p.brand) !== lc(b.name)) { p.brand = b.name; p.model = ''; p.year = '' }
+          ;[].forEach.call(grid.children, function (x) { x.setAttribute('aria-pressed', x === btn ? 'true' : 'false') })
+          settle(); lists()
+          if (!mSel.disabled) { mSel.focus({ preventScroll: true }); anchor(pick) }
+        })
+        grid.appendChild(btn)
+      })
+      mSel.addEventListener('change', function () { firstTouch(); p.model = mSel.value; p.year = ''; settle(); lists(); if (!yWrap.hidden) ySel.focus() })
+      ySel.addEventListener('change', function () { p.year = ySel.value; settle() })
+      var mWrap = el('div', null, [el('label', { for: id + '-m', text: c.modelLabel || PD.modelLabel }), mSel])
+      var yWrap = el('div', null, [el('label', { for: id + '-y', text: c.yearLabel || PD.yearLabel }), ySel])
+      var none = el('button', { type: 'button', class: 'nm', text: c.noMatchLabel || PD.noMatchLabel })
+      none.addEventListener('click', function () { firstTouch(); finishProduct(f, null) })
+      box.appendChild(el('fieldset', { style: 'margin:0;padding:0;border:0;min-width:0' }, [el('legend', { class: lone ? 'sr' : null, text: f.label }, [req]), help, grid]))
+      var pick = el('div', { class: 'ps' }, [mWrap, yWrap])
+      box.appendChild(pick)
+      box.appendChild(none)
+      box.appendChild(err)
+      lists()
+      settle()
+      return box
+    }
+
+    // Abre o WhatsApp sozinho depois de alguns segundos, para a pessoa não ficar parada na tela do produto.
+    // O tempo aparece no próprio botão (escurecendo da esquerda para a direita) ou numa barra fina abaixo
+    // dele; pausa com a aba escondida e para com "Cancelar", com o clique no botão ou em outro link.
+    // Na prévia do editor conta, mas não sai da página.
+    function autoOpen(a, cta, secs, style, href, onSent) {
+      var left = secs * 1000, last = 0, timer = null
+      var num = el('b', { text: String(secs) })
+      var cancel = el('button', { type: 'button', class: 'cx', text: 'Cancelar' })
+      var note = el('p', { class: 'auto' }, [
+        el('span', { class: 'sr', text: 'O WhatsApp abre sozinho em ' + secs + ' segundos.' }),
+        el('span', { 'aria-hidden': 'true' }, [document.createTextNode('Abrindo o WhatsApp em '), num, document.createTextNode(' s')]),
+        cancel,
+      ])
+      var bar = style === 'bar' ? el('div', { class: 'cdbar', 'aria-hidden': 'true' }, [el('i')]) : null
+      a.classList.add('cd', 'cd-' + style)
+      a.style.setProperty('--cd', secs + 's')
+      if (bar) { bar.style.setProperty('--cd', secs + 's'); cta.insertBefore(bar, a.nextSibling) }
+      cta.insertBefore(note, (bar || a).nextSibling)
+      function paused(on) { a.classList.toggle('hold', on); if (bar) bar.classList.toggle('hold', on) }
+      function tick() {
+        var now = Date.now()
+        if (document.hidden) { paused(true); last = now; return }
+        paused(false)
+        left -= now - last
+        last = now
+        num.textContent = String(Math.max(0, Math.ceil(left / 1000)))
+        if (left > 0) return
+        clearInterval(timer); timer = null
+        onSent()
+        if (opts.preview) { note.textContent = 'Na página publicada, o WhatsApp abriria agora.'; return }
+        note.textContent = 'Abrindo o WhatsApp…'
+        try { window.location.assign(href) } catch (e) {}
+      }
+      var api = {
+        start: function () { last = Date.now(); timer = setInterval(tick, 200) },
+        stop: function () {
+          if (timer) clearInterval(timer)
+          timer = null
+          a.classList.remove('cd', 'cd-fill', 'cd-bar', 'hold')
+          if (bar && bar.parentNode) bar.parentNode.removeChild(bar)
+          if (note.parentNode) note.parentNode.removeChild(note)
+        },
+      }
+      cancel.addEventListener('click', function () { api.stop(); if (ticking === api) ticking = null; a.focus() })
+      return api
+    }
+
+    // Fim do localizador: o card do produto (ou a ajuda, sem compatível) e o WhatsApp com a moto e o produto
+    function finishProduct(f, itemId) {
+      done = true
+      screen = 'result'
+      lastRes = { product: f.id, item: itemId }
+      var c = f.catalog || { items: [] }
+      var p = picks[f.id] || {}
+      if (!refCode) refCode = rid().replace(/[^a-z0-9]/gi, '').slice(0, 6).toUpperCase()
+      var item = itemId ? c.items.filter(function (i) { return i.id === itemId })[0] : null
+      var all = item ? cMatches(c, item.brand, item.model, item.year) : []
+      var out = el('div', { class: 'pr', role: 'status' })
+      out.appendChild(el('h3', { text: item ? c.resultTitle || PD.resultTitle : c.noMatchTitle || PD.noMatchTitle }))
+      if (!item) out.appendChild(el('p', { class: 'd', text: c.noMatchText || PD.noMatchText }))
+      // O card: a foto inteira em cima; embaixo, para qual moto serve, o nome e os acabamentos (um por coluna)
+      all.forEach(function (i) {
+        var moto = [i.brand, i.model].join(' ') + (i.year ? ' · ' + i.year : '')
+        out.appendChild(el('div', { class: 'pcard' }, [
+          i.image ? el('div', { class: 'im' }, [el('img', { src: i.image, alt: i.name || i.model, decoding: 'async' })]) : null,
+          el('div', { class: 'bd' }, [
+            el('div', { class: 'fit' }, [icon('check'), el('span', { text: 'Compatível com ' + moto })]),
+            el('b', { text: i.name || i.model }),
+            i.codes && i.codes.length ? el('div', { class: 'cds' }, i.codes.map(function (x) { return el('div', null, [el('span', { text: x.label || 'Código' }), el('strong', { text: x.code })]) })) : null,
+            i.url ? el('a', { class: 'vp', href: i.url, target: '_blank', rel: 'noopener', text: 'Ver detalhes do produto' }, [arrow()]) : null,
+          ]),
+        ]))
+      })
+      var href = waUrl(c.whatsapp, cMessage(c, item, p, refCode))
+      var cta = el('div', { class: 'cta' })
+      var countdown = null
+      if (href) {
+        var label = item ? c.buttonLabel || PD.buttonLabel : 'Falar no WhatsApp'
+        var a = el('a', { class: 'btn', href: href, target: '_blank', rel: 'noopener', 'aria-label': label + ' (abre em uma nova aba)' }, [el('i', { class: 'fillx', 'aria-hidden': 'true' }), wa(), el('span', { text: label })])
+        var sent = function (auto) {
+          if (opts.preview) return
+          var d = Object.assign(base(), { produto: item ? item.name || item.model : '', moto: [p.brand, p.model, p.year].filter(Boolean).join(' '), ref: refCode, encontrou: !!item, automatico: !!auto })
+          track(host, 'whatsapp_click', d)
+          if (pixel) fb(pixel, 'Contact', d, refCode + ':contact')
+        }
+        a.addEventListener('click', function () { if (countdown) countdown.stop(); sent(false) })
+        cta.appendChild(a)
+        var secs = c.redirectSeconds === undefined || c.redirectSeconds === null ? PD.redirectSeconds : c.redirectSeconds
+        if (item && secs > 0) countdown = autoOpen(a, cta, secs, c.redirectStyle === 'bar' ? 'bar' : 'fill', href, function () { sent(true) })
+      }
+      out.addEventListener('click', function (e) { if (countdown && e.target.closest && e.target.closest('a.vp,button.bk')) countdown.stop() })
+      var again = el('button', { type: 'button', class: 'bk', text: '← Buscar de novo' })
+      again.addEventListener('click', function () { done = false; screen = 'steps'; lastRes = null; render(true) })
+      cta.appendChild(again)
+      out.appendChild(cta)
+      if (opts.preview) out.appendChild(el('p', { class: 'pv', text: 'Prévia: nada foi enviado.' }))
+      frame([out], 'endf')
+      if (countdown) { ticking = countdown; countdown.start() }
+      if (opts.preview) return
+      push(item ? 'produto_encontrado' : 'produto_nao_encontrado', Object.assign(base(), { moto: [p.brand, p.model, p.year].filter(Boolean).join(' '), produto: item ? item.name || item.model : '' }))
+      // Registra a busca (sem cadastro) sem fazer a pessoa esperar; falhar aqui não tira o produto da tela
+      if (item) {
+        try {
+          var hp = root.querySelector('input[name=website]')
+          fetch(opts.endpoint, { method: 'POST', headers: { 'content-type': 'text/plain' }, keepalive: true, body: JSON.stringify({ id: cfg.id, answers: answers, ref: refCode, hp: hp ? hp.value : '', meta: metaNow(origin), visit: tr ? tr.visit : undefined }) }).catch(function () {})
+        } catch (e) {}
+      }
+    }
+
     // Mostra e esconde os campos que dependem de respostas (sem redesenhar a etapa)
     function refresh() {
       var wrap = root.querySelector('.st')
@@ -695,11 +968,35 @@
     function frame(children, extra) {
       var f = el('form', { class: 'f ' + cfg.theme.frame + (cfg.theme.fieldStyle === 'outline' ? ' ol' : '') + (extra ? ' ' + extra : ''), novalidate: true }, children)
       f.addEventListener('submit', function (e) { e.preventDefault(); next() })
+      if (ticking) { ticking.stop(); ticking = null }
       root.innerHTML = ''
       root.appendChild(el('style', { text: css(cfg.theme) }))
       root.appendChild(f)
       if (tr) tr.moved(where())
       return f
+    }
+
+    // Capa pequena acima das perguntas (definition.cover): logo, linha pequena, título com destaque e a foto
+    function coverEl() {
+      var c = cfg.definition.cover
+      if (!c || !c.enabled || !c.title) return null
+      if (c.display) loadFont('Barlow Condensed')
+      var style = (c.background ? '--cb:' + c.background + ';' : '') + (c.accent ? '--ca:' + c.accent : '')
+      var t = el('p', { class: 'ct' })
+      rich(t, c.title)
+      // Foto que não carrega (link quebrado, ainda não publicada) sai, e o texto volta a ocupar a faixa
+      var ph = c.image ? el('img', { class: 'ph', src: c.image, alt: '', decoding: 'async' }) : null
+      if (ph) ph.addEventListener('error', function () { var h = ph.parentNode; if (h) { h.classList.remove('wph'); h.removeChild(ph) } })
+      return el('header', { class: 'cov' + (c.display ? ' dsp' : '') + (c.image ? ' wph' : ''), style: style || null }, [
+        c.watermark ? el('span', { class: 'wm', 'aria-hidden': 'true', text: c.watermark }) : null,
+        ph,
+        el('div', { class: 'cvi' }, [
+          c.logoUrl ? el('img', { class: 'lg', src: c.logoUrl, alt: cfg.name, decoding: 'async' }) : null,
+          c.eyebrow ? el('p', { class: 'ey', text: c.eyebrow }) : null,
+          t,
+          c.text ? el('p', { class: 'tx', text: c.text }) : null,
+        ]),
+      ])
     }
 
     function renderWelcome(focus) {
@@ -897,7 +1194,11 @@
       if (step.description) wrap.appendChild(el('p', { class: 'd', text: step.description }))
       if (step.note && step.note.trim()) wrap.appendChild(el('p', { class: 'nt', text: step.note.trim() }))
       step.fields.forEach(function (f) { wrap.appendChild(field(f, step)) })
-      var go = el('button', { type: 'submit', class: 'go', text: busy ? 'Enviando…' : last ? s.submitLabel : s.nextLabel, disabled: busy })
+      // Etapa do localizador: botão no centro, com a seta
+      var finder = step.fields.some(function (f) { return f.type === 'product' && visible(f, answers) })
+      var go = finder
+        ? el('button', { type: 'submit', class: 'go cen', disabled: busy }, [el('span', { text: busy ? 'Enviando…' : last ? s.submitLabel : s.nextLabel }), arrow()])
+        : el('button', { type: 'submit', class: 'go', text: busy ? 'Enviando…' : last ? s.submitLabel : s.nextLabel, disabled: busy })
       var toWelcome = prevIndex(cur) < 0 && welcomeOn()
       var back = prevIndex(cur) >= 0 || toWelcome ? el('button', { type: 'button', class: 'bk', text: '← Voltar' }) : null
       if (back) back.addEventListener('click', function () {
@@ -907,12 +1208,14 @@
         render(true)
       })
       var children = []
+      var cv = coverEl()
+      if (cv) children.push(cv)
       if (s.showProgress && steps().length > 1) children.push(bar())
       children.push(wrap)
       children.push(el('div', { class: 'hp', 'aria-hidden': 'true' }, [el('input', { type: 'text', name: 'website', tabindex: '-1', autocomplete: 'off' })]))
       // Escolha obrigatória que avança sozinha fica sem o botão (ele aparece enquanto envia, no último passo)
       if (noButton(step) && !busy) go = null
-      if (back || go) children.push(el('div', { class: 'row' }, [back, go]))
+      if (back || go) children.push(el('div', { class: 'row' + (finder ? ' cen' : '') }, [back, go]))
       if (s.footnote) children.push(el('p', { class: 'fn', text: s.footnote }))
       if (opts.preview) children.push(el('p', { class: 'pv', text: opts.test ? 'Modo teste: avança sem preencher. Nada é enviado.' : 'Prévia: nada é enviado.' }))
       frame(children)
@@ -954,8 +1257,18 @@
       if (row) row.insertAdjacentElement('beforebegin', el('p', { class: 'er', role: 'alert', text: text }))
     }
 
+    function productOf() {
+      var out = null
+      steps().forEach(function (s) { s.fields.forEach(function (f) { if (!out && f.type === 'product' && visible(f, answers) && answers[f.id]) out = f }) })
+      return out
+    }
+    // Contato no formulário (nome, telefone, e-mail): com ele vira lead no CRM pelo envio normal
+    function hasContactField() { return steps().some(function (s) { return s.fields.some(function (f) { return visible(f, answers) && (f.type === 'phone' || f.type === 'email' || f.map === 'phone' || f.map === 'email') && asList(answers[f.id]).length }) }) }
+
     function submit() {
       var def = cfg.definition
+      var pf = productOf()
+      if (pf && !hasContactField()) return finishProduct(pf, answers[pf.id])
       var hp = root.querySelector('input[name=website]')
       if (opts.preview) {
         var pts = score(def, answers)
@@ -1004,6 +1317,8 @@
           }
           if (r.body.booking) { openBooking(r.body); return }
           if (r.body.redirectUrl) { location.href = r.body.redirectUrl; return }
+          var pfx = productOf()
+          if (pfx) { finishProduct(pfx, answers[pfx.id]); return }
           finish(r.body)
         })
         .catch(function () {
@@ -1051,6 +1366,11 @@
           else if (opts.preview) agenda = { token: '', submission: '', days: localDays(bookingCfg(), new Date()) }
         }
         if (screen === 'booked' && (!bookingCfg() || !bookingCfg().enabled)) screen = 'steps'
+        if (screen === 'result' && lastRes && lastRes.product) {
+          var fp = null
+          steps().forEach(function (s) { s.fields.forEach(function (x) { if (x.id === lastRes.product) fp = x }) })
+          if (fp) { finishProduct(fp, lastRes.item); return }
+        }
         if (screen === 'result' && lastRes) { finish(lastRes); return }
         if (screen === 'steps') done = false
         render(false)
@@ -1073,6 +1393,9 @@
           return
         }
         if (name === 'done') {
+          var fpv = null
+          steps().forEach(function (s) { s.fields.forEach(function (x) { if (!fpv && x.type === 'product' && x.catalog && x.catalog.items.length) fpv = x }) })
+          if (fpv) { finishProduct(fpv, answers[fpv.id] || fpv.catalog.items[0].id); return }
           var def = cfg.definition
           var r = def.kind === 'quiz' ? def.results.filter(function (x) { return !x.qualified })[0] || def.results[0] : null
           finish({ score: null, result: r || null })
@@ -1087,7 +1410,7 @@
       setTest: function (on) { if (opts.preview) { opts.test = !!on; if (screen === 'steps' && !done) render(false) } },
       // A pessoa já mexeu (digitou, respondeu, avançou ou enviou): nada de trocar o formulário debaixo dela
       touched: function () { return started || done || screen !== 'welcome' && screen !== 'steps' || cur > 0 || Object.keys(answers).some(function (k) { return asList(answers[k]).length }) },
-      destroy: function () { root.innerHTML = '' },
+      destroy: function () { if (ticking) { ticking.stop(); ticking = null } root.innerHTML = '' },
     }
   }
 

@@ -6,7 +6,48 @@
  * então o que o navegador calcula nunca é confiado.
  */
 
-export type FieldType = 'short' | 'long' | 'email' | 'phone' | 'number' | 'choice' | 'multi' | 'select' | 'yesno' | 'rating'
+export type FieldType = 'short' | 'long' | 'email' | 'phone' | 'number' | 'choice' | 'multi' | 'select' | 'yesno' | 'rating' | 'product'
+
+/**
+ * Localizador de produto (2026-11-07, sugestões da Vizor: "focado em qual a moto, perguntando marca, modelo… abrir
+ * um card estilo ecommerce mostrando o produto e levar para o WhatsApp" e "um seletor por imagem… olhando os
+ * logos, e depois um drop com modelo e ano"). O catálogo vai dentro do campo (cópia do catálogo da conta): a
+ * marca é escolhida por cartões com logo, o modelo e o ano por listas que dependem da escolha anterior, e só
+ * aparece o que existe no catálogo. A resposta é o id do item. O fim mostra o produto e o botão do WhatsApp.
+ */
+export interface CatalogItem {
+  id: string
+  brand: string
+  model: string
+  year?: string
+  /** Nome do produto (sem ele, o card mostra o modelo) */
+  name?: string
+  image?: string
+  url?: string
+  /** Variações com código (ex.: Brilho VZB0001, Fosco VZF0001) */
+  codes?: { label: string; code: string }[]
+}
+export interface CatalogBrand { name: string; logo?: string }
+export interface ProductCatalog {
+  items: CatalogItem[]
+  brands: CatalogBrand[]
+  /** Número do WhatsApp comercial (só dígitos, com DDI) */
+  whatsapp?: string
+  /** Mensagem com {produto}, {marca}, {modelo}, {ano}, {codigos}, {link}, {ref} */
+  message?: string
+  buttonLabel?: string
+  modelLabel?: string
+  yearLabel?: string
+  resultTitle?: string
+  noMatchLabel?: string
+  noMatchTitle?: string
+  noMatchText?: string
+  noMatchMessage?: string
+  /** Segundos até abrir o WhatsApp sozinho na tela do produto (0 desliga; sem valor, 12) */
+  redirectSeconds?: number
+  /** Como o tempo aparece: o botão escurecendo (`fill`, o padrão) ou uma barra fina abaixo dele (`bar`) */
+  redirectStyle?: 'fill' | 'bar'
+}
 
 /** O dado do CRM que o campo preenche (nome, e-mail, telefone ou a mensagem do lead). */
 export type FieldMap = 'name' | 'email' | 'phone' | 'message'
@@ -38,6 +79,8 @@ export interface FormField {
   showIf?: FieldCondition
   /** `half` põe o campo ao lado de outro `half` (duas colunas; uma só em telas estreitas) */
   width?: 'half'
+  /** Só no `product` */
+  catalog?: ProductCatalog
 }
 
 export interface FormStep {
@@ -61,13 +104,14 @@ export interface QuizResult {
   qualified?: boolean
 }
 
-export type FormFont = 'inherit' | 'Inter' | 'Inter Tight' | 'Lato' | 'system'
+export type FormFont = 'inherit' | 'Inter' | 'Inter Tight' | 'Lato' | 'Barlow' | 'system'
 
 export const FONTS: { id: FormFont; label: string }[] = [
   { id: 'inherit', label: 'A do site' },
   { id: 'Inter Tight', label: 'Inter Tight (Avence)' },
   { id: 'Lato', label: 'Lato' },
   { id: 'Inter', label: 'Inter' },
+  { id: 'Barlow', label: 'Barlow (Vizor)' },
   { id: 'system', label: 'Do sistema' },
 ]
 
@@ -106,6 +150,32 @@ export interface FormWelcome {
   /** Altura do logo em px (12 a 64); sem o campo, 32 */
   logoSize?: number
 }
+
+/**
+ * Capa pequena no topo das perguntas, como num checkout de evento: uma faixa com logo, uma linha
+ * pequena, o título (`**assim**` em destaque) e uma foto à direita. Não é uma tela a mais (essa é a
+ * `welcome`); acompanha as perguntas e some na tela final.
+ */
+export interface FormCover {
+  enabled: boolean
+  logoUrl?: string
+  /** Foto à direita (PNG/WebP sem fundo fica melhor) */
+  image?: string
+  /** Linha pequena acima do título */
+  eyebrow?: string
+  title: string
+  /** Uma linha curta abaixo do título */
+  text?: string
+  /** Palavra grande e apagada ao fundo */
+  watermark?: string
+  /** Cor do fundo da faixa e a do trecho em destaque */
+  background?: string
+  accent?: string
+  /** Título condensado, em maiúsculas e itálico (Barlow Condensed), estilo de post */
+  display?: boolean
+}
+
+export const COVER_DEFAULT: FormCover = { enabled: true, title: 'Seu título com **destaque**', background: '#0b0f14', accent: '#5b9bff' }
 
 export type WelcomeVAlign = 'top' | 'center' | 'bottom' | 'justify'
 
@@ -243,6 +313,8 @@ export interface FormDefinition {
   kind: 'form' | 'quiz'
   /** Tela de início antes da primeira pergunta */
   welcome?: FormWelcome
+  /** Faixa de capa acima das perguntas */
+  cover?: FormCover
   steps: FormStep[]
   /** Só no quiz, da maior pontuação mínima para a menor na hora de decidir */
   results: QuizResult[]
@@ -318,7 +390,53 @@ export const FIELD_TYPES: { type: FieldType; label: string; hint: string }[] = [
   { type: 'select', label: 'Lista', hint: 'Menu suspenso' },
   { type: 'yesno', label: 'Sim ou não', hint: 'Duas opções' },
   { type: 'rating', label: 'Nota de 1 a 5', hint: 'Estrelas' },
+  { type: 'product', label: 'Encontrar produto', hint: 'Marca com logo, modelo e ano do catálogo' },
 ]
+
+export const PRODUCT_DEFAULTS = {
+  message: 'Olá! Encontrei no site: *{produto}* ({ano})\n{codigos}\n{link}\n\nRef. {ref}',
+  buttonLabel: 'Comprar pelo WhatsApp',
+  modelLabel: 'Modelo',
+  yearLabel: 'Ano',
+  resultTitle: 'Encontramos o produto para você',
+  noMatchLabel: 'Não encontrei a minha',
+  noMatchTitle: 'Vamos achar com você',
+  noMatchText: 'Fale com a gente no WhatsApp e diga o que você procura.',
+  redirectSeconds: 12,
+  noMatchMessage: 'Olá! Não encontrei no site o produto para {marca} {modelo} {ano}. Podem me ajudar?',
+}
+const norm = (v: string) => v.trim().toLowerCase()
+/** Marcas que têm itens, na ordem do cadastro de marcas (as sem cadastro vão no fim, em ordem alfabética). */
+export function catalogBrands(c: ProductCatalog): CatalogBrand[] {
+  const used = new Set(c.items.map((i) => norm(i.brand)))
+  const known = c.brands.filter((b) => used.has(norm(b.name)))
+  const names = new Set(known.map((b) => norm(b.name)))
+  const rest = [...new Set(c.items.map((i) => i.brand))].filter((b) => !names.has(norm(b))).sort((a, b) => a.localeCompare(b, 'pt-BR')).map((name) => ({ name }))
+  return [...known, ...rest]
+}
+export const catalogModels = (c: ProductCatalog, brand: string) =>
+  [...new Set(c.items.filter((i) => norm(i.brand) === norm(brand)).map((i) => i.model))].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }))
+export const catalogYears = (c: ProductCatalog, brand: string, model: string) =>
+  [...new Set(c.items.filter((i) => norm(i.brand) === norm(brand) && i.model === model).map((i) => i.year ?? '').filter(Boolean))].sort().reverse()
+export const catalogMatches = (c: ProductCatalog, brand: string, model: string, year?: string) =>
+  c.items.filter((i) => norm(i.brand) === norm(brand) && i.model === model && (!year || (i.year ?? '') === year))
+
+/** O texto do WhatsApp com os dados do produto (ou da moto, quando não achou). */
+export function productMessage(c: ProductCatalog, item: CatalogItem | undefined, pick: { brand?: string; model?: string; year?: string }, ref = ''): string {
+  const tpl = item ? c.message || PRODUCT_DEFAULTS.message : c.noMatchMessage || PRODUCT_DEFAULTS.noMatchMessage
+  const vars: Record<string, string> = {
+    produto: item ? item.name || `${item.brand} ${item.model}` : '',
+    marca: item?.brand ?? pick.brand ?? '',
+    modelo: item?.model ?? pick.model ?? '',
+    ano: item?.year ?? pick.year ?? '',
+    codigos: (item?.codes ?? []).map((x) => `${x.label}: ${x.code}`).join('\n'),
+    link: item?.url ?? '',
+    ref,
+  }
+  return tpl.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? '').replace(/\(\s*\)/g, '').replace(/\n{3,}/g, '\n\n').replace(/[ \t]+\n/g, '\n').trim()
+}
+export const whatsappLink = (number: string | undefined, text: string) => (number ? `https://wa.me/${number.replace(/\D/g, '')}?text=${encodeURIComponent(text)}` : undefined)
+export const productField = (d: FormDefinition) => allFields(d).find((f) => f.type === 'product' && f.catalog?.items.length)
 
 export const hasOptions = (type: FieldType) => type === 'choice' || type === 'multi' || type === 'select'
 
@@ -407,6 +525,10 @@ export function formIssues(definition: FormDefinition, settings: FormSettings): 
         if (opts.some((o) => !o.label.trim())) err(`${label ? `“${label}”` : name} tem uma opção sem texto.`, n)
         else if (opts.length && opts.every((o) => DEFAULT_OPTION.test(o.label.trim()))) err(`${label ? `“${label}”` : name} ainda está com as opções padrão (Opção 1, Opção 2…).`, n)
       }
+      if (f.type === 'product') {
+        if (!f.catalog?.items.length) err(`${label ? `“${label}”` : name}: importe o catálogo de produtos.`, n)
+        if (!f.catalog?.whatsapp) err(`${label ? `“${label}”` : name}: falta o número do WhatsApp para o botão de compra.`, n)
+      }
       if (f.showIf && !allFields(definition).some((x) => x.id === f.showIf!.field)) err(`${label ? `“${label}”` : name} depende de uma pergunta que não existe mais.`, n)
     })
   })
@@ -416,10 +538,11 @@ export function formIssues(definition: FormDefinition, settings: FormSettings): 
     })
   }
   const b = settings.booking
-  if (b?.enabled && b.gate.mode === 'answer') {
-    const field = allFields(definition).find((f) => f.id === b.gate.field)
+  const gate = b?.gate
+  if (b?.enabled && gate?.mode === 'answer') {
+    const field = allFields(definition).find((f) => f.id === gate.field)
     if (!field) err('A agenda filtra por uma pergunta que não existe mais: ajuste o filtro na aba Agenda.')
-    else if (!b.gate.values.some((v) => (field.options ?? []).some((o) => o.id === v))) err('Nenhuma resposta marcada no filtro da agenda existe na pergunta: ninguém veria a agenda.')
+    else if (!gate.values.some((v) => (field.options ?? []).some((o) => o.id === v))) err('Nenhuma resposta marcada no filtro da agenda existe na pergunta: ninguém veria a agenda.')
   }
   if (definition.kind === 'quiz' && !definition.results.length) err('O quiz está sem resultados.')
   if (settings.whatsapp && !settings.whatsapp.number.replace(/\D/g, '')) err('O botão do WhatsApp está ligado sem o número.')
@@ -547,6 +670,12 @@ export function checkAnswers(definition: FormDefinition, raw: unknown): Checked 
         if (field.required) errors[field.id] = 'Preencha este campo.'
         continue
       }
+      if (field.type === 'product') {
+        const item = field.catalog?.items.find((i) => i.id === list[0])
+        if (!item) errors[field.id] = 'Escolha a marca, o modelo e o ano.'
+        else answers[field.id] = item.id
+        continue
+      }
       if (hasOptions(field.type) || field.type === 'yesno' || field.type === 'rating') {
         const valid = new Set(optionsOf(field).map((o) => o.id))
         const picked = list.filter((id) => valid.has(id))
@@ -568,6 +697,10 @@ export function checkAnswers(definition: FormDefinition, raw: unknown): Checked 
 export function answerText(field: FormField, value: string | string[] | undefined): string {
   const list = asList(value)
   if (!list.length) return ''
+  if (field.type === 'product') {
+    const i = field.catalog?.items.find((x) => x.id === list[0])
+    return i ? [i.name || `${i.brand} ${i.model}`, i.year, (i.codes ?? []).map((c) => `${c.label} ${c.code}`).join(', ')].filter(Boolean).join(' · ') : list[0]
+  }
   if (hasOptions(field.type) || field.type === 'yesno' || field.type === 'rating') {
     const options = optionsOf(field)
     return list.map((id) => options.find((o) => o.id === id)?.label ?? id).join(', ')
@@ -592,6 +725,7 @@ export function cleanDefinition(raw: unknown): FormDefinition {
   return {
     kind: source.kind === 'quiz' ? 'quiz' : 'form',
     welcome: cleanWelcome(source.welcome),
+    cover: cleanCover(source.cover),
     steps: steps.slice(0, 40).map((s, i) => ({
       id: String(s?.id ?? `s${i}`),
       title: typeof s?.title === 'string' ? s.title.slice(0, 200) : undefined,
@@ -608,6 +742,7 @@ export function cleanDefinition(raw: unknown): FormDefinition {
         map: f?.map === 'name' || f?.map === 'email' || f?.map === 'phone' || f?.map === 'message' ? f.map : undefined,
         width: f?.width === 'half' ? 'half' : undefined,
         showIf: f?.showIf && typeof f.showIf.field === 'string' ? { field: f.showIf.field, op: f.showIf.op === 'neq' ? 'neq' : 'eq', value: String(f.showIf.value ?? '') } : undefined,
+        catalog: f?.type === 'product' ? cleanCatalog(f.catalog) : undefined,
       })),
     })),
     results: (Array.isArray(source.results) ? source.results : []).slice(0, 10).map((r, i) => ({
@@ -622,7 +757,52 @@ export function cleanDefinition(raw: unknown): FormDefinition {
   }
 }
 
+/** O catálogo de um campo `product`: até 3.000 itens, textos curtos, imagens e links só https. */
+export function cleanCatalog(raw: unknown): ProductCatalog {
+  const c = raw && typeof raw === 'object' ? (raw as Partial<ProductCatalog>) : {}
+  const txt = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined)
+  const seen = new Set<string>()
+  const items = (Array.isArray(c.items) ? c.items : []).slice(0, 3000).flatMap((i, n): CatalogItem[] => {
+    const brand = txt(i?.brand, 60), model = txt(i?.model, 120)
+    if (!brand || !model) return []
+    let id = (txt(i?.id, 60) ?? `p${n}`).replace(/[^\w.-]/g, '')
+    while (seen.has(id)) id += '_'
+    seen.add(id)
+    const codes = (Array.isArray(i?.codes) ? i.codes : []).slice(0, 6).map((x) => ({ label: txt(x?.label, 30) ?? '', code: txt(x?.code, 40) ?? '' })).filter((x) => x.code)
+    return [{ id, brand, model, year: txt(i?.year, 30), name: txt(i?.name, 160), image: httpsUrl(i?.image), url: httpsUrl(i?.url), codes: codes.length ? codes : undefined }]
+  })
+  const brands = (Array.isArray(c.brands) ? c.brands : []).slice(0, 200).flatMap((b): CatalogBrand[] => { const name = txt(b?.name, 60); return name ? [{ name, logo: httpsUrl(b?.logo) }] : [] })
+  const digits = typeof c.whatsapp === 'string' ? c.whatsapp.replace(/\D/g, '').slice(0, 15) : ''
+  return {
+    items, brands, whatsapp: digits.length >= 10 ? digits : undefined,
+    message: txt(c.message, 800), buttonLabel: txt(c.buttonLabel, 40), modelLabel: txt(c.modelLabel, 40), yearLabel: txt(c.yearLabel, 40),
+    resultTitle: txt(c.resultTitle, 120), noMatchLabel: txt(c.noMatchLabel, 60), noMatchTitle: txt(c.noMatchTitle, 120), noMatchText: txt(c.noMatchText, 400), noMatchMessage: txt(c.noMatchMessage, 600),
+    redirectSeconds: typeof c.redirectSeconds === 'number' && Number.isFinite(c.redirectSeconds) ? Math.max(0, Math.min(30, Math.round(c.redirectSeconds))) : undefined,
+    redirectStyle: c.redirectStyle === 'bar' ? 'bar' : undefined,
+  }
+}
+
 const httpsUrl = (v: unknown, max = 500) => (typeof v === 'string' && /^https:\/\//i.test(v.trim()) ? v.trim().slice(0, max) : undefined)
+
+const HEX = /^#[0-9a-f]{6}$/i
+
+function cleanCover(raw: unknown): FormCover | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const c = raw as Partial<FormCover>
+  const txt = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined)
+  return {
+    enabled: c.enabled === true,
+    logoUrl: httpsUrl(c.logoUrl),
+    image: httpsUrl(c.image),
+    eyebrow: txt(c.eyebrow, 60),
+    title: txt(c.title, 90) ?? '',
+    text: txt(c.text, 90),
+    watermark: txt(c.watermark, 20),
+    background: typeof c.background === 'string' && HEX.test(c.background) ? c.background : undefined,
+    accent: typeof c.accent === 'string' && HEX.test(c.accent) ? c.accent : undefined,
+    display: c.display === true,
+  }
+}
 
 function cleanWelcome(raw: unknown): FormWelcome | undefined {
   if (!raw || typeof raw !== 'object') return undefined

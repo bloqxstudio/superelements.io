@@ -20,6 +20,7 @@ import {
   type QuizResult,
 } from '@/features/crm/forms'
 import { cn } from '@/lib/utils'
+import { ProductCatalogEditor } from './ProductCatalogEditor'
 
 /**
  * O construtor de formulário e quiz: etapas com campos, lógica ("só aparece se…"), pontuação por
@@ -187,7 +188,7 @@ const FieldEditor: React.FC<{
   quiz: boolean
   onChange: (patch: Partial<FormField>) => void
 }> = ({ field, earlier, quiz, onChange }) => {
-  const textual = !hasOptions(field.type) && field.type !== 'yesno' && field.type !== 'rating'
+  const textual = !hasOptions(field.type) && field.type !== 'yesno' && field.type !== 'rating' && field.type !== 'product'
   const pickable = earlier.filter((f) => hasOptions(f.type) || f.type === 'yesno' || f.type === 'rating')
   const target = pickable.find((f) => f.id === field.showIf?.field)
   const scored = hasOptions(field.type) || field.type === 'yesno' || field.type === 'rating'
@@ -219,6 +220,7 @@ const FieldEditor: React.FC<{
           </div>
         </div>
       )}
+      {field.type === 'product' && <ProductCatalogEditor catalog={field.catalog} onChange={(catalog) => onChange({ catalog })} />}
       {(hasOptions(field.type) || field.type === 'yesno' || field.type === 'rating') && <OptionsEditor field={field} quiz={quiz && scored} onChange={(options) => onChange({ options })} />}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -305,8 +307,9 @@ const AddField: React.FC<{ onAdd: (type: FieldType) => void }> = ({ onAdd }) => 
 const newField = (type: FieldType): FormField => ({
   id: newId('f'),
   type,
-  label: '',
-  required: false,
+  label: type === 'product' ? 'Qual é a sua marca?' : '',
+  required: type === 'product',
+  catalog: type === 'product' ? { items: [], brands: [] } : undefined,
   options: hasOptions(type) ? [{ id: newId('o'), label: 'Opção 1' }, { id: newId('o'), label: 'Opção 2' }] : undefined,
 })
 

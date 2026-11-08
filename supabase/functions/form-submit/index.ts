@@ -13,6 +13,7 @@ import {
   cleanTheme,
   localDay,
   localTime,
+  productField,
   resultFor,
   scoreOf,
   slotInstant,
@@ -187,6 +188,21 @@ Deno.serve(async (request) => {
   payload.message = [payload.message, ...lines].filter(Boolean).join(' | ').slice(0, 1500)
 
   const lead = parseLead(payload)
+  // Localizador de produto sem cadastro (2026-11-07, pedido da Vizor): a pessoa escolhe a moto, vê o produto e
+  // segue para o WhatsApp. Sem contato não há lead no CRM: a busca fica nas respostas do formulário, com a
+  // referência que vai na mensagem do WhatsApp (para a equipe ligar a conversa a esta resposta).
+  const pf = productField(definition)
+  if (!hasContact(lead) && pf && answers[pf.id]) {
+    const ref = typeof body.ref === 'string' ? body.ref.replace(/[^A-Z0-9]/gi, '').slice(0, 12).toUpperCase() : undefined
+    const { data: saved, error: saveError } = await admin.from('crm_form_submissions').insert({
+      form_id: id, team_id: teamId, answers, summary, score, result: result?.title ?? null, qualified,
+      origin: { ...leadOrigin(lead, undefined, await sha([id, ref ?? '', JSON.stringify(answers)].join('|'))), form: form.name as string, formId: id, ref, product: answerText(pf, answers[pf.id]) },
+    }).select('id').single()
+    if (saveError) console.error('crm_form_submissions:', saveError.message)
+    const submissionId = saved?.id as string | undefined
+    if (submissionId) await markVisit(admin, id, body.visit, { submitted: true, qualified, submission_id: submissionId, screen: 'result', left_at: null })
+    return json({ ok: true, qualified, score, submissionId, ref })
+  }
   if (!hasContact(lead)) return json({ error: 'Faltou um e-mail ou telefone para a equipe responder.', errors: {} }, 422)
 
   const { data: reports } = await admin.from('crm_ad_reports').select('preset, data, fetched_at').eq('team_id', teamId)
