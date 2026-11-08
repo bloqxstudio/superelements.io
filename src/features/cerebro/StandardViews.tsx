@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, Loader2, Plus, Star, Trash2, X } from 'lucide-react'
+import { Check, Loader2, Plus, Sparkles, Star, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/integrations/supabase/client'
 import { cn } from '@/lib/utils'
 import { loadProjectDoc } from '@/features/projects/storage'
-import { deleteNote, mediaUrl, saveNote, uploadFiles, type LoadedVault } from './data'
-import { DESIGN_PATH, FORMAT_LABEL, PATTERN_DIR, forgetStandard, patternNote, patternsOf, withStatus, type Pattern } from './standard'
-import { AUTO_FOLDER, dirOf, joinPath, type VaultMedia } from './vault'
+import { deleteFile, deleteNote, mediaUrl, saveNote, uploadFiles, type LoadedVault } from './data'
+import { DESIGN_PATH, FORMAT_LABEL, PATTERN_DIR, forgetStandard, patternNote, patternsOf, sourceHref, withRules, withStatus, type Pattern } from './standard'
+import { aiReady, draftPattern } from './patternAi'
+import { AUTO_FOLDER, dirOf, fileName, joinPath, type VaultMedia } from './vault'
 
 /**
  * As peças do padrão de design no Cérebro: o cabeçalho da marca (cores e fontes do DESIGN.md), a grade
@@ -121,9 +122,16 @@ async function markDefault(teamId: string, vault: LoadedVault, target: Pattern) 
   forgetStandard()
 }
 
+/** O arquivo da imagem de exemplo de um padrão (só os guardados no Cérebro). */
+const examplePath = (p: Pattern) => (p.example && !/^https?:/.test(p.example) ? joinPath(dirOf(p.path), p.example).path : undefined)
+
 async function deleteOthers(teamId: string, vault: LoadedVault, keep: Pattern) {
   const others = patternsOf(vault).filter((p) => p.path !== keep.path && p.format === keep.format)
-  for (const p of others) await deleteNote(teamId, p.path)
+  for (const p of others) {
+    await deleteNote(teamId, p.path)
+    const file = examplePath(p)
+    if (file && file !== examplePath(keep)) await deleteFile(teamId, file).catch(() => {})
+  }
   if (!keep.isDefault) await markDefault(teamId, vault, keep)
   forgetStandard()
   return others.length
@@ -140,12 +148,36 @@ export const PatternActions: React.FC<{ teamId: string; vault: LoadedVault; patt
     finally { setBusy(false) }
   }
   const label = FORMAT_LABEL[pattern.format] ?? 'sem formato'
+  const note = vault.notes.find((n) => n.path === pattern.path)
+  const href = note ? sourceHref(note.content) : undefined
+  const [reading, setReading] = useState<string | null>(null)
+  const rewrite = async () => {
+    if (!note) return
+    if (pattern.rules.length && !window.confirm('Trocar as regras e o "Quando usar" desta nota pelo que a IA ler do post de exemplo?')) return
+    setReading('Abrindo o post')
+    try {
+      const d = await draftPattern({ teamId, href, onStep: setReading })
+      if (!d.rules.length) throw new Error('Não achei o post de exemplo nos Criativos.')
+      await saveNote(teamId, pattern.path, withRules(note.content, d.rules, d.when))
+      forgetStandard()
+      toast.success(d.byAi ? `A IA escreveu ${d.rules.length} regras.` : `Regras tiradas das medidas do post (a IA desta máquina não está conectada).`)
+      onDone()
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Não leu o post') }
+    finally { setReading(null) }
+  }
   return (
     <div className="mb-5 flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
       {pattern.isDefault
         ? <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-600 px-2.5 py-1 text-xs font-medium text-white"><Star className="h-3 w-3 fill-current" />Padrão do {label}</span>
         : <span className="rounded-full bg-gray-200 px-2.5 py-1 text-xs text-gray-700">Alternativo · {label}</span>}
-      <span className="flex-1 text-xs text-gray-500">{pattern.isDefault ? 'Os Criativos seguem este padrão em todo post novo deste formato.' : 'Não é usado nos posts novos enquanto não for o padrão.'}</span>
+      <span className="min-w-[220px] flex-1 text-xs text-gray-500">{pattern.isDefault ? 'Os Criativos seguem este padrão em todo post novo deste formato.' : 'Não é usado nos posts novos enquanto não for o padrão.'}</span>
+      {href && (
+        <Button size="sm" variant={pattern.rules.length ? 'ghost' : 'default'} className="h-7" disabled={busy || !!reading} onClick={() => void rewrite()}
+          title="Lê o post de exemplo (as camadas e a imagem de cada slide) e escreve as regras">
+          {reading ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}
+          {reading ? `${reading}…` : pattern.rules.length ? 'Refazer as regras pelo post' : 'Escrever as regras pelo post'}
+        </Button>
+      )}
       {!pattern.isDefault && (
         <Button size="sm" variant="outline" className="h-7" disabled={busy} onClick={() => void run(() => markDefault(teamId, vault, pattern), `${pattern.name} é o padrão do ${label}.`)}>
           <Check className="mr-1 h-3.5 w-3.5" />Marcar como padrão
@@ -165,6 +197,9 @@ export const PatternActions: React.FC<{ teamId: string; vault: LoadedVault; patt
 export const PatternsView: React.FC<{ teamId: string; vault: LoadedVault; manager: boolean; onOpen: (p: string) => void; onChanged: () => void }> = ({ teamId, vault, manager, onOpen, onChanged }) => {
   const [creating, setCreating] = useState(false)
   const patterns = patternsOf(vault)
+  // Fotos da pasta que nenhum padrão usa (exemplos de padrões apagados, envios avulsos)
+  const used = new Set(patterns.map(examplePath).filter(Boolean))
+  const loose = vault.media.filter((m) => !m.url && m.path.startsWith(PATTERN_DIR + '/') && !used.has(m.path))
   const byFormat = useMemo(() => {
     const m = new Map<string, Pattern[]>()
     for (const p of patterns) m.set(p.format, [...(m.get(p.format) ?? []), p])
@@ -181,6 +216,24 @@ export const PatternsView: React.FC<{ teamId: string; vault: LoadedVault; manage
       {creating && <NewPattern teamId={teamId} vault={vault} onClose={() => setCreating(false)} onCreated={(p) => { setCreating(false); onChanged(); onOpen(p) }} />}
       {!patterns.length && !creating && (
         <p className="rounded-lg border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">Nenhum padrão ainda. Clique em <b className="font-medium">Novo padrão</b> e escolha um post que deu certo.</p>
+      )}
+      {loose.length > 0 && (
+        <section className="mb-8">
+          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">Fotos sem padrão · {loose.length}</h2>
+          <p className="mb-3 text-xs text-gray-500">Nenhum padrão usa estas fotos. Apague as que não servem mais.</p>
+          <ul className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+            {loose.map((m) => (
+              <li key={m.path} className="group relative">
+                <Img vault={vault} from={PATTERN_DIR + '/x.md'} src={m.path.slice(PATTERN_DIR.length + 1)} alt={fileName(m.path)} className="aspect-[4/5] w-full rounded-lg border border-gray-200 object-cover" />
+                <button type="button" aria-label={`Apagar ${fileName(m.path)}`}
+                  onClick={async () => { if (!window.confirm(`Apagar ${fileName(m.path)}?`)) return; try { await deleteFile(teamId, m.path); onChanged() } catch (e) { toast.error(e instanceof Error ? e.message : 'Não apagou') } }}
+                  className="absolute right-1.5 top-1.5 rounded-md bg-white/90 p-1.5 text-gray-500 shadow-sm hover:text-red-600 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       {byFormat.map(([format, list]) => (
         <section key={format || 'x'} className="mb-8">
@@ -227,9 +280,29 @@ const NewPattern: React.FC<{ teamId: string; vault: LoadedVault; onClose: () => 
   const [name, setName] = useState('')
   const [format, setFormat] = useState('4x5')
   const [rules, setRules] = useState('')
+  const [when, setWhen] = useState<string[]>([])
   const [makeDefault, setMakeDefault] = useState(true)
   const [busy, setBusy] = useState(false)
-  const choose = (m: VaultMedia) => { setPick(m); if (m.format) setFormat(m.format); if (!name) setName(m.label?.split(' · ').pop() ?? '') }
+  const [reading, setReading] = useState<string | null>(null)
+  const [byAi, setByAi] = useState<boolean | null>(null)
+  const nameTouched = React.useRef(false)
+  const job = React.useRef<AbortController | null>(null)
+  useEffect(() => () => job.current?.abort(), [])
+  // Escolher o post já lê o padrão dele: a IA olha os slides e as medidas; sem IA, só as medidas
+  const read = async (m: VaultMedia) => {
+    job.current?.abort()
+    const ctrl = new AbortController()
+    job.current = ctrl
+    setReading('Abrindo o post'); setByAi(null)
+    try {
+      const d = await draftPattern({ teamId, href: m.href, coverUrl: m.url, signal: ctrl.signal, onStep: (x) => !ctrl.signal.aborted && setReading(x) })
+      if (ctrl.signal.aborted) return
+      setRules(d.rules.join('\n')); setWhen(d.when); setByAi(d.byAi)
+      if (d.name && !nameTouched.current) setName(d.name)
+    } catch (e) { if (!ctrl.signal.aborted) toast.error(e instanceof Error ? e.message : 'Não leu o post') }
+    finally { if (job.current === ctrl) setReading(null) }
+  }
+  const choose = (m: VaultMedia) => { setPick(m); if (m.format) setFormat(m.format); if (!nameTouched.current) setName(m.label?.split(' · ').pop() ?? ''); void read(m) }
   const create = async () => {
     const n = name.trim()
     if (!n) return
@@ -252,7 +325,7 @@ const NewPattern: React.FC<{ teamId: string; vault: LoadedVault; onClose: () => 
         }
       }
       const source = pick?.href ? { label: pick.label ?? 'post nos Criativos', href: pick.href } : undefined
-      await saveNote(teamId, path, patternNote({ name: n, format, isDefault: makeDefault, rules: list, example, source }), true)
+      await saveNote(teamId, path, patternNote({ name: n, format, isDefault: makeDefault, rules: list, when, example, source }), true)
       forgetStandard()
       onCreated(path)
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Não criou') }
@@ -280,7 +353,7 @@ const NewPattern: React.FC<{ teamId: string; vault: LoadedVault; onClose: () => 
       <div className="grid gap-3 sm:grid-cols-[1fr_160px]">
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor="pd-name">2. Nome do padrão</label>
-          <input id="pd-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Carrossel editorial com foto"
+          <input id="pd-name" value={name} onChange={(e) => { nameTouched.current = true; setName(e.target.value) }} placeholder="Ex.: Carrossel editorial com foto"
             className="h-9 w-full rounded-md border border-gray-200 px-2.5 text-sm outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100" />
         </div>
         <div>
@@ -290,8 +363,13 @@ const NewPattern: React.FC<{ teamId: string; vault: LoadedVault; onClose: () => 
           </select>
         </div>
       </div>
-      <label className="mb-1 mt-3 block text-xs font-medium text-gray-600" htmlFor="pd-rules">3. Regras, uma por linha <span className="font-normal text-gray-400">(o que se repete em todo post deste padrão; a Iara pode escrever olhando o exemplo)</span></label>
-      <textarea id="pd-rules" value={rules} onChange={(e) => setRules(e.target.value)} rows={4} placeholder={'Título em no máximo duas linhas, à esquerda\nFoto ocupa a metade de cima, com veu escuro\nÚltimo slide sempre com chamada para o WhatsApp'}
+      <div className="mb-1 mt-3 flex items-center gap-2">
+        <label className="flex-1 text-xs font-medium text-gray-600" htmlFor="pd-rules">3. Regras, uma por linha <span className="font-normal text-gray-400">(lidas do post escolhido; ajuste o que quiser)</span></label>
+        {pick && !reading && <button type="button" onClick={() => void read(pick)} className="flex items-center gap-1 text-xs font-medium text-violet-700 hover:underline"><Sparkles className="h-3 w-3" />Ler de novo</button>}
+      </div>
+      {reading && <p className="mb-1.5 flex items-center gap-1.5 text-xs text-violet-700"><Loader2 className="h-3 w-3 animate-spin" />{reading}… {aiReady() ? 'a IA olha cada slide, as fontes, as cores e a foto' : ''}</p>}
+      {!reading && byAi === false && <p className="mb-1.5 text-xs text-amber-700">Regras tiradas só das medidas das camadas: a IA desta máquina não está conectada (abra o conector para ela olhar a foto e o estilo).</p>}
+      <textarea id="pd-rules" value={rules} onChange={(e) => setRules(e.target.value)} rows={rules.split('\n').length > 4 ? 10 : 4} disabled={!!reading} placeholder={'Título em no máximo duas linhas, à esquerda\nFoto ocupa a metade de cima, com veu escuro\nÚltimo slide sempre com chamada para o WhatsApp'}
         className="w-full rounded-md border border-gray-200 p-2.5 text-sm outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100" />
       <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
         <input type="checkbox" checked={makeDefault} onChange={(e) => setMakeDefault(e.target.checked)} className="h-4 w-4 accent-violet-600" />
@@ -299,7 +377,7 @@ const NewPattern: React.FC<{ teamId: string; vault: LoadedVault; onClose: () => 
       </label>
       <div className="mt-4 flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={onClose}>Cancelar</Button>
-        <Button size="sm" onClick={() => void create()} disabled={!name.trim() || busy}>{busy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}Criar padrão</Button>
+        <Button size="sm" onClick={() => void create()} disabled={!name.trim() || busy || !!reading}>{busy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}Criar padrão</Button>
       </div>
     </div>
   )

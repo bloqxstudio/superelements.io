@@ -71,9 +71,9 @@ export const PreviewDrawer: React.FC = () => {
   const onResize = (e: React.PointerEvent) => resizing && setSaved(window.innerWidth - e.clientX)
 
   if (!open) return null
-  const w = full ? '100vw' : `min(${width}px, 100vw)`
+  const w = full ? 'calc(100vw - var(--iara-dock, 0px))' : `min(${width}px, 100vw)`
   return (
-    <aside role="dialog" aria-label={`Prévia: ${open.title}`} className={cn('fixed inset-y-0 right-0 z-50 flex flex-col border-l bg-white shadow-[-12px_0_32px_-12px_rgb(0_0_0/0.3)]', !full && 'se-side-panel')} style={{ width: w }}>
+    <aside role="dialog" aria-label={`Prévia: ${open.title}`} className={cn('fixed inset-y-0 right-0 z-50 flex flex-col border-l bg-white shadow-[-12px_0_32px_-12px_rgb(0_0_0/0.3)]', !full && 'se-side-panel')} style={full ? { width: w, right: 'var(--iara-dock, 0px)' } : { width: w }}>
       {!full && (
         <div
           role="separator"

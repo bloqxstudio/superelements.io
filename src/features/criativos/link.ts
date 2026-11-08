@@ -30,7 +30,7 @@ interface LinkState {
   images: CreativeImageProvider | null
   /** Todos os serviços de imagem prontos neste computador, do preferido ao último. */
   providers: CreativeImageProvider[]
-  keys: { openai: boolean; gemini: boolean }
+  keys: { openai: boolean; gemini: boolean; elevenlabs?: boolean }
 }
 
 export const useCreativeLink = create<LinkState>()(() => ({ connected: false, ia: null, stale: false, agents: [], legacy: false, images: null, providers: [], keys: { openai: false, gemini: false } }))
@@ -58,7 +58,7 @@ const failAll = (message: string) => {
 /** Liga a IA dos criativos a um canal; devolve a função que desliga. */
 export function startCreativeLink(channel: AgentChannel) {
   let helloTimer: ReturnType<typeof setTimeout> | undefined
-  const onStatus = (data: { ia?: boolean; agents?: CreativeAgentInfo[]; images?: CreativeImageProvider | null; providers?: CreativeImageProvider[]; keys?: { openai: boolean; gemini: boolean } }) => {
+  const onStatus = (data: { ia?: boolean; agents?: CreativeAgentInfo[]; images?: CreativeImageProvider | null; providers?: CreativeImageProvider[]; keys?: { openai: boolean; gemini: boolean; elevenlabs?: boolean } }) => {
     clearTimeout(helloTimer)
     const images = { images: data?.images ?? null, providers: data?.providers ?? [], keys: data?.keys ?? { openai: false, gemini: false } }
     // Aviso só das chaves de imagem (depois de salvar uma): o resto continua como está
@@ -181,7 +181,7 @@ function callAiNow<T>(kind: CreativeCall['kind'], request: unknown, signal?: Abo
     // Sem nenhum passo vindo do outro lado, o conector provavelmente não conhece este pedido
     // Imagem não manda passos (leva até 1 minuto): só vale o limite total
     // Imagem, download e captura não mandam passos; a pesquisa lê a web por minutos entre um sinal e outro
-    const watch = kind !== 'image' && kind !== 'download' && kind !== 'capture'
+    const watch = kind !== 'image' && kind !== 'download' && kind !== 'capture' && kind !== 'reel' && kind !== 'voice' && kind !== 'voices' && kind !== 'transcribe' && kind !== 'media-search' && kind !== 'media-download' && kind !== 'voices-br' && kind !== 'voice-add'
     let silence = watch ? setTimeout(() => fail(STALE_MESSAGE), SILENCE) : undefined
     const fail = (message: string) => {
       if (!pending.delete(id)) return
@@ -242,12 +242,35 @@ export const requestImage = (prompt: string, ratio: 'square' | 'portrait' | 'lan
   callAi<{ data: string; provider: CreativeImageProvider; model: string }>('image', { prompt, ratio, provider: imageProviderChoice() }, signal)
 
 /** Guarda a chave de um serviço de imagens no computador de quem usa (vazia, apaga). */
-export function saveImageKey(provider: 'openai' | 'gemini', key: string) {
+export function saveImageKey(provider: 'openai' | 'gemini' | 'elevenlabs', key: string) {
   useCreativeLink.getState().channel?.send(CREATIVE_EVENTS.key, { provider, key })
 }
 
 /** Baixa uma imagem da web pelo conector deste computador (sem as travas de CORS do navegador); vem como data URL. */
 export const downloadImageViaLink = (url: string, signal?: AbortSignal) => callAi<{ data: string; type: string }>('download', { url }, signal)
+
+/** Um reel do Instagram pelo link, baixado no computador de quem usa (referência do vídeo explicativo, `scripts/criativos/reel.ts`). */
+/** Narração por IA (voz da OpenAI) pelo conector deste computador; vem como data URL de MP3. */
+export const speakViaLink = (req: { provider?: 'openai' | 'elevenlabs'; text: string; voice?: string; instructions?: string; speed?: number; model?: string; stability?: number; style?: number; similarity?: number }, signal?: AbortSignal) => callAiQuiet<{ data: string; type: string; model: string; voice: string }>('voice', req, signal)
+
+/** As vozes da conta da ElevenLabs (prontas e clonadas), pelo conector. */
+export const elevenVoicesViaLink = (signal?: AbortSignal) => callAiQuiet<{ id: string; name: string; category: string; description: string; preview?: string }[]>('voices', {}, signal)
+
+/** A narração gerada por IA transcrita pela OpenAI (whisper-1), com o tempo de cada palavra. */
+export const transcribeViaLink = (audio: string, signal?: AbortSignal) => callAiQuiet<{ text: string; words: { w: string; s: number; e: number }[] }>('transcribe', { audio }, signal)
+
+/** Fotos com licença livre para uso comercial (Openverse), com crédito. */
+export const freeImagesViaLink = (q: string, signal?: AbortSignal) => callAiQuiet<{ id: string; url: string; thumb?: string; title: string; creator?: string; license: string; licenseUrl?: string; page?: string; width: number; height: number; source: string }[]>('media-search', { q }, signal)
+/** Uma imagem ou vídeo público baixado pelo conector (sem CORS); data URL. */
+export const mediaViaLink = (url: string, signal?: AbortSignal) => callAiQuiet<{ data: string; type: string }>('media-download', { url }, signal)
+/** Um clipe curto (4 s, vertical) gerado pela OpenAI (Sora). */
+export const clipViaLink = (prompt: string, seconds = 4, signal?: AbortSignal, onStep?: (detail: string) => void) => callAiQuiet<{ data: string; type: string; seconds: number }>('clip', { prompt, seconds }, signal, (_s, d) => d && onStep?.(d))
+/** As vozes brasileiras da biblioteca da ElevenLabs. */
+export const brazilVoicesViaLink = (signal?: AbortSignal) => callAiQuiet<{ ownerId: string; id: string; name: string; gender?: string; age?: string; description: string; preview?: string; added: boolean }[]>('voices-br', {}, signal)
+/** Adiciona uma voz da biblioteca à conta da ElevenLabs. */
+export const addVoiceViaLink = (ownerId: string, id: string, name: string, signal?: AbortSignal) => callAiQuiet<{ id: string }>('voice-add', { ownerId, id, name }, signal)
+
+export const downloadReelViaLink = (url: string, signal?: AbortSignal) => callAiQuiet<{ data: string; type: string; name: string }>('reel', { url }, signal)
 
 /** Fotografa uma página (HTML completo) com o navegador deste computador: a página inteira, em PNG (data URL). */
 export const capturePageViaLink = (html: string, width: number, signal?: AbortSignal) => callAi<{ data: string; width: number; height: number }>('capture', { html, width }, signal)

@@ -44,7 +44,7 @@ export function joinPath(base: string, rel: string): { path: string; outside: nu
 /** Áreas: as pastas do primeiro nível do cérebro da conta, mais a raiz. */
 export interface Area { id: string; label: string; color: string }
 const AREA_LABEL: Record<string, string> = {
-  plataforma: 'Da plataforma', padroes: 'Padrões de post', produtos: 'Produtos', log: 'Log', midia: 'Arquivos', fotos: 'Fotos', marca: 'Marca', clientes: 'Clientes',
+  plataforma: 'Da plataforma', padroes: 'Padrões de post', produtos: 'Produtos', log: 'Log', midia: 'Arquivos', fotos: 'Fotos', imagens: 'Imagens dos posts', criativos: 'Capas dos posts', 'em-varios-conjuntos': 'Em vários conjuntos', marca: 'Marca', clientes: 'Clientes',
 }
 export const folderLabel = (id: string) => AREA_LABEL[id] ?? id.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
 const PALETTE = ['#7c3aed', '#0ea5e9', '#16a34a', '#ea580c', '#db2777', '#0d9488', '#ca8a04', '#4f46e5', '#dc2626']

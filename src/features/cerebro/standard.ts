@@ -31,7 +31,7 @@ const normFormat = (v?: string) => {
 export function parsePattern(note: Pick<VaultNote, 'path' | 'content'>): Pattern {
   const meta = metaOf(note as VaultNote)
   const rulesBlock = note.content.split(/^##\s+Regras\s*$/m)[1]?.split(/^##\s/m)[0] ?? ''
-  const rules = rulesBlock.split('\n').map((l) => l.match(/^\s*[-*]\s+(.+)$/)?.[1]?.trim()).filter((x): x is string => !!x)
+  const rules = rulesBlock.split('\n').map((l) => l.match(/^\s*[-*]\s+(.+)$/)?.[1]?.trim()).filter((x): x is string => !!x && x !== PLACEHOLDER)
   return {
     path: note.path,
     name: titleOf(note as VaultNote),
@@ -51,8 +51,21 @@ export function withStatus(content: string, isDefault: boolean): string {
   return content.replace(/^(#\s+.+\n)/, `$1\n${line}\n`)
 }
 
+const PLACEHOLDER = 'Descreva o que se repete em todo post deste padrão: grade, títulos, fotos, cores, ritmo dos slides.'
+
+/** O post de onde o padrão saiu (a linha `**Exemplo:**`). */
+export const sourceHref = (content: string) => content.match(/^\*\*Exemplo:\*\*\s*\[[^\]]*\]\(([^)\s]+)\)/m)?.[1]
+
+/** Troca as seções `## Regras` e `## Quando usar` da nota, mantendo o resto. */
+export function withRules(content: string, rules: string[], when: string[]): string {
+  const section = (title: string, items: string[]) => `## ${title}\n\n${(items.length ? items : ['']).map((r) => `- ${r}`.trimEnd()).join('\n')}\n`
+  const strip = (c: string, title: string) => c.replace(new RegExp(`^##\\s+${title}\\s*$[\\s\\S]*?(?=^##\\s|(?![\\s\\S]))`, 'm'), '')
+  const base = strip(strip(content, 'Regras'), 'Quando usar').trimEnd()
+  return `${base}\n\n${section('Regras', rules)}\n${section('Quando usar', when)}`
+}
+
 /** O modelo de uma nota de padrão. */
-export function patternNote(o: { name: string; format: string; isDefault: boolean; rules: string[]; example?: string; source?: { label: string; href: string } }): string {
+export function patternNote(o: { name: string; format: string; isDefault: boolean; rules: string[]; when?: string[]; example?: string; source?: { label: string; href: string } }): string {
   return `# ${o.name}
 
 **Status:** ${o.isDefault ? 'padrão' : 'alternativo'}
@@ -61,11 +74,11 @@ ${o.source ? `**Exemplo:** [${o.source.label}](${o.source.href})\n` : ''}
 ${o.example ? `![${o.name}](${o.example})\n` : ''}
 ## Regras
 
-${(o.rules.length ? o.rules : ['Descreva o que se repete em todo post deste padrão: grade, títulos, fotos, cores, ritmo dos slides.']).map((r) => `- ${r}`).join('\n')}
+${(o.rules.length ? o.rules : [PLACEHOLDER]).map((r) => `- ${r}`).join('\n')}
 
 ## Quando usar
 
--
+${(o.when?.length ? o.when : ['']).map((r) => `- ${r}`.trimEnd()).join('\n')}
 `
 }
 

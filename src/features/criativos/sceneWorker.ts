@@ -213,7 +213,7 @@ async function loadFonts(list) {
     if (!fam) continue
     const q = encodeURIComponent(fam).replace(/%20/g, '+')
     let css = ''
-    for (const spec of [':ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700;1,800;1,900', ':wght@400;700;800;900', '']) {
+    for (const spec of [':ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700;1,800;1,900', ':ital,wght@0,400;0,500;0,600;0,700;1,400;1,700', ':wght@400;500;600;700;800;900', ':wght@400;700', ':ital@0;1', '']) {
       try { const r = await netFetch('https://fonts.googleapis.com/css2?family=' + q + spec + '&display=block'); if (r.ok) { css = await r.text(); break } } catch (e) {}
     }
     const blocks = css.match(/@font-face\s*{[^}]*}/g) || []
@@ -238,7 +238,7 @@ self.onmessage = async (ev) => {
     try {
       canvas = new OffscreenCanvas(m.width, m.height)
       ctx = canvas.getContext('2d')
-      env = { width: m.width, height: m.height, duration: m.duration, fps: m.fps, images: m.images || {}, beats: m.beats || [], bpm: m.bpm || 120, brand: m.brand || {}, post: m.post || null, lib }
+      env = { width: m.width, height: m.height, duration: m.duration, fps: m.fps, images: m.images || {}, beats: m.beats || [], bpm: m.bpm || 120, brand: m.brand || {}, post: m.post || null, data: m.data || null, video: null, lib }
       env.beat = (t) => {
         const bs = env.beats.length ? env.beats : null
         if (!bs) { const step = 60 / env.bpm, i = Math.floor(t / step); return { index: i, at: i * step, phase: (t % step) / step, step } }
@@ -263,7 +263,13 @@ self.onmessage = async (ev) => {
       ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none'
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       seedState = (Math.floor(m.t * 1000) + 1) >>> 0
+      env.video = m.video || null
+      env.broll = m.broll || null
       def.draw(ctx, m.t, env)
+      if (m.video) { try { m.video.close() } catch (e) {} }
+      if (m.broll) { try { m.broll.close() } catch (e) {} }
+      env.video = null
+      env.broll = null
       const bitmap = canvas.transferToImageBitmap()
       self.postMessage({ type: 'frame', id: m.id, bitmap }, [bitmap])
     } catch (err) {

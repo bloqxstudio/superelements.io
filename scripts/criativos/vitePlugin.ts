@@ -11,8 +11,11 @@ import { runAgent, type AgentRunRequest } from '../agente/run.ts'
 import { planFolder, type FolderPlanRequest } from '../copy/plan.ts'
 import { copyToSlides, type SlidesRequest } from '../copy/slides.ts'
 import { downloadImage } from './baixar.ts'
+import { downloadReel } from './reel.ts'
+import { elevenAddShared, elevenBrazilVoices, elevenVoices, speak, transcribeWords, type SpeakRequest } from './voz.ts'
+import { downloadMedia, generateClip, searchFreeImages } from './midia.ts'
 import { capturePage, findBrowser } from './captura.ts'
-import { generateImage, hasKey, imageProvider, imageProviders, saveImageKey } from './imagem.ts'
+import { generateImage, hasKey, imageProvider, imageProviders, saveImageKey, keyStatus } from './imagem.ts'
 import { editCreatives } from './edit.ts'
 import { planPosts } from './plan.ts'
 import { planStories } from './stories.ts'
@@ -96,7 +99,7 @@ export const criativos = (): Plugin => ({
     server.ws.on(CREATIVE_EVENTS.hello, () => {
       void checkAgents().then((found) => {
         const agents: CreativeAgentInfo[] = found.map((a) => ({ id: a.id, name: CHAT_AGENTS[a.id].name, available: a.available, version: a.version }))
-        server.ws.send(CREATIVE_EVENTS.status, { ia: agents.some((a) => a.available), agents, images: imageProvider(), providers: imageProviders(), keys: { openai: hasKey('openai'), gemini: hasKey('gemini') }, browser: !!findBrowser() })
+        server.ws.send(CREATIVE_EVENTS.status, { ia: agents.some((a) => a.available), agents, images: imageProvider(), providers: imageProviders(), keys: keyStatus(), browser: !!findBrowser() })
       })
     })
 
@@ -138,6 +141,32 @@ export const criativos = (): Plugin => ({
             const req = call.request as Partial<AgentRunRequest>
             if (!String(req?.prompt ?? '').trim()) throw new Error('O pedido veio vazio.')
             send({ id, ok: true, data: await runAgent({ engine: req.engine === 'codex' ? 'codex' : 'claude', system: String(req.system ?? '').slice(0, 12000), prompt: String(req.prompt), web: !!req.web, images: Array.isArray(req.images) ? req.images.filter((i): i is string => typeof i === 'string').slice(0, 12) : undefined }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
+          } else if (call.kind === 'voice') {
+            // Narração do vídeo explicativo pela voz da OpenAI, com a chave guardada neste computador
+            const req = call.request as SpeakRequest
+            send({ id, ok: true, data: await speak({ provider: req?.provider === 'elevenlabs' ? 'elevenlabs' : 'openai', text: String(req?.text ?? ''), voice: typeof req?.voice === 'string' ? req.voice : undefined, instructions: typeof req?.instructions === 'string' ? req.instructions : undefined, speed: Number(req?.speed) || undefined, model: typeof req?.model === 'string' ? req.model : undefined, stability: req?.stability, style: req?.style, similarity: req?.similarity }, controller.signal) })
+          } else if (call.kind === 'media-search') {
+            send({ id, ok: true, data: await searchFreeImages(String((call.request as { q?: string })?.q ?? ''), controller.signal) })
+          } else if (call.kind === 'media-download') {
+            send({ id, ok: true, data: await downloadMedia(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
+          } else if (call.kind === 'clip') {
+            const req = call.request as { prompt?: string; seconds?: number }
+            send({ id, ok: true, data: await generateClip({ prompt: String(req?.prompt ?? ''), seconds: Number(req?.seconds) || 4 }, controller.signal, (detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step: 'writing', detail } satisfies CreativeProgress)) })
+          } else if (call.kind === 'voices-br') {
+            send({ id, ok: true, data: await elevenBrazilVoices(controller.signal) })
+          } else if (call.kind === 'voice-add') {
+            const req = call.request as { ownerId?: string; id?: string; name?: string }
+            send({ id, ok: true, data: await elevenAddShared(String(req?.ownerId ?? ''), String(req?.id ?? ''), String(req?.name ?? 'Voz'), controller.signal) })
+          } else if (call.kind === 'transcribe') {
+            // A narração gerada por IA, transcrita pela OpenAI com o tempo de cada palavra
+            send({ id, ok: true, data: await transcribeWords(String((call.request as { audio?: string })?.audio ?? ''), controller.signal) })
+          } else if (call.kind === 'voices') {
+            // As vozes da conta da ElevenLabs (prontas e clonadas)
+            send({ id, ok: true, data: await elevenVoices(controller.signal) })
+          } else if (call.kind === 'reel') {
+            // Referência do vídeo explicativo: um link de reel por vez, baixado aqui pelo yt-dlp
+            const url = String((call.request as { url?: string })?.url ?? '')
+            send({ id, ok: true, data: await downloadReel(url, controller.signal, (detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step: 'reading', detail } satisfies CreativeProgress)) })
           } else if (call.kind === 'download') {
             send({ id, ok: true, data: await downloadImage(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
           } else if (call.kind === 'capture') {
@@ -155,9 +184,9 @@ export const criativos = (): Plugin => ({
 
     // A chave vai do navegador só até este computador; fica no arquivo da pessoa e nunca volta para a tela
     server.ws.on(CREATIVE_EVENTS.key, (data: { provider?: string; key?: string }) => {
-      if (data?.provider === 'openai' || data?.provider === 'gemini') {
+      if (data?.provider === 'openai' || data?.provider === 'gemini' || data?.provider === 'elevenlabs') {
         saveImageKey(data.provider, String(data.key ?? '').slice(0, 300))
-        server.ws.send(CREATIVE_EVENTS.status, { images: imageProvider(), providers: imageProviders(), keys: { openai: hasKey('openai'), gemini: hasKey('gemini') } })
+        server.ws.send(CREATIVE_EVENTS.status, { images: imageProvider(), providers: imageProviders(), keys: keyStatus() })
       }
     })
 

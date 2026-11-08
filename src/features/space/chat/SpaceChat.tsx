@@ -1,3 +1,4 @@
+import { openViewer } from '@/components/MediaViewer'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -309,6 +310,9 @@ const UserMessage: React.FC<{ message: ChatMessage }> = ({ message }) => {
                 key={i}
                 src={image.preview}
                 alt={image.name}
+                onClick={() => openViewer(images.filter((x) => x.preview).map((x) => ({ src: x.preview!, name: x.name, kind: 'image' as const })), images.filter((x) => x.preview).indexOf(image))}
+                role="button"
+                style={{ cursor: 'zoom-in' }}
                 title={`${image.name}${image.width ? ` · ${image.width}×${image.height}` : ''}`}
                 className={`rounded-xl border border-gray-200 bg-gray-100 object-cover ${images.length === 1 ? 'max-h-44 max-w-full' : tile}`}
               />

@@ -50,7 +50,8 @@ export const SceneStudio: React.FC = () => {
   const set = useEditor((s) => s.set)
   const images = useEditor((s) => s.images)
   const saving = useEditor((s) => s.saving)
-  const scenes = set?.scenes ?? []
+  // Os vídeos explicativos têm o estúdio deles (`/motion/:setId/explica`)
+  const scenes = (set?.scenes ?? []).filter((s) => !s.explainer)
   const postParam = query.get('post') ?? undefined
   const forPost = postParam ? scenes.filter((s) => s.source?.postId === postParam) : scenes
   const scene = scenes.find((s) => s.id === query.get('id')) ?? (postParam ? forPost.at(-1) : scenes[0])

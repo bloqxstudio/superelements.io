@@ -18,7 +18,7 @@ const privateIp = (ip: string) => {
   return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)
 }
 
-async function assertPublic(url: URL) {
+export async function assertPublic(url: URL) {
   if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('Só endereços http e https.')
   const host = url.hostname.replace(/^\[|\]$/g, '')
   if (!host.includes('.') && !net.isIP(host)) throw new Error('Endereço da rede local recusado.')

@@ -27,6 +27,15 @@ function stopped(projectId: string, agents: ChatAgentId[], epoch: number) {
   }
 }
 
+/** O id desta aba na ponte (o mesmo que `bridge/client.ts` grava), para as ações da Iara voltarem a ela. */
+const bridgeTab = () => {
+  try {
+    return sessionStorage.getItem('space-bridge-tab') ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function startSpaceChat(hot: Hot) {
   const hello = () => hot.send(CHAT_EVENTS.hello, { projectId: useProjectSync.getState().openId })
 
@@ -71,7 +80,7 @@ export function startSpaceChat(hot: Hot) {
   hot.on('vite:ws:connect', hello)
   const unsubscribe = useProjectSync.subscribe((s, prev) => s.openId !== prev.openId && hello())
   useChat.setState({
-    send: (payload) => hot.send(CHAT_EVENTS.send, payload),
+    send: (payload) => hot.send(CHAT_EVENTS.send, { ...payload, tab: payload.tab ?? bridgeTab() }),
     stop: (projectId, agent) => hot.send(CHAT_EVENTS.stop, { projectId, agent }),
     reset: (projectId) => hot.send(CHAT_EVENTS.reset, { projectId }),
     openConversation: (projectId, epoch) => hot.send(CHAT_EVENTS.open, { projectId, epoch }),

@@ -1,9 +1,10 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ArrowUp, Check, ExternalLink, Gauge, ImagePlus, Loader2, LogIn, Square, Wand2, X } from 'lucide-react'
+import { ArrowUp, Check, ExternalLink, Gauge, ImagePlus, Loader2, LogIn, Mic, Square, Wand2, X } from 'lucide-react'
 import { skillIcon } from '@/features/skills/skillIcon'
 import { CHAT_IMAGE_LIMIT, type ChatImageUpload } from './protocol'
 import { isChatImage, readChatImage } from './attachments'
 import type { ChatSkill } from './skills'
+import { dictationSupported, useDictation } from './useDictation'
 
 /**
  * A caixa de mensagem dos agentes: a do projeto (SpaceChat) e a da Iara usam a mesma (2026-11-05,
@@ -201,29 +202,49 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const ready = attachments.filter((a) => a.state === 'ready' && a.upload)
   const reading = attachments.some((a) => a.state === 'reading')
 
-  const send = (text = draft) => {
+  const send = (text = draft, afterSpeech = false): boolean => {
+    // Falando: para o microfone e manda quando o último trecho for entendido
+    if (!afterSpeech && dictation.listening && text === draft) {
+      sendAfterSpeech.current = true
+      dictation.stop()
+      return false
+    }
     const clean = text.trim()
     const command = commands && /^\/(usage|login)\b/i.test(clean)
     const images = command ? [] : ready.map((a) => a.upload!)
-    if ((!clean && !images.length) || busy || blocked || (!command && reading)) return
-    if (!onSend({ text: clean, images, skill: command ? undefined : skill, command })) return
+    if ((!clean && !images.length) || busy || blocked || (!command && reading)) return false
+    if (!onSend({ text: clean, images, skill: command ? undefined : skill, command })) return false
     // O /usage da barrinha não apaga o que a pessoa estava escrevendo
     if (text === draft) setDraft('')
     if (images.length) clearAttachments()
+    return true
   }
 
-  useImperativeHandle(ref, () => ({ addFiles, focus: () => input.current?.focus(), setDraft, send }))
+  // Voz: o que a pessoa fala entra na caixa ao vivo (useDictation)
+  const sendAfterSpeech = useRef(false)
+  const dictation = useDictation(
+    (text) => setDraft(text),
+    (message) => setNote(message),
+    (text) => {
+      if (!sendAfterSpeech.current) return input.current?.focus()
+      sendAfterSpeech.current = false
+      if (send(text, true)) setDraft('')
+    }
+  )
+  const canDictate = useMemo(dictationSupported, [])
+
+  useImperativeHandle(ref, () => ({ addFiles, focus: () => input.current?.focus(), setDraft, send: (text: string) => void send(text) }))
 
   /** Item do menu: a skill fica na caixa até a pessoa tirar; o comando vai na hora. */
   const pick = (item: MenuItem) => {
     setMenuOpen(false)
     if (slash) setDraft('')
-    if (item.type === 'command') return send(item.command.name)
+    if (item.type === 'command') return void send(item.command.name)
     onSkill(item.skill.id)
     input.current?.focus()
   }
 
-  const canSend = (!!draft.trim() || ready.length > 0) && !reading && !blocked
+  const canSend = (!!draft.trim() || ready.length > 0 || dictation.listening) && !reading && !blocked
 
   return (
     <form
@@ -285,7 +306,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
         rows={rows}
         value={draft}
         aria-label={ariaLabel}
-        placeholder={placeholder({ attachments: attachments.length, skill })}
+        placeholder={dictation.listening ? 'Pode falar… o que você disser aparece aqui' : placeholder({ attachments: attachments.length, skill })}
         className="block max-h-40 w-full resize-none bg-transparent px-3 pb-1 pt-2 text-[13px] leading-relaxed text-gray-900 placeholder:text-gray-400 focus:outline-none"
         onChange={(e) => setDraft(e.target.value)}
         onPaste={(e) => {
@@ -325,6 +346,28 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       <div className="flex items-center gap-1 px-2 pb-2">
         {footer}
         <div className="flex-1" />
+        {dictation.listening && (
+          <span role="status" className="mr-1 inline-flex items-center gap-1.5 text-[11px] font-medium text-red-600">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" aria-hidden />
+            Ouvindo
+          </span>
+        )}
+        {canDictate && (
+          <button
+            type="button"
+            aria-label={dictation.listening ? 'Parar de ouvir' : 'Falar a mensagem'}
+            aria-pressed={dictation.listening}
+            title={dictation.listening ? 'Parar de ouvir (o texto fica na caixa)' : 'Falar a mensagem: o que você disser vira texto na caixa'}
+            className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${dictation.listening ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+            onClick={() => {
+              if (dictation.listening) return dictation.stop()
+              setMenuOpen(false)
+              dictation.start(draft)
+            }}
+          >
+            <Mic className="h-4 w-4" />
+          </button>
+        )}
         <button
           type="button"
           disabled={attachments.length >= CHAT_IMAGE_LIMIT}

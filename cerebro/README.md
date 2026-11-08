@@ -65,5 +65,5 @@ link na nota.
   no CRM, não aqui. Nomes de empresas clientes e o que entregamos podem ficar.
 - **Datas absolutas** (2026-11-06), nunca "ontem" ou "semana que vem".
 - **Links para o código** quando houver: `src/features/...`, migrações, PRs.
-- O detalhe técnico de cada funcionalidade continua no `AGENTS.md` da raiz; aqui fica o contexto de negócio,
+- O detalhe técnico de cada funcionalidade continua em `docs/agentes/` (índice no `AGENTS.md` da raiz); aqui fica o contexto de negócio,
   o estado e o próximo passo, com link para lá quando precisar.

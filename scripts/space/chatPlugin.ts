@@ -338,7 +338,7 @@ function contextLines(context: ChatContext) {
 /** Primeira mensagem de uma conversa: quem ele é, onde está e como trabalhar. */
 /** Onde o agente acha as regras do projeto: no repo, a skill e o AGENTS.md; no conector, o AGENTS.md da pasta dele. */
 const REPO_GUIDE =
-  '- Siga a skill do cliente (`.claude/skills/cliente/SKILL.md`) e as regras do projeto na seção dele no `AGENTS.md` (procure pelo nome do projeto; o arquivo é grande, leia só a seção).'
+  '- Siga a skill do cliente (`.claude/skills/cliente/SKILL.md`) e as regras do projeto no arquivo dele em `docs/agentes/marcas/` (procure pelo nome do projeto; o `AGENTS.md` tem o índice).'
 
 /** A conversa da conta, fora de um projeto (a Iara no resto do produto): `conta-<id da conta>`. */
 export const isAccountChat = (projectId: string) => projectId.startsWith('conta-')
@@ -926,7 +926,8 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
 
         const space = 'node scripts/space/space.mjs'
         // As ações da Iara (o produto inteiro) entram como ferramentas MCP, nos dois agentes
-        const iaraEnv = { SPACE_BRIDGE_URL: String(env.SPACE_BRIDGE_URL ?? ''), SPACE_BRIDGE_TOKEN: String(env.SPACE_BRIDGE_TOKEN ?? ''), SPACE_SESSION: session }
+        // SPACE_TAB: a aba de onde a pessoa escreveu (a conta e a tela dela); a ponte usa outra se ela fechou
+        const iaraEnv = { SPACE_BRIDGE_URL: String(env.SPACE_BRIDGE_URL ?? ''), SPACE_BRIDGE_TOKEN: String(env.SPACE_BRIDGE_TOKEN ?? ''), SPACE_SESSION: session, ...(typeof payload.tab === 'string' && /^[\w-]{8,64}$/.test(payload.tab) ? { SPACE_TAB: payload.tab } : {}) }
         const iaraMcp = path.join(root, 'scripts/iara/iara-mcp.mjs')
         const withIara = existsSync(iaraMcp)
         const toml = (v: unknown) => JSON.stringify(v)

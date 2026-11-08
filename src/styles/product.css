@@ -220,3 +220,18 @@ body:has(.se-product) .se-dialog-content h2 + p { font-size: 13px; line-height: 
 /* Recolhido, a barra de rolagem empurrava os ícones: rola sem mostrar a barra */
 .se-sidebar-collapsed .se-navigation, .se-sidebar-collapsed .se-navigation:hover { scrollbar-width: none; }
 .se-sidebar-collapsed .se-navigation::-webkit-scrollbar { display: none; width: 0; }
+
+/*
+ * A Iara aberta na lateral (2026-11-07, o usuário: "algumas telas não respeitando a divisão de tela e
+ * estão ficando por trás"; "pode vir como padrão aberto a tela da Iara e o app todo adaptado pra isso").
+ * `--iara-dock` é a largura da coluna dela (0 fechada ou no celular). Tudo que é fixo na tela — diálogos,
+ * avisos, barras flutuantes, prévias — centra e encosta na área que sobra, à esquerda da Iara.
+ */
+@media (min-width: 768px) {
+  :root .se-dialog-overlay { right: var(--iara-dock, 0px); }
+  :root .se-dialog-content { left: calc(50% - var(--iara-dock, 0px) / 2); width: calc(100vw - 32px - var(--iara-dock, 0px)); }
+  :root [data-sonner-toaster][data-x-position='right'] { right: calc(max(var(--offset, 32px), env(safe-area-inset-right)) + var(--iara-dock, 0px)) !important; }
+  :root .se-toast-viewport { right: var(--iara-dock, 0px); }
+  /* Telas cheias por cima do app (visualizador de imagens, prévia grande): param na borda da Iara */
+  :root .se-dock-inset { right: var(--iara-dock, 0px); }
+}

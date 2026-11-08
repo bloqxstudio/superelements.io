@@ -6,13 +6,15 @@ import { setHash, setPath } from '@/features/conteudos/forward'
 import { scheduleContent } from '@/features/pauta/api'
 import { CHANNELS, STAGE_LABEL, channelOfFormat, stageOf } from '@/features/pauta/rules'
 import { listSets, loadSet, saveSet, uploadAsset } from '@/features/criativos/storage'
-import { uid, type CreativeSet, type ImageLayer, type Post, type SetSummary } from '@/features/criativos/types'
+import { uid, type CreativeSet, type ImageLayer, type Post, type SetAsset, type SetSummary } from '@/features/criativos/types'
+import type { ExplainerBeat } from '@/features/criativos/explicativo/types'
 import { withIa } from '@/features/ia/porTarefa'
 import { useChat } from '@/features/space/chat/chatStore'
 import { useCreativeLink } from '@/features/criativos/link'
 import { attachmentFiles, reportStep, useIara, type IaraAction, type IaraDone } from './store'
 import { useEditor } from '@/features/criativos/store'
 import type { ResolvedRef } from '@/features/criativos/references'
+import { TOOL_ACTIONS } from './toolActions'
 import { agentBegin, agentEnd, agentPhase, applyInEditor, editorHas, followOn, goTo, liveSet, openInEditor } from './follow'
 
 /**
@@ -46,7 +48,7 @@ const clip = (s: string | undefined, n: number) => {
 
 const team = () => {
   const t = useCrm.getState().team
-  if (!t) throw new Error('Abra uma conta de empresa primeiro.')
+  if (!t) throw new Error('Esta aba não tem uma conta de empresa aberta: entre na conta nela (ou recarregue a página) e peça de novo.')
   return t
 }
 
@@ -254,6 +256,36 @@ export async function decidePost(setId: string, postId: string, decision: 'aprov
 }
 
 /** Um post igual ao exemplo, com ids novos (post e slides; as camadas mantêm os ids dentro do slide). */
+/**
+ * Post novo no padrão de um exemplo, sem ser o exemplo com outro texto (2026-11-07, o usuário: "pegou o
+ * modelo correto mas somente mudou o texto, queria que criasse mesmo algo legal com essa base"). O que
+ * fica é a linguagem (marca, tipografia, fundo, logo, rodapé e o padrão de post do Cérebro, que já vai na
+ * skill do designer); o que muda é a ideia visual, a composição e a foto. Cada post de um mesmo pedido
+ * puxa uma direção diferente.
+ */
+const VARIATIONS = [
+  'close dramático num detalhe do produto (textura, reflexo, borda), cortado pela moldura, com o título grande ocupando o espaço que sobra',
+  'o produto em uso, numa cena real do dia a dia do cliente (contexto, ambiente, mãos ou pessoa), foto de ponta a ponta com véu para o texto',
+  'composição tipográfica: o título domina o slide e o produto entra menor, deslocado para um canto, criando tensão',
+  'antes e depois ou comparação em dois blocos lado a lado (ou em cima e embaixo), com rótulos curtos',
+  'produto em ângulo diferente (de cima, de lado ou de baixo) com luz lateral forte e sombra marcada, fundo escuro com textura',
+  'benefícios em destaque: produto de um lado e 3 itens curtos com ícone do outro, como uma ficha técnica bonita',
+]
+
+function variationMessage(example: string, pedido: string, direction: string, canGenerate: boolean): string {
+  return `Crie um post NOVO para este tema: ${pedido}
+
+Ele parte de uma cópia do post de exemplo "${example}", mas NÃO é para trocar só o texto. Pense como diretor de arte de agência fazendo a próxima peça da mesma campanha.
+
+Mantenha (a linguagem da marca): as cores e fontes da marca, o tratamento do título (família, peso, caixa, a palavra de destaque na cor de acento), o tipo de fundo e textura, o logo no mesmo lugar e tamanho, o rodapé (site e WhatsApp) e as regras do padrão de post da conta.
+
+Mude (a peça): a ideia visual e a composição. Direção para este post: ${direction}.
+- Reposicione, redimensione, acrescente ou tire camadas à vontade: o título pode ir para outro lugar e ter outra quebra; pode entrar um selo, um número, uma lista curta, uma forma ou uma linha de destaque.
+- A foto principal tem de ser outra e servir à direção acima. ${canGenerate ? 'Gere uma foto nova (camada de imagem com "prompt"): descreva a cena em detalhe (assunto, enquadramento, ângulo, luz, ambiente, fundo), foto realista de produto, sem texto nem logo na imagem, no mesmo clima de luz e cor do exemplo. Se o produto for uma película ou peça aplicada, ela tem de estar assentada na superfície, nunca flutuando.' : 'Não há gerador de fotos conectado: reaproveite as fotos do conjunto, mas com outro recorte, escala e posição, para a composição ficar claramente diferente.'}
+- O resultado tem de parecer da mesma série e, ao mesmo tempo, uma peça diferente do exemplo à primeira vista. Se ficar igual ao exemplo com outro texto, está errado.
+- Textos curtos, com hierarquia clara, dentro das margens e longe das bordas. Escreva também a legenda do post.`
+}
+
 const clonePost = (post: Post, name: string): Post => {
   const copy = JSON.parse(JSON.stringify(post)) as Post
   return { ...copy, id: uid(), name, slides: copy.slides.map((sl) => ({ ...sl, id: uid() })) }
@@ -629,6 +661,182 @@ const CREATIVE_ACTIONS: Full[] = [
     },
   },
   {
+    name: 'criar_video_explicativo',
+    doc: '{"tema"?:string,"briefing"?:string,"conjunto"?:string,"estilo"?:"editorial"|"tela-frase"|"palavra-heroi"|"legenda-forte"|"contraste","voz"?:"openai"|"elevenlabs"|"nenhuma","pedido"?:string,"midia"?:boolean,"videos"?:number} — cria um vídeo explicativo (reels 9:16, estúdio do Motion) no design system da marca. Com "tema", pesquisa na web uma curiosidade que prende (ex.: "uma curiosidade da BMW R 1250 GS") e confirma cada fato numa fonte; com "briefing", usa o texto. Junta mídia real (a foto do produto do catálogo da conta que combina com o tema, 2 fotos reais com licença livre e "videos" clipes de 4 s gerados pela OpenAI, padrão 2; "midia": false para nenhuma). Escreve o roteiro, narra com voz de IA (ElevenLabs com voz brasileira se houver chave, a clonada primeiro; senão OpenAI; "nenhuma" para sem voz) e monta as cenas no estilo pedido (padrão: palavra-heroi). Demora 2 a 6 minutos. Nada é publicado: devolve o link do estúdio, as cenas, os fatos com as fontes e a legenda.',
+    label: (a) => `Criar vídeo explicativo${a.tema ? ` sobre "${str(a.tema, 60)}"` : ''}`,
+    // Leva minutos (pesquisa, roteiro, voz): roda como trabalho na tela, com passos e o botão de parar
+    long: true,
+    run: async () => ({ label: 'Vídeo explicativo criado.', ok: true }),
+    exec: async (a) => {
+      const tema = str(a.tema, 200)
+      const briefing = str(a.briefing, 4000)
+      if (!tema && !briefing) throw new Error('Diga o tema da pesquisa ou o briefing do vídeo.')
+      const sum = typeof a.conjunto === 'string' && a.conjunto.trim() ? await findSet(a.conjunto) : (await accountSets())[0]
+      if (!sum) throw new Error('A conta não tem conjunto de criativos: crie um nos Criativos (ele guarda a marca e as mídias do vídeo).')
+      const base = `/motion/${sum.id}/explica${sum.shared && sum.projectId ? `?projeto=${sum.projectId}` : ''}`
+      const withQ = (q: string) => `${base}${base.includes('?') ? '&' : '?'}${q}`
+      // O conjunto direto do Storage: a linha de produção grava nele e confere (não depende do editor
+      // desta aba, que pode fechar durante os minutos de pesquisa e voz)
+      const set = await loadSet(sum.id, sum.projectId)
+      if (!set) throw new Error('Não consegui abrir o conjunto do vídeo.')
+      const { createBriefingVideo } = await import('@/features/criativos/explicativo/pipeline')
+      const { DEFAULT_VOICE } = await import('@/features/criativos/explicativo/VoicePicker')
+      const keys = useCreativeLink.getState().keys
+      const wantVoice = str(a.voz, 20) ?? (keys.elevenlabs ? 'elevenlabs' : 'openai')
+      let voice: import('@/features/criativos/explicativo/narracao').VoiceAI | null = null
+      if (wantVoice === 'elevenlabs' && keys.elevenlabs) {
+        const { elevenVoicesViaLink } = await import('@/features/criativos/link')
+        const list = await elevenVoicesViaLink().catch(() => [])
+        // A clonada primeiro; senão uma brasileira já na conta; senão a primeira brasileira da biblioteca
+        let pick = list.find((v) => v.category === 'cloned' || v.category === 'professional') ?? list.find((v) => /\(BR\)|brazil|brasil/i.test(`${v.name} ${v.description}`))
+        if (!pick) {
+          const { brazilVoicesViaLink, addVoiceViaLink } = await import('@/features/criativos/link')
+          const br = (await brazilVoicesViaLink().catch(() => []))[0]
+          if (br) {
+            const added = br.added ? { id: br.id } : await addVoiceViaLink(br.ownerId, br.id, br.name).catch(() => undefined)
+            if (added) pick = { id: added.id, name: `${br.name} (BR)`, category: 'generated', description: '' }
+          }
+        }
+        pick = pick ?? list[0]
+        if (pick) voice = { ...DEFAULT_VOICE, provider: 'elevenlabs', voice: pick.id, voiceName: pick.name, model: 'eleven_multilingual_v2' }
+      }
+      if (!voice && wantVoice !== 'nenhuma' && keys.openai) voice = DEFAULT_VOICE
+      const looks = ['editorial', 'tela-frase', 'palavra-heroi', 'legenda-forte', 'contraste'] as const
+      const look = looks.find((l) => l === a.estilo) ?? 'palavra-heroi'
+      const clips = Math.max(0, Math.min(3, Number(a.videos ?? 2) || 0))
+      const { scene, research } = await createBriefingVideo(set, { topic: tema, briefText: briefing, brief: str(a.pedido, 600), look, voice, media: a.midia === false ? false : { free: 2, clips } }, (label, state, detail) => reportStep(`${label}${state === 'warn' ? ' (aviso)' : ''}${detail ? ` · ${detail}` : ''}`))
+      const open = withQ(`id=${scene.id}`)
+      if (followOn()) goTo(open)
+      const d = scene.explainer!
+      return {
+        done: [{ label: `Vídeo pronto: ${scene.name}`, ok: true, to: open }],
+        data: {
+          abrir: open,
+          duracao_s: Math.round(scene.duration),
+          estilo: look,
+          narracao: d.voiceAI ? `${d.voiceAI.provider === 'elevenlabs' ? 'ElevenLabs' : 'OpenAI'} (${d.voiceAI.voiceName ?? d.voiceAI.voice})` : 'sem voz (texto, trilha e efeitos)',
+          cenas: d.beats.map((b) => ({ animacao: b.pattern, tela: b.headline.replace(/\*/g, ''), fala: b.fala })),
+          pesquisa: research ? { curiosidade: research.title, gancho: research.hook, fatos: research.facts.map((f) => ({ fato: f.text, fonte: f.source })) } : undefined,
+          legenda: d.caption,
+          lembrete: 'Nada foi publicado. Confira as fontes e o vídeo no estúdio antes de postar.',
+        },
+      }
+    },
+  },
+  {
+    name: 'video_midias',
+    doc: '{"video"?:string,"conjunto"?:string,"midias"?:[{"caminho"?:string,"anexo"?:"anexo-1","cerebro"?:string,"nome"?:string,"descricao"?:string,"cenas"?:number[],"como"?:"cartao"|"foto"}],"tirar"?:number[]} — fotos e vídeos nas cenas de um vídeo explicativo do Motion (Estilo › Fotos e o "Print no cartão" de cada cena). Sem "midias" nem "tirar": lista as cenas (número, animação, texto, mídia ligada) e as mídias do vídeo, para escolher onde vai cada uma. Cada mídia vem de um arquivo desta máquina ("caminho" absoluto: PNG, JPG, WebP, GIF, MP4, MOV ou WebM, até 40 MB; vídeo já cortado no tamanho da cena, que toca em loop e sem som), de um anexo do chat ("anexo"), de uma imagem do cérebro ("cerebro", o caminho que mostrar_imagens devolve) ou de uma mídia que o vídeo já tem ("nome" sozinho). "nome": como a mídia aparece no roteiro (padrão: o nome do arquivo). "cenas": os números das cenas (1 = a primeira) que mostram essa mídia. "como": "cartao" (o print no cartão dos estilos virais; a animação da cena continua por trás) ou "foto" (troca a animação da cena por Foto/vídeo); padrão: cartão nos estilos virais, foto no editorial. "tirar": números de cenas que voltam à animação. "video": o id do vídeo (padrão: o vídeo explicativo aberto na tela; senão o mais recente da conta). Grava no conjunto e confere; nada é publicado.',
+    label: (a) => (Array.isArray(a.midias) && a.midias.length ? `Pôr ${a.midias.length} mídia(s) nas cenas do vídeo` : 'Ler as cenas do vídeo'),
+    run: async () => ({ label: 'Mídias do vídeo.', ok: true }),
+    exec: async (a) => {
+      // O vídeo: o pedido, o aberto no estúdio (/motion/<conjunto>/explica?id=<cena>) ou o mais recente da conta
+      const here = window.location.pathname.match(/^\/motion\/([^/]+)\/explica/)
+      const q = new URLSearchParams(window.location.search)
+      const wanted = str(a.video, 80) ?? (here ? q.get('id') ?? undefined : undefined)
+      let sum: SetSummary | undefined = typeof a.conjunto === 'string' && a.conjunto.trim() ? await findSet(a.conjunto) : undefined
+      const sets = sum ? [sum] : await accountSets()
+      if (!sum && here) sum = sets.find((x) => x.id === here[1])
+      if (!sum && wanted) sum = sets.find((x) => x.videosInfo?.some((v) => v.id === wanted))
+      if (!sum) sum = [...sets].filter((x) => x.videosInfo?.length).sort((x, y) => (y.videosInfo![0].at ?? 0) - (x.videosInfo![0].at ?? 0))[0]
+      if (!sum) throw new Error('A conta não tem vídeo explicativo: crie um antes (criar_video_explicativo ou o Motion).')
+      const set = await loadSet(sum.id, sum.projectId)
+      if (!set) throw new Error('Não consegui abrir o conjunto do vídeo.')
+      const videos = (set.scenes ?? []).filter((s) => s.explainer).sort((x, y) => y.updatedAt - x.updatedAt)
+      const scene = (wanted && videos.find((s) => s.id === wanted)) || videos[0]
+      if (!scene?.explainer) throw new Error(`O conjunto ${set.name} não tem vídeo explicativo${wanted ? ` com o id ${wanted}` : ''}.`)
+      const open = `/motion/${set.id}/explica?${set.shared && set.projectId ? `projeto=${set.projectId}&` : ''}id=${scene.id}`
+      const viral = !!scene.explainer.look && scene.explainer.look !== 'editorial'
+      const describe = (d: NonNullable<typeof scene.explainer>) => ({
+        video: scene.id,
+        nome: scene.name,
+        estilo: d.look ?? 'editorial',
+        abrir: open,
+        cenas: d.beats.map((b, i) => ({ cena: i + 1, animacao: b.pattern, tela: b.headline.replace(/\*/g, ''), segundos: `${b.start.toFixed(1)}–${b.end.toFixed(1)}`, midia: b.photo ?? null })),
+        midias: d.photos.map((p) => ({ nome: p.name, tipo: p.kind === 'video' ? 'video' : 'imagem', descricao: p.desc })),
+      })
+
+      const midias = Array.isArray(a.midias) ? (a.midias as Record<string, unknown>[]).filter((m) => m && typeof m === 'object').slice(0, 20) : []
+      const tirar = Array.isArray(a.tirar) ? a.tirar.map(Number).filter((n) => Number.isInteger(n)) : []
+      if (!midias.length && !tirar.length) return { done: [], data: describe(scene.explainer) }
+
+      const total = scene.explainer.beats.length
+      const sceneNums = (v: unknown) => (Array.isArray(v) ? v : v === undefined ? [] : [v]).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= total)
+      const slugOf = (s: string) => s.replace(/\.[a-z0-9]+$/i, '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24)
+      const blobOf = async (dataUrl: string) => (await fetch(dataUrl)).blob()
+      const newAssets: SetAsset[] = []
+      const photos = [...scene.explainer.photos]
+      const links: { name: string; scenes: number[]; foto: boolean }[] = []
+      const done: IaraDone[] = []
+      for (const m of midias) {
+        let file: { blob: Blob; name: string } | undefined
+        const arquivo = m.arquivo as { nome?: string; tipo?: string; data?: string } | undefined
+        if (arquivo?.data) file = { blob: await blobOf(`data:${arquivo.tipo ?? 'application/octet-stream'};base64,${arquivo.data}`), name: arquivo.nome ?? 'arquivo' }
+        else if (typeof m.anexo === 'string') {
+          const att = attachmentFiles.get(m.anexo.trim())
+          if (!att) { done.push({ label: `Não achei o ${m.anexo} nesta conversa.`, ok: false }); continue }
+          file = { blob: await blobOf(att.data), name: att.name }
+        } else if (typeof m.cerebro === 'string') {
+          const { vault } = await brain()
+          const { mediaUrl } = await import('@/features/cerebro/data')
+          const p = brainPath(m.cerebro)
+          const hit = vault.media.find((x) => x.path === p || x.path.endsWith('/' + p))
+          if (!hit) { done.push({ label: `Não achei "${m.cerebro}" no cérebro (use mostrar_imagens).`, ok: false }); continue }
+          const res = await fetch(await mediaUrl(hit.path, hit.mtime))
+          if (!res.ok) { done.push({ label: `Não consegui baixar "${hit.path}" do cérebro.`, ok: false }); continue }
+          file = { blob: await res.blob(), name: hit.path.split('/').pop()! }
+        } else if (typeof m.caminho === 'string') {
+          // O caminho só vira arquivo pelo servidor da Iara no computador (iara-mcp); aqui ele não chega lido
+          done.push({ label: `Não consegui ler ${m.caminho}: mande pelo chat da Iara (o agente lê o arquivo) ou anexe.`, ok: false })
+          continue
+        }
+        let name = str(m.nome, 24)?.replace(/[^\w-]/g, '')
+        if (file) {
+          const kind = file.blob.type.startsWith('video/') ? 'video' : file.blob.type.startsWith('image/') ? 'image' : undefined
+          if (!kind) { done.push({ label: `${file.name} não é imagem nem vídeo.`, ok: false }); continue }
+          const asset = await uploadAsset(set, file.blob, file.name)
+          newAssets.push(asset)
+          name = name || slugOf(file.name) || `midia${photos.length + 1}`
+          // Nome livre no roteiro (dois arquivos com o mesmo nome não se confundem)
+          let unique = name
+          for (let i = 2; photos.some((p) => p.name === unique); i++) unique = `${name.slice(0, 21)}-${i}`
+          name = unique
+          photos.push({ src: `asset:${asset.id}`, name, kind, desc: str(m.descricao, 200), origin: 'enviado' })
+          done.push({ label: `Enviei ${file.name} (${kind === 'video' ? `vídeo${asset.duration ? ` de ${asset.duration.toFixed(1)} s` : ''}` : 'imagem'}) como "${name}"`, ok: true })
+        } else if (!name || !photos.some((p) => p.name === name)) {
+          done.push({ label: `O vídeo não tem a mídia "${m.nome ?? ''}". Mídias: ${photos.map((p) => p.name).join(', ') || 'nenhuma'}.`, ok: false })
+          continue
+        }
+        const scenesOf = sceneNums(m.cenas ?? m.cena)
+        if (scenesOf.length) links.push({ name, scenes: scenesOf, foto: m.como === 'foto' || (m.como !== 'cartao' && !viral) })
+      }
+
+      const patchBeats = (beats: ExplainerBeat[]): ExplainerBeat[] =>
+        beats.map((b, i) => {
+          const n = i + 1
+          const link = [...links].reverse().find((l) => l.scenes.includes(n))
+          if (link) return { ...b, photo: link.name, ...(link.foto ? { pattern: 'foto' as const } : {}) }
+          if (tirar.includes(n)) return { ...b, photo: undefined, ...(b.pattern === 'foto' ? { pattern: 'titulo' as const } : {}) }
+          return b
+        })
+      const { commitToSet } = await import('@/features/criativos/explicativo/pipeline')
+      await commitToSet(set, (cur) => ({
+        ...cur,
+        assets: [...cur.assets, ...newAssets.filter((x) => !cur.assets.some((y) => y.id === x.id))],
+        scenes: (cur.scenes ?? []).map((s) => {
+          if (s.id !== scene.id || !s.explainer) return s
+          const have = new Set(s.explainer.photos.map((p) => p.src))
+          return { ...s, explainer: { ...s.explainer, photos: [...s.explainer.photos, ...photos.filter((p) => !have.has(p.src))], beats: patchBeats(s.explainer.beats) }, updatedAt: Date.now() }
+        }),
+      }))
+      for (const l of links) done.push({ label: `Cena${l.scenes.length > 1 ? 's' : ''} ${l.scenes.join(', ')}: "${l.name}" ${l.foto ? 'no lugar da animação (Foto/vídeo)' : 'no cartão'}`, ok: true, to: open })
+      if (tirar.length) done.push({ label: `Cena${tirar.length > 1 ? 's' : ''} ${tirar.join(', ')} de volta à animação`, ok: true, to: open })
+      const saved = await loadSet(set.id, set.shared ? set.projectId : undefined)
+      const after = saved?.scenes?.find((s) => s.id === scene.id)?.explainer
+      if (followOn() && !window.location.pathname.startsWith(`/motion/${set.id}/explica`)) goTo(open)
+      return { done, data: after ? describe(after) : undefined }
+    },
+  },
+  {
     name: 'listar_conjuntos',
     doc: '{"busca"?:string} — os conjuntos de criativos da conta (id, nome, projeto, quantos posts, quando mudou).',
     run: async () => ({ label: 'Li os conjuntos.', ok: true }),
@@ -891,9 +1099,9 @@ const CREATIVE_ACTIONS: Full[] = [
   },
   {
     name: 'criar_parecidos',
-    doc: '{"conjunto"?:string,"id"?:ID,"post":number,"pedidos":[string],"referencias"?:[{"conjunto"?:string,"post":number|string}|{"projeto":string,"pagina"?:string}|{"case":"slug"|"todos"}],"agente"?:AGENTE} — reproduz um post de exemplo: para cada pedido (o tema ou o texto do post novo) cria uma cópia fiel do exemplo, logo depois dele no conjunto, com o mesmo layout, fontes, cores e estilo, e o designer troca só os textos e as fotos. Até 6 por vez. Feito pelo agente escolhido no chat.',
+    doc: '{"conjunto"?:string,"id"?:ID,"post":number,"pedidos":[string],"modo"?:"variacao"|"fiel","direcoes"?:[string],"referencias"?:[{"conjunto"?:string,"post":number|string}|{"projeto":string,"pagina"?:string}|{"case":"slug"|"todos"}],"agente"?:AGENTE} — cria posts novos a partir de um post de exemplo, logo depois dele no conjunto, um por pedido (o tema do post novo). Com "modo":"variacao" (o normal) cada post é uma peça nova na mesma linguagem do exemplo e do padrão de post do Cérebro (marca, fontes, tratamento do título, fundo, logo, rodapé), mas com outra composição e uma foto nova gerada para o tema; posts do mesmo pedido saem com direções diferentes entre si. Com "modo":"fiel" é a cópia exata com só os textos trocados: use só quando a pessoa pedir para trocar o texto ou manter o layout igual. "direcoes"?:[string] dá a ideia visual de cada post (ex.: "close na tela com reflexo do sol"). Até 6 por vez. Feito pelo agente escolhido no chat.',
     handoff: handoffOf,
-    label: (a) => `Criar ${Array.isArray(a.pedidos) ? a.pedidos.length : 1} post(s) no padrão do post ${a.post ?? 1}${a.conjunto ? ` de "${a.conjunto}"` : ''}`,
+    label: (a) => `Criar ${Array.isArray(a.pedidos) ? a.pedidos.length : 1} post(s) ${a.modo === 'fiel' ? 'copiando' : 'novos no padrão d'}o post ${a.post ?? 1}${a.conjunto ? ` de "${a.conjunto}"` : ''}`,
     run: async () => ({ label: 'Posts criados.', ok: true }),
     exec: async (a) =>
       withIa(creativeAgent(a), async () => {
@@ -904,11 +1112,14 @@ const CREATIVE_ACTIONS: Full[] = [
         const pedidos = (Array.isArray(a.pedidos) ? a.pedidos : [a.pedidos]).map((x) => str(x, 1500)).filter((x): x is string => !!x).slice(0, 6)
         if (!pedidos.length) throw new Error('Diga o tema de cada post novo em "pedidos".')
         const who = creativeAgent(a)
+        const faithful = a.modo === 'fiel'
+        const direcoes = (Array.isArray(a.direcoes) ? a.direcoes : []).map((x) => str(x, 400) ?? '')
+        const seed = Math.floor(Math.random() * VARIATIONS.length)
         let cur = t.set
         const made: Post[] = []
         try {
           for (const [i, pedido] of pedidos.entries()) {
-            reportStep(`${agentName(who)}: post ${i + 1} de ${pedidos.length}`)
+            reportStep(`${agentName(who)}: post ${i + 1} de ${pedidos.length}${faithful ? '' : ' (peça nova no padrão)'}`)
             const clone = clonePost(example, `${example.name} · ${pedido.split(/[.:\n]/)[0].slice(0, 40)}`)
             const at = cur.posts.findIndex((p) => p.id === example.id) + 1 + made.length
             cur = { ...cur, posts: [...cur.posts.slice(0, at), clone, ...cur.posts.slice(at)] }
@@ -916,8 +1127,10 @@ const CREATIVE_ACTIONS: Full[] = [
             await persist(t, cur, [], clone.id)
             agentBegin(clone, `${agentName(who)}: ${clip(pedido, 60)}`, who)
             agentPhase('thinking')
-            const message = `Este post é uma cópia exata do post de exemplo "${example.name}". Mantenha o design igual: a mesma quantidade e ordem de slides, as mesmas camadas nas mesmas posições e tamanhos, as mesmas fontes, cores, pesos e estilo das fotos. Troque só os textos (e a descrição das fotos, quando houver) para este novo post: ${pedido}\nCada texto novo deve ter tamanho parecido com o do exemplo, para caber no mesmo layout. Escreva também a legenda do post.`
-            const { next } = await designEdit(cur, clone, message, { agent: who, references: refs })
+            const message = faithful
+              ? `Este post é uma cópia exata do post de exemplo "${example.name}". Mantenha o design igual: a mesma quantidade e ordem de slides, as mesmas camadas nas mesmas posições e tamanhos, as mesmas fontes, cores, pesos e estilo das fotos. Troque só os textos (e a descrição das fotos, quando houver) para este novo post: ${pedido}\nCada texto novo deve ter tamanho parecido com o do exemplo, para caber no mesmo layout. Escreva também a legenda do post.`
+              : variationMessage(example.name, pedido, direcoes[i] ?? VARIATIONS[(i + seed) % VARIATIONS.length], !!useCreativeLink.getState().providers.length)
+            const { next } = await designEdit(cur, clone, message, { agent: who, scope: 'post', references: refs })
             agentPhase('applying')
             cur = next
             const done = cur.posts.find((p) => p.id === clone.id) ?? clone
@@ -929,7 +1142,7 @@ const CREATIVE_ACTIONS: Full[] = [
         }
         const images = (await Promise.all(made.map((p) => previews(cur, { ...p, slides: p.slides.slice(0, 2) }, 360)))).flat().slice(0, 10)
         return {
-          done: [{ label: `${made.length} post(s) novo(s) no padrão de "${example.name}"`, ok: true, to: t.open }],
+          done: [{ label: `${made.length} post(s) ${faithful ? 'copiando' : 'novo(s) no padrão de'} "${example.name}"`, ok: true, to: t.open }],
           data: { feito_por: agentName(who), exemplo: example.name, novos: made.map((p) => ({ post: cur.posts.findIndex((x) => x.id === p.id) + 1, nome: p.name, slides: slideTexts(p) })) },
           images,
         }
@@ -1157,6 +1370,31 @@ const BRAIN_ACTIONS: Full[] = [
     },
   },
   {
+    name: 'mostrar_imagens',
+    doc: '{"pasta"?:string,"busca"?:string,"arquivo"?:string} — abre na tela da pessoa, ampliadas e na mesma aba, imagens do cérebro da empresa: as fotos das pastas (produtos, fotos, marca/padroes…), as **imagens usadas nos posts** ("plataforma/imagens", uma subpasta por conjunto) e as capas dos posts ("plataforma/criativos"). "pasta" filtra pelo caminho, "busca" pelo nome do arquivo ou do conjunto, "arquivo" abre um só. Use sempre que a pessoa pedir para ver, mostrar ou achar uma imagem. Devolve a lista do que abriu.',
+    run: async () => ({ label: 'Mostrei as imagens.', ok: true }),
+    exec: async (a) => {
+      const { vault } = await brain()
+      const { isImage } = await import('@/features/cerebro/vault')
+      const { mediaUrl } = await import('@/features/cerebro/data')
+      const { openViewer } = await import('@/components/MediaViewer')
+      const pasta = brainPath(a.pasta)?.replace(/\/$/, '')
+      const busca = str(a.busca, 80)?.toLowerCase()
+      const arquivo = brainPath(a.arquivo)
+      let list = vault.media.filter((m) => isImage(m.path))
+      if (arquivo) list = list.filter((m) => m.path === arquivo || m.path.endsWith('/' + arquivo))
+      if (pasta) list = list.filter((m) => m.path.startsWith(pasta + '/'))
+      if (busca) list = list.filter((m) => `${m.path} ${m.label ?? ''}`.toLowerCase().includes(busca))
+      list = list.slice(0, 60)
+      if (!list.length) return { done: [{ label: 'Não achei imagens com esse filtro no cérebro.', ok: false }], data: { pastas: [...new Set(vault.media.map((m) => m.path.split('/').slice(0, -1).join('/')))].slice(0, 60) } }
+      openViewer(list.map((m) => ({ name: m.path.split('/').pop()!, src: m.url, resolve: () => mediaUrl(m.path, m.mtime), caption: m.label, href: m.href, hrefLabel: m.href?.startsWith('/criativos') ? 'Abrir no Criativos' : undefined })))
+      return {
+        done: [{ label: `Abri ${list.length} imagem(ns) na tela`, ok: true, to: `/cerebro?midia=${encodeURIComponent(list[0].path)}` }],
+        data: list.map((m) => ({ arquivo: m.path, de: m.label })),
+      }
+    },
+  },
+  {
     name: 'cerebro_buscar',
     doc: '{"texto":string} — busca no cérebro da empresa ativa; devolve as notas que falam disso, com um trecho.',
     run: async () => ({ label: 'Busquei no cérebro.', ok: true }),
@@ -1185,7 +1423,7 @@ const BRAIN_ACTIONS: Full[] = [
   },
   {
     name: 'salvar_padrao',
-    doc: '{"conjunto"?:string,"id"?:ID,"post"?:number,"nome":string,"regras":[string],"padrao"?:boolean} — guarda um post dos Criativos como padrão de post no Cérebro da conta (marca/padroes/): a capa vira o exemplo e as "regras" (frases curtas do que se repete: grade, títulos, fotos, cores, ritmo) entram em toda criação e edição de criativo deste formato quando ele for o padrão. "padrao": true (o normal) desmarca o padrão anterior do mesmo formato. Olhe o post com ver_criativo antes de escrever as regras.',
+    doc: '{"conjunto"?:string,"id"?:ID,"post"?:number,"nome":string,"regras"?:[string],"padrao"?:boolean} — guarda um post dos Criativos como padrão de post no Cérebro da conta (marca/padroes/): a capa vira o exemplo e as "regras" (frases curtas do que se repete: grade, títulos, fotos, cores, ritmo) entram em toda criação e edição de criativo deste formato quando ele for o padrão. "padrao": true (o normal) desmarca o padrão anterior do mesmo formato. Sem "regras", o app lê o post sozinho (as camadas e a imagem de cada slide) e escreve regras concretas; mande "regras" só quando a pessoa ditar.',
     label: (a) => `Salvar como padrão: ${String(a.nome ?? '')}`,
     run: async (a) => {
       const t = await target(a)
@@ -1212,8 +1450,16 @@ const BRAIN_ACTIONS: Full[] = [
         }
       }
       const href = `/criativos/${t.set.id}?${t.set.shared && t.set.projectId ? `projeto=${t.set.projectId}&` : ''}post=${post.id}`
+      // Sem regras, o app lê o post (camadas e slides) e escreve
+      let when: string[] = []
+      if (!rules.length) {
+        reportStep('Lendo o padrão do post')
+        const d = await (await import('@/features/cerebro/patternAi')).draftPattern({ teamId, href, onStep: reportStep })
+        rules.push(...d.rules)
+        when = d.when
+      }
       const path = `${PATTERN_DIR}/${slug}.md`
-      await saveNote(teamId, path, patternNote({ name, format: post.format, isDefault, rules, example, source: { label: `${t.set.name} · ${post.name}`, href } }))
+      await saveNote(teamId, path, patternNote({ name, format: post.format, isDefault, rules, when, example, source: { label: `${t.set.name} · ${post.name}`, href } }))
       forgetStandard()
       ;(await import('@/features/cerebro/scope')).forgetBrain()
       return { label: `${isDefault ? 'Padrão' : 'Padrão alternativo'} salvo no Cérebro: ${name}`, ok: true, to: `/cerebro?nota=${encodeURIComponent(path)}` }
@@ -1297,6 +1543,15 @@ const PLACES: Record<string, string> = {
   inicio: '/inicio',
   sugestoes: '/sugestoes',
   cerebro: '/cerebro',
+  quadros: '/quadros',
+  formularios: '/crm/formularios',
+  funis: '/crm/funis',
+  oportunidades: '/crm',
+  clientes: '/crm/clientes',
+  projetos: '/',
+  sites: '/sites',
+  prospeccao: '/prospeccao',
+  operacao: '/crm/operacao',
 }
 
 let navigateRef: ((to: string) => void) | undefined
@@ -1317,15 +1572,28 @@ const NAV_ACTIONS: Full[] = [
   },
 ]
 
-export const allActions = (): Full[] => [...CONTENT_ACTIONS, ...CREATIVE_ACTIONS, ...DATA_ACTIONS, ...BRAIN_ACTIONS, ...PRODUCT_ACTIONS, ...NAV_ACTIONS, ...(useIara.getState().screen?.actions ?? [])]
+export const allActions = (): Full[] => [...CONTENT_ACTIONS, ...CREATIVE_ACTIONS, ...DATA_ACTIONS, ...BRAIN_ACTIONS, ...TOOL_ACTIONS, ...PRODUCT_ACTIONS, ...NAV_ACTIONS, ...(useIara.getState().screen?.actions ?? [])]
 
 export const isRisky = (a: IaraAction, args: Record<string, unknown>) => !!a.handoff?.(args) || (typeof a.risky === 'function' ? a.risky(args) : !!a.risky)
 
 /** Executa uma ação (sem conferir se é arriscada: quem chama decide). */
+/**
+ * A conta desta aba, lida antes de qualquer ação (2026-11-08, sugestão: com a Vizor aberta, ações davam "Abra uma
+ * conta de empresa primeiro"). O quadro e outras telas cheias não têm o menu lateral, que lê as contas; se a aba
+ * ainda não leu (acabou de abrir, recarregou), a ação espera a leitura em vez de falhar.
+ */
+async function ensureTeam() {
+  const s = useCrm.getState()
+  if (s.team) return
+  const { data } = await supabase.auth.getUser()
+  if (data.user) await s.load(data.user.id).catch(() => undefined)
+}
+
 export async function execAction(name: string, args: Record<string, unknown>): Promise<IaraResult> {
   const action = allActions().find((a) => a.name === name)
   if (!action) return { done: [{ label: `Ação desconhecida: ${name}`, ok: false }] }
   try {
+    await ensureTeam()
     if (action.exec) return await action.exec(args)
     return one(await action.run(args))
   } catch (e) {
@@ -1337,7 +1605,7 @@ export const ETAPAS = 'ideia | producao | gestor | pronto | cliente | ajuste | a
 
 /** O catálogo para a IA. */
 export const catalog = () =>
-  `AGENTE = ${localAgents().join(' | ') || 'claude'}\nFORMATO = ${CONTENT_FORMATS.map((f) => f.id).join(' | ')}\nCANAL = ${CHANNELS.map((c) => c.id).join(' | ')}\nETAPA = ${ETAPAS}\nID = o id de um conteúdo\n${allActions()
+  `AGENTE = ${localAgents().join(' | ') || 'claude'}\nFORMATO = ${CONTENT_FORMATS.map((f) => f.id).join(' | ')}\nCANAL = ${CHANNELS.map((c) => c.id).join(' | ')}\nETAPA = ${ETAPAS}\nETAPA_CRM = novo | mapeado | selecionado | pagina | contatado | conversa | proposta | fechado | perdido\nID = o id de um conteúdo\n${allActions()
     .map((a) => `- ${a.name}${isRisky(a, {}) || typeof a.risky === 'function' ? ' (pede confirmação)' : ''}: ${a.doc}`)
     .join('\n')}`
 

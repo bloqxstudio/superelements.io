@@ -8,6 +8,7 @@ import { findOpportunity, updateOpportunity } from '@/features/crm/opportunities
 import { BRIEF_FIELDS, STAGE_LABEL, type OpportunityPatch, type SalesBrief } from '@/features/prospects/funnel'
 import { draftOffer } from '@/features/prospects/offer'
 import { useProjectSync } from '@/features/projects/useProjectSession'
+import { useCrm } from '@/features/crm/crmStore'
 import { getActiveBrand, useBrandStore } from '@/features/space/brand/brandStore'
 import { parseDesignMd } from '@/features/space/brand/designMd'
 import { buildLandingPage, parseSectionElements, type SectionElement } from '@/features/space/landingPage'
@@ -135,6 +136,8 @@ const info = () => {
     visible: document.visibilityState === 'visible',
     focused: document.hasFocus(),
     activeAt,
+    /** A conta lida nesta aba: a ponte não manda pedido da conta para uma aba sem ela (prévia, login). */
+    team: useCrm.getState().team?.id,
   }
 }
 
@@ -1214,7 +1217,6 @@ async function creatives(params: { action?: string; teamId?: string; provider?: 
   // Conta aberta nesta aba (2026-11-03): o conjunto vai para a pasta da conta aberta, então o agente
   // confere (e, com `teamId`, troca) antes de gravar. Devolve também os serviços de imagem prontos.
   if (params.action === 'account') {
-    const { useCrm } = await import('@/features/crm/crmStore')
     if (params.teamId && useCrm.getState().team?.id !== params.teamId) {
       if (!useCrm.getState().teams.some((t) => t.id === params.teamId)) throw new Error('Esta pessoa não está nessa conta.')
       await useCrm.getState().select(params.teamId)
@@ -1484,6 +1486,7 @@ export function startSpaceBridge(hot: Hot) {
   }
   const heartbeat = setInterval(send, HEARTBEAT)
   const unsubscribe = useProjectSync.subscribe((s, prev) => (s.openId !== prev.openId || s.status !== prev.status) && send())
+  const offTeam = useCrm.subscribe((s, prev) => s.team?.id !== prev.team?.id && send())
   window.addEventListener('pointerdown', onActivity, true)
   window.addEventListener('keydown', onActivity, true)
   window.addEventListener('focus', send)
@@ -1498,6 +1501,7 @@ export function startSpaceBridge(hot: Hot) {
   return () => {
     clearInterval(heartbeat)
     unsubscribe()
+    offTeam()
     hot.off('space-bridge:call', onCall)
     hot.off('vite:ws:connect', send)
     hot.off('space-bridge:spawn', onSpawn)

@@ -377,7 +377,7 @@ async function cmdStatus() {
   console.log(`Projeto: ${status.project.name}  (${status.project.id})${status.ready ? '' : '  · ainda abrindo'}`)
   if (!status.ready) return
   const client = clientOf(status.project.name)
-  console.log(`Marca no Space: ${status.brand.name ?? 'nenhuma'}${status.brand.enabled ? '' : ' (desligada)'}${client ? `  · no repo: ${client.brand} · builder: ${client.builder} · AGENTS.md: "${client.scope}"` : ''}`)
+  console.log(`Marca no Space: ${status.brand.name ?? 'nenhuma'}${status.brand.enabled ? '' : ' (desligada)'}${client ? `  · no repo: ${client.brand} · builder: ${client.builder} · regras: docs/agentes/marcas/ › "${client.scope}"` : ''}`)
   if (status.project.context?.trim()) console.log(`Briefing: ${status.project.context.trim().replace(/\s+/g, ' ').slice(0, 220)}${status.project.context.length > 220 ? '…' : ''}`)
   console.log(`Tela no canvas: ${status.device} · nível: ${status.editLevel}`)
   console.log('')
@@ -500,7 +500,7 @@ async function pullPages(pageRefs) {
     `# ${data.project.name}`,
     '',
     `- Projeto no Space: \`${data.project.id}\` (${data.project.role === 'editor' ? 'compartilhado comigo' : 'dono'})`,
-    client && `- No repo: marca \`${client.brand}\` (DESIGN.md e COPY.md), builder \`${client.builder}\`, regras em AGENTS.md › ${client.scope}`,
+    client && `- No repo: marca \`${client.brand}\` (DESIGN.md e COPY.md), builder \`${client.builder}\`, regras em docs/agentes/marcas/ › ${client.scope}`,
     `- Marca no Space: ${data.brand.name ?? 'nenhuma'}${data.brand.enabled ? '' : ' (desligada)'} — texto em \`marca.md\``,
     `- Lido em ${new Date().toLocaleString('pt-BR')}`,
     '',

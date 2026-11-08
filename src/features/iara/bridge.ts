@@ -1,4 +1,4 @@
-import { agentName, allActions, catalog, creativeAgent, execAction, isRisky } from './actions'
+import { agentName, allActions, catalog, chatAgent, creativeAgent, execAction, isRisky } from './actions'
 import { addCard, cardOfAnswer, patchCard, useIaraFeed } from './feed'
 import { uid, useIara } from './store'
 
@@ -35,6 +35,14 @@ export async function iaraCall(params: { action?: string; args?: Record<string, 
         iniciado: true,
         aviso: `Começou: ${agentName(who)} está fazendo isso na tela. Termine sua resposta agora em uma frase. Quando acabar, você recebe o resultado numa nova mensagem ("[Trabalho pronto]") e confere. Não repita esta ação.`,
       }
+    }
+  }
+  // Ação longa (gerar imagem, ler a Meta agora): roda como trabalho na aba, com passos e o botão de parar
+  if (!isRisky(action, args) && (typeof action.long === 'function' ? action.long(args) : action.long)) {
+    const work = useIaraFeed.getState().work
+    if (work) {
+      work({ action: name, args, label: action.label?.(args) ?? name }, chatAgent())
+      return { iniciado: true, aviso: 'Começou na tela (leva alguns minutos). Termine sua resposta agora em uma frase. O resultado volta numa nova mensagem ("[Trabalho pronto]") e você confere. Não repita esta ação.' }
     }
   }
   if (name === 'consultar_agente' && !action.handoff?.(args)) throw new Error('Esse agente é você mesmo: faça a tarefa direto.')

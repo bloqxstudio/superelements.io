@@ -1,3 +1,4 @@
+import { openViewer } from '@/components/MediaViewer'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { ArrowRight, Check, CircleAlert, Eye, EyeOff, Lightbulb, Loader2, MousePointer2, PanelRight, PanelRightClose, Sparkles, X } from 'lucide-react'
@@ -38,6 +39,9 @@ const SUGGESTIONS = [
   'Monta a pauta das próximas duas semanas, terças e quintas às 18h',
   'Quero sugerir uma melhoria no produto',
 ]
+
+/** A largura da coluna: mais estreita em notebooks, para a tela ao lado continuar usável. */
+const dockWidth = () => (window.innerWidth >= 1440 ? 420 : window.innerWidth >= 1180 ? 380 : 340)
 
 /** Projetos em que a pessoa fechou a Iara (não reabre sozinha até recarregar). */
 const closedIn = new Set<string>()
@@ -161,7 +165,7 @@ const Bubble: React.FC<{ m: IaraMessage; busy: boolean; onProposal: (msg: string
       {m.attachments && m.attachments.length > 0 && (
         <div className={cn('grid grid-cols-3 gap-1.5', m.text && 'mb-2')}>
           {m.attachments.map((a) => (
-            <figure key={a.ref} className="overflow-hidden rounded-md bg-white/10">
+            <figure key={a.ref} className="cursor-zoom-in overflow-hidden rounded-md bg-white/10" onClick={() => openViewer(m.attachments!.map((x) => ({ src: x.preview, name: x.name, caption: x.ref, kind: 'image' as const })), m.attachments!.indexOf(a))}>
               <img src={a.preview} alt={a.name} className="w-full" />
               <figcaption className="truncate px-1 py-0.5 text-[10px] opacity-70">{a.ref}</figcaption>
             </figure>
@@ -172,9 +176,10 @@ const Bubble: React.FC<{ m: IaraMessage; busy: boolean; onProposal: (msg: string
       {m.images && m.images.length > 0 && (
         <div className="mt-2 grid grid-cols-3 gap-1.5">
           {m.images.map((src, i) => (
-            <a key={i} href={src} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-md bg-white ring-1 ring-black/5">
+            <button key={i} type="button" onClick={() => openViewer(m.images!.map((s, j) => ({ src: s, name: `Slide ${j + 1}`, kind: 'image' as const })), i)} aria-label={`Ampliar o slide ${i + 1}`}
+              className="block cursor-zoom-in overflow-hidden rounded-md bg-white ring-1 ring-black/5 hover:ring-violet-300">
               <img src={src} alt={`Slide ${i + 1}`} className="w-full" loading="lazy" />
-            </a>
+            </button>
           ))}
         </div>
       )}
@@ -264,6 +269,7 @@ export const IaraPanel: React.FC = () => {
   const siteMatch = useMatch('/sites/:siteId')
   const codeSite = useSitesLink((s) => s.state?.sites.find((x) => x.id === siteMatch?.params.siteId))
   const inSite = !!siteMatch && !!codeSite
+  const inBoard = !!useMatch('/quadros/:boardId')
   const chatId = inProject ? openProject : inSite ? `site-${codeSite.id}` : team ? `conta-${team.id}` : undefined
   const projectName = useProjectStore((s) => s.projects.find((p) => p.id === openProject)?.name)
   useEffect(() => {
@@ -282,13 +288,39 @@ export const IaraPanel: React.FC = () => {
   const [role, setRole] = useState<IaraRole>(readRole)
   const roleRef = useRef(role)
   roleRef.current = role
+  // Na lateral por padrão (a janela flutuante cobria as telas); a pessoa ainda pode voltar à janela
   const [dock, setDock] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('iara-lateral') === '1'
+      return localStorage.getItem('iara-lateral') !== '0'
     } catch {
-      return false
+      return true
     }
   })
+  // No celular não há coluna: a Iara abre por cima, em tela cheia, e nada é empurrado
+  const [wide, setWide] = useState(() => window.matchMedia('(min-width: 768px)').matches)
+  const [width, setWidth] = useState(() => dockWidth())
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const onChange = () => {
+      setWide(mq.matches)
+      setWidth(dockWidth())
+    }
+    mq.addEventListener('change', onChange)
+    window.addEventListener('resize', onChange)
+    return () => {
+      mq.removeEventListener('change', onChange)
+      window.removeEventListener('resize', onChange)
+    }
+  }, [])
+  // Lembra se a pessoa fechou ou abriu (vale para a próxima vez que o app abrir)
+  useEffect(() => {
+    if (!wide) return
+    try {
+      localStorage.setItem('iara-aberta', open ? '1' : '0')
+    } catch {
+      // vale até recarregar
+    }
+  }, [open, wide])
   // Um painel lateral aberto (a peça da Pauta, o cartão da oportunidade): a Iara vira coluna e ele fica à esquerda dela
   const [sidePanel, setSidePanel] = useState(false)
   useEffect(() => {
@@ -299,17 +331,21 @@ export const IaraPanel: React.FC = () => {
     return () => clearInterval(timer)
   }, [open])
   // Num projeto a Iara é a coluna da direita (o chat do canvas mora nela) e abre ao entrar
-  const docked = dock || inProject || inSite || sidePanel
+  const docked = wide && (dock || inProject || inSite || inBoard || sidePanel)
   useEffect(() => {
     if (inProject && openProject && !closedIn.has(openProject)) useIara.setState({ open: true })
   }, [inProject, openProject])
   // Barra lateral: as telas abrem espaço para ela (a variável --iara-dock empurra o conteúdo)
   useEffect(() => {
-    document.documentElement.style.setProperty('--iara-dock', open && docked ? '400px' : '0px')
+    const root = document.documentElement
+    root.style.setProperty('--iara-dock', open && docked ? `${width}px` : '0px')
+    root.style.setProperty('--iara-w', `${width}px`)
+    root.toggleAttribute('data-iara-docked', open && docked)
     return () => {
-      document.documentElement.style.setProperty('--iara-dock', '0px')
+      root.style.setProperty('--iara-dock', '0px')
+      root.removeAttribute('data-iara-docked')
     }
-  }, [open, docked])
+  }, [open, docked, width])
   const toggleDock = () => {
     setDock((d) => {
       try {
@@ -483,8 +519,10 @@ export const IaraPanel: React.FC = () => {
           className={cn(
             'fixed z-50 flex flex-col overflow-hidden bg-white',
             docked
-              ? 'inset-y-0 right-0 w-[min(400px,100vw)] border-l border-gray-200'
-              : 'bottom-4 right-4 h-[min(680px,calc(100vh-32px))] w-[min(400px,calc(100vw-32px))] rounded-2xl shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_24px_64px_-16px_rgb(0_0_0/0.35)]'
+              ? 'inset-y-0 right-0 w-[var(--iara-w,400px)] border-l border-gray-200'
+              : wide
+                ? 'bottom-4 right-4 h-[min(680px,calc(100vh-32px))] w-[min(400px,calc(100vw-32px))] rounded-2xl shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_24px_64px_-16px_rgb(0_0_0/0.35)]'
+                : 'inset-0'
           )}
         >
           <header className="flex items-center gap-2.5 border-b border-gray-100 px-4 py-3">
@@ -518,7 +556,7 @@ export const IaraPanel: React.FC = () => {
             >
               <Lightbulb className="h-4 w-4" aria-hidden />
             </button>
-            {!inProject && !inSite && !sidePanel && (
+            {!inProject && !inSite && !inBoard && !sidePanel && (
               <button type="button" onClick={toggleDock} aria-label={dock ? 'Voltar para a janela flutuante' : 'Abrir como barra lateral'} title={dock ? 'Voltar para a janela flutuante' : 'Abrir como barra lateral'} className="hidden h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 md:flex">
                 {dock ? <PanelRightClose className="h-4 w-4" aria-hidden /> : <PanelRight className="h-4 w-4" aria-hidden />}
               </button>

@@ -18,10 +18,12 @@ import { findBin, kill, launch } from '../space/chatPlugin.ts'
 
 export type ImageProvider = 'codex' | 'openai' | 'gemini'
 export type ImageRatio = 'square' | 'portrait' | 'landscape'
+/** Serviços com chave neste computador: imagens (OpenAI, Gemini) e voz (OpenAI, ElevenLabs). */
+export type KeyProvider = 'openai' | 'gemini' | 'elevenlabs'
 
 const FILE = path.join(os.homedir(), '.superelements', 'chaves.json')
 
-const readKeys = (): Partial<Record<'openai' | 'gemini', string>> => {
+const readKeys = (): Partial<Record<KeyProvider, string>> => {
   try {
     return JSON.parse(readFileSync(FILE, 'utf8'))
   } catch {
@@ -30,7 +32,7 @@ const readKeys = (): Partial<Record<'openai' | 'gemini', string>> => {
 }
 
 /** Guarda (ou apaga, com texto vazio) a chave de um serviço neste computador. */
-export function saveImageKey(provider: 'openai' | 'gemini', key: string) {
+export function saveImageKey(provider: KeyProvider, key: string) {
   const keys = readKeys()
   const clean = key.trim()
   if (clean) keys[provider] = clean
@@ -44,8 +46,8 @@ export function saveImageKey(provider: 'openai' | 'gemini', key: string) {
   }
 }
 
-const keyOf = (provider: 'openai' | 'gemini') => {
-  const env = provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
+const keyOf = (provider: KeyProvider) => {
+  const env = provider === 'openai' ? process.env.OPENAI_API_KEY : provider === 'elevenlabs' ? process.env.ELEVENLABS_API_KEY : process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
   return (env || readKeys()[provider] || '').trim() || undefined
 }
 
@@ -57,7 +59,12 @@ export function imageProviders(): ImageProvider[] {
 /** O primeiro serviço pronto; nenhum, se não há Codex nem chave. */
 export const imageProvider = (): ImageProvider | null => imageProviders()[0] ?? null
 
-export const hasKey = (provider: 'openai' | 'gemini') => !!keyOf(provider)
+export const hasKey = (provider: KeyProvider) => !!keyOf(provider)
+/** O que a tela pode saber das chaves: só se existem. */
+export const keyStatus = () => ({ openai: hasKey('openai'), gemini: hasKey('gemini'), elevenlabs: hasKey('elevenlabs') })
+
+/** A chave de um serviço neste computador (variável de ambiente ou `~/.superelements/chaves.json`); só o conector a lê, nunca o navegador. */
+export const apiKey = (provider: KeyProvider) => keyOf(provider)
 
 const OPENAI_MODEL = () => process.env.SE_OPENAI_IMAGE_MODEL || 'gpt-image-1'
 const GEMINI_MODEL = () => process.env.SE_GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview'

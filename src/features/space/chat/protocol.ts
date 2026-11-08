@@ -252,6 +252,11 @@ export interface ChatSendPayload {
    * de um projeto, `projectId` é `conta-<id da conta>`.
    */
   iara?: { system?: string; screen?: string }
+  /**
+   * A aba que mandou (id da ponte, `space-bridge-tab`): as ações da Iara voltam para ela, com a conta e a tela
+   * que a pessoa tem abertas (2026-11-08; antes iam para a "melhor" aba e às vezes caíam numa sem conta).
+   */
+  tab?: string
 }
 
 /** Sessão da ponte (SPACE_SESSION) de um agente no chat de um projeto. */

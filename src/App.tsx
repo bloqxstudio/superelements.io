@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { MediaViewer } from "@/components/MediaViewer";
 import Layout from "@/components/Layout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -23,9 +24,12 @@ import Motion from "@/pages/Motion";
 import CodeSites from "@/pages/sites/CodeSites";
 import SiteEditor from "@/pages/sites/SiteEditor";
 import Copy from "@/pages/Copy";
+import Boards from "@/pages/Boards";
+import { BoardRoute } from "@/features/quadros/BoardRoute";
 import { CreativeEditor } from "@/features/criativos/Editor";
 import { MotionStudio } from "@/features/criativos/MotionStudio";
 import { SceneStudio } from "@/features/criativos/SceneStudio";
+import { ExplainerStudio } from "@/features/criativos/explicativo/ExplainerStudio";
 import { CopyEditorPage } from "@/features/copy/CopyEditorPage";
 import WordPressCallback from "@/pages/WordPressCallback";
 import PageApproval from "@/pages/PageApproval";
@@ -162,6 +166,7 @@ function App() {
                 <Route path="motion" element={<Motion />} />
                 <Route path="motion/:setId" element={<MotionStudio />} />
                 <Route path="motion/:setId/cena" element={<SceneStudio />} />
+                <Route path="motion/:setId/explica" element={<ExplainerStudio />} />
                 <Route path="criativos/:setId" element={<CreativeEditor />} />
                 {/* CRM da equipe: funil, clientes, equipe e convites; só para quem é de uma equipe */}
                 <Route path="plano" element={<CrmGate><CrmPlan /></CrmGate>} />
@@ -178,6 +183,8 @@ function App() {
                 <Route path="sugestoes" element={<ProductSuggestions />} />
                 {/* Segundo cérebro (cerebro/ do repositório): só o admin da plataforma; no dev edita os arquivos */}
                 <Route path="cerebro" element={<Cerebro />} />
+                <Route path="quadros" element={<Boards />} />
+                <Route path="quadros/:boardId" element={<BoardRoute />} />
                 <Route path="contas/nova" element={<AccountWizard />} />
                 {/* Social selling: a fila do dia nas redes; quem segue e envia é a pessoa */}
                 <Route path="crm/social" element={<CrmGate><CrmSocial /></CrmGate>} />
@@ -205,6 +212,7 @@ function App() {
 
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <MediaViewer />
           </ErrorBoundary>
         </AuthProvider>
       </BrowserRouter>

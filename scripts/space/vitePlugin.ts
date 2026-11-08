@@ -42,6 +42,8 @@ interface TabInfo {
   focused: boolean
   /** Última vez que a pessoa mexeu nesta aba. */
   activeAt: number
+  /** A conta lida na aba (sem ela, pedidos da conta falham). */
+  team?: string
 }
 
 interface Tab {
@@ -278,7 +280,8 @@ export function spaceBridge(): Plugin {
       /** A tela pedida (por id); sem pedido, a tela de uma pessoa com projeto aberto, usada por último. */
       const pickTab = (tabId?: string) => {
         if (tabId) return liveTabs().find((t) => t.info.tabId === tabId || t.info.tabId.startsWith(tabId))
-        const score = (t: Tab) => (t.info.ready ? 4 : 0) + (t.info.projectId ? 2 : 0) + (t.info.visible ? 1 : 0)
+        // Uma aba sem conta lida (prévia embutida, login) não serve para pedido nenhum da conta
+        const score = (t: Tab) => (t.info.team ? 8 : 0) + (t.info.ready ? 4 : 0) + (t.info.projectId ? 2 : 0) + (t.info.visible ? 1 : 0)
         return people().sort((a, b) => score(b) - score(a) || b.info.activeAt - a.info.activeAt)[0]
       }
 
@@ -318,7 +321,8 @@ export function spaceBridge(): Plugin {
       const call = (tab: Tab, method: string, params: unknown, agent?: string, session?: string) =>
         new Promise<Reply>((resolve, reject) => {
           const requestId = randomUUID()
-          const timeout = LONG_CALLS.has(method) ? LONG_TIMEOUT : CALL_TIMEOUT
+          // `long` nos pedidos da Iara: leva arquivos (fotos e vídeos enviados ao conjunto), que demoram a subir
+          const timeout = LONG_CALLS.has(method) || (method === 'iara' && (params as { long?: unknown } | undefined)?.long === true) ? LONG_TIMEOUT : CALL_TIMEOUT
           const timer = setTimeout(() => {
             pending.delete(requestId)
             reject(new BridgeError(504, `O Space não respondeu a "${method}" em ${timeout / 1000} s`))
@@ -460,7 +464,7 @@ export function spaceBridge(): Plugin {
 
           if (req.method === 'POST' && url.pathname === '/call') {
             const body = JSON.parse((await readBody(req)) || '{}')
-            const { method, params, tab: tabId, project } = body
+            const { method, params, tab: tabId, project, prefer } = body
             const agent = text(body.agent, 24) || undefined
             const who = { agent: agent ?? 'Agente', session: text(body.session, 120) }
             let tab: Tab | undefined
@@ -468,7 +472,8 @@ export function spaceBridge(): Plugin {
             try {
               if (tabId || !project || ACCOUNT_CALLS.has(method)) {
                 // Pedido da conta, ou sem projeto dito: a tela de uma pessoa, como antes
-                tab = pickTab(tabId)
+                // `prefer` (as ações da Iara): a aba do chat; se ela fechou, a melhor das outras
+                tab = tabId ? pickTab(tabId) : (typeof prefer === 'string' && prefer ? pickTab(prefer) : undefined) ?? pickTab()
                 if (!tab) return sendJson(res, 409, { error: 'Nenhuma aba do Space conectada. Abra o app no preview ou no navegador.' })
                 if (tab.info.projectId) lastUse.set(tab.info.projectId, Date.now())
                 reply = await call(tab, method, params, agent, who.session || undefined)

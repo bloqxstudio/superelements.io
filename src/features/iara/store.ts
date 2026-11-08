@@ -148,6 +148,8 @@ export interface IaraAction {
   risky?: boolean | ((args: Record<string, unknown>) => boolean)
   /** Frase da proposta (quando precisa confirmar). */
   label?: (args: Record<string, unknown>) => string
+  /** Leva mais que os 30 s da ponte (gerar imagem, ler a Meta agora): roda como trabalho na aba e o resultado volta à conversa. */
+  long?: boolean | ((args: Record<string, unknown>) => boolean)
   /** A ação vai para outro agente (troca de bastão, confirmada pela pessoa): devolve o id dele. */
   handoff?: (args: Record<string, unknown>) => string | undefined
   run: (args: Record<string, unknown>) => Promise<IaraDone | IaraDone[]>
@@ -288,8 +290,22 @@ const listOf = (conv: string): IaraMessage[] => {
   return background.get(conv) ?? (s.teamId ? readMessages(s.teamId, conv) : [])
 }
 
+/**
+ * A Iara abre sozinha no computador (2026-11-07, o usuário: "pode vir como padrão aberto a tela da Iara
+ * e o app todo adaptado pra isso"): aberta na lateral, a menos que a pessoa tenha fechado
+ * (`iara-aberta` = 0). No celular começa fechada (ela cobriria a tela inteira).
+ */
+const startsOpen = () => {
+  try {
+    if (typeof window === 'undefined' || !window.matchMedia('(min-width: 768px)').matches) return false
+    return localStorage.getItem('iara-aberta') !== '0'
+  } catch {
+    return false
+  }
+}
+
 export const useIara = create<IaraState>()((set) => ({
-  open: false,
+  open: startsOpen(),
   busy: false,
   messages: [],
   conversations: [],

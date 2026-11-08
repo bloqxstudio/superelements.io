@@ -32,6 +32,11 @@ export default defineConfig(({ command, mode }) => ({
       ignored: ["**/.shipstudio/**"],
     },
   },
+  optimizeDeps: {
+    // Só o worker da transcrição importa esta lib: sem pré-otimizar, o Vite a descobre no meio
+    // do uso e recarrega a página, e o vídeo explicativo some no meio do processo (2026-11-07).
+    include: ["@huggingface/transformers"],
+  },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',

@@ -1,3 +1,4 @@
+import type { ExplainerData } from './explicativo/types'
 /**
  * Criativos: posts de Instagram montados num editor de camadas (como o Canva),
  * a partir da marca de um projeto do Space. Tudo é desenhado num canvas 2D no
@@ -382,6 +383,25 @@ export interface SetSummary {
   updatedAt: number
   /** Os posts com a capa de cada um (o primeiro slide), para as listas acharem o criativo sem abrir o conjunto. */
   postsInfo?: PostInfo[]
+  /** Os vídeos explicativos do conjunto (o Motion lista os últimos sem abrir o conjunto). */
+  videosInfo?: VideoInfo[]
+  /** Áudios e vídeos do conjunto em uso (por vídeos, posts e cenas): o que sobra na pasta é tentativa sem vídeo. */
+  mediaUsed?: string[]
+}
+
+export interface VideoInfo {
+  id: string
+  name: string
+  /** Segundos. */
+  duration: number
+  look?: string
+  mode?: string
+  /** Quem narra: "OpenAI (marin)", "ElevenLabs (Ana)", "fala gravada", ou nada (sem voz). */
+  voice?: string
+  /** O título da pesquisa que originou o vídeo. */
+  research?: string
+  cenas: number
+  at: number
 }
 
 export interface PostInfo {
@@ -421,5 +441,7 @@ export interface CodeScene {
   prompt?: string
   /** O criativo de onde a cena nasceu: as camadas desses slides entram na cena como peças (`env.post`). */
   source?: { postId: string; slideIds: string[] }
+  /** Vídeo explicativo (`explicativo/`): a fala, as palavras no tempo, o roteiro e o estilo. A cena é o motor fixo `EXPLAINER_SCENE`. */
+  explainer?: ExplainerData
   updatedAt: number
 }

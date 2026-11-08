@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { currentUserId } from '@/features/projects/storage'
 import { personalFolder } from '@/features/crm/accountScope'
 import { createOnce, isAlreadyExists } from '@/features/conteudos/exclusive'
-import type { CreativeSet, Post, PostInfo, SetAsset, SetSummary } from './types'
+import type { CreativeSet, Post, PostInfo, SetAsset, SetSummary, VideoInfo } from './types'
 
 /**
  * Os conjuntos ficam no bucket privado `space-projects`. Um conjunto pessoal vai
@@ -14,6 +14,8 @@ import type { CreativeSet, Post, PostInfo, SetAsset, SetSummary } from './types'
 const bucket = () => supabase.storage.from('space-projects')
 
 const owners = new Map<string, string>()
+/** Guarda o dono de projetos já lidos noutra consulta (poupa uma ida ao banco por projeto). */
+export const rememberOwners = (rows: { id: string; owner_id?: string | null }[]) => { for (const r of rows) if (r.owner_id) owners.set(r.id, r.owner_id) }
 
 /** Pasta dos conjuntos: a do projeto (compartilhada com a equipe) ou a da conta. */
 const folderOf = async (projectId?: string) => {
@@ -98,7 +100,50 @@ export const summaryOf = (set: CreativeSet, previous?: SetSummary): SetSummary =
   colors: set.brand.colors.slice(0, 5).map((c) => c.hex),
   updatedAt: set.updatedAt,
   postsInfo: postsInfoOf(set, previous?.postsInfo),
+  videosInfo: videosInfoOf(set),
+  mediaUsed: mediaUsedOf(set),
 })
+
+/** Os vídeos explicativos do conjunto, do mais novo ao mais antigo (até 20). */
+export function videosInfoOf(set: CreativeSet): VideoInfo[] {
+  return (set.scenes ?? [])
+    .filter((s) => s.explainer)
+    .map((s) => {
+      const d = s.explainer!
+      const voice = d.voiceAI ? `${d.voiceAI.provider === 'elevenlabs' ? 'ElevenLabs' : 'OpenAI'} (${d.voiceAI.voiceName ?? d.voiceAI.voice})` : d.media && (d.mode ?? 'narracao') === 'narracao' ? 'fala gravada' : undefined
+      return { id: s.id, name: s.name, duration: Math.round(s.duration * 10) / 10, look: d.look, mode: d.mode ?? 'narracao', ...(voice ? { voice } : {}), ...(d.research ? { research: d.research.title } : {}), cenas: d.beats.length, at: s.updatedAt }
+    })
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 20)
+}
+
+/** Os ids dos áudios e vídeos em uso no conjunto. */
+export function mediaUsedOf(set: CreativeSet): string[] {
+  const ids = new Set<string>()
+  const add = (src?: string) => src?.startsWith('asset:') && ids.add(src.slice(6))
+  for (const s of set.scenes ?? []) {
+    add(s.audio?.src)
+    add(s.explainer?.media?.src)
+    add(s.explainer?.music?.src)
+    // As fotos e os clipes das cenas (a Iara e Estilo › Fotos sobem vídeos curtos)
+    for (const p of s.explainer?.photos ?? []) add(p.src)
+  }
+  for (const p of set.posts) {
+    add(p.motion?.audio?.src)
+    for (const sl of p.slides) for (const l of sl.layers) if (l.type === 'image') add(l.src)
+  }
+  return [...ids]
+}
+
+/** Áudios e vídeos na pasta do conjunto (só os nomes e datas, sem baixar): evidência do que subiu. */
+export async function listSetMedia(set: Pick<SetSummary, 'id' | 'projectId' | 'shared'>): Promise<{ id: string; name: string; size: number; mtime: number; kind: 'audio' | 'video' }[]> {
+  const dir = `${await folderOf(placeOf(set))}/${set.id}`
+  const { data, error } = await bucket().list(dir, { limit: 1000, sortBy: { column: 'updated_at', order: 'desc' } })
+  if (error) return []
+  return (data ?? [])
+    .filter((f) => f.id && /\.(wav|mp3|m4a|aac|ogg|webm|mp4|mov)$/i.test(f.name))
+    .map((f) => ({ id: f.name.replace(/\.[^.]+$/, ''), name: f.name, size: (f.metadata as { size?: number } | null)?.size ?? 0, mtime: Date.parse(f.updated_at ?? '') || 0, kind: /\.(mp4|mov|webm)$/i.test(f.name) && !/^narracao/.test(f.name) ? ('video' as const) : ('audio' as const) }))
+}
 
 /** Os conjuntos da conta e os dos projetos que ela abre (`projectIds`), do mais novo ao mais antigo. */
 export async function listSets(projectIds: string[] = []): Promise<SetSummary[]> {
@@ -290,6 +335,19 @@ function mediaMeta(file: File | Blob, kind: 'video' | 'audio'): Promise<Pick<Set
     }
     el.src = url
   })
+}
+
+/**
+ * As imagens guardadas na pasta de um conjunto (as fotos, recortes e peças que os posts usam), lidas pela
+ * listagem do Storage, sem baixar o set.json. Para o Cérebro mostrar as imagens dos posts, não só as capas.
+ */
+export async function listSetImages(set: Pick<SetSummary, 'id' | 'projectId' | 'shared'>): Promise<{ path: string; name: string; size: number; mtime: number }[]> {
+  const dir = `${await folderOf(placeOf(set))}/${set.id}`
+  const { data, error } = await bucket().list(dir, { limit: 1000, sortBy: { column: 'updated_at', order: 'desc' } })
+  if (error) return []
+  return (data ?? [])
+    .filter((f) => f.id && /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name))
+    .map((f) => ({ path: `${dir}/${f.name}`, name: f.name, size: (f.metadata as { size?: number } | null)?.size ?? 0, mtime: Date.parse(f.updated_at ?? '') || 0 }))
 }
 
 /** Endereço temporário do arquivo, para desenhar no canvas. */

@@ -1,7 +1,8 @@
 import { supabase } from '@/integrations/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { loadContext } from '@/features/conteudos/api'
-import { coverUrls, listSets } from '@/features/criativos/storage'
+import { coverUrls, listSets, loadSet, rememberOwners } from '@/features/criativos/storage'
+import type { CreativeSet, SetSummary } from '@/features/criativos/types'
 import { AUTO_FOLDER, type Vault, type VaultMedia, type VaultNote } from './vault'
 import { DESIGN_PATH, forgetStandard, saveBrand } from './standard'
 
@@ -26,7 +27,7 @@ export interface BrainTeam {
   profile?: { segment?: string; website?: string; contactName?: string; contactEmail?: string; contactPhone?: string; notes?: string }
 }
 
-export interface LoadedVault extends Vault { teamId: string }
+export interface LoadedVault extends Vault { teamId: string; /** Os Criativos (capas) ainda estão chegando. */ partial?: boolean }
 
 // ———————————————————————————————————— notas
 
@@ -50,7 +51,7 @@ export async function saveNote(teamId: string, path: string, content: string, cr
   if (!p.endsWith('.md') || p.split('/').some((s) => !s || s === '..' || s.startsWith('.'))) throw new Error('Caminho de nota inválido.')
   if (isAutoPath(p)) throw new Error('A pasta "Da plataforma" é montada sozinha; mude na tela de origem.')
   // O DESIGN.md é a marca da conta (a mesma que os Criativos usam)
-  if (p === DESIGN_PATH) return saveBrand(teamId, content)
+  if (p === DESIGN_PATH) { baseCache = null; return saveBrand(teamId, content) }
   if (create) {
     const { error } = await db.from('crm_knowledge_notes').insert({ team_id: teamId, path: p, content })
     if (error) throw new Error(/duplicate|unique/i.test(error.message) ? 'Já existe uma nota com esse nome.' : error.message)
@@ -177,9 +178,48 @@ export async function mediaUrl(path: string, mtime?: number): Promise<string> {
 
 const line = (label: string, value?: string) => (value?.trim() ? `- **${label}:** ${value.trim()}\n` : '')
 const block = (title: string, value?: string) => `## ${title}\n\n${value?.trim() || '_Ainda não preenchido._'}\n\n`
+const slugOf = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'conjunto'
 const dateBr = (ms: number) => new Date(ms).toLocaleDateString('pt-BR')
 
-async function autoVault(team: BrainTeam): Promise<Vault> {
+/**
+ * De onde vem a imagem de uma camada: `asset:<id>` (arquivo do conjunto no Storage), caminho público do
+ * app (`/brands/…`) ou link. Links do próprio app (inclusive os gravados com localhost) viram o caminho
+ * público servido aqui, para abrir em qualquer máquina.
+ */
+function imageOf(set: CreativeSet, src: string): { key: string; name: string; storage?: string; url?: string } | null {
+  const base = (p: string) => decodeURIComponent(p.split('?')[0].split('/').pop() || 'imagem')
+  if (src.startsWith('asset:')) {
+    const a = set.assets.find((x) => x.id === src.slice(6))
+    if (!a || a.kind) return null
+    const ext = a.path.split('.').pop()
+    const name = /\.[a-z0-9]{2,4}$/i.test(a.name) ? a.name : `${a.name || a.id}.${ext}`
+    return { key: a.path, name: name.replace(/[\/]/g, '-'), storage: a.path }
+  }
+  if (src.startsWith('data:')) return null
+  if (src.startsWith('/')) return { key: src.split('?')[0], name: base(src), url: `${location.origin}${src}` }
+  try {
+    const u = new URL(src)
+    if (/^(localhost|127\.0\.0\.1)$/.test(u.hostname) || /avencestudio\.com$/.test(u.hostname) && u.pathname.startsWith('/brands/')) return { key: u.pathname, name: base(u.pathname), url: `${location.origin}${u.pathname}` }
+    return { key: src, name: base(u.pathname), url: src }
+  } catch { return null }
+}
+
+type Project = { id: string; name: string; updated_at: string; owner_id?: string }
+
+/**
+ * A pasta "Da plataforma" em duas partes (2026-11-07, o usuário: "fica muito tempo em loading"): o
+ * cadastro, o Plano, a marca e os projetos saem em 3 consultas; os Criativos leem o index.json de cada
+ * projeto da conta (38 na casa) e assinam as capas, o que levava segundos. A tela abre com a primeira
+ * parte e os Criativos entram depois; os dois ficam guardados por conta para os recarregamentos
+ * depois de salvar uma nota não refazerem tudo.
+ */
+let baseCache: { team: string; at: number; vault: Vault; projects: Project[] } | null = null
+let creativesCache: { team: string; at: number; vault: Vault } | null = null
+const BASE_TTL = 60_000
+const CREATIVES_TTL = 180_000
+export const forgetPlatform = () => { baseCache = null; creativesCache = null }
+
+async function autoVault(team: BrainTeam): Promise<Vault & { projects: Project[] }> {
   const notes: VaultNote[] = []
   const media: VaultMedia[] = []
   const now = Date.now()
@@ -195,9 +235,11 @@ async function autoVault(team: BrainTeam): Promise<Vault> {
     db.from('crm_account_context').select('brand_md').eq('team_id', team.id).maybeSingle()
       .then(({ data }) => ((data as { brand_md?: string | null } | null)?.brand_md ?? '').trim(), () => ''),
     (async () => {
-      const q = db.from('space_projects').select('id, name, updated_at')
+      const q = db.from('space_projects').select('id, name, updated_at, owner_id')
       const { data } = await (team.isHome ? q.or(`team_id.eq.${team.id},team_id.is.null`) : q.eq('team_id', team.id)).order('updated_at', { ascending: false }).limit(40)
-      return (data ?? []) as { id: string; name: string; updated_at: string }[]
+      const rows = (data ?? []) as Project[]
+      rememberOwners(rows)
+      return rows
     })().catch(() => []),
   ])
 
@@ -219,7 +261,14 @@ async function autoVault(team: BrainTeam): Promise<Vault> {
     })
   }
 
-  // Criativos: a capa de cada post (as imagens que a conta já criou na plataforma)
+  return { notes, media, projects }
+}
+
+/** Criativos: a capa de cada post (as imagens que a conta já criou na plataforma). */
+async function creativesVault(projects: Project[]): Promise<Vault> {
+  const notes: VaultNote[] = []
+  const media: VaultMedia[] = []
+  const now = Date.now()
   const sets = await listSets(projects.map((x) => x.id)).catch(() => [])
   const shown = sets.slice(0, 24)
   const coverPaths = shown.flatMap((s) => (s.postsInfo ?? []).slice(0, 12).flatMap((x) => (x.cover ? [x.cover] : [])))
@@ -238,6 +287,46 @@ async function autoVault(team: BrainTeam): Promise<Vault> {
     }
     parts.push(`## ${s.name}\n\n${s.posts} post(s)${s.projectName ? ` · ${s.projectName}` : ''} · atualizado em ${dateBr(s.updatedAt)} · [Abrir no Criativos](${href})\n\n${imgs.join(' ')}\n`)
   }
+  // As imagens que os posts usam de verdade (a pessoa, o navio, o mundo, as fotos dos cases…), lidas das
+  // camadas de cada post: arquivos do conjunto, arquivos públicos da marca (/brands/…) e links do app.
+  // Uma pasta por conjunto; o que aparece em vários conjuntos (logo, cases) vai para "em vários conjuntos".
+  const scan = sets.slice(0, 40)
+  const loaded = await Promise.all(scan.map((s) => loadSet(s.id, s.shared ? s.projectId : undefined).catch(() => undefined)))
+  type Found = { key: string; name: string; storage?: string; url?: string; set: SetSummary; post: string }
+  const bySet: Found[][] = scan.map(() => [])
+  const usedIn = new Map<string, Set<string>>()
+  loaded.forEach((set, i) => {
+    if (!set) return
+    const seen = new Set<string>()
+    for (const post of set.posts) for (const slide of post.slides) for (const l of slide.layers) {
+      if (l.type !== 'image' || !l.src || l.hidden || /^[íi]cone\b/i.test(l.name)) continue
+      const f = imageOf(set, l.src)
+      if (!f || seen.has(f.key)) continue
+      seen.add(f.key)
+      bySet[i].push({ ...f, set: scan[i], post: post.id })
+      usedIn.set(f.key, (usedIn.get(f.key) ?? new Set()).add(scan[i].id))
+    }
+  })
+  const storagePaths = [...new Set(bySet.flat().flatMap((f) => (f.storage ? [f.storage] : [])))]
+  const signedFiles = storagePaths.length ? await coverUrls(storagePaths).catch(() => ({}) as Record<string, string>) : {}
+  const placed = new Set<string>()
+  bySet.forEach((list, i) => {
+    const s = scan[i]
+    const base = `/criativos/${s.id}${s.shared && s.projectId ? `?projeto=${s.projectId}` : ''}`
+    for (const f of list) {
+      const url = f.storage ? signedFiles[f.storage] : f.url
+      if (!url) continue
+      const shared = (usedIn.get(f.key)?.size ?? 0) > 1
+      if (shared && placed.has(f.key)) continue
+      placed.add(f.key)
+      const folder = `${AUTO_FOLDER}/imagens/${shared ? 'em-varios-conjuntos' : `${slugOf(s.name)}-${s.id.slice(-4)}`}`
+      let path = `${folder}/${f.name}`
+      for (let n = 2; media.some((m) => m.path === path); n++) path = `${folder}/${f.name.replace(/(\.[a-z0-9]+)?$/i, `-${n}$1`)}`
+      const label = shared ? `Em ${usedIn.get(f.key)!.size} conjuntos` : s.name
+      media.push({ path, size: 0, mtime: s.updatedAt, url, label, href: `${base}${base.includes('?') ? '&' : '?'}post=${f.post}` })
+      urls.set(path, url)
+    }
+  })
   notes.push({
     path: `${AUTO_FOLDER}/criativos.md`, mtime: shown[0]?.updatedAt ?? now, auto: { label: 'os conjuntos dos Criativos', route: '/criativos' },
     content: `# Criativos\n\n${sets.length ? `${sets.length} conjunto(s) criados na plataforma${sets.length > shown.length ? ` (os ${shown.length} mais recentes aqui)` : ''}.\n\n${parts.join('\n')}` : '_A conta ainda não tem criativos._\n'}`,
@@ -248,17 +337,42 @@ async function autoVault(team: BrainTeam): Promise<Vault> {
 
 // ———————————————————————————————————— o cofre da conta
 
-export async function loadAccountVault(team: BrainTeam): Promise<LoadedVault> {
+const fresh = (c: { team: string; at: number } | null, team: string, ttl: number) => !!c && c.team === team && Date.now() - c.at < ttl
+
+async function platformBase(team: BrainTeam) {
+  if (fresh(baseCache, team.id, BASE_TTL)) return baseCache!
+  const v = await autoVault(team).catch(() => ({ notes: [], media: [], projects: [] as Project[] }))
+  baseCache = { team: team.id, at: Date.now(), vault: { notes: v.notes, media: v.media }, projects: v.projects }
+  return baseCache
+}
+
+/** Os Criativos da pasta "Da plataforma" (o que demora). */
+export async function loadPlatformCreatives(team: BrainTeam): Promise<Vault> {
+  if (fresh(creativesCache, team.id, CREATIVES_TTL)) return creativesCache!.vault
+  const base = await platformBase(team)
+  const vault = await creativesVault(base.projects).catch(() => ({ notes: [], media: [] }) as Vault)
+  creativesCache = { team: team.id, at: Date.now(), vault }
+  return vault
+}
+
+/**
+ * As notas e os arquivos da conta, mais a pasta "Da plataforma". Com `creatives: 'later'` não espera os
+ * Criativos quando eles não estão guardados: volta `partial` e a tela chama `loadPlatformCreatives`.
+ */
+export async function loadAccountVault(team: BrainTeam, opts: { creatives?: 'wait' | 'later' } = {}): Promise<LoadedVault> {
   activeTeam = team.id
-  const [notes, files, auto] = await Promise.all([
+  const later = opts.creatives === 'later' && !fresh(creativesCache, team.id, CREATIVES_TTL)
+  const [notes, files, base, creatives] = await Promise.all([
     loadNotes(team.id),
     loadFiles(team.id).catch(() => [] as VaultMedia[]),
-    autoVault(team).catch(() => ({ notes: [], media: [] }) as Vault),
+    platformBase(team),
+    later ? Promise.resolve<Vault>({ notes: [], media: [] }) : loadPlatformCreatives(team),
   ])
   return {
     teamId: team.id,
-    notes: [...notes.filter((n) => !isAutoPath(n.path) && n.path !== DESIGN_PATH), ...auto.notes],
-    media: [...files.filter((m) => !isAutoPath(m.path)), ...auto.media],
+    notes: [...notes.filter((n) => !isAutoPath(n.path) && n.path !== DESIGN_PATH), ...base.vault.notes, ...creatives.notes],
+    media: [...files.filter((m) => !isAutoPath(m.path)), ...base.vault.media, ...creatives.media],
+    partial: later,
   }
 }
 

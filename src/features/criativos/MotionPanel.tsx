@@ -353,7 +353,7 @@ export const MotionPanel: React.FC = () => {
       </div>
 
       {big && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={() => setBig(false)}>
+        <div className="se-dock-inset fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={() => setBig(false)}>
           <div className="w-fit space-y-2 rounded-xl bg-white p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between gap-6">
               <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900"><Clapperboard className="h-4 w-4" /> {post.name}</p>

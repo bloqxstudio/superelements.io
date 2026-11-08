@@ -483,7 +483,7 @@ const Plan: React.FC = () => {
             {manager && (
               <div
                 className={cn(
-                  'se-glass fixed bottom-4 left-1/2 z-30 flex w-[calc(100vw-32px)] max-w-xl -translate-x-1/2 items-center gap-3 !rounded-2xl px-4 py-2.5 transition-all duration-300 md:left-[calc(50%+126px)]',
+                  'se-glass fixed bottom-4 left-1/2 z-30 flex w-[calc(100vw-32px)] max-w-xl -translate-x-1/2 items-center gap-3 !rounded-2xl px-4 py-2.5 transition-all duration-300 md:left-[calc(50%+126px-var(--iara-dock,0px)/2)]',
                   dirty || saving ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'
                 )}
                 aria-hidden={!(dirty || saving)}

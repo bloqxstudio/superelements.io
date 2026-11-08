@@ -54,6 +54,8 @@ export interface SceneInput {
   post?: ScenePost
   /** Fontes a carregar além das que a cena pede (as das camadas do criativo). */
   fonts?: string[]
+  /** Dados livres da cena (`env.data`): o roteiro e as palavras do vídeo explicativo. */
+  data?: unknown
 }
 
 export class SceneError extends Error {
@@ -99,7 +101,7 @@ export class SceneRunner {
         reject(new SceneError(e.message || 'O código da cena tem um erro.'))
       }
     })
-    this.worker.postMessage({ type: 'init', code: input.code, width: input.width, height: input.height, duration: input.duration, fps: FPS, images: input.images, beats: input.beats ?? [], bpm: input.bpm ?? 120, brand: input.brand, post: input.post ?? null, fonts: input.fonts ?? [] })
+    this.worker.postMessage({ type: 'init', code: input.code, width: input.width, height: input.height, duration: input.duration, fps: FPS, images: input.images, beats: input.beats ?? [], bpm: input.bpm ?? 120, brand: input.brand, post: input.post ?? null, fonts: input.fonts ?? [], data: input.data ?? null })
   }
 
   load() {
@@ -107,7 +109,7 @@ export class SceneRunner {
   }
 
   /** O quadro do segundo `t`. Mais de 8 s num quadro = laço infinito: o worker é derrubado. */
-  async frame(t: number): Promise<ImageBitmap> {
+  async frame(t: number, video?: ImageBitmap, broll?: ImageBitmap): Promise<ImageBitmap> {
     await this.ready
     if (this.dead) throw new SceneError('A cena parou.')
     const id = ++this.seq
@@ -118,7 +120,7 @@ export class SceneRunner {
         reject(new SceneError('Um quadro levou mais de 8 s: o código deve estar em laço. A cena foi parada.'))
       }, 8000)
       this.waiting.set(id, { resolve, reject, timer })
-      this.worker.postMessage({ type: 'frame', id, t })
+      this.worker.postMessage({ type: 'frame', id, t, video, broll }, [video, broll].filter(Boolean) as ImageBitmap[])
     })
   }
 

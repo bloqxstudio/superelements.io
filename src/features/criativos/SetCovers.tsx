@@ -47,8 +47,9 @@ export const CoverStrip: React.FC<{ summary: SetSummary; urls: Record<string, st
   return (
     <div className={cn('grid h-28 gap-1.5', className)} style={{ gridTemplateColumns: `repeat(${max}, minmax(0, 1fr))` }}>
       {shown.map((p, i) => (
-        <span key={p.id} className="relative h-full min-w-0">
-          <PostCover post={p} url={p.cover ? urls[p.cover] : undefined} colors={summary.colors} className="h-full w-full" />
+        <span key={p.id} className="relative block h-full min-w-0 overflow-hidden">
+          {/* Preenche a célula da faixa: sem isso a proporção do post (9:16) esticava a altura e cobria o nome do conjunto */}
+          <PostCover post={p} url={p.cover ? urls[p.cover] : undefined} colors={summary.colors} className="absolute inset-0 h-full w-full" />
           {rest > 0 && i === shown.length - 1 && <span className="absolute bottom-1 right-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">+{rest}</span>}
         </span>
       ))}

@@ -27,6 +27,6 @@ Cada conta tem um produto (`crm_teams.product`): `completo` (tudo; a Avence e as
 
 ## Onde está o detalhe
 
-- Técnico, por funcionalidade: [AGENTS.md](../../AGENTS.md).
+- Técnico, por funcionalidade: [docs/agentes/](../../docs/agentes/) (índice no [AGENTS.md](../../AGENTS.md)).
 - Marcas e textos de cada cliente: `brands/<cliente>/DESIGN.md` e `COPY.md`.
 - Meta (publicação do app): [META-PRODUCAO.md](../../META-PRODUCAO.md).

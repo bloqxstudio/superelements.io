@@ -120,6 +120,8 @@ export interface EncodeOptions {
   /** O quadro `i` (o tempo é i / FPS), do tamanho do vídeo. */
   frame: (i: number) => Promise<CanvasImageSource & { width: number; height: number }>
   audio?: { data: ArrayBuffer; cfg: MotionAudio }
+  /** Áudio já mixado (narração + efeitos do vídeo explicativo), no lugar de `audio`. */
+  mixed?: AudioBuffer
   onProgress?: (done: number) => void
   signal?: AbortSignal
 }
@@ -134,7 +136,7 @@ export async function encodeMp4(opts: EncodeOptions): Promise<Blob> {
   const codec = await pickCodec(width, height, bitrate)
   if (!codec) throw new Error('O navegador não codifica H.264 nesse tamanho.')
   const audio = await silentAudio()
-  if (opts.audio && !audio) throw new Error('Este navegador não codifica o áudio do vídeo. Use o Chrome ou o Edge atualizados, ou tire a trilha.')
+  if ((opts.audio || opts.mixed) && !audio) throw new Error('Este navegador não codifica o áudio do vídeo. Use o Chrome ou o Edge atualizados, ou tire a trilha.')
 
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
@@ -186,7 +188,7 @@ export async function encodeMp4(opts: EncodeOptions): Promise<Blob> {
     aenc.configure({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 2, bitrate: 96000 })
     const chunk = 4800
     const samples = Math.ceil(total * RATE)
-    const mixed = opts.audio ? await mixAudio(opts.audio.data, opts.audio.cfg, total) : undefined
+    const mixed = opts.mixed ?? (opts.audio ? await mixAudio(opts.audio.data, opts.audio.cfg, total) : undefined)
     const left = mixed?.getChannelData(0)
     const right = mixed ? mixed.getChannelData(Math.min(1, mixed.numberOfChannels - 1)) : undefined
     const planar = new Float32Array(chunk * 2)

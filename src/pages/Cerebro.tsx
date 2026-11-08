@@ -10,17 +10,19 @@ import { supabase } from '@/integrations/supabase/client'
 import { useCrm } from '@/features/crm/crmStore'
 import { cn } from '@/lib/utils'
 import {
-  ACCEPT, deleteFile, deleteNote, isAutoPath, loadAccountVault, mediaUrl, saveNote, starterNotes, uploadFiles, type LoadedVault,
+  ACCEPT, deleteFile, deleteNote, isAutoPath, loadAccountVault, loadPlatformCreatives, mediaUrl, saveNote, starterNotes, uploadFiles, type LoadedVault,
 } from '@/features/cerebro/data'
 import { renderMarkdown } from '@/features/cerebro/markdown'
 import { forgetBrain } from '@/features/cerebro/scope'
 import { GraphView } from '@/features/cerebro/GraphView'
 import {
-  AUTO_FOLDER, areaId, areasOf, buildGraph, buildTree, countMedia, dateOf, dirOf, fileName, folderLabel, folderNote, headingsOf, isImage, isLog, isVideo,
+  AUTO_FOLDER, areaId, areasOf, joinPath, buildGraph, buildTree, countMedia, dateOf, dirOf, fileName, folderLabel, folderNote, headingsOf, isImage, isLog, isVideo,
   metaOf, search, titleOf, type Area, type TreeFolder, type VaultMedia, type VaultNote,
 } from '@/features/cerebro/vault'
 import { DESIGN_PATH, PATTERN_DIR, isPatternPath, parsePattern, patternsOf } from '@/features/cerebro/standard'
 import { BrandEmpty, BrandHeader, PatternActions, PatternsView } from '@/features/cerebro/StandardViews'
+import { kindOf, openViewer, type ViewerItem } from '@/components/MediaViewer'
+import { GenerateMedia } from '@/features/cerebro/GenerateMedia'
 import '@/features/cerebro/cerebro.css'
 
 /**
@@ -46,11 +48,57 @@ const MediaThumb: React.FC<{ m: VaultMedia; className?: string }> = ({ m, classN
   return <div className={cn('flex items-center justify-center bg-gray-50 text-xs font-medium uppercase text-gray-400', className)}>{m.path.split('.').pop()}</div>
 }
 
-const openMedia = async (path: string, mtime?: number) => {
-  const tab = window.open('', '_blank')
-  const url = await mediaUrl(path, mtime)
-  if (tab) tab.location.href = url
-  else window.location.href = url
+/**
+ * O último cérebro aberto fica guardado neste navegador (2026-11-07, o usuário: "se abrir uma vez, depois
+ * manter já salvo? está bem lento"): a tela abre na hora com ele e atualiza por trás. Os links das
+ * imagens valem 7 dias, então a cópia vale 5.
+ */
+const SAVED_KEY = (team: string) => `cerebro-cofre:${team}`
+const SAVED_TTL = 5 * 86_400_000
+const readSaved = (team?: string): LoadedVault | null => {
+  if (!team) return null
+  try {
+    const raw = localStorage.getItem(SAVED_KEY(team))
+    if (!raw) return null
+    const { at, vault } = JSON.parse(raw) as { at: number; vault: LoadedVault }
+    return Date.now() - at < SAVED_TTL && vault?.teamId === team ? vault : null
+  } catch { return null }
+}
+const writeSaved = (vault: LoadedVault) => {
+  try {
+    const raw = JSON.stringify({ at: Date.now(), vault })
+    if (raw.length < 3_000_000) localStorage.setItem(SAVED_KEY(vault.teamId), raw)
+  } catch { /* cheio ou bloqueado: só não guarda */ }
+}
+
+/** O que vem dos Criativos (capas, imagens dos posts): chega depois do resto. */
+const isCreative = (p: string) => p === `${AUTO_FOLDER}/criativos.md` || p.startsWith(`${AUTO_FOLDER}/criativos/`) || p.startsWith(`${AUTO_FOLDER}/imagens/`)
+
+/** Num recarregamento, mantém as capas dos Criativos que já estavam na tela enquanto as novas chegam. */
+const withCreatives = (v: LoadedVault, prev: LoadedVault): Partial<LoadedVault> => {
+  return { notes: [...v.notes, ...prev.notes.filter((n) => isCreative(n.path))], media: [...v.media, ...prev.media.filter((m) => isCreative(m.path))], partial: false }
+}
+
+/**
+ * Abre arquivos do cérebro no visualizador da mesma aba (`MediaViewer`), com as outras imagens da pasta
+ * ou da nota para passar com as setas. `remove` apaga um arquivo da conta (as da plataforma não).
+ */
+const viewMedia = (vault: LoadedVault, paths: string[], start: string, remove?: (path: string) => Promise<void>) => {
+  const items: ViewerItem[] = paths.map((path) => {
+    const m = vault.media.find((x) => x.path === path)
+    const own = !m?.url && !isAutoPath(path)
+    return {
+      name: fileName(path),
+      src: m?.url,
+      resolve: () => mediaUrl(path, m?.mtime),
+      kind: kindOf(path),
+      caption: m?.label ?? (dirOf(path) ? folderLabel(fileName(dirOf(path))) : undefined),
+      href: m?.href,
+      hrefLabel: m?.href?.startsWith('/criativos') ? 'Abrir no Criativos' : undefined,
+      onDelete: own && remove ? () => remove(path) : undefined,
+    }
+  })
+  openViewer(items, Math.max(0, paths.indexOf(start)))
 }
 
 // ———————————————————————————————————— árvore
@@ -138,7 +186,9 @@ const FolderRow: React.FC<{
 
 // ———————————————————————————————————— nota
 
-const NoteBody: React.FC<{ vault: LoadedVault; note: VaultNote; onOpen: (p: string) => void; onFolder: (p: string) => void }> = ({ vault, note, onOpen, onFolder }) => {
+const NoteBody: React.FC<{ vault: LoadedVault; note: VaultNote; onOpen: (p: string) => void; onFolder: (p: string) => void; onRemoveMedia?: (path: string) => void; onView: (paths: string[], start: string) => void }> = ({ vault, note, onOpen, onFolder, onRemoveMedia, onView }) => {
+  const removeRef = useRef(onRemoveMedia)
+  removeRef.current = onRemoveMedia
   const ref = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const html = useMemo(() => renderMarkdown(vault, note.path, note.content), [vault, note])
@@ -150,17 +200,38 @@ const NoteBody: React.FC<{ vault: LoadedVault; note: VaultNote; onOpen: (p: stri
       const path = el.dataset.midia!
       const m = vault.media.find((x) => x.path === path)
       void mediaUrl(path, m?.mtime).then((u) => { if (live) el.src = u }).catch(() => {})
+      // Tirar a foto da nota: um × sobre cada imagem (nota que se edita)
+      if (removeRef.current && !el.parentElement?.classList.contains('cb-media')) {
+        const wrap = document.createElement('span')
+        wrap.className = 'cb-media group relative inline-block max-w-full'
+        el.replaceWith(wrap)
+        wrap.appendChild(el)
+        const b = document.createElement('button')
+        b.type = 'button'
+        b.dataset.tirar = path
+        b.setAttribute('aria-label', `Tirar ${fileName(path)} da nota`)
+        b.title = 'Tirar da nota'
+        b.className = 'absolute right-2 top-2 rounded-md bg-white/95 px-2 py-1 text-xs font-medium text-gray-600 shadow-sm opacity-100 transition-opacity hover:text-red-600 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100'
+        b.textContent = 'Tirar ✕'
+        wrap.appendChild(b)
+      }
     })
     return () => { live = false }
   }, [html, vault.media])
   const click = (e: React.MouseEvent) => {
     const t = e.target as HTMLElement
     const a = t.closest('a') as HTMLAnchorElement | null
+    const tirar = (t.closest('[data-tirar]') as HTMLElement | null)?.dataset.tirar
+    if (tirar) { e.preventDefault(); e.stopPropagation(); removeRef.current?.(tirar); return }
     if (a?.dataset.nota) { e.preventDefault(); onOpen(a.dataset.nota) }
     else if (a?.dataset.pasta) { e.preventDefault(); onFolder(a.dataset.pasta) }
     else if (a?.dataset.rota) { e.preventDefault(); navigate(a.dataset.rota) }
-    else if (a?.dataset.midiaAbrir) { e.preventDefault(); void openMedia(a.dataset.midiaAbrir) }
-    else if (t.tagName === 'IMG' && (t as HTMLImageElement).dataset.midia) void openMedia((t as HTMLImageElement).dataset.midia!)
+    else if (a?.dataset.midiaAbrir) { e.preventDefault(); onView([a.dataset.midiaAbrir], a.dataset.midiaAbrir) }
+    else if (t.tagName === 'IMG' && (t as HTMLImageElement).dataset.midia) {
+      // As imagens da nota, na ordem, para passar com as setas
+      const all = [...new Set([...(ref.current?.querySelectorAll<HTMLImageElement>('img[data-midia]') ?? [])].map((x) => x.dataset.midia!))]
+      onView(all, (t as HTMLImageElement).dataset.midia!)
+    }
   }
   return <div ref={ref} className="cb-prose" onClick={click} dangerouslySetInnerHTML={{ __html: html }} />
 }
@@ -276,12 +347,14 @@ export default function Cerebro() {
   const navigate = useNavigate()
   const manager = team?.role === 'owner' || team?.role === 'admin'
   const [params, setParams] = useSearchParams()
-  const [vault, setVault] = useState<LoadedVault | null>(null)
+  const [vault, setVault] = useState<LoadedVault | null>(() => readSaved(useCrm.getState().team?.id))
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [generating, setGenerating] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [treeOpen, setTreeOpen] = useState(false)
   const [open, setOpen] = useState<Set<string>>(() => new Set([AUTO_FOLDER, 'produtos']))
@@ -301,14 +374,29 @@ export default function Cerebro() {
   const reload = useCallback(async () => {
     const t = teamRef.current
     if (!t) return
+    setRefreshing(true)
     try {
       forgetBrain()
-      setVault(await loadAccountVault({ id: t.id, name: t.name, isHome: t.isHome, profile: t.profile }))
+      const team = { id: t.id, name: t.name, isHome: t.isHome, profile: t.profile }
+      // Abre com as notas e os arquivos; as capas dos Criativos (o que demora) entram depois
+      const v = await loadAccountVault(team, { creatives: 'later' })
+      setVault((prev) => (v.partial && prev?.teamId === v.teamId && !prev.partial ? { ...v, ...withCreatives(v, prev) } : v))
       setError(null)
+      if (v.partial) {
+        const c = await loadPlatformCreatives(team)
+        setVault((cur) => (cur && cur.teamId === v.teamId ? { ...cur, notes: [...cur.notes.filter((n) => !isCreative(n.path)), ...c.notes], media: [...cur.media.filter((m) => !isCreative(m.path)), ...c.media], partial: false } : cur))
+      }
     } catch (e) { setError(e instanceof Error ? e.message : 'Não deu para ler o cérebro') }
+    finally { setRefreshing(false) }
   }, [])
 
-  useEffect(() => { setVault(null); void reload() }, [reload, teamId])
+  useEffect(() => { setVault((v) => (v?.teamId === teamId ? v : readSaved(teamId))); void reload() }, [reload, teamId])
+  // Guarda a versão completa para a próxima abertura
+  useEffect(() => {
+    if (!vault || vault.partial) return
+    const id = window.setTimeout(() => writeSaved(vault), 800)
+    return () => window.clearTimeout(id)
+  }, [vault])
   // Ao vivo: outra pessoa (ou a Iara) gravou uma nota desta conta
   useEffect(() => {
     if (!teamId) return
@@ -402,6 +490,52 @@ export default function Cerebro() {
     catch (e) { toast.error(e instanceof Error ? e.message : 'Não apagou') }
   }
 
+  // Apagar pelo visualizador
+  const removeFile = useCallback(async (path: string) => { if (!team) return; await deleteFile(team.id, path); await reload() }, [team, reload])
+  // /cerebro?midia=<arquivo> (links da Iara): abre a imagem ampliada, com as outras da mesma pasta
+  const midia = params.get('midia')
+  useEffect(() => {
+    if (!midia || !vault) return
+    const siblings = vault.media.filter((m) => dirOf(m.path) === dirOf(midia) && isImage(m.path)).map((m) => m.path)
+    if (!vault.media.some((m) => m.path === midia) && vault.partial) return // ainda chegando
+    viewMedia(vault, siblings.includes(midia) ? siblings : [midia], midia, removeFile)
+    setParams((x) => { const n = new URLSearchParams(x); n.delete('midia'); if (!n.get('nota')) n.set('pasta', dirOf(midia) || '.'); return n }, { replace: true })
+  }, [midia, vault, removeFile, setParams])
+
+  // Tira a imagem da nota (todas as menções a ela) e apaga o arquivo se nenhuma outra nota usa
+  const removeMedia = async (path: string) => {
+    if (!team || !note || note.auto || note.linked) return
+    if (!window.confirm(`Tirar ${fileName(path)} desta nota? O arquivo é apagado se nenhuma outra nota usar.`)) return
+    const dir = dirOf(note.path)
+    const next = note.content
+      .replace(/!\[[^\]]*\]\(([^)\s]+)\)/g, (m, src: string) => (!/^https?:/.test(src) && joinPath(dir, decodeURI(src)).path === path ? '' : m))
+      .replace(/^[ \t]*$\n(?=^[ \t]*$\n)/gm, '')
+    try {
+      await saveNote(team.id, note.path, next)
+      const used = vault?.notes.some((n) => n.path !== note.path && n.content.includes(fileName(path)))
+      if (!used) await deleteFile(team.id, path).catch(() => {})
+      toast.success(used ? 'Tirada da nota (outra nota ainda usa o arquivo).' : 'Imagem tirada e apagada.')
+      await reload()
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Não tirou') }
+  }
+
+  // Apaga uma pasta inteira: as notas (gestor) e os arquivos dela
+  const removeFolder = async (dir: string) => {
+    if (!team || !vault || !dir || isAutoPath(dir)) return
+    const notes = vault.notes.filter((n) => !n.auto && !n.linked && (n.path.startsWith(dir + '/')))
+    const files = vault.media.filter((m) => !m.url && m.path.startsWith(dir + '/'))
+    if (!window.confirm(`Apagar a pasta ${folderLabel(fileName(dir))} com ${notes.length} nota(s) e ${files.length} arquivo(s)? Não dá para desfazer.`)) return
+    setBusy('Apagando')
+    try {
+      for (const n of notes) await deleteNote(team.id, n.path)
+      for (const m of files) await deleteFile(team.id, m.path)
+      toast.success('Pasta apagada.')
+      setParams(new URLSearchParams())
+      await reload()
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Não apagou'); await reload() }
+    finally { setBusy(null) }
+  }
+
   if (!team) return <Centered icon={Users} title="Abra uma conta" text="O cérebro mostra só o que é da empresa aberta no menu." />
   if (error && !vault) return <Centered icon={Brain} title="Não deu para abrir o cérebro" text={error} action={<Button size="sm" variant="outline" onClick={() => void reload()}>Tentar de novo</Button>} />
   if (!vault || !tree || !graph) return <Centered icon={Loader2} spin title="Abrindo o cérebro" />
@@ -489,6 +623,7 @@ export default function Cerebro() {
         </button>
         <Brain className="hidden h-4 w-4 text-violet-600 lg:block" aria-hidden />
         <h1 className="text-[15px] font-semibold tracking-tight text-gray-900">Cérebro</h1>
+        {(refreshing || vault?.partial) && <span className="flex items-center gap-1 text-[11px] text-gray-400" aria-live="polite"><Loader2 className="h-3 w-3 animate-spin" />Atualizando</span>}
         <div className="ml-3 hidden rounded-lg bg-gray-100 p-0.5 text-[13px] sm:flex" role="tablist" aria-label="Vista">
           <button type="button" role="tab" aria-selected={!graphMode} onClick={() => setGraph(false)} className={cn('flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors', !graphMode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800')}>
             <FileText className="h-3.5 w-3.5" aria-hidden /> Notas
@@ -503,6 +638,9 @@ export default function Cerebro() {
           title={`Fotos, vídeos e PDF entram em ${targetFolder ? folderLabel(targetFolder) : 'Início'}`}>
           {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-1.5 h-3.5 w-3.5" />}
           <span className="hidden md:inline">{busy ?? 'Adicionar arquivos'}</span>
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setGenerating((v) => !v)} aria-expanded={generating} title="Criar fotos e peças da empresa com a IA de imagens">
+          <Sparkles className="mr-1.5 h-3.5 w-3.5" /><span className="hidden md:inline">Criar imagem</span>
         </Button>
         <div className="relative">
           <Button size="sm" variant="outline" onClick={() => setCreating((v) => !v)} aria-expanded={creating}><Plus className="mr-1 h-3.5 w-3.5" />Nova</Button>
@@ -558,21 +696,34 @@ export default function Cerebro() {
                   </nav>
                 )}
 
+                {generating && (
+                  <GenerateMedia teamId={team.id} vault={vault} folder={targetFolder} folders={[...new Set([...folders, ...vault.media.filter((m) => !m.url).map((m) => dirOf(m.path)).filter(Boolean)])].sort()}
+                    onClose={() => setGenerating(false)} onSaved={() => void reload()} />
+                )}
                 {shownFolder === PATTERN_DIR ? (
                   <PatternsView teamId={team.id} vault={vault} manager={manager} onOpen={openNote} onChanged={() => void reload()} />
                 ) : shownFolder !== null ? (
                   <div>
-                    <h1 className="mb-1 text-[28px] font-semibold tracking-tight text-gray-900">{shownFolder ? folderLabel(fileName(shownFolder)) : 'Arquivos do início'}</h1>
+                    <div className="mb-1 flex items-start gap-2">
+                      <h1 className="flex-1 text-[28px] font-semibold tracking-tight text-gray-900">{shownFolder ? folderLabel(fileName(shownFolder)) : 'Arquivos do início'}</h1>
+                      {manager && shownFolder && !isAutoPath(shownFolder) && shownFolder !== 'marca' && (
+                        <Button size="sm" variant="ghost" className="h-8 text-gray-400 hover:bg-red-50 hover:text-red-600" disabled={!!busy} onClick={() => void removeFolder(shownFolder)}>
+                          <Trash2 className="mr-1.5 h-3.5 w-3.5" />Apagar pasta
+                        </Button>
+                      )}
+                    </div>
                     <p className="mb-6 text-sm text-gray-500">
                       {folderMedia.length} arquivo(s){folderNotes.length ? ` · ${folderNotes.length} nota(s)` : ''}.
-                      {!isAutoPath(shownFolder) && <> Use <b className="font-medium text-gray-700">Adicionar arquivos</b> para pôr fotos aqui, ou cole a foto numa nota em edição.</>}
+                      {isAutoPath(shownFolder)
+                        ? <> Estas vêm dos Criativos da conta: para tirar uma daqui, apague o post lá.</>
+                        : <> Use <b className="font-medium text-gray-700">Adicionar arquivos</b> ou <b className="font-medium text-gray-700">Criar imagem</b> para pôr fotos aqui. Passe o mouse numa foto para apagar.</>}
                     </p>
                     {folderNotes.length > 0 && <div className="mb-6 space-y-0.5">{folderNotes.map((n) => <NoteRow key={n.path} note={n} depth={0} current={null} onOpen={openNote} />)}</div>}
                     {folderMedia.length ? (
                       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                         {folderMedia.map((m) => (
                           <li key={m.path} className="group relative">
-                            <button type="button" onClick={() => void openMedia(m.path, m.mtime)} className="block w-full text-left">
+                            <button type="button" onClick={() => viewMedia(vault, folderMedia.map((x) => x.path), m.path, removeFile)} className="block w-full text-left">
                               <MediaThumb m={m} className="aspect-square w-full rounded-lg border border-gray-200 object-cover transition-opacity group-hover:opacity-90" />
                               <span className="mt-1.5 block truncate text-xs text-gray-600">{fileName(m.path)}</span>
                               {m.size > 0 && <span className="block text-[11px] text-gray-400">{(m.size / 1024).toFixed(0)} KB · {fmtDate(m.mtime)}</span>}
@@ -580,7 +731,7 @@ export default function Cerebro() {
                             {!m.url && (
                               <button type="button" aria-label={`Apagar ${fileName(m.path)}`}
                                 onClick={async () => { if (!window.confirm(`Apagar ${fileName(m.path)}?`)) return; try { await deleteFile(team.id, m.path); await reload() } catch (e) { toast.error(e instanceof Error ? e.message : 'Não apagou') } }}
-                                className="absolute right-1.5 top-1.5 rounded-md bg-white/90 p-1.5 text-gray-500 opacity-0 shadow-sm transition-opacity hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100">
+                                className="absolute right-1.5 top-1.5 rounded-md bg-white/90 p-1.5 text-gray-500 shadow-sm transition-opacity hover:text-red-600 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             )}
@@ -619,7 +770,7 @@ export default function Cerebro() {
                       )}
                       {isPatternPath(note.path) && <PatternActions teamId={team.id} vault={vault} pattern={parsePattern(note)} manager={manager} onDone={() => void reload()} />}
                       {note.linked === 'brand' && <BrandHeader md={note.content} />}
-                      <NoteBody vault={vault} note={note.linked === 'brand' ? { ...note, content: note.content.replace(/^---\n[\s\S]*?\n---\n?/, '') } : note} onOpen={openNote} onFolder={openFolder} />
+                      <NoteBody key={note.path} vault={vault} note={note.linked === 'brand' ? { ...note, content: note.content.replace(/^---\n[\s\S]*?\n---\n?/, '') } : note} onOpen={openNote} onFolder={openFolder} onRemoveMedia={!note.auto && !note.linked ? (p) => void removeMedia(p) : undefined} onView={(paths, start) => viewMedia(vault, paths, start, removeFile)} />
                       <p className="mt-12 border-t border-gray-100 pt-4 text-xs text-gray-400">{note.auto ? 'Da plataforma, atualizada agora' : note.linked === 'brand' ? 'A marca da conta: os Criativos e a Iara usam este texto em todo post novo.' + (manager ? '' : ' Só gestor edita.') : `${note.path} · salva em ${fmtDate(note.mtime)}`}</p>
                     </article>
                   )

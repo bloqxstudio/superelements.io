@@ -3,7 +3,7 @@
 // este servidor repassa à aba do app pela ponte do Space (método `iara`). Sem shell no meio: o JSON
 // vai inteiro (acentos, apóstrofos) e as imagens dos slides voltam como imagem para o agente ver.
 // Sem dependências: o conector grava este arquivo na pasta dele (scripts/connector/build.mjs).
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import readline from 'node:readline'
 
@@ -14,12 +14,45 @@ function bridge() {
   throw new Error('A ponte com o app não está no ar: abra o app no navegador com o conector ligado.')
 }
 
+/**
+ * Arquivos desta máquina nas ações (2026-11-08, sugestão: a Iara pôr fotos e vídeos nas cenas do Motion): um objeto
+ * com "caminho" absoluto de uma imagem ou vídeo ganha `arquivo` ({nome, tipo, data em base64}) antes de ir à aba,
+ * que não lê o disco. Só mídia, até 40 MB cada e 80 MB no pedido.
+ */
+const MEDIA = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm' }
+const MAX_FILE = 40 * 1024 * 1024
+const MAX_TOTAL = 80 * 1024 * 1024
+function attachFiles(value, budget = { left: MAX_TOTAL, files: 0 }) {
+  if (Array.isArray(value)) return value.map((v) => attachFiles(v, budget))
+  if (!value || typeof value !== 'object') return value
+  const out = {}
+  for (const [k, v] of Object.entries(value)) out[k] = attachFiles(v, budget)
+  if (typeof value.caminho === 'string' && value.caminho.trim()) {
+    const file = path.resolve(value.caminho.trim().replace(/^~(?=\/)/, process.env.HOME ?? '~'))
+    const ext = path.extname(file).slice(1).toLowerCase()
+    const tipo = MEDIA[ext]
+    if (!tipo) throw new Error(`"${value.caminho}" não é imagem nem vídeo (PNG, JPG, WebP, GIF, MP4, MOV ou WebM).`)
+    if (!existsSync(file)) throw new Error(`Arquivo não encontrado: ${file}`)
+    const size = statSync(file).size
+    if (size > MAX_FILE) throw new Error(`${path.basename(file)} tem ${Math.round(size / 1048576)} MB; o limite é 40 MB por arquivo (corte ou comprima antes).`)
+    if (size > budget.left) throw new Error('Os arquivos passam de 80 MB juntos: mande em mais de um pedido.')
+    budget.left -= size
+    budget.files++
+    out.arquivo = { nome: path.basename(file), tipo, data: readFileSync(file).toString('base64') }
+    delete out.caminho
+  }
+  return out
+}
+
 async function call(action, args = {}) {
   const { url, token } = bridge()
+  const budget = { left: MAX_TOTAL, files: 0 }
+  args = attachFiles(args, budget)
   const response = await fetch(`${url}/__space/call`, {
     method: 'POST',
     headers: { 'x-space-token': token, 'content-type': 'application/json' },
-    body: JSON.stringify({ method: 'iara', params: { action, args }, agent: 'Iara', session: process.env.SPACE_SESSION ?? 'iara' }),
+    // prefer: a aba onde a pessoa conversa com a Iara (a conta e a tela abertas nela)
+    body: JSON.stringify({ method: 'iara', params: { action, args, ...(budget.files ? { long: true } : {}) }, agent: 'Iara', session: process.env.SPACE_SESSION ?? 'iara', prefer: process.env.SPACE_TAB || undefined }),
   })
   const body = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`)
