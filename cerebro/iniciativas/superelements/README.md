@@ -15,6 +15,8 @@
 
 ## Em andamento
 
+- Comercial animado no vídeo explicativo (2026-11-08, no ar): falta criar o vídeo na conta da Avence, narrar e revisar.
+
 - 2026-11-08: Motion ganhou composição visual de vídeo, animação e legenda, com caixas arrastáveis e medidas por vídeo (app local, sem deploy).
 - 2026-11-08: marca e Cérebro inicial da Ready Seguros importados para a conta, com logos originais e pendências explícitas; sem alteração de páginas ou campanhas.
 - Sites em código: commits `5ffa40a` e `197edd9` na branch `sites-astro` (2026-11-06).
