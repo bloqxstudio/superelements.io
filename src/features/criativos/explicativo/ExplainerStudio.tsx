@@ -208,7 +208,7 @@ const Preview: React.FC<{ set: CreativeSet; scene: CodeScene; voice: Voice | nul
   // O motor: refeito quando o roteiro, os cortes, a marca ou o estilo mudam
   const brand = brandOfExplainer(set, data)
   const photoKey = data.photos.map((p) => `${p.src}=${p.name}:${images.has(p.src) ? 1 : 0}`).join('|')
-  const dataKey = JSON.stringify([data.beats, data.cuts, data.mode, data.layout, data.captions, data.theme, data.treatment, data.mirror, data.words, scene.duration, brand, photoKey, voice?.kind])
+  const dataKey = JSON.stringify([data.beats, data.endCard, data.cuts, data.mode, data.look, data.layout, data.composition, data.videoPositionY, data.captions, data.theme, data.treatment, data.mirror, data.words, scene.duration, brand, photoKey, voice?.kind])
   const drawn = useRef(-1)
   useEffect(() => {
     let alive = true

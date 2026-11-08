@@ -22,6 +22,7 @@ import { commitToSet } from './pipeline'
 import { retime } from './transcribe'
 import { narrate, spokenText, type VoiceAI } from './narracao'
 import { DEFAULT_VOICE, VoicePicker } from './VoicePicker'
+import { CompositionPanel } from './CompositionPanel'
 import { CAPTIONS, LAYOUTS, LOOKS, PATTERNS, SFX, THEMES, TRANSITIONS, TREATMENTS, type ExplainerBeat, type ExplainerData, type PatternId } from './types'
 import { Label, PATTERN_COLOR, editExplainer, field, fmt, isBriefing, slug, uid } from './shared'
 
@@ -396,6 +397,21 @@ export const StylePanel: React.FC<{ set: CreativeSet; scene: CodeScene }> = ({ s
         <p className="mt-1 text-[11px] text-gray-500">{LOOKS[data.look ?? 'editorial'].hint}{data.look && data.look !== 'editorial' ? ' Ponha um print em cada cena (aba Roteiro, "Print no cartão"); sem print, o cartão mostra a animação da cena.' : ''}</p>
       </section>
       <BrandBox set={set} scene={scene} />
+      <CompositionPanel scene={scene} hasVideo={hasVideo} />
+      {data.endCard && <section className="space-y-2 rounded-lg border p-3">
+        <Label>Tela final · logo e chamada</Label>
+        <label className="block text-xs">Chamada<input className={field} value={data.endCard.headline} onChange={e => set1({ endCard: { ...data.endCard!, headline: e.target.value } })} /></label>
+        <label className="block text-xs">Texto de apoio<input className={field} value={data.endCard.sub ?? ''} onChange={e => set1({ endCard: { ...data.endCard!, sub: e.target.value } })} /></label>
+        <label className="block text-xs">Duração (segundos)<input className={field} type="number" min={1} max={15} step={0.5} value={data.endCard.duration} onChange={e => { if (e.target.value) set1({ endCard: { ...data.endCard!, duration: Math.max(1, Math.min(15, Number(e.target.value))) } }) }} /></label>
+        <p className="text-xs text-gray-500">Entra após o último trecho mantido da gravação, em tela cheia.</p>
+      </section>}
+      {data.endCard && <section className="space-y-2 rounded-lg border p-3">
+        <Label>Tela final · logo e chamada</Label>
+        <label className="block text-xs">Chamada<input className={field} value={data.endCard.headline} onChange={e => set1({ endCard: { ...data.endCard!, headline: e.target.value } })} /></label>
+        <label className="block text-xs">Texto de apoio<input className={field} value={data.endCard.sub ?? ''} onChange={e => set1({ endCard: { ...data.endCard!, sub: e.target.value } })} /></label>
+        <label className="block text-xs">Duração (segundos)<input className={field} type="number" min={1} max={15} step={0.5} value={data.endCard.duration} onChange={e => { if (e.target.value) set1({ endCard: { ...data.endCard!, duration: Math.max(1, Math.min(15, Number(e.target.value))) } }) }} /></label>
+        <p className="text-xs text-gray-500">Entra após o último trecho mantido da gravação, em tela cheia.</p>
+      </section>}
       <section>
         <Label>Fundo</Label>
         <Chips value={theme} options={THEMES} onPick={(v) => set1({ theme: v })} />
@@ -406,6 +422,10 @@ export const StylePanel: React.FC<{ set: CreativeSet; scene: CodeScene }> = ({ s
           <Chips value={data.layout} options={LAYOUTS} onPick={(v) => set1({ layout: v })} disabled={(v) => v !== 'animacao' && !hasVideo} />
           <p className="mt-1 text-[11px] text-gray-500">{LAYOUTS[data.layout].hint}</p>
           {hasVideo && data.layout !== 'animacao' && <label className="mt-1.5 flex items-center gap-2 text-xs text-gray-700"><input type="checkbox" checked={!!data.mirror} onChange={(e) => set1({ mirror: e.target.checked })} /> Espelhar a câmera</label>}
+          {hasVideo && <label className="mt-3 block text-xs text-gray-700">Enquadramento vertical
+            <input aria-label="Enquadramento vertical" type="range" min="0" max="100" value={Math.round((data.videoPositionY ?? 0.5) * 100)} onChange={(e) => set1({ videoPositionY: Number(e.target.value) / 100 })} className="mt-2 w-full" />
+            <span className="flex justify-between text-[11px] text-gray-500"><span>Mostrar topo · pessoa mais abaixo</span><span>Mostrar base</span></span>
+          </label>}
         </section>
       )}
       {!briefing && (

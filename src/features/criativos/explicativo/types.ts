@@ -1,5 +1,6 @@
 import type { SetBrand } from '../types'
 import type { Research } from './pesquisa'
+import type { Composition } from './composition'
 /**
  * Vídeo explicativo (2026-11-07, o usuário: "eu posso gravar um video ou mandar um audio, isso vai
  * ser gerado uma animacao explicando o audio… animacoes virais, com efeitos de texto, animando
@@ -43,6 +44,8 @@ export type SfxId = keyof typeof SFX
 
 /** Um momento do roteiro: um trecho da fala e a animação dele. */
 export interface ExplainerBeat {
+  /** Fecho que ocupa o quadro inteiro, sem vídeo ou legenda por cima. */
+  fullScreen?: boolean
   id: string
   /** Segundos no vídeo. */
   start: number
@@ -130,6 +133,9 @@ export const MODES = {
 export type ModeId = keyof typeof MODES
 
 export interface ExplainerData {
+  /** Tela final depois da fala mantida, sem estender o áudio original. */
+  endCard?: { duration: number; headline: string; sub?: string }
+  composition?: Composition
   /** Sem o campo: narração (vídeos criados antes dos dois modos). */
   mode?: ModeId
   /** Estilo de edição viral; sem o campo, editorial. */
@@ -160,6 +166,8 @@ export interface ExplainerData {
   voiceVolume: number
   /** Espelhar a câmera (selfie). */
   mirror?: boolean
+  /** Recorte vertical: 0 mostra o topo do original, 0.5 centraliza, 1 mostra a base. */
+  videoPositionY?: number
   /** A marca do vídeo; sem o campo, a do conjunto. "Usar a marca da conta" copia o DESIGN.md do Cérebro aqui. */
   brand?: SetBrand
   /** A narração foi feita por voz de IA (OpenAI): a voz e o jeito, para refazer. */
@@ -199,6 +207,7 @@ export interface BrandTokens {
 }
 
 export interface ExplainerEnvData {
+  composition?: Composition
   look: LookId
   words: ExplainerWord[]
   beats: ExplainerBeat[]
@@ -210,6 +219,7 @@ export interface ExplainerEnvData {
   icons: Record<string, [string, Record<string, string>][]>
   treatment: TreatmentId
   mirror: boolean
+  videoPositionY?: number
   hasVideo: boolean
   videoSize?: { width: number; height: number }
 }

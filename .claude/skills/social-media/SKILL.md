@@ -7,6 +7,13 @@ description: Criar posts, carrosséis e stories de Instagram para uma conta de c
 
 A entrega é um **conjunto nos Criativos da conta do cliente**, gravado pela ponte do produto, que a equipe abre, ajusta e aprova. Nunca um arquivo solto. Aprendido no piloto da Vizor Películas (2026-11-03, sete rodadas com o usuário: `.space/vizor/build/`).
 
+## Regra fixa: tudo editável, em camadas
+
+O usuário, em 2026-11-04: "eles precisam ser editáveis… em outros projetos de criativos… é bem bom de mexer… Eu quero criar nesse padrão sempre". Todo criativo vai para o editor **em camadas**: a foto do Codex **sem nenhum texto** como camada de imagem, e título, subtítulo, botão, véu de legibilidade, logo e rodapé como camadas de texto e forma. **Nunca** peça ao Codex para escrever o texto na imagem ("sobreposição de texto publicitário"), nem grave a peça pronta como uma imagem só. A peça inteira vira arquivo único apenas na exportação.
+- Se a ideia veio de uma peça com texto pronto, gere (ou reaproveite) a **foto base sem texto** e refaça o texto por cima, em camadas.
+- Quebras de linha escritas à mão (`\n`) e a mesma régua do bloco em todo o conjunto (título → subtítulo → botão).
+- Exemplo: `.space/avence-studio/corretoras/editavel.mjs` (Reels das corretoras: foto 2:3 cobrindo 1280×1920 com `x` escolhendo a faixa, véu em degradê `#rrggbbaa` → transparente, título em serifa caixa alta, botão preenchido, zonas do Reels conferidas no script).
+
 ## O que o usuário rejeitou (não repetir)
 
 - **Cara de IA:** cena cinematográfica escura e genérica, vidro desfocado, degradê escuro no topo para o logo.

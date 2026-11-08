@@ -1374,7 +1374,10 @@ async function withBrowser(work) {
   } finally {
     child.kill()
     await new Promise((r) => setTimeout(r, 300))
-    rmSync(profile, { recursive: true, force: true, maxRetries: 3 })
+    // No Windows o Edge ainda segura a pasta do perfil por um instante (EPERM): as fotos já foram gravadas
+    try {
+      rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 400 })
+    } catch {}
   }
 }
 

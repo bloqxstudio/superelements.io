@@ -393,9 +393,9 @@ PAT.cta = (ctx, b, lt, dur, box, S, u, o) => {
   let y = box.y + box.h * (o.free ? 0.34 : 0.3)
   if (logo) {
     const lp = lib.prog(lt, 0, 0.6, 'outExpo')
-    const lh = 84 * u, lw = Math.min(box.w * 0.5, (logo.width / logo.height) * lh)
+    const lh = (b.fullScreen ? 155 : 84) * u, lw = Math.min(box.w * (b.fullScreen ? 0.72 : 0.5), (logo.width / logo.height) * lh)
     ctx.save(); ctx.globalAlpha = lp; lib.image(ctx, logo, cx, y + (1 - lp) * 30 * u, lw, lh, 'contain'); ctx.restore()
-    y += 130 * u
+    y += (b.fullScreen ? 205 : 130) * u
   }
   const h = textBlock(ctx, b, lt, S, { text: b.headline, x: cx, align: 'center', y, maxW: box.w - m * 2, size: 104 * u, maxLines: 3, at: 0.15, shadow: o.over })
   // Frase longa no sub vira texto de apoio; o botão só aparece com rótulo curto (ou "Seguir")
@@ -583,7 +583,9 @@ function drawVideo(ctx, x, y, w, h, t) {
   const kick = beats.length ? lib.pulse(t - beats[i].start, 0, 0.2) * 0.02 : 0
   const k = Math.max(w / v.width, h / v.height) * (punch + kick)
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip()
-  ctx.translate(x + w / 2, y + h / 2 + (punch > 1 ? h * 0.03 : 0))
+  const positionY = Math.max(0, Math.min(1, env.data.videoPositionY ?? 0.5))
+  const cropOffset = (0.5 - positionY) * Math.max(0, v.height * k - h)
+  ctx.translate(x + w / 2, y + h / 2 + cropOffset + (env.data.videoPositionY == null && punch > 1 ? h * 0.03 : 0))
   if (env.data.mirror) ctx.scale(-1, 1)
   ctx.drawImage(v, -v.width * k / 2, -v.height * k / 2, v.width * k, v.height * k)
   ctx.restore()
@@ -773,6 +775,35 @@ scene({
     const W = env.width, H = env.height, d = env.data
     if (!d || !d.brand) { ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H); return }
     const u = Math.min(W / 1080, H / 1920)
+    const activeBeat = d.beats[current(t)]
+    if (activeBeat && activeBeat.fullScreen) {
+      animation(ctx, t, { x: 0, y: 0, w: W, h: H }, { u })
+      return
+    }
+    if (d.composition) {
+      const c = d.composition
+      const rect = (b) => ({ x: b.x * W / 100, y: b.y * H / 100, w: b.w * W / 100, h: b.h * H / 100 })
+      const base = surface(d.theme === 'claro' ? 'paper' : 'ink')
+      ctx.fillStyle = base.bg; ctx.fillRect(0, 0, W, H)
+      let S = base
+      const video = () => { if (c.video.visible && env.video) { const r = rect(c.video); drawVideo(ctx, r.x, r.y, r.w, r.h, t) } }
+      if (!c.videoOnTop) video()
+      if (c.animation.visible) {
+        const r = rect(c.animation)
+        ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip()
+        S = animation(ctx, t, r, { u: Math.min(r.w / 1080, r.h / 1200) })
+        ctx.restore()
+      }
+      if (c.videoOnTop) video()
+      signature(ctx, W, t, base, u)
+      if (c.captions.visible) {
+        const r = rect(c.captions)
+        ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip(); ctx.translate(r.x, r.y)
+        captions(ctx, t, r.h / 2, S, u * Math.max(0.5, Math.min(2, c.captionScale || 1)), r.w, true)
+        ctx.restore()
+      }
+      return
+    }
     if (d.look && d.look !== 'editorial') {
       viral(ctx, t, W, H, u, d.look)
       signature(ctx, W, t, surface(d.look === 'tela-frase' ? 'paper' : 'ink'), u)

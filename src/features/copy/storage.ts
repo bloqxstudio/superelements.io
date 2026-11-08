@@ -20,13 +20,20 @@ const isNotFound = (error: unknown) => {
   return e?.statusCode === '404' || status === 404 || status === 400 || e?.name === 'StorageUnknownError' || /not.?found/i.test(e?.message ?? '')
 }
 
+/**
+ * Sempre a versão de agora, como nos Criativos: o download comum vinha do cache do navegador e
+ * mostrava o documento de antes depois que outra pessoa (ou um agente) gravou (2026-11-03).
+ */
 async function readJson<T>(path: string): Promise<T | undefined> {
-  const { data, error } = await bucket().download(path)
-  if (error) {
-    if (isNotFound(error)) return undefined
+  const { data, error } = await bucket().createSignedUrl(path, 60)
+  if (error || !data?.signedUrl) {
+    if (!error || isNotFound(error)) return undefined
     throw error
   }
-  return JSON.parse(await data.text()) as T
+  const response = await fetch(`${data.signedUrl}&v=${Date.now()}`, { cache: 'no-store' })
+  if (response.status === 400 || response.status === 404) return undefined
+  if (!response.ok) throw new Error(`Não consegui ler ${path.split('/').slice(-2).join('/')} (${response.status}).`)
+  return (await response.json()) as T
 }
 
 async function writeJson(path: string, value: unknown) {
