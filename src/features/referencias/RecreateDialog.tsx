@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Clapperboard, Image as ImageIcon, Loader2, Sparkles } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -21,8 +22,8 @@ import { KIND_LABEL } from './rules'
  * Usa as linhas de produção que já existem, pela Iara:
  *   - post, carrossel ou story: `criar_de_referencia` (o designer reproduz o layout, a hierarquia e o estilo das
  *     imagens da referência, na marca do conjunto); a capa e os quadros da referência vão como anexos;
- *   - vídeo: `criar_video_explicativo` (Reels 9:16 no estúdio do Motion, na marca), com o roteiro e o estilo
- *     tirados da referência.
+ *   - vídeo: o estúdio único de vídeo cria a animação no motor a partir desta referência (`videoFromReference.ts`,
+ *     desde 2026-11-09: a narração, a voz da OpenAI e a animação desenhada na linguagem da referência).
  * "Recriar como está" mantém a estrutura, o ritmo e a mensagem, reescritos na voz e na marca da conta. Nos dois
  * modos, nada de logo, nome, foto ou texto literal da outra empresa.
  */
@@ -50,6 +51,7 @@ type How = 'novo' | 'igual'
 
 export const RecreateDialog: React.FC<{ reference: Reference; open: boolean; onClose: () => void }> = ({ reference: r, open, onClose }) => {
   const team = useCrm((s) => s.team)
+  const navigate = useNavigate()
   const moving = r.kind === 'reels' || r.kind === 'video' || r.kind === 'motion'
   const [what, setWhat] = useState<What>(moving ? 'video' : 'post')
   const [how, setHow] = useState<How>('novo')
@@ -69,6 +71,14 @@ export const RecreateDialog: React.FC<{ reference: Reference; open: boolean; onC
 
   const start = async () => {
     if (!team || !chosen || busy) return
+    // Vídeo: o estúdio único cria no motor, a partir desta referência (videoFromReference.ts), e começa sozinho
+    if (what === 'video') {
+      const q = new URLSearchParams({ novo: 'referencia', ref: r.id, modo: how === 'igual' ? 'igual' : 'novo', ...(how === 'novo' ? { tema: topic.trim() } : {}) })
+      if (chosen.shared && chosen.projectId) q.set('projeto', chosen.projectId)
+      navigate(`/motion/${chosen.id}/video?${q.toString()}`)
+      onClose()
+      return
+    }
     setBusy(true)
     try {
       // A capa e os quadros da referência viram anexos da conversa (o designer vê as imagens)
@@ -126,7 +136,7 @@ export const RecreateDialog: React.FC<{ reference: Reference; open: boolean; onC
                 <ImageIcon className="mt-0.5 h-4 w-4 shrink-0" /><span><b className="block">Post ou carrossel</b><span className="text-xs text-gray-500">Imagem na marca, pelo designer</span></span>
               </button>
               <button type="button" className={option(what === 'video')} onClick={() => { setWhat('video'); setFormat('9x16') }}>
-                <Clapperboard className="mt-0.5 h-4 w-4 shrink-0" /><span><b className="block">Vídeo</b><span className="text-xs text-gray-500">Reels animado, no estúdio do Motion</span></span>
+                <Clapperboard className="mt-0.5 h-4 w-4 shrink-0" /><span><b className="block">Vídeo animado</b><span className="text-xs text-gray-500">A animação recriada no motor, com narração</span></span>
               </button>
             </div>
           </div>
@@ -171,7 +181,7 @@ export const RecreateDialog: React.FC<{ reference: Reference; open: boolean; onC
             <Button onClick={() => void start()} disabled={!ready || busy} className="gap-1.5">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Criar com a Iara
             </Button>
-            <span className="text-xs text-gray-500">{what === 'video' ? 'Leva alguns minutos (roteiro, voz e animação).' : 'O post aparece no conjunto escolhido.'}</span>
+            <span className="text-xs text-gray-500">{what === 'video' ? 'Abre o estúdio de vídeo e cria lá (2 a 5 minutos).' : 'O post aparece no conjunto escolhido.'}</span>
           </div>
         </div>
       </DialogContent>

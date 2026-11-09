@@ -206,6 +206,16 @@ function layer(ctx, l, o = {}) {
 
 let env = null, def = null, canvas = null, ctx = null
 
+// Os campos editáveis viram env.data.params (a chave de cada um → o valor escolhido)
+function withParams(data) {
+  if (!data || !Array.isArray(data.fields)) return data
+  const params = { ...(data.params || {}) }
+  for (const f of data.fields) if (f && f.key) params[f.key] = f.value
+  return { ...data, params }
+}
+let loadedFonts = new Set()
+
+
 async function loadFonts(list) {
   const done = []
   for (const raw of list || []) {
@@ -230,6 +240,83 @@ async function loadFonts(list) {
   return done
 }
 
+
+// A legenda da fala (env.data.captions), desenhada pelo motor por cima de qualquer cena: os mesmos estilos do
+// vídeo explicativo (pop, karaokê, caixa, contorno), com posição, tamanho e cor de destaque editáveis.
+function capGroups(words, max) {
+  const out = []
+  let cur = []
+  words.forEach((w, i) => {
+    cur.push(w)
+    const n = words[i + 1]
+    if (!n || cur.length >= max || n.s - w.e > 0.35 || /[.!?,]$/.test(w.w)) { out.push(cur); cur = [] }
+  })
+  return out
+}
+const capCache = {}
+function drawCaptions(ctx, t) {
+  const d = env.data, c = d && d.captions
+  if (!c || !c.style || c.style === 'nenhuma' || !Array.isArray(d.words) || !d.words.length) return
+  const style = c.style, W = env.width, H = env.height, u = (W / 1080) * (c.size || 1)
+  const y = H * (c.y === undefined ? 0.78 : clamp(c.y, 0.08, 0.95))
+  const key = style + ':' + d.words.length + ':' + d.words[0].s
+  const G = capCache[key] || (capCache[key] = capGroups(d.words, style === 'karaoke' ? 6 : style === 'contorno' ? 1 : 3))
+  let g = null
+  for (let i = 0; i < G.length; i++) {
+    const a = G[i][0].s - 0.05, n = G[i + 1], last = G[i][G[i].length - 1]
+    const z = n ? Math.min(n[0].s - 0.05, last.e + 0.6) : last.e + 0.6
+    if (t >= a && t < z) { g = G[i]; break }
+  }
+  if (!g) return
+  const colors = (env.brand && env.brand.colors) || []
+  const hi = c.color || colors[1] || colors[0] || '#FFD400'
+  const head = (env.brand && env.brand.font) || 'Montserrat'
+  const clean = (w) => w.w.replace(/[.,!?;:]+$/, '')
+  const cur = g.findIndex((w, i) => t >= w.s - 0.03 && (i === g.length - 1 || t < g[i + 1].s - 0.03))
+  ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none'
+  if (style === 'contorno') {
+    const w = g[0], p = clamp((t - w.s + 0.03) / 0.16)
+    const str = clean(w).toUpperCase(), size = Math.min(132 * u, fit(ctx, str, W * 0.84, { font: head, size: 132 * u, weight: 800 }))
+    at(ctx, W / 2, y, { scale: 0.85 + 0.15 * ease.outBack(p), alpha: clamp(p * 3) }, (k) => text(k, str, 0, 0, { font: head, size, weight: 800, color: '#FFFFFF', stroke: '#000000', strokeWidth: 18 * u }))
+    ctx.restore()
+    return
+  }
+  const size = (style === 'karaoke' ? 52 : 60) * u
+  const font = { font: head, size, weight: 700 }
+  const words = g.map(clean)
+  const space = measure(ctx, ' ', font)
+  const ws = words.map((w) => measure(ctx, w, font))
+  const lines = []
+  let line = [], lw = 0
+  ws.forEach((w, i) => { if (line.length && lw + space + w > W * 0.84) { lines.push({ idx: line, w: lw }); line = []; lw = 0 } line.push(i); lw += (line.length > 1 ? space : 0) + w })
+  if (line.length) lines.push({ idx: line, w: lw })
+  const lh = size * 1.3, top = y - ((lines.length - 1) * lh) / 2
+  if (style === 'caixa') {
+    const p = clamp((t - g[0].s + 0.05) / 0.18)
+    const bw = Math.max(...lines.map((l) => l.w)) + 56 * u, bh = lines.length * lh + 28 * u
+    at(ctx, W / 2, y, { scale: 0.9 + 0.1 * ease.outBack(p), alpha: clamp(p * 3) }, (k) => { k.fillStyle = '#FFFFFF'; roundRect(k, -bw / 2, -bh / 2, bw, bh, 22 * u); k.fill() })
+  }
+  lines.forEach((l, li) => {
+    let x = W / 2 - l.w / 2
+    const ly = top + li * lh
+    l.idx.forEach((i) => {
+      const w = g[i], on = i === cur, said = t >= w.s - 0.03
+      const p = clamp((t - w.s + 0.05) / 0.14), cx = x + ws[i] / 2
+      if (style === 'karaoke') {
+        if (on) { ctx.fillStyle = hi; roundRect(ctx, x - 12 * u, ly - size * 0.66, ws[i] + 24 * u, size * 1.32, 16 * u); ctx.fill() }
+        text(ctx, words[i], cx, ly, { ...font, color: on ? '#111111' : said ? '#FFFFFF' : 'rgba(255,255,255,0.5)', stroke: on ? undefined : 'rgba(0,0,0,0.85)', strokeWidth: 10 * u })
+      } else if (style === 'caixa') {
+        if (p > 0) text(ctx, words[i], cx, ly, { ...font, color: on ? hi : '#111111' })
+      } else if (p > 0) {
+        at(ctx, cx, ly + (1 - ease.outExpo(p)) * 18 * u, { alpha: clamp(p * 2) }, (k) => text(k, words[i], 0, 0, { ...font, color: on ? hi : '#FFFFFF', stroke: 'rgba(0,0,0,0.85)', strokeWidth: 12 * u }))
+      }
+      x += ws[i] + space
+    })
+  })
+  ctx.restore()
+}
+
 const lib = { layer, clamp, lerp, ease, prog, tween, keys, pulse, rand, noise, shake, mix, roundRect, circle, star, at, text, measure, fit, letters, image, path, blurFrame, PI }
 
 self.onmessage = async (ev) => {
@@ -239,6 +326,7 @@ self.onmessage = async (ev) => {
       canvas = new OffscreenCanvas(m.width, m.height)
       ctx = canvas.getContext('2d')
       env = { width: m.width, height: m.height, duration: m.duration, fps: m.fps, images: m.images || {}, beats: m.beats || [], bpm: m.bpm || 120, brand: m.brand || {}, post: m.post || null, data: m.data || null, video: null, lib }
+      env.data = withParams(env.data)
       env.beat = (t) => {
         const bs = env.beats.length ? env.beats : null
         if (!bs) { const step = 60 / env.bpm, i = Math.floor(t / step); return { index: i, at: i * step, phase: (t % step) / step, step } }
@@ -250,11 +338,25 @@ self.onmessage = async (ev) => {
       const scene = (d) => { def = d }
       new Function('scene', 'env', 'lib', '"use strict";\n' + m.code)(scene, env, lib)
       if (!def || typeof def.draw !== 'function') throw new Error('O código não chamou scene({ draw(ctx, t, env) { ... } }).')
-      await loadFonts([...(def.fonts || []), ...(m.fonts || [])])
+      await loadFonts([...(def.fonts || []), ...(m.fonts || []), ...(env.data && env.data.captions && env.brand.font ? [env.brand.font] : [])])
       env.state = def.setup ? def.setup(env) : undefined
       self.postMessage({ type: 'ready', name: def.name || '', duration: def.duration })
     } catch (err) {
       self.postMessage({ type: 'error', message: String((err && err.message) || err), stack: String((err && err.stack) || '').split('\n').slice(0, 4).join('\n') })
+    }
+    return
+  }
+  // Campos, legenda ou narração mudaram: sem recarregar o código (a prévia responde na hora)
+  if (m.type === 'data') {
+    if (!env || !def) return
+    try {
+      env.data = withParams(m.data || null)
+      env.state = def.setup ? def.setup(env) : undefined
+      const f = env.data && env.data.captions && env.brand.font
+      if (f && !loadedFonts.has(f)) { loadedFonts.add(f); await loadFonts([f]) }
+      self.postMessage({ type: 'data-ok', id: m.id })
+    } catch (err) {
+      self.postMessage({ type: 'data-ok', id: m.id, message: String((err && err.message) || err) })
     }
     return
   }
@@ -266,6 +368,7 @@ self.onmessage = async (ev) => {
       env.video = m.video || null
       env.broll = m.broll || null
       def.draw(ctx, m.t, env)
+      drawCaptions(ctx, m.t)
       if (m.video) { try { m.video.close() } catch (e) {} }
       if (m.broll) { try { m.broll.close() } catch (e) {} }
       env.video = null

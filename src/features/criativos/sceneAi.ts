@@ -1,6 +1,7 @@
 import { resolveIa } from '@/features/ia/porTarefa'
 import { callAiQuiet } from './link'
 import { SCENE_CONTRACT } from './scene'
+import { describeFields, parseFields, sceneDataOf, type SceneField } from './sceneEdit'
 import { sizeOf, type CodeScene, type CreativeSet } from './types'
 
 /**
@@ -15,7 +16,9 @@ const SYSTEM = [
   'Você escreve UMA cena: um código JavaScript que segue exatamente o contrato abaixo. Desenhe tudo com o ctx e a lib; quando houver imagens no material, use-as pelo nome em env.images e tenha um desenho de reserva quando faltarem. O código precisa rodar sem erro na primeira vez: declare tudo que usar, não use import, DOM, rede, setTimeout nem estado entre quadros.',
   'Use as cores e o nome da marca do material (env.brand); quando vierem quadros de um vídeo de referência, siga o estilo de movimento, o ritmo e a estrutura de cenas, mas nunca copie a marca, o logo ou os textos de outra empresa.',
   'Textos em português do Brasil, curtos e de anúncio. Nenhum preço, número ou promessa que não esteja no pedido; se o pedido não der preços, use preços de exemplo e diga isso no `reply`.',
-  'Responda pelo esquema: `reply` com 2 ou 3 frases dizendo o roteiro (as cenas e os tempos) e o que trocar; `items` com um item {"ref": "cena", "text": o código inteiro} e, opcional, {"ref": "duracao", "text": segundos}.',
+  'A cena é editável sem a IA: tudo o que a pessoa pode querer trocar vira um campo, e o código lê o valor em env.data.params (sempre com reserva: `const P = env.data?.params || {}` e `P.titulo1 ?? "TEXTO"`). Exponha todo texto que aparece na tela, as cores principais (fundo, destaque) e de 2 a 4 escolhas de efeito que mudem de verdade o visual (tipo de transição, partículas ligadas, intensidade da câmera, velocidade das entradas). Não desenhe legenda da fala: o motor desenha a legenda por cima quando a pessoa liga.',
+  'Responda pelo esquema: `reply` com 2 ou 3 frases dizendo o roteiro (as cenas e os tempos) e o que trocar; `items` com um item {"ref": "cena", "text": o código inteiro}, um item {"ref": "campos", "text": JSON da lista de campos} e, opcional, {"ref": "duracao", "text": segundos}.',
+  'Cada campo: {"key": nome-de-variável (letras, números, _), "label": nome curto em português, "type": "texto" | "cor" | "numero" | "opcao" | "liga", "value": o valor padrão, "group": "Parte 1" | "Cores" | "Efeitos" | …} e, conforme o tipo, "options": [lista de textos] (opcao), "min", "max", "step" (numero). Cor em #RRGGBB. Até 30 campos. Ao ajustar uma cena que já tem campos, mantenha as chaves e os valores escolhidos pela pessoa, a menos que o pedido mude isso.',
   '',
   'Contrato da cena:',
   SCENE_CONTRACT,
@@ -25,6 +28,8 @@ const STEP: Record<string, string> = { start: 'Começando…', thinking: 'Pensan
 
 export interface SceneAiResult {
   code: string
+  /** Os campos editáveis que a cena lê em env.data.params. */
+  fields?: SceneField[]
   duration?: number
   reply?: string
 }
@@ -49,7 +54,9 @@ export async function writeSceneCode(set: CreativeSet, scene: CodeScene, request
     scene.images.length ? `## Imagens disponíveis (env.images)\n${scene.images.map((i) => `- "${i.name}"`).join('\n')}` : '## Imagens\nNenhuma: desenhe tudo em código.',
     scene.beats?.length ? `## Trilha\n${Math.round(scene.bpm ?? 120)} BPM; batidas em ${scene.beats.slice(0, 40).map((b) => b.toFixed(2)).join(', ')}${scene.beats.length > 40 ? '…' : ''} (env.beats). Corte e bata nelas.` : `## Trilha\nSem trilha lida: use ${scene.bpm ?? 120} BPM (env.beat).`,
     opts.reference?.length ? `## Referência\n${opts.reference.length} quadros de um vídeo de referência vão anexados${opts.post ? ' depois dos slides' : ''}, em ordem. Siga o estilo de movimento e o tipo de cena, na marca acima.` : '',
-    opts.adjust ? `## O código atual (ajuste-o; devolva o código inteiro)\n${scene.code}` : '',
+    sceneDataOf(scene.data).parts?.length ? `## A narração (env.data.parts)\n${sceneDataOf(scene.data).parts!.map((p, i) => `${i + 1}. ${p.start.toFixed(1)}s–${p.end.toFixed(1)}s · "${p.label}" · ${p.text}`).join('\n')}` : '',
+    opts.adjust && sceneDataOf(scene.data).fields?.length ? `## Os campos atuais (env.data.params; mantenha as chaves)\n${describeFields(sceneDataOf(scene.data).fields)}` : '',
+    opts.adjust ? `## O código atual (ajuste-o; devolva o código inteiro e os campos)\n${scene.code}` : '',
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -58,7 +65,8 @@ export async function writeSceneCode(set: CreativeSet, scene: CodeScene, request
   code = code.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/, '').trim()
   if (!code.includes('scene(')) throw new Error('A IA não devolveu o código da cena. Tente de novo.')
   const dur = Number((out.items ?? []).find((i) => i?.ref === 'duracao')?.text)
-  return { code, duration: Number.isFinite(dur) && dur > 1 && dur <= 90 ? dur : undefined, reply: out.reply?.trim() || undefined }
+  const fields = parseFields((out.items ?? []).find((i) => i?.ref === 'campos')?.text)
+  return { code, fields, duration: Number.isFinite(dur) && dur > 1 && dur <= 90 ? dur : undefined, reply: out.reply?.trim() || undefined }
 }
 
 /** Quadros de um vídeo (ou imagens) de referência, reduzidos, como data URLs para a IA. */

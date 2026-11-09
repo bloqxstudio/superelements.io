@@ -105,13 +105,21 @@ export const summaryOf = (set: CreativeSet, previous?: SetSummary): SetSummary =
 })
 
 /** Os vídeos explicativos do conjunto, do mais novo ao mais antigo (até 20). */
+/**
+ * Os vídeos do conjunto para o índice: todos, os de roteiro e voz (vídeo explicativo) e as animações em
+ * código (uma ferramenta só desde 2026-11-09), com a capa.
+ */
 export function videosInfoOf(set: CreativeSet): VideoInfo[] {
   return (set.scenes ?? [])
-    .filter((s) => s.explainer)
-    .map((s) => {
-      const d = s.explainer!
+    .map((s): VideoInfo => {
+      const cover = s.cover ? { cover: s.cover } : {}
+      if (!s.explainer) {
+        const voice = s.audio ? s.audio.name : undefined
+        return { id: s.id, name: s.name, duration: Math.round(s.duration * 10) / 10, kind: 'animacao', ...(voice ? { voice } : {}), cenas: Array.isArray((s.data as { parts?: unknown[] } | undefined)?.parts) ? (s.data as { parts: unknown[] }).parts.length : 1, at: s.updatedAt, ...cover }
+      }
+      const d = s.explainer
       const voice = d.voiceAI ? `${d.voiceAI.provider === 'elevenlabs' ? 'ElevenLabs' : 'OpenAI'} (${d.voiceAI.voiceName ?? d.voiceAI.voice})` : d.media && (d.mode ?? 'narracao') === 'narracao' ? 'fala gravada' : undefined
-      return { id: s.id, name: s.name, duration: Math.round(s.duration * 10) / 10, look: d.look, mode: d.mode ?? 'narracao', ...(voice ? { voice } : {}), ...(d.research ? { research: d.research.title } : {}), cenas: d.beats.length, at: s.updatedAt }
+      return { id: s.id, name: s.name, duration: Math.round(s.duration * 10) / 10, kind: 'roteiro', look: d.look, mode: d.mode ?? 'narracao', ...(voice ? { voice } : {}), ...(d.research ? { research: d.research.title } : {}), cenas: d.beats.length, at: s.updatedAt, ...cover }
     })
     .sort((a, b) => b.at - a.at)
     .slice(0, 20)
@@ -199,7 +207,8 @@ export async function saveCovers(set: CreativeSet, made: { postId: string; hash:
     const old = list.find((s) => s.id === set.id)
     const next = summaryOf(set, old)
     next.postsInfo = next.postsInfo?.map((p) => (paths.has(`${p.id}:${p.hash}`) ? { ...p, cover: paths.get(`${p.id}:${p.hash}`) } : p))
-    keep = new Set((next.postsInfo ?? []).flatMap((p) => (p.cover ? [p.cover] : [])))
+    // As capas dos vídeos ficam na mesma pasta: não podem sair como velhas
+    keep = new Set([...(next.postsInfo ?? []).flatMap((p) => (p.cover ? [p.cover] : [])), ...(set.scenes ?? []).flatMap((s) => (s.cover ? [s.cover] : []))])
     saved = { ...next, ...(placeOf(set) ? { projectId: set.projectId, shared: true } : {}) }
     return [next, ...list.filter((s) => s.id !== set.id)]
   })
@@ -207,6 +216,18 @@ export async function saveCovers(set: CreativeSet, made: { postId: string; hash:
   const stale = (data ?? []).map((f) => `${folder}/${f.name}`).filter((p) => !keep.has(p))
   if (stale.length) await bucket().remove(stale)
   return saved
+}
+
+/**
+ * Sobe a capa de um vídeo (`capas/video-<id>-<marca>.jpg`, cache de um ano: o nome muda quando a capa muda)
+ * e apaga a anterior. Quem grava o caminho na cena é o estúdio (o índice pega dali).
+ */
+export async function saveVideoCover(set: Where, sceneId: string, blob: Blob, previous?: string): Promise<string> {
+  const path = `${await coversFolder(set)}/video-${sceneId}-${Date.now().toString(36)}.jpg`
+  const { error } = await bucket().upload(path, blob, { contentType: 'image/jpeg', upsert: true, cacheControl: '31536000' })
+  if (error) throw error
+  if (previous && previous !== path) void bucket().remove([previous]).catch(() => undefined)
+  return path
 }
 
 /** O resumo gravado deste conjunto (para saber que capas já existem). */

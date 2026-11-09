@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, Code2, Download, Film, ImagePlus, Music, Pause, Play, SkipBack, Sparkles, Trash2, Wand2 } from 'lucide-react'
+import { ArrowLeft, Code2, Download, Film, ImagePlus, Music, Pause, Play, Plus, SkipBack, Sparkles, Trash2, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useEditor } from './store'
@@ -11,6 +11,8 @@ import { describePost, fontsOf, postSceneDuration, scenePost, slideImages } from
 import { drawSlide, type ImageMap } from './render'
 import { referenceFrames, writeSceneCode } from './sceneAi'
 import { useAiAvailable } from './link'
+import { SceneEditPanel } from './SceneEditor'
+import { sceneDataOf } from './sceneEdit'
 import { detectBeats, gridBeats } from './beats'
 import { audioOfSrc, videoSupported } from './video'
 import { assetUrl, uploadAsset } from './storage'
@@ -42,6 +44,10 @@ const editScene = (id: string, fn: (s: CodeScene) => CodeScene) =>
 
 const brandOf = (set: CreativeSet) => ({ name: set.brand.name, colors: set.brand.colors.map((c) => c.hex), font: set.brand.headingFont })
 
+/**
+ * O painel da animação em código dentro do estúdio único de vídeo (`VideoStudio.tsx`, 2026-11-09). Quem abre
+ * o conjunto é o estúdio único; esta parte só desenha a cena escolhida (`?id=`).
+ */
 export const SceneStudio: React.FC = () => {
   const { setId = '' } = useParams()
   const [query, setQuery] = useSearchParams()
@@ -50,23 +56,19 @@ export const SceneStudio: React.FC = () => {
   const set = useEditor((s) => s.set)
   const images = useEditor((s) => s.images)
   const saving = useEditor((s) => s.saving)
-  // Os vídeos explicativos têm o estúdio deles (`/motion/:setId/explica`)
+  // Esta parte desenha as animações; os vídeos de roteiro e voz abrem no painel deles (o estúdio único escolhe)
   const scenes = (set?.scenes ?? []).filter((s) => !s.explainer)
+  const allScenes = set?.scenes ?? []
   const postParam = query.get('post') ?? undefined
   const forPost = postParam ? scenes.filter((s) => s.source?.postId === postParam) : scenes
   const scene = scenes.find((s) => s.id === query.get('id')) ?? (postParam ? forPost.at(-1) : scenes[0])
   const sourcePost = set?.posts.find((p) => p.id === (scene?.source?.postId ?? postParam))
   const [autoAsk, setAutoAsk] = useState<{ id: string; request: string; reference?: string[] } | null>(null)
-  const [fresh, setFresh] = useState(false)
+  const [fresh, setFresh] = useState(query.get('novo') === 'codigo')
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [error, setError] = useState<SceneError | null>(null)
   const [progress, setProgress] = useState<number | null>(null)
-
-  useEffect(() => {
-    void useEditor.getState().open(setId, projectParam)
-    return () => useEditor.getState().close()
-  }, [setId, projectParam])
 
   // As imagens da cena entram no mapa do editor (as das camadas já entram sozinhas)
   const sceneImageKey = scene?.images.map((i) => i.src).join('|') ?? ''
@@ -161,7 +163,7 @@ export const SceneStudio: React.FC = () => {
     setProgress(0)
     try {
       const audio = scene.audio ? await audioOfSrc(scene.audio.src, set.assets) : undefined
-      const blob = await sceneToMp4(scene, { images: await sceneBitmaps(scene, images), beats: scene.beats, bpm: scene.bpm, brand: brandOf(set), ...(await sourceInput(scene, sourcePost, images)) }, { audio: audio && scene.audio ? { data: audio, cfg: scene.audio } : undefined, onProgress: setProgress })
+      const blob = await sceneToMp4(scene, { images: await sceneBitmaps(scene, images), beats: scene.beats, bpm: scene.bpm, brand: brandOf(set), data: scene.data, ...(await sourceInput(scene, sourcePost, images)) }, { audio: audio && scene.audio ? { data: audio, cfg: scene.audio } : undefined, onProgress: setProgress })
       const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${scene.name.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase() || 'cena'}.mp4` })
       a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
@@ -173,7 +175,7 @@ export const SceneStudio: React.FC = () => {
     }
   }
 
-  const back = `/motion/${set.id}${set.shared && set.projectId ? `?projeto=${set.projectId}` : ''}`
+  const back = '/motion'
 
   return (
     <div className="flex h-[calc(100vh-56px)] min-h-[600px] flex-col bg-gray-50 md:h-screen">
@@ -181,13 +183,14 @@ export const SceneStudio: React.FC = () => {
         <Link to={back} aria-label="Voltar ao estúdio de motion" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
         <Code2 className="h-4 w-4 text-violet-700" />
         <span className="max-w-[12rem] truncate text-sm font-semibold text-gray-900">{set.name}</span>
-        {scenes.length > 0 && (
-          <select aria-label="Cena" value={scene?.id} onChange={(e) => { select(e.target.value); setTime(0) }} className="h-8 max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 text-sm">
-            {scenes.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+        {allScenes.length > 0 && (
+          <select aria-label="Vídeo" value={scene?.id} onChange={(e) => { select(e.target.value); setTime(0) }} className="h-8 max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 text-sm">
+            {allScenes.map((s) => (<option key={s.id} value={s.id}>{s.explainer ? 'Roteiro · ' : 'Animação · '}{s.name}</option>))}
           </select>
         )}
         <span className="text-xs text-gray-500">{({ saved: 'Salvo', dirty: 'Alterações…', saving: 'Salvando…', error: 'Erro ao salvar' } as const)[saving]}</span>
         <div className="ml-auto flex items-center gap-1.5">
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-white" onClick={() => setQuery((q) => { const n = new URLSearchParams(q); n.set('novo', 'escolher'); n.delete('id'); return n }, { replace: true })}><Plus className="h-4 w-4" /> Novo vídeo</Button>
           <NewSceneMenu onCreate={create} />
           {scene && (
             <Button size="sm" className="h-8 gap-1.5" disabled={!videoSupported() || progress !== null || !!error} onClick={() => void exportVideo()} title={videoSupported() ? undefined : 'Use o Chrome ou o Edge atualizados'}>
@@ -267,7 +270,7 @@ const Stage: React.FC<{ scene: CodeScene; set: CreativeSet; post?: Post; images:
     let r: SceneRunner | null = null
     const timer = setTimeout(async () => {
       try {
-        r = new SceneRunner({ code: scene.code, width, height, duration: scene.duration, images: await sceneBitmaps(scene, images), beats: scene.beats, bpm: scene.bpm, brand, ...(await sourceInput(scene, post, images)) })
+        r = new SceneRunner({ code: scene.code, width, height, duration: scene.duration, images: await sceneBitmaps(scene, images), beats: scene.beats, bpm: scene.bpm, brand, data: scene.data, ...(await sourceInput(scene, post, images)) })
         await r.load()
         if (!alive) return r.dispose()
         onError(null)
@@ -283,6 +286,19 @@ const Stage: React.FC<{ scene: CodeScene; set: CreativeSet; post?: Post; images:
       r?.dispose()
     }
   }, [scene.code, scene.format, scene.duration, scene.beats, scene.bpm, imageKey, brand, post, scene.source?.slideIds.join(','), images.size]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Campos, legenda e narração: o mesmo worker recebe o env.data novo e redesenha, sem recarregar a cena
+  const [dataTick, setDataTick] = useState(0)
+  useEffect(() => {
+    if (!runner) return
+    let alive = true
+    runner.setData(scene.data).then(() => {
+      if (!alive) return
+      drawn.current = -1
+      setDataTick((n) => n + 1)
+    }, (err) => alive && onError(err instanceof SceneError ? err : new SceneError(String(err))))
+    return () => { alive = false }
+  }, [runner, scene.data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pede o quadro do tempo atual; se outro está a caminho, o próximo pega o tempo mais novo
   useEffect(() => {
@@ -307,7 +323,7 @@ const Stage: React.FC<{ scene: CodeScene; set: CreativeSet; post?: Post; images:
       }
     }
     void pull()
-  }, [runner, time, fit]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [runner, time, fit, dataTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const dpr = typeof window === 'undefined' ? 1 : Math.min(2, window.devicePixelRatio || 1)
   return (
@@ -347,7 +363,7 @@ const ScenePanel: React.FC<{ set: CreativeSet; scene: CodeScene; post?: Post; im
         setBusy('Pedindo à IA…')
       }
       const out = await writeSceneCode(set, scene, text + fixing, { adjust, reference: override?.reference ?? reference?.frames, post: postCtx, signal: ctrl.signal, onStep: (s) => setBusy(s) })
-      editScene(scene.id, (s) => ({ ...s, code: out.code, prompt: text, duration: out.duration ?? s.duration }))
+      editScene(scene.id, (s) => ({ ...s, code: out.code, prompt: text, duration: out.duration ?? s.duration, data: out.fields ? { ...sceneDataOf(s.data), fields: out.fields } : s.data }))
       setReply(out.reply ?? null)
       toast.success(adjust ? 'Cena ajustada.' : 'Cena escrita. Dê play.')
     } catch (err) {
@@ -380,8 +396,17 @@ const ScenePanel: React.FC<{ set: CreativeSet; scene: CodeScene; post?: Post; im
     }
   }
 
+  const [tab, setTab] = useState<'editar' | 'avancado'>(autoAsk ? 'avancado' : 'editar')
   return (
     <div className="space-y-5">
+      <div role="tablist" aria-label="Painel da animação" className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1">
+        {([['editar', 'Editar'], ['avancado', 'IA e código']] as const).map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn('h-7 rounded-md text-xs font-medium transition-colors', tab === id ? 'bg-white text-gray-900 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_rgb(0_0_0/0.08)]' : 'text-gray-600 hover:text-gray-900')}>{label}</button>
+        ))}
+      </div>
+      {tab === 'editar' ? (
+        <SceneEditPanel set={set} scene={scene} edit={(fn) => editScene(scene.id, fn)} />
+      ) : (<>
       {scene.source && post && <SourceSlides scene={scene} post={post} images={images} onNew={onNewFromCreative} />}
       <section className={cn(scene.source && post && 'border-t border-gray-100 pt-4')}>
         <Label>Prompt avançado</Label>
@@ -434,6 +459,7 @@ const ScenePanel: React.FC<{ set: CreativeSet; scene: CodeScene; post?: Post; im
       <section className="border-t border-gray-100 pt-4">
         <button type="button" className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-600" onClick={() => useEditor.getState().edit((cur) => ({ ...cur, scenes: (cur.scenes ?? []).filter((s) => s.id !== scene.id) }))}><Trash2 className="h-3.5 w-3.5" /> Apagar esta cena</button>
       </section>
+      </>)}
     </div>
   )
 }
