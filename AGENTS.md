@@ -75,6 +75,7 @@ Sem segredos e sem contatos de prospects ou clientes finais. O Cérebro **do app
 | Iara, a assistente (chat único, ações, troca de bastão, equipe, imagens) | `iara.md` |
 | Cérebro da conta no app (`/cerebro`, padrões de design, criar imagem, visualizador) | `cerebro.md` |
 | Quadros (`/quadros`, canvas livre estilo Miro/FigJam, notas adesivas, ao vivo) | `quadros.md` |
+| Referências visuais da conta (`/referencias`, links de posts, estrela, ideia e criativo) | `referencias.md` |
 | Pauta e aprovação do cliente | `pauta.md` |
 | Formulários (capa, agenda, pixel, publicar, ao vivo e funil) | `formularios.md` |
 | Página de cliente e componentes do Space | `space-componentes.md` |

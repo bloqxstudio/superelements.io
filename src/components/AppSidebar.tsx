@@ -5,7 +5,7 @@ import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react
 import { navigationMatches } from '@/features/navigation/workspace'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { areaPaths, type AreaId } from '@/features/navigation/AreaTabs'
-import { Activity, Bot, Brain, Building2, CalendarRange, Filter, House, Building, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, Presentation, KanbanSquare, LayoutTemplate, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
+import { Activity, Bookmark, Bot, Brain, Building2, CalendarRange, Filter, House, Building, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, Presentation, KanbanSquare, LayoutTemplate, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { PersonAvatar } from '@/features/profile/PersonAvatar'
 import { useAuth } from '@/contexts/AuthContext'
@@ -184,6 +184,7 @@ const JourneyNav: React.FC<{ on: (id: ModuleId) => boolean; teams: number; crm: 
           {team && <Item to="/cerebro" icon={Brain} label="Cérebro" area="cerebro" />}
           {team && on('copy') && <Item to="/pauta" icon={CalendarRange} label="Pauta" area="pauta" />}
           {team && <Item to="/quadros" icon={Presentation} label="Quadros" />}
+          {team && <Item to="/referencias" icon={Bookmark} label="Referências" />}
           {/* sem conta de empresa não há Pauta: os Textos continuam com caminho próprio */}
           {!team && on('copy') && <Item to="/copy" icon={PenLine} label="Textos" />}
           {on('projetos') && <Item to="/" icon={LayoutTemplate} label="Sites" area="sites" />}

@@ -6,7 +6,7 @@ const AREAS: [string, string][] = [
   ['/crm/site', 'Visitas do site'], ['/crm/diagnostico', 'Diagnóstico'], ['/crm', 'Leads'],
   ['/conteudos', 'Pauta'], ['/pauta', 'Pauta'], ['/plano', 'Cérebro · Plano da empresa'], ['/copy', 'Pauta · Textos'], ['/criativos', 'Criativos'], ['/motion', 'Criativos · Motion'], ['/sites', 'Sites'],
   ['/agentes', 'Agentes de IA'], ['/skills', 'Instruções de IA'], ['/prospeccao', 'Prospecção'],
-  ['/contas', 'Contas e módulos'], ['/cerebro', 'Cérebro'], ['/quadros', 'Quadros'], ['/inicio', 'Início'],
+  ['/contas', 'Contas e módulos'], ['/cerebro', 'Cérebro'], ['/quadros', 'Quadros'], ['/referencias', 'Referências'], ['/inicio', 'Início'],
 ]
 export const workspaceTitle = (pathname: string) => AREAS.find(([path]) => pathname === path || pathname.startsWith(`${path}/`))?.[1] ?? 'Sites'
 export const normalizeNavigation = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim()
@@ -15,7 +15,7 @@ const ALIASES: [string, string][] = [
   ['/copy', 'textos copy redacao documentos conteudos'], ['/conteudos', 'conteudos lista textos copy'],
   ['/pauta', 'calendario editorial'], ['/plano', 'plano da empresa negocio briefing marca'],
   ['/cerebro', 'contexto marca notas plano'], ['/sites', 'sites em codigo astro'],
-  ['/criativos', 'posts carrossel stories'], ['/motion', 'motion video animacao explicativo'],
+  ['/criativos', 'posts carrossel stories'], ['/referencias', 'referencias inspiracao links posts reels'], ['/motion', 'motion video animacao explicativo'],
   ['/skills', 'skills receitas'], ['/crm/whatsapp', 'whatsapp'], ['/crm/site', 'site visitas'],
 ]
 export const navigationMatches = (query: string, label: string, path: string) => {
