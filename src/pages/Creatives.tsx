@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react'
+import { useCrm } from '@/features/crm/crmStore'
+import { accountBrand } from '@/features/conteudos/carousel'
 import { AreaTabs } from '@/features/navigation/AreaTabs'
 import { useNavigate, Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -50,13 +52,21 @@ const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClos
     setBusy(true)
     try {
       let brand: SetBrand = setBrandFrom(null, name || 'Marca')
+      let parsed = null as ReturnType<typeof parseDesignMd>['brand']
       if (project) {
         const cloud = await loadProjectDoc(project.id)
         const source = cloud?.doc?.brand?.source
-        const parsed = source?.trim() ? parseDesignMd(source).brand : null
+        parsed = source?.trim() ? parseDesignMd(source).brand : null
         brand = setBrandFrom(parsed, project.name)
-        if (!parsed) toast.message('Este projeto ainda não tem um DESIGN.md. Usei cores e fontes neutras.')
       }
+      // Sem a marca do projeto, a marca da conta (o DESIGN.md do Cérebro); só então neutra (2026-11-09).
+      // Na conta da casa um projeto é o site de um cliente: a marca da Avence nunca entra nele.
+      const clientProjectAtHome = !!project && !!useCrm.getState().team?.isHome
+      if (!parsed && !clientProjectAtHome) {
+        const fromAccount = await accountBrand().catch(() => undefined)
+        if (fromAccount) brand = fromAccount
+        else toast.message(project ? 'Nem o projeto nem o Cérebro da conta têm marca. Usei cores e fontes neutras.' : 'O Cérebro da conta ainda não tem marca. Usei cores e fontes neutras.')
+      } else if (!parsed) toast.message('Este projeto ainda não tem um DESIGN.md. Usei cores e fontes neutras.')
       const now = Date.now()
       const set: CreativeSet = {
         id: uid(),

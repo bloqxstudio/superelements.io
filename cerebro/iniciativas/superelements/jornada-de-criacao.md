@@ -182,3 +182,22 @@ Decisões usadas: seção "Vender"; o Sinfy usa o mesmo menu (os módulos escond
   - Mover os textos avulsos (copy de landing page, e-mail) para dentro do Site.
   - Unificar as cópias da marca em projetos e conjuntos.
 - **Detalhes:** `docs/agentes/pauta.md`.
+
+## Fase 4 feita (2026-11-09): Cérebro conectado em tudo
+
+- **Fases 0 a 3:** publicadas no PR #16. No ar desde 13:29 GMT.
+- **Uma marca só por conta:**
+  - **Space:** o diálogo de marca tem "Usar a marca da conta" e "Gravar como marca da conta". Um projeto novo de conta de cliente nasce com a marca da conta.
+  - **Criativos:** um conjunto novo usa a marca da conta, e o editor tem o botão "Usar a marca da conta".
+- **Iara, canvas e sites em código:** recebem a marca da conta.
+- **Mais áreas com o contexto da conta:** Stories programados, análise do Instagram e agentes comerciais.
+- **Aprendizados do mês no Cérebro:**
+  - Onde ficam: `aprendizados/AAAA-MM.md`. A IA leva a nota em toda criação.
+  - A primeira nota da Avence foi gravada em 2026-11-09. Dela:
+    - um Reels foi o formato com mais engajamento por post;
+    - o post do dia 26/10 teve 6 salvamentos.
+- **Garantia:** testes que falham se uma área perder o Cérebro. Hoje são 13 áreas ligadas.
+- **Ficou de fora:**
+  - Recolorir os posts que já existem quando a marca muda.
+  - A IA do WhatsApp, que não vende: só responde números aos clientes da Avence.
+- **Detalhes:** `docs/agentes/cerebro.md`.

@@ -1,4 +1,5 @@
 import { escapeHtml } from '@/features/copy/html'
+import { accountContext } from '@/features/cerebro/accountContext'
 import { docLink } from '@/features/copy/folder'
 import { formatById, FORMATS, isResearch, NICHES, researchObjective } from '@/features/copy/knowledge'
 import { runCopyAgent } from '@/features/copy/runner'
@@ -91,7 +92,8 @@ async function ask(agentId: string, prompt: string, job: ReturnType<typeof comme
   const p = profileNow(agentId)
   return callAi<{ reply: string; items: { ref: string; text: string }[] }>(
     'agent',
-    { engine: job.engine, system: personaFor(agentId), prompt, web: web && p.web },
+    // O Cérebro da conta (quem somos, oferta, tom e marca) vai em toda tarefa comercial (2026-11-09)
+    { engine: job.engine, system: personaFor(agentId), prompt: [(await accountContext().catch(() => undefined))?.context, prompt].filter(Boolean).join('\n\n'), web: web && p.web },
     job.controller.signal,
     (_s, detail) => detail && noteJob(job.id, detail)
   )

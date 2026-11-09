@@ -22,6 +22,8 @@ export interface ContextParts {
   plan?: PlanFields | null
   /** Marca e padrões de post (texto já pronto de `standardBlock`). */
   standard?: string
+  /** A nota de aprendizados mais recente (`learnings.ts`): o que funcionou e o que o cliente pediu. */
+  learnings?: string
 }
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s)
@@ -52,12 +54,14 @@ export function contextText(parts: ContextParts): string {
   const overview = cleanOverview(parts.overview)
   const plan = planText(parts.plan)
   const standard = parts.standard?.trim() ?? ''
-  if (!overview && !plan && !standard) return ''
+  const learnings = parts.learnings?.trim() ?? ''
+  if (!overview && !plan && !standard && !learnings) return ''
   return [
     `# Contexto da empresa: ${parts.name} (do Cérebro da conta; é a fonte de verdade sobre a empresa)`,
     overview && `## Quem é (visão geral do Cérebro)\n${clip(overview, 2500)}`,
     plan && `## Plano da empresa\n${plan}`,
     standard && `## Marca e padrões\n${standard}`,
+    learnings && `## O que a operação já ensinou (use para repetir o que funcionou e evitar o que o cliente pediu para ajustar)\n${clip(learnings.replace(/^# .*\n/, ''), 2500)}`,
   ].filter(Boolean).join('\n\n')
 }
 
@@ -66,3 +70,24 @@ export function contextText(parts: ContextParts): string {
  * o tom vem do Cérebro; sem conta (uso antigo, sem conta aberta), vale a voz da Avence como antes.
  */
 export const usesHouseVoice = (account: { isHome?: boolean } | undefined | null) => !account || !!account.isHome
+
+/**
+ * As áreas que criam com o Cérebro e o arquivo de cada uma (a garantia fica em
+ * scripts/tests/cerebro-conectado.test.mjs: se uma delas deixar de ler o contexto, o teste falha).
+ * O radar do Início mostra esta lista na etapa Cérebro.
+ */
+export const CONNECTED_AREAS: { area: string; file: string; uses: string }[] = [
+  { area: 'Textos', file: 'src/features/copy/runner.ts', uses: 'accountContext(' },
+  { area: 'Criativos', file: 'src/features/criativos/ai.ts', uses: 'accountContext(' },
+  { area: 'Roteiro da Pauta', file: 'src/features/conteudos/produce.ts', uses: 'accountContext(' },
+  { area: 'Vídeo explicativo', file: 'src/features/criativos/explicativo/roteiro.ts', uses: 'accountContext(' },
+  { area: 'Pesquisa do vídeo', file: 'src/features/criativos/explicativo/pesquisa.ts', uses: 'accountContext(' },
+  { area: 'Iara, canvas e sites', file: 'src/features/iara/engine.ts', uses: 'brandContext(team)' },
+  { area: 'Marca dos sites', file: 'src/features/projects/useProjectSession.ts', uses: 'accountBrandSource(' },
+  { area: 'Marca dos criativos', file: 'src/pages/Creatives.tsx', uses: 'accountBrand(' },
+  { area: 'Stories programados', file: 'src/features/crm/storyPipeline.ts', uses: 'accountContext(' },
+  { area: 'Análise do Instagram', file: 'src/features/crm/profileAnalysis.ts', uses: 'accountContext(' },
+  { area: 'Agentes comerciais', file: 'src/features/ia/tarefas.ts', uses: 'accountContext(' },
+  { area: 'Aprendizados no contexto', file: 'src/features/cerebro/accountContext.ts', uses: 'learningsForContext(' },
+  { area: 'Aprendizados gravados', file: 'src/features/onboarding/OperationRadar.tsx', uses: 'syncLearnings(' },
+]

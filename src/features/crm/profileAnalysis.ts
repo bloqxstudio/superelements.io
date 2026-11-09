@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { accountContext } from '@/features/cerebro/accountContext'
 import { supabase } from '@/integrations/supabase/client'
 import { callAiQuiet } from '@/features/criativos/link'
 import { finishJob, noteJob, patchJob, startJob } from '@/features/operations/jobs'
@@ -199,9 +200,12 @@ export async function readWithAi(input: { account: IgAccount; media: IgMedia[]; 
       mais_alcance: best.map(describe),
       menos_alcance: worst.map(describe),
     }
+    const brain = (await accountContext().catch(() => undefined))?.context ?? ''
     const prompt = [
       images.length ? `## Imagens\n${legend.join('\n')}` : '## Imagens\nNenhuma imagem veio: diga em `foto` e `grid` que não deu para ver e não invente.',
       `## Material (JSON)\n${JSON.stringify(material)}`,
+      // O Cérebro da conta: a análise compara o perfil com quem a empresa diz ser (2026-11-09)
+      brain ? `${brain}\n\nCompare o perfil com este contexto: o que a empresa diz ser e vender deve aparecer na bio, nos destaques e no grid.` : '',
       '## Tarefa',
       'Responda no JSON pedido. `reply` = o diagnóstico em 2 ou 3 frases: o que o perfil faz bem e o que mais trava quem chega.',
       'Em `items`, um item por ref, nesta lista:',

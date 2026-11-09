@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useCrm } from '@/features/crm/crmStore'
+import { accountBrand } from '@/features/conteudos/carousel'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, Wand2, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Instagram, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
@@ -896,6 +898,7 @@ export const CreativeEditor: React.FC = () => {
                 ))}
               </div>
               <p className="text-xs">Títulos em <b>{set.brand.headingFont}</b>, texto em <b>{set.brand.bodyFont}</b>.</p>
+              <AccountBrandButton set={set} />
               <Field label="Linguagem dos modelos">
                 <select
                   className={cn(inputClass, 'h-8 text-xs')}
@@ -925,5 +928,34 @@ export const CreativeEditor: React.FC = () => {
         </aside>
       </div>
     </div>
+  )
+}
+
+/**
+ * Liga o conjunto à marca da conta (o DESIGN.md do Cérebro), uma marca só por conta (2026-11-09).
+ * Troca cores, fontes e logo do conjunto e mantém a linguagem dos modelos e o motion escolhidos.
+ * Vale para os posts que os modelos e a IA montarem daqui em diante: os posts guardam as próprias
+ * cores, e os que já existem ficam como estão. Na conta da casa,
+ * um conjunto de projeto é de um cliente: o botão não aparece.
+ */
+const AccountBrandButton: React.FC<{ set: CreativeSet }> = ({ set }) => {
+  const team = useCrm((s) => s.team)
+  const [busy, setBusy] = useState(false)
+  if (!team || (set.projectId && team.isHome)) return null
+  const run = async () => {
+    setBusy(true)
+    try {
+      const b = await accountBrand()
+      if (!b) return void toast.message('O Cérebro da conta ainda não tem marca.', { description: 'Escreva a marca em Cérebro › Marca (DESIGN.md).' })
+      useEditor.getState().edit((s) => ({ ...s, brand: { ...b, look: s.brand.look, motion: s.brand.motion } }))
+      toast.success(`Marca de ${team.name} no conjunto`, { description: 'Vale para os posts novos; os que já existem ficam como estão.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Button type="button" variant="outline" size="sm" className="h-7 w-full text-xs" disabled={busy} onClick={() => void run()} title="Usa as cores, fontes e logo do DESIGN.md do Cérebro da conta">
+      {busy ? 'Buscando a marca…' : 'Usar a marca da conta (Cérebro)'}
+    </Button>
   )
 }

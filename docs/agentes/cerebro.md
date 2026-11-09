@@ -20,3 +20,25 @@ O usuário: "cérebro deve vir primeiro de qualquer coisa, é o contexto básico
   (`explicativo/roteiro.ts`, `pesquisa.ts`) usam o mesmo contexto; a edição de post continua só com o padrão.
 - **MCP da Sinfy**: `sinfy_conta` devolve `cerebro: { visao_geral, marca_design_md }` (publicado, versão 8).
 - Não feito: Cérebro visível para quem ainda não tem conta de empresa (os dados são por conta).
+
+## Cérebro conectado em tudo (2026-11-09, nova jornada de criação, Fase 4)
+
+O usuário: "garantir a qualidade de entrega do produto, conectando tudo ao cérebro".
+
+- **Uma marca só por conta.** A fonte é `brand_md` (marca/DESIGN.md). O ajudante fica em `src/features/cerebro/accountBrand.ts`.
+  - **Space:** o diálogo de marca tem "Usar a marca da conta" e "Gravar como marca da conta". A linha da marca avisa quando o projeto está "Diferente da marca da conta".
+  - **Projeto novo e vazio:** numa conta de cliente, ele nasce com a marca da conta (`useProjectSession`).
+  - **Criativos:** um conjunto novo sem marca no projeto usa a marca da conta. O editor tem o botão "Usar a marca da conta (Cérebro)", que vale só para os posts novos, porque os posts guardam as próprias cores.
+  - **Conta da casa (Avence):** cada projeto é o site de um cliente, então a marca da Avence nunca entra nele (`linksProjects`, `clientProjectAtHome`).
+- **Iara, chat do canvas e sites em código:** `material()` (`iara/engine.ts`) leva a marca da conta logo depois do Plano (`brandContext`). Na conta da casa, ela não vai dentro de `/projetos/` nem de `/sites/`.
+- **Mais áreas com o contexto da conta:** Stories programados, análise do Instagram e agentes comerciais.
+- **Aprendizados:**
+  - Onde ficam: `aprendizados/AAAA-MM.md`. A nota é montada por `learnings.ts` e gravada por `learningsSync.ts`.
+  - Quando grava: uma vez por mês por conta, quando o Início abre. Só grava se a nota do mês ainda não existe.
+  - O que traz: os 5 posts que mais engajaram em 30 dias, o formato que mais engaja, os ajustes pedidos pelo cliente e a taxa de aprovação. São só fatos do banco, sem IA.
+  - Onde é usada: `accountContext` leva a nota mais recente para toda criação.
+- **Garantia:**
+  - `CONNECTED_AREAS` (`contextText.ts`) lista cada área e o arquivo dela.
+  - `scripts/tests/cerebro-conectado.test.mjs` falha se uma área deixar de usar o contexto, se a voz da Avence escapar da conta da casa ou se a marca da Avence entrar em projeto de cliente.
+  - O radar do Início mostra quantas áreas usam o Cérebro.
+- **WhatsApp:** a IA do WhatsApp (`services/whatsapp`) não foi ligada. Ela só responde números da conta aos clientes da Avence, em nome da Avence. Formulários não têm IA própria.
