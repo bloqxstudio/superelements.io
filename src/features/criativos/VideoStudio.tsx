@@ -1,22 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Check, Clapperboard, Code2, Loader2, MessageSquareText, Sparkles } from 'lucide-react'
-import { toast } from 'sonner'
+import { ArrowLeft, Clapperboard, Code2, Loader2, MessageSquareText, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useCrm } from '@/features/crm/crmStore'
-import { accountContext } from '@/features/cerebro/accountContext'
-import { listReferences, referenceShotUrl, type Reference as SavedReference } from '@/features/referencias/api'
-import { KIND_LABEL } from '@/features/referencias/rules'
-import { cn } from '@/lib/utils'
 import { ExplainerStudio } from './explicativo/ExplainerStudio'
-import { ReferencePicker, type Reference as PickedReference } from './explicativo/Reference'
 import { coverJpeg } from './explicativo/media'
 import { SceneRunner, sceneBitmaps } from './scene'
 import { SceneStudio } from './SceneStudio'
 import { saveVideoCover } from './storage'
 import { useEditor } from './store'
 import type { CodeScene, CreativeSet } from './types'
-import { createVideoFromReference } from './videoFromReference'
+import { VideoCreator } from './VideoCreator'
 
 /**
  * O estúdio único de vídeo (`/motion/:setId/video`, 2026-11-09; o usuário: "cena em código e vídeos explicativos
@@ -30,16 +23,6 @@ import { createVideoFromReference } from './videoFromReference'
  * A capa de cada vídeo sai da própria animação e vai para o índice (a tela /motion mostra).
  * `/motion/:setId/cena` e `/explica` continuam abrindo aqui.
  */
-
-const dataUrlOf = async (url: string) => {
-  const blob = await (await fetch(url)).blob()
-  return new Promise<string>((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(String(r.result))
-    r.onerror = () => reject(r.error)
-    r.readAsDataURL(blob)
-  })
-}
 
 /** A capa: um quadro do vídeo, reduzido a 360 × 640 (como as capas dos posts). */
 async function renderCover(scene: CodeScene, set: CreativeSet, images: Map<string, CanvasImageSource & { width: number; height: number }>): Promise<Blob> {
@@ -97,7 +80,7 @@ type Choice = 'referencia' | 'roteiro' | 'codigo'
 
 const NewVideo: React.FC<{ onPick: (c: Choice) => void; onCancel?: () => void }> = ({ onPick, onCancel }) => {
   const options: { id: Choice; icon: React.ElementType; title: string; text: string; tag?: string }[] = [
-    { id: 'referencia', icon: Sparkles, title: 'A partir de uma referência', text: 'A IA recria a animação de um vídeo que você gostou, desenhada do zero na sua marca, com narração.', tag: 'Recomendado' },
+    { id: 'referencia', icon: Sparkles, title: 'Criador com IA', text: 'A IA escolhe a referência, escreve a copy e monta o plano (logo, motion, legenda); você vê a prévia ao vivo e gera.', tag: 'Recomendado' },
     { id: 'roteiro', icon: MessageSquareText, title: 'Com roteiro e voz', text: 'Grave a fala ou dê o briefing: a IA escreve o roteiro e monta o vídeo com legenda, no estilo escolhido.' },
     { id: 'codigo', icon: Code2, title: 'Animação do zero', text: 'Descreva o comercial e a IA escreve a animação no motor; ajuste por pedido ou pelo código.' },
   ]
@@ -116,119 +99,6 @@ const NewVideo: React.FC<{ onPick: (c: Choice) => void; onCancel?: () => void }>
       </div>
       {onCancel && <Button variant="ghost" className="mt-4" onClick={onCancel}>Voltar ao vídeo</Button>}
     </div>
-  )
-}
-
-/** Criar a partir de uma referência: as salvas em Referências (com capa e quadros) ou um vídeo/link na hora. */
-const FromReference: React.FC<{ set: CreativeSet; refId?: string; how?: 'igual' | 'novo'; topic?: string; onCreated: (id: string) => void; onCancel: () => void }> = ({ set, refId, how: how0, topic: topic0, onCreated, onCancel }) => {
-  const team = useCrm((s) => s.team)
-  const [saved, setSaved] = useState<SavedReference[]>()
-  const [chosen, setChosen] = useState<string | undefined>(refId)
-  const [picked, setPicked] = useState<PickedReference | null>(null)
-  const [how, setHow] = useState<'igual' | 'novo'>(how0 ?? 'igual')
-  const [topic, setTopic] = useState(topic0 ?? '')
-  const [steps, setSteps] = useState<{ label: string; detail?: string }[]>([])
-  const [busy, setBusy] = useState(false)
-  const started = useRef(false)
-
-  useEffect(() => {
-    if (!team) return
-    void listReferences(team.id).then((l) => setSaved(l.filter((r) => r.mediaPath)), () => setSaved([]))
-  }, [team])
-
-  const ref = saved?.find((r) => r.id === chosen)
-  const ready = !!(ref || picked?.frames.length) && (how === 'igual' || topic.trim().length > 3)
-
-  const run = async () => {
-    if (!team || busy) return
-    setBusy(true)
-    setSteps([])
-    const step = (label: string, detail?: string) => setSteps((s) => [...s.filter((x) => x.label !== label), { label, detail }])
-    try {
-      let frames: string[] = picked?.frames ?? []
-      if (ref) {
-        step('Referência', 'Lendo os quadros guardados no Cérebro…')
-        frames = []
-        for (const p of [ref.mediaPath, ...ref.frames].filter((x): x is string => !!x).slice(0, 8)) {
-          try { frames.push(await dataUrlOf(await referenceShotUrl(team.id, p))) } catch { /* segue com os outros */ }
-        }
-        step('Referência', `${frames.length} quadros de "${ref.title || KIND_LABEL[ref.kind]}"`)
-      }
-      const brief = (await accountContext('9x16').catch(() => undefined))?.context
-      const scene = await createVideoFromReference(set, { frames, how, topic, notes: ref?.notes || undefined, title: ref?.title || picked?.name }, { brief, onStep: step })
-      toast.success('Vídeo criado', { description: scene.name })
-      onCreated(scene.id)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Não consegui criar o vídeo.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  // Vindo de Referências › Recriar com tudo escolhido: começa sozinho
-  useEffect(() => {
-    if (started.current || !refId || !saved || !ref) return
-    if (how === 'novo' && topic.trim().length <= 3) return
-    started.current = true
-    void run()
-  }, [saved]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <div className="mx-auto w-full max-w-3xl overflow-y-auto px-4 py-8">
-      <h1 className="text-xl font-semibold tracking-tight text-gray-900">Vídeo a partir de uma referência</h1>
-      <p className="mt-1 text-sm text-gray-500">A IA olha a referência, escreve a narração, a voz da OpenAI narra e a animação é desenhada do zero no motor, na linguagem da referência e na marca de {set.brand.name}. Nada de texto, logo ou personagem de quem fez.</p>
-
-      {!busy && (
-        <>
-          <p className="mt-5 text-xs font-medium text-gray-700">Referência salva</p>
-          {!saved ? <p className="mt-2 flex items-center gap-2 text-xs text-gray-500"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Abrindo as referências</p> : saved.length === 0 ? (
-            <p className="mt-2 text-xs text-gray-500">Nenhuma referência com imagem ainda. Salve em <Link to="/referencias" className="underline">Referências</Link> ou mande o vídeo abaixo.</p>
-          ) : (
-            <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
-              {saved.slice(0, 40).map((r) => <SavedThumb key={r.id} r={r} teamId={team!.id} active={chosen === r.id} onPick={() => { setChosen(r.id); setPicked(null) }} />)}
-            </div>
-          )}
-          <p className="mt-4 text-xs font-medium text-gray-700">Ou um vídeo, imagem ou link</p>
-          <div className="mt-2"><ReferencePicker value={picked} onChange={(p) => { setPicked(p); if (p) setChosen(undefined) }} compact /></div>
-
-          <div className="mt-5 grid gap-2 sm:grid-cols-2">
-            {([['igual', 'Recriar como está', 'A mesma estrutura, sequência e ideia, na sua marca'], ['novo', 'Com um conteúdo novo', 'O estilo da referência sobre outro assunto']] as const).map(([id, title, text]) => (
-              <button key={id} type="button" onClick={() => setHow(id)} className={cn('rounded-lg border p-3 text-left text-sm', how === id ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-white hover:border-gray-300')}>
-                <b className="block">{title}</b><span className="text-xs text-gray-500">{text}</span>
-              </button>
-            ))}
-          </div>
-          {how === 'novo' && <textarea rows={3} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Sobre o quê? Ex.: por que o site do escritório precisa mostrar as obras entregues." className="mt-3 w-full rounded-md border border-gray-200 px-2.5 py-2 text-sm outline-none focus:border-gray-400" />}
-          <div className="mt-4 flex gap-2">
-            <Button onClick={() => void run()} disabled={!ready} className="gap-1.5"><Sparkles className="h-4 w-4" /> Criar o vídeo</Button>
-            <Button variant="ghost" onClick={onCancel}>Cancelar</Button>
-          </div>
-        </>
-      )}
-
-      {(busy || steps.length > 0) && (
-        <ol className="mt-6 grid gap-2 rounded-xl bg-white p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.06)]">
-          {steps.map((s, i) => (
-            <li key={s.label} className="flex items-start gap-2 text-sm">
-              {busy && i === steps.length - 1 ? <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-violet-700" /> : <Check className="mt-0.5 h-4 w-4 text-emerald-600" />}
-              <span><b className="text-gray-900">{s.label}</b>{s.detail ? <span className="text-gray-600"> · {s.detail}</span> : null}</span>
-            </li>
-          ))}
-          {busy && <li className="text-xs text-gray-500">Leva de 2 a 5 minutos. Pode deixar a aba aberta.</li>}
-        </ol>
-      )}
-    </div>
-  )
-}
-
-const SavedThumb: React.FC<{ r: SavedReference; teamId: string; active: boolean; onPick: () => void }> = ({ r, teamId, active, onPick }) => {
-  const [url, setUrl] = useState<string>()
-  useEffect(() => { if (r.mediaPath) void referenceShotUrl(teamId, r.mediaPath).then(setUrl, () => undefined) }, [teamId, r.mediaPath])
-  return (
-    <button type="button" onClick={onPick} title={r.title} className={cn('w-24 shrink-0 overflow-hidden rounded-lg border-2 text-left', active ? 'border-violet-600' : 'border-transparent')}>
-      <div className="aspect-[9/14] bg-gray-100">{url && <img src={url} alt="" className="h-full w-full object-cover" />}</div>
-      <p className="truncate px-1 py-0.5 text-[10px] text-gray-600">{r.title || KIND_LABEL[r.kind]}</p>
-    </button>
   )
 }
 
@@ -280,8 +150,8 @@ export const VideoStudio: React.FC = () => {
   if (novo === 'referencia')
     return (
       <div className="flex h-[calc(100vh-56px)] flex-col bg-gray-50 md:h-screen">
-        {header('a partir de uma referência')}
-        <FromReference set={set} refId={query.get('ref') ?? undefined} how={(query.get('modo') as 'igual' | 'novo' | null) ?? undefined} topic={query.get('tema') ?? undefined} onCreated={(id) => go({ id, novo: null, ref: null, modo: null, tema: null })} onCancel={() => go({ novo: scenes.length ? null : 'escolher', ref: null })} />
+        {header('novo vídeo')}
+        <VideoCreator set={set} refId={query.get('ref') ?? undefined} how={(query.get('modo') as 'igual' | 'novo' | null) ?? undefined} topic={query.get('tema') ?? undefined} onCreated={(id) => go({ id, novo: null, ref: null, modo: null, tema: null })} onCancel={() => go({ novo: scenes.length ? null : 'escolher', ref: null })} />
       </div>
     )
   if (novo === 'escolher' || (!scene && !novo))

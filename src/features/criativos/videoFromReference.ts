@@ -4,7 +4,8 @@ import { DEFAULT_VOICE } from './explicativo/VoicePicker'
 import { callAiQuiet } from './link'
 import { newScene, SceneRunner } from './scene'
 import { writeSceneCode } from './sceneAi'
-import { narrateParts, type SceneData } from './sceneEdit'
+import { narrateParts, type NarrationPart, type SceneData } from './sceneEdit'
+import { planRequest, type VideoPlan } from './videoPlan'
 import { sizeOf, type CodeScene, type CreativeSet } from './types'
 
 /**
@@ -30,6 +31,8 @@ export interface ReferenceInput {
   /** `igual`: a mesma estrutura, sequência e ideia, na marca; `novo`: o estilo da referência sobre `topic`. */
   how: 'igual' | 'novo'
   topic?: string
+  /** O plano do criador (copy, logo, posições, movimento, legenda, voz): a geração segue ele. */
+  plan?: VideoPlan
 }
 
 export type { NarrationPart, SceneData } from './sceneEdit'
@@ -49,7 +52,8 @@ async function writeScript(set: CreativeSet, input: ReferenceInput, brief: strin
   const prompt = [
     `## Marca\n${set.brand.name}`,
     brief ? `## Contexto da empresa (Cérebro)\n${brief.slice(0, 5000)}` : '',
-    `## A referência\n${input.title ? `${input.title}. ` : ''}${input.notes ?? ''}\nOs ${input.frames.length} quadros vão anexados, em ordem.`,
+    input.frames.length ? `## A referência\n${input.title ? `${input.title}. ` : ''}${input.notes ?? ''}\nOs ${input.frames.length} quadros vão anexados, em ordem.` : '## Sem referência\nMonte uma estrutura de Reels forte: gancho, desenvolvimento, virada, fecho.',
+    input.plan?.copy.trim() ? `## A copy (use exatamente estas palavras, na ordem; só divida em partes e dê o rótulo de cada uma)\n${input.plan.copy.trim()}` : '',
     input.how === 'igual'
       ? '## Pedido\nRecrie como está: a mesma estrutura, sequência de momentos, ritmo e ideia central da referência, contados para a marca acima (o produto e a oferta dela).'
       : `## Pedido\nUm conteúdo novo no estilo e na estrutura da referência. Assunto: ${input.topic?.trim() || 'a oferta principal da marca'}.`,
@@ -88,26 +92,43 @@ export async function tryScene(code: string, set: CreativeSet, duration: number,
 /** `dryRun`: monta e confere sem gravar nada (testes por comando); devolve também a narração em data URL. */
 export async function createVideoFromReference(set: CreativeSet, input: ReferenceInput, opts: { brief?: string; onStep?: Step; dryRun?: boolean } = {}): Promise<CodeScene & { narration?: string }> {
   const step: Step = opts.onStep ?? (() => undefined)
-  if (!input.frames.length) throw new Error('Sem quadros da referência: escolha uma referência com imagem ou mande o vídeo.')
-  step('Roteiro', 'A IA olha a referência e escreve a narração em partes…')
+  const plan = input.plan
+  step('Roteiro', plan?.copy.trim() ? 'A IA divide a sua copy em partes…' : 'A IA olha a referência e escreve a narração em partes…')
   const script = await writeScript(set, input, opts.brief, (d) => step('Roteiro', d))
   step('Roteiro', `${script.parts.length} partes: ${script.parts.map((p) => p.label).join(' · ')}`)
 
-  step('Narração', 'A voz da OpenAI está narrando…')
-  const voice = { ...DEFAULT_VOICE, provider: 'openai' as const }
-  const narration = await narrateParts(set, script.parts, voice, { dryRun: opts.dryRun, onStep: (d) => step('Narração', d) })
-  const { parts, words, asset } = narration
-  const duration = Math.round((narration.seconds + 1.8) * 10) / 10
-  const data: SceneData = { parts, words, voice, captions: { style: 'nenhuma' } }
+  const voice = plan?.voice ?? { ...DEFAULT_VOICE, provider: 'openai' as const }
+  let narration: Awaited<ReturnType<typeof narrateParts>> | undefined
+  let parts: NarrationPart[], words: { w: string; s: number; e: number }[] = [], duration: number
+  if (plan && !plan.narrate) {
+    // Sem narração: cada parte dura o tempo de leitura do texto dela (mínimo 3 s)
+    let at = 0
+    parts = script.parts.map((p) => {
+      const len = Math.max(3, p.text.split(/\s+/).length / 2.6)
+      const part = { ...p, start: Math.round(at * 10) / 10, end: Math.round((at + len) * 10) / 10 }
+      at += len
+      return part
+    })
+    duration = Math.round((at + 1.8) * 10) / 10
+  } else {
+    step('Narração', 'A voz está narrando…')
+    narration = await narrateParts(set, script.parts, voice, { dryRun: opts.dryRun, onStep: (d) => step('Narração', d) })
+    ;({ parts, words } = narration)
+    duration = Math.round((narration.seconds + 1.8) * 10) / 10
+  }
+  const asset = narration?.asset
+  const data: SceneData = { parts, words, voice, captions: plan && narration ? plan.captions : { style: 'nenhuma' } }
 
   const request = [
-    'Recrie a LINGUAGEM VISUAL da referência anexada como uma animação nova, desenhada do zero: o mesmo tipo de elemento (objetos, personagens simples, formas, partículas, tipografia), a mesma composição, a mesma câmera, o mesmo ritmo e o mesmo tipo de movimento. Nada de template de slides, cartões ou legenda gigante palavra por palavra se a referência não for assim.',
+    input.frames.length ? '' : 'Não há referência: crie uma animação de motion design moderna e original, no plano abaixo.',
+    input.frames.length ? 'Recrie a LINGUAGEM VISUAL da referência anexada como uma animação nova, desenhada do zero: o mesmo tipo de elemento (objetos, personagens simples, formas, partículas, tipografia), a mesma composição, a mesma câmera, o mesmo ritmo e o mesmo tipo de movimento. Nada de template de slides, cartões ou legenda gigante palavra por palavra se a referência não for assim.' : '',
     input.notes ? `O que é a referência e o que ela tem de bom: ${input.notes}` : '',
-    `O vídeo dura ${duration} s e é narrado. As partes (cada uma vira um momento da animação; entram no segundo de start, vêm em env.data.parts):\n${parts.map((p, i) => `${i + 1}. ${p.start.toFixed(1)}s–${p.end.toFixed(1)}s · rótulo na tela "${p.label}" · fala: ${p.text}`).join('\n')}`,
+    `O vídeo dura ${duration} s${narration ? ' e é narrado' : ' e não tem narração'}. As partes (cada uma vira um momento da animação; entram no segundo de start, vêm em env.data.parts):\n${parts.map((p, i) => `${i + 1}. ${p.start.toFixed(1)}s–${p.end.toFixed(1)}s · rótulo na tela "${p.label}" · fala: ${p.text}`).join('\n')}`,
     'Mostre o rótulo de cada parte como título da cena, no estilo de texto da referência. A última parte é o fecho com o nome da marca e o convite.',
     'Fundo e luz: os da referência (se ela é escura, o fundo é quase preto, não a cor da marca). As cores da marca (env.brand.colors) entram nos destaques: brilho, partículas, botão, palavra em destaque. Cores com sentido na referência (vermelho de perda ou de erro, verde de acerto) mantêm o sentido.',
     'Escala de celular (1080 × 1920): os elementos principais ocupam de 50% a 80% da largura; títulos de 52 a 72 px em caixa alta com espaçamento, rótulos de 28 a 34 px; nada de texto abaixo de 26 px. Use a altura toda: nada de cena espremida num canto.',
     'Movimento contínuo como na referência: física simples (queda com gravidade, quique curto, empilhamento), câmera que respira, transição entre as partes sem corte seco quando a referência faz assim.',
+    plan ? planRequest(plan, set) : '',
     'Deixe a cena editável (item `campos`): o título de cada parte como campo de texto (grupo "Parte N", o valor é o rótulo acima), o fundo e a cor de destaque, e de 2 a 4 escolhas de efeito que mudem de verdade o visual (ex.: estilo da transição, partículas, intensidade da câmera, velocidade das entradas).',
   ].filter(Boolean).join('\n\n')
   const base: CodeScene = { ...newScene('scene({ draw(ctx) {} })', script.name), duration, data }
@@ -126,12 +147,12 @@ export async function createVideoFromReference(set: CreativeSet, input: Referenc
     ...base,
     code,
     data: { ...data, fields },
-    prompt: `A partir da referência${input.title ? ` "${input.title}"` : ''} (${input.how === 'igual' ? 'recriar como está' : `conteúdo novo: ${input.topic ?? ''}`})`,
-    audio: { src: `asset:${asset.id}`, name: narration.name, volume: 1, offset: 0, fadeIn: 0, fadeOut: 0.4 },
+    prompt: `${input.frames.length ? 'A partir da referência' : 'Criado pelo plano'}${input.title ? ` "${input.title}"` : ''} (${input.how === 'igual' ? 'recriar como está' : `conteúdo novo: ${input.topic ?? ''}`})`,
+    ...(asset && narration ? { audio: { src: `asset:${asset.id}`, name: narration.name, volume: 1, offset: 0, fadeIn: 0, fadeOut: 0.4 } } : {}),
     updatedAt: Date.now(),
   }
-  if (opts.dryRun) return { ...scene, narration: narration.dataUrl }
+  if (opts.dryRun) return { ...scene, narration: narration?.dataUrl }
   step('Salvando', 'Guardando o vídeo no conjunto…')
-  await commitToSet(set, (cur) => ({ ...cur, assets: cur.assets.some((a) => a.id === asset.id) ? cur.assets : [...cur.assets, asset], scenes: [...(cur.scenes ?? []), scene] }))
+  await commitToSet(set, (cur) => ({ ...cur, assets: !asset || cur.assets.some((a) => a.id === asset.id) ? cur.assets : [...cur.assets, asset], scenes: [...(cur.scenes ?? []), scene] }))
   return scene
 }
