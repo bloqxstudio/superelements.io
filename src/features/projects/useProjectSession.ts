@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { create } from 'zustand'
 import { isMeasuring, useSpaceStore } from '@/store/spaceStore'
 import { useBrandStore } from '@/features/space/brand/brandStore'
+import { accountBrandSource } from '@/features/cerebro/accountBrand'
 import { useSiteKitStore } from '@/features/wordpress/siteKitStore'
 import { supabase } from '@/integrations/supabase/client'
 import { personName } from './access'
@@ -548,6 +549,20 @@ export const useProjectSession = (projectId: string | undefined) => {
         void push()
       }
       if (offer) offerDraft(offer)
+
+      // Projeto novo e vazio de uma conta de cliente: nasce com a marca da conta (o DESIGN.md do Cérebro).
+      // Uma marca só por conta (2026-11-09); na conta da casa cada projeto é um cliente, com a marca dele.
+      const opened = useProjectStore.getState().projects.find((p) => p.id === projectId)
+      const startDoc = resume?.doc ?? remote.doc
+      if (opened?.teamId && !startDoc?.brand?.source?.trim() && !(startDoc?.canvas?.nodes?.length)) {
+        void accountBrandSource().then((acc) => {
+          if (!active || !acc?.linksProjects || acc.teamId !== opened.teamId || !acc.source.trim()) return
+          if (useBrandStore.getState().source.trim()) return
+          useBrandStore.getState().setSource(acc.source)
+          useBrandStore.getState().setEnabled(true)
+          toast.message(`Usei a marca de ${acc.teamName}`, { description: 'O DESIGN.md do Cérebro da conta. Dá para trocar em Estilo › Marca.' })
+        }, () => undefined)
+      }
 
       // Quem mais está no projeto, e o aviso de quando alguém salva
       me = await currentPerson()

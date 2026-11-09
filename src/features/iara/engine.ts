@@ -76,6 +76,25 @@ async function brainContext(team: { id: string; name: string; isHome?: boolean }
   }
 }
 
+/**
+ * A marca da conta (DESIGN.md do Cérebro, `crm_account_context.brand_md`) em todo pedido: a Iara, o
+ * chat do canvas e o dos sites em código passam a criar na marca da conta (Fase 4 da nova jornada,
+ * 2026-11-09, "uma marca só"). Na conta da casa, dentro de um projeto ou site (que é de um cliente),
+ * a marca da Avence não entra.
+ */
+async function brandContext(team: { id: string; isHome?: boolean }): Promise<string> {
+  try {
+    const path = typeof window === 'undefined' ? '' : window.location.pathname
+    if (team.isHome && /^\/(projetos|sites)\//.test(path)) return ''
+    const { loadStandard } = await import('@/features/cerebro/standard')
+    const { brand } = await loadStandard(team.id)
+    if (!brand.trim()) return '## Marca da conta\n(o Cérebro ainda não tem a marca: antes de criar algo visual, peça as cores, fontes e logo, ou ofereça escrever marca/DESIGN.md)'
+    return `## Marca da conta (marca/DESIGN.md do Cérebro; siga em tudo que criar, inclusive páginas e seções)\n${clip(brand, 3500)}`
+  } catch {
+    return ''
+  }
+}
+
 /** Conta, Plano, conteúdos e tela: o que a Iara precisa saber em cada pedido. */
 export async function material(opts: { contents: number; withCatalog: boolean }): Promise<string> {
   const team = useCrm.getState().team
@@ -97,6 +116,8 @@ export async function material(opts: { contents: number; withCatalog: boolean })
         ? `## Plano da empresa\nOferta: ${clip(ctx.offer, 900) || '(vazio)'}\nPúblico: ${clip(ctx.audience, 700) || '(vazio)'}\nTom: ${clip(ctx.tone, 400) || '(vazio)'}\nObjetivo: ${clip(ctx.goal, 400) || '(vazio)'}\nRestrições: ${clip(ctx.restrictions, 600) || '(nenhuma)'}\nPilares: ${ctx.pillars.join(' · ') || '(nenhum)'}`
         : '## Plano da empresa\n(a conta ainda não tem Plano: peça o essencial antes de criar muitas ideias)'
     )
+    // A marca logo depois do Plano: o chat do canvas corta o contexto no fim, e a marca não pode cair
+    parts.push(await brandContext(team))
     const rows = contents
       .slice()
       .sort((a, b) => b.updatedAt - a.updatedAt)

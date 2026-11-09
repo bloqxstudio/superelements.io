@@ -5,8 +5,9 @@ import { supabase } from '@/integrations/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { useCrm } from '@/features/crm/crmStore'
 import { moduleOn } from '@/features/crm/modules'
-import { cleanOverview } from '@/features/cerebro/contextText'
+import { CONNECTED_AREAS, cleanOverview } from '@/features/cerebro/contextText'
 import { cn } from '@/lib/utils'
+import { syncLearnings } from '@/features/cerebro/learningsSync'
 import { radarScore, radarSteps, type RadarContent, type RadarFacts, type RadarState } from './journey'
 
 /**
@@ -54,6 +55,8 @@ export const OperationRadar: React.FC = () => {
     if (!team) return
     let alive = true
     void loadFacts(team.id).then((f) => alive && setFacts(f))
+    // Uma vez por mês, os aprendizados da operação voltam para o Cérebro (só grava se a nota do mês não existe)
+    void syncLearnings(team.id).catch((error) => console.warn('[aprendizados] não gravou', error))
     return () => { alive = false }
   }, [team])
 
@@ -85,6 +88,11 @@ export const OperationRadar: React.FC = () => {
                 <span className="sr-only">: {tone.label}</span>
               </div>
               <p className="mt-2 text-xs leading-relaxed text-gray-600">{s.have}</p>
+              {s.id === 'cerebro' && (
+                <p className="mt-1 text-[11px] leading-relaxed text-gray-500" title={CONNECTED_AREAS.map((a) => a.area).join(', ')}>
+                  Usado por {CONNECTED_AREAS.length} áreas: textos, criativos, roteiros, vídeos, stories, Instagram, Iara, sites e comercial
+                </p>
+              )}
               {s.missing && <p className={cn('mt-1 text-xs font-medium leading-relaxed', s.state === 'atencao' ? 'text-amber-900' : 'text-gray-900')}>{s.missing}</p>}
               <Link to={s.to} className="mt-auto inline-flex items-center gap-1 pt-3 text-xs font-medium text-gray-700 hover:text-gray-900">
                 {s.action} <ChevronRight className="h-3.5 w-3.5" aria-hidden />

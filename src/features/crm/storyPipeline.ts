@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { accountContext } from '@/features/cerebro/accountContext'
 import { create } from 'zustand'
 import { AV_CASES } from '@/features/avence/cases'
 import { docText } from '@/features/copy/send'
@@ -116,7 +117,8 @@ async function planWeek(settings: StorySettings, start: number, free: number[], 
       slots: slots.map(({ ref, when }) => ({ ref, when })),
       framesMax: settings.framesMax,
       pillars: settings.pillars,
-      brief: settings.brief,
+      // O Cérebro da conta (quem é, Plano e marca) vai junto do briefing dos stories (2026-11-09)
+      brief: [settings.brief, (await accountContext('9x16').catch(() => undefined))?.context].filter(Boolean).join('\n\n'),
       photos: settings.photos,
       cases: casesFor([]),
       history: history.map((s) => ({ when: whenText(s.publishAt), pillar: pillar(s.pillar), title: s.title, hook: s.idea.hook ?? '', frames: s.frames.length, numbers: numbersText(storyNumbers(s)) })),
@@ -276,7 +278,7 @@ async function buildCreative(story: Story, settings: StorySettings, engine: Chat
   try {
     const plan = await callAiQuiet<PlanResponse>(
       'plan',
-      { brief: briefOf(story, settings, extra), format: '9x16', slides: frames, posts: 1, engine, story: true, photos: settings.photos, cases: casesFor([story.idea.case]) },
+      { brief: [briefOf(story, settings, extra), (await accountContext('9x16').catch(() => undefined))?.context].filter(Boolean).join('\n\n'), format: '9x16', slides: frames, posts: 1, engine, story: true, photos: settings.photos, cases: casesFor([story.idea.case]) },
       job.signal,
       job.step
     )

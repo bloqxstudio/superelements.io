@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRightLeft, CircleAlert, FileDown, FileUp, Info, RotateCcw, SwatchBook, TriangleAlert } from 'lucide-react'
+import { ArrowRightLeft, Brain, CircleAlert, FileDown, FileUp, Info, RotateCcw, SwatchBook, TriangleAlert, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -17,6 +17,7 @@ import { FORMAT_LABELS } from './designFormats'
 import { DESIGN_MD_EXAMPLES } from './examples'
 import { SPECIMEN_ELEMENTS, SPECIMEN_WITH_LOGO } from './specimen'
 import { Hint, ToolButton } from '../ToolbarIsland'
+import { accountBrandSource, sameBrand, saveAccountBrand, type AccountBrandInfo } from '@/features/cerebro/accountBrand'
 
 /**
  * A marca do projeto (DESIGN.md): na aba Estilo, uma linha com as cores, o nome
@@ -36,6 +37,31 @@ export const BrandButton: React.FC<{ variant?: 'toolbar' | 'row' }> = ({ variant
   }, [open, parsed, measureLogos])
   const dirty = draft !== source
   const active = enabled && brand
+
+  // A marca da conta (Cérebro): o projeto de uma conta de cliente segue ela (2026-11-09, "uma marca só")
+  const [account, setAccount] = useState<AccountBrandInfo>()
+  useEffect(() => {
+    let alive = true
+    void accountBrandSource().then((a) => alive && setAccount(a), () => undefined)
+    return () => { alive = false }
+  }, [open])
+  const linked = !!account?.linksProjects
+  const differs = linked && !!account?.source.trim() && !sameBrand(source, account!.source)
+  const [savingAccount, setSavingAccount] = useState(false)
+  const toAccount = async () => {
+    const md = (converted ?? draft).trim()
+    if (!md || !account) return
+    setSavingAccount(true)
+    try {
+      await saveAccountBrand(md)
+      setAccount({ ...account, source: md })
+      toast.success(`Marca gravada no Cérebro de ${account.teamName}`, { description: 'Criativos, textos e vídeos desta conta passam a usar esta marca.' })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não consegui gravar a marca na conta.')
+    } finally {
+      setSavingAccount(false)
+    }
+  }
 
   // Amostra: a mesma aplicação que as seções recebem, com as animações rodando
   const [compare, setCompare] = useState(false)
@@ -109,7 +135,7 @@ export const BrandButton: React.FC<{ variant?: 'toolbar' | 'row' }> = ({ variant
           {swatch('h-7 w-7')}
           <span className="min-w-0">
             <span className={`block truncate text-[12px] font-medium ${brand ? 'text-gray-900' : 'text-gray-700'}`}>{brand ? brand.name : 'Adicionar a marca'}</span>
-            <span className="block truncate text-[11px] text-gray-500">{active ? 'Aplicada a todas as seções' : brand ? 'Desligada' : 'Colar ou importar o DESIGN.md'}</span>
+            <span className={`block truncate text-[11px] ${differs ? 'text-amber-700' : 'text-gray-500'}`}>{differs ? 'Diferente da marca da conta' : active ? (linked && account?.source.trim() ? 'A marca da conta, em todas as seções' : 'Aplicada a todas as seções') : brand ? 'Desligada' : linked && account?.source.trim() ? 'A conta tem marca: clique para usar' : 'Colar ou importar o DESIGN.md'}</span>
           </span>
         </button>
         {brand && <Switch checked={enabled} onCheckedChange={setEnabled} aria-label={enabled ? 'Desligar a marca' : 'Ligar a marca'} />}
@@ -183,6 +209,18 @@ export const BrandButton: React.FC<{ variant?: 'toolbar' | 'row' }> = ({ variant
                   <FileDown className="h-3.5 w-3.5" />
                   Baixar DESIGN.md
                 </Button>
+                {linked && account?.source.trim() && !sameBrand(draft, account.source) && (
+                  <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => setDraft(account.source)} title={`A marca escrita no Cérebro de ${account.teamName}`}>
+                    <Brain className="h-3.5 w-3.5" />
+                    Usar a marca da conta
+                  </Button>
+                )}
+                {linked && parsed?.brand && !sameBrand(converted ?? draft, account?.source ?? '') && (
+                  <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => void toAccount()} disabled={savingAccount} title="Grava este guia como a marca da conta no Cérebro (só gestor)">
+                    <Upload className="h-3.5 w-3.5" />
+                    {savingAccount ? 'Gravando…' : 'Gravar como marca da conta'}
+                  </Button>
+                )}
                 <input
                   ref={fileRef}
                   type="file"
