@@ -15,6 +15,7 @@
 
 ## Em andamento
 
+- Efeitos com recorte no vídeo (2026-11-09, PR #26, no ar): 9 efeitos, entre eles carrossel, órbita de cartões, tela dividida e gráfico, vindos das skills de vídeo do usuário (`docs/agentes/skills-video/`). Falta um vídeo real com a IA escolhendo os efeitos; as skills de vídeo da plataforma ficam para depois.
 - Motor 3D nas cenas (`lib.d3`, 2026-11-09, no ar): vídeos 3D com tudo conectado à marca pela IA e pela Iara; o vídeo da Avence refeito em 3D. Falta testar a IA gerando um vídeo 3D numa conta de cliente.
 - Nova jornada de criação (2026-11-09): Fases 0 a 3 no ar (PR #16); Fase 4 (Cérebro conectado em tudo: marca única, aprendizados do mês, testes de garantia) feita. Plano em [jornada-de-criacao.md](jornada-de-criacao.md).
 - Comercial animado no vídeo explicativo (2026-11-08, no ar): falta criar o vídeo na conta da Avence, narrar e revisar.
