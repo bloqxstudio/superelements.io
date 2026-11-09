@@ -5,7 +5,7 @@ import { ArrowLeft, Clapperboard, Code2, Diamond, Download, Film, Instagram, Mus
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { currentLayer, currentPost, currentSlide, useEditor } from './store'
-import { KEY_EASES, MOTION_EASES, MOTION_EXITS, MOTION_FX, MOTION_LOOPS, MOTION_STYLES, MOTION_TRANSITIONS, MotionRenderer, SLIDE_CAMERAS, autoPostMotion, autoSlideMotion, clearPostMotion, coverOnlyMotion, filledKeys, hasMotion, keysAt, keysSpan, postOutput, numberIn, postMotionOf, slideDuration, snapPostToBeats, timeline, type MotionStyle } from './motion'
+import { KEY_EASES, MOTION_EASES, MOTION_EXITS, MOTION_FX, MOTION_LOOPS, MOTION_STYLES, MOTION_TRANSITIONS, MotionRenderer, SLIDE_CAMERAS, autoPostMotion, autoSlideMotion, clearPostMotion, hasMotionData, coverOnlyMotion, filledKeys, hasMotion, keysAt, keysSpan, postOutput, numberIn, postMotionOf, slideDuration, snapPostToBeats, timeline, type MotionStyle } from './motion'
 import { detectBeats, gridBeats } from './beats'
 import { foodAdPost } from './foodAd'
 import { advancedMotionLink } from './scenePost'
@@ -96,7 +96,9 @@ export const MotionStudio: React.FC = () => {
     autoDone.current.add(post.id)
     // Abre tocando: em 0 s quase tudo ainda está para entrar
     setPlaying(true)
-    if (hasMotion(post)) return
+    // Já tem animação (mesmo marcada como estático): não mexe; estático continua estático até a pessoa
+    // ligar "Animado" (antes, abrir o estúdio só para testar deixava o post animado de vez)
+    if (hasMotionData(post)) return
     const brandMotion = useEditor.getState().set?.brand.motion
     const style = brandMotion?.style ?? 'suave'
     editPost((p) => autoPostMotion(p, style, brandMotion))

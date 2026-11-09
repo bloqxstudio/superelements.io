@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { StaticToggle } from './StaticToggle'
 import { useCrm } from '@/features/crm/crmStore'
 import { accountBrand } from '@/features/conteudos/carousel'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -758,6 +759,7 @@ export const CreativeEditor: React.FC = () => {
             <Sparkles className="h-4 w-4 text-violet-600" /> IA
           </Button>
           <FormatField value={format} onChange={(f) => editPost((p) => reformat(p, f))} />
+          {post && <StaticToggle post={post} onChange={editPost} />}
           <Button variant="outline" size="sm" className="gap-1.5 bg-white" disabled={!post} title="Mandar um link para o cliente ver como fica no Instagram e aprovar ou pedir ajuste" onClick={() => post && setApproving(post.id)}>
             <SendHorizontal className="h-4 w-4 text-emerald-600" /> Aprovação
           </Button>

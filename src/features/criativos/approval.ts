@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
 import { creativeImages, renderCreative } from '@/features/crm/instagram'
 import { approvalUrl } from '@/features/pauta/api'
-import { hasMotion } from './motion'
+import { hasMotion, hasMotionData } from './motion'
 import type { CreativeSet, Post } from './types'
 import { audioFor, coverAtOf, frameAt, postToCarousel, postToMp4, videoSupported } from './video'
 
@@ -24,9 +24,9 @@ export type ApprovalView = 'feed' | 'carrossel' | 'reels' | 'story'
 
 export const VIEW_LABEL: Record<ApprovalView, string> = { feed: 'Post no feed', carrossel: 'Carrossel', reels: 'Reels', story: 'Story' }
 
-/** Como o post aparece no Instagram, pelo formato e pelo movimento. */
-export function viewOf(post: Post): ApprovalView {
-  if (post.format === '9x16') return hasMotion(post) ? 'reels' : 'story'
+/** Como o post aparece no Instagram, pelo formato e pelo movimento (`animate`: se vai animado). */
+export function viewOf(post: Post, animate = hasMotion(post)): ApprovalView {
+  if (post.format === '9x16') return animate ? 'reels' : 'story'
   return post.slides.length > 1 ? 'carrossel' : 'feed'
 }
 
@@ -39,7 +39,8 @@ export function viewsFor(post: Post): ApprovalView[] {
 export interface SendInput {
   teamId: string
   set: CreativeSet
-  posts: { post: Post; view: ApprovalView }[]
+  /** `animate`: manda em vídeo (só vale se o post tem animação); falso manda as imagens paradas. */
+  posts: { post: Post; view: ApprovalView; animate: boolean }[]
   title: string
   message: string
   /** O @ do Instagram que a simulação mostra. */
@@ -57,14 +58,15 @@ export async function sendCreativeApproval(input: SendInput): Promise<{ id: stri
   const link = crypto.randomUUID()
   const say = (t: string) => input.onStep?.(t)
   const items = []
-  for (const [index, { post, view }] of input.posts.entries()) {
+  for (const [index, { post, view, animate }] of input.posts.entries()) {
     const item = crypto.randomUUID()
     const base = `${input.teamId}/${link}/${item}`
     const label = post.name || `Post ${index + 1}`
     const images = await creativeImages(input.set, post.slides)
     const slides: string[] = []
     let poster: string | undefined
-    const moving = hasMotion(post) && videoSupported()
+    // Vai animado só se a pessoa escolheu e o post tem animação (mesmo marcado como estático no editor)
+    const moving = animate && hasMotionData(post) && videoSupported()
     if (moving && post.slides.length === 1) {
       say(`Gerando o vídeo de ${label}`)
       const audio = await audioFor(post, input.set.assets).catch(() => undefined)

@@ -173,6 +173,12 @@ export interface PostMotion {
   /** Batidas da trilha (segundos do vídeo), lidas do áudio: os cortes e impactos se encaixam nelas. */
   beats?: number[]
   bpm?: number
+  /**
+   * Estático (2026-11-09; o usuário: "um criativo clicado no motion sempre será um motion… permitir voltar
+   * e tornar estático novamente"): a animação fica guardada, mas o post sai parado em tudo (aprovação,
+   * publicação, Instagram). Animar de novo é só desligar.
+   */
+  paused?: boolean
 }
 
 export interface MotionAudio {

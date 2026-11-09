@@ -8,7 +8,7 @@ import { fillSetImages, type MissingImage } from '@/features/criativos/generate'
 import { callAiQuiet, useCreativeLink, type CreativeStep } from '@/features/criativos/link'
 import type { PlanResponse, PostPlan, SlideSpec } from '@/features/criativos/plan'
 import { loadSet, saveSet } from '@/features/criativos/storage'
-import { autoPostMotion, hasMotion } from '@/features/criativos/motion'
+import { autoPostMotion, hasMotion, hasMotionData, setPostStatic } from '@/features/criativos/motion'
 import { audioFor, postToMp4 } from '@/features/criativos/video'
 import { buildPost, buildSlide } from '@/features/criativos/templates'
 import { sizeOf, type CreativeSet, type ImageLayer, type Post, type SetAsset } from '@/features/criativos/types'
@@ -514,7 +514,7 @@ export async function approveStory(story: Story, accountId: string | undefined):
   // Com motion (ou reels, que é sempre vídeo, ou a marca com padrão de motion): um MP4 só, gerado aqui no navegador
   // A marca com padrão de motion: os stories programados também saem animados
   if (reel || hasMotion(post) || set.brand.motion) {
-    const animated = hasMotion(post) ? post : autoPostMotion(post, set.brand.motion?.style ?? 'suave', set.brand.motion)
+    const animated = hasMotion(post) ? post : hasMotionData(post) ? setPostStatic(post, false) : autoPostMotion(post, set.brand.motion?.style ?? 'suave', set.brand.motion)
     const video = await postToMp4(animated, await creativeImages(set, animated.slides), { audio: await audioFor(animated, set.assets) })
     const path = framePath(story.teamId, story.id, 0, 'mp4')
     const { error } = await supabase.storage.from(BUCKET).upload(path, video, { contentType: 'video/mp4', upsert: true })
