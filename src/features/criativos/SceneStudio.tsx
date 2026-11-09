@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, Code2, Download, Film, ImagePlus, Music, Pause, Play, Plus, SkipBack, Sparkles, Trash2, Wand2 } from 'lucide-react'
+import { ArrowLeft, Code2, Download, Film, ImagePlus, Music, Pause, Play, Plus, Send, SkipBack, Sparkles, Trash2, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useEditor } from './store'
@@ -13,6 +13,7 @@ import { referenceFrames, writeSceneCode } from './sceneAi'
 import { useAiAvailable } from './link'
 import { SceneEditPanel } from './SceneEditor'
 import { useVideoIara } from './videoIara'
+import { ScenePublish } from './ScenePublish'
 import { useIara } from '@/features/iara/store'
 import { sceneDataOf } from './sceneEdit'
 import { detectBeats, gridBeats } from './beats'
@@ -84,6 +85,7 @@ export const SceneStudio: React.FC = () => {
   const [playing, setPlaying] = useState(false)
   const [error, setError] = useState<SceneError | null>(null)
   const [progress, setProgress] = useState<number | null>(null)
+  const [publishing, setPublishing] = useState(false)
   // A Iara sabe o vídeo aberto e age nele (ações de vídeo em videoIara.ts)
   useVideoIara(status === 'ready' ? set : null, scene, error?.message)
 
@@ -176,13 +178,22 @@ export const SceneStudio: React.FC = () => {
       </div>
     )
 
+  // O que a cena recebe para desenhar fora da prévia (MP4, capa do reels)
+  const sceneInput = async () => {
+    const s = useEditor.getState().set?.scenes?.find((x) => x.id === scene!.id) ?? scene!
+    return { images: await sceneBitmaps(s, useEditor.getState().images, set.brand), beats: s.beats, bpm: s.bpm, brand: brandOf(set), data: s.data, ...(await sourceInput(s, sourcePost, useEditor.getState().images)) }
+  }
+  const renderMp4 = async (onProgress: (p: number) => void) => {
+    const s = useEditor.getState().set?.scenes?.find((x) => x.id === scene!.id) ?? scene!
+    const audio = s.audio ? await audioOfSrc(s.audio.src, set.assets) : undefined
+    return sceneToMp4(s, await sceneInput(), { audio: audio && s.audio ? { data: audio, cfg: s.audio } : undefined, onProgress })
+  }
   const exportVideo = async () => {
     if (!scene) return
     setPlaying(false)
     setProgress(0)
     try {
-      const audio = scene.audio ? await audioOfSrc(scene.audio.src, set.assets) : undefined
-      const blob = await sceneToMp4(scene, { images: await sceneBitmaps(scene, images, set.brand), beats: scene.beats, bpm: scene.bpm, brand: brandOf(set), data: scene.data, ...(await sourceInput(scene, sourcePost, images)) }, { audio: audio && scene.audio ? { data: audio, cfg: scene.audio } : undefined, onProgress: setProgress })
+      const blob = await renderMp4(setProgress)
       const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${scene.name.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase() || 'cena'}.mp4` })
       a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
@@ -214,6 +225,11 @@ export const SceneStudio: React.FC = () => {
           {scene && (
             <Button size="sm" className="h-8 gap-1.5" disabled={!videoSupported() || progress !== null || !!error} onClick={() => void exportVideo()} title={videoSupported() ? undefined : 'Use o Chrome ou o Edge atualizados'}>
               <Download className="h-4 w-4" /> {progress !== null ? `Gerando… ${Math.round(progress * 100)}%` : 'Baixar MP4'}
+            </Button>
+          )}
+          {scene && (
+            <Button size="sm" className="h-8 gap-1.5 bg-violet-600 hover:bg-violet-700" disabled={!!error} onClick={() => { setPlaying(false); setPublishing(true) }}>
+              <Send className="h-4 w-4" /> Publicar reels
             </Button>
           )}
         </div>
@@ -254,6 +270,7 @@ export const SceneStudio: React.FC = () => {
           </aside>
         </div>
       )}
+      {scene && publishing && <ScenePublish key={scene.id} set={set} scene={scene} open={publishing} onClose={() => setPublishing(false)} render={renderMp4} input={sceneInput} />}
     </div>
   )
 }
