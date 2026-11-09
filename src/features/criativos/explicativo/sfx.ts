@@ -31,7 +31,7 @@ function noiseBuffer(ctx: BaseAudioContext, seconds: number, seed = 7) {
 const noise = (ctx: BaseAudioContext, seconds: number, seed?: number) => Object.assign(ctx.createBufferSource(), { buffer: noiseBuffer(ctx, seconds, seed) })
 
 /** Sala curta (reverb) gerada: ruído estéreo que decai em ~0,9 s. */
-function room(ctx: BaseAudioContext) {
+export function room(ctx: BaseAudioContext) {
   const len = Math.ceil(0.9 * ctx.sampleRate)
   const buf = ctx.createBuffer(2, len, ctx.sampleRate)
   for (let ch = 0; ch < 2; ch++) {
