@@ -72,5 +72,16 @@ recomendado (`cerebro/iniciativas/superelements/decisoes.md`; exceção registra
   filtro "Novas do grupo"; e no cartão o selo "Nova", o @ de quem postou e o "Ok" para marcar como revisada.
 - **Testes:** `services/referencias/tests/rules.test.mjs` (os links na conversa, o autor e a legenda, o tipo e a
   rotina).
-- **Não testado:** a leitura real de um grupo. A tela de DM do Instagram muda sem aviso, então o primeiro passo é
-  o `diagnostico` com o link de um grupo real.
+- **Testado com um grupo real** (2026-11-09, grupo "Referencias 👀", cadastrado na conta Avence Studio):
+  - **Como os posts aparecem:** um post compartilhado na DM é um cartão (`div[role=article]` com botão), sem link
+    escrito.
+  - **Como o leitor pega o endereço:** clica no cartão, lê o endereço `/p/<código>/` que a página abre e fecha
+    com Esc.
+  - **Para não clicar de novo:** guarda os cartões já abertos em
+    `~/Library/Application Support/avence-referencias/cartoes-vistos.json`.
+  - **Resultado:** importou 2 posts.
+    - Um motion de `corretorja.oficial` e um Reels de `marcelodesignxh`, cada um com capa, 6 quadros, legenda,
+      tipo, título, o que aproveitar e etiquetas.
+    - O autor vem do `og:description`, que veio misturado ("usuario no November 9").
+  - **Serviço sempre ligado:** instalado no launchd deste Mac (`com.avencestudio.referencias`).
+  - **"Ver novas agora":** atendido em menos de 1 minuto, sem repetir os posts.

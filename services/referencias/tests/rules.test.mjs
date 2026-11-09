@@ -19,6 +19,7 @@ test('endereço do grupo', () => {
 test('autor e legenda pelo og:description, em inglês e português', () => {
   assert.deepEqual(metaOf('1,234 likes, 56 comments - estudio.x on November 1, 2026: "Seu site tem que\nfechar projeto." '), { author: 'estudio.x', caption: 'Seu site tem que\nfechar projeto.' })
   assert.deepEqual(metaOf('12 curtidas, 3 comentários - marca_y em 1 de novembro de 2026: "Legenda"'), { author: 'marca_y', caption: 'Legenda' })
+  assert.deepEqual(metaOf('5 likes, 0 comments - corretorja.oficial no November 9, 2026: "Site em instantes."'), { author: 'corretorja.oficial', caption: 'Site em instantes.' })
   assert.deepEqual(metaOf(undefined), {})
 })
 

@@ -34,11 +34,13 @@ export interface PostMeta {
 
 /**
  * O og:description do Instagram: `123 likes, 4 comments - usuario on November 1, 2026: "legenda".`
- * (ou em português: `123 curtidas, 4 comentários - usuario em 1 de novembro de 2026: "legenda"`).
+ * (ou em português: `123 curtidas, 4 comentários - usuario em 1 de novembro de 2026: "legenda"`, ou misturado:
+ * `5 likes, 0 comments - usuario no November 9, 2026: "legenda"`, como veio em 2026-11-09).
  */
 export function metaOf(description: string | undefined): PostMeta {
   if (!description) return {}
-  const author = /-\s+([A-Za-z0-9._]{1,30})\s+(?:on|em)\s/.exec(description)?.[1]
+  // "… - usuario on November 1", "… - usuario em 1 de novembro" ou misturado: "… - usuario no November 9"
+  const author = /-\s+([A-Za-z0-9._]{1,30})\s+(?:on|em|no|el|le)\s/.exec(description)?.[1]
   const caption = /:\s*"([\s\S]*)"\.?\s*$/.exec(description)?.[1]?.trim()
   return { author, caption: caption ? caption.slice(0, 2200) : undefined }
 }

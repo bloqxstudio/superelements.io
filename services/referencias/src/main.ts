@@ -29,7 +29,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import { chromium, type BrowserContext, type Page } from 'playwright-core'
-import { due, humanPause, kindOf, metaOf, postLinksIn, shotName, validKind, type RefKind } from './rules.ts'
+import { due, humanPause, kindOf, metaOf, postLinksIn, postUrlOf, shotName, validKind, type RefKind } from './rules.ts'
 
 // ---------- configuração ----------
 
@@ -76,8 +76,20 @@ async function openBrowser(headed = HEADED): Promise<BrowserContext> {
 
 const loggedOut = (page: Page) => /\/accounts\/login|\/challenge\//.test(page.url())
 
-/** Abre o grupo, sobe a conversa algumas vezes e junta os links de posts. */
-async function readThread(page: Page, threadUrl: string): Promise<string[]> {
+// Os cartões já abertos em cada grupo (assinatura do cartão → endereço do post), guardados neste Mac: assim
+// cada volta só clica nos cartões novos
+const SEEN_FILE = path.join(path.dirname(PROFILE), 'cartoes-vistos.json')
+type Seen = Record<string, Record<string, string>>
+const readSeen = (): Seen => { try { return JSON.parse(readFileSync(SEEN_FILE, 'utf8')) as Seen } catch { return {} } }
+const writeSeen = (seen: Seen) => { try { writeFileSync(SEEN_FILE, JSON.stringify(seen)) } catch { /* sem disco: clica de novo na próxima */ } }
+
+/**
+ * Abre o grupo, sobe a conversa algumas telas e junta os posts. No Instagram, um post compartilhado na DM é um
+ * cartão (`div[role=article]` com um botão), sem link escrito: o leitor clica no cartão, a página vai para o
+ * endereço do post (/p/<código>/), lê o endereço e fecha com Esc, voltando ao grupo. Links colados como texto
+ * também valem.
+ */
+async function readThread(page: Page, threadUrl: string, sourceKey: string): Promise<string[]> {
   await page.goto(threadUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await sleep(humanPause(5000, 8000))
   if (loggedOut(page)) throw new Error('login')
@@ -94,7 +106,34 @@ async function readThread(page: Page, threadUrl: string): Promise<string[]> {
     hrefs: Array.from(document.querySelectorAll('a[href]')).map((a) => (a as HTMLAnchorElement).getAttribute('href') ?? ''),
     text: document.body.innerText,
   }))
-  return postLinksIn(hrefs, text)
+  const found = postLinksIn(hrefs, text)
+
+  const seen = readSeen()
+  const mine = (seen[sourceKey] ??= {})
+  const cards = page.locator('div[role="article"] div[role="button"]')
+  const total = await cards.count()
+  // Os mais novos ficam embaixo: abre de baixo para cima, até 30 por volta
+  for (let i = total - 1; i >= Math.max(0, total - 30); i--) {
+    const card = cards.nth(i)
+    const sign = ((await card.innerText().catch(() => '')) + '|' + ((await card.locator('img').first().getAttribute('src').catch(() => '')) ?? '').split('?')[0].slice(-60)).slice(0, 300)
+    if (mine[sign]) { if (!found.includes(mine[sign])) found.push(mine[sign]); continue }
+    await card.scrollIntoViewIfNeeded().catch(() => undefined)
+    await card.click({ timeout: 6000 }).catch(() => undefined)
+    await sleep(humanPause(2000, 3500))
+    const opened = postUrlOf(page.url())
+    if (opened) {
+      mine[sign] = opened
+      if (!found.includes(opened)) found.push(opened)
+    }
+    await page.keyboard.press('Escape')
+    await sleep(humanPause(1000, 2000))
+    if (!page.url().includes('/direct/t/')) {
+      await page.goto(threadUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+      await sleep(humanPause(4000, 6000))
+    }
+  }
+  writeSeen(seen)
+  return found
 }
 
 interface PostPage { author?: string; caption?: string; cover?: string; video: boolean; slides: number; images: string[] }
@@ -237,7 +276,7 @@ async function upload(teamId: string, p: string, body: Buffer) {
 
 async function processSource(ctx: BrowserContext, src: Source, dryRun = false): Promise<number> {
   const page = ctx.pages()[0] ?? (await ctx.newPage())
-  const links = await readThread(page, src.thread_url)
+  const links = await readThread(page, src.thread_url, src.id === '-' ? src.thread_url : src.id)
   log(`[${src.name}] ${links.length} link(s) de post no grupo`)
   if (dryRun) {
     for (const l of links) log('  ', l)
