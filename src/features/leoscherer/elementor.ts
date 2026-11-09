@@ -60,8 +60,8 @@ export const createBuilder = (prefix: string) => {
     container_type: 'grid', grid_columns_grid: fluid(columns), grid_columns_grid_tablet: fluid(tablet), grid_columns_grid_mobile: fluid(mobile),
     grid_rows_grid: fluid('auto'), grid_gaps: gap(space), ...settings,
   }, elements)
-  const heading = (title: string, spec: TypeSpec, color = C.ink, options: JsonRecord = {}) => widget('heading', { title, header_size: 'p', title_color: color, ...typography(spec), ...options })
-  const text = (html: string, spec: TypeSpec = T.body, color = C.body, options: JsonRecord = {}) => widget('text-editor', { editor: html.startsWith('<') ? html : `<p>${html}</p>`, text_color: color, ...typography(spec), ...options })
+  const heading = (title: string, spec: TypeSpec, color: string = C.ink, options: JsonRecord = {}) => widget('heading', { title, header_size: 'p', title_color: color, ...typography(spec), ...options })
+  const text = (html: string, spec: TypeSpec = T.body, color: string = C.body, options: JsonRecord = {}) => widget('text-editor', { editor: html.startsWith('<') ? html : `<p>${html}</p>`, text_color: color, ...typography(spec), ...options })
   const image = (file: string, alt: string, options: JsonRecord = {}) => widget('image', { image: media(file.startsWith('http') ? file : lsAsset(file), alt), image_size: 'full', ...options })
   const button = (label: string, url: string, options: JsonRecord = {}) => widget('button', {
     text: label, link: link(url), ...typography(T.button), button_text_color: C.ink, background_color: 'rgba(255,255,255,0)',

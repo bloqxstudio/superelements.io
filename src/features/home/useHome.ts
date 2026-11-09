@@ -127,6 +127,30 @@ export interface SiteData {
   contacts: SiteSession[]
   /** O último evento que o código do site mandou */
   lastEventAt?: number
+  /** Visitas por dia, por canal e por estado, somando os sites da conta (os gráficos do Início) */
+  days: SiteReport['days']
+  channels: SiteReport['channels']
+  regions: SiteReport['regions']
+}
+
+/**
+ * Soma linhas de vários sites pela chave (dia, canal ou estado): os números somam, o resto fica da
+ * primeira. Antes o Início não passava estas listas aos gráficos e "Visitas por dia", canais e estados
+ * nunca apareciam (2026-11-09).
+ */
+function mergeBy<T extends object>(lists: T[][], key: (row: T) => string): T[] {
+  const out = new Map<string, T>()
+  for (const row of lists.flat()) {
+    const k = key(row)
+    const cur = out.get(k)
+    if (!cur) { out.set(k, { ...row }); continue }
+    const merged = { ...cur } as Record<string, unknown>
+    for (const [field, value] of Object.entries(row)) {
+      if (typeof value === 'number' && typeof merged[field] === 'number') merged[field] = (merged[field] as number) + value
+    }
+    out.set(k, merged as T)
+  }
+  return [...out.values()]
 }
 
 export interface AdsData {
@@ -288,6 +312,9 @@ export function useHome(days: Days, day?: string) {
         live: parts.flatMap((p) => p.live).sort((a, b) => b.lastAt - a.lastAt),
         contacts: parts.flatMap((p) => p.contacts).sort((a, b) => b.startedAt - a.startedAt),
         lastEventAt: Math.max(0, ...trackers.map((t) => t.lastSeenAt ?? 0)) || undefined,
+        days: mergeBy(parts.map((p) => p.report.days ?? []), (d) => d.day).sort((a, b) => a.day.localeCompare(b.day)),
+        channels: mergeBy(parts.map((p) => p.report.channels ?? []), (c) => c.channel).sort((a, b) => b.sessions - a.sessions),
+        regions: mergeBy(parts.map((p) => p.report.regions ?? []), (r) => `${r.country}:${r.region}`).sort((a, b) => b.sessions - a.sessions),
       }
     },
     `${teamId}:${days}:${day ?? ''}`,

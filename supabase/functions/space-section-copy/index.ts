@@ -121,7 +121,8 @@ Deno.serve(async (req) => {
       .join('\n\n')
 
     const client = new Anthropic({ apiKey })
-    const response = await client.beta.messages.create({
+    // Sem `stream`, a resposta é a mensagem inteira (o tipo do pedido abre os dois casos)
+    const response = (await client.beta.messages.create({
       model: 'claude-opus-5-5',
       max_tokens: 16000,
       // Se o modelo recusar, o pedido roda de novo num modelo de reserva, na mesma chamada
@@ -130,7 +131,7 @@ Deno.serve(async (req) => {
       output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
       system: SYSTEM,
       messages: [{ role: 'user', content: request }],
-    } as Parameters<typeof client.beta.messages.create>[0])
+    } as Parameters<typeof client.beta.messages.create>[0])) as Anthropic.Beta.Messages.BetaMessage
 
     if (response.stop_reason === 'refusal') return json({ error: 'O modelo não quis escrever estes textos.' }, 422)
     if (response.stop_reason === 'max_tokens') return json({ error: 'A resposta ficou longa demais. Tente uma seção menor.' }, 422)

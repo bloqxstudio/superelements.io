@@ -16,7 +16,12 @@
     "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    /* Os scripts do Vite importam arquivos do app (o atalho @/ e import.meta.env) */
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] },
+    "types": ["vite/client", "node"]
   },
   "include": ["vite.config.ts", "scripts/space/vitePlugin.ts", "scripts/space/chatPlugin.ts", "scripts/connector/*.ts", "scripts/prospects/*.ts"]
 }

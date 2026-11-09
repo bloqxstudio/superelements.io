@@ -88,7 +88,7 @@ export const Bars: React.FC<{ items: { label: string; value: number }[]; offset?
 }
 
 const HomeChartsInner: React.FC<{
-  site?: SiteReport
+  site?: Pick<SiteReport, 'days' | 'channels' | 'regions'>
   adDays?: { day: string; spend: number }[]
   stages?: { label: string; count: number }[]
   currency?: string

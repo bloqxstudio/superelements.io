@@ -604,7 +604,7 @@ function render(params: { page?: string; sections?: string[]; device?: string; m
   const height = DEVICE_HEIGHT[params.device ?? 'desktop'] ?? DEVICE_HEIGHT.desktop
   const html = document.replace('<head>', `<head>\n<base href="${location.origin}/">\n<style>:root{--se-vh:${height / 100}px}</style>`)
   // No vídeo, a imagem preguiçosa entraria em branco no meio da rolagem
-  return params.motion === 'play' ? html.replaceAll(' loading="lazy"', '') : html
+  return params.motion === 'play' ? html.split(' loading="lazy"').join('') : html
 }
 
 /** Primeiro elemento da seção: é por ele (`data-id`) que a prévia acha a seção na página. */

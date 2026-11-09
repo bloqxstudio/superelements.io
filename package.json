@@ -23,6 +23,7 @@
     "functions:deploy": "node scripts/supabase.mjs deploy",
     "build:mcp": "node scripts/mcp/build.mjs",
     "test": "node --test scripts/tests/*.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "repo:check": "node scripts/check-repository.mjs",
     "cerebro:log": "node scripts/cerebro/log.mjs",
     "cerebro:midia": "node scripts/cerebro/midia.mjs"
