@@ -167,6 +167,13 @@ export async function listLinks(contentId: string): Promise<ContentLink[]> {
   return ((data ?? []) as LinkRow[]).map(toLink)
 }
 
+/** Os conteúdos da conta que já têm criativo ligado (o filtro "Sem criativo" da lista e o radar). */
+export async function listCreativeContentIds(teamId: string): Promise<Set<string>> {
+  const { data, error } = await db.from('crm_content_links').select('content_id').eq('team_id', teamId).eq('kind', 'criativos').limit(5000)
+  if (error) fail(error)
+  return new Set(((data ?? []) as { content_id: string }[]).map((l) => l.content_id))
+}
+
 export const linkContent = async (contentId: string, kind: 'copy' | 'criativos', artifactId: string, projectId: string | undefined, hash: string): Promise<ContentLink> =>
   toLink(await call<LinkRow>('crm_content_link', { p_content: contentId, p_kind: kind, p_artifact: artifactId, p_project: projectId ?? null, p_hash: hash }, LINK_KEYS))
 

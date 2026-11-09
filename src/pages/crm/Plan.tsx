@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { AreaTabs } from '@/features/navigation/AreaTabs'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ArrowRight, Check, CircleAlert, Info, Loader2, Lock, Plug, Plus, RefreshCw, X } from 'lucide-react'
@@ -317,6 +318,7 @@ const Plan: React.FC = () => {
 
   return (
     <Page>
+      <AreaTabs area="cerebro" />
       <PageHeader title="Plano da empresa" text={`O contexto de ${team?.name ?? 'sua conta'} que todo conteúdo, texto e criativo reaproveita. Escreva uma vez; o briefing sai daqui.`}>
         {team && (
           <Button type="button" variant="outline" size="sm" onClick={() => setMcpOpen(true)}>
@@ -324,8 +326,8 @@ const Plan: React.FC = () => {
           </Button>
         )}
         <Button asChild variant="outline" size="sm">
-          <Link to="/conteudos">
-            Ir para Conteúdos <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          <Link to="/pauta">
+            Ir para a Pauta <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
         </Button>
       </PageHeader>

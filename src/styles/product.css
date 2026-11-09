@@ -215,6 +215,18 @@ body:has(.se-product) .se-dialog-content h2 + p { font-size: 13px; line-height: 
 .se-sidebar-collapsed .se-nav-badges > span { width: 8px; height: 8px; padding: 0; font-size: 0; box-shadow: 0 0 0 2px #fff; }
 .se-sidebar-collapsed .se-nav-badges > span > [aria-hidden] { display: none; }
 .se-section-rule { height: 1px; margin: 4px 8px 8px; background: var(--se-line); }
+/*
+ * Grupo Criação (2026-11-09): cada ícone num círculo; o aberto fica com o círculo escuro. Sem linha entre
+ * os itens (o usuário: "tire a linha"): só o Cérebro vem antes, o resto não é um passo a passo.
+ */
+.se-nav-rail > .se-nav-item > svg:first-child {
+  box-sizing: content-box; width: 14px; height: 14px; padding: 4px; margin-inline: -3px; border-radius: 999px;
+  background: #fff; color: #6e6e73; box-shadow: 0 0 0 1px rgb(0 0 0 / .08), 0 1px 2px rgb(0 0 0 / .06);
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+.se-nav-rail > .se-nav-item:hover > svg:first-child { color: #1d1d1f; }
+.se-nav-rail > .se-nav-active > svg:first-child, .se-nav-rail > .se-nav-active:hover > svg:first-child { background: #1d1d1f; color: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .16); }
+.se-sidebar-collapsed .se-nav-rail > .se-nav-item > svg:first-child { margin-inline: 0; }
 .se-sidebar-collapsed .se-sidebar-user { padding-inline: 12px; }
 .se-menu-collapsed .se-skip-link { left: 100px; }
 /* Recolhido, a barra de rolagem empurrava os ícones: rola sem mostrar a barra */

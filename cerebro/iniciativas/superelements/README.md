@@ -3,7 +3,7 @@
 > O construtor: páginas Elementor no canvas do Space, com agentes de IA, Criativos, Motion e sites em código.
 
 **Estado:** em uso interno pelo estúdio; produto `builder` no app
-**Atualizado em:** 2026-11-07
+**Atualizado em:** 2026-11-09
 
 ## O que já existe
 
@@ -15,6 +15,7 @@
 
 ## Em andamento
 
+- Nova jornada de criação (2026-11-09): diagnóstico do menu e plano em [jornada-de-criacao.md](jornada-de-criacao.md), quadro "Nova jornada de criação" na conta Avence. Aprovada; Fases 0 (menu único e abas por área), 1 (Cérebro como contexto de toda criação), 2 (conteúdo em abas, status únicos) e 3 (radar da operação no Início, sempre à vista) feitas no código local, não commitadas; sinfy-mcp publicada.
 - Comercial animado no vídeo explicativo (2026-11-08, no ar): falta criar o vídeo na conta da Avence, narrar e revisar.
 
 - 2026-11-08: Motion ganhou composição visual de vídeo, animação e legenda, com caixas arrastáveis e medidas por vídeo (app local, sem deploy).
@@ -23,6 +24,7 @@
 
 ## Próximos passos
 
+1. Ver logado o menu, a tela do conteúdo em abas, o radar da operação no Início e um texto gerado numa conta que não seja a Avence; commitar e publicar.
 1. Testar logado a Iara com as ferramentas novas e o layout com ela aberta (2026-11-07, não commitado).
 1. Testar logado o vídeo explicativo: gravar pela câmera, roteiro pela IA, publicar um reels (2026-11-07, não commitado).
 1. Testar Sites em código com o repositório real de um cliente e um PR real.

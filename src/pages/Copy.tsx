@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { AreaTabs } from '@/features/navigation/AreaTabs'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ArrowLeft, FileText, FolderOpen, Microscope, Plus, Search, Trash2 } from 'lucide-react'
@@ -241,6 +242,7 @@ const Copy: React.FC = () => {
   return (
     <div className="se-page min-h-[calc(100vh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
+        {!folderParam && <AreaTabs area="pauta" />}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             {folderParam ? (

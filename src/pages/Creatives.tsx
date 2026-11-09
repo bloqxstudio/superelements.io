@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { AreaTabs } from '@/features/navigation/AreaTabs'
 import { useNavigate, Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Images, Plus, Search, Trash2 } from 'lucide-react'
@@ -191,6 +192,7 @@ const Creatives: React.FC = () => {
   return (
     <div className="se-page min-h-[calc(100vh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
+        <AreaTabs area="criativos" />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Criativos</h1>
@@ -233,7 +235,7 @@ const Creatives: React.FC = () => {
           <div className="mt-6 flex flex-col items-center rounded-xl border border-dashed border-gray-300 px-6 py-14 text-center">
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-gray-500 shadow-[0_0_0_1px_rgb(0_0_0/0.06)]"><Images className="h-5 w-5" /></span>
             <h3 className="mt-4 text-sm font-semibold text-gray-900">Nenhum conjunto ainda</h3>
-            <p className="mt-1 max-w-md text-sm text-gray-500">Crie um a partir de um projeto: ele já vem com as cores, as fontes e o logo da marca e com os modelos de post.</p>
+            <p className="mt-1 max-w-md text-sm text-gray-500">Crie um a partir de um projeto: ele já vem com as cores, as fontes e o logo da marca e com os modelos de post. Para sair na marca e no tom certos, escreva antes a marca no <Link to="/cerebro" className="font-medium underline underline-offset-2">Cérebro</Link>; para um post de um conteúdo da Pauta, use "Produzir com IA" dentro do conteúdo.</p>
             <Button className="mt-5 gap-1.5" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Criar conjunto</Button>
           </div>
         )}

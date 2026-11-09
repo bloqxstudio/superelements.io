@@ -10,11 +10,16 @@ export type TeamRoleLike = 'owner' | 'admin' | 'seller' | undefined
 
 export const STATUS_ORDER: ContentStatus[] = ['ideia', 'producao', 'revisao', 'aprovado']
 
+/**
+ * Os mesmos nomes da Pauta (`pauta/rules.ts`, STAGE_LABEL): um vocabulário só para os conteúdos
+ * (nova jornada de criação, Fase 2, 2026-11-09). "Aprovado pelo gestor" é o "Pronto para o cliente"
+ * da Pauta; o que o cliente respondeu aparece no chip (`StatusChip`, pela etapa).
+ */
 export const STATUS_LABEL: Record<ContentStatus, string> = {
   ideia: 'Ideia',
   producao: 'Em produção',
-  revisao: 'Em revisão',
-  aprovado: 'Aprovado',
+  revisao: 'Com o gestor',
+  aprovado: 'Aprovado pelo gestor',
 }
 
 /** Os mesmos formatos que o banco aceita (`crm_contents.format`), com o id do Copy. */

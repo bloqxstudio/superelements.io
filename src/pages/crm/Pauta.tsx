@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AreaTabs } from '@/features/navigation/AreaTabs'
 import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Ban, CalendarRange, Check, ChevronLeft, ChevronRight, CircleAlert, Copy, Lightbulb, Link2, Loader2, MessageSquare, Plus, Send, Sparkles, X } from 'lucide-react'
@@ -402,6 +403,7 @@ const Pauta: React.FC = () => {
 
   return (
     <Page wide>
+      <AreaTabs area="pauta" />
       <PageHeader title="Pauta" text={`O calendário de ${team?.name ?? 'a empresa'}: o que sai, quando e onde, e quem já aprovou.`}>
         <Button variant="outline" size="sm" onClick={() => void openLinks()}>
           <Link2 className="mr-1.5 h-4 w-4" aria-hidden /> Envios
@@ -594,7 +596,7 @@ const Pauta: React.FC = () => {
           </ul>
           {data.contents.length === 0 && (
             <p className="mt-4 text-sm text-gray-500">
-              Nenhum conteúdo ainda. Crie em <Link to="/conteudos?novo=1" className="font-medium underline underline-offset-2">Conteúdos</Link> ou peça à IA pelo Plano.
+              Nenhum conteúdo ainda. Antes, confira se o <Link to="/cerebro" className="font-medium underline underline-offset-2">Cérebro</Link> e o <Link to="/plano" className="font-medium underline underline-offset-2">Plano</Link> dizem quem é a empresa: as ideias da IA saem deles. Depois, <Link to="/conteudos?novo=1" className="font-medium underline underline-offset-2">crie o primeiro conteúdo</Link> ou peça à Iara as ideias do mês.
             </p>
           )}
         </>

@@ -1,4 +1,5 @@
 import { resolveIa } from '@/features/ia/porTarefa'
+import { accountContext } from '@/features/cerebro/accountContext'
 import { useCrm } from '@/features/crm/crmStore'
 import { standardBlock } from '@/features/cerebro/standard'
 import { callAiQuiet } from '../link'
@@ -34,7 +35,7 @@ const STEP: Record<string, string> = { start: 'Começando a pesquisa…', thinki
 export async function researchCuriosity(topic: string, opts: { brand: SetBrand; extra?: string; signal?: AbortSignal; onStep?: (s: string) => void }): Promise<Research> {
   const clean = topic.trim()
   if (!clean) throw new Error('Diga o tema da pesquisa.')
-  const voice = await standardBlock(useCrm.getState().team?.id, '9x16')
+  const voice = (await accountContext('9x16').catch(() => undefined))?.context || (await standardBlock(useCrm.getState().team?.id, '9x16'))
   const prompt = [
     `## O tema\n${clean}`,
     opts.extra?.trim() ? `## Pedido extra\n${opts.extra.trim()}` : '',

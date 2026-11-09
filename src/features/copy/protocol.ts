@@ -32,6 +32,11 @@ export interface CopyRequest {
   history?: { role: 'user' | 'ai'; text: string }[]
   /** Pesquisa na web (o papel Pesquisador, o formato Pesquisa ou um link no pedido ligam sozinhos). */
   web?: boolean
+  /**
+   * A conta aberta e o contexto dela (Cérebro + Plano + marca; `cerebro/accountContext.ts`). Sem ela,
+   * o agente usa a voz da Avence como antes; com outra conta, o tom vem do contexto (2026-11-09).
+   */
+  account?: { name: string; isHome: boolean; context: string }
 }
 
 /** Um bloco novo: o texto aceita **negrito**, *itálico* e [texto](endereço). */

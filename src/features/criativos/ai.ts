@@ -1,4 +1,5 @@
 import { resolveIa } from '@/features/ia/porTarefa'
+import { accountContext } from '@/features/cerebro/accountContext'
 import { AV_CASES } from '@/features/avence/cases'
 import type { PlanRequest, PlanResponse, FormatKey } from './plan'
 import { buildPost } from './templates'
@@ -31,8 +32,8 @@ export const AI_EXAMPLES = [
 ]
 
 export async function generatePosts(form: AiForm, brand: SetBrand, signal?: AbortSignal): Promise<Post[]> {
-  // O padrão de design do Cérebro da conta (marca e padrão de post marcado) vai em todo pedido
-  const standard = await standardBlock(useCrm.getState().team?.id, form.format)
+  // O contexto da conta (Cérebro: quem é, Plano, marca e padrão de post marcado) vai em todo pedido
+  const standard = (await accountContext(form.format).catch(() => undefined))?.context ?? (await standardBlock(useCrm.getState().team?.id, form.format))
   const request: PlanRequest = {
     brief: standard ? `${form.brief}\n\n${standard}` : form.brief,
     format: form.format,

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { AreaTabs } from '@/features/navigation/AreaTabs'
 import { Link } from 'react-router-dom'
 import { Code2, FolderOpen, Github, Loader2, Lock, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -69,6 +70,7 @@ const CodeSites: React.FC = () => {
   return (
     <div className="se-page min-h-[calc(100vh-57px)]">
       <div className="mx-auto max-w-5xl px-4 py-8 md:px-6 md:py-10">
+        <AreaTabs area="sites" />
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-gray-900">
           <Code2 className="h-6 w-6" aria-hidden /> Sites em código
         </h1>

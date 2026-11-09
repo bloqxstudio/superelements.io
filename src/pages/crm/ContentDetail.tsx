@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, Clapperboard, CheckCircle2, CircleAlert, ExternalLink, FileText, Images, Info, Loader2, RefreshCw, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Brain, Clapperboard, CheckCircle2, CircleAlert, ExternalLink, FileText, Images, Info, Loader2, RefreshCw, Save, Send, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useCrm } from '@/features/crm/crmStore'
@@ -23,6 +23,12 @@ import { useAiAvailable } from '@/features/criativos/link'
 
 /**
  * Um conteúdo (/conteudos/:id): ideia, roteiro, briefing do Plano, estado e material ligado.
+ *
+ * Nova jornada de criação, Fase 2 (2026-11-09, o usuário: "Pauta, conteúdo e texto é meio que a mesma
+ * coisa"): o conteúdo é a unidade. A tela tem três abas, Texto (o roteiro daqui é o texto oficial;
+ * o editor completo de Textos é só um jeito de editar o mesmo texto), Criativo e vídeo, e Aprovação.
+ * Os estados usam os nomes da Pauta. O documento do Textos é atualizado sozinho com o roteiro quando
+ * ninguém o editou depois do último envio (`linkedHash`); só se os dois mudaram a pessoa escolhe.
  *
  * A aprovação cobre só o TEXTO deste conteúdo (título, formato, objetivo, ideia e roteiro) na
  * versão exata em que foi dada. Design de Criativos e links externos não são cobertos. Quem
@@ -46,6 +52,13 @@ const Section: React.FC<{ title: string; children: React.ReactNode; className?: 
     {children}
   </section>
 )
+
+type Tab = 'texto' | 'criativo' | 'aprovacao'
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'texto', label: 'Texto' },
+  { id: 'criativo', label: 'Criativo e vídeo' },
+  { id: 'aprovacao', label: 'Aprovação' },
+]
 
 interface MaterialState {
   check?: LinkCheck
@@ -74,6 +87,9 @@ const ContentDetail: React.FC = () => {
   const [conflict, setConflict] = useState(false)
   const [problem, setProblem] = useState<string>()
   const [projectId, setProjectId] = useState('')
+  const [params, setParams] = useSearchParams()
+  const tab: Tab = TABS.some((t) => t.id === params.get('aba')) ? (params.get('aba') as Tab) : 'texto'
+  const openTab = (t: Tab) => setParams((p) => { const n = new URLSearchParams(p); if (t === 'texto') n.delete('aba'); else n.set('aba', t); return n }, { replace: true })
 
   // A tela é reaproveitada ao trocar de /conteudos/:id: respostas de leituras e ações do id anterior
   // não podem substituir a tela do novo. `seq` numera as leituras; `idRef` diz qual id está aberto.
@@ -205,7 +221,7 @@ const ContentDetail: React.FC = () => {
     setBusy('apagar')
     try {
       await deleteContent(content.id)
-      navigate('/conteudos')
+      navigate('/pauta')
     } catch (error) {
       handle(error)
       setBusy(undefined)
@@ -221,6 +237,12 @@ const ContentDetail: React.FC = () => {
     setProblem(undefined)
     try {
       const existing = kind === 'copy' ? copyLink : setLinkRow
+      // Um texto só: se o documento do Textos não foi mexido desde o último envio, ele recebe o roteiro
+      // daqui antes de abrir (nada se perde); se os dois mudaram, a pessoa escolhe na aba Texto
+      if (kind === 'copy' && existing && material.copy.check?.state === 'diferente') {
+        const doc = await readCopy(existing)
+        if (doc && existing.linkedHash && (await copyHash(doc)) === existing.linkedHash) await scriptToCopy(content, existing)
+      }
       const run = kind === 'copy' ? forwardToCopy : forwardToCriativos
       const { path, created } = await run(content, ctx, existing, project ? { id: project.id, name: project.name } : undefined)
       if (created) toast.success(kind === 'copy' ? 'Documento criado no Copy, com o briefing do plano.' : 'Conjunto criado em Criativos, com o briefing do plano.')
@@ -329,8 +351,8 @@ const ContentDetail: React.FC = () => {
   if (state !== 'ready' || !content || !draft) {
     return (
       <Page>
-        <Link to="/conteudos" className="mb-4 inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900">
-          <ArrowLeft className="h-4 w-4" aria-hidden /> Conteúdos
+        <Link to="/pauta" className="mb-4 inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900">
+          <ArrowLeft className="h-4 w-4" aria-hidden /> Pauta
         </Link>
         <div role="alert" className="rounded-lg border border-gray-200 bg-white p-5 text-sm text-gray-700">
           {state === 'missing' ? 'Este conteúdo não existe ou não é desta conta.' : state === 'sem-banco' ? 'Falta aplicar a migração 20261031041728 no Supabase.' : 'Não consegui ler este conteúdo.'}
@@ -349,15 +371,15 @@ const ContentDetail: React.FC = () => {
 
   return (
     <Page>
-      <Link to="/conteudos" className="mb-4 inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <ArrowLeft className="h-4 w-4" aria-hidden /> Conteúdos
+      <Link to="/pauta" className="mb-4 inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <ArrowLeft className="h-4 w-4" aria-hidden /> Pauta
       </Link>
 
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{content.title}</h1>
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-            <StatusChip status={content.status} />
+            <StatusChip content={content} />
             <span>{formatLabel(content.format)}</span>
             <span>Versão {content.version}</span>
             <span>Atualizado {whenLabel(content.updatedAt)}</span>
@@ -401,7 +423,17 @@ const ContentDetail: React.FC = () => {
         </p>
       )}
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+      <div role="tablist" aria-label="Partes do conteúdo" className="mt-5 flex w-fit rounded-lg bg-gray-100 p-0.5 text-sm">
+        {TABS.map((t) => (
+          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => openTab(t.id)} className={cn('rounded-md px-3 py-1 font-medium transition-colors', tab === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800')}>
+            {t.label}
+            {t.id === 'texto' && dirty && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-500 align-middle" aria-label="mudanças não salvas" />}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'texto' && (
+      <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
         <form
           className="grid content-start gap-4"
           onSubmit={(e) => {
@@ -470,40 +502,47 @@ const ContentDetail: React.FC = () => {
         </form>
 
         <div className="grid content-start gap-5">
-          <Section title="Aprovação">
-            {approvalIsCurrent(content) ? (
-              <div className="text-sm text-gray-700">
-                <p className="flex items-start gap-2 font-medium text-emerald-800">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> Texto aprovado na versão {content.approvedVersion}
-                </p>
-                <p className="mt-1 text-xs text-gray-500">
-                  {nameOf(people, content.approvedBy) ?? 'Um gestor'} · {content.approvedAt ? whenLabel(content.approvedAt) : ''}
-                  {approvedSnapshot?.contextVersion ? ` · plano v${approvedSnapshot.contextVersion}` : ''}
-                </p>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-600">{content.status === 'revisao' ? 'Em revisão: um dono ou gestor da conta pode aprovar.' : 'Sem aprovação valendo.'}</p>
-            )}
-            <p className="mt-3 flex items-start gap-2 rounded-lg bg-gray-50 p-2.5 text-xs leading-relaxed text-gray-600">
-              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-              <span>A aprovação vale só para o <strong>texto</strong> deste conteúdo (título, formato, objetivo, ideia e roteiro), na versão exata aprovada. <strong>Não cobre</strong> o design dos Criativos nem links externos. Qualquer edição do texto derruba a aprovação.</span>
-            </p>
-            {snapshots.length > 0 && (
-              <details className="mt-3 text-xs text-gray-600">
-                <summary className="cursor-pointer font-medium text-gray-700">Registros ({snapshots.length})</summary>
-                <ul className="mt-2 grid gap-1.5">
-                  {snapshots.map((s) => (
-                    <li key={s.id} className="rounded-md border border-gray-100 p-2">
-                      <span className="font-medium text-gray-800">{s.kind === 'aprovacao' ? 'Aprovação' : 'Enviado para revisão'}</span> · v{s.contentVersion} · {whenLabel(s.createdAt)}
-                      {nameOf(people, s.createdBy) ? ` · ${nameOf(people, s.createdBy)}` : ''}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
+          <Section title="Editor completo">
+            <p className="mb-3 text-xs text-gray-600">O roteiro desta aba é o texto oficial do conteúdo. O editor completo (Textos) abre o mesmo texto, com os agentes, comentários e blocos.</p>
+            {(['copy'] as ('copy' | 'criativos')[]).map((kind) => {
+              const link = kind === 'copy' ? copyLink : setLinkRow
+              const m = material[kind]
+              const Icon = kind === 'copy' ? FileText : Images
+              const name = kind === 'copy' ? 'Textos' : 'Criativos'
+              if (kind === 'criativos' && team && team.modules.criativos === false) return null
+              return (
+                <div key={kind}>
+                  <p className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                    <Icon className="h-4 w-4" aria-hidden /> {name}
+                  </p>
+                  {link && m.loading && <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-500"><Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Conferindo o material</p>}
+                  {link && m.check && (
+                    <p className={cn('mt-1 text-xs', m.check.state === 'igual' ? 'text-gray-600' : 'text-amber-800')} role={m.check.blocksApproval ? 'alert' : undefined}>
+                      {m.check.note}
+                    </p>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button size="sm" variant={link ? 'outline' : 'default'} disabled={!!busy} onClick={() => void forward(kind)}>
+                      {busy === kind && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />}
+                      {link ? <><ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Abrir no editor completo</> : 'Abrir no editor completo'}
+                    </Button>
+                    {link && kind === 'copy' && m.check?.state === 'diferente' && (
+                      <>
+                        <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void pullFromCopy()}>Usar o texto do editor</Button>
+                        <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void pushToCopy()}>Usar o roteiro daqui</Button>
+                      </>
+                    )}
+                    {link && (
+                      <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => void unlink(kind)}>
+                        Desligar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </Section>
-
-          <Section title="Briefing do plano">
+          <Section title="Contexto da empresa">
             {brief && (
               <dl className="grid gap-2 text-xs text-gray-600">
                 {([['Objetivo', brief.objective], ['Público', brief.audience], ['Oferta', brief.offer], ['Tom', brief.tone]] as const).map(([k, v]) => (
@@ -530,9 +569,18 @@ const ContentDetail: React.FC = () => {
               {ctx ? `Plano versão ${ctx.version}.` : 'A conta ainda não tem plano.'} {missingContext(ctx).length > 0 && <>Falta: {missingContext(ctx).join(' e ')}. </>}
               <Link to="/plano" className="font-medium text-gray-800 underline underline-offset-2">{canManage(role) ? 'Editar o plano' : 'Ver o plano'}</Link>
             </p>
+            <p className="mt-2 flex items-start gap-1.5 text-xs text-gray-500">
+              <Brain className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>A IA escreve e cria com o <Link to="/cerebro" className="font-medium text-gray-800 underline underline-offset-2">Cérebro</Link> da conta: quem é a empresa, o Plano e a marca.</span>
+            </p>
           </Section>
+        </div>
+      </div>
+      )}
 
-          <Section title="Material ligado">
+      {tab === 'criativo' && (
+      <div className="mt-4 grid max-w-3xl gap-5">
+          <Section title="Criativo e vídeo">
             <label className="block text-xs">
               <span className="mb-1 block font-medium text-gray-700">Onde guardar ao criar</span>
               <select value={projectId} disabled={!!copyLink && !!setLinkRow} onChange={(e) => setProjectId(e.target.value)} className={cn(FIELD, 'h-8 text-xs')}>
@@ -571,7 +619,7 @@ const ContentDetail: React.FC = () => {
               </div>
             )}
 
-            {(['copy', 'criativos'] as const).map((kind) => {
+            {(['criativos'] as ('copy' | 'criativos')[]).map((kind) => {
               const link = kind === 'copy' ? copyLink : setLinkRow
               const m = material[kind]
               const Icon = kind === 'copy' ? FileText : Images
@@ -608,10 +656,53 @@ const ContentDetail: React.FC = () => {
                 </div>
               )
             })}
-            <p className="mt-3 text-xs text-gray-500">O mesmo documento e o mesmo conjunto abrem sempre: encaminhar de novo não cria cópias.</p>
+            <p className="mt-3 text-xs text-gray-500">O mesmo conjunto abre sempre: encaminhar de novo não cria cópias.</p>
           </Section>
-        </div>
       </div>
+      )}
+
+      {tab === 'aprovacao' && (
+      <div className="mt-4 grid max-w-3xl gap-5">
+          <Section title="Aprovação">
+            {approvalIsCurrent(content) ? (
+              <div className="text-sm text-gray-700">
+                <p className="flex items-start gap-2 font-medium text-emerald-800">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> Texto aprovado na versão {content.approvedVersion}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {nameOf(people, content.approvedBy) ?? 'Um gestor'} · {content.approvedAt ? whenLabel(content.approvedAt) : ''}
+                  {approvedSnapshot?.contextVersion ? ` · plano v${approvedSnapshot.contextVersion}` : ''}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600">{content.status === 'revisao' ? 'Em revisão: um dono ou gestor da conta pode aprovar.' : 'Sem aprovação valendo.'}</p>
+            )}
+            <p className="mt-3 flex items-start gap-2 rounded-lg bg-gray-50 p-2.5 text-xs leading-relaxed text-gray-600">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>A aprovação vale só para o <strong>texto</strong> deste conteúdo (título, formato, objetivo, ideia e roteiro), na versão exata aprovada. <strong>Não cobre</strong> o design dos Criativos nem links externos. Qualquer edição do texto derruba a aprovação.</span>
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+              <Button asChild size="sm" variant="outline">
+                <Link to="/pauta"><Send className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Enviar ao cliente pela Pauta</Link>
+              </Button>
+              <span className="text-xs text-gray-500">Depois que o gestor aprova, o envio ao cliente sai da Pauta, junto com as outras peças.</span>
+            </div>
+            {snapshots.length > 0 && (
+              <details className="mt-3 text-xs text-gray-600">
+                <summary className="cursor-pointer font-medium text-gray-700">Registros ({snapshots.length})</summary>
+                <ul className="mt-2 grid gap-1.5">
+                  {snapshots.map((s) => (
+                    <li key={s.id} className="rounded-md border border-gray-100 p-2">
+                      <span className="font-medium text-gray-800">{s.kind === 'aprovacao' ? 'Aprovação' : 'Enviado para revisão'}</span> · v{s.contentVersion} · {whenLabel(s.createdAt)}
+                      {nameOf(people, s.createdBy) ? ` · ${nameOf(people, s.createdBy)}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </Section>
+      </div>
+      )}
     </Page>
   )
 }

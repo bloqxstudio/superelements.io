@@ -1,4 +1,5 @@
 import { resolveIa } from '@/features/ia/porTarefa'
+import { accountContext } from '@/features/cerebro/accountContext'
 import { useCrm } from '@/features/crm/crmStore'
 import { standardBlock } from '@/features/cerebro/standard'
 import { callAiQuiet } from '../link'
@@ -161,7 +162,7 @@ export function briefingBeats(raw: RawBeat[], photos: string[]): ExplainerBeat[]
 
 
 async function brandContext(brand: SetBrand) {
-  const voice = await standardBlock(useCrm.getState().team?.id, '9x16')
+  const voice = (await accountContext('9x16').catch(() => undefined))?.context || (await standardBlock(useCrm.getState().team?.id, '9x16'))
   return [`## Marca\n${brand.name || '(sem nome)'}; fontes ${brand.headingFont} / ${brand.bodyFont}${brand.emphasisFont && brand.emphasisFont !== brand.headingFont ? `, destaque em ${brand.emphasisFont}` : ''}. As cores e o logo o vídeo já aplica.`, voice ? `## Voz e regras da marca\n${voice}` : ''].filter(Boolean).join('\n\n')
 }
 

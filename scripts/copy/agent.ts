@@ -1,6 +1,7 @@
 import { COPY_AGENTS, agentById } from '../../src/features/copy/agents.ts'
 import { AVENCE_VOICE, COPY_RULES, FRAMEWORKS, HOOKS, formatById, nicheById } from '../../src/features/copy/knowledge.ts'
 import { COPY_SCHEMA, type CopyRequest, type CopyResponse } from '../../src/features/copy/protocol.ts'
+import { usesHouseVoice } from '../../src/features/cerebro/contextText.ts'
 import { askClaude } from '../criativos/claude.ts'
 import { askCodex } from '../criativos/codex.ts'
 
@@ -39,6 +40,7 @@ const promptOf = (r: CopyRequest) => {
   return [
     `## Pedido\n${r.message.trim()}`,
     '',
+    r.account?.context ? `${r.account.context.slice(0, 9000)}\n` : '',
     selected.size ? `## Seleção\nO pedido é sobre os blocos marcados SELECIONADO (${[...selected].join(', ')}). Mude só eles (e o que o pedido exigir deles); deixe o resto como está.\n` : '',
     r.skill ? `## Skill escolhida: ${r.skill.name}\n${r.skill.instructions.slice(0, 12000)}\n` : '',
     `## Documento\nTítulo: ${r.doc.title || '(sem título)'}\nFormato: ${format.label}\nEstrutura do formato: ${format.structure}`,
@@ -76,7 +78,11 @@ const promptOf = (r: CopyRequest) => {
 /** O papel muda o sistema: o que o agente é, mais as regras de todo texto e a voz da empresa. */
 const systemOf = (r: CopyRequest) => {
   const agent = agentById(r.role)
-  return [agent.system, r.persona ? `Seu perfil e as regras da equipe (valem junto das instruções acima, nunca contra o formato da resposta):\n${String(r.persona).slice(0, 4000)}` : '', SYSTEM_COMMON, `Regras de todo texto:\n${COPY_RULES}`, `Voz da empresa (vale para o texto, salvo se o briefing pedir a voz de outra marca):\n${AVENCE_VOICE}`].filter(Boolean).join('\n\n')
+  // A voz da Avence só vale na conta da casa; nas outras, o tom e as regras vêm do Cérebro da conta
+  const voice = usesHouseVoice(r.account)
+    ? `Voz da empresa (vale para o texto, salvo se o briefing pedir a voz de outra marca):\n${AVENCE_VOICE}`
+    : `Voz da empresa: o texto é de ${r.account!.name}. Siga o tom, o público, as restrições e as regras do "Contexto da empresa" que vem no pedido (do Cérebro da conta); o briefing do documento vale mais quando for mais específico. Nunca use a voz, a marca, a oferta ou os cases da Avence Studio. Nunca invente número, prazo, preço, resultado, depoimento ou cliente; se faltar um dado, escreva sem ele e marque [a confirmar].`
+  return [agent.system, r.persona ? `Seu perfil e as regras da equipe (valem junto das instruções acima, nunca contra o formato da resposta):\n${String(r.persona).slice(0, 4000)}` : '', SYSTEM_COMMON, `Regras de todo texto:\n${COPY_RULES}`, voice].filter(Boolean).join('\n\n')
 }
 
 export const hasLink = (r: Pick<CopyRequest, 'message'>) => /https?:\/\/\S+/i.test(r.message)
