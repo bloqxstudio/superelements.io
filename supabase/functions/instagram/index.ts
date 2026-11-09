@@ -1029,7 +1029,8 @@ async function publishStory(admin: SupabaseClient, row: StoryRow, started: numbe
       )
       if (result.status !== 'published') {
         // Vídeo ainda processando na Meta: guarda o contêiner e volta no próximo minuto, sem contar tentativa
-        frame.containerId = result.containerId
+        // Um arquivo só nunca volta como carrossel ("children"); só o processando traz o contêiner
+        if ('containerId' in result) frame.containerId = result.containerId
         frame.processingSince ??= new Date().toISOString()
         if (Date.now() - Date.parse(frame.processingSince) > VIDEO_PROCESSING_MS) return fail('O Instagram não terminou de processar o vídeo em 30 minutos. Gere o vídeo de novo e aprove outra vez.').then(() => 'falhou')
         await save({ status: 'agendado', frames, attempts: Math.max(0, row.attempts - 1), next_try_at: new Date(Date.now() + 60_000).toISOString() })

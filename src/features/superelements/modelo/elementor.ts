@@ -516,7 +516,7 @@ export const buildSimple = () => {
 export const buildSplit = () => {
   const b = createModelBuilder('sxc')
   const card = (classes: string, elements: ElementorNode[]) => b.col(elements, 0, { css_classes: `sx-wg ${classes}` })
-  const tx = (value: string, classes: string, color = SX.ink) => b.heading(value, T.ui, color, { _css_classes: `sx-wt ${classes}` })
+  const tx = (value: string, classes: string, color: string = SX.ink) => b.heading(value, T.ui, color, { _css_classes: `sx-wt ${classes}` })
   const projects = card('sx-wg-1', [
     ...SX_SPLIT.projects.map(([name, status, fg, bgc], i) => b.row([
       b.box(`sx-wsq sx-wsq-${i + 1}`),
@@ -632,7 +632,7 @@ const STEP_LABELS = PUBLISH_STEPS.map((step) => step.replace(/…$/, '').replace
 
 export const buildFeatures = () => {
   const b = createModelBuilder('sxd')
-  const tx = (value: string, classes: string, color = SX.ink) => b.heading(value, T.ui, color, { _css_classes: `sx-ct ${classes}` })
+  const tx = (value: string, classes: string, color: string = SX.ink) => b.heading(value, T.ui, color, { _css_classes: `sx-ct ${classes}` })
   const check = () => b.icon('check', 'sx-rcheck')
   const item = (elements: ElementorNode[], classes = '') => b.row(elements, 0, { css_classes: `sx-ri ${classes}`.trim() })
 
