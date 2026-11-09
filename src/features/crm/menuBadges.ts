@@ -75,8 +75,11 @@ function writeJson(key: string, value: unknown) {
 const SITE_EVERY = 30_000
 const CRM_EVERY = 2 * 60_000
 const IG_EVERY = 5 * 60_000
-/** A Meta é perguntada no máximo a cada 10 minutos por conta, somando as abas deste navegador. */
-const IG_PROFILE_EVERY = 10 * 60_000
+/**
+ * A Meta é perguntada no máximo a cada 30 minutos por conta, somando as abas deste navegador. O servidor
+ * já relê cada conta a cada hora (2026-11-09); cada navegador chamando a Meta gastava o limite da conta.
+ */
+const IG_PROFILE_EVERY = 30 * 60_000
 const TRACKERS_EVERY = 10 * 60_000
 
 const missingTable = (error: { code?: string }) => error.code === '42P01' || error.code === 'PGRST205'

@@ -86,8 +86,11 @@ function useSoon(run: () => void, ms: number) {
 export type Days = 1 | 7 | 30
 
 const PRESET: Record<Days, AdPreset> = { 1: 'today', 7: 'last_7d', 30: 'last_30d' }
-/** O relatório de hoje muda ao longo do dia: guardado há mais que isso, a Home lê a Meta de novo (como a aba Anúncios). */
-const TODAY_STALE = 5 * 60_000
+/**
+ * O relatório de hoje muda ao longo do dia. O servidor relê a Meta a cada ~15 minutos (cron
+ * `crm-social-sync`, 2026-11-09); só um guardado mais velho que isso faz a Home ler a Meta.
+ */
+const TODAY_STALE = 20 * 60_000
 const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 /** O relatório guardado do período; em "Hoje", só vale o do dia, e um velho é relido da Meta (se falhar, fica o guardado do dia). */
@@ -100,8 +103,11 @@ async function adReportFor(accountId: string, preset: AdPreset): Promise<AdRepor
     if (saved && (saved.fetchedAt > closed || (day === todayKey() ? Date.now() - saved.fetchedAt < TODAY_STALE : Date.now() - saved.fetchedAt < 30 * 60_000))) return saved
     return fetchAdReport(accountId, preset).catch(() => saved)
   }
+  // 7 e 30 dias: o servidor relê a cada hora; o guardado vale
   if (preset !== 'today') return saved
-  const sameDay = saved && saved.since === localDay() ? saved : null
+  // "Hoje" é o dia da conta de anúncios (fuso dela na Meta): vale o guardado recente, sem comparar com o
+  // dia deste navegador (antes, perto da meia-noite ou em conta de outro fuso, a Home relia a Meta a cada vez)
+  const sameDay = saved && (saved.since === localDay() || Date.now() - saved.fetchedAt < TODAY_STALE) ? saved : null
   if (sameDay && Date.now() - sameDay.fetchedAt < TODAY_STALE) return sameDay
   return fetchAdReport(accountId, 'today').catch(() => sameDay)
 }

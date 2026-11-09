@@ -565,7 +565,9 @@ const RESULT_FIELDS = 'results,cost_per_result'
 
 /** Insights da conta; tenta com `results` (resultado como no Gerenciador) e, se a Meta recusar o campo, sem ele. */
 async function insights(token: string, act: string, params: Params, missing: Set<string>, withResults = false): Promise<InsightRow[]> {
-  const read = (fields: string) => all<InsightRow>(`act_${act}/insights`, token, { limit: 500, ...params, fields }, 5000)
+  // A mesma atribuição do Gerenciador de Anúncios (a de cada conjunto), para os números baterem com ele
+  // e o total, os dias e os leads usarem a mesma janela (2026-11-09)
+  const read = (fields: string) => all<InsightRow>(`act_${act}/insights`, token, { limit: 500, use_unified_attribution_setting: 'true', ...params, fields }, 5000)
   const fields = String(params.fields ?? BASE_FIELDS)
   if (!withResults || missing.has('results')) return read(fields)
   try {
@@ -646,7 +648,7 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
     insights(token, act, { ...base, level: 'account', time_increment: 1 }, missing),
     insights(token, act, { ...base, level: 'campaign', fields: `campaign_id,campaign_name,objective,${BASE_FIELDS}` }, missing, true),
     optional('campanhas', () => all<CampaignRow>(`act_${act}/campaigns`, token, { fields: 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,start_time,stop_time', limit: 200 }, 500), [] as CampaignRow[]),
-    optional('dias por campanha', () => insights(token, act, { ...base, level: 'campaign', time_increment: 1, fields: `campaign_id,${BASE_FIELDS}` }, missing), [] as InsightRow[]),
+    optional('dias por campanha', () => insights(token, act, { ...base, level: 'campaign', time_increment: 1, fields: `campaign_id,${BASE_FIELDS}` }, missing, true), [] as InsightRow[]),
   ])
 
   // Os cortes vêm por campanha, para o filtro de campanhas da tela somar só as escolhidas
@@ -711,7 +713,11 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
     .filter((r) => r.campaign_id && r.date_start)
     .map((r) => {
       const metrics = metricsOf(r)
-      return { campaignId: r.campaign_id!, day: r.date_start!, metrics: lean(metrics), result: resultIn(metrics, resultType.get(r.campaign_id!)) }
+      // O resultado do dia sai do mesmo `results` da campanha (os dias somam o total); sem ele, pelas ações
+      const type = resultType.get(r.campaign_id!)
+      const stat = r.results?.[0]
+      const own = stat?.indicator && stat.indicator.replace(/^actions:/, '') === type ? num(stat.values?.[0]?.value) : undefined
+      return { campaignId: r.campaign_id!, day: r.date_start!, metrics: lean(metrics), result: own ?? resultIn(metrics, type) }
     })
 
   const cut = (rows: InsightRow[], key: (r: InsightRow) => string | undefined) =>
@@ -804,9 +810,50 @@ async function preview(account: AccountRow, token: string, body: Record<string, 
 
 // ---------- entrada ----------
 
+/**
+ * Sincronização agendada (2026-11-09; o usuário: "a sinc de dados para funcionar sempre em tempo real e
+ * com dados reais"). O pg_cron chama `cron_report` com o cabeçalho `x-cron-secret` (o mesmo segredo dos
+ * stories, `STORIES_CRON_SECRET`), uma conta e um período por chamada, e o relatório vai para
+ * `crm_ad_reports`, de onde as telas leem sem esperar a Meta. A função continua com verify_jwt: o cron
+ * manda a chave pública (anon) no Authorization, e quem decide é o segredo.
+ */
+async function cronReport(body: Record<string, unknown>) {
+  const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
+  const ctx: Ctx = { user: admin, admin, userId: '' }
+  const id = uuid(body.accountId, 'Conta')
+  const { data, error } = await admin.from('crm_ad_accounts').select('id, team_id, ad_account_id, name, currency').eq('id', id).maybeSingle()
+  if (error) throw dbError(error)
+  if (!data) throw new HttpError('Conta não encontrada.', 404, 'not_found')
+  const account = data as AccountRow
+  const preset = presetOf(body.preset)
+  const token = await tokenOf(ctx, account)
+  try {
+    const out = await report(ctx, account, token, preset)
+    return { ok: true, account: account.id, preset, fetchedAt: out.fetchedAt }
+  } catch (error) {
+    if (error instanceof HttpError && error.code === 'token') await markBroken(ctx, account.id)
+    throw error
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Use POST.' }, 405)
+
+  if (req.headers.has('x-cron-secret')) {
+    const expected = Deno.env.get('STORIES_CRON_SECRET') ?? ''
+    const given = req.headers.get('x-cron-secret') ?? ''
+    if (!expected || given.length !== expected.length || given !== expected) return json({ error: 'Segredo do cron inválido.', code: 'auth' }, 401)
+    try {
+      const body = ((await req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>
+      if (body.action !== 'cron_report') return json({ error: 'Ação desconhecida.' }, 400)
+      return json(await cronReport(body))
+    } catch (error) {
+      console.error('[meta-ads] cron', error)
+      if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status)
+      return json({ error: error instanceof Error ? error.message : String(error), code: 'error' }, 500)
+    }
+  }
 
   try {
     const url = Deno.env.get('SUPABASE_URL')!
