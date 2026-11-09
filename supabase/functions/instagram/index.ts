@@ -378,6 +378,7 @@ const TOTAL_METRICS = ['reach', 'views', 'accounts_engaged', 'total_interactions
 const MEDIA_METRICS: Record<string, string[][]> = {
   REELS: [
     ['reach', 'views', 'likes', 'comments', 'shares', 'saved', 'total_interactions', 'ig_reels_avg_watch_time'],
+    ['reach', 'views', 'likes', 'comments', 'shares', 'saved'],
     ['reach', 'likes', 'comments', 'shares', 'saved'],
   ],
   FEED: [
@@ -387,6 +388,7 @@ const MEDIA_METRICS: Record<string, string[][]> = {
   ],
   STORY: [
     ['reach', 'views', 'replies', 'shares', 'total_interactions', 'follows', 'profile_visits'],
+    ['reach', 'views', 'replies'],
     ['reach', 'replies'],
   ],
 }
@@ -464,9 +466,13 @@ async function sync(ctx: Ctx, account: AccountRow, token: string) {
     .filter((v) => typeof v.value === 'number' && v.end_time)
     .map((v) => ({ account_id: account.id, team_id: account.team_id, day: new Date(Date.parse(v.end_time!) - DAY * 1000).toISOString().slice(0, 10), reach: v.value as number }))
 
+  // Dias completos, como os anúncios (`last_7d` da Meta): de N dias atrás até o fim de ontem, no horário
+  // de São Paulo. Antes a janela terminava na hora da leitura e misturava um pedaço de hoje (2026-11-09).
+  // As duas janelas saem juntas (antes, uma depois da outra).
+  const midnight = Math.floor(Date.parse(`${spDay()}T00:00:00-03:00`) / 1000)
   const totals: Record<string, Record<string, number>> = {}
-  for (const days of [7, 30]) {
-    const range = { period: 'day', metric_type: 'total_value', since: now - days * DAY + 60, until: now }
+  await Promise.all([7, 30].map(async (days) => {
+    const range = { period: 'day', metric_type: 'total_value', since: midnight - days * DAY, until: midnight - 60 }
     const out: Record<string, number> = {}
     const all = await soft(`totais de ${days} dias`, () => ig<{ data: Insight[] }>('me/insights', token, { params: { metric: TOTAL_METRICS.join(','), ...range } }))
     if (all) {
@@ -476,7 +482,8 @@ async function sync(ctx: Ctx, account: AccountRow, token: string) {
       }
     } else {
       // Uma métrica recusada derruba o pedido todo: tira o grupo da lista e pede uma a uma
-      missing.pop()
+      const at = missing.indexOf(`totais de ${days} dias`)
+      if (at >= 0) missing.splice(at, 1)
       await pool(TOTAL_METRICS, 4, async (metric) => {
         const one = await soft(`${metric} (${days} dias)`, () => ig<{ data: Insight[] }>('me/insights', token, { params: { metric, ...range } }))
         const first = one?.data?.[0]
@@ -484,20 +491,18 @@ async function sync(ctx: Ctx, account: AccountRow, token: string) {
         if (n !== undefined) out[metric] = n
       })
     }
-    const follows = await soft(`seguir e deixar de seguir (${days} dias)`, () =>
-      ig<{ data: Insight[] }>('me/insights', token, { params: { metric: 'follows_and_unfollows', breakdown: 'follow_type', ...range } })
-    )
+    const [follows, reachSplit] = await Promise.all([
+      soft(`seguir e deixar de seguir (${days} dias)`, () => ig<{ data: Insight[] }>('me/insights', token, { params: { metric: 'follows_and_unfollows', breakdown: 'follow_type', ...range } })),
+      soft(`alcance de seguidores (${days} dias)`, () => ig<{ data: Insight[] }>('me/insights', token, { params: { metric: 'reach', breakdown: 'follow_type', ...range } })),
+    ])
     const split = breakdownOf(follows?.data?.[0])
     if (split.FOLLOWER !== undefined) out.follows = split.FOLLOWER
     if (split.NON_FOLLOWER !== undefined) out.unfollows = split.NON_FOLLOWER
-    const reachSplit = await soft(`alcance de seguidores (${days} dias)`, () =>
-      ig<{ data: Insight[] }>('me/insights', token, { params: { metric: 'reach', breakdown: 'follow_type', ...range } })
-    )
     const bySplit = breakdownOf(reachSplit?.data?.[0])
     if (bySplit.FOLLOWER !== undefined) out.reach_followers = bySplit.FOLLOWER
     if (bySplit.NON_FOLLOWER !== undefined) out.reach_non_followers = bySplit.NON_FOLLOWER
     totals[String(days)] = out
-  }
+  }))
 
   const audience: Record<string, Record<string, number>> = {}
   if ((profile.followers_count ?? 0) >= 100) {
@@ -1101,6 +1106,17 @@ async function readStoryNumbers(admin: SupabaseClient, started: number) {
 }
 
 /** O que o cron pede a cada minuto: publicar o que venceu e ler os números do que está para sumir. */
+async function cronSync(admin: SupabaseClient, accountId: unknown) {
+  if (typeof accountId !== 'string' || !/^[0-9a-f-]{36}$/i.test(accountId)) throw new HttpError('Conta inválida.', 400, 'bad_request')
+  const { data, error } = await admin.from('crm_instagram_accounts').select('id, team_id, ig_user_id, username').eq('id', accountId).maybeSingle()
+  if (error) throw dbError(error)
+  if (!data) throw new HttpError('Conta não encontrada.', 404, 'not_found')
+  const ctx: Ctx = { user: admin, admin, userId: '' }
+  const account = data as AccountRow
+  const token = await tokenOf(ctx, account)
+  return { account: account.id, ...(await guarded(ctx, account, () => sync(ctx, account, token))) }
+}
+
 async function runScheduled(admin: SupabaseClient, dryRun: boolean) {
   const started = Date.now()
   if (dryRun) {
@@ -1224,8 +1240,11 @@ Deno.serve(async (req) => {
     if (!expected || !sameText(given, expected)) return json({ error: 'Segredo do cron inválido.', code: 'auth' }, 401)
     try {
       const body = ((await req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>
-      if (body.action !== 'run_scheduled') return json({ error: 'Ação desconhecida.' }, 400)
       const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
+      // Sincronização agendada de uma conta (2026-11-09, "sempre em tempo real e com dados reais"): o cron
+      // chama uma conta por vez, e as telas leem as tabelas sem esperar a Meta
+      if (body.action === 'sync_account') return json(await cronSync(admin, body.accountId))
+      if (body.action !== 'run_scheduled') return json({ error: 'Ação desconhecida.' }, 400)
       return json(await runScheduled(admin, body.dryRun === true))
     } catch (error) {
       console.error('[instagram] cron', error)

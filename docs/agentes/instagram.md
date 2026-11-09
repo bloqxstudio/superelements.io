@@ -44,3 +44,40 @@ timestamps em milissegundos ou em segundos (inclusive texto).
 Estado observado no painel da Meta: app não publicado, verificação da empresa
 em análise e App Review não enviado. O painel informa que webhooks exigem app
 publicado. Não afirmar funcionamento real antes de uma mensagem chegar pela Meta.
+
+## Sincronização agendada no servidor (2026-11-09)
+
+O usuário: "dados que demoram pra carregar e apresentam números errados… sinc… sempre em tempo real e com
+dados reais, tanto dos anúncios quanto do Instagram". Antes, nada era lido da Meta em horário marcado: só
+quando alguém abria a tela. O Início mostrava o que tinha ficado da última vez (a Vizor estava parada desde
+06/11).
+
+- **Cron** `crm-social-sync`, a cada 10 min, chama `public.crm_social_sync_tick()` (migração
+  `20261109120000_crm_social_sync.sql`, aplicada):
+  - **Instagram:** `instagram` com a ação `sync_account`, uma conta por chamada, a cada ~1 h. O limite de
+    chamadas da Meta é por conta, e cada leitura completa faz dezenas delas.
+  - **Anúncios:** `meta-ads` com a ação `cron_report`. Hoje é relido a cada ~15 min; 7 e 30 dias a cada ~1 h.
+  - **Autorização:** usa o segredo e o endereço dos stories (Vault). O `meta-ads` mantém `verify_jwt`: o cron
+    manda a chave anon no Authorization (segredo `supabase_anon_key` no Vault) e o `x-cron-secret`.
+  - **Ficam de fora:** contas pausadas, com o módulo Instagram desligado ou com o token expirado.
+  - **Primeiro ciclo:** 14 chamadas com código 200. Todas as contas foram relidas às 14:08.
+- **Números corrigidos:**
+  - **Anúncios:**
+    - `use_unified_attribution_setting=true` em todas as leituras: a mesma atribuição do Gerenciador de
+      Anúncios.
+    - O resultado de cada dia sai do mesmo `results` da campanha, então o gráfico soma o total.
+  - **Instagram:**
+    - Os totais de 7 e 30 dias usam dias completos até ontem, no horário de São Paulo, como os anúncios. Antes
+      a janela terminava na hora da leitura e misturava um pedaço de hoje.
+    - As duas janelas são lidas em paralelo.
+    - As métricas de reserva de Reels e Stories mantêm `views`.
+- **Telas:**
+  - Leem o que está salvo e só chamam a Meta quando o salvo passou do ciclo do servidor: Instagram 75 min,
+    anúncios 70 min, hoje 20 min.
+  - O menu pergunta o perfil a cada 30 min (antes 10 min, por navegador).
+  - O Início não compara mais o "hoje" do navegador com o da conta de anúncios.
+  - Os avisos de dado velho: 2 h para anúncios e 3 h para o Instagram.
+- **Não feito:**
+  - Realtime nas tabelas de relatório: o JSON é grande, e o egress conta. As telas releem a tabela.
+  - Paginar além dos 50 posts mais recentes: os mais antigos ficam com o último número lido.
+  - Prender o alcance diário ao dia de São Paulo: a Meta fecha o dia no horário do Pacífico.

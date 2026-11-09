@@ -31,8 +31,9 @@ import { PlanBlock } from '@/features/conteudos/PlanBlock'
  * webhook do formulário, e vem sempre rotulado assim.
  */
 
-const ADS_FRESH = 6 * 3_600_000
-const IG_FRESH = 12 * 3_600_000
+// Com o cron (2026-11-09), um relatório mais velho que isso quer dizer que a leitura falhou
+const ADS_FRESH = 2 * 3_600_000
+const IG_FRESH = 3 * 3_600_000
 const SITE_POLL_FRESH = 8 * 60_000
 const PRODUCTION_FRESH = 5 * 60_000
 
@@ -407,7 +408,7 @@ function buildAttention(h: HomeData, now: number): Alert[] {
       if (account.syncError) out.push({ id: `ads-erro-${account.id}`, title: `Anúncios: ${account.name} precisa ser reconectada`, reason: `A última leitura da Meta falhou (${account.syncError}). Os números mostrados podem estar atrasados.`, to: '/crm/anuncios', action: 'Reconectar', weight: 0 })
       else if (account.tokenExpiresAt && account.tokenExpiresAt - now < 10 * 86_400_000) out.push({ id: `ads-token-${account.id}`, title: `Acesso à conta ${account.name} vence ${account.tokenExpiresAt < now ? 'e já venceu' : 'em breve'}`, reason: 'Depois disso a Meta deixa de ser lida.', to: '/crm/anuncios', action: 'Renovar acesso', weight: 1 })
       else if (!report) out.push({ id: `ads-sem-${account.id}`, title: `${account.name}: sem relatório deste período`, reason: 'A Home mostra o último relatório guardado. Abra Anúncios para ler da Meta.', to: '/crm/anuncios', action: 'Atualizar anúncios', weight: 2 })
-      else if (freshnessOf(report.fetchedAt, ADS_FRESH, now) === 'atrasado') out.push({ id: `ads-velho-${account.id}`, title: `Anúncios de ${account.name} lidos ${ago(report.fetchedAt, now)}`, reason: 'O relatório só atualiza quando alguém abre Anúncios. O gasto mostrado pode ter mudado.', to: '/crm/anuncios', action: 'Atualizar anúncios', weight: 2 })
+      else if (freshnessOf(report.fetchedAt, ADS_FRESH, now) === 'atrasado') out.push({ id: `ads-velho-${account.id}`, title: `Anúncios de ${account.name} lidos ${ago(report.fetchedAt, now)}`, reason: 'O servidor relê os anúncios a cada 15 minutos e este ficou para trás: o acesso à Meta pode ter caído ou a Meta limitou as leituras. O gasto mostrado pode ter mudado.', to: '/crm/anuncios', action: 'Atualizar anúncios', weight: 2 })
     }
   }
   if (h.instagram.status === 'ready') {
@@ -964,8 +965,8 @@ const Sources: React.FC<{ h: HomeData; now: number }> = ({ h, now }) => {
   const rows: { name: string; how: string; cond?: { kind: React.ComponentProps<typeof Condition>['kind']; label: string }; to: string; icon: React.ElementType }[] = [
     h.crmOn && { name: 'Oportunidades', how: 'Tempo real (a equipe vê cada mudança na hora).', cond: h.oppsError ? { kind: 'indisponivel', label: 'Indisponível' } : h.oppsAt ? { kind: h.realtime ? 'tempo-real' : 'atualizado', label: h.realtime ? 'Tempo real' : `Lido às ${clock(h.oppsAt)}` } : { kind: 'lendo', label: 'Lendo…' }, to: '/crm', icon: KanbanSquare },
     h.siteOn && { name: 'Site (visitas e eventos)', how: 'Tempo real quando disponível; relido a cada 5 min com a aba aberta.', cond: conditionOf(h.site, now, { freshMs: SITE_POLL_FRESH, realtime: h.siteRealtime }), to: '/crm/site', icon: Globe },
-    h.adsOn && { name: 'Anúncios da Meta', how: 'Último relatório guardado. Atualiza quando alguém abre Anúncios, não em tempo real.', cond: conditionOf(h.ads, now, { freshMs: ADS_FRESH }), to: '/crm/anuncios', icon: Megaphone },
-    h.adsOn && { name: 'Instagram e stories', how: 'Sincronizado pela função da Meta; os stories mudam na hora.', cond: conditionOf(h.instagram, now, { freshMs: IG_FRESH }), to: '/crm/instagram', icon: Instagram },
+    h.adsOn && { name: 'Anúncios da Meta', how: 'Relido da Meta pelo servidor: hoje a cada 15 minutos, 7 e 30 dias a cada hora.', cond: conditionOf(h.ads, now, { freshMs: ADS_FRESH }), to: '/crm/anuncios', icon: Megaphone },
+    h.adsOn && { name: 'Instagram e stories', how: 'Relido da Meta pelo servidor a cada hora; os stories mudam na hora.', cond: conditionOf(h.instagram, now, { freshMs: IG_FRESH }), to: '/crm/instagram', icon: Instagram },
     h.projOn && { name: 'Projetos e aprovações', how: 'Relido a cada 2 min com a aba aberta.', cond: conditionOf(h.production, now, { freshMs: PRODUCTION_FRESH }), to: '/', icon: Workflow },
     h.waOn && { name: 'WhatsApp', how: 'Tempo real (o estado da conexão chega na hora).', cond: h.wa.status === 'ready' ? (h.wa.data?.status === 'connected' ? { kind: 'tempo-real', label: 'Conectado' } : { kind: 'desconectado', label: 'Desconectado' }) : conditionOf(h.wa, now, { freshMs: 60_000 }), to: '/crm/whatsapp', icon: Bot },
   ].filter(Boolean) as never

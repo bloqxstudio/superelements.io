@@ -91,9 +91,10 @@ import {
  * campanha é no Gerenciador de Anúncios.
  */
 
-const STALE = 30 * 60_000
-// Hoje muda ao longo do dia: relê com mais frequência
-const STALE_TODAY = 5 * 60_000
+// O servidor relê a Meta sozinho (cron `crm-social-sync`, 2026-11-09): hoje a cada ~15 min, 7 e 30 dias a
+// cada ~1 h. A tela só lê a Meta quando o guardado passou disso (o cron falhou ou é outro período)
+const STALE = 70 * 60_000
+const STALE_TODAY = 20 * 60_000
 /** Um dia que já passou faz tempo não muda mais na Meta: o guardado vale; o de hoje envelhece rápido */
 function staleAfter(preset: AdPreset, fetchedAt: number) {
   if (!isDayPeriod(preset)) return preset === 'today' ? STALE_TODAY : STALE

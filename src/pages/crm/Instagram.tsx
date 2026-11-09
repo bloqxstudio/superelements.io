@@ -62,7 +62,9 @@ type Tab = 'geral' | 'posts'
 type Area = 'perfil' | 'analise' | 'caixa' | 'stories'
 type SortKey = 'recentes' | 'alcance' | 'interacoes' | 'salvos' | 'taxa'
 
-const STALE = 30 * 60_000
+// O servidor sincroniza cada conta a cada ~1 hora (cron `crm-social-sync`, 2026-11-09): a tela só lê a
+// Meta ao abrir quando a última leitura passou disso; o botão Atualizar continua lendo na hora
+const STALE = 75 * 60_000
 const DAY = 86_400_000
 
 const ago = (at: number | undefined) => {
@@ -663,7 +665,7 @@ const Dashboard: React.FC<{ account: IgAccount; accounts: IgAccount[]; manager: 
     [account.id, loadData, onReload]
   )
 
-  // Leitura nova ao abrir, se a última tem mais de 30 minutos
+  // Leitura nova ao abrir, se a última passou do ciclo do servidor
   useEffect(() => {
     if (autoSynced.current === account.id || account.syncError === 'token') return
     if (account.syncedAt && Date.now() - account.syncedAt < STALE) return
