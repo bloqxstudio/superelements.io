@@ -40,16 +40,16 @@ const MAX_SLIDE = 20
 
 export const FPS = 30
 
-export const postMotionOf = (post: Post): Required<Omit<PostMotion, 'audio' | 'output' | 'beats' | 'bpm'>> => ({
+export const postMotionOf = (post: Post): Required<Omit<PostMotion, 'audio' | 'output' | 'beats' | 'bpm' | 'paused'>> => ({
   slideDur: post.motion?.slideDur ?? 0,
   transition: post.motion?.transition ?? 'push',
   transitionDur: Math.min(1.2, Math.max(0.1, post.motion?.transitionDur ?? 0.5)),
 })
 
-/** O slide anda: alguma camada tem entrada ou a câmera se move. */
-export const slideHasMotion = (slide: Slide) => !!slide.camera || !!slide.flashes?.length || !!slide.shakes?.length || slide.layers.some((l) => l.motion && !l.hidden)
 
-export const hasMotion = (post: Post | undefined) => !!post?.slides.some(slideHasMotion)
+// Estático ou animado (as regras ficam em motionFlags.ts, sem imports, para os testes do Node)
+export { slideHasMotion, hasMotion, hasMotionData, setPostStatic } from './motionFlags'
+import { slideHasMotion } from './motionFlags'
 
 export type PostOutput = 'video' | 'carousel'
 
@@ -817,6 +817,8 @@ export const autoPostMotion = (post: Post, style: MotionStyle = 'dinamico', bran
     ...post,
     motion: {
       ...post.motion,
+      // Animar de propósito tira a marca de estático
+      paused: undefined,
       transition: post.slides.length > 1 ? brand?.transition ?? STYLE_TRANSITION[style] : 'fade',
       transitionDur: brand?.transitionDur ?? (style === 'impacto' ? 0.35 : 0.5),
     },

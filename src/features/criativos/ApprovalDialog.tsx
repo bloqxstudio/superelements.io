@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useCrm } from '@/features/crm/crmStore'
 import { cn } from '@/lib/utils'
 import { accountInstagram, latestCreativeApproval, sendCreativeApproval, VIEW_LABEL, viewOf, viewsFor, type ApprovalView, type CreativeApprovalStatus } from './approval'
-import { hasMotion } from './motion'
+import { hasMotion, hasMotionData } from './motion'
 import type { CreativeSet, Post } from './types'
 import { videoSupported } from './video'
 
@@ -21,7 +21,10 @@ const field = 'h-9 w-full rounded-md border border-gray-200 bg-white px-2.5 text
 export const ApprovalDialog: React.FC<{ set: CreativeSet; post: Post; open: boolean; onClose: () => void }> = ({ set, post, open, onClose }) => {
   const team = useCrm((s) => s.team)
   const [scope, setScope] = useState<'post' | 'todos'>('post')
+  // Animado ou estático no envio (sem mexer no post): começa como o post está no editor
+  const [animate, setAnimate] = useState(hasMotion(post))
   const [view, setView] = useState<ApprovalView>(viewOf(post))
+  useEffect(() => { setView(viewOf(post, animate)) }, [animate, post])
   const [title, setTitle] = useState(`${set.name}${post.name ? ` · ${post.name}` : ''}`)
   const [message, setMessage] = useState('')
   const [ig, setIg] = useState('')
@@ -37,7 +40,8 @@ export const ApprovalDialog: React.FC<{ set: CreativeSet; post: Post; open: bool
   }, [open, team, set.id, post.id])
 
   const posts = scope === 'post' ? [post] : set.posts.filter((p) => p.slides.length)
-  const moving = posts.some(hasMotion)
+  const canAnimate = posts.some(hasMotionData)
+  const moving = animate && canAnimate
   const noVideo = moving && !videoSupported()
 
   const send = async () => {
@@ -48,7 +52,7 @@ export const ApprovalDialog: React.FC<{ set: CreativeSet; post: Post; open: bool
       const out = await sendCreativeApproval({
         teamId: team.id,
         set,
-        posts: posts.map((p) => ({ post: p, view: scope === 'post' ? view : viewOf(p) })),
+        posts: posts.map((p) => ({ post: p, view: scope === 'post' ? view : viewOf(p, animate && hasMotionData(p)), animate })),
         title: title.trim() || set.name,
         message,
         ig,
@@ -125,6 +129,18 @@ export const ApprovalDialog: React.FC<{ set: CreativeSet; post: Post; open: bool
                 ))}
               </div>
             )}
+            {canAnimate && (
+              <div>
+                <span className="mb-1 block text-xs font-medium text-gray-700">Enviar como</span>
+                <div className="flex rounded-lg bg-gray-100 p-0.5 text-xs" role="radiogroup" aria-label="Enviar como">
+                  {([[false, 'Estático (imagem)'], [true, 'Animado (vídeo)']] as const).map(([v, label]) => (
+                    <button key={String(v)} type="button" role="radio" aria-checked={animate === v} onClick={() => setAnimate(v)} className={cn('h-8 flex-1 rounded-md font-medium', animate === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {scope === 'post' && viewsFor(post).length > 1 && (
               <label className="block">
                 <span className="mb-1 block text-xs font-medium text-gray-700">Como vai aparecer</span>
@@ -133,7 +149,7 @@ export const ApprovalDialog: React.FC<{ set: CreativeSet; post: Post; open: bool
                 </select>
               </label>
             )}
-            {scope === 'post' && viewsFor(post).length === 1 && <p className="text-xs text-gray-500">Vai aparecer como <b>{VIEW_LABEL[view]}</b>{moving ? ', em vídeo (o motion do post)' : ''}.</p>}
+            {scope === 'post' && viewsFor(post).length === 1 && <p className="text-xs text-gray-500">Vai aparecer como <b>{VIEW_LABEL[view]}</b>{moving ? ', em vídeo (o motion do post)' : canAnimate ? ', parado (sem a animação)' : ''}.</p>}
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-gray-700">Título do envio</span>
               <input value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} className={field} />

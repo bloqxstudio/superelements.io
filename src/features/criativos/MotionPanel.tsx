@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { StaticToggle } from './StaticToggle'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ELEVATE_STYLES, elevatePost } from './elevate'
@@ -6,7 +7,7 @@ import { Clapperboard, Download, Maximize2, Pause, Play, Sparkles, Wand2, X } fr
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { currentLayer, currentPost, currentSlide, useEditor } from './store'
-import { MOTION_FX, MOTION_TRANSITIONS, MotionRenderer, autoPostMotion, autoSlideMotion, clearPostMotion, clearSlideMotion, coverOnlyMotion, hasMotion, numberIn, postMotionOf, postOutput, slideAsPost, slideDuration, slideHasMotion, timeline, type PostOutput } from './motion'
+import { MOTION_FX, MOTION_TRANSITIONS, MotionRenderer, autoPostMotion, autoSlideMotion, clearPostMotion, clearSlideMotion, coverOnlyMotion, hasMotion, hasMotionData, numberIn, postMotionOf, postOutput, slideAsPost, slideDuration, slideHasMotion, timeline, type PostOutput } from './motion'
 import { audioFor, postToCarousel, postToMp4, videoSupported } from './video'
 import { zipFiles } from './zip'
 import type { ImageMap } from './render'
@@ -298,8 +299,11 @@ export const MotionPanel: React.FC = () => {
         )}
       </div>
       <OutputPicker post={post} />
-      {animated && (
-        <button type="button" className="-mt-2 text-xs text-gray-500 underline-offset-2 hover:text-red-600 hover:underline" onClick={() => editPost(clearPostMotion)}>Tirar a animação do post</button>
+      {hasMotionData(post) && (
+        <div className="-mt-1 flex flex-wrap items-center gap-2">
+          <StaticToggle post={post} onChange={editPost} />
+          <button type="button" className="text-xs text-gray-500 underline-offset-2 hover:text-red-600 hover:underline" title="Apaga a animação (Ctrl+Z desfaz). Para só sair parado, use Estático." onClick={() => editPost(clearPostMotion)}>Apagar a animação</button>
+        </div>
       )}
 
       <div className="space-y-2 border-t border-gray-100 pt-3">

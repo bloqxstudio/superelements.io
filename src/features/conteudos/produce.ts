@@ -1,6 +1,6 @@
 import { callAiQuiet, useCreativeLink } from '@/features/criativos/link'
 import { accountContext } from '@/features/cerebro/accountContext'
-import { autoPostMotion, hasMotion } from '@/features/criativos/motion'
+import { autoPostMotion, hasMotion, hasMotionData, setPostStatic } from '@/features/criativos/motion'
 import { saveSet } from '@/features/criativos/storage'
 import { resolveIa } from '@/features/ia/porTarefa'
 import { finishJob, noteJob, patchJob, startJob } from '@/features/operations/jobs'
@@ -86,7 +86,7 @@ export async function produceWithAi(
     noteJob(job, PRODUCE_LABEL.motion)
     const style = set.brand.motion?.style ?? 'dinamico'
     const posts = set.posts.map((p, i) => {
-      const animated = hasMotion(p) ? p : autoPostMotion(p, style, set.brand.motion)
+      const animated = hasMotion(p) ? p : hasMotionData(p) ? setPostStatic(p, false) : autoPostMotion(p, style, set.brand.motion)
       return i === 0 && caption && !animated.caption ? { ...animated, caption } : animated
     })
     const ready = { ...set, posts, updatedAt: Date.now() }

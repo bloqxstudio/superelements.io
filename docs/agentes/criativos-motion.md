@@ -55,3 +55,23 @@ Ainda falta: anúncios criados pela plataforma (exige `ads_management`), mais de
 
 **Enquadramento vertical (2026-11-08):** pedido para baixar a pessoa na faixa inferior do vídeo da Ready. Campo opcional videoPositionY (0 topo, 0.5 centro, 1 base) em ExplainerData, repassado por envData ao worker. drawVideo alinha o excedente vertical do cover pelo ponto escolhido, inclusive no punch-in; sem campo preserva o comportamento anterior. Controle em Estilo, Enquadramento vertical. Aplicado 0 na cena b6sz3ydr do conjunto ybzn4vrc, relido após salvar. Build de produção passou; sem deploy do app.
 - **Comercial animado** (2026-11-08, o usuário mandou o reel `instagram.com/p/Dc_59XFgoY9` de uma agência, tipografia cinética amarela/preta/branca com locução: "recrie exatamente como é, com esse nível de animação… dentro do app, como um novo vídeo, usando o motor do vídeo explicativo"; depois "quero que suba no produto, como um vídeo explicativo"). O reel foi baixado só para análise (quadros e transcrição, na pasta temporária da sessão; não foi guardado nem vai ao Git). Novo estilo `look: 'comercial'` com motor próprio (`explicativo/comercial.ts`, `COMMERCIAL_SCENE`; `sceneCodeOf` em `media.ts` escolhe o motor). Cada cena tem `shot` (17 planos: abertura, objeto3d, tipo, digitado, passagem, selo, frase, cartao, logo, destaque, celular, chuva3d, escudo, ranking, orcamento, circulo, assinatura) e `surface` (tinta, papel, branco, tom, destaque); cena sem `shot` (roteiro da IA) usa o plano pelo `pattern`, e a tela final vira assinatura. Texto entra com desfoque/máscara quando a palavra é falada (`timesOf` com `env.data.words`), `*palavra*` sai na fonte e cor de destaque (na Avence, Instrument Serif itálico azul), símbolo 3D extrudado que gira (`glyph3d`), transições círculo, zoom (a nova entra de 1,25× para não mostrar borda), empurrar e piscada, câmera que aproxima devagar. Na Avence o amarelo de fundo do reel virou o tom claro do azul (`tom`) e o azul só aparece em cunhas, faixas e destaques (regra da marca: azul nunca de fundo). Modelo pronto na criação do vídeo explicativo ("Modelo pronto: comercial animado", `commercialData`): 23 cenas em 31,4 s no ritmo do reel, copy da Avence (site, prender atenção / gerar interesse / convencer, especialista em sites rápidos e feitos para o celular com as telas reais dos cases ProcessBase e Vizor de `/brands/avence-studio/cases/`, ranking, orçamento, assinatura com avencestudio.com); outras contas recebem o mesmo roteiro sem as fotos e o site da Avence. A aba Roteiro do comercial edita plano, fundo, símbolo 3D, texto, segunda linha, itens, número, ícone, foto, transição e som. Narração: "Narração por voz de IA" em Estilo › Som fala exatamente as `fala` (sem a reescrita da IA), alinha com mínimo de 0,45 s por cena, sem legenda, e a assinatura vira `endCard`. Fotos com `src` público (`/brands/...`) agora entram no motor (`photoBitmaps`). Testado no harness `.space/_harness/comercial/` em Chrome headless (MP4 1080×1920 H.264 + AAC, 31,5 s).
+
+## Estático ou animado, sem perder a animação (2026-11-09)
+
+O usuário: "um criativo clicado no motion sempre será um motion. Podemos ajustar? permitir voltar e tornar estático
+novamente… pra mandar aprovação pro cliente, quero que vá estático".
+
+- **A causa:** abrir o estúdio de Motion animava sozinho um post sem animação (estilo Suave). Bastava abrir para
+  testar e o post virava motion de vez.
+  - Agora o estúdio só anima sozinho o post que nunca teve animação.
+  - Um post marcado como estático continua estático.
+- **`PostMotion.paused`:** a animação fica guardada, mas o post sai parado.
+  - `hasMotion` (o post sai animado) passa a respeitá-la. `hasMotionData` diz se há animação guardada.
+  - As duas ficam, junto com `setPostStatic`, em `criativos/motionFlags.ts`, testadas em
+    `scripts/tests/motion-estatico.test.mjs`.
+  - `autoPostMotion` (animar de propósito) tira a marca.
+  - A produção da Pauta e os Stories usam a animação guardada sem a marca.
+- **Chave Estático / Animado** (`StaticToggle.tsx`): fica na barra do editor e no painel de motion, e só aparece
+  quando o post tem animação guardada. "Apagar a animação" continua no painel, para quem quer apagar de vez.
+- **Aprovação:** a janela tem "Enviar como: Estático (imagem) / Animado (vídeo)", sem mexer no post. Começa como o
+  post está no editor.
