@@ -62,6 +62,10 @@ export interface SentPost {
   format: string
   caption: string
   slides: string[]
+  /** Como aparece no Instagram (envio de criativo, 2026-11-09): feed, carrossel, reels ou story. */
+  view?: string
+  /** A capa do vídeo, quando o slide é um MP4. */
+  poster?: string
 }
 
 type ItemRow = { id: string; link_id: string; content_id: string; decision: SentItem['decision']; decided_name: string | null; decided_at: string | null; content_hash: string; set_hash: string; media: SentPost[]; created_at: string }
@@ -164,7 +168,7 @@ export interface ApprovalLink {
   expiresAt: number
   revokedAt?: number
   createdBy?: string
-  items: { contentId: string; decision: SentItem['decision'] }[]
+  items: { contentId: string | null; decision: SentItem['decision'] }[]
 }
 
 export async function listApprovalLinks(teamId: string): Promise<ApprovalLink[]> {
@@ -175,7 +179,7 @@ export async function listApprovalLinks(teamId: string): Promise<ApprovalLink[]>
     .order('created_at', { ascending: false })
     .limit(50)
   if (error) fail(error)
-  return ((data ?? []) as { id: string; title: string; message: string; created_at: string; expires_at: string; revoked_at: string | null; created_by: string | null; items: { content_id: string; decision: SentItem['decision'] }[] }[]).map((r) => ({
+  return ((data ?? []) as { id: string; title: string; message: string; created_at: string; expires_at: string; revoked_at: string | null; created_by: string | null; items: { content_id: string | null; decision: SentItem['decision'] }[] }[]).map((r) => ({
     id: r.id,
     title: r.title,
     message: r.message,
@@ -291,6 +295,8 @@ export interface PublicComment {
 
 export interface PublicItem {
   id: string
+  /** `criativo`: um post enviado do editor de criativos, sem conteúdo da Pauta. */
+  kind: 'conteudo' | 'criativo'
   title: string
   format: string
   channel?: string
@@ -307,7 +313,7 @@ export interface PublicItem {
 
 export type PublicApproval =
   | { state: 'inexistente' | 'revogado' | 'expirado'; teamName?: string; title?: string }
-  | { state: 'ativo'; id: string; title: string; teamName: string; message: string; createdAt: number; expiresAt: number; items: PublicItem[] }
+  | { state: 'ativo'; id: string; title: string; teamName: string; message: string; createdAt: number; expiresAt: number; items: PublicItem[]; igUsername?: string }
 
 type RawPublic = {
   state: 'ativo' | 'inexistente' | 'revogado' | 'expirado'
@@ -315,10 +321,12 @@ type RawPublic = {
   title?: string
   team_name?: string
   message?: string
+  ig_username?: string | null
   created_at?: string
   expires_at?: string
   items?: {
     id: string
+    kind?: 'conteudo' | 'criativo'
     title: string
     format: string
     channel: string | null
@@ -344,10 +352,12 @@ export async function getApproval(id: string): Promise<PublicApproval> {
     title: raw.title ?? '',
     teamName: raw.team_name ?? '',
     message: raw.message ?? '',
+    igUsername: raw.ig_username ?? undefined,
     createdAt: Date.parse(raw.created_at!),
     expiresAt: Date.parse(raw.expires_at!),
     items: (raw.items ?? []).map((i) => ({
       id: i.id,
+      kind: i.kind ?? 'conteudo',
       title: i.title,
       format: i.format,
       channel: i.channel ?? undefined,

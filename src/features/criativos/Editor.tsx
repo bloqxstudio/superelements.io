@@ -3,12 +3,13 @@ import { useCrm } from '@/features/crm/crmStore'
 import { accountBrand } from '@/features/conteudos/carousel'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, Wand2, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Instagram, Plus, Redo2, Square, Trash2, Type, Undo2 } from 'lucide-react'
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, Wand2, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Instagram, Plus, Redo2, Square, Trash2, Type, Undo2, SendHorizontal } from 'lucide-react'
 import { LayersPanel } from './LayersPanel'
 import { MotionPanel, downloadMp4 } from './MotionPanel'
 import { videoSupported } from './video'
 import { copySelection, pasteClip } from './slideOps'
 import { PublishPost } from './MotionPublish'
+import { ApprovalDialog } from './ApprovalDialog'
 import { spreadSelected, unspreadSelected, alignLayers, currentLayers, distributeLayers, duplicateLayers, groupLayers, moveLayers, patchLayerFields, removeLayers, stackLayers, ungroupLayers, type AlignHow } from './layerOps'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -447,6 +448,7 @@ export const CreativeEditor: React.FC = () => {
   const [menu, setMenu] = useState<'add' | 'export' | 'slide' | null>(null)
   /** O post aberto na publicação para o Instagram. */
   const [publishing, setPublishing] = useState<string | null>(null)
+  const [approving, setApproving] = useState<string | null>(null)
   const ai = useAiAvailable()
   const [aiOpen, setAiOpen] = useState(false)
   const [view, setView] = useState<'canvas' | 'slide'>('canvas')
@@ -756,6 +758,9 @@ export const CreativeEditor: React.FC = () => {
             <Sparkles className="h-4 w-4 text-violet-600" /> IA
           </Button>
           <FormatField value={format} onChange={(f) => editPost((p) => reformat(p, f))} />
+          <Button variant="outline" size="sm" className="gap-1.5 bg-white" disabled={!post} title="Mandar um link para o cliente ver como fica no Instagram e aprovar ou pedir ajuste" onClick={() => post && setApproving(post.id)}>
+            <SendHorizontal className="h-4 w-4 text-emerald-600" /> Aprovação
+          </Button>
           <Button variant="outline" size="sm" className="gap-1.5 bg-white" disabled={!post} title="Publicar o post escolhido no Instagram da conta" onClick={() => post && setPublishing(post.id)}>
             <Instagram className="h-4 w-4 text-fuchsia-600" /> Publicar
           </Button>
@@ -873,6 +878,10 @@ export const CreativeEditor: React.FC = () => {
           {(() => {
             const target = publishing ? set.posts.find((p) => p.id === publishing) : undefined
             return target ? <PublishPost key={target.id} post={target} open onClose={() => setPublishing(null)} /> : null
+          })()}
+          {(() => {
+            const target = approving ? set.posts.find((p) => p.id === approving) : undefined
+            return target ? <ApprovalDialog key={target.id} set={set} post={target} open onClose={() => setApproving(null)} /> : null
           })()}
         </main>
 
