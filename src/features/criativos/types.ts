@@ -408,6 +408,10 @@ export interface VideoInfo {
   research?: string
   cenas: number
   at: number
+  /** A capa do vídeo (caminho no Storage, pasta `capas/` do conjunto). */
+  cover?: string
+  /** `roteiro`: vídeo com roteiro e voz nos modelos; `animacao`: animação desenhada em código (2026-11-09). */
+  kind?: 'roteiro' | 'animacao'
 }
 
 export interface PostInfo {
@@ -449,5 +453,13 @@ export interface CodeScene {
   source?: { postId: string; slideIds: string[] }
   /** Vídeo explicativo (`explicativo/`): a fala, as palavras no tempo, o roteiro e o estilo. A cena é o motor fixo `EXPLAINER_SCENE`. */
   explainer?: ExplainerData
+  /**
+   * Dados livres da cena (`env.data`): numa animação narrada, as partes com o tempo de cada uma e as
+   * palavras da narração (`videoFromReference.ts`, 2026-11-09).
+   */
+  data?: unknown
+  /** A capa do vídeo (Storage, pasta `capas/` do conjunto) e de quando ela é (o `updatedAt` da cena na hora). */
+  cover?: string
+  coverAt?: number
   updatedAt: number
 }

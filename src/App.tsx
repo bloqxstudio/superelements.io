@@ -29,8 +29,8 @@ import References from "@/pages/References";
 import { BoardRoute } from "@/features/quadros/BoardRoute";
 import { CreativeEditor } from "@/features/criativos/Editor";
 import { MotionStudio } from "@/features/criativos/MotionStudio";
-import { SceneStudio } from "@/features/criativos/SceneStudio";
-import { ExplainerStudio } from "@/features/criativos/explicativo/ExplainerStudio";
+import { VideoStudio } from "@/features/criativos/VideoStudio";
+import { ToVideoStudio } from "@/features/criativos/ToVideoStudio";
 import { CopyEditorPage } from "@/features/copy/CopyEditorPage";
 import WordPressCallback from "@/pages/WordPressCallback";
 import PageApproval from "@/pages/PageApproval";
@@ -166,8 +166,10 @@ function App() {
                 <Route path="sites/:siteId" element={<SiteEditor />} />
                 <Route path="motion" element={<Motion />} />
                 <Route path="motion/:setId" element={<MotionStudio />} />
-                <Route path="motion/:setId/cena" element={<SceneStudio />} />
-                <Route path="motion/:setId/explica" element={<ExplainerStudio />} />
+                {/* Um estúdio só de vídeo (2026-11-09): os endereços antigos de cena e explicativo abrem nele */}
+                <Route path="motion/:setId/video" element={<VideoStudio />} />
+                <Route path="motion/:setId/cena" element={<ToVideoStudio />} />
+                <Route path="motion/:setId/explica" element={<ToVideoStudio />} />
                 <Route path="criativos/:setId" element={<CreativeEditor />} />
                 {/* CRM da equipe: funil, clientes, equipe e convites; só para quem é de uma equipe */}
                 <Route path="plano" element={<CrmGate><CrmPlan /></CrmGate>} />

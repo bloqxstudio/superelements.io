@@ -75,3 +75,31 @@ novamente… pra mandar aprovação pro cliente, quero que vá estático".
   quando o post tem animação guardada. "Apagar a animação" continua no painel, para quem quer apagar de vez.
 - **Aprovação:** a janela tem "Enviar como: Estático (imagem) / Animado (vídeo)", sem mexer no post. Começa como o
   post está no editor.
+
+## Estúdio único de vídeo, a partir de referência, capas e edição (2026-11-09)
+
+O usuário: "cena em código e vídeo explicativo são coisas diferentes? … deixar somente 1"; "o motor deve conseguir
+entregar isso a partir de uma referência"; "deixe capas nos vídeos, crie uma área 100% focada em vídeos"; depois
+"parece que cria algo fechado… quero conseguir editar, trocar legenda, mudar o tipo, trocar efeitos".
+
+- **Uma rota só:** `/motion/:setId/video` (`VideoStudio.tsx`). `/cena` e `/explica` redirecionam (`ToVideoStudio.tsx`).
+  O seletor lista todos os vídeos do conjunto; vídeo com `explainer` abre o painel de roteiro e voz; os outros
+  abrem o de animação (`SceneStudio.tsx`). "Novo vídeo" oferece: a partir de referência (recomendado), roteiro e voz,
+  ou código.
+- **A partir de referência** (`videoFromReference.ts`): a IA escreve a narração em partes olhando os quadros, a voz
+  da OpenAI narra, a transcrição marca as palavras, a IA desenha a cena do zero no motor seguindo a referência e o
+  motor confere (até 2 correções). Recriar em Referências → Vídeo abre esse fluxo (`?novo=referencia&ref=`).
+- **`/motion`** mostra só vídeos (todos os conjuntos, com capa); `videosInfoOf` inclui as animações (`kind`).
+  Capa: tirada da própria animação 6 s depois de salvar (`saveVideoCover`, pasta `capas/`).
+- **Edição sem pedir outra animação** (`sceneEdit.ts`, `SceneEditor.tsx`, aba "Editar" do painel):
+  - **Texto e efeitos:** a IA devolve `campos` junto com o código (texto da tela, cores, tipo de efeito,
+    intensidade); ficam em `scene.data.fields` e o worker entrega os valores em `env.data.params`. Cena sem campos
+    tem "Deixar editável" (a IA reescreve lendo os params, sem mudar o visual; conferida antes de gravar).
+  - **Narração:** partes (rótulo e fala) e a voz (`VoicePicker`); "Refazer a narração" (`narrateParts`) narra de
+    novo, sobe o áudio, refaz `parts`/`words` e a duração. A cena acompanha porque lê `parts[i].start`.
+  - **Legenda:** desenhada pelo motor por cima de qualquer cena (`drawCaptions` em `sceneWorker.ts`), estilos
+    nenhuma, pop, karaokê, caixa e contorno, com altura, tamanho e cor do destaque (`data.captions`).
+  - Mudar campos ou legenda não recarrega a cena: `SceneRunner.setData` troca o `env.data` no mesmo worker e o
+    `setup` roda de novo.
+- Testado no harness `.space/_harness/referencia/` (Chrome local): os 4 estilos de legenda sobre uma cena gerada e a
+  troca de campos ao vivo; o fluxo de referência em dry run (~3 min). Não testado: a tela logada em produção.

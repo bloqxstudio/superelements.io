@@ -24,6 +24,8 @@ scene({
 
 - ctx é um CanvasRenderingContext2D de env.width × env.height (1080×1920 no 9:16). O quadro começa transparente: pinte o fundo inteiro.
 - draw precisa ser uma função pura de t: o mesmo t sempre gera o mesmo quadro (a prévia pula para qualquer ponto). Não guarde nada entre quadros. Math.random é semeado por quadro; para valores estáveis use lib.rand(n).
+- env.data (vídeo narrado, quando houver): { parts: [{ label, text, start, end }] (cada parte da narração e o segundo em que ela começa e termina), words: [{ w, s, e }] (cada palavra falada, início e fim em segundos) }. Sincronize as cenas com parts[i].start: a animação de cada parte entra quando a voz começa a falar dela. Use sempre um valor de reserva (ex.: env.data?.parts?.[1]?.start ?? 6) para a cena rodar sem dados.
+- env.data.params: os valores dos campos editáveis da cena (texto da tela, cores, efeitos), pela chave de cada campo. Leia sempre com reserva: const P = env.data?.params || {}; P.titulo1 ?? 'TEXTO'. A legenda da fala é do motor (desenhada por cima quando ligada): não a desenhe.
 - env: width, height, duration, fps, bpm, beats (segundos das batidas da trilha, pode ser vazio), beat(t) → {index, at, phase, step}, images (objeto nome → imagem pronta para ctx.drawImage, com width e height), brand ({name, colors: [hex], font}), state (o que setup devolveu), lib.
 - lib (use à vontade):
   clamp(v, a=0, b=1), lerp(a, b, t), ease.{linear,inQuad,outQuad,inOutQuad,inCubic,outCubic,inOutCubic,outQuart,inOutQuart,inExpo,outExpo,inOutExpo,inBack,outBack,outElastic,outBounce},
@@ -87,6 +89,14 @@ export class SceneRunner {
           clearTimeout(timer)
           reject(new SceneError(m.message, m.stack))
         }
+        else if (m.type === 'data-ok') {
+          const w = this.waiting.get(m.id)
+          if (!w) return
+          this.waiting.delete(m.id)
+          clearTimeout(w.timer)
+          if (m.message) w.reject(new SceneError(m.message))
+          else w.resolve(null as unknown as ImageBitmap)
+        }
         else if (m.type === 'frame' || m.type === 'frame-error') {
           const w = this.waiting.get(m.id)
           if (!w) return
@@ -121,6 +131,18 @@ export class SceneRunner {
       }, 8000)
       this.waiting.set(id, { resolve, reject, timer })
       this.worker.postMessage({ type: 'frame', id, t, video, broll }, [video, broll].filter(Boolean) as ImageBitmap[])
+    })
+  }
+
+  /** Troca o env.data (campos, legenda, narração) sem recarregar a cena: o setup roda de novo. */
+  async setData(data: unknown): Promise<void> {
+    await this.ready
+    if (this.dead) throw new SceneError('A cena parou.')
+    const id = ++this.seq
+    await new Promise<ImageBitmap>((resolve, reject) => {
+      const timer = setTimeout(() => { this.waiting.delete(id); reject(new SceneError('A cena não respondeu à troca dos campos.')) }, 8000)
+      this.waiting.set(id, { resolve, reject, timer })
+      this.worker.postMessage({ type: 'data', id, data: data ?? null })
     })
   }
 

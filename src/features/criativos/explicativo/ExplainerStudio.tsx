@@ -32,14 +32,12 @@ export const ExplainerStudio: React.FC = () => {
   const set = useEditor((s) => s.set)
   const saving = useEditor((s) => s.saving)
   const list = (set?.scenes ?? []).filter((s) => s.explainer)
-  const fresh = query.get('novo') === '1'
+  const allScenes = set?.scenes ?? []
+  // "Novo vídeo com roteiro e voz" no estúdio único (`?novo=roteiro`); `novo=1` dos links antigos
+  const fresh = query.get('novo') === '1' || query.get('novo') === 'roteiro'
   const scene = fresh ? undefined : list.find((s) => s.id === query.get('id')) ?? list.at(-1)
 
-  useEffect(() => {
-    void useEditor.getState().open(setId, projectParam)
-    return () => useEditor.getState().close()
-  }, [setId, projectParam])
-
+  void setId; void projectParam
   const go = (patch: Record<string, string | null>) =>
     setQuery((q) => {
       const n = new URLSearchParams(q)
@@ -65,16 +63,16 @@ export const ExplainerStudio: React.FC = () => {
         <Link to="/motion" aria-label="Voltar ao Motion" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
         <AudioLines className="h-4 w-4 text-violet-700" />
         <span className="hidden max-w-[10rem] truncate text-sm font-semibold text-gray-900 sm:inline">{set.name}</span>
-        {list.length > 0 && (
+        {allScenes.length > 0 && (
           <select aria-label="Vídeo" value={fresh ? '' : scene?.id} onChange={(e) => go({ id: e.target.value, novo: null })} className="h-8 max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 text-sm">
             {fresh && <option value="">Novo vídeo</option>}
-            {list.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+            {allScenes.map((s) => (<option key={s.id} value={s.id}>{s.explainer ? 'Roteiro · ' : 'Animação · '}{s.name}</option>))}
           </select>
         )}
         {scene?.explainer && <span className="hidden rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-800 md:inline">{isBriefing(scene.explainer) ? 'Briefing · roteiro da IA' : 'Narração'}</span>}
         <span className="text-xs text-gray-500">{({ saved: 'Salvo', dirty: 'Alterações…', saving: 'Salvando…', error: 'Erro ao salvar' } as const)[saving]}</span>
         <div className="ml-auto flex items-center gap-1.5">
-          {!fresh && <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-white" onClick={() => go({ novo: '1', id: null })}><Plus className="h-4 w-4" /> Novo vídeo</Button>}
+          {!fresh && <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-white" onClick={() => go({ novo: 'escolher', id: null })}><Plus className="h-4 w-4" /> Novo vídeo</Button>}
         </div>
       </header>
       {!scene ? <NewExplainer set={set} onCreated={(id) => go({ id, novo: null })} onCancel={list.length ? () => go({ novo: null }) : undefined} /> : <Editor key={scene.id} set={set} scene={scene} />}
