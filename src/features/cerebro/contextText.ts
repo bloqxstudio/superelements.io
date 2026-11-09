@@ -24,6 +24,8 @@ export interface ContextParts {
   standard?: string
   /** A nota de aprendizados mais recente (`learnings.ts`): o que funcionou e o que o cliente pediu. */
   learnings?: string
+  /** As melhores referências visuais da conta (`referencias/rules.ts`, `referencesText`). */
+  references?: string
 }
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s)
@@ -55,12 +57,14 @@ export function contextText(parts: ContextParts): string {
   const plan = planText(parts.plan)
   const standard = parts.standard?.trim() ?? ''
   const learnings = parts.learnings?.trim() ?? ''
-  if (!overview && !plan && !standard && !learnings) return ''
+  const references = parts.references?.trim() ?? ''
+  if (!overview && !plan && !standard && !learnings && !references) return ''
   return [
     `# Contexto da empresa: ${parts.name} (do Cérebro da conta; é a fonte de verdade sobre a empresa)`,
     overview && `## Quem é (visão geral do Cérebro)\n${clip(overview, 2500)}`,
     plan && `## Plano da empresa\n${plan}`,
     standard && `## Marca e padrões\n${standard}`,
+    references && `## Referências visuais que a empresa marcou como as melhores (pegue a ideia, a composição e o ritmo; nunca copie texto, logo ou foto)\n${references}`,
     learnings && `## O que a operação já ensinou (use para repetir o que funcionou e evitar o que o cliente pediu para ajustar)\n${clip(learnings.replace(/^# .*\n/, ''), 2500)}`,
   ].filter(Boolean).join('\n\n')
 }
@@ -90,4 +94,5 @@ export const CONNECTED_AREAS: { area: string; file: string; uses: string }[] = [
   { area: 'Agentes comerciais', file: 'src/features/ia/tarefas.ts', uses: 'accountContext(' },
   { area: 'Aprendizados no contexto', file: 'src/features/cerebro/accountContext.ts', uses: 'learningsForContext(' },
   { area: 'Aprendizados gravados', file: 'src/features/onboarding/OperationRadar.tsx', uses: 'syncLearnings(' },
+  { area: 'Referências no contexto', file: 'src/features/cerebro/accountContext.ts', uses: 'starredReferences(' },
 ]

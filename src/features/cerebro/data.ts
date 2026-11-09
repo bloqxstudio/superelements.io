@@ -152,6 +152,8 @@ export async function deleteFile(teamId: string, path: string): Promise<void> {
 // navegador (o mesmo endereço volta e a imagem vem do cache, sem gastar o tráfego do Supabase).
 const urls = new Map<string, string>()
 let activeTeam = ''
+/** A conta dos arquivos (outras telas que mostram arquivos do Cérebro, como Referências, sem abrir o cofre). */
+export const setMediaTeam = (teamId: string) => { activeTeam = teamId }
 const CACHE_KEY = 'cerebro-arquivos'
 const TTL = 7 * 86_400_000
 type UrlCache = Record<string, { url: string; until: number }>
