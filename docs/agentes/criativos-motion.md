@@ -103,3 +103,4 @@ entregar isso a partir de uma referência"; "deixe capas nos vídeos, crie uma �
     `setup` roda de novo.
 - Testado no harness `.space/_harness/referencia/` (Chrome local): os 4 estilos de legenda sobre uma cena gerada e a
   troca de campos ao vivo; o fluxo de referência em dry run (~3 min). Não testado: a tela logada em produção.
+- **Logo de verdade e Iara** (2026-11-09, print do usuário: a cena escreveu "Avence Studio" no lugar do logo e desenhou uma frase fixa embaixo junto com a legenda do motor). `sceneBitmaps` entrega `env.images.logo` e `logo_escuro` (os logos da marca do conjunto) a toda cena, e o contrato e a IA mandam usar o logo e não desenhar legenda nem frase de rodapé. Os pedidos à IA sobre o vídeo aberto passaram para a Iara (`videoIara.ts`, ver `iara.md`).

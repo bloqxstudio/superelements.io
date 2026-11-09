@@ -387,6 +387,19 @@ export const SpaceChat: React.FC<{ chatId?: string; chatName?: string; iara?: Ia
   const conversation = useChat((s) => (projectId ? s.conversations[projectId] : undefined))
   const context = useSelectionContext()
   const composer = useRef<ChatComposerHandle>(null)
+  // Outra tela pode abrir a Iara com um pedido pronto (ex.: "Pedir à Iara" no estúdio de vídeo)
+  const isIara = !!iara
+  useEffect(() => {
+    if (!isIara) return
+    const on = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail
+      if (typeof text !== 'string') return
+      composer.current?.setDraft(text)
+      composer.current?.focus()
+    }
+    window.addEventListener('iara:draft', on)
+    return () => window.removeEventListener('iara:draft', on)
+  }, [isIara])
   const [withSelection, setWithSelection] = useState(true)
   // A lista das conversas anteriores no lugar da conversa
   const [showHistory, setShowHistory] = useState(false)

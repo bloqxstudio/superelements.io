@@ -49,7 +49,7 @@ async function renderCover(scene: CodeScene, set: CreativeSet, images: Map<strin
     const parts = (scene.data as { parts?: { start: number; end: number }[] } | undefined)?.parts
     // O meio da segunda parte (a animação já montada), ou pouco depois da metade
     const t = parts?.[1] ? Math.min(scene.duration - 0.2, (parts[1].start + parts[1].end) / 2) : scene.duration * 0.55
-    const r = new SceneRunner({ code: scene.code, width: 1080, height: 1920, duration: scene.duration, images: await sceneBitmaps(scene, images), beats: scene.beats, bpm: scene.bpm, brand: { name: set.brand.name, colors: set.brand.colors.map((c) => c.hex), font: set.brand.headingFont }, data: scene.data })
+    const r = new SceneRunner({ code: scene.code, width: 1080, height: 1920, duration: scene.duration, images: await sceneBitmaps(scene, images, set.brand), beats: scene.beats, bpm: scene.bpm, brand: { name: set.brand.name, colors: set.brand.colors.map((c) => c.hex), font: set.brand.headingFont }, data: scene.data })
     try {
       await r.load()
       const bmp = await r.frame(t)

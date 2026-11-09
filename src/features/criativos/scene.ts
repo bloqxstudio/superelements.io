@@ -25,7 +25,8 @@ scene({
 - ctx é um CanvasRenderingContext2D de env.width × env.height (1080×1920 no 9:16). O quadro começa transparente: pinte o fundo inteiro.
 - draw precisa ser uma função pura de t: o mesmo t sempre gera o mesmo quadro (a prévia pula para qualquer ponto). Não guarde nada entre quadros. Math.random é semeado por quadro; para valores estáveis use lib.rand(n).
 - env.data (vídeo narrado, quando houver): { parts: [{ label, text, start, end }] (cada parte da narração e o segundo em que ela começa e termina), words: [{ w, s, e }] (cada palavra falada, início e fim em segundos) }. Sincronize as cenas com parts[i].start: a animação de cada parte entra quando a voz começa a falar dela. Use sempre um valor de reserva (ex.: env.data?.parts?.[1]?.start ?? 6) para a cena rodar sem dados.
-- env.data.params: os valores dos campos editáveis da cena (texto da tela, cores, efeitos), pela chave de cada campo. Leia sempre com reserva: const P = env.data?.params || {}; P.titulo1 ?? 'TEXTO'. A legenda da fala é do motor (desenhada por cima quando ligada): não a desenhe.
+- env.data.params: os valores dos campos editáveis da cena (texto da tela, cores, efeitos), pela chave de cada campo. Leia sempre com reserva: const P = env.data?.params || {}; P.titulo1 ?? 'TEXTO'. A legenda da fala é do motor (desenhada por cima quando ligada): não desenhe legenda, frase de rodapé nem a fala na tela.
+- env.images.logo (o logo da marca para fundo claro) e env.images.logo_escuro (para fundo escuro), quando a marca tem logo: onde a marca aparece, desenhe o logo de verdade com lib.image(..., 'contain'), nunca o nome escrito no lugar; só sem imagem use o nome em texto.
 - env: width, height, duration, fps, bpm, beats (segundos das batidas da trilha, pode ser vazio), beat(t) → {index, at, phase, step}, images (objeto nome → imagem pronta para ctx.drawImage, com width e height), brand ({name, colors: [hex], font}), state (o que setup devolveu), lib.
 - lib (use à vontade):
   clamp(v, a=0, b=1), lerp(a, b, t), ease.{linear,inQuad,outQuad,inOutQuad,inCubic,outCubic,inOutCubic,outQuart,inOutQuart,inExpo,outExpo,inOutExpo,inBack,outBack,outElastic,outBounce},
@@ -160,8 +161,13 @@ export class SceneRunner {
 }
 
 /** As imagens que a cena usa, prontas para o worker. */
-export async function sceneBitmaps(scene: CodeScene, images: Map<string, CanvasImageSource & { width: number; height: number }>): Promise<Record<string, ImageBitmap>> {
+export async function sceneBitmaps(scene: CodeScene, images: Map<string, CanvasImageSource & { width: number; height: number }>, brand?: { logoOnLight?: string; logoOnDark?: string }): Promise<Record<string, ImageBitmap>> {
   const out: Record<string, ImageBitmap> = {}
+  // O logo de verdade da marca, sempre à mão (a cena escrevia o nome no lugar dele)
+  for (const [name, src] of [['logo', brand?.logoOnLight ?? brand?.logoOnDark], ['logo_escuro', brand?.logoOnDark ?? brand?.logoOnLight]] as const) {
+    const img = src ? images.get(src) : undefined
+    if (img && !(img instanceof HTMLVideoElement)) out[name] = await createImageBitmap(img as ImageBitmapSource)
+  }
   for (const { src, name } of scene.images) {
     const img = images.get(src)
     if (img && !(img instanceof HTMLVideoElement)) out[name] = await createImageBitmap(img as ImageBitmapSource)
