@@ -31,15 +31,30 @@ export interface Reference {
   caption?: string
   frames: string[]
   sourceId?: string
+  /** O engajamento que a página do post mostrava quando o Mac leu (metricsAt). */
+  likes?: number
+  comments?: number
+  views?: number
+  metricsAt?: number
+  /** A posição no grupo: maior = mandado mais recentemente. */
+  groupOrder?: number
 }
 
-type Row = { id: string; team_id: string; url: string; platform: RefPlatform; kind: RefKind; title: string; notes: string; tags: string[]; starred: boolean; media_path: string | null; created_at: string; auto?: boolean; reviewed?: boolean; author?: string | null; caption?: string | null; frames?: string[] | null; source_id?: string | null }
+type Row = { id: string; team_id: string; url: string; platform: RefPlatform; kind: RefKind; title: string; notes: string; tags: string[]; starred: boolean; media_path: string | null; created_at: string; auto?: boolean; reviewed?: boolean; author?: string | null; caption?: string | null; frames?: string[] | null; source_id?: string | null; likes?: number | null; comments?: number | null; views?: number | null; metrics_at?: string | null; group_order?: number | null }
 
 const toRef = (r: Row): Reference => ({
   id: r.id, teamId: r.team_id, url: r.url, platform: r.platform, kind: r.kind, title: r.title, notes: r.notes, tags: r.tags ?? [],
   starred: r.starred, mediaPath: r.media_path ?? undefined, createdAt: Date.parse(r.created_at),
   auto: !!r.auto, reviewed: r.reviewed !== false, author: r.author ?? undefined, caption: r.caption ?? undefined, frames: r.frames ?? [], sourceId: r.source_id ?? undefined,
+  likes: r.likes ?? undefined, comments: r.comments ?? undefined, views: r.views ?? undefined, metricsAt: r.metrics_at ? Date.parse(r.metrics_at) : undefined,
+  groupOrder: r.group_order != null ? Number(r.group_order) : undefined,
 })
+
+/**
+ * A ordem da tela: a do grupo (o mais recente em cima) e, para as salvas à mão, a data em que foram salvas.
+ * As duas escalas são milissegundos, então se misturam bem.
+ */
+export const byRecent = (a: Reference, b: Reference) => (b.groupOrder ?? b.createdAt) - (a.groupOrder ?? a.createdAt)
 
 const fail = (error: { message: string; code?: string }): never => {
   if (error.code === '23505') throw new Error('Esta referência já está salva nesta conta.')
@@ -48,9 +63,9 @@ const fail = (error: { message: string; code?: string }): never => {
 }
 
 export async function listReferences(teamId: string): Promise<Reference[]> {
-  const { data, error } = await db.from('crm_references').select('*').eq('team_id', teamId).order('starred', { ascending: false }).order('created_at', { ascending: false }).limit(500)
+  const { data, error } = await db.from('crm_references').select('*').eq('team_id', teamId).order('created_at', { ascending: false }).limit(500)
   if (error) fail(error)
-  return ((data ?? []) as Row[]).map(toRef)
+  return ((data ?? []) as Row[]).map(toRef).sort(byRecent)
 }
 
 export interface ReferenceDraft { url: string; platform: RefPlatform; kind: RefKind; title: string; notes: string; tags: string[]; starred: boolean; mediaPath?: string | null; reviewed?: boolean }
@@ -93,8 +108,8 @@ export function referenceShotUrl(teamId: string, path: string): Promise<string> 
 
 /** As melhores (com estrela) para o contexto da IA: só o que precisa, sem a captura. */
 export async function starredReferences(teamId: string) {
-  const { data } = await db.from('crm_references').select('title, kind, url, notes, tags').eq('team_id', teamId).eq('starred', true).order('updated_at', { ascending: false }).limit(8)
-  return (data ?? []) as { title: string; kind: RefKind; url: string; notes: string; tags: string[] }[]
+  const { data } = await db.from('crm_references').select('title, kind, url, notes, tags, likes, comments, author').eq('team_id', teamId).eq('starred', true).order('updated_at', { ascending: false }).limit(8)
+  return (data ?? []) as { title: string; kind: RefKind; url: string; notes: string; tags: string[]; likes: number | null; comments: number | null; author: string | null }[]
 }
 
 // ---------- grupos do Instagram (lidos pelo Mac, services/referencias) ----------

@@ -20,8 +20,9 @@
  *
  *   npm run referencias -- entrar            abre o Chrome para entrar na conta do Instagram (uma vez)
  *   npm run referencias                      fica rodando (a rotina e os pedidos da tela)
- *   npm run referencias -- agora             uma volta agora em todos os grupos, e sai
+ *   npm run referencias -- agora [20]        uma volta agora em todos os grupos (os N mais recentes), e sai
  *   npm run referencias -- diagnostico <url> lê um grupo sem gravar nada e mostra os links achados
+ *   npm run referencias -- metricas [todas]  lê de novo o engajamento (curtidas, comentários, visualizações)
  */
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -29,7 +30,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import { chromium, type BrowserContext, type Page } from 'playwright-core'
-import { due, humanPause, kindOf, metaOf, postLinksIn, postUrlOf, shotName, validKind, type RefKind } from './rules.ts'
+import { due, humanPause, kindOf, metaOf, metricsOf, postLinksIn, postUrlOf, shotName, validKind, windowOrders, type Metrics, type RefKind } from './rules.ts'
 
 // ---------- configuração ----------
 
@@ -84,59 +85,66 @@ const readSeen = (): Seen => { try { return JSON.parse(readFileSync(SEEN_FILE, '
 const writeSeen = (seen: Seen) => { try { writeFileSync(SEEN_FILE, JSON.stringify(seen)) } catch { /* sem disco: clica de novo na próxima */ } }
 
 /**
- * Abre o grupo, sobe a conversa algumas telas e junta os posts. No Instagram, um post compartilhado na DM é um
- * cartão (`div[role=article]` com um botão), sem link escrito: o leitor clica no cartão, a página vai para o
- * endereço do post (/p/<código>/), lê o endereço e fecha com Esc, voltando ao grupo. Links colados como texto
+ * Abre o grupo e junta os posts, dos mais novos para os mais antigos, até `limit`. No Instagram, um post
+ * compartilhado na DM é um cartão (`div[role=article]` com um botão), sem link escrito: o leitor clica no
+ * cartão, a página vai para o endereço do post (/p/<código>/), lê o endereço e fecha com Esc, voltando ao
+ * grupo. A lista é virtual (os cartões fora da tela saem da página) e cresce de baixo para cima: por isso
+ * o leitor abre os cartões visíveis, sobe um pouco com a roda do mouse e repete. Links colados como texto
  * também valem.
  */
-async function readThread(page: Page, threadUrl: string, sourceKey: string): Promise<string[]> {
+async function readThread(page: Page, threadUrl: string, sourceKey: string, limit = 30): Promise<string[]> {
   await page.goto(threadUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await sleep(humanPause(5000, 8000))
   if (loggedOut(page)) throw new Error('login')
-  // A conversa carrega de baixo para cima: sobe algumas telas para pegar o que chegou desde a última volta
-  for (let i = 0; i < 6; i++) {
-    await page.evaluate(() => {
-      for (const el of Array.from(document.querySelectorAll<HTMLElement>('div'))) {
-        if (el.scrollHeight > el.clientHeight + 200 && getComputedStyle(el).overflowY.match(/auto|scroll/)) el.scrollTop = Math.max(0, el.scrollTop - 1800)
-      }
-    })
-    await sleep(humanPause(1200, 2400))
-  }
-  const { hrefs, text } = await page.evaluate(() => ({
-    hrefs: Array.from(document.querySelectorAll('a[href]')).map((a) => (a as HTMLAnchorElement).getAttribute('href') ?? ''),
-    text: document.body.innerText,
-  }))
-  const found = postLinksIn(hrefs, text)
-
+  const found: string[] = []
+  const add = (u: string | undefined) => { if (u && !found.includes(u)) found.push(u) }
   const seen = readSeen()
   const mine = (seen[sourceKey] ??= {})
-  const cards = page.locator('div[role="article"] div[role="button"]')
-  const total = await cards.count()
-  // Os mais novos ficam embaixo: abre de baixo para cima, até 30 por volta
-  for (let i = total - 1; i >= Math.max(0, total - 30); i--) {
-    const card = cards.nth(i)
-    const sign = ((await card.innerText().catch(() => '')) + '|' + ((await card.locator('img').first().getAttribute('src').catch(() => '')) ?? '').split('?')[0].slice(-60)).slice(0, 300)
-    if (mine[sign]) { if (!found.includes(mine[sign])) found.push(mine[sign]); continue }
-    await card.scrollIntoViewIfNeeded().catch(() => undefined)
-    await card.click({ timeout: 6000 }).catch(() => undefined)
-    await sleep(humanPause(2000, 3500))
-    const opened = postUrlOf(page.url())
-    if (opened) {
-      mine[sign] = opened
-      if (!found.includes(opened)) found.push(opened)
+  const done = new Set<string>()
+  await page.mouse.move(860, 450)
+  let still = 0
+  for (let step = 0; step < 160 && found.length < limit && still < 6; step++) {
+    const { hrefs, text } = await page.evaluate(() => ({
+      hrefs: Array.from(document.querySelectorAll('a[href]')).map((a) => (a as HTMLAnchorElement).getAttribute('href') ?? ''),
+      text: (document.querySelector('[role="main"]') as HTMLElement | null)?.innerText ?? document.body.innerText,
+    }))
+    for (const u of postLinksIn(hrefs, text)) add(u)
+    const cards = page.locator('div[role="article"] div[role="button"]')
+    const total = await cards.count()
+    let fresh = 0
+    // De baixo para cima: os mais novos primeiro
+    for (let i = total - 1; i >= 0 && found.length < limit; i--) {
+      const card = cards.nth(i)
+      const sign = ((await card.innerText().catch(() => '')) + '|' + ((await card.locator('img').first().getAttribute('src').catch(() => '')) ?? '').split('?')[0].slice(-60)).slice(0, 300)
+      if (done.has(sign)) continue
+      done.add(sign)
+      fresh++
+      if (mine[sign]) { add(mine[sign]); continue }
+      const box = await card.boundingBox().catch(() => null)
+      if (!box || box.y < 60 || box.y > 860) continue
+      await card.click({ timeout: 6000 }).catch(() => undefined)
+      await sleep(humanPause(2000, 3500))
+      const opened = postUrlOf(page.url())
+      if (opened) { mine[sign] = opened; add(opened) }
+      await page.keyboard.press('Escape')
+      await sleep(humanPause(1000, 2000))
+      if (!page.url().includes('/direct/t/')) {
+        // Saiu do grupo: volta (a rolagem recomeça de baixo, os já vistos são pulados pela assinatura)
+        await page.goto(threadUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+        await sleep(humanPause(4000, 6000))
+        await page.mouse.move(860, 450)
+      }
     }
-    await page.keyboard.press('Escape')
-    await sleep(humanPause(1000, 2000))
-    if (!page.url().includes('/direct/t/')) {
-      await page.goto(threadUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-      await sleep(humanPause(4000, 6000))
-    }
+    still = fresh ? 0 : still + 1
+    // Passo menor que a área lida (y 60 a 860): nenhum cartão fica para trás entre um passo e outro
+    await page.mouse.wheel(0, -600)
+    await sleep(humanPause(1200, 2200))
   }
   writeSeen(seen)
-  return found
+  return found.slice(0, limit)
 }
 
-interface PostPage { author?: string; caption?: string; cover?: string; video: boolean; slides: number; images: string[] }
+interface PostPage extends Metrics { author?: string; caption?: string; cover?: string; video: boolean; slides: number; images: string[] }
 
 /** Abre o post e lê o que a página mostra: autor, legenda, capa, se é vídeo e quantos slides. */
 async function readPost(page: Page, postUrl: string): Promise<PostPage> {
@@ -148,7 +156,7 @@ async function readPost(page: Page, postUrl: string): Promise<PostPage> {
     const main = document.querySelector('main') ?? document.body
     const next = main.querySelector('button[aria-label*="Next" i], button[aria-label*="Avançar" i], button[aria-label*="Próximo" i]')
     const dots = main.querySelectorAll('div[role="presentation"] div[class] > div[class]:only-child').length
-    return { description: meta('og:description'), cover: meta('og:image'), video: !!main.querySelector('video') || meta('og:type') === 'video', hasNext: !!next, dots }
+    return { description: meta('og:description'), cover: meta('og:image'), video: !!main.querySelector('video') || meta('og:type') === 'video', hasNext: !!next, dots, text: (main as HTMLElement).innerText.slice(0, 4000) }
   })
   // Carrossel: passa os slides e junta as imagens grandes (até 8)
   const images: string[] = []
@@ -165,7 +173,7 @@ async function readPost(page: Page, postUrl: string): Promise<PostPage> {
     }
   }
   const meta = metaOf(info.description)
-  return { ...meta, cover: info.cover, video: info.video, slides: Math.max(slides, images.length > 1 ? images.length : 1), images: images.slice(0, 8) }
+  return { ...meta, ...metricsOf(info.description, info.text), cover: info.cover, video: info.video, slides: Math.max(slides, images.length > 1 ? images.length : 1), images: images.slice(0, 8) }
 }
 
 /** Baixa uma imagem com a sessão do navegador. */
@@ -274,17 +282,21 @@ async function upload(teamId: string, p: string, body: Buffer) {
   if (error) throw new Error(`Não guardou ${p}: ${error.message}`)
 }
 
-async function processSource(ctx: BrowserContext, src: Source, dryRun = false): Promise<number> {
+async function processSource(ctx: BrowserContext, src: Source, dryRun = false, limit = 30, cap = MAX_POSTS): Promise<number> {
   const page = ctx.pages()[0] ?? (await ctx.newPage())
-  const links = await readThread(page, src.thread_url, src.id === '-' ? src.thread_url : src.id)
+  const links = await readThread(page, src.thread_url, src.id === '-' ? src.thread_url : src.id, limit)
   log(`[${src.name}] ${links.length} link(s) de post no grupo`)
   if (dryRun) {
     for (const l of links) log('  ', l)
     return links.length
   }
-  const { data: known } = await db.from('crm_references').select('url').eq('team_id', src.team_id).in('url', links.length ? links : ['-'])
+  const { data: known } = await db.from('crm_references').select('id, url').eq('team_id', src.team_id).in('url', links.length ? links : ['-'])
   const seen = new Set((known ?? []).map((r: { url: string }) => r.url))
-  const fresh = links.filter((l) => !seen.has(l)).slice(-MAX_POSTS)
+  // A posição de cada post no grupo (o mais recente em cima na tela): esta leitura refaz a ordem de todos
+  const orders = windowOrders(links)
+  for (const r of (known ?? []) as { id: string; url: string }[]) await db.from('crm_references').update({ group_order: orders[r.url] }).eq('id', r.id)
+  // A rotina abre no máximo 12 posts novos por volta; `agora 20` abre os 20
+  const fresh = links.filter((l) => !seen.has(l)).slice(0, cap)
   const { data: team } = await db.from('crm_teams').select('name').eq('id', src.team_id).maybeSingle()
   let created = 0
   for (const postUrl of fresh) {
@@ -321,10 +333,16 @@ async function processSource(ctx: BrowserContext, src: Source, dryRun = false): 
         auto: true,
         reviewed: false,
         created_by: null,
+        likes: info.likes ?? null,
+        comments: info.comments ?? null,
+        views: info.views ?? null,
+        metrics_at: new Date().toISOString(),
+        group_order: orders[postUrl] ?? null,
       })
       if (error && error.code !== '23505') throw new Error(error.message)
-      if (!error) created++
-      log(`   ✓ ${postUrl} → ${validKind(ai?.tipo, guess)}${ai?.titulo ? ` · ${ai.titulo}` : ''}`)
+      if (error) { log(`   = ${postUrl} já estava salva`); continue }
+      created++
+      log(`   ✓ ${postUrl} → ${validKind(ai?.tipo, guess)}${ai?.titulo ? ` · ${ai.titulo}` : ''}${info.likes !== undefined ? ` · ♥ ${info.likes} 💬 ${info.comments ?? 0}${info.views !== undefined ? ` ▶ ${info.views}` : ''}` : ''}`)
     } catch (e) {
       if (e instanceof Error && e.message === 'login') throw e
       log(`   ✗ ${postUrl}: ${e instanceof Error ? e.message : e}`)
@@ -334,7 +352,7 @@ async function processSource(ctx: BrowserContext, src: Source, dryRun = false): 
   return created
 }
 
-async function runSources(onlyDue: boolean) {
+async function runSources(onlyDue: boolean, limit = 30, cap = MAX_POSTS) {
   const { data, error } = await db.from('crm_reference_sources').select('id, team_id, name, thread_url, enabled, every_minutes, last_run_at, run_requested_at')
   if (error) { log('Não li os grupos:', error.message); return }
   const list = ((data ?? []) as Source[]).filter((s) => (onlyDue ? due(s) : s.enabled))
@@ -344,7 +362,7 @@ async function runSources(onlyDue: boolean) {
     for (const src of list) {
       const started = new Date().toISOString()
       try {
-        const n = await processSource(ctx, src)
+        const n = await processSource(ctx, src, false, limit, cap)
         await db.from('crm_reference_sources').update({ last_run_at: started, last_found: n, last_error: null }).eq('id', src.id)
         log(`[${src.name}] ${n} referência(s) nova(s)`)
       } catch (e) {
@@ -382,8 +400,37 @@ if (cmd === 'entrar') {
   } finally {
     await ctx.close()
   }
+} else if (cmd === 'metricas') {
+  // Lê de novo o engajamento das referências do grupo (as sem número, ou todas com `metricas todas`)
+  let q = db.from('crm_references').select('id, url, author').eq('auto', true).eq('platform', 'instagram').limit(200)
+  if (arg !== 'todas') q = q.is('metrics_at', null)
+  const { data } = await q
+  const list = (data ?? []) as { id: string; url: string; author: string | null }[]
+  log(`${list.length} referência(s) para ler o engajamento`)
+  if (list.length) {
+    const ctx = await openBrowser()
+    try {
+      const page = ctx.pages()[0] ?? (await ctx.newPage())
+      for (const r of list) {
+        try {
+          const info = await readPost(page, r.url)
+          await db.from('crm_references').update({ likes: info.likes ?? null, comments: info.comments ?? null, views: info.views ?? null, metrics_at: new Date().toISOString(), ...(!r.author && info.author ? { author: info.author } : {}) }).eq('id', r.id)
+          log(`   ${r.url} · ♥ ${info.likes ?? '?'} 💬 ${info.comments ?? '?'}${info.views !== undefined ? ` ▶ ${info.views}` : ''}`)
+        } catch (e) {
+          if (e instanceof Error && e.message === 'login') { log('O Instagram saiu da conta: rode entrar.'); break }
+          log(`   ✗ ${r.url}: ${e instanceof Error ? e.message : e}`)
+        }
+        await sleep(humanPause())
+      }
+    } finally {
+      await ctx.close().catch(() => undefined)
+    }
+  }
 } else if (cmd === 'agora') {
-  await runSources(false)
+  // `agora 20`: os 20 posts mais recentes de cada grupo (importar o histórico); sem número, a volta normal
+  const n = Number(arg)
+  const many = Number.isFinite(n) && n > 0 ? Math.min(n, 60) : undefined
+  await runSources(false, many ?? 30, many ?? MAX_POSTS)
 } else {
   log('Leitor de referências rodando: olha os grupos a cada minuto e lê os que estão na hora.')
   let busy = false

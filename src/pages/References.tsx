@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Bookmark, Check, ExternalLink, ImagePlus, Lightbulb, Loader2, MessagesSquare, Pencil, Plus, RefreshCw, Search, Sparkles, Star, Trash2, X } from 'lucide-react'
+import { Bookmark, Check, ExternalLink, Heart, MessageCircle, Play, ImagePlus, Lightbulb, Loader2, MessagesSquare, Pencil, Plus, RefreshCw, Search, Sparkles, Star, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useCrm } from '@/features/crm/crmStore'
 import { FIELD, Page, PageHeader } from '@/features/crm/ui'
 import { createContent } from '@/features/conteudos/api'
-import { useIara } from '@/features/iara/store'
-import { createReference, createSource, deleteReference, deleteSource, listReferences, listSources, referenceShotUrl, updateReference, updateSource, uploadReferenceShot, type Reference, type ReferenceSource } from '@/features/referencias/api'
+import { RecreateDialog } from '@/features/referencias/RecreateDialog'
+import { byRecent, createReference, createSource, deleteReference, deleteSource, listReferences, listSources, referenceShotUrl, updateReference, updateSource, uploadReferenceShot, type Reference, type ReferenceSource } from '@/features/referencias/api'
 import { KIND_LABEL, PLATFORM_LABEL, contentFormatOf, parseRefUrl, parseTags, threadUrlOf, type RefKind } from '@/features/referencias/rules'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +21,8 @@ import { cn } from '@/lib/utils'
  */
 
 const KINDS = Object.keys(KIND_LABEL) as RefKind[]
+/** 646000 → "646 mil", 1200000 → "1,2 mi". */
+const compact = (n: number) => (n >= 1e6 ? `${(n / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi` : n >= 1e4 ? `${Math.round(n / 1e3)} mil` : n.toLocaleString('pt-BR'))
 
 interface FormState { id?: string; url: string; kind: RefKind; title: string; notes: string; tags: string; starred: boolean; mediaPath?: string; file?: File }
 const EMPTY: FormState = { url: '', kind: 'estatico', title: '', notes: '', tags: '', starred: false }
@@ -61,17 +63,7 @@ const Card: React.FC<{ r: Reference; teamId: string; onEdit: () => void; onChang
       setBusy(undefined)
     }
   }
-  const toIara = () => {
-    useIara.getState().ask(
-      [
-        `Crie um criativo (${KIND_LABEL[r.kind].toLowerCase()}) para ${team?.name ?? 'esta conta'} na linha desta referência: ${r.url}.`,
-        r.title && `Referência: ${r.title}.`,
-        r.notes && `O que aproveitar dela: ${r.notes}`,
-        r.mediaPath && `A captura da referência está no Cérebro em ${r.mediaPath} (use como referência visual).`,
-        'Use a marca e o tom da conta (Cérebro). Não copie texto, logo, marca nem foto da referência: pegue a ideia, a composição e o ritmo.',
-      ].filter(Boolean).join(' '),
-    )
-  }
+  const [recreating, setRecreating] = useState(false)
 
   return (
     <article className="flex flex-col overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)]">
@@ -106,14 +98,21 @@ const Card: React.FC<{ r: Reference; teamId: string; onEdit: () => void; onChang
           {r.auto && r.reviewed && <span className="text-gray-400" title="Lida e classificada pelo Mac a partir do grupo">· do grupo</span>}
         </div>
         {r.title && <h3 className="mt-1.5 text-sm font-semibold leading-snug text-gray-900">{r.title}</h3>}
+        {r.likes !== undefined && (
+          <p className="mt-1 flex flex-wrap items-center gap-x-2.5 text-[11px] tabular-nums text-gray-600" title={r.metricsAt ? `Números do post quando foi lido, em ${new Date(r.metricsAt).toLocaleDateString('pt-BR')}` : undefined}>
+            <span className="inline-flex items-center gap-1"><Heart className="h-3 w-3 text-rose-500" aria-hidden />{compact(r.likes)}<span className="sr-only"> curtidas</span></span>
+            {r.comments !== undefined && <span className="inline-flex items-center gap-1"><MessageCircle className="h-3 w-3" aria-hidden />{compact(r.comments)}<span className="sr-only"> comentários</span></span>}
+            {r.views !== undefined && <span className="inline-flex items-center gap-1"><Play className="h-3 w-3" aria-hidden />{compact(r.views)}<span className="sr-only"> visualizações</span></span>}
+          </p>
+        )}
         {r.notes && <p className="mt-1 line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-gray-600">{r.notes}</p>}
         {r.tags.length > 0 && <p className="mt-1.5 flex flex-wrap gap-1">{r.tags.map((t) => <span key={t} className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] text-violet-800">#{t}</span>)}</p>}
         <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
           <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" disabled={!!busy} onClick={() => void toIdea()} title="Cria uma ideia na Pauta com esta referência">
             {busy === 'ideia' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lightbulb className="h-3.5 w-3.5" />} Ideia
           </Button>
-          <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" onClick={toIara} title="Pede à Iara um criativo na linha desta referência, na marca da conta">
-            <Sparkles className="h-3.5 w-3.5 text-violet-600" /> Criativo
+          <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" onClick={() => setRecreating(true)} title="Recriar como post ou vídeo, com um conteúdo novo ou como está, na marca da conta">
+            <Sparkles className="h-3.5 w-3.5 text-violet-600" /> Recriar
           </Button>
           <a href={r.url} target="_blank" rel="noreferrer" className="inline-flex h-7 items-center rounded-md px-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" title="Abrir o link"><ExternalLink className="h-3.5 w-3.5" /></a>
           {r.auto && !r.reviewed && (
@@ -123,6 +122,7 @@ const Card: React.FC<{ r: Reference; teamId: string; onEdit: () => void; onChang
           <button type="button" onClick={onDelete} className="ml-auto inline-flex h-7 items-center rounded-md px-1.5 text-gray-400 hover:bg-red-50 hover:text-red-700" title="Apagar"><Trash2 className="h-3.5 w-3.5" /></button>
         </div>
       </div>
+      {recreating && <RecreateDialog reference={r} open onClose={() => setRecreating(false)} />}
     </article>
   )
 }
@@ -235,6 +235,7 @@ const References: React.FC = () => {
   const [saving, setSaving] = useState(false)
   const [filter, setFilter] = useState<'todas' | 'novas' | 'melhores' | RefKind>('todas')
   const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<'recentes' | 'engajamento'>('recentes')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
@@ -260,7 +261,7 @@ const References: React.FC = () => {
       if (form.file) mediaPath = await uploadReferenceShot(team.id, form.file)
       const draft = { url: parsed.url, platform: parsed.platform, kind: form.kind, title: form.title, notes: form.notes, tags: parseTags(form.tags), starred: form.starred, mediaPath: mediaPath ?? null }
       const saved = form.id ? await updateReference(form.id, draft) : await createReference(team.id, draft)
-      setItems((list) => [saved, ...(list ?? []).filter((r) => r.id !== saved.id)])
+      setItems((list) => [saved, ...(list ?? []).filter((r) => r.id !== saved.id)].sort(byRecent))
       setForm(null)
       toast.success(form.id ? 'Referência atualizada' : 'Referência salva')
     } catch (e) {
@@ -278,8 +279,9 @@ const References: React.FC = () => {
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     return (items ?? []).filter((r) => (filter === 'todas' ? true : filter === 'novas' ? r.auto && !r.reviewed : filter === 'melhores' ? r.starred : r.kind === filter))
-      .filter((r) => !q || [r.title, r.notes, r.url, ...r.tags].join(' ').toLowerCase().includes(q))
-  }, [items, filter, query])
+      .filter((r) => !q || [r.title, r.notes, r.url, r.author ?? '', ...r.tags].join(' ').toLowerCase().includes(q))
+      .sort(sort === 'engajamento' ? (a, b) => ((b.likes ?? -1) + (b.comments ?? 0)) - ((a.likes ?? -1) + (a.comments ?? 0)) : byRecent)
+  }, [items, filter, query, sort])
 
   if (teamStatus === 'ready' && !team) {
     return <Page><PageHeader title="Referências" text="As referências são de uma conta de empresa. Peça um convite em Equipe." /></Page>
@@ -349,7 +351,11 @@ const References: React.FC = () => {
             </button>
           )
         })}
-        <label className="ml-auto flex h-8 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3">
+        <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Ordem" className="ml-auto h-8 rounded-full border border-gray-200 bg-white px-3 text-xs">
+          <option value="recentes">Mais recentes no grupo</option>
+          <option value="engajamento">Mais engajamento</option>
+        </select>
+        <label className="flex h-8 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3">
           <Search className="h-3.5 w-3.5 text-gray-400" aria-hidden />
           <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar" aria-label="Buscar nas referências" className="w-36 bg-transparent text-xs outline-none" />
         </label>

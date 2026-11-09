@@ -70,3 +70,36 @@ export function due(src: { enabled: boolean; every_minutes: number; last_run_at:
 
 /** Nome de arquivo seguro para o Cérebro (`referencias/<código>-<parte>.jpg`). */
 export const shotName = (postUrl: string, part: string) => `referencias/${(postUrlOf(postUrl) ?? postUrl).split('/').filter(Boolean).pop()}-${part}.jpg`.replace(/[^A-Za-z0-9._/-]/g, '')
+
+/** Um número como o Instagram escreve: 1,234 · 1.234 · 12K · 1.2M · 1,2 mil · 3 mi. */
+export function parseCount(raw: string | undefined): number | undefined {
+  if (!raw) return undefined
+  const m = /^\s*([\d.,]+)\s*(k|m|mil|mi|mi\.)?\b/i.exec(raw)
+  if (!m) return undefined
+  const unit = (m[2] ?? '').toLowerCase()
+  const mult = unit === 'k' || unit === 'mil' ? 1e3 : unit === 'm' || unit.startsWith('mi') ? 1e6 : 1
+  const n = mult > 1 ? parseFloat(m[1].replace(',', '.')) : parseInt(m[1].replace(/[.,]/g, ''), 10)
+  return Number.isFinite(n) ? Math.round(n * mult) : undefined
+}
+
+export interface Metrics { likes?: number; comments?: number; views?: number }
+
+/**
+ * O engajamento que a página mostra: curtidas e comentários pelo og:description ("12K likes, 345 comments - …"
+ * ou "1.234 curtidas, 56 comentários - …") e as visualizações pelo texto da página, quando aparecem.
+ */
+export function metricsOf(description: string | undefined, pageText = ''): Metrics {
+  const num = '([\\d.,]+\\s*(?:K|M|mil|mi)?)'
+  const likes = parseCount(new RegExp(`${num}\\s+(?:likes?|curtidas?)`, 'i').exec(description ?? '')?.[1])
+  const comments = parseCount(new RegExp(`${num}\\s+(?:comments?|comentários?)`, 'i').exec(description ?? '')?.[1])
+  const views = parseCount(new RegExp(`${num}\\s+(?:views|visualizações|reproduções|plays)`, 'i').exec(pageText)?.[1])
+  return { likes, comments, views }
+}
+
+/**
+ * A ordem no grupo (maior = mandado mais recentemente). `links` vem do mais novo para o mais antigo, na
+ * sequência exata da conversa: cada leitura refaz a ordem de todos os que leu (os novos e os já guardados).
+ * Os mais antigos, fora desta leitura, ficam com a ordem de antes, que é menor (de uma leitura anterior).
+ */
+export const windowOrders = (links: string[], now = Date.now()): Record<string, number> =>
+  Object.fromEntries(links.map((url, i) => [url, now - i]))

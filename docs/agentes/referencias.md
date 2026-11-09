@@ -85,3 +85,46 @@ recomendado (`cerebro/iniciativas/superelements/decisoes.md`; exceção registra
     - O autor vem do `og:description`, que veio misturado ("usuario no November 9").
   - **Serviço sempre ligado:** instalado no launchd deste Mac (`com.avencestudio.referencias`).
   - **"Ver novas agora":** atendido em menos de 1 minuto, sem repetir os posts.
+
+## Engajamento, ordem do grupo e importação em lote (2026-11-09)
+
+O usuário pediu: "podemos ter o engajamento daquele vídeo? pra conseguir usar isso como um argumento e análise" e
+"siga para mais 20, busque em lote, mas mostre a ordem enviada no grupo, mais recente em cima".
+
+- **Banco** (migração `20261109190000_crm_referencias_engajamento.sql`, aplicada): `likes`, `comments`, `views`,
+  `metrics_at` e `group_order`.
+- **Engajamento:**
+  - Curtidas e comentários vêm do `og:description`. Na leitura logada, a página do post não mostra as
+    visualizações, e `views` fica vazio.
+  - São os números do momento da leitura. `npm run referencias -- metricas [todas]` relê.
+- **Lista virtual:** a conversa só tem na página os cartões visíveis. O leitor abre os cartões visíveis, rola
+  para cima com a roda do mouse e repete. A primeira versão travava no topo, porque a lista cresce de baixo para
+  cima.
+- **Importar em lote:** `npm run referencias -- agora 40` lê os 40 posts mais recentes e importa os que faltam.
+  A rotina continua abrindo no máximo 12 novos por volta.
+- **Ordem do grupo:** cada leitura refaz a ordem de todos os posts que leu, na sequência exata da conversa
+  (`windowOrders`, testada). Os mais antigos, fora daquela leitura, ficam abaixo. A tela ordena por ela ("Mais
+  recentes no grupo") ou por "Mais engajamento".
+- **Rolagem em passos de 600 px:** com passos de 1400 px, a roda pulava cartões entre um passo e outro. A releitura
+  achou 9 posts que tinham ficado para trás.
+- **Resultado em 2026-11-09:** 51 referências do grupo da Avence, 50 com curtidas e comentários, todas ordenadas.
+- **Cartão e IA:** o cartão mostra curtidas e comentários. As referências com estrela levam o @ e o engajamento
+  ao contexto da IA.
+
+## Recriar a partir da referência (2026-11-09)
+
+O usuário: "crie um fluxo pra recriar um criativo com base nessa referência, seja criar um vídeo ou post, podendo
+por ex. criar com base num conteúdo novo, recriar como está".
+
+- **Onde fica:** o botão "Recriar" no cartão abre `referencias/RecreateDialog.tsx`.
+- **O que a pessoa escolhe:**
+  - O que criar: post ou carrossel, ou vídeo (Reels).
+  - Como: "Com um conteúdo novo" (o estilo da referência sobre outro assunto, que a pessoa escreve) ou "Recriar
+    como está" (a mesma estrutura, sequência, ritmo e ideia, na voz e na marca da conta).
+  - O conjunto de criativos da conta e, no post, o formato.
+- **Como produz:** a capa e até 3 quadros da referência viram anexos da conversa (`registerAttachment`), e a Iara
+  recebe o pedido pronto.
+  - Post: `criar_de_referencia` (o designer reproduz o layout das imagens, na marca do conjunto).
+  - Vídeo: `criar_video_explicativo`, com o roteiro e o estilo descritos a partir da referência.
+- **O que nunca entra:** logo, nome, foto, rosto ou texto literal da outra empresa.
+- **Não testado:** a criação real pelo app logado.
