@@ -16,3 +16,20 @@
 - **Alternativa recusada:** só o caminho oficial (reels das contas conectadas pela API e arquivo baixado à mão).
 - **Risco aceito:** os termos da Meta não permitem baixar mídia de terceiros por automação; pode afetar a conta ou o App Review.
 - **Quem decidiu:** Igor.
+
+## 2026-11-09 · Referências lidas do grupo do Instagram, com a conta pessoal, pelo Mac
+
+- **Decisão:** um grupo de DM no Instagram por cliente. A equipe manda ali os posts de referência, e o Mac da equipe (`services/referencias`), logado na conta pessoal num Chrome próprio, lê o grupo na rotina ou quando alguém pede. Ele abre cada post, guarda a capa e alguns quadros no Cérebro da conta (apaga o vídeo), e a IA local classifica e cria a referência.
+- **Por quê:** o usuário disse: "não temos hoje a API oficial e as referências estão no Instagram mesmo".
+- **Alternativas apresentadas e recusadas:**
+  - Um grupo de WhatsApp por cliente, lido pelo número da equipe que já está conectado. Era o caminho recomendado.
+  - Encaminhar por DM ao Instagram da empresa e receber pela API oficial. Depende de o app da Meta ser publicado.
+- **Riscos aceitos:**
+  - Os termos da Meta proíbem automação com login. Há risco real de bloqueio ou suspensão da conta pessoal.
+  - O leitor abre um grupo com mensagens de outras pessoas, mas só guarda os links de posts.
+- **Cuidados:**
+  - Só leitura.
+  - Só os grupos cadastrados.
+  - Até 12 posts por volta, com pausas de pessoa.
+  - O login é feito pela própria pessoa (`npm run referencias -- entrar`). A senha não passa pelo sistema.
+- **Quem decidiu:** Igor.

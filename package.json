@@ -16,6 +16,7 @@
     "conector": "node scripts/connector/build.mjs",
     "plugin:zip": "node scripts/connector/plugin-zip.mjs",
     "whatsapp": "npm --prefix services/whatsapp start",
+    "referencias": "node services/referencias/src/main.ts",
     "db:status": "node scripts/supabase.mjs status",
     "db:plan": "node scripts/supabase.mjs plan",
     "db:migrate": "node scripts/supabase.mjs migrate",

@@ -70,16 +70,22 @@ export function parseRefUrl(raw: string): ParsedRef | undefined {
 export const parseTags = (raw: string) =>
   [...new Set(raw.split(',').map((t) => t.trim().toLowerCase().replace(/^#/, '')).filter(Boolean))].map((t) => t.slice(0, 30)).slice(0, 12)
 
-export interface RefForContext { title: string; kind: RefKind; url: string; notes: string; tags: string[] }
+export interface RefForContext { title: string; kind: RefKind; url: string; notes: string; tags: string[]; likes?: number | null; comments?: number | null; author?: string | null }
 
 /** As melhores referências da conta, para a IA criar na mesma linha (entra no contexto do Cérebro). */
 export function referencesText(refs: RefForContext[]): string {
   if (!refs.length) return ''
   return refs
     .slice(0, 8)
-    .map((r) => `- ${KIND_LABEL[r.kind]}${r.title ? `: ${r.title}` : ''} (${r.url})${r.notes ? ` — o que aproveitar: ${r.notes.replace(/\s+/g, ' ').slice(0, 300)}` : ''}${r.tags.length ? ` [${r.tags.join(', ')}]` : ''}`)
+    .map((r) => `- ${KIND_LABEL[r.kind]}${r.title ? `: ${r.title}` : ''} (${r.url}${r.author ? `, de @${r.author}` : ''}${typeof r.likes === 'number' ? `, ${r.likes} curtidas e ${r.comments ?? 0} comentários quando foi salvo` : ''})${r.notes ? ` — o que aproveitar: ${r.notes.replace(/\s+/g, ' ').slice(0, 300)}` : ''}${r.tags.length ? ` [${r.tags.join(', ')}]` : ''}`)
     .join('\n')
 }
 
 /** O formato do conteúdo da Pauta que combina com a referência. */
 export const contentFormatOf = (kind: RefKind) => (kind === 'reels' || kind === 'video' || kind === 'motion' ? 'reels' : kind === 'carrossel' ? 'carrossel' : kind === 'story' ? 'story' : 'post-instagram')
+
+/** O endereço do grupo do Instagram (instagram.com/direct/t/<id>/), como o banco guarda. */
+export function threadUrlOf(raw: string): string | undefined {
+  const m = /instagram\.com\/direct\/t\/(\d{5,40})/i.exec(raw.trim())
+  return m ? `https://www.instagram.com/direct/t/${m[1]}/` : undefined
+}

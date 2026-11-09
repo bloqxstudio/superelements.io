@@ -48,7 +48,11 @@ Sem segredos e sem contatos de prospects ou clientes finais. O Cérebro **do app
 - **Redes sociais de terceiros**: nada automatizado em perfis de outras pessoas (seguir, comentar, primeira
   mensagem); WhatsApp nunca envia sozinho a clientes. Nunca raspar o Instagram; única exceção (decisão do usuário,
   2026-11-07): baixar pelo link, no conector, um reel que a pessoa colou como referência do vídeo explicativo
-  (`scripts/criativos/reel.ts`), sem login nem cookies e sem guardar o vídeo.
+  (`scripts/criativos/reel.ts`), sem login nem cookies e sem guardar o vídeo. Segunda exceção (decisão do usuário,
+  2026-11-09, ciente do risco à conta pessoal e dos termos da Meta): o leitor de referências do Mac
+  (`services/referencias`, `docs/agentes/referencias.md`) entra na conta pessoal num Chrome próprio, lê só os
+  grupos de DM cadastrados na tela Referências e abre os posts mandados ali; guarda capa e quadros (o vídeo é
+  apagado); só leitura (nunca curte, comenta, segue nem envia) e no máximo 12 posts por volta, com pausas.
 - **Meta**: manter todos os pedidos do App Review (decisão do usuário, 2026-10-28). Não afirmar que DMs ou
   webhooks funcionam antes de uma mensagem real chegar. Estado em `META-PRODUCAO.md` e `docs/agentes/instagram.md`.
 - **Egress do Supabase** (2026-11-02): não voltar a gerar link assinado a cada montagem (links de 7 dias ficam
