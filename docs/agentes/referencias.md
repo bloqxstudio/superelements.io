@@ -35,3 +35,42 @@ criativos… as melhores refs pra aquela empresa, com os links de postagens, pod
 - Testar a tela logada e o embed do Instagram no domínio publicado.
 - Abrir o vídeo de um Reels para a IA analisar. A exceção que baixa um Reels pelo link vale só para o vídeo
   explicativo (`scripts/criativos/reel.ts`).
+
+## Leitor do grupo do Instagram no Mac (2026-11-09)
+
+O usuário: "temos um grupo no Instagram, enviamos lá as referências. Poderia ter um grupo pra cada projeto e enviar
+nesse grupo e aí já criar tudo? Já deixar identificar, entender o que é cada criativo e tabular ele… pode usar a
+conta pessoal… pode usar o Mac conectado". Ciente dos riscos, escolheu esse caminho em vez do grupo de WhatsApp
+recomendado (`cerebro/iniciativas/superelements/decisoes.md`; exceção registrada no AGENTS.md).
+
+- **Banco** (migração `20261109180000_crm_referencias_grupos.sql`, aplicada):
+  - `crm_reference_sources`: os grupos de cada conta, com `thread_url` (`instagram.com/direct/t/<id>/`), a rotina
+    (`every_minutes`, de 30 min a 1 dia), `run_requested_at` ("Ver novas agora"), a última volta e o erro.
+  - `crm_references` ganha `source_id`, `author`, `caption`, `frames`, `auto` e `reviewed`.
+- **Serviço** (`services/referencias`, Node com `playwright-core` e o Chrome do Mac):
+  - **Perfil próprio:** `~/Library/Application Support/avence-referencias/perfil`, fora do git.
+  - **Comandos:**
+    - `npm run referencias -- entrar`: abre o Chrome para a pessoa entrar na conta. Faz-se uma vez, e de novo
+      quando o Instagram sair.
+    - `npm run referencias`: a rotina. A cada minuto olha os grupos que estão na hora.
+    - `npm run referencias -- agora`: uma volta em todos os grupos.
+    - `npm run referencias -- diagnostico <link do grupo>`: mostra os links achados sem gravar e salva uma
+      captura da tela.
+  - **Para rodar sempre:** `bash services/referencias/instalar-mac.sh`, que usa launchd e grava o log em
+    `~/Library/Logs/avence-referencias.log`. A chave é a do serviço do WhatsApp (`services/whatsapp/.env.local`).
+- **Uma volta:**
+  1. Abre o grupo, sobe a conversa algumas telas e junta os links `/p/` e `/reel/`.
+  2. Para cada post novo da conta (até 12): lê a página (autor e legenda pelo `og:description`, capa, se é vídeo,
+     os slides do carrossel).
+  3. Vídeo: baixa com o `yt-dlp` e os cookies num arquivo temporário apagado logo depois, e o `ffmpeg` tira até
+     6 quadros. O vídeo é apagado.
+  4. Sobe a capa e os quadros para o Cérebro (`referencias/<código>-capa.jpg`, `-q1`…).
+  5. O Claude Code local (sonnet) devolve o tipo, o título, o que aproveitar e as etiquetas.
+  6. Cria a referência como "Nova". Pausas de 4 a 9 s entre as páginas e de 15 a 30 s entre os grupos.
+  7. Se o Instagram saiu da conta, o grupo mostra o erro, e a pessoa roda `entrar` de novo.
+- **Tela:** "Grupos do Instagram" (cadastrar, rotina, ligar e desligar, "Ver novas agora", status e erro); o
+  filtro "Novas do grupo"; e no cartão o selo "Nova", o @ de quem postou e o "Ok" para marcar como revisada.
+- **Testes:** `services/referencias/tests/rules.test.mjs` (os links na conversa, o autor e a legenda, o tipo e a
+  rotina).
+- **Não testado:** a leitura real de um grupo. A tela de DM do Instagram muda sem aviso, então o primeiro passo é
+  o `diagnostico` com o link de um grupo real.

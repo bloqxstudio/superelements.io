@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Bookmark, ExternalLink, ImagePlus, Lightbulb, Loader2, Pencil, Plus, Search, Sparkles, Star, Trash2, X } from 'lucide-react'
+import { Bookmark, Check, ExternalLink, ImagePlus, Lightbulb, Loader2, MessagesSquare, Pencil, Plus, RefreshCw, Search, Sparkles, Star, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useCrm } from '@/features/crm/crmStore'
 import { FIELD, Page, PageHeader } from '@/features/crm/ui'
 import { createContent } from '@/features/conteudos/api'
 import { useIara } from '@/features/iara/store'
-import { createReference, deleteReference, listReferences, referenceShotUrl, updateReference, uploadReferenceShot, type Reference } from '@/features/referencias/api'
-import { KIND_LABEL, PLATFORM_LABEL, contentFormatOf, parseRefUrl, parseTags, type RefKind } from '@/features/referencias/rules'
+import { createReference, createSource, deleteReference, deleteSource, listReferences, listSources, referenceShotUrl, updateReference, updateSource, uploadReferenceShot, type Reference, type ReferenceSource } from '@/features/referencias/api'
+import { KIND_LABEL, PLATFORM_LABEL, contentFormatOf, parseRefUrl, parseTags, threadUrlOf, type RefKind } from '@/features/referencias/rules'
 import { cn } from '@/lib/utils'
 
 /**
@@ -100,8 +100,10 @@ const Card: React.FC<{ r: Reference; teamId: string; onEdit: () => void; onChang
       </div>
       <div className="flex flex-1 flex-col p-3">
         <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          {r.auto && !r.reviewed && <span className="rounded-full bg-violet-600 px-2 py-0.5 font-semibold text-white">Nova</span>}
           <span className="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-700">{KIND_LABEL[r.kind]}</span>
-          <span className="text-gray-500">{PLATFORM_LABEL[r.platform]}</span>
+          <span className="text-gray-500">{r.author ? `@${r.author}` : PLATFORM_LABEL[r.platform]}</span>
+          {r.auto && r.reviewed && <span className="text-gray-400" title="Lida e classificada pelo Mac a partir do grupo">· do grupo</span>}
         </div>
         {r.title && <h3 className="mt-1.5 text-sm font-semibold leading-snug text-gray-900">{r.title}</h3>}
         {r.notes && <p className="mt-1 line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-gray-600">{r.notes}</p>}
@@ -114,11 +116,114 @@ const Card: React.FC<{ r: Reference; teamId: string; onEdit: () => void; onChang
             <Sparkles className="h-3.5 w-3.5 text-violet-600" /> Criativo
           </Button>
           <a href={r.url} target="_blank" rel="noreferrer" className="inline-flex h-7 items-center rounded-md px-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" title="Abrir o link"><ExternalLink className="h-3.5 w-3.5" /></a>
+          {r.auto && !r.reviewed && (
+            <button type="button" onClick={() => void updateReference(r.id, { reviewed: true }).then(onChange, () => undefined)} className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs text-gray-600 hover:bg-gray-100 hover:text-gray-900" title="A classificação da IA está boa"><Check className="h-3.5 w-3.5" /> Ok</button>
+          )}
           <button type="button" onClick={onEdit} className="inline-flex h-7 items-center rounded-md px-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
           <button type="button" onClick={onDelete} className="ml-auto inline-flex h-7 items-center rounded-md px-1.5 text-gray-400 hover:bg-red-50 hover:text-red-700" title="Apagar"><Trash2 className="h-3.5 w-3.5" /></button>
         </div>
       </div>
     </article>
+  )
+}
+
+const EVERY = [[30, '30 min'], [60, '1 hora'], [180, '3 horas'], [720, '12 horas'], [1440, '1 dia']] as const
+const ago = (t?: number) => {
+  if (!t) return 'ainda não leu'
+  const m = Math.round((Date.now() - t) / 60_000)
+  return m < 1 ? 'agora' : m < 60 ? `há ${m} min` : m < 1440 ? `há ${Math.round(m / 60)} h` : `há ${Math.round(m / 1440)} d`
+}
+
+/**
+ * Os grupos do Instagram desta conta (2026-11-09): a equipe manda os posts no grupo e o Mac
+ * (`services/referencias`, logado na conta pessoal) lê na rotina ou quando alguém pede "Ver novas agora",
+ * classifica com a IA e cria as referências como "Nova".
+ */
+const Groups: React.FC<{ teamId: string; onRun: () => void }> = ({ teamId, onRun }) => {
+  const [list, setList] = useState<ReferenceSource[]>()
+  const [adding, setAdding] = useState(false)
+  const [name, setName] = useState('')
+  const [link, setLink] = useState('')
+  const load = useCallback(() => listSources(teamId).then(setList, () => setList([])), [teamId])
+  useEffect(() => { void load() }, [load])
+  // Enquanto há pedido de leitura sem resposta, confere de tempos em tempos
+  const waiting = list?.some((s) => s.runRequestedAt && (!s.lastRunAt || s.runRequestedAt > s.lastRunAt))
+  useEffect(() => {
+    if (!waiting) return
+    const t = window.setInterval(() => { void load(); onRun() }, 20_000)
+    return () => window.clearInterval(t)
+  }, [waiting, load, onRun])
+
+  const thread = threadUrlOf(link)
+  const add = async () => {
+    if (!thread || !name.trim()) return
+    try {
+      const s = await createSource(teamId, name, thread)
+      setList((l) => [...(l ?? []), s])
+      setAdding(false); setName(''); setLink('')
+      toast.success('Grupo cadastrado: o Mac lê na próxima volta (em até 1 minuto, se estiver ligado).')
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Não cadastrou.') }
+  }
+  const patch = async (s: ReferenceSource, p: Parameters<typeof updateSource>[1]) => {
+    try { const n = await updateSource(s.id, p); setList((l) => (l ?? []).map((x) => (x.id === n.id ? n : x))); if (p.requestRun) toast.message('Pedido enviado ao Mac: as novas aparecem aqui em alguns minutos.') } catch (e) { toast.error(e instanceof Error ? e.message : 'Não salvou.') }
+  }
+  const remove = async (s: ReferenceSource) => {
+    if (!window.confirm(`Parar de ler o grupo "${s.name}"? As referências que já vieram dele ficam.`)) return
+    try { await deleteSource(s.id); setList((l) => (l ?? []).filter((x) => x.id !== s.id)) } catch (e) { toast.error(e instanceof Error ? e.message : 'Não tirou.') }
+  }
+
+  return (
+    <section className="mt-5 rounded-xl bg-white p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.06)]" aria-labelledby="grupos-ig">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 id="grupos-ig" className="flex items-center gap-2 text-sm font-semibold text-gray-900"><MessagesSquare className="h-4 w-4 text-fuchsia-600" /> Grupos do Instagram</h2>
+          <p className="mt-0.5 text-xs text-gray-500">Mande os posts no grupo do cliente: o Mac da equipe abre cada um, guarda a capa e os quadros, a IA classifica e a referência aparece aqui como Nova.</p>
+        </div>
+        {!adding && <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> Grupo</Button>}
+      </div>
+      {adding && (
+        <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_2fr_auto]" onSubmit={(e) => { e.preventDefault(); void add() }}>
+          <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="Nome (ex.: Refs Vizor)" className={cn(FIELD, 'h-9')} />
+          <div>
+            <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Link do grupo: instagram.com/direct/t/…" className={cn(FIELD, 'h-9')} />
+            <span className="mt-1 block text-[11px] text-gray-500">{link && !thread ? 'Abra o grupo no instagram.com (no computador) e copie o endereço da barra.' : 'No computador, abra o grupo em instagram.com e copie o endereço da barra.'}</span>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" className="h-9" disabled={!thread || !name.trim()}>Cadastrar</Button>
+            <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => setAdding(false)}>Cancelar</Button>
+          </div>
+        </form>
+      )}
+      {list && list.length > 0 && (
+        <ul className="mt-3 grid gap-2">
+          {list.map((s) => {
+            const pending = !!s.runRequestedAt && (!s.lastRunAt || s.runRequestedAt > s.lastRunAt)
+            return (
+              <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg bg-gray-50 px-3 py-2 text-xs">
+                <span className="font-medium text-gray-900">{s.name}</span>
+                <span className={cn('text-gray-500', s.lastError && 'text-red-700')}>
+                  {s.lastError ? s.lastError : pending ? 'Esperando o Mac ler…' : `Lido ${ago(s.lastRunAt)}${s.lastFound !== undefined && s.lastRunAt ? ` · ${s.lastFound} nova${s.lastFound === 1 ? '' : 's'}` : ''}`}
+                </span>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-1 text-gray-600">
+                    Rotina
+                    <select value={s.everyMinutes} onChange={(e) => void patch(s, { everyMinutes: Number(e.target.value) })} className="h-7 rounded-md border border-gray-200 bg-white px-1.5 text-xs">
+                      {EVERY.map(([v, l]) => <option key={v} value={v}>a cada {l}</option>)}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1 text-gray-600"><input type="checkbox" checked={s.enabled} onChange={(e) => void patch(s, { enabled: e.target.checked })} className="h-3.5 w-3.5" /> Ligado</label>
+                  <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" disabled={pending || !s.enabled} onClick={() => void patch(s, { requestRun: true })}>
+                    {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Ver novas agora
+                  </Button>
+                  <a href={s.threadUrl} target="_blank" rel="noreferrer" className="text-gray-500 hover:text-gray-900" title="Abrir o grupo"><ExternalLink className="h-3.5 w-3.5" /></a>
+                  <button type="button" onClick={() => void remove(s)} className="text-gray-400 hover:text-red-700" title="Parar de ler este grupo"><Trash2 className="h-3.5 w-3.5" /></button>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
   )
 }
 
@@ -128,7 +233,7 @@ const References: React.FC = () => {
   const [items, setItems] = useState<Reference[]>()
   const [form, setForm] = useState<FormState | null>(null)
   const [saving, setSaving] = useState(false)
-  const [filter, setFilter] = useState<'todas' | 'melhores' | RefKind>('todas')
+  const [filter, setFilter] = useState<'todas' | 'novas' | 'melhores' | RefKind>('todas')
   const [query, setQuery] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -172,7 +277,7 @@ const References: React.FC = () => {
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return (items ?? []).filter((r) => (filter === 'todas' ? true : filter === 'melhores' ? r.starred : r.kind === filter))
+    return (items ?? []).filter((r) => (filter === 'todas' ? true : filter === 'novas' ? r.auto && !r.reviewed : filter === 'melhores' ? r.starred : r.kind === filter))
       .filter((r) => !q || [r.title, r.notes, r.url, ...r.tags].join(' ').toLowerCase().includes(q))
   }, [items, filter, query])
 
@@ -232,13 +337,15 @@ const References: React.FC = () => {
         </form>
       )}
 
+      {team && <Groups teamId={team.id} onRun={() => window.setTimeout(() => void load(), 1500)} />}
+
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        {(['todas', 'melhores', ...KINDS] as const).map((f) => {
-          const n = f === 'todas' ? items?.length : f === 'melhores' ? items?.filter((r) => r.starred).length : items?.filter((r) => r.kind === f).length
+        {(['todas', 'novas', 'melhores', ...KINDS] as const).map((f) => {
+          const n = f === 'todas' ? items?.length : f === 'novas' ? items?.filter((r) => r.auto && !r.reviewed).length : f === 'melhores' ? items?.filter((r) => r.starred).length : items?.filter((r) => r.kind === f).length
           if (f !== 'todas' && f !== 'melhores' && !n) return null
           return (
             <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} className={cn('h-8 rounded-full border px-3 text-xs font-medium', filter === f ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300')}>
-              {f === 'todas' ? 'Todas' : f === 'melhores' ? '★ Melhores' : KIND_LABEL[f]} {n !== undefined && <span className="tabular-nums opacity-70">{n}</span>}
+              {f === 'todas' ? 'Todas' : f === 'novas' ? 'Novas do grupo' : f === 'melhores' ? '★ Melhores' : KIND_LABEL[f]} {n !== undefined && <span className="tabular-nums opacity-70">{n}</span>}
             </button>
           )
         })}

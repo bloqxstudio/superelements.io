@@ -83,3 +83,9 @@ export function referencesText(refs: RefForContext[]): string {
 
 /** O formato do conteúdo da Pauta que combina com a referência. */
 export const contentFormatOf = (kind: RefKind) => (kind === 'reels' || kind === 'video' || kind === 'motion' ? 'reels' : kind === 'carrossel' ? 'carrossel' : kind === 'story' ? 'story' : 'post-instagram')
+
+/** O endereço do grupo do Instagram (instagram.com/direct/t/<id>/), como o banco guarda. */
+export function threadUrlOf(raw: string): string | undefined {
+  const m = /instagram\.com\/direct\/t\/(\d{5,40})/i.exec(raw.trim())
+  return m ? `https://www.instagram.com/direct/t/${m[1]}/` : undefined
+}

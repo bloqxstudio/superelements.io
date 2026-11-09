@@ -1,0 +1,19 @@
+{
+  "name": "superelements-referencias",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "entrar": "node src/main.ts entrar",
+    "agora": "node src/main.ts agora",
+    "diagnostico": "node src/main.ts diagnostico",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "playwright-core": "1.56.1"
+  }
+}
