@@ -33,3 +33,34 @@ Lista `/conteudos`, Textos `/copy`).
     - Criativos: os em andamento sem criativo.
     - Aprovação: esperando o gestor, pedidos de ajuste do cliente, com o cliente, prontos para enviar.
   - As telas vazias de Pauta, Conteúdos e Criativos apontam para o Cérebro.
+
+## Aprovação de criativo com simulação do Instagram (2026-11-09)
+
+O usuário: "enviar um link para o cliente aprovar do criativo, podendo ser estático, carrossel, vídeo ou motion…
+visualizar como vai ficar no Instagram dele simuladamente e aprovar por esse link, ou colocar algum ajuste".
+
+- **Banco** (migração `20261109140000_crm_criativo_aprovacao.sql`, aplicada):
+  - `crm_approval_items` ganha `kind` (`conteudo` | `criativo`), `set_id` e `post_id`. O `content_id` fica opcional
+    para criativo; o comentário também.
+  - `crm_approval_links.ig_username` guarda o @ mostrado na simulação.
+  - O bucket `crm-aprovacao` aceita `video/mp4`, até 100 MB.
+  - Criar: `crm_creative_approval_create`. Qualquer pessoa da equipe pode criar, com o módulo de conteúdo ou de
+    criativos ligado (`crm_creative_require`, `crm_approval_on`).
+  - `crm_approval_get` e `crm_approval_guard` valem com conteúdo ou criativos ligados.
+  - `media[].view` (`feed` | `carrossel` | `reels` | `story`) e `media[].poster` (a capa do vídeo).
+  - O fluxo foi testado numa transação desfeita: criar, a página pública ler e pedir ajuste com comentário.
+- **Envio:** botão "Aprovação" no editor de criativos (`criativos/ApprovalDialog.tsx`, `criativos/approval.ts`).
+  - Gera o post: imagens, vídeo MP4 quando tem motion (só no Chrome e no Edge) ou carrossel misto.
+  - Sobe uma vez para o bucket público e cria o link.
+  - Mostra o link para copiar, "Mandar pelo WhatsApp" (abre o WhatsApp com a mensagem; a pessoa escolhe o contato
+    e envia) e a última resposta do cliente a este post.
+- **Página do cliente** (`/pauta/aprovar/:id`): cada peça aparece em `pauta/InstagramPreview.tsx`.
+  - **Feed:** cabeçalho com o @ e ações.
+  - **Carrossel:** setas, pontos e contador.
+  - **Reels:** vídeo em tela cheia, com a coluna de ações e o som.
+  - **Story:** barras, toque nas laterais e avanço sozinho a cada 5 s.
+  - Vale também para as peças da Pauta.
+  - O cliente aprova ou pede ajuste com nome e comentário, como antes.
+- **Não feito:**
+  - Aviso quando o cliente responde: a resposta aparece no editor e na Pauta (Realtime da Pauta).
+  - A foto real do perfil: a simulação mostra a inicial do @.

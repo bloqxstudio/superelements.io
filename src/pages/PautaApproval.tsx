@@ -5,14 +5,18 @@ import { cn } from '@/lib/utils'
 import { formatLabel } from '@/features/conteudos/rules'
 import { commentApproval, getApproval, mediaUrl, respondApproval, type PublicApproval, type PublicItem } from '@/features/pauta/api'
 import { channelLabel, dayHeading } from '@/features/pauta/rules'
-import { SlideViewer, ratioOf, timeLabel } from '@/features/pauta/ui'
+import { timeLabel } from '@/features/pauta/ui'
+import { InstagramPreview, previewViewOf } from '@/features/pauta/InstagramPreview'
 
 /**
  * /pauta/aprovar/:id — o cliente, sem login, vê as peças de um envio, aprova ou pede ajuste em
  * cada uma e comenta (inclusive sobre um slide). Não edita nada. O nome fica neste navegador.
+ * Desde 2026-11-09 cada peça aparece numa simulação do Instagram (feed, carrossel, Reels ou story),
+ * e o envio pode ser de um criativo solto, mandado do editor de criativos (`criativos/approval.ts`).
  */
 
 const NAME_KEY = 'pauta-aprovacao-nome'
+const VIEW_NAME = { feed: 'Post no feed', carrossel: 'Carrossel', reels: 'Reels', story: 'Story' } as const
 const readName = () => {
   try {
     return localStorage.getItem(NAME_KEY) ?? ''
@@ -23,7 +27,7 @@ const readName = () => {
 
 const field = 'w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900/10'
 
-const ItemCard: React.FC<{ linkId: string; item: PublicItem; name: string; needName: () => boolean; onDone: () => void; index: number; total: number }> = ({ linkId, item, name, needName, onDone, index, total }) => {
+const ItemCard: React.FC<{ linkId: string; item: PublicItem; name: string; needName: () => boolean; onDone: () => void; index: number; total: number; ig?: string }> = ({ linkId, item, name, needName, onDone, index, total, ig }) => {
   const posts = item.media.filter((m) => m.slides.length)
   const [post, setPost] = useState(0)
   const [slide, setSlide] = useState(0)
@@ -35,6 +39,8 @@ const ItemCard: React.FC<{ linkId: string; item: PublicItem; name: string; needN
   const [scriptOpen, setScriptOpen] = useState(!posts.length)
   const current = posts[post]
   const urls = useMemo(() => (current ? current.slides.map(mediaUrl) : []), [current])
+  const poster = current?.poster ? mediaUrl(current.poster) : undefined
+  const view = current ? previewViewOf(current) : 'feed'
 
   const act = async (fn: () => Promise<unknown>) => {
     if (needName()) return
@@ -64,7 +70,7 @@ const ItemCard: React.FC<{ linkId: string; item: PublicItem; name: string; needN
               {index + 1}/{total}
             </span>
             {when && <span className="capitalize"> · {when}</span>}
-            {item.channel && ` · ${channelLabel(item.channel)}`} · {formatLabel(item.format)}
+            {item.channel && ` · ${channelLabel(item.channel)}`} · {item.kind === 'criativo' ? VIEW_NAME[view] : formatLabel(item.format)}
           </p>
           <h2 id={`t-${item.id}`} className="mt-1 text-lg font-semibold leading-snug tracking-tight text-gray-900">
             {item.title}
@@ -95,15 +101,10 @@ const ItemCard: React.FC<{ linkId: string; item: PublicItem; name: string; needN
           </div>
         )}
         {current && (
-          <div className="mx-auto max-w-[420px]">
-            <SlideViewer urls={urls} ratio={ratioOf(current.format)} onSlide={setSlide} label={current.name || item.title} />
-          </div>
-        )}
-        {current?.caption && (
-          <div className="mt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Legenda</p>
-            <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-gray-800">{current.caption}</p>
-          </div>
+          <>
+            <InstagramPreview key={`${post}-${view}`} view={view} urls={urls} poster={poster} format={current.format} username={ig} caption={current.caption} onSlide={setSlide} />
+            <p className="mt-2 text-center text-xs text-gray-500">Simulação de como fica no Instagram{ig ? ` de @${ig}` : ''}. {view === 'story' || view === 'reels' ? 'Toque nas laterais para passar.' : urls.length > 1 ? 'Use as setas para passar os slides.' : ''}</p>
+          </>
         )}
         {item.script && (
           <div className="mt-4">
@@ -164,7 +165,7 @@ const ItemCard: React.FC<{ linkId: string; item: PublicItem; name: string; needN
             {current && (
               <label className="mt-2 flex items-center gap-2 text-xs text-gray-600">
                 <input type="checkbox" checked={onSlide} onChange={(e) => setOnSlide(e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
-                Sobre o slide {slide + 1}
+                {urls.length > 1 ? `Sobre o slide ${slide + 1}` : 'Sobre esta peça'}
                 {posts.length > 1 ? ` do ${current.name || `post ${post + 1}`}` : ''}
               </label>
             )}
@@ -286,7 +287,7 @@ const PautaApproval: React.FC = () => {
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{data.teamName} · para aprovar</p>
           <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-gray-900">{data.title}</h1>
           {data.message && <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-gray-700">{data.message}</p>}
-          <p className="mt-3 text-sm text-gray-600">Veja cada peça, aprove ou peça ajuste. Você pode comentar sobre um slide específico.</p>
+          <p className="mt-3 text-sm text-gray-600">Veja cada peça como vai aparecer no Instagram, aprove ou peça ajuste. Você pode comentar sobre um slide específico.</p>
 
           <div className="mt-5 rounded-xl bg-white p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.06)]">
             <div className="flex items-baseline justify-between text-sm">
@@ -317,7 +318,7 @@ const PautaApproval: React.FC = () => {
 
         <div className="mt-6 grid gap-6">
           {data.items.map((item, i) => (
-            <ItemCard key={item.id} linkId={data.id} item={item} name={name} needName={needName} onDone={() => void load()} index={i} total={total} />
+            <ItemCard key={item.id} linkId={data.id} item={item} name={name} needName={needName} onDone={() => void load()} index={i} total={total} ig={data.igUsername} />
           ))}
         </div>
 
