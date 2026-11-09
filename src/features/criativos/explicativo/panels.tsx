@@ -24,7 +24,7 @@ import { narrate, spokenText, type VoiceAI } from './narracao'
 import { DEFAULT_VOICE, VoicePicker } from './VoicePicker'
 import { CompositionPanel } from './CompositionPanel'
 import { SHOTS, SURFACES, type ShotId, type SurfaceId } from './comercial'
-import { CAPTIONS, LAYOUTS, LOOKS, PATTERNS, SFX, THEMES, TRANSITIONS, TREATMENTS, type ExplainerBeat, type ExplainerData, type PatternId } from './types'
+import { CAPTIONS, EFFECTS, LAYOUTS, LOOKS, PATTERNS, effectOf, type EffectId, SFX, THEMES, TRANSITIONS, TREATMENTS, type ExplainerBeat, type ExplainerData, type PatternId } from './types'
 import { Label, PATTERN_COLOR, editExplainer, field, fmt, isBriefing, slug, uid } from './shared'
 
 // ——— Roteiro ———
@@ -203,7 +203,15 @@ export const ScriptPanel: React.FC<{ set: CreativeSet; scene: CodeScene; current
                     <label className="text-[11px] text-gray-500">Depois<input className={field} placeholder="%" value={b.number?.suffix ?? ''} onChange={(e) => patch(b.id, { number: { value: b.number?.value ?? 0, ...b.number, suffix: e.target.value || undefined } })} /></label>
                   </div>
                 )}
-                {data.look && data.look !== 'editorial' && (
+                {data.look === 'recorte' && (
+                  <label className="col-span-2 text-[11px] text-gray-500">Efeito atrás de você
+                    <select className={field} value={effectOf(b, i)} onChange={(e) => patch(b.id, { effect: e.target.value as EffectId })}>
+                      {(Object.keys(EFFECTS) as EffectId[]).map((k) => (<option key={k} value={k}>{EFFECTS[k].label}</option>))}
+                    </select>
+                    <span className="mt-0.5 block leading-snug">{EFFECTS[effectOf(b, i)].hint}</span>
+                  </label>
+                )}
+                {data.look && data.look !== 'editorial' && data.look !== 'recorte' && (
                   <>
                     <label className="col-span-2 text-[11px] text-gray-500">Rótulo do cartão (palavra de destaque entre *asteriscos*)<input className={field} placeholder="preparando os *slides*" value={b.kicker ?? ''} onChange={(e) => patch(b.id, { kicker: e.target.value || undefined })} /></label>
                     {b.pattern !== 'foto' && (
@@ -454,7 +462,7 @@ export const StylePanel: React.FC<{ set: CreativeSet; scene: CodeScene }> = ({ s
       <section>
         <Label>Estilo do vídeo</Label>
         <Chips value={data.look ?? 'editorial'} options={LOOKS} onPick={(v) => set1({ look: v })} />
-        <p className="mt-1 text-[11px] text-gray-500">{LOOKS[data.look ?? 'editorial'].hint}{data.look && data.look !== 'editorial' && data.look !== 'comercial' ? ' Ponha um print em cada cena (aba Roteiro, "Print no cartão"); sem print, o cartão mostra a animação da cena.' : ''}</p>
+        <p className="mt-1 text-[11px] text-gray-500">{LOOKS[data.look ?? 'editorial'].hint}{data.look && data.look !== 'editorial' && data.look !== 'comercial' && data.look !== 'recorte' ? ' Ponha um print em cada cena (aba Roteiro, "Print no cartão"); sem print, o cartão mostra a animação da cena.' : ''}</p>
       </section>
       <BrandBox set={set} scene={scene} />
       <CompositionPanel scene={scene} hasVideo={hasVideo} />

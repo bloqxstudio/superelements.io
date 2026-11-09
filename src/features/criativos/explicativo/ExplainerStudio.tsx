@@ -8,7 +8,7 @@ import { useEditor } from '../store'
 import { SceneError, type SceneRunner } from '../scene'
 import { videoSupported } from '../video'
 import type { CodeScene, CreativeSet } from '../types'
-import { brandOfExplainer, clipFrame, clipVideos, explainerToMp4, grab, iconOfBeat, loadVoice, mixOptions, openVideo, runnerFor, sceneImages, seek, usesVideo, usesVoice, type Voice } from './media'
+import { brandOfExplainer, clipFrame, clipVideos, explainerToMp4, grab, iconOfBeat, maskFor, loadVoice, mixOptions, openVideo, runnerFor, sceneImages, seek, usesVideo, usesVoice, type Voice } from './media'
 import { NewExplainer } from './NewExplainer'
 import { PublishPanel, ScriptPanel, SpeechPanel, StylePanel } from './panels'
 import { mixExplainer } from './sfx'
@@ -342,7 +342,8 @@ const Preview: React.FC<{ set: CreativeSet; scene: CodeScene; voice: Voice | nul
             if (!playingRef.current) await seek(video, toSrc(segsRef.current, t))
             if (video.readyState >= 2) frame = await grab(video)
           }
-          const bmp = await runner.frame(t, frame, await clipFrame(clips, data, scene.duration, t))
+          const mask = await maskFor(data, frame)
+          const bmp = await runner.frame(t, frame, await clipFrame(clips, data, scene.duration, t), mask)
           const c = canvas.current
           const g = c?.getContext('2d')
           if (c && g) g.drawImage(bmp, 0, 0, c.width, c.height)

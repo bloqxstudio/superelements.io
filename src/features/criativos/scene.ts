@@ -134,7 +134,7 @@ export class SceneRunner {
   }
 
   /** O quadro do segundo `t`. Mais de 8 s num quadro = laço infinito: o worker é derrubado. */
-  async frame(t: number, video?: ImageBitmap, broll?: ImageBitmap): Promise<ImageBitmap> {
+  async frame(t: number, video?: ImageBitmap, broll?: ImageBitmap, mask?: ImageBitmap): Promise<ImageBitmap> {
     await this.ready
     if (this.dead) throw new SceneError('A cena parou.')
     const id = ++this.seq
@@ -145,7 +145,8 @@ export class SceneRunner {
         reject(new SceneError('Um quadro levou mais de 8 s: o código deve estar em laço. A cena foi parada.'))
       }, 8000)
       this.waiting.set(id, { resolve, reject, timer })
-      this.worker.postMessage({ type: 'frame', id, t, video, broll }, [video, broll].filter(Boolean) as ImageBitmap[])
+      // mask: o recorte da pessoa no quadro do vídeo (explicativo/recorte.ts), alfa = pessoa
+      this.worker.postMessage({ type: 'frame', id, t, video, broll, mask }, [video, broll, mask].filter(Boolean) as ImageBitmap[])
     })
   }
 

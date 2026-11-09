@@ -8,6 +8,7 @@ import { paletteOf } from '../brand'
 import type { SetBrand } from '../types'
 import { useEditor } from '../store'
 import { EXPLAINER_SCENE } from './engine'
+import { personMask } from './recorte'
 import { COMMERCIAL_SCENE } from './comercial'
 import { ICONS } from './icons'
 import { outBeats, outWords, segments, toSrc } from './timeline'
@@ -77,7 +78,7 @@ export function envData(data: ExplainerData, brand: SetBrand, total: number, vid
   const icons: ExplainerEnvData['icons'] = {}
   for (const name of new Set([...beats.map((b) => b.icon).filter(Boolean) as string[], 'brilho', 'seta', 'check', 'erro'])) if (ICONS[name]) icons[name] = ICONS[name] as ExplainerEnvData['icons'][string]
   const theme = data.theme === 'marca' ? 'alternado' : data.theme
-  return { composition: data.composition, look: data.look ?? 'editorial', words: outWords(data), beats, layout: hasVideo ? (data.layout === 'animacao' ? 'dividido' : data.layout) : 'animacao', captions: data.captions, theme, brand: brandTokens(brand), icons, treatment: data.treatment, mirror: !!data.mirror, videoPositionY: data.videoPositionY, hasVideo, videoSize: video }
+  return { composition: data.composition, look: data.look ?? 'editorial', words: outWords(data), beats, layout: hasVideo ? (data.layout === 'animacao' ? 'dividido' : data.layout) : 'animacao', captions: data.captions, theme, brand: brandTokens(brand), icons, treatment: data.treatment, mirror: !!data.mirror, videoPositionY: data.videoPositionY, hasVideo, videoSize: video, photos: data.photos.filter((p) => p.kind !== 'video').map((p) => p.name) }
 }
 
 /** Uma imagem pelo endereço do conjunto (`asset:`) ou pública (`/brands/...`), para o worker. */
@@ -165,6 +166,11 @@ export function seek(v: HTMLVideoElement, t: number): Promise<void> {
   })
 }
 
+/** O estilo "Efeitos com recorte" precisa da máscara da pessoa em cada quadro (`recorte.ts`). */
+export const usesMask = (data: ExplainerData) => data.look === 'recorte' && usesVideo(data)
+/** A máscara do quadro, quando o estilo pede (antes de o quadro ir ao worker, que o fecha). */
+export const maskFor = (data: ExplainerData, frame: ImageBitmap | undefined) => (frame && usesMask(data) ? personMask(frame) : Promise.resolve(undefined))
+
 /** Um quadro do vídeo da pessoa, no máximo 1080 de largura (o que o motor desenha). */
 export const grab = (v: HTMLVideoElement) => (v.videoWidth > 1080 ? createImageBitmap(v, { resizeWidth: 1080, resizeHeight: Math.round((v.videoHeight * 1080) / v.videoWidth), resizeQuality: 'medium' }) : createImageBitmap(v))
 
@@ -194,7 +200,8 @@ export async function explainerToMp4(scene: CodeScene, set: CreativeSet, images:
           await seek(video, toSrc(segs, i / FPS))
           frame = await grab(video)
         }
-        last = await runner.frame(i / FPS, frame, await clipFrame(clips, data, scene.duration, i / FPS))
+        const mask = await maskFor(data, frame)
+        last = await runner.frame(i / FPS, frame, await clipFrame(clips, data, scene.duration, i / FPS), mask)
         return last
       },
     })
@@ -258,7 +265,7 @@ export async function coverJpeg(scene: CodeScene, set: CreativeSet, images: Imag
       await seek(video, toSrc(segments(data), t))
       frame = await grab(video)
     }
-    const bmp = await runner.frame(t, frame)
+    const bmp = await runner.frame(t, frame, undefined, await maskFor(data, frame))
     const c = Object.assign(document.createElement('canvas'), { width: bmp.width, height: bmp.height })
     c.getContext('2d')!.drawImage(bmp, 0, 0)
     bmp.close()

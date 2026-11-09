@@ -79,7 +79,29 @@ export interface ExplainerBeat {
   shot?: string
   /** Estilo comercial: o fundo da cena (tinta, papel, branco, tom, destaque). */
   surface?: string
+  /** Estilo "Efeitos com recorte": o efeito do momento (`EFFECTS`); sem ele, um por ordem (`effectOf`). */
+  effect?: EffectId
 }
+
+/**
+ * Os efeitos do estilo "Efeitos com recorte" (2026-11-09, a partir do reel "20 video effects in 20 seconds"):
+ * o motor recorta a pessoa em cada quadro (`recorte.ts`) e desenha o efeito entre o fundo e ela.
+ */
+export const EFFECTS = {
+  'texto-fundo': { label: 'Texto atrás', hint: 'As palavras do momento abrem gigantes no fundo, atrás de você, quando são faladas.' },
+  orbita: { label: 'Órbita', hint: 'A palavra de destaque gira em anel em volta da sua cabeça, passando atrás.' },
+  parede: { label: 'Parede de posts', hint: 'Uma grade de quadrados acende atrás de você, com um contador.' },
+  clones: { label: 'Clones', hint: 'Cópias suas em fileira atrás de você.' },
+  foco: { label: 'Foco', hint: 'O fundo desfoca e só você fica nítido, com a palavra de destaque atrás.' },
+  carrossel: { label: 'Carrossel', hint: 'Duas fileiras de cartões (as fotos do vídeo ou cartões da marca) passando atrás de você.' },
+  'orbita-cartoes': { label: 'Órbita de cartões', hint: 'Cartões com as fotos do vídeo girando em 3D em volta de você, passando atrás e na frente.' },
+  'tela-dividida': { label: 'Tela dividida', hint: 'A animação do momento em cima, você embaixo e a legenda na emenda.' },
+  grafico: { label: 'Gráfico', hint: 'Papel quadriculado com barras, número que conta, lista ou título em cima, e você num painel em arco embaixo. Barras só com números escritos nos itens.' },
+} as const
+export type EffectId = keyof typeof EFFECTS
+/** A ordem quando o roteiro não escolhe: abre com o texto atrás e varia sem repetir seguido. */
+export const EFFECT_ORDER: EffectId[] = ['texto-fundo', 'orbita', 'texto-fundo', 'parede', 'clones', 'texto-fundo', 'foco']
+export const effectOf = (b: Pick<ExplainerBeat, 'effect'>, i: number): EffectId => b.effect ?? EFFECT_ORDER[i % EFFECT_ORDER.length]
 
 export const LAYOUTS = {
   animacao: { label: 'Só animação', hint: 'A tela inteira é animação; a sua voz por cima.' },
@@ -100,6 +122,7 @@ export const LOOKS = {
   'palavra-heroi': { label: 'Palavra-herói', hint: 'Degradê da marca, rótulo com ícone e uma palavra de destaque, cartão com brilho.' },
   'legenda-forte': { label: 'Legenda forte', hint: 'Você em tela cheia, uma palavra gigante na cor de destaque e o cartão por cima.' },
   contraste: { label: 'Contraste', hint: 'Metade de cima na cor forte da marca com rótulo e cartão; você embaixo.' },
+  recorte: { label: 'Efeitos com recorte', hint: 'Você em tela cheia e, a cada momento, um efeito: texto gigante atrás, órbita, parede de posts, clones, foco, carrossel, órbita de cartões, tela dividida ou gráfico (precisa de vídeo seu).' },
   comercial: { label: 'Comercial animado', hint: 'Tipografia cinética de anúncio: objeto 3D, selo, cartões numerados, celular, ranking e orçamento, um plano por cena.' },
 } as const
 export type LookId = keyof typeof LOOKS
@@ -227,4 +250,6 @@ export interface ExplainerEnvData {
   videoPositionY?: number
   hasVideo: boolean
   videoSize?: { width: number; height: number }
+  /** Os nomes das fotos (imagens) do vídeo, na ordem: os cartões do carrossel e da órbita de cartões. */
+  photos?: string[]
 }

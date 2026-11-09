@@ -109,6 +109,107 @@ entregar isso a partir de uma referência"; "deixe capas nos vídeos, crie uma �
 - **Voz mais rápida** (mesmo dia, "a voz ainda tá meio lenta… ser mais rápido mesmo"): o `gpt-4o-mini-tts` ignora `speed` (só os modelos tts-1 usam), então o ritmo vai na direção: com `speed` ≥ 1,25 `directionFor` pede "fale RÁPIDO, com energia de Reels… pausas bem curtas". No vídeo fu3f9do9 isso levou de 32,4 s a 29,8 s; o resto veio de acelerar o áudio 1,2× com o `atempo` do ffmpeg (sem mudar o tom), tempos das palavras divididos por 1,2 (24,8 s de voz, vídeo de 26,6 s), e a energia da animação foi para Alta.
 - **Fluidez e efeitos sonoros** (2026-11-09, o usuário: "ficou um pouco tremido… parece que fica dando micro tremidas… deixar mais fluido, mais natural, aplique efeitos sonoros"). Causa no vídeo fu3f9do9: a câmera fazia média de 6 amostras passadas de um alvo que muda em degraus (anda em saltos a cada 3 quadros; medido: diferença entre quadros 5,7 → 9,9 → 5,7…) e um tremor de impacto com `Math.sin(time * 93)`. Trocado por interpolação contínua (inOutCubic) entre o alvo anterior e o novo; medido depois: curva suave 2,6 → 6,6 → 0,1. O contrato (`SCENE_CONTRACT`, "Fluidez (obrigatório)") e o sistema da IA não pedem mais "tremida no impacto" e proíbem média de amostras, degraus e seno rápido. Efeitos: `sceneSound.ts` (`bakeSceneAudio` + `wavOf`) mistura a voz com os efeitos sintetizados do explicativo (`scheduleSfx`, `room` agora exportado) num WAV que vira a trilha da cena (prévia, MP4 e reels tocam igual); as marcações ficam em `data.sfx` (`{at, kind, volume}`) e a voz sem efeitos em `data.voiceAsset`. Ainda sem tela para editar os efeitos nem remixar sozinho ao refazer a narração.
 
+**Referência "20 efeitos em 20 segundos"** (2026-11-09, o usuário mandou o reel `instagram.com/reel/DfgSB4DthfJ` de
+@justyn.ai: "quero ver o conteúdo desse vídeo, cada efeito que ele apresenta… incorporar esses efeitos dentro do
+nosso projeto de videomaker"; e, com prints do Clone row e do Post wall, "podemos fazer esse tipo de coisa? como
+máscaras avançadas, como After Effects").
+
+- **Como foi lido:** baixado pelo link só para análise (exceção do reel de referência). Saíram 104 quadros a
+  4 por segundo, e o vídeo foi apagado. A referência na conta Avence ganhou capa, 7 quadros, título, notas e
+  etiquetas.
+- **O vídeo:** pessoa falando para a câmera, 26 s, quadrado 720 px. Um painel lateral "In this video NN/20" marca
+  o efeito da vez, e o título "20 video effects in 20 seconds / built by Claude" fica em caixas brancas.
+- **Os efeitos, na ordem, e o que cada um precisa (R = recorte da pessoa, a máscara que separa a pessoa do fundo):**
+
+| # | Efeito | O que faz | Precisa |
+| --- | --- | --- | --- |
+| 1 | Live cursor | Cursor, caixa de seleção com medidas (284 × 450) e etiqueta "Claude" enquadrando a pessoa | Camada por cima (rastreio do rosto opcional) |
+| 2 | Clone row | Cópias da pessoa em fileira atrás dela, diminuindo | R |
+| 3 | Day dial | O fundo vira um relógio/calendário creme que gira, com a pessoa na frente | R |
+| 4 | Predict keys | Teclado do iPhone e caixa de texto digitando, com sugestões | Camada por cima |
+| 5 | Orbit ring | Palavras em anel 3D girando em volta da cabeça, passando atrás dela | R |
+| 6 | Code body | Pessoa refeita em caracteres (ASCII) vermelho e branco, com código no rodapé | R + filtro de quadro |
+| 7 | Post wall | Grade de posts que acende quadrado a quadrado (DAY 564, contador 1.711 POSTS) atrás da pessoa | R |
+| 8 | Letter dive | Palavra serifada gigante ("dive.") com o vídeo dentro das letras, e corte para a cena | Máscara de texto |
+| + | Comment drop | Caixa de comentário digitando "EDIT", respostas caindo e a legenda-CTA em caixas brancas | Camada por cima |
+| 9 | Layer explode | O quadro vira camadas separadas em 3D (vídeo, painel, título, onda de som) e volta | Composição 3D das camadas |
+| 10 | Sketch words | Fundo de papel e palavra desenhada a lápis atrás da pessoa | R |
+| 11 | Blade slice | Um corte diagonal fatia o quadro, que desliza | Máscara geométrica |
+| 12 | Head stack | Etiquetas/fichas empilhadas voando em volta da cabeça | Camada por cima (R para passar atrás) |
+| 13 | Rack focus | O fundo desfoca e a pessoa fica nítida | R |
+| 14 | Banknote | A pessoa vira a gravura de uma cédula, com contador 174 → 174.953 | R + filtro de gravura |
+| 15 | Voice note | Bolha de nota de voz do WhatsApp/iMessage com a onda e "Delivered" | Camada por cima |
+| 16 | Impact frame | Quadro de HQ em traço preto e branco com linhas de velocidade e "IMPACT" | Filtro de traço (R melhora) |
+| 17 | Dolly zoom | Efeito vertigo: a pessoa fica do mesmo tamanho e o fundo estica | R |
+| 18 | Press front | Capa de jornal "The Daily Reel" com a pessoa em meio-tom | Filtro de meio-tom + layout |
+| 19 | Paper tear | O quadro rasga como papel para a cena seguinte | Máscara de transição |
+| 20 | Blow away | A pessoa se desfaz em partículas e sobra a cadeira vazia | R + fundo limpo (placa sem a pessoa) |
+
+- **O que o motor já tem:** o formato "você na tela" manda o quadro do vídeo da pessoa ao worker (`env.video`) e
+  desenha por cima; não separa a pessoa do fundo. Dá para fazer agora, só com camadas: Live cursor, Predict keys,
+  Comment drop, Voice note, Head stack (por cima), Letter dive, Blade slice, Paper tear, Press front e Impact frame.
+- **Peça que falta para os demais:** o recorte da pessoa, quadro a quadro, no navegador (MediaPipe Image
+  Segmenter, `@mediapipe/tasks-vision`, ou similar). Com a máscara, cada quadro vira três camadas: fundo, o que
+  passa atrás, a pessoa e o que vai na frente.
+
+**Efeitos com recorte** (2026-11-09, o usuário: "pode fazer", depois de "podemos fazer esse tipo de coisa? como
+máscaras avançadas, como After Effects" e "texto cinético… pra abrir no fundo, com mais destaque"). Primeiro lote
+do reel "20 efeitos" (tabela acima).
+
+- **Recorte** (`explicativo/recorte.ts`):
+  - O MediaPipe Image Segmenter (`@mediapipe/tasks-vision` 1.1.1, versão exata) roda no navegador. O WASM vem do
+    jsDelivr e o modelo `selfie_multiclass_256x256` (16 MB) do Google; os dois ficam no cache. Usa a GPU e cai
+    para a CPU se precisar.
+  - `personMask(frame)` devolve a máscara do quadro em 512 px (alfa = pessoa, com curva que firma o miolo).
+  - Medido no harness: cerca de 35 ms por quadro depois de carregar; a primeira carga leva de 3 a 15 s.
+  - Nada sai do computador.
+- **Caminho da máscara:**
+  - `SceneRunner.frame(t, video, broll, mask)` manda a máscara ao worker, onde ela vira `env.mask` e é fechada
+    depois do quadro.
+  - `usesMask` e `maskFor` (`media.ts`) calculam a máscara só no estilo de recorte, na exportação (`explainerToMp4`),
+    na capa e na prévia do estúdio.
+- **Estilo** `look: 'recorte'` ("Efeitos com recorte", em `LOOKS`):
+  - A pessoa ocupa a tela inteira e cada momento tem um `effect` (`EFFECTS`).
+  - Sem `effect`, segue a ordem `EFFECT_ORDER` (`effectOf`). A aba Roteiro tem "Efeito atrás de você".
+- **Motor** (`engine.ts`, `cutout`). Cada quadro sai em camadas: fundo → efeito → pessoa recortada
+  (`personLayer`) → frente.
+  - `videoXf` e `drawSrc` desenham o quadro e a máscara com a mesma posição.
+  - `headOf` acha a cabeça na máscara em miniatura (54 × 96): o topo, o centro e a largura, suavizados entre
+    quadros.
+  - **Cabeça alta demais:** num vídeo de webcam cortado para vertical, a pessoa diminui, ancorada embaixo, até a
+    cabeça ficar a ~36% da altura. O fundo vira o estúdio da marca (tinta com brilho do destaque), decidido uma
+    vez por vídeo. As bordas do quadro somem em degradê.
+- **Os efeitos:**
+  - `texto-fundo`: o texto do momento abre gigante atrás da cabeça, uma ou duas palavras por linha ocupando a
+    largura. Cada linha sobe de trás de um corte, esticada na vertical, quando a primeira palavra é falada. O
+    destaque sai na fonte e na cor de destaque.
+  - `orbita`: a palavra de destaque gira em anel 3D em volta da cabeça. As letras de trás são desenhadas antes da
+    pessoa, as da frente depois.
+  - `parede`: uma grade de 16 × 6 acende atrás, com contador (o `number` do momento, se houver).
+  - `clones`: 3 cópias de cada lado, menores e mais escuras, abrindo do centro.
+  - `foco`: o fundo desfoca, com a palavra de destaque atrás.
+- **Testado:**
+  - Harness `.space/_harness/recorte/`, fora do git, em Chrome headless, com uma gravação do usuário (webcam
+    1080 × 720, 40 s, transcrita no navegador). MP4 de 20 s, 1080 × 1920, H.264 + AAC, gerado em 119 s, em
+    `artifacts/recorte/teste-efeitos-recorte.mp4`.
+  - Conferidos os 5 efeitos nos quadros.
+  - **Limite visto:** com o ombro encostado na borda do vídeo (webcam de perto), sobra uma faixa suave nas laterais.
+    Vídeo de meio corpo com espaço dos lados fica limpo.
+- **Não testado:**
+  - O app logado (prévia tocando e exportação pelo estúdio).
+  - A IA do roteiro ainda não escolhe o efeito: a ordem é automática ou manual.
+- **Exemplo no app** (2026-11-09, o usuário: "crie um exemplo na plataforma"):
+  - **Onde:** cena `0wvlv8g5`, "Exemplo: efeitos com recorte", no conjunto "Anúncio para arquiteto: Google ou
+    Instagram?" (`conteudo-72b79f6f…`, pasta pessoal do usuário).
+  - **Como foi feito:** é uma cópia do vídeo explicativo `quggxenf`, feito com a gravação `jh6kws5u.mp4` (o
+    original não mudou), com `look: 'recorte'` e um efeito escolhido para cada um dos 16 momentos.
+  - **Gravação:** escrito direto no `set.json` e no `index.json` pelo Storage. O `videosInfo` do índice foi
+    tirado para o app recalcular.
+  - **Conferido:** no harness, com os dados reais (marca, legenda em caixa, espelhado).
+  - **Acentos:** o corte das linhas do texto atrás cortava os acentos; corrigido.
+  - **Publicação:** só abre certo com o código novo. Até publicar, o app de produção não conhece o estilo
+    `recorte`.
+
 **Vídeo 3D "tudo conectado"** (2026-11-09, o usuário sobre a cena `n2vy687y`, "Do anúncio até o atendimento", no conjunto `xr65lkb3`: "não ficou tão bom e fluido… explore melhore esse motion, focando no 3d… navegando no 3d e trocando de ângulo por etapa… não coloque legenda… retire o título… ícone do Instagram, ícone melhor para o site… não precisa ter conexão com plantação, pode ser só uma cidade tecnológica, ou um mini componente com tudo conectado… conexão em todas as pontas, como uma solução da Avence").
 - **O que mudou:** o código da cena foi trocado por um motor 3D próprio em canvas 2D (o worker só tem canvas 2D): câmera em perspectiva numa trajetória contínua (Hermite pelos quadros-chave de cada parte da narração, sem paradas nem degraus), luz direcional, névoa, sombras projetadas no chão, faces de trás descartadas, ordenação por profundidade e texturas mapeadas nas faces (dois triângulos afins). Rastro de velocidade (`blurFrame`, 3 amostras) só quando a câmera anda rápido.
 - **Cena:** placa de mini componente (trilhas de circuito, quadras-chip) com o centro Avence (logo de verdade, `env.images.logo`) ligado a cinco pontas: anúncio (megafone), Instagram (glifo e degradê), criativo (cartões de post com imagem e brilho), site (navegador com cursor) e atendimento (balão). Conexões em arco do centro a cada ponta e em anel entre as pontas, com pulsos de dados.
@@ -123,5 +224,17 @@ entregar isso a partir de uma referência"; "deixe capas nos vídeos, crie uma �
 - **Ícones:** anuncio, instagram, site, atendimento, whatsapp, criativo, loja, agenda, email, busca, grafico, video, pagamento, logo, logo_escuro (o logo de verdade de `env.images`), e os balões msg_in, msg_out, digitando; aceita imagem de `env.images`. Pintados em código, na cor de destaque da conta.
 - **IA:** `SCENE_CONTRACT` (`scene.ts`) descreve a API com o padrão de câmera; o sistema de `sceneAi.ts` manda usar `lib.d3` quando o pedido falar em 3D, cidade, ecossistema ou "tudo conectado". A Iara usa o mesmo caminho (`videoIara.ts` → `writeSceneCode`) e ganhou a sugestão "Refaz este vídeo em 3D, com tudo conectado à marca". Não mexe no conector.
 - **Correção junto:** a faixa acesa dos prédios desenhava um disco sobre o topo (os topos azuis); agora é só o anel.
-- **Exemplo:** `docs/agentes/exemplos/cena-3d-tudo-conectado.js` é o vídeo `n2vy687y` refeito com `lib.d3` (≈8,5 KB contra ≈48 KB). A cena gravada no conjunto continua na versão autônoma até o app com `lib.d3` ser publicado; depois dá para trocar pelo exemplo.
+- **Exemplo:** `docs/agentes/exemplos/cena-3d-tudo-conectado.js` é o vídeo `n2vy687y` refeito com `lib.d3` (≈8,5 KB contra ≈48 KB). Publicado no app (PR #25, merge `63c1973`, bundle `index-CVFsXzES.js` conferido no domínio) e, em seguida, a cena gravada no conjunto passou a ser este exemplo (backup da versão autônoma fora do repositório).
 - **Testado:** `scripts/tests/scene3d.test.mjs` (mundo completo com todos os ícones e formas, câmera sem saltos, `wordAt`, contrato); harness `.space/_harness/conexao/` em Chrome headless com o `SceneRunner` real: a versão `lib.d3` sai igual à autônoma e uma cena genérica com os 13 ícones em roxo. Build do Vite passou. Não testado: a IA gerando uma cena 3D a partir de um pedido real.
+
+**Efeitos das skills de vídeo** (2026-11-09, o usuário mandou 5 skills `effects-*` em Remotion e escolheu "como efeitos do estúdio, mas também gosto da ideia de skills para vídeos dentro da plataforma, depois será útil"). Especificações guardadas em `docs/agentes/skills-video/`.
+- **Quatro efeitos novos** no estilo "Efeitos com recorte" (`EFFECTS` em `types.ts`, `engine.ts`):
+  - `carrossel`: duas fileiras infinitas de cartões 9:16 atrás da pessoa, em sentidos opostos e com as bordas sumindo.
+  - `orbita-cartoes`: cartões girando em órbita inclinada. Os de trás passam atrás e desfocados; os da frente passam sobre o tronco.
+  - `tela-dividida`: a animação do momento (os padrões do roteiro) em cima, a pessoa embaixo e a legenda na emenda.
+  - `grafico`: papel quadriculado da marca e a pessoa num painel com topo em arco embaixo. Em cima, barras quando os itens trazem número escrito ("Instagram 42%"), número que conta, lista ou título; nunca inventa número.
+- **Cartões:** as fotos do vídeo (`envData` agora passa `photos` ao motor). Com menos de 4, completa com cartões da marca (ícone e palavra de destaque de cada momento).
+- **Sem o recorte** (navegador sem GPU nem CPU para o MediaPipe): o carrossel vira uma fileira na faixa de baixo e a órbita mostra só a metade da frente, no tronco. O rosto nunca fica coberto.
+- **Legenda:** cada efeito diz a altura dela (`env.state.capY`): emenda na tela dividida, embaixo no gráfico, 80% nos outros.
+- **IA do roteiro:** no estilo com recorte, `writeScript` manda `EFFECT_RULES` (`prompts.ts`) e a IA escolhe o `effect` de cada momento pelo que a fala diz; `beatFrom` guarda o campo. Sem a IA, continua a ordem automática `EFFECT_ORDER` (não mudou, para não alterar vídeos já feitos).
+- **Testado:** `scripts/tests/efeitos-skills.test.mjs` (barras só com números escritos, legenda na emenda, nada sobre o rosto sem recorte); harness `.space/_harness/efeitos/` (fora do git) em Chrome headless com GPU, com a gravação do harness de recorte e prints dos cases da Avence como fotos: os 4 efeitos conferidos nos quadros. Não testado: a IA escolhendo os efeitos num roteiro real e a exportação de MP4 pelo estúdio.
