@@ -461,5 +461,7 @@ export interface CodeScene {
   /** A capa do vídeo (Storage, pasta `capas/` do conjunto) e de quando ela é (o `updatedAt` da cena na hora). */
   cover?: string
   coverAt?: number
+  /** A legenda do reels (o diálogo Publicar guarda a última escrita). */
+  caption?: string
   updatedAt: number
 }

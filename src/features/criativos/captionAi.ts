@@ -106,7 +106,11 @@ export interface CaptionResult {
   angle?: string
 }
 
-export async function writeCaption(set: CreativeSet, post: Post, signal?: AbortSignal): Promise<CaptionResult> {
+/** Um vídeo do estúdio (sem slides): o nome e o que a narração fala, parte a parte. */
+export interface VideoCaptionSource { id: string; name: string; texts: string }
+
+export async function writeCaption(set: CreativeSet, post: Post | VideoCaptionSource, signal?: AbortSignal): Promise<CaptionResult> {
+  const video = 'texts' in post
   const used: string[] = []
   const missing: string[] = []
   const team = useCrm.getState().team ?? (await crmContext().catch(() => undefined))?.team
@@ -149,7 +153,7 @@ export async function writeCaption(set: CreativeSet, post: Post, signal?: AbortS
   if (readSite) used.push('site')
   if (!plan && !website && !voice) missing.push('site da empresa no cadastro da conta')
 
-  const texts = postTexts(post)
+  const texts = video ? post.texts : postTexts(post)
   if (!texts && !set.brief && !source) throw new Error('O post não tem texto para a IA partir. Escreva a legenda à mão.')
 
   const prompt = [
@@ -161,7 +165,7 @@ export async function writeCaption(set: CreativeSet, post: Post, signal?: AbortS
     set.brief ? `## Briefing do conjunto\n${clip(set.brief, 2000)}` : '',
     ig.text ? `## O Instagram da empresa\n${ig.text}` : '',
     siblings ? `## Legendas de outros posts deste conjunto (não repita)\n${siblings}` : '',
-    `## O post\nNome: ${post.name}\nSlides: ${post.slides.length}\n\n${texts || '(sem texto nas telas)'}`,
+    video ? `## O vídeo (reels)\nNome: ${post.name}\nA narração, parte a parte (a legenda complementa, não repete):\n${texts}` : `## O post\nNome: ${post.name}\nSlides: ${post.slides.length}\n\n${texts || '(sem texto nas telas)'}`,
   ]
     .filter(Boolean)
     .join('\n\n')

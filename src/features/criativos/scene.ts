@@ -25,7 +25,8 @@ scene({
 - ctx é um CanvasRenderingContext2D de env.width × env.height (1080×1920 no 9:16). O quadro começa transparente: pinte o fundo inteiro.
 - draw precisa ser uma função pura de t: o mesmo t sempre gera o mesmo quadro (a prévia pula para qualquer ponto). Não guarde nada entre quadros. Math.random é semeado por quadro; para valores estáveis use lib.rand(n).
 - env.data (vídeo narrado, quando houver): { parts: [{ label, text, start, end }] (cada parte da narração e o segundo em que ela começa e termina), words: [{ w, s, e }] (cada palavra falada, início e fim em segundos) }. Sincronize as cenas com parts[i].start: a animação de cada parte entra quando a voz começa a falar dela. Use sempre um valor de reserva (ex.: env.data?.parts?.[1]?.start ?? 6) para a cena rodar sem dados.
-- env.data.params: os valores dos campos editáveis da cena (texto da tela, cores, efeitos), pela chave de cada campo. Leia sempre com reserva: const P = env.data?.params || {}; P.titulo1 ?? 'TEXTO'. A legenda da fala é do motor (desenhada por cima quando ligada): não a desenhe.
+- env.data.params: os valores dos campos editáveis da cena (texto da tela, cores, efeitos), pela chave de cada campo. Leia sempre com reserva: const P = env.data?.params || {}; P.titulo1 ?? 'TEXTO'. A legenda da fala é do motor (desenhada por cima quando ligada): não desenhe legenda, frase de rodapé nem a fala na tela.
+- env.images.logo (o logo da marca para fundo claro) e env.images.logo_escuro (para fundo escuro), quando a marca tem logo: onde a marca aparece, desenhe o logo de verdade com lib.image(..., 'contain'), nunca o nome escrito no lugar; só sem imagem use o nome em texto.
 - env: width, height, duration, fps, bpm, beats (segundos das batidas da trilha, pode ser vazio), beat(t) → {index, at, phase, step}, images (objeto nome → imagem pronta para ctx.drawImage, com width e height), brand ({name, colors: [hex], font}), state (o que setup devolveu), lib.
 - lib (use à vontade):
   clamp(v, a=0, b=1), lerp(a, b, t), ease.{linear,inQuad,outQuad,inOutQuad,inCubic,outCubic,inOutCubic,outQuart,inOutQuart,inExpo,outExpo,inOutExpo,inBack,outBack,outElastic,outBounce},
@@ -37,11 +38,25 @@ scene({
   letters(ctx, str, x, y, p, {...opts de text, mode: 'pop' | 'write', span}) texto entrando letra a letra conforme p (0..1),
   image(ctx, img, cx, cy, w, h, 'contain' | 'cover'), path(ctx, [[x, y], ...], p, {color, width, dash}) linha desenhada até a fração p,
   blurFrame(ctx, t, amostras, segundos, (ctx, t) => desenhaTudo(ctx, t)) motion blur do quadro inteiro (média de amostras; 4 amostras e 1/30 s bastam).
+- lib.d3: motor 3D pronto (perspectiva, luz, sombras, profundidade, ícones). Para vídeos 3D (cidade tecnológica, mini componente, ecossistema conectado), use-o em vez de escrever projeção à mão. Padrão:
+  const CAM = [[0, { at: [0, 0.5, 0], yaw: -40, pitch: 70, dist: 24, fov: 50 }], [parts[1].start, { at: [-3, 1.6, -2], yaw: -128, pitch: 17, dist: 9 }], ...]  // um ângulo por parte; campos omitidos repetem o anterior; yaw/pitch em graus; yaw contínuo (-40 → -128 → -210…, sem voltar a 0) para a câmera girar sempre para o mesmo lado
+  lib.d3.run(ctx, t, env, CAM, (c, time) => { const w = lib.d3.world(c, time, env, { camera: CAM, background: '#070912', accent: '#2B3CF0' }); ...; w.render() })  // run aplica rastro de velocidade só quando a câmera anda rápido; desenhe SEMPRE em c e com time
+  Mundo (unidades: a placa tem 11,2 de lado, centro em 0,0; y para cima; chão em y=0):
+  w.plate({ size, open (0..1), layers: [{ kind: 'texto'|'grade'|'botao'|'vazio', lit (0..1), at (segundo em que acende) }] }) a placa do mini componente com trilhas de circuito; open abre as camadas de baixo em escada ("o que sustenta").
+  w.city({ seed, rise (segundo em que sobe), avoid: [[x, z, raio]], roads: [[ax, az, bx, bz]] }) quarteirões baixos preenchendo a placa. w.road([x, z], [x, z], largura).
+  w.node({ x, z, h, shape: 'nucleo'|'torre'|'recuo'|'estudio'|'largo'|'cilindro'|'caixa', icon, grow (0..1 sobe), pop (0..1 plaquinha), focus (0..1 destaque), band (cor), tileW, tileScale, lift }) → { top, tile, screen }: prédio com plaquinha de ícone em cima. 'nucleo' é o centro (use icon 'logo'); 'largo' devolve screen (fachada) para w.panel.
+  Ícones (icon; a lista fica em lib.d3.icons): anuncio, instagram, site, atendimento, whatsapp, criativo, loja, agenda, email, busca, grafico, video, pagamento, logo, logo_escuro; e msg_in, msg_out, digitando (balões de conversa). Também aceita uma imagem de env.images.
+  w.link(a, b, { grow, focus, dim, flash, pulses }) → { at(s) }: arco de luz com pulsos entre dois pontos (use node.top). w.comet(link, p) pulso grande com rastro na fração p.
+  w.tile({ at: [x, y, z], icon, w, scale, halo, haloColor, sway }) plaquinha solta virada para a câmera. w.panel({ id, corners, draw(g, largura, altura) }) tela viva; lib.d3.browser(g, largura, altura, p, cor, time) pinta um site montando (p 0..1: página, depois estrelas e selo).
+  w.people({ from: [x, z], to: [x, z], count, alpha }), w.ripple({ at, phase (0..1), r0, r1, ground }), w.floaters({ at, kind: 'coracao'|'estrela', alpha }), w.glow(p, raio, cor, alfa), w.line(pontos, cor, largura, alfa), w.sprite(p, (g, x, y, escala) => {...}) desenho 2D livre na ordem de profundidade. w.cam (right, yaw…) para posicionar coisas ao lado do que a câmera vê.
+  lib.d3.wordAt(env, 'palavra', aPartirDe, reserva) → segundo em que a palavra é falada (acende cada coisa na palavra certa).
+  No 3D: ponha a parte da narração em foco com a câmera (perto, 6 a 10 de distância) e abra o plano (17 a 25) nas transições e no fecho; cada nó com prédio + ícone + conexões; nada de texto na tela se o pedido não pedir.
 - env.post (quando a cena nasce de um criativo; senão null): { name, width, height, slides: [{ index, background (cor), start, dur (o tempo de cada slide no vídeo que o post já tinha), camera, layers: [peça] }] }.
   Cada peça é uma camada do criativo pronta para desenhar, idêntica ao editor (fonte, destaque, foto, moldura): { id, name, type ('text'|'image'|'rect'|'ring'|'dots'), x, y, w, h, cx, cy (centro), background (cobre o slide), order (ordem de leitura, -1 no fundo), text, font, weight, size, color, align, italic, upper, fill, motion (a animação que já tinha: fx, start, dur, exit, loop, keys) }.
   lib.layer(ctx, peça, { x, y (deslocamento a partir do lugar dela), scale, sx, sy, rotate (rad), alpha, blur (px), reveal (0..1), from ('left'|'right'|'up'|'down', de onde a revelação vem) }) desenha a peça no lugar dela com essas transformações em volta do centro. Para texto cinético (letra a letra, palavra a palavra) use lib.letters/lib.text com peça.text, peça.font, peça.size, peça.color e a caixa dela, em vez da peça.
   Quando há env.post, a cena é ESTE criativo elevado: use todas as peças (nenhum texto, foto ou logo some, nada inventado), mantenha a ordem dos slides e a hierarquia, e trabalhe o movimento: entradas coreografadas, transições contínuas entre slides, câmera, profundidade, impactos na batida.
-Linguagem publicitária: cortes e impactos na batida, entradas com outExpo/outBack, saídas com inExpo, rastro de velocidade (blurFrame) nos movimentos rápidos, squash and stretch no pouso (sx/sy), tremida no impacto, transições que empurram a cena (a próxima entra enquanto a outra sai), máscaras circulares que abrem, títulos gigantes que atravessam a tela. Nada parado mais de 1 s.`
+Fluidez (obrigatório): todo movimento de câmera e de destaque é uma curva contínua com aceleração e desaceleração (lib.tween/lib.prog com inOutCubic ou outExpo, ou uma interpolação entre o alvo anterior e o novo); nunca média de amostras passadas, nunca valor que muda em degraus, nunca Math.sin/cos de frequência alta (acima de ~6) para tremer: a 30 fps isso vira micro-tremida. Câmera que respira = seno lento (0,3 a 1 por segundo) e pequeno.
+Linguagem publicitária: cortes e impactos na batida, entradas com outExpo/outBack, saídas com inExpo, rastro de velocidade (blurFrame) nos movimentos rápidos, squash and stretch no pouso (sx/sy), transições que empurram a cena (a próxima entra enquanto a outra sai), máscaras circulares que abrem, títulos gigantes que atravessam a tela. Nada parado mais de 1 s.`
 
 export interface SceneInput {
   code: string
@@ -160,8 +175,13 @@ export class SceneRunner {
 }
 
 /** As imagens que a cena usa, prontas para o worker. */
-export async function sceneBitmaps(scene: CodeScene, images: Map<string, CanvasImageSource & { width: number; height: number }>): Promise<Record<string, ImageBitmap>> {
+export async function sceneBitmaps(scene: CodeScene, images: Map<string, CanvasImageSource & { width: number; height: number }>, brand?: { logoOnLight?: string; logoOnDark?: string }): Promise<Record<string, ImageBitmap>> {
   const out: Record<string, ImageBitmap> = {}
+  // O logo de verdade da marca, sempre à mão (a cena escrevia o nome no lugar dele)
+  for (const [name, src] of [['logo', brand?.logoOnLight ?? brand?.logoOnDark], ['logo_escuro', brand?.logoOnDark ?? brand?.logoOnLight]] as const) {
+    const img = src ? images.get(src) : undefined
+    if (img && !(img instanceof HTMLVideoElement)) out[name] = await createImageBitmap(img as ImageBitmapSource)
+  }
   for (const { src, name } of scene.images) {
     const img = images.get(src)
     if (img && !(img instanceof HTMLVideoElement)) out[name] = await createImageBitmap(img as ImageBitmapSource)

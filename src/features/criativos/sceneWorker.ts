@@ -7,6 +7,8 @@
  * OffscreenCanvas e volta como ImageBitmap.
  */
 
+import { SCENE3D_SOURCE } from './scene3d'
+
 export const SCENE_WORKER_SOURCE = String.raw`
 'use strict'
 const netFetch = self.fetch.bind(self)
@@ -317,7 +319,9 @@ function drawCaptions(ctx, t) {
   ctx.restore()
 }
 
-const lib = { layer, clamp, lerp, ease, prog, tween, keys, pulse, rand, noise, shake, mix, roundRect, circle, star, at, text, measure, fit, letters, image, path, blurFrame, PI }
+// O motor 3D das cenas (scene3d.ts): lib.d3
+${SCENE3D_SOURCE}
+const lib = { layer, clamp, lerp, ease, prog, tween, keys, pulse, rand, noise, shake, mix, roundRect, circle, star, at, text, measure, fit, letters, image, path, blurFrame, PI, d3 }
 
 self.onmessage = async (ev) => {
   const m = ev.data

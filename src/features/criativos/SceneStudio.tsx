@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, Code2, Download, Film, ImagePlus, Music, Pause, Play, Plus, SkipBack, Sparkles, Trash2, Wand2 } from 'lucide-react'
+import { ArrowLeft, Code2, Download, Film, ImagePlus, Music, Pause, Play, Plus, Send, SkipBack, Sparkles, Trash2, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useEditor } from './store'
@@ -12,6 +12,9 @@ import { drawSlide, type ImageMap } from './render'
 import { referenceFrames, writeSceneCode } from './sceneAi'
 import { useAiAvailable } from './link'
 import { SceneEditPanel } from './SceneEditor'
+import { useVideoIara } from './videoIara'
+import { ScenePublish } from './ScenePublish'
+import { useIara } from '@/features/iara/store'
 import { sceneDataOf } from './sceneEdit'
 import { detectBeats, gridBeats } from './beats'
 import { audioOfSrc, videoSupported } from './video'
@@ -42,6 +45,14 @@ const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => <p clas
 const editScene = (id: string, fn: (s: CodeScene) => CodeScene) =>
   useEditor.getState().edit((set: CreativeSet) => ({ ...set, scenes: (set.scenes ?? []).map((s) => (s.id === id ? { ...fn(s), updatedAt: Date.now() } : s)) }))
 
+/** Abre a Iara com um pedido sobre o vídeo aberto (ela recebe a tela e as ações de vídeo). */
+const askIara = (text: string) => {
+  useIara.setState({ open: true })
+  const draft = text ? `Neste vídeo: ${text}` : 'Neste vídeo, '
+  // O chat pode estar montando agora: manda de novo logo depois
+  for (const ms of [0, 300]) setTimeout(() => window.dispatchEvent(new CustomEvent('iara:draft', { detail: draft })), ms)
+}
+
 const brandOf = (set: CreativeSet) => ({ name: set.brand.name, colors: set.brand.colors.map((c) => c.hex), font: set.brand.headingFont })
 
 /**
@@ -55,6 +66,11 @@ export const SceneStudio: React.FC = () => {
   const status = useEditor((s) => s.status)
   const set = useEditor((s) => s.set)
   const images = useEditor((s) => s.images)
+  // O logo da marca entra em toda cena (env.images.logo): carrega junto
+  const logos = `${set?.brand.logoOnLight ?? ''}|${set?.brand.logoOnDark ?? ''}`
+  useEffect(() => {
+    for (const src of logos.split('|')) if (src) void useEditor.getState().ensureImage(src)
+  }, [logos])
   const saving = useEditor((s) => s.saving)
   // Esta parte desenha as animações; os vídeos de roteiro e voz abrem no painel deles (o estúdio único escolhe)
   const scenes = (set?.scenes ?? []).filter((s) => !s.explainer)
@@ -69,6 +85,9 @@ export const SceneStudio: React.FC = () => {
   const [playing, setPlaying] = useState(false)
   const [error, setError] = useState<SceneError | null>(null)
   const [progress, setProgress] = useState<number | null>(null)
+  const [publishing, setPublishing] = useState(false)
+  // A Iara sabe o vídeo aberto e age nele (ações de vídeo em videoIara.ts)
+  useVideoIara(status === 'ready' ? set : null, scene, error?.message)
 
   // As imagens da cena entram no mapa do editor (as das camadas já entram sozinhas)
   const sceneImageKey = scene?.images.map((i) => i.src).join('|') ?? ''
@@ -130,7 +149,9 @@ export const SceneStudio: React.FC = () => {
     if (!el || !scene?.audio) return
     el.volume = scene.audio.volume
     const want = scene.audio.offset + time
-    if (playing) {
+    // Depois do fim da trilha (a cena dura mais que a voz): fica parada. Pular e tocar a cada quadro dava estalos
+    const ends = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : Infinity
+    if (playing && want < ends - 0.05) {
       if (Math.abs(el.currentTime - want) > 0.25) el.currentTime = want
       if (el.paused) void el.play().catch(() => undefined)
     } else if (!el.paused) el.pause()
@@ -157,13 +178,22 @@ export const SceneStudio: React.FC = () => {
       </div>
     )
 
+  // O que a cena recebe para desenhar fora da prévia (MP4, capa do reels)
+  const sceneInput = async () => {
+    const s = useEditor.getState().set?.scenes?.find((x) => x.id === scene!.id) ?? scene!
+    return { images: await sceneBitmaps(s, useEditor.getState().images, set.brand), beats: s.beats, bpm: s.bpm, brand: brandOf(set), data: s.data, ...(await sourceInput(s, sourcePost, useEditor.getState().images)) }
+  }
+  const renderMp4 = async (onProgress: (p: number) => void) => {
+    const s = useEditor.getState().set?.scenes?.find((x) => x.id === scene!.id) ?? scene!
+    const audio = s.audio ? await audioOfSrc(s.audio.src, set.assets) : undefined
+    return sceneToMp4(s, await sceneInput(), { audio: audio && s.audio ? { data: audio, cfg: s.audio } : undefined, onProgress })
+  }
   const exportVideo = async () => {
     if (!scene) return
     setPlaying(false)
     setProgress(0)
     try {
-      const audio = scene.audio ? await audioOfSrc(scene.audio.src, set.assets) : undefined
-      const blob = await sceneToMp4(scene, { images: await sceneBitmaps(scene, images), beats: scene.beats, bpm: scene.bpm, brand: brandOf(set), data: scene.data, ...(await sourceInput(scene, sourcePost, images)) }, { audio: audio && scene.audio ? { data: audio, cfg: scene.audio } : undefined, onProgress: setProgress })
+      const blob = await renderMp4(setProgress)
       const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${scene.name.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase() || 'cena'}.mp4` })
       a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
@@ -195,6 +225,11 @@ export const SceneStudio: React.FC = () => {
           {scene && (
             <Button size="sm" className="h-8 gap-1.5" disabled={!videoSupported() || progress !== null || !!error} onClick={() => void exportVideo()} title={videoSupported() ? undefined : 'Use o Chrome ou o Edge atualizados'}>
               <Download className="h-4 w-4" /> {progress !== null ? `Gerando… ${Math.round(progress * 100)}%` : 'Baixar MP4'}
+            </Button>
+          )}
+          {scene && (
+            <Button size="sm" className="h-8 gap-1.5 bg-violet-600 hover:bg-violet-700" disabled={!!error} onClick={() => { setPlaying(false); setPublishing(true) }}>
+              <Send className="h-4 w-4" /> Publicar reels
             </Button>
           )}
         </div>
@@ -235,6 +270,7 @@ export const SceneStudio: React.FC = () => {
           </aside>
         </div>
       )}
+      {scene && publishing && <ScenePublish key={scene.id} set={set} scene={scene} open={publishing} onClose={() => setPublishing(false)} render={renderMp4} input={sceneInput} />}
     </div>
   )
 }
@@ -270,7 +306,7 @@ const Stage: React.FC<{ scene: CodeScene; set: CreativeSet; post?: Post; images:
     let r: SceneRunner | null = null
     const timer = setTimeout(async () => {
       try {
-        r = new SceneRunner({ code: scene.code, width, height, duration: scene.duration, images: await sceneBitmaps(scene, images), beats: scene.beats, bpm: scene.bpm, brand, data: scene.data, ...(await sourceInput(scene, post, images)) })
+        r = new SceneRunner({ code: scene.code, width, height, duration: scene.duration, images: await sceneBitmaps(scene, images, set.brand), beats: scene.beats, bpm: scene.bpm, brand, data: scene.data, ...(await sourceInput(scene, post, images)) })
         await r.load()
         if (!alive) return r.dispose()
         onError(null)
@@ -408,6 +444,19 @@ const ScenePanel: React.FC<{ set: CreativeSet; scene: CodeScene; post?: Post; im
         <SceneEditPanel set={set} scene={scene} edit={(fn) => editScene(scene.id, fn)} />
       ) : (<>
       {scene.source && post && <SourceSlides scene={scene} post={post} images={images} onNew={onNewFromCreative} />}
+      {!scene.source && (
+        <section>
+          <Label>Pedir à Iara</Label>
+          <p className="text-xs leading-snug text-gray-600">Peça mudanças no chat da Iara: ela vê este vídeo (partes, campos, legenda), troca texto, cor e efeito na hora, reescreve a animação ou narra de novo, e confere os quadros antes de responder.</p>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {['Tire a frase fixa do rodapé', 'Use o nosso logo de verdade', 'Mais movimento na abertura', 'Ligue a legenda karaokê'].map((t) => (
+              <button key={t} type="button" className="h-7 rounded-full border border-gray-200 bg-white px-2.5 text-[11px] text-gray-700 hover:border-gray-300" onClick={() => askIara(t)}>{t}</button>
+            ))}
+          </div>
+          <Button type="button" size="sm" className="mt-2 w-full gap-1.5" onClick={() => askIara('')}><Sparkles className="h-3.5 w-3.5" /> Abrir a Iara neste vídeo</Button>
+        </section>
+      )}
+      {scene.source && (<>
       <section className={cn(scene.source && post && 'border-t border-gray-100 pt-4')}>
         <Label>Prompt avançado</Label>
         <PromptChips onPick={(t) => setRequest((r) => (r.trim() ? `${r.trim()}\n${t}` : t))} />
@@ -429,6 +478,7 @@ const ScenePanel: React.FC<{ set: CreativeSet; scene: CodeScene; post?: Post; im
         {reply && <p className="mt-2 rounded-md bg-violet-50 p-2 text-xs leading-snug text-violet-900">{reply}</p>}
         <p className="mt-1.5 text-[11px] leading-snug text-gray-500">{scene.source ? 'A IA vê cada slide e recebe todas as camadas do criativo (textos, fotos, a animação de antes); ' : ''}A referência serve para o estilo e o ritmo; a cena sai na marca deste conjunto. Leva de 1 a 4 minutos.</p>
       </section>
+      </>)}
 
       <section className="border-t border-gray-100 pt-4">
         <Label>Cena</Label>

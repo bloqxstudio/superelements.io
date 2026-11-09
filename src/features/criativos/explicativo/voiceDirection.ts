@@ -59,7 +59,7 @@ export interface VoiceAI {
 
 export function directionFor(v: VoiceAI, brand?: string): string {
   const t = TONE_PARTS[v.tone] ?? TONE_PARTS.reels
-  const pace = v.speed >= 1.12 ? ' Fale um pouco mais rápido que o normal.' : v.speed <= 0.93 ? ' Fale um pouco mais devagar que o normal.' : ''
+  const pace = v.speed >= 1.25 ? ' Fale RÁPIDO, com energia de Reels: ritmo acelerado, frases emendadas, pausas bem curtas (nada de respiro longo entre as frases).' : v.speed >= 1.12 ? ' Fale um pouco mais rápido que o normal.' : v.speed <= 0.93 ? ' Fale um pouco mais devagar que o normal.' : ''
   return [
     `Identidade: ${t.who}${brand ? `, falando pela marca ${brand}` : ''}.`,
     `Afeto: ${t.affect}.`,
