@@ -3,7 +3,7 @@
  * pesquisa), sem dependências do app: usados por `roteiro.ts` e `pesquisa.ts`, e por testes no Node.
  */
 import { ICON_NAMES } from './icons'
-import { PATTERNS, SFX, TRANSITIONS } from './types'
+import { EFFECTS, PATTERNS, SFX, TRANSITIONS } from './types'
 
 export const PATTERN_LIST = () => Object.entries(PATTERNS).map(([id, p]) => `${id} (${p.hint})`).join('; ')
 export const TEXT_RULES = [
@@ -48,4 +48,16 @@ export const RESEARCH_SYSTEM = [
   'A marca que publica o vídeo é a da conta (abaixo), não a do tema: ela aparece como quem conta a curiosidade, no fecho e na chamada, nunca como fabricante ou parceira oficial de outra marca. Não use logos nem slogans de outras empresas; nomes de produtos podem ser citados como fato.',
   'O briefing é para um vídeo de 25 a 40 segundos em português do Brasil: gancho nos 2 primeiros segundos (uma pergunta ou afirmação que cria curiosidade), a revelação em 3 a 5 passos com os fatos, um "e tem mais" no meio para segurar, e um fecho que ligue a curiosidade à marca da conta com uma chamada leve (salvar, seguir, comentar uma palavra).',
   'Responda pelo esquema: `reply` com 1 frase; `items` com {"ref": "pesquisa", "text": JSON} onde JSON = {"titulo": "...", "gancho": "...", "angulo": "para quem e por que prende", "fatos": [{"texto": "...", "fonte": "https://..."}], "briefing": "o briefing completo do vídeo, usando só os fatos acima"}.',
+].join('\n')
+
+/**
+ * Estilo "Efeitos com recorte": a IA escolhe o efeito de cada momento (campo effect) pelo que a fala diz
+ * (2026-11-09, os efeitos das skills de vídeo: carrossel, órbita de cartões, tela dividida e gráfico).
+ */
+export const EFFECT_RULES = (hasPhotos: boolean) => [
+  '## Efeitos (campo effect em cada momento)',
+  `A pessoa fica em tela cheia e cada momento tem um efeito: ${Object.entries(EFFECTS).map(([id, e]) => `${id} (${e.hint})`).join('; ')}.`,
+  'Escolha pelo que está sendo dito: gancho e frases fortes → texto-fundo; a palavra que resume tudo → orbita ou foco; quantidade, volume, "todo dia" → parede; "eu, você, todo mundo" → clones; processo, passos ou ideia que pede ilustração → tela-dividida (com items ou icon); números comparados ditos na fala → grafico com items no formato "Rótulo 42%" (só números falados; sem número, grafico vira título ou lista);',
+  hasPhotos ? 'trabalhos, portfólio, resultados, "meus clientes", "olha isso" → carrossel ou orbita-cartoes (usam as fotos do vídeo).' : 'carrossel e orbita-cartoes só com fotos no material (sem fotos, viram cartões da marca): use no máximo uma vez.',
+  'Não repita o mesmo efeito em dois momentos seguidos; abra com texto-fundo.',
 ].join('\n')

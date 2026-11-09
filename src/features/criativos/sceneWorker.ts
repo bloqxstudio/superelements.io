@@ -371,12 +371,15 @@ self.onmessage = async (ev) => {
       seedState = (Math.floor(m.t * 1000) + 1) >>> 0
       env.video = m.video || null
       env.broll = m.broll || null
+      env.mask = m.mask || null
       def.draw(ctx, m.t, env)
       drawCaptions(ctx, m.t)
       if (m.video) { try { m.video.close() } catch (e) {} }
       if (m.broll) { try { m.broll.close() } catch (e) {} }
+      if (m.mask) { try { m.mask.close() } catch (e) {} }
       env.video = null
       env.broll = null
+      env.mask = null
       const bitmap = canvas.transferToImageBitmap()
       self.postMessage({ type: 'frame', id: m.id, bitmap }, [bitmap])
     } catch (err) {

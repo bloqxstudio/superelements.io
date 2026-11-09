@@ -569,26 +569,458 @@ function captions(ctx, t, y, S, u, W, over) {
   })
 }
 
-function drawVideo(ctx, x, y, w, h, t) {
+/** Onde e em que escala o vídeo da pessoa entra na caixa (o mesmo para o quadro e para a máscara do recorte). */
+function videoXf(x, y, w, h, t) {
   const v = env.video
-  if (!v) {
-    ctx.fillStyle = '#1b1b1f'; ctx.fillRect(x, y, w, h)
-    lib.text(ctx, 'você aqui', x + w / 2, y + h / 2, { font: BODY(), size: 40, weight: 600, color: 'rgba(255,255,255,0.4)' })
-    return
-  }
   const beats = env.data.beats
   const i = current(t)
   // Zoom de corte nos momentos ímpares (o "punch in" dos vídeos falados)
   const punch = beats.length && i % 2 === 1 ? 1.1 : 1
   const kick = beats.length ? lib.pulse(t - beats[i].start, 0, 0.2) * 0.02 : 0
   const k = Math.max(w / v.width, h / v.height) * (punch + kick)
-  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip()
   const positionY = Math.max(0, Math.min(1, env.data.videoPositionY ?? 0.5))
   const cropOffset = (0.5 - positionY) * Math.max(0, v.height * k - h)
-  ctx.translate(x + w / 2, y + h / 2 + cropOffset + (env.data.videoPositionY == null && punch > 1 ? h * 0.03 : 0))
+  return { x, y, w, h, k, vw: v.width, vh: v.height, cx: x + w / 2, cy: y + h / 2 + cropOffset + (env.data.videoPositionY == null && punch > 1 ? h * 0.03 : 0) }
+}
+/** Desenha o quadro (ou a máscara, que tem o mesmo formato em outro tamanho) com a posição de videoXf. */
+function drawSrc(ctx, src, P) {
+  ctx.save(); ctx.beginPath(); ctx.rect(P.x, P.y, P.w, P.h); ctx.clip()
+  ctx.translate(P.cx, P.cy)
   if (env.data.mirror) ctx.scale(-1, 1)
-  ctx.drawImage(v, -v.width * k / 2, -v.height * k / 2, v.width * k, v.height * k)
+  ctx.drawImage(src, -P.vw * P.k / 2, -P.vh * P.k / 2, P.vw * P.k, P.vh * P.k)
   ctx.restore()
+}
+function drawVideo(ctx, x, y, w, h, t) {
+  if (!env.video) {
+    ctx.fillStyle = '#1b1b1f'; ctx.fillRect(x, y, w, h)
+    lib.text(ctx, 'você aqui', x + w / 2, y + h / 2, { font: BODY(), size: 40, weight: 600, color: 'rgba(255,255,255,0.4)' })
+    return
+  }
+  drawSrc(ctx, env.video, videoXf(x, y, w, h, t))
+}
+
+// ——— Efeitos com recorte (2026-11-09; o reel "20 video effects in 20 seconds") ———
+// env.mask é o recorte da pessoa no quadro (recorte.ts): alfa = pessoa. Cada quadro sai em camadas:
+// o fundo (o próprio vídeo, escurecido ou desfocado), o efeito, a pessoa recortada e o que vai na frente.
+
+/** A pessoa recortada, numa tela do tamanho do vídeo (borda levemente suavizada). */
+function personLayer(P) {
+  if (!env.mask || !env.video) return null
+  const st = env.state
+  if (!st.person || st.person.width !== env.width || st.person.height !== env.height) { st.person = new OffscreenCanvas(env.width, env.height); st.pctx = st.person.getContext('2d') }
+  const c = st.pctx
+  c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'source-over'; c.filter = 'none'
+  c.clearRect(0, 0, env.width, env.height)
+  drawSrc(c, env.video, P)
+  c.globalCompositeOperation = 'destination-in'
+  c.filter = 'blur(' + Math.max(1, Math.round(env.width / 720)) + 'px)'
+  drawSrc(c, env.mask, P)
+  // As bordas do quadro somem em degradê: com a pessoa diminuída, o corte do vídeo viraria uma linha reta
+  c.filter = 'none'
+  const W = env.width, H = env.height, e = W * 0.16
+  const gx = c.createLinearGradient(0, 0, W, 0)
+  gx.addColorStop(0, 'rgba(0,0,0,0)'); gx.addColorStop(e / W, '#000'); gx.addColorStop(1 - e / W, '#000'); gx.addColorStop(1, 'rgba(0,0,0,0)')
+  c.fillStyle = gx; c.fillRect(0, 0, W, H)
+  const gy = c.createLinearGradient(0, 0, 0, H * 0.1)
+  gy.addColorStop(0, 'rgba(0,0,0,0)'); gy.addColorStop(1, '#000')
+  // destination-in apaga o que fica fora do que se pinta: o degradê cobre a tela toda (abaixo do topo é preto)
+  c.fillStyle = gy; c.fillRect(0, 0, W, H)
+  c.globalCompositeOperation = 'source-over'
+  return st.person
+}
+
+/** A cabeça, achada na máscara em miniatura: o topo, o centro e a largura (suavizados entre quadros). */
+function headOf(person) {
+  const W = env.width, H = env.height, st = env.state
+  const fallback = { top: H * 0.3, cx: W / 2, w: W * 0.28, cy: H * 0.36 }
+  if (!person) return st.head || fallback
+  const qw = 54, qh = 96
+  if (!st.probe) { st.probe = new OffscreenCanvas(qw, qh); st.qctx = st.probe.getContext('2d', { willReadFrequently: true }) }
+  const q = st.qctx
+  q.clearRect(0, 0, qw, qh); q.drawImage(person, 0, 0, qw, qh)
+  const a = q.getImageData(0, 0, qw, qh).data
+  let top = -1
+  for (let y = 0; y < qh && top < 0; y++) { let n = 0; for (let x = 0; x < qw; x++) if (a[(y * qw + x) * 4 + 3] > 128) n++; if (n >= 2) top = y }
+  if (top < 0) return st.head || fallback
+  let sx = 0, n = 0, minX = qw, maxX = 0
+  for (let y = top; y < Math.min(qh, top + 9); y++) for (let x = 0; x < qw; x++) if (a[(y * qw + x) * 4 + 3] > 128) { sx += x; n++; if (x < minX) minX = x; if (x > maxX) maxX = x }
+  const w = Math.max(W * 0.14, (maxX - minX + 1) * (W / qw))
+  const now = { top: top * (H / qh), cx: (sx / n + 0.5) * (W / qw), w, cy: top * (H / qh) + w * 0.62 }
+  const prev = st.head
+  st.head = prev ? { top: lib.lerp(prev.top, now.top, 0.45), cx: lib.lerp(prev.cx, now.cx, 0.45), w: lib.lerp(prev.w, now.w, 0.45), cy: lib.lerp(prev.cy, now.cy, 0.45) } : now
+  return st.head
+}
+
+const FX_ORDER = ['texto-fundo', 'orbita', 'texto-fundo', 'parede', 'clones', 'texto-fundo', 'foco']
+const hash = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x) }
+/** A palavra de destaque do momento (o *destaque*, o highlight ou a mais longa). */
+function keyWord(b) {
+  return ((b.highlight && b.highlight[0]) || ((b.headline || '').match(/\*([^*]+)\*/) || [])[1] || tokens(b, b.headline).map((x) => x.text).sort((a, z) => z.length - a.length)[0] || '').replace(/[.,!?;:]+$/, '')
+}
+/** Some no fim do momento (os últimos 0,22 s). */
+const outOf = (lt, dur) => 1 - lib.prog(lt, dur - 0.22, dur, 'inCubic')
+
+/**
+ * Texto cinético atrás da pessoa: cada linha (uma ou duas palavras) ocupa a largura e sobe de trás de um
+ * corte esticada na vertical, quando a primeira palavra dela é falada. O destaque sai na cor da marca.
+ */
+function backText(ctx, b, lt, dur, W, H, u, head, only) {
+  const all = only ? [{ text: only, emph: true }] : tokens(b, b.headline).slice(0, 6)
+  if (!all.length) return
+  const lines = []
+  for (const tk of all) { const last = lines[lines.length - 1]; if (last && last.length < 2 && (last[0].text + tk.text).length <= 9) last.push(tk); else lines.push([tk]) }
+  const italic = emphItalic()
+  const fontOf = (tk) => (tk.emph && italic ? { font: EMPH(), weight: 400, italic: true } : { font: HEAD(), weight: 900 })
+  const maxW = W * 0.92
+  const sized = lines.map((ln) => {
+    const strs = ln.map((tk) => tk.text.toUpperCase())
+    const at = 400 * u
+    const width = strs.reduce((s2, str, k) => s2 + lib.measure(ctx, str, { ...fontOf(ln[k]), size: at }), 0) + (ln.length - 1) * at * 0.22
+    const size = Math.min(at * 1.25, at * maxW / width)
+    return { ln, strs, size, width: width * size / at }
+  })
+  const lh = (x) => x.size * 0.86
+  const total = sized.reduce((s2, x) => s2 + lh(x), 0)
+  // A cabeça cobre a parte de baixo do bloco: o texto fica "na parede", atrás dela
+  let y = Math.max(190 * u, Math.min(head.top + head.w * 0.35 - total, H * 0.5 - total))
+  const out = outOf(lt, dur)
+  const times = spokenTimes(b, all, 0.12)
+  let wi = 0
+  const b2 = B()
+  for (const L of sized) {
+    const at = times[wi] || 0
+    wi += L.ln.length
+    const p = lib.prog(lt, at, at + 0.42, 'outExpo')
+    if (p > 0) {
+      const top = y, h = lh(L)
+      // O corte de baixo faz a linha subir de trás dele; em cima sobra espaço para os acentos (Ã, Ó)
+      ctx.save(); ctx.beginPath(); ctx.rect(0, top - h * 0.34, W, h * 1.42); ctx.clip()
+      ctx.globalAlpha = out
+      ctx.translate(W / 2, top + h / 2 + (1 - p) * h * 1.1 - (1 - out) * h * 0.6)
+      ctx.scale(1, 1 + (1 - p) * 0.55)
+      let x = -L.width / 2
+      L.ln.forEach((tk, k) => {
+        const f = fontOf(tk), w = lib.measure(ctx, L.strs[k], { ...f, size: L.size })
+        lib.text(ctx, L.strs[k], x + w / 2, 0, { ...f, size: L.size, color: tk.emph ? b2.accentOnDark : b2.paper })
+        x += w + L.size * 0.22
+      })
+      ctx.restore()
+    }
+    y += lh(L)
+  }
+}
+
+/** A palavra de destaque em anel em volta da cabeça. front: só as letras da frente (depois da pessoa). */
+function orbit(ctx, b, lt, dur, u, head, front) {
+  const word = keyWord(b).toUpperCase()
+  if (!word) return
+  const grow = lib.prog(lt, 0, 0.5, 'outBack'), out = outOf(lt, dur)
+  const rx = Math.max(head.w * 0.95, 230 * u) * (0.6 + 0.4 * grow), ry = rx * 0.26
+  const cx = head.cx, cy = head.top + head.w * 0.42
+  const size = Math.max(46 * u, Math.min(86 * u, rx * 0.2))
+  const chunk = word + ' • '
+  const n = Math.max(chunk.length, Math.round((2 * Math.PI * rx) / (size * 0.78) / chunk.length) * chunk.length)
+  const str = chunk.repeat(Math.ceil(n / chunk.length)).slice(0, n)
+  const tilt = -0.1, spin = lt * 1.5
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(tilt)
+  for (let k = 0; k < n; k++) {
+    // O ângulo diminui com k: na frente do anel (seno positivo) as letras ficam da esquerda para a direita
+    const th = -(k / n) * Math.PI * 2 - spin, sn = Math.sin(th)
+    if ((sn >= 0) !== front) continue
+    const x = Math.cos(th) * rx, y2 = sn * ry
+    const depth = (sn + 1) / 2
+    lib.at(ctx, x, y2, { scale: 0.78 + 0.34 * depth, alpha: (0.55 + 0.45 * depth) * out * lib.clamp(grow * 1.5) }, (c) => {
+      c.scale(0.3 + 0.7 * Math.abs(sn), 1)
+      lib.text(c, str[k], 0, 0, { font: HEAD(), size, weight: 800, color: B().paper, stroke: 'rgba(0,0,0,0.35)', strokeWidth: size * 0.08 })
+    })
+  }
+  ctx.restore()
+}
+
+/** A grade que acende quadrado a quadrado atrás da pessoa, com um contador. */
+function postWall(ctx, b, lt, dur, W, H, u, head) {
+  const b2 = B()
+  const cols = 16, rows = 6, gap = 5 * u
+  const cell = (W * 0.9 - gap * (cols - 1)) / cols
+  const gh = rows * (cell + gap)
+  const x0 = W * 0.05, y0 = Math.max(260 * u, Math.min(head.top + head.w * 0.25 - gh, H * 0.42 - gh))
+  const out = outOf(lt, dur)
+  const colors = [b2.paper, lib.mix(b2.paper, b2.ink, 0.35), b2.accent, lib.mix(b2.accent, b2.paper, 0.45), lib.mix(b2.paper, b2.ink, 0.6)]
+  const span = Math.max(0.6, dur * 0.7)
+  let lit = 0
+  ctx.save(); ctx.globalAlpha = out
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const i = r * cols + c
+    const on = 0.12 + hash(i) * span
+    const p = lib.prog(lt, on, on + 0.18, 'outCubic')
+    const x = x0 + c * (cell + gap), y = y0 + r * (cell + gap)
+    ctx.fillStyle = rgba(b2.paper, 0.07); ctx.fillRect(x, y, cell, cell)
+    if (p > 0) {
+      lit++
+      const sc = 0.6 + 0.4 * lib.ease.outBack(p)
+      ctx.fillStyle = colors[Math.floor(hash(i + 99) * colors.length)]
+      ctx.fillRect(x + cell * (1 - sc) / 2, y + cell * (1 - sc) / 2, cell * sc, cell * sc)
+    }
+  }
+  const nb = b.number
+  const value = nb ? Math.round(nb.value * lib.prog(lt, 0.1, span + 0.2, 'outCubic')) : lit
+  const label = nb ? (nb.prefix || '') + value.toLocaleString('pt-BR') + (nb.suffix || '') : value.toLocaleString('pt-BR')
+  lib.text(ctx, label, x0 + W * 0.9, y0 - 70 * u, { font: HEAD(), size: 120 * u, weight: 800, color: b2.paper, align: 'right' })
+  const kw = keyWord(b)
+  if (kw) lib.text(ctx, kw.toUpperCase(), x0, y0 - 40 * u, { font: BODY(), size: 34 * u, weight: 700, color: b2.accentOnDark, align: 'left', spacing: 6 * u })
+  ctx.restore()
+}
+
+/** Cópias da pessoa em fileira, menores e mais escuras, abrindo do centro para os lados. */
+function clones(ctx, lt, dur, W, H, drawPerson, head) {
+  const out = outOf(lt, dur)
+  for (let k = 3; k >= 1; k--) {
+    const p = lib.prog(lt, 0.05 + k * 0.07, 0.45 + k * 0.07, 'outCubic')
+    if (p <= 0) continue
+    const s = 0.86 - k * 0.13
+    for (const side of [-1, 1]) {
+      ctx.save()
+      ctx.globalAlpha = out * lib.clamp(p * 1.4)
+      ctx.filter = 'brightness(' + (0.72 - k * 0.1) + ')'
+      ctx.translate(head.cx + side * W * 0.21 * k * p, H * 0.97)
+      ctx.scale(s, s)
+      ctx.translate(-head.cx, -H * 0.97)
+      drawPerson(ctx)
+      ctx.restore()
+    }
+  }
+}
+
+/**
+ * O fundo de estúdio na cor da marca: quando a pessoa é diminuída para caber o efeito, o fundo original
+ * (com ela grande) não serve mais.
+ */
+function studio(ctx, W, H, head) {
+  const b = B()
+  ctx.fillStyle = b.ink; ctx.fillRect(0, 0, W, H)
+  const g = ctx.createRadialGradient(head.cx, head.top + head.w * 0.6, 0, head.cx, head.top + head.w * 0.6, H * 0.7)
+  g.addColorStop(0, rgba(b.accent, 0.42)); g.addColorStop(0.45, rgba(b.accent, 0.14)); g.addColorStop(1, rgba(b.accent, 0))
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H)
+}
+
+// ——— Efeitos das skills de vídeo (2026-11-09: effects-carousel, effects-orbit, effects-split, effects-chart) ———
+
+/**
+ * Os cartões do carrossel e da órbita: as fotos do vídeo; com menos de 4, completa com cartões da marca
+ * (o ícone e a palavra de destaque de cada momento), para o efeito nunca sair vazio.
+ */
+function mediaCards() {
+  const st = env.state
+  if (st.cards) return st.cards
+  const d = env.data, b = B(), out = []
+  for (const name of d.photos || []) if (env.images[name]) out.push(env.images[name])
+  const kinds = [[b.accent, lib.mix(b.accent, '#000000', 0.35), b.onAccent], [b.ink, lib.mix(b.ink, b.accent, 0.3), b.paper], [b.paper, lib.mix(b.paper, b.accent, 0.14), b.ink]]
+  for (let i = 0; out.length < 8 && i < Math.max(8, d.beats.length); i++) {
+    if (out.length >= 4 && i >= d.beats.length) break
+    const bt = d.beats[i % Math.max(1, d.beats.length)] || {}
+    const k = kinds[i % 3], c = new OffscreenCanvas(300, 533), g = c.getContext('2d')
+    const gr = g.createLinearGradient(0, 0, 300, 533); gr.addColorStop(0, k[0]); gr.addColorStop(1, k[1]); g.fillStyle = gr; g.fillRect(0, 0, 300, 533)
+    g.fillStyle = rgba(k[2], 0.12); for (let y = 30; y < 533; y += 34) g.fillRect(24, y, 252, 1)
+    const name = iconOf(bt) || ((d.icons || {}).brilho ? 'brilho' : null)
+    if (name) icon(g, name, 150, 210, 120, k[2], 1, 1.4)
+    else { g.fillStyle = rgba(k[2], 0.9); lib.circle(g, 150, 210, 54); g.fill() }
+    const kw = keyWord(bt).toUpperCase() || String(i + 1).padStart(2, '0')
+    lib.text(g, kw, 150, 400, { font: HEAD(), size: Math.min(54, lib.fit(g, kw, 250, { font: HEAD(), size: 54, weight: 800 })), weight: 800, color: k[2] })
+    lib.text(g, String(i + 1).padStart(2, '0'), 30, 40, { font: BODY(), size: 22, weight: 700, color: rgba(k[2], 0.7), align: 'left' })
+    out.push(c)
+  }
+  return (st.cards = out)
+}
+/** Um cartão 9:16 com canto arredondado, sombra e a imagem cobrindo. */
+function mediaCard(ctx, img, x, y, w, h, r, u) {
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 40 * u; ctx.shadowOffsetY = 20 * u
+  ctx.fillStyle = B().ink; lib.roundRect(ctx, x, y, w, h, r); ctx.fill(); ctx.restore()
+  ctx.save(); lib.roundRect(ctx, x, y, w, h, r); ctx.clip(); lib.image(ctx, img, x + w / 2, y + h / 2, w, h, 'cover'); ctx.restore()
+}
+
+/** Duas fileiras infinitas de cartões passando atrás da pessoa, em sentidos opostos, com as bordas sumindo. */
+function carousel(ctx, lt, dur, W, H, u, cut) {
+  const cards = mediaCards()
+  if (!cards.length) return
+  const out = outOf(lt, dur), inn = lib.prog(lt, 0, 0.4, 'outCubic')
+  const cw = 300 * u, ch = 533 * u, step = cw + 28 * u
+  const n = Math.max(cards.length, Math.ceil((W + cw) / step) + 1), total = n * step
+  ;(cut ? [{ y: H * 0.3, speed: 66 * u, dir: -1, seed: 0 }, { y: H * 0.62, speed: 45 * u, dir: 1, seed: 3 }] : [{ y: H * 0.8, speed: 52 * u, dir: -1, seed: 0 }]).forEach((row) => {
+    const shift = lt * row.speed + (1 - inn) * W * 0.35
+    for (let k = 0; k < n; k++) {
+      const x = ((k * step + row.dir * shift) % total + total) % total - step
+      if (x > W || x + cw < 0) continue
+      const edge = lib.clamp(Math.min(x + cw, W - x) / (W * 0.16))
+      ctx.save(); ctx.globalAlpha = out * inn * edge
+      mediaCard(ctx, cards[(k + row.seed) % cards.length], x, row.y - ch / 2, cw, ch, 24 * u, u)
+      ctx.restore()
+    }
+  })
+}
+
+/**
+ * Cartões girando em órbita inclinada em volta da pessoa: os de trás passam mais alto (atrás da cabeça) e
+ * menores; os da frente, mais baixo, na frente do tronco. front: só os da frente (desenhados depois da pessoa).
+ */
+function orbitCards(ctx, lt, dur, W, H, u, head, front) {
+  const all = mediaCards()
+  if (!all.length) return
+  const N = Math.min(7, Math.max(5, all.length))
+  const grow = lib.prog(lt, 0, 0.6, 'outBack'), out = outOf(lt, dur)
+  const RX = Math.min(W * 0.42, 470 * u), TILT = Math.max(150 * u, head.w * 0.75)
+  const CX = head.cx, CY = Math.min(H * 0.7, head.cy + head.w * 0.85)
+  const list = []
+  for (let i = 0; i < N; i++) {
+    const th = (i * 2 * Math.PI) / N + (2 * Math.PI * lt) / 8
+    const depth = Math.cos(th)
+    if ((depth >= 0) !== front) continue
+    const born = lib.prog(lt, i * 0.1, i * 0.1 + 0.6, 'outBack')
+    list.push({ img: all[i % all.length], depth, x: CX + Math.sin(th) * RX * grow * born, y: CY + depth * TILT, s: (0.62 + 0.46 * (depth + 1) / 2) * born, sx: Math.max(0.35, Math.cos(Math.sin(th) * 0.5)), o: (0.7 + 0.3 * (depth + 1) / 2) * out })
+  }
+  list.sort((a, z) => a.depth - z.depth)
+  const cw = 250 * u, ch = 444 * u
+  for (const c of list) {
+    if (c.s <= 0.01) continue
+    ctx.save(); ctx.globalAlpha = lib.clamp(c.o)
+    if (c.depth < 0) ctx.filter = 'blur(' + (2.5 * -c.depth * u).toFixed(1) + 'px)'
+    ctx.translate(c.x, c.y); ctx.scale(c.s * c.sx, c.s)
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 6 * u
+    mediaCard(ctx, c.img, -cw / 2, -ch / 2, cw, ch, 20 * u, u)
+    lib.roundRect(ctx, -cw / 2, -ch / 2, cw, ch, 20 * u); ctx.stroke()
+    ctx.restore()
+  }
+}
+
+/** Tela dividida: o motion do momento em cima (os padrões do roteiro), a pessoa embaixo e a legenda na emenda. */
+function splitFx(ctx, t, W, H, u) {
+  const split = Math.round(H * 0.47)
+  const S = animation(ctx, t, { x: 0, y: 0, w: W, h: split }, { u: Math.min(W / 1080, split / 1150) })
+  drawVideo(ctx, 0, split, W, H - split, t)
+  const g = ctx.createLinearGradient(0, split, 0, split + 220 * u); g.addColorStop(0, 'rgba(0,0,0,0.45)'); g.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = g; ctx.fillRect(0, split, W, 220 * u)
+  ctx.save(); ctx.globalAlpha = 0.5; ctx.fillStyle = B().accent; ctx.fillRect(0, split - 2 * u, W, 4 * u); ctx.restore()
+  env.state.capY = split + 30 * u
+  return S
+}
+
+/** Números do roteiro que dão um gráfico: "Instagram 40%", "Site: 1.200" (só os escritos, nunca inventados). */
+function chartData(b) {
+  const rows = []
+  for (const it of b.items || []) {
+    const m = String(it).match(/(-?\d{1,3}(?:\.\d{3})+(?:,\d+)?|-?\d+(?:[.,]\d+)?)\s*(%|x|mil|k)?/i)
+    if (!m) return null
+    const value = parseFloat(m[1].replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'))
+    const label = String(it).replace(m[0], '').replace(/[:–—-]\s*$|^\s*[:–—-]/g, '').trim()
+    rows.push({ value, text: m[0].trim(), label })
+  }
+  return rows.length >= 2 ? rows.slice(0, 6) : null
+}
+
+/**
+ * Gráfico: fundo de papel quadriculado, a pessoa num painel com topo em arco embaixo e, em cima, o que a
+ * fala pede: barras (itens com número), número gigante que conta (o número do momento), lista ou título
+ * com a palavra de destaque sublinhada.
+ */
+function chartFx(ctx, t, b, lt, dur, W, H, u) {
+  const br = B(), S = surface('paper')
+  ctx.fillStyle = S.bg; ctx.fillRect(0, 0, W, H)
+  ctx.fillStyle = rgba(br.ink, 0.06)
+  for (let x = 0; x < W; x += 44 * u) ctx.fillRect(x, 0, Math.max(1, u), H)
+  for (let y = 0; y < H; y += 44 * u) ctx.fillRect(0, y, W, Math.max(1, u))
+  const top = Math.round(H * 0.5), m = 24 * u, arc = 150 * u
+  ctx.save(); ctx.beginPath()
+  ctx.moveTo(m, H); ctx.lineTo(m, top + arc); ctx.ellipse(W / 2, top + arc, (W - 2 * m) / 2, arc, 0, Math.PI, Math.PI * 2); ctx.lineTo(W - m, H); ctx.closePath()
+  ctx.clip()
+  if (env.video) drawSrc(ctx, env.video, videoXf(m, top, W - 2 * m, H - top, t))
+  else { ctx.fillStyle = br.ink; ctx.fillRect(0, top, W, H - top) }
+  ctx.restore()
+  const out = outOf(lt, dur), inn = lib.prog(lt, 0, 0.3, 'outCubic')
+  ctx.save(); ctx.globalAlpha = out; ctx.translate(0, (1 - inn) * 30 * u)
+  const x0 = 72 * u, x1 = W - 72 * u, y0 = 170 * u, y1 = top - 50 * u
+  const rows = chartData(b)
+  const title = String(b.headline || '').replace(/\*/g, '')
+  if (rows) {
+    lib.text(ctx, title, W / 2, y0 + 30 * u, { font: HEAD(), size: Math.min(64 * u, lib.fit(ctx, title, x1 - x0, { font: HEAD(), size: 64 * u, weight: 800 })), weight: 800, color: br.ink })
+    const max = Math.max(...rows.map((r) => r.value), 1), top0 = y0 + 150 * u, base = y1 - 70 * u
+    const bw = (x1 - x0) / rows.length, mean = rows.reduce((s2, r) => s2 + r.value, 0) / rows.length
+    rows.forEach((r, k) => {
+      const at = 0.15 + k * 0.13, p = lib.prog(lt, at, at + 0.7, 'outBack')
+      const h = Math.max(0, (base - top0) * (r.value / max) * p), cx = x0 + bw * (k + 0.5), w = bw * 0.62
+      ctx.fillStyle = r.value === max ? br.accent : lib.mix(br.accent, br.paper, 0.45)
+      lib.roundRect(ctx, cx - w / 2, base - h, w, h, Math.min(12 * u, w / 4)); ctx.fill()
+      if (p > 0.05) lib.text(ctx, r.text, cx, base - h - 34 * u, { font: HEAD(), size: Math.min(52 * u, w * 0.5), weight: 800, color: rgba(br.ink, lib.clamp(p)) })
+      lib.text(ctx, r.label.slice(0, 16), cx, base + 38 * u, { font: BODY(), size: Math.min(30 * u, w * 0.26), weight: 700, color: br.muted })
+    })
+    const lp = lib.prog(lt, 0.9, 1.5, 'inOutCubic'), my = base - (base - top0) * (mean / max)
+    if (lp > 0) { ctx.save(); ctx.setLineDash([14 * u, 10 * u]); lib.path(ctx, [[x0, my], [x0 + (x1 - x0) * lp, my]], 1, { color: lib.mix(br.accent, '#D2453A', 0.6), width: 4 * u }); ctx.restore() }
+  } else if (b.number && typeof b.number.value === 'number') {
+    const nb = b.number, p = lib.prog(lt, 0.1, 1.2, 'outCubic')
+    const dec = nb.value % 1 ? 1 : 0, v = nb.value * p
+    const str = (nb.prefix || '') + (dec ? v.toFixed(1).replace('.', ',') : Math.round(v).toLocaleString('pt-BR')) + (nb.suffix || '')
+    lib.text(ctx, str, W / 2, (y0 + y1) / 2 - 40 * u, { font: HEAD(), size: Math.min(260 * u, lib.fit(ctx, str, x1 - x0, { font: HEAD(), size: 260 * u, weight: 900 })), weight: 900, color: br.accentOnLight })
+    textBlock(ctx, b, lt, S, { text: b.headline, x: W / 2, y: (y0 + y1) / 2 + 120 * u, size: 54 * u, maxW: x1 - x0, align: 'center', maxLines: 2 })
+  } else if ((b.items || []).length >= 2) {
+    const h1 = textBlock(ctx, b, lt, S, { text: b.headline, x: x0, y: y0, size: 66 * u, maxW: x1 - x0, maxLines: 2 })
+    const items = b.items.slice(0, 5), times = spokenTimes(b, items.map((x) => ({ text: String(x).split(/\s+/)[0] })), 0.35)
+    items.forEach((it, k) => {
+      const at = Math.max(0.3 + k * 0.25, times[k]), p = lib.prog(lt, at, at + 0.5, 'outExpo'), y = y0 + h1 + 70 * u + k * 92 * u
+      if (p <= 0) return
+      ctx.save(); ctx.globalAlpha = p; ctx.translate((1 - p) * 40 * u, 0)
+      ctx.fillStyle = br.accent; lib.roundRect(ctx, x0, y - 22 * u, 44 * u, 44 * u, 12 * u); ctx.fill()
+      lib.text(ctx, String(k + 1), x0 + 22 * u, y, { font: HEAD(), size: 26 * u, weight: 800, color: br.onAccent })
+      lib.text(ctx, String(it), x0 + 72 * u, y, { font: BODY(), size: Math.min(44 * u, lib.fit(ctx, String(it), x1 - x0 - 72 * u, { font: BODY(), size: 44 * u, weight: 700 })), weight: 700, color: br.ink, align: 'left' })
+      ctx.restore()
+    })
+  } else {
+    const name = iconOf(b)
+    if (name) iconBadge(ctx, name, W / 2, y0 + 90 * u, 80 * u, lt, 0.1, S)
+    textBlock(ctx, b, lt, S, { text: b.headline, x: W / 2, y: (name ? y0 + 230 * u : y0 + 60 * u), size: 104 * u, maxW: x1 - x0, align: 'center', maxLines: 4 })
+  }
+  ctx.restore()
+  env.state.capY = H * 0.86
+  return S
+}
+
+function cutout(ctx, t, W, H, u) {
+  const d = env.data, beats = d.beats, b2 = B(), st = env.state
+  if (!beats.length || !env.video) { drawVideo(ctx, 0, 0, W, H, t); return surface('ink') }
+  const i = current(t), b = beats[i], lt = t - b.start, dur = Math.max(0.4, (beats[i + 1] ? beats[i + 1].start : env.duration) - b.start)
+  let fx = b.effect || FX_ORDER[i % FX_ORDER.length]
+  st.capY = H * 0.8
+  // Estes dois trocam o quadro inteiro (não precisam do recorte)
+  if (fx === 'tela-dividida') return splitFx(ctx, t, W, H, u)
+  if (fx === 'grafico') return chartFx(ctx, t, b, lt, dur, W, H, u)
+  const P = videoXf(0, 0, W, H, t)
+  const person = personLayer(P)
+  if (fx === 'clones' && !person) fx = 'texto-fundo'
+  // Espaço para o efeito: se a cabeça está alta demais (vídeo de webcam cortado para vertical), a pessoa
+  // diminui ancorada embaixo até a cabeça ficar a ~36% da altura, sobre o fundo de estúdio da marca
+  const raw = headOf(person)
+  const want = person ? Math.max(0.55, Math.min(1, (H * 0.64) / Math.max(1, H - raw.top))) : 1
+  st.fit = st.fit == null ? want : lib.lerp(st.fit, want, 0.12)
+  if (st.studio == null && person) st.studio = st.fit < 0.92
+  const k = st.studio ? Math.min(1, st.fit) : 1
+  const head = { top: H - (H - raw.top) * k, cx: W / 2 + (raw.cx - W / 2) * k, w: raw.w * k, cy: H - (H - raw.cy) * k }
+  const drawPerson = (c) => { c.save(); c.translate(W / 2, H); c.scale(k, k); c.translate(-W / 2, -H); c.drawImage(person, 0, 0); c.restore() }
+  if (st.studio) studio(ctx, W, H, head)
+  else {
+    // O fundo: o próprio vídeo, desfocado no foco; escurecido para o efeito aparecer (a pessoa volta nítida por cima)
+    if (fx === 'foco') { ctx.save(); ctx.filter = 'blur(' + (lib.prog(lt, 0, 0.45, 'outCubic') * 22 * u).toFixed(1) + 'px)'; drawSrc(ctx, env.video, P); ctx.restore() }
+    else drawSrc(ctx, env.video, P)
+    ctx.fillStyle = rgba(b2.ink, person ? (fx === 'foco' ? 0.3 : 0.45) : 0.18); ctx.fillRect(0, 0, W, H)
+  }
+  if (fx === 'texto-fundo') backText(ctx, b, lt, dur, W, H, u, head)
+  else if (fx === 'foco') backText(ctx, b, lt, dur, W, H, u, head, keyWord(b))
+  else if (fx === 'parede') postWall(ctx, b, lt, dur, W, H, u, head)
+  else if (fx === 'orbita') orbit(ctx, b, lt, dur, u, head, false)
+  else if (fx === 'clones') clones(ctx, lt, dur, W, H, drawPerson, head)
+  else if (fx === 'carrossel') carousel(ctx, lt, dur, W, H, u, !!person)
+  else if (fx === 'orbita-cartoes' && person) orbitCards(ctx, lt, dur, W, H, u, head, false)
+  if (person) drawPerson(ctx)
+  if (fx === 'orbita') orbit(ctx, b, lt, dur, u, head, true)
+  // Sem o recorte, a órbita não tem como passar atrás: só a metade da frente, baixa, no tronco
+  if (fx === 'orbita-cartoes') orbitCards(ctx, lt, dur, W, H, u, person ? head : { ...head, cy: Math.max(head.cy, H * 0.5) }, true)
+  return surface('ink')
 }
 
 /** A barra de progresso e o logo pequeno: a assinatura da marca em todo o vídeo. */
@@ -778,6 +1210,12 @@ scene({
     const activeBeat = d.beats[current(t)]
     if (activeBeat && activeBeat.fullScreen) {
       animation(ctx, t, { x: 0, y: 0, w: W, h: H }, { u })
+      return
+    }
+    if (d.look === 'recorte') {
+      const S = cutout(ctx, t, W, H, u)
+      signature(ctx, W, t, S, u)
+      captions(ctx, t, env.state.capY || H * 0.8, S, u, W, true)
       return
     }
     if (d.composition) {

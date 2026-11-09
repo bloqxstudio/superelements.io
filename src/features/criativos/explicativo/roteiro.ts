@@ -5,9 +5,9 @@ import { standardBlock } from '@/features/cerebro/standard'
 import { callAiQuiet } from '../link'
 import type { CreativeSet, SetBrand } from '../types'
 import { ICON_NAMES } from './icons'
-import { BRIEFING_SYSTEM, NARRATION_SYSTEM, NARRATION_WRITER } from './prompts'
+import { BRIEFING_SYSTEM, EFFECT_RULES, NARRATION_SYSTEM, NARRATION_WRITER } from './prompts'
 import { cleanCuts } from './timeline'
-import { PATTERNS, SFX, TRANSITIONS, type ExplainerBeat, type ExplainerData, type ExplainerWord, type PatternId, type SfxId, type TransitionId } from './types'
+import { EFFECTS, PATTERNS, SFX, TRANSITIONS, type EffectId, type ExplainerBeat, type ExplainerData, type ExplainerWord, type PatternId, type SfxId, type TransitionId } from './types'
 
 /**
  * O roteiro do vídeo explicativo, nos dois modos (`types.ts`, `MODES`):
@@ -130,6 +130,7 @@ function beatFrom(b: RawBeat, start: number, photos: string[]): ExplainerBeat {
     photo: b.photo && photos.includes(b.photo) ? b.photo : undefined,
     transition: (b.transition && b.transition in TRANSITIONS ? b.transition : 'chicote') as TransitionId,
     sfx: (b.sfx && b.sfx in SFX ? b.sfx : SFX_OF[pattern]) as SfxId,
+    effect: b.effect && b.effect in EFFECTS ? (b.effect as EffectId) : undefined,
   }
 }
 
@@ -202,6 +203,7 @@ export async function writeScript(set: CreativeSet, data: ExplainerData, total: 
     await brandContext(opts.brand),
     mediaList(data),
     data.layout !== 'animacao' ? '## Formato\nA pessoa aparece no vídeo; as animações dividem a tela com ela. Headlines ainda mais curtos.' : '',
+    data.look === 'recorte' ? EFFECT_RULES(data.photos.some((p) => p.kind !== 'video')) : '',
     opts.reference?.length ? `## Referência\n${opts.reference.length} quadros de um vídeo de referência vão anexados: siga o ritmo, o tipo de cena e o jeito de usar texto e elementos, mas nas fontes, cores e voz desta marca (nunca a marca nem os textos de outra pessoa).` : '',
   ].filter(Boolean).join('\n\n')
   const out = await callAiQuiet<{ reply?: string; items?: { ref: string; text: string }[] }>('agent', { engine: resolveIa('criativos'), system: NARRATION_SYSTEM(), prompt, images: (opts.reference ?? []).slice(0, 10) }, opts.signal, (step, detail) => opts.onStep?.(detail || STEP[step] || 'Trabalhando…'))
