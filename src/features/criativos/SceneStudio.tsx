@@ -147,7 +147,9 @@ export const SceneStudio: React.FC = () => {
     if (!el || !scene?.audio) return
     el.volume = scene.audio.volume
     const want = scene.audio.offset + time
-    if (playing) {
+    // Depois do fim da trilha (a cena dura mais que a voz): fica parada. Pular e tocar a cada quadro dava estalos
+    const ends = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : Infinity
+    if (playing && want < ends - 0.05) {
       if (Math.abs(el.currentTime - want) > 0.25) el.currentTime = want
       if (el.paused) void el.play().catch(() => undefined)
     } else if (!el.paused) el.pause()

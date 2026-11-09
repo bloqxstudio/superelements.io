@@ -134,6 +134,27 @@ export function partTimes(parts: { label: string; text: string }[], words: Spoke
   return parts.map((p, i) => ({ ...p, start: Math.max(0, starts[i] - (i ? 0.2 : 0)), end: i < parts.length - 1 ? starts[i + 1] - 0.2 : duration }))
 }
 
+/**
+ * A voz da OpenAI vem em WAV "de transmissão", com o tamanho 0xFFFFFFFF no cabeçalho. Alguns tocadores leem além
+ * do fim e dão estalo ao pular perto do final: grava os tamanhos de verdade (RIFF e data). Outros formatos passam.
+ */
+export function fixWav(buf: ArrayBuffer): ArrayBuffer {
+  const v = new DataView(buf)
+  if (buf.byteLength < 44 || v.getUint32(0, false) !== 0x52494646 || v.getUint32(8, false) !== 0x57415645) return buf
+  let at = 12
+  while (at + 8 <= buf.byteLength) {
+    const id = v.getUint32(at, false), size = v.getUint32(at + 4, true)
+    if (id === 0x64617461) {
+      const data = buf.byteLength - (at + 8)
+      if (size === 0xffffffff || size > data) v.setUint32(at + 4, data - (data % 2), true)
+      v.setUint32(4, buf.byteLength - 8, true)
+      return buf
+    }
+    at += 8 + size + (size % 2)
+  }
+  return buf
+}
+
 export interface Narration {
   parts: NarrationPart[]
   words: SpokenWord[]
@@ -157,8 +178,8 @@ export async function narrateParts(set: CreativeSet, parts: { label: string; tex
   const out = voice.provider === 'elevenlabs'
     ? await speakViaLink({ provider: 'elevenlabs', text, voice: voice.voice, model: voice.model, ...elevenSettings(voice) }, opts.signal)
     : await speakViaLink({ text, voice: voice.voice || 'marin', instructions: directionFor(voice, set.brand.name) }, opts.signal)
-  const blob = await (await fetch(out.data)).blob()
-  const buf = await blob.arrayBuffer()
+  const buf = fixWav(await (await fetch(out.data)).arrayBuffer())
+  const blob = new Blob([buf], { type: out.type || 'audio/mpeg' })
   const ac = new AudioContext()
   const seconds = Math.round((await ac.decodeAudioData(buf.slice(0))).duration * 100) / 100
   void ac.close()
