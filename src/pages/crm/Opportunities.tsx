@@ -54,7 +54,7 @@ const Opportunities: React.FC = () => {
   return (
     <Page wide>
       <PageHeader
-        title="Oportunidades"
+        title="Leads"
         text={
           <>
             Funil {pipeline?.name} da equipe {team?.name}. O que alguém da equipe muda aparece aqui na hora.

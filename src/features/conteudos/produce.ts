@@ -1,4 +1,5 @@
 import { callAiQuiet, useCreativeLink } from '@/features/criativos/link'
+import { accountContext } from '@/features/cerebro/accountContext'
 import { autoPostMotion, hasMotion } from '@/features/criativos/motion'
 import { saveSet } from '@/features/criativos/storage'
 import { resolveIa } from '@/features/ia/porTarefa'
@@ -36,7 +37,9 @@ async function writeScript(content: Content, ctx: AccountContext | null, signal?
   const prompt = [
     `## Conteúdo\nTítulo: ${content.title}\nFormato: ${formatLabel(content.format)}${content.goal ? `\nObjetivo: ${content.goal}` : ''}${content.idea ? `\nIdeia: ${content.idea}` : ''}`,
     `## Plano da empresa\n${briefText(briefOf(ctx, content)) || '(sem plano)'}`,
-  ].join('\n\n')
+    // O Cérebro da conta (quem é, marca e voz): o roteiro sai na voz da empresa, não numa genérica
+    (await accountContext(content.format).catch(() => undefined))?.context ?? '',
+  ].filter(Boolean).join('\n\n')
   const out = await callAiQuiet<{ reply: string; items: { ref: string; text: string }[] }>('agent', { engine: resolveIa('copy'), system: SYSTEM, prompt, web: false }, signal)
   const script = out.items.find((i) => i.ref === 'roteiro')?.text.trim() ?? ''
   const caption = out.items.find((i) => i.ref === 'legenda')?.text.trim() ?? ''

@@ -329,18 +329,32 @@ async function loadContext(teamId: string) {
   return data as { offer: string; audience: string; tone: string; goal: string; restrictions: string; pillars: string[]; version: number; updated_at: string } | null
 }
 
+/**
+ * O Cérebro da conta (nova jornada de criação, Fase 1, 2026-11-09: o Cérebro é a fonte única do
+ * contexto): a visão geral (README.md) e a marca escrita (`brand_md`, a nota marca/DESIGN.md).
+ */
+async function loadBrain(teamId: string) {
+  const [readme, brand] = await Promise.all([
+    admin.from('crm_knowledge_notes').select('content').eq('team_id', teamId).eq('path', 'README.md').maybeSingle(),
+    admin.from('crm_account_context').select('brand_md').eq('team_id', teamId).maybeSingle(),
+  ])
+  const clip = (v: unknown, n: number) => { const t = String(v ?? '').trim(); return t.length > n ? `${t.slice(0, n)}…` : t }
+  return { visao_geral: clip((readme.data as { content?: string } | null)?.content, 3000), marca_design_md: clip((brand.data as { brand_md?: string } | null)?.brand_md, 4000) }
+}
+
 const TOOLS: Tool[] = [
   {
     name: 'sinfy_conta',
     title: 'Quem somos',
     description:
-      'Comece por aqui. Devolve quem é a empresa desta conta (nome, segmento, site, observações), o Plano da empresa (oferta, público, tom de voz, objetivo, restrições e pilares de conteúdo), a marca usada nos criativos (cores e fontes), os projetos, os módulos ligados e os canais conectados. Use isso como contexto de tudo que escrever ou criar para a empresa: escreva no tom dela, para o público dela e respeite as restrições.',
+      'Comece por aqui. Devolve quem é a empresa desta conta (nome, segmento, site, observações), o Cérebro da conta (visão geral e a marca escrita, a fonte de verdade sobre a empresa), o Plano da empresa (oferta, público, tom de voz, objetivo, restrições e pilares de conteúdo), a marca usada nos criativos (cores e fontes), os projetos, os módulos ligados e os canais conectados. Use isso como contexto de tudo que escrever ou criar para a empresa: escreva no tom dela, para o público dela e respeite as restrições.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true },
     run: async (caller) => {
       const t = caller.team
-      const [ctx, brand, projects, sites, ads, ig] = await Promise.all([
+      const [ctx, brain, brand, projects, sites, ads, ig] = await Promise.all([
         loadContext(t.id),
+        loadBrain(t.id).catch(() => ({ visao_geral: '', marca_design_md: '' })),
         moduleOn(t, 'criativos') ? latestBrand(caller) : Promise.resolve(undefined),
         teamProjects(caller),
         admin.from('site_trackers').select('domain').eq('team_id', t.id),
@@ -350,6 +364,9 @@ const TOOLS: Tool[] = [
       const modules = ['copy', 'criativos', 'crm', 'site', 'instagram', 'whatsapp', 'projetos'].filter((m) => moduleOn(t, m))
       return {
         empresa: { nome: t.name, segmento: t.segment, site: t.website, contato: t.contact_name, observacoes: t.notes, produto: t.product },
+        cerebro: brain.visao_geral || brain.marca_design_md
+          ? { visao_geral: brain.visao_geral || undefined, marca_design_md: brain.marca_design_md || undefined }
+          : { aviso: 'O Cérebro da conta ainda está vazio. Pergunte à pessoa quem é a empresa e o que vende antes de criar muito.' },
         voce: { papel: caller.role === 'owner' ? 'dono' : caller.role === 'admin' ? 'gestor' : 'vendedor', pode_mudar_o_plano: caller.role !== 'seller' },
         plano: ctx
           ? { oferta: ctx.offer, publico: ctx.audience, tom: ctx.tone, objetivo: ctx.goal, restricoes: ctx.restrictions, pilares: ctx.pillars, versao: ctx.version, atualizado_em: ctx.updated_at }

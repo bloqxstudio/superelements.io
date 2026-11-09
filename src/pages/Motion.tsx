@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { AreaTabs } from '@/features/navigation/AreaTabs'
 import { Link, useNavigate } from 'react-router-dom'
 import { AudioLines, Clapperboard, Images, Mic, Search, Video } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -95,6 +96,7 @@ const Motion: React.FC = () => {
   return (
     <div className="se-page min-h-[calc(100vh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
+        <AreaTabs area="criativos" />
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-gray-900"><Clapperboard className="h-6 w-6" /> Motion</h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">Transforme um criativo em vídeo animado, na marca da conta, para postar ou anunciar.</p>

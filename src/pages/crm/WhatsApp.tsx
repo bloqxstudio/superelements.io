@@ -122,7 +122,7 @@ export default function CrmWhatsApp() {
 
   return (
     <Page wide>
-      <PageHeader title="WhatsApp" text="O número da empresa conectado ao CRM como mais um aparelho, pelo QR code. Ele continua funcionando no celular." />
+      <PageHeader title="Conversas" text="O número da empresa conectado ao CRM como mais um aparelho, pelo QR code. Ele continua funcionando no celular." />
       <div className="se-tabs mt-4 flex items-center gap-1 border-b border-gray-200" role="tablist" aria-label="WhatsApp">
         {(
           [

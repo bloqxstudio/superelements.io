@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { AreaTabs } from '@/features/navigation/AreaTabs'
 import { useNavigate } from 'react-router-dom'
 import { Archive, CircleAlert, CloudUpload, FolderPlus, Plus } from 'lucide-react'
 import { toast } from 'sonner'
@@ -147,11 +148,12 @@ const Projects: React.FC = () => {
   return (
     <div className="se-page min-h-[calc(100vh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
+        <AreaTabs area="sites" />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Projetos</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Sites</h1>
             <p className="mt-1 text-sm text-gray-500">
-              Um projeto por cliente: a marca, o contexto e as páginas montadas no canvas.
+              Um site por cliente, montado no canvas: a marca, o contexto e as páginas.
             </p>
           </div>
           {ready && mine.length > 0 && (

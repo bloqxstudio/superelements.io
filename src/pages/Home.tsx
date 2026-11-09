@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { OperationRadar } from '@/features/onboarding/OperationRadar'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowUpRight, Bot, CalendarClock, CheckCircle2, CircleDashed, FileText, Globe, Instagram, KanbanSquare, Megaphone, MessageCircle, Phone, Sparkles, UserPlus, Workflow } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -148,6 +149,8 @@ const Home: React.FC = () => {
       </header>
 
       <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-5">
+        <OperationRadar />
+
         <Reading h={h} w={w} summary={summary} spend={spend} now={now} days={days} day={day} />
 
         <HomeToday trackers={site.status === 'ready' ? site.data.trackers : undefined} live={site.status === 'ready' ? site.data.live : undefined} days={days} day={day} />

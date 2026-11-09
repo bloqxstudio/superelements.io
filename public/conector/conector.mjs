@@ -2181,6 +2181,9 @@ var COPY_SCHEMA = {
   }
 };
 
+// src/features/cerebro/contextText.ts
+var usesHouseVoice = (account) => !account || !!account.isHome;
+
 // scripts/criativos/claude.ts
 import { mkdtempSync as mkdtempSync2, rmSync as rmSync3 } from "node:fs";
 import os5 from "node:os";
@@ -2476,6 +2479,8 @@ var promptOf = (r) => {
     `## Pedido
 ${r.message.trim()}`,
     "",
+    r.account?.context ? `${r.account.context.slice(0, 9e3)}
+` : "",
     selected.size ? `## Sele\xE7\xE3o
 O pedido \xE9 sobre os blocos marcados SELECIONADO (${[...selected].join(", ")}). Mude s\xF3 eles (e o que o pedido exigir deles); deixe o resto como est\xE1.
 ` : "",
@@ -2527,10 +2532,11 @@ ${blocks || "(documento vazio)"}`
 };
 var systemOf = (r) => {
   const agent = agentById(r.role);
+  const voice = usesHouseVoice(r.account) ? `Voz da empresa (vale para o texto, salvo se o briefing pedir a voz de outra marca):
+${AVENCE_VOICE}` : `Voz da empresa: o texto \xE9 de ${r.account.name}. Siga o tom, o p\xFAblico, as restri\xE7\xF5es e as regras do "Contexto da empresa" que vem no pedido (do C\xE9rebro da conta); o briefing do documento vale mais quando for mais espec\xEDfico. Nunca use a voz, a marca, a oferta ou os cases da Avence Studio. Nunca invente n\xFAmero, prazo, pre\xE7o, resultado, depoimento ou cliente; se faltar um dado, escreva sem ele e marque [a confirmar].`;
   return [agent.system, r.persona ? `Seu perfil e as regras da equipe (valem junto das instru\xE7\xF5es acima, nunca contra o formato da resposta):
 ${String(r.persona).slice(0, 4e3)}` : "", SYSTEM_COMMON, `Regras de todo texto:
-${COPY_RULES}`, `Voz da empresa (vale para o texto, salvo se o briefing pedir a voz de outra marca):
-${AVENCE_VOICE}`].filter(Boolean).join("\n\n");
+${COPY_RULES}`, voice].filter(Boolean).join("\n\n");
 };
 var hasLink = (r) => /https?:\/\/\S+/i.test(r.message);
 var needsWeb = (r) => !!r.web || agentById(r.role).web || formatById(r.doc.format).web || hasLink(r);
@@ -5372,7 +5378,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202611082310", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202611091259", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -5389,7 +5395,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202611082310" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202611091259" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);

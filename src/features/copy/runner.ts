@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { accountContext } from '@/features/cerebro/accountContext'
 import { callAi } from '@/features/criativos/link'
 import type { ChatAgentId } from '@/features/space/chat/protocol'
 import { agentById, type CopyAgentId } from './agents'
@@ -151,8 +152,9 @@ export async function runCopyAgent(input: RunInput, external?: AbortSignal, onDo
   let error: unknown
   try {
     // O pedido já está na conversa: a IA recebe o histórico sem ele
-    const folderRefs = await folderReferences(start)
-    const answer = await callAi<CopyResponse>('copy', buildRequest(start, { ...input, references: [...folderRefs, ...(input.references ?? [])] }, history.slice(0, -1)), signal, (step, detail) => {
+    const [folderRefs, account] = await Promise.all([folderReferences(start), accountContext().catch(() => undefined)])
+    const request = { ...buildRequest(start, { ...input, references: [...folderRefs, ...(input.references ?? [])] }, history.slice(0, -1)), account }
+    const answer = await callAi<CopyResponse>('copy', request, signal, (step, detail) => {
       useCopyAgent.getState().phase(step)
       patchJob(jobId, { step: detail ?? PHASE_LABEL[step] })
       noteJob(jobId, detail ?? PHASE_LABEL[step])

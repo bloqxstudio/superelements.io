@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AreaTabs } from '@/features/navigation/AreaTabs'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
@@ -623,6 +624,7 @@ export default function Cerebro() {
         </button>
         <Brain className="hidden h-4 w-4 text-violet-600 lg:block" aria-hidden />
         <h1 className="text-[15px] font-semibold tracking-tight text-gray-900">Cérebro</h1>
+        <AreaTabs area="cerebro" compact className="ml-2 hidden sm:flex" />
         {(refreshing || vault?.partial) && <span className="flex items-center gap-1 text-[11px] text-gray-400" aria-live="polite"><Loader2 className="h-3 w-3 animate-spin" />Atualizando</span>}
         <div className="ml-3 hidden rounded-lg bg-gray-100 p-0.5 text-[13px] sm:flex" role="tablist" aria-label="Vista">
           <button type="button" role="tab" aria-selected={!graphMode} onClick={() => setGraph(false)} className={cn('flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors', !graphMode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800')}>

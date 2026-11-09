@@ -646,7 +646,7 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Site</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Visitas do site</h1>
             {trackers.length > 1 && (
               <select value={tracker.id} onChange={(e) => onSelect(e.target.value)} className={cn(FIELD, 'h-8 w-auto py-0 text-xs')} aria-label="Site">
                 {trackers.map((t) => (
@@ -817,7 +817,7 @@ const SitePage: React.FC = () => {
       ) : (
         <>
           <div className="mb-6">
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Site</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Visitas do site</h1>
             <p className="mt-1 max-w-2xl text-sm text-gray-500">Quem visita o site da equipe, de onde veio e o que fez.</p>
           </div>
           <SiteStart teamId={team.id} manager={manager} onDone={() => void reload()} />

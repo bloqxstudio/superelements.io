@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { AreaTabs } from '@/features/navigation/AreaTabs'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CalendarDays, CircleAlert, Columns3, ListChecks, Loader2, Plus } from 'lucide-react'
@@ -8,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { useCrm } from '@/features/crm/crmStore'
 import { FIELD, Page, PageHeader } from '@/features/crm/ui'
 import { StatusChip } from '@/features/conteudos/StatusChip'
-import { ContentError, ContentTablesError, createContent, listContents, loadContext } from '@/features/conteudos/api'
+import { ContentError, ContentTablesError, createContent, listContents, loadContext, listCreativeContentIds } from '@/features/conteudos/api'
 import { CONTENT_FORMATS, STATUS_LABEL, STATUS_ORDER, briefOf, editorialLate, formatLabel, missingContext, validateContentDraft, type AccountContext, type Content, type ContentFormat, type ContentStatus } from '@/features/conteudos/rules'
 
 /**
@@ -150,14 +151,17 @@ const Contents: React.FC = () => {
   const [state, setState] = useState<'loading' | 'ready' | 'error' | 'sem-banco'>('loading')
   const [items, setItems] = useState<Content[]>([])
   const [context, setContext] = useState<AccountContext | null>(null)
+  // Os conteúdos com criativo ligado: o filtro "Sem criativo" (o radar do Início abre com ele)
+  const [withCreative, setWithCreative] = useState<Set<string>>()
 
   const load = useCallback(async () => {
     if (!team) return
     setState('loading')
     try {
-      const [list, ctx] = await Promise.all([listContents(team.id), loadContext(team.id)])
+      const [list, ctx, creative] = await Promise.all([listContents(team.id), loadContext(team.id), listCreativeContentIds(team.id).catch(() => undefined)])
       setItems(list)
       setContext(ctx)
+      setWithCreative(creative)
       setState('ready')
     } catch (error) {
       console.error('[conteudos] falha ao ler', error)
@@ -179,9 +183,10 @@ const Contents: React.FC = () => {
 
   const shown = useMemo(() => {
     if (filter === 'atrasado') return items.filter(isLate)
+    if (filter === 'sem-criativo') return withCreative ? items.filter((c) => c.status !== 'ideia' && !withCreative.has(c.id)) : items
     if (STATUS_ORDER.includes(filter as ContentStatus)) return items.filter((c) => c.status === filter)
     return items
-  }, [items, filter])
+  }, [items, filter, withCreative])
 
   const counts = useMemo(() => Object.fromEntries(STATUS_ORDER.map((s) => [s, items.filter((c) => c.status === s).length])) as Record<ContentStatus, number>, [items])
 
@@ -193,11 +198,12 @@ const Contents: React.FC = () => {
     )
   }
 
-  const filters: { id: string; label: string; n?: number }[] = [{ id: 'todos', label: 'Todos', n: items.length }, ...STATUS_ORDER.map((s) => ({ id: s, label: STATUS_LABEL[s], n: counts[s] })), { id: 'atrasado', label: 'Data vencida', n: items.filter(isLate).length }]
+  const filters: { id: string; label: string; n?: number }[] = [{ id: 'todos', label: 'Todos', n: items.length }, ...STATUS_ORDER.map((s) => ({ id: s, label: STATUS_LABEL[s], n: counts[s] })), { id: 'atrasado', label: 'Data vencida', n: items.filter(isLate).length }, ...(withCreative ? [{ id: 'sem-criativo', label: 'Sem criativo', n: items.filter((c) => c.status !== 'ideia' && !withCreative.has(c.id)).length }] : [])]
 
   return (
     <Page>
-      <PageHeader title="Conteúdos" text={`O que ${team?.name ?? 'a empresa'} vai publicar, da ideia à aprovação do texto.`}>
+      <AreaTabs area="pauta" />
+      <PageHeader title="Pauta" text={`Os conteúdos de ${team?.name ?? 'a empresa'} em lista, por etapa: da ideia à aprovação do texto.`}>
         <Button asChild variant="outline" size="sm">
           <Link to="/plano">Plano da empresa</Link>
         </Button>
@@ -260,7 +266,7 @@ const Contents: React.FC = () => {
           {items.length === 0 ? (
             <div className="mt-6 rounded-xl border border-dashed border-gray-300 bg-white px-6 py-12 text-center">
               <p className="text-sm font-medium text-gray-800">Nenhum conteúdo ainda</p>
-              <p className="mx-auto mt-1 max-w-md text-xs text-gray-500">Comece pela primeira ideia. O briefing vem do Plano da empresa e o texto pode seguir para o Copy e os Criativos.</p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-gray-500">Comece pela primeira ideia. O contexto vem do <Link to="/cerebro" className="font-medium underline underline-offset-2">Cérebro</Link> e do Plano da empresa; dentro do conteúdo ficam o texto, o criativo e a aprovação.</p>
               <Button className="mt-4" size="sm" onClick={() => setParam('novo', '1')}>
                 <Plus className="mr-1.5 h-4 w-4" aria-hidden /> Criar o primeiro
               </Button>
@@ -282,7 +288,7 @@ const Contents: React.FC = () => {
                           </>
                         )}
                       </span>
-                      <StatusChip status={c.status} />
+                      <StatusChip content={c} />
                     </Link>
                   </li>
                 ))}

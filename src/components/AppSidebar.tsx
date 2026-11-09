@@ -3,8 +3,9 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { navigationMatches } from '@/features/navigation/workspace'
-import { Link, NavLink } from 'react-router-dom'
-import { Activity, Bot, Brain, Building2, Code2, CalendarDays, CalendarRange, Filter, Target, House, Building, FolderKanban, Globe, ListChecks, Images, Clapperboard, Instagram, Megaphone, PenLine, Presentation, KanbanSquare, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
+import { Link, NavLink, useLocation } from 'react-router-dom'
+import { areaPaths, type AreaId } from '@/features/navigation/AreaTabs'
+import { Activity, Bot, Brain, Building2, CalendarRange, Filter, House, Building, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, Presentation, KanbanSquare, LayoutTemplate, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { PersonAvatar } from '@/features/profile/PersonAvatar'
 import { useAuth } from '@/contexts/AuthContext'
@@ -19,11 +20,13 @@ import { agentStatus, useAgents } from '@/features/space/bridge/agentsStore'
 import { cn } from '@/lib/utils'
 
 /**
- * Menu lateral das telas da conta, com as duas frentes do produto: Produção
- * (os projetos no Space, os agentes e as skills) e CRM (oportunidades,
- * clientes, prospecção e a equipe). O CRM aparece para quem é de uma equipe e
- * para o admin da plataforma, que cria a primeira. Dentro de um projeto o
- * Space ocupa a tela e o menu some.
+ * Menu lateral das telas da conta. Desde 2026-11-09 (nova jornada de criação, aprovada pelo usuário:
+ * "Sites e projetos é a mesma coisa", "cérebro deve vir primeiro", "Pauta, conteúdo e texto é meio que
+ * a mesma coisa") é um menu só para os três produtos, na ordem da jornada: o grupo Criação (Cérebro
+ * primeiro, depois Pauta, Quadros, Sites e Criativos), Vendas e Resultados. Os módulos da conta só
+ * escondem itens; não mudam a ordem nem os nomes. Telas irmãs viram abas no topo da área
+ * (`AreaTabs`). Dentro de um projeto o Space ocupa a tela e o menu some.
+ * Plano: cerebro/iniciativas/superelements/jornada-de-criacao.md.
  */
 
 const NavigationQuery = createContext('')
@@ -36,12 +39,17 @@ const itemClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'se-nav-active text-gray-900' : 'text-gray-600 hover:text-gray-900'
   )
 
-const Item: React.FC<{ to: string; icon: React.ElementType; label: string; end?: boolean; children?: React.ReactNode }> = ({ to, icon: Icon, label, end, children }) => {
+/** Uma rota é da área quando é ela mesma ou está abaixo dela (`/` só conta sozinha e em `/projetos`). */
+const inArea = (pathname: string, paths: string[]) =>
+  paths.some((p) => (p === '/' ? pathname === '/' || pathname.startsWith('/projetos/') : pathname === p || pathname.startsWith(`${p}/`)))
+
+const Item: React.FC<{ to: string; icon: React.ElementType; label: string; end?: boolean; area?: AreaId; children?: React.ReactNode }> = ({ to, icon: Icon, label, end, area, children }) => {
   const query = useContext(NavigationQuery)
   const collapsed = useContext(Collapsed)
-  if (!navigationMatches(query, label, to)) return null
+  const { pathname } = useLocation()
+  if (!navigationMatches(query, label, area ? areaPaths(area).join(' ') : to)) return null
   return (
-  <NavLink to={to} end={end} className={itemClass} title={collapsed ? label : undefined}>
+  <NavLink to={to} end={end} className={({ isActive }) => itemClass({ isActive: area ? inArea(pathname, areaPaths(area)) : isActive })} title={collapsed ? label : undefined}>
     <Icon className="h-4 w-4 shrink-0" aria-hidden />
     <span className="se-nav-label min-w-0 flex-1 truncate">{label}</span>
     {children && <span className="se-nav-badges flex items-center gap-1">{children}</span>}
@@ -49,7 +57,11 @@ const Item: React.FC<{ to: string; icon: React.ElementType; label: string; end?:
   )
 }
 
-const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => {
+/**
+ * Um grupo do menu. `rail`: o grupo Criação, com os ícones em círculos (o Cérebro primeiro, porque é o
+ * contexto de tudo; os outros não são um passo a passo).
+ */
+const Section: React.FC<{ title: string; rail?: boolean; children: React.ReactNode }> = ({ title, rail, children }) => {
   const key = `superelements-menu-grupo:${title}`
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(key) !== '0' } catch { return true } })
   const query = useContext(NavigationQuery)
@@ -58,11 +70,11 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
   const shown = open || !!query || collapsed
   const toggle = () => setOpen((v) => { try { localStorage.setItem(key, v ? '0' : '1') } catch { /* sem armazenamento */ } return !v })
   return (
-    <div className="se-sidebar-section mt-3 first:mt-0">
-      {collapsed ? <div className="se-section-rule" role="separator" aria-label={title} /> : <button type="button" onClick={toggle} aria-expanded={shown} className="se-section-toggle mb-0.5 flex w-full items-center justify-between rounded-md px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-800">
-        {title}<ChevronDown className={cn('h-3 w-3 transition-transform', !shown && '-rotate-90')} aria-hidden />
+    <div className="se-sidebar-section mt-5 first:mt-0">
+      {collapsed ? <div className="se-section-rule" role="separator" aria-label={title} /> : <button type="button" onClick={toggle} aria-expanded={shown} className="se-section-toggle group mb-1 flex w-full items-center justify-between rounded-md px-2.5 py-0.5 text-xs font-medium text-gray-400 transition-colors hover:text-gray-700">
+        {title}<ChevronDown className={cn('h-3 w-3 opacity-0 transition-[opacity,transform] group-hover:opacity-100 group-focus-visible:opacity-100', !shown && '-rotate-90 opacity-100')} aria-hidden />
       </button>}
-      {shown && <div className="grid gap-px">{children}</div>}
+      {shown && <div className={cn('grid gap-px', rail && 'se-nav-rail')}>{children}</div>}
     </div>
   )
 }
@@ -101,7 +113,7 @@ const NewBadge: React.FC<{ count: number; label: string }> = ({ count, label }) 
     </span>
   ) : null
 
-const OportunidadesItem: React.FC<{ label?: string }> = ({ label = 'Oportunidades' }) => {
+const OportunidadesItem: React.FC<{ label?: string }> = ({ label = 'Leads' }) => {
   const count = useMenuBadges((s) => s.opportunities)
   return (
     <Item to="/crm" end icon={KanbanSquare} label={label}>
@@ -120,7 +132,7 @@ const InstagramItem: React.FC = () => {
 }
 
 /** WhatsApp: mensagens não lidas (verde, como no próprio WhatsApp); some quando a conversa é aberta. */
-const WhatsAppItem: React.FC<{ name?: string }> = ({ name = 'WhatsApp' }) => {
+const WhatsAppItem: React.FC<{ name?: string }> = ({ name = 'Conversas' }) => {
   const count = useMenuBadges((s) => s.whatsapp)
   const label = plural(count, 'mensagem não lida', 'mensagens não lidas')
   return (
@@ -135,8 +147,8 @@ const WhatsAppItem: React.FC<{ name?: string }> = ({ name = 'WhatsApp' }) => {
   )
 }
 
-/** Site: quem está no site agora (verde, pulsando) e os contatos novos. */
-const SiteItem: React.FC<{ label?: string }> = ({ label = 'Site' }) => {
+/** Visitas do site: quem está no site agora (verde, pulsando) e os contatos novos. */
+const SiteItem: React.FC<{ label?: string }> = ({ label = 'Visitas do site' }) => {
   const live = useMenuBadges((s) => s.live)
   const contacts = useMenuBadges((s) => s.contacts)
   const liveLabel = live === 1 ? '1 pessoa no site agora' : `${live} pessoas no site agora`
@@ -154,104 +166,61 @@ const SiteItem: React.FC<{ label?: string }> = ({ label = 'Site' }) => {
   )
 }
 
-/**
- * As áreas que cada produto põe no menu. Um módulo ligado à mão fora do produto vai
- * para "Mais", assim nada ligado fica sem caminho.
- */
-const PRODUCT_AREAS: Record<Exclude<ProductId, 'completo'>, ModuleId[]> = {
-  resultados: ['instagram', 'site', 'crm', 'formularios', 'whatsapp', 'copy', 'criativos'],
-  builder: ['projetos', 'agentes', 'copy', 'criativos', 'skills'],
+/** O menu da jornada, o mesmo em todos os produtos. */
+const JourneyNav: React.FC<{ on: (id: ModuleId) => boolean; teams: number; crm: boolean }> = ({ on, teams, crm }) => {
+  const team = teams > 0
+  const criar = on('projetos') || on('criativos')
+  const vender = crm && (on('crm') || on('whatsapp') || on('formularios') || on('funis') || on('clientes') || on('social') || on('prospeccao') || on('diagnostico'))
+  const resultados = crm && (on('instagram') || on('site') || on('crm'))
+  return (
+    <>
+      {crm && (
+        <div className="mb-4">
+          <Item to="/inicio" icon={House} label="Início" />
+        </div>
+      )}
+      {(team || criar || on('copy')) && (
+        <Section title="Criação" rail>
+          {team && <Item to="/cerebro" icon={Brain} label="Cérebro" area="cerebro" />}
+          {team && on('copy') && <Item to="/pauta" icon={CalendarRange} label="Pauta" area="pauta" />}
+          {team && <Item to="/quadros" icon={Presentation} label="Quadros" />}
+          {/* sem conta de empresa não há Pauta: os Textos continuam com caminho próprio */}
+          {!team && on('copy') && <Item to="/copy" icon={PenLine} label="Textos" />}
+          {on('projetos') && <Item to="/" icon={LayoutTemplate} label="Sites" area="sites" />}
+          {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" area="criativos" />}
+        </Section>
+      )}
+      {vender && (
+        <Section title="Vendas">
+          {on('crm') && <OportunidadesItem />}
+          {on('whatsapp') && <WhatsAppItem />}
+          {on('whatsapp') && <Item to="/crm/fluxos" icon={Workflow} label="Automações" />}
+          {on('formularios') && <Item to="/crm/formularios" icon={ListChecks} label="Formulários" />}
+          {on('funis') && <Item to="/crm/funis" icon={Filter} label="Funis de venda" />}
+          {on('clientes') && <Item to="/crm/clientes" icon={Building2} label="Clientes" />}
+          {on('social') && <Item to="/crm/social" icon={Send} label="Relacionamento nas redes" />}
+          {on('prospeccao') && <Item to="/prospeccao" icon={Radar} label="Prospecção" />}
+          {on('diagnostico') && <Item to="/crm/diagnostico" icon={ScanSearch} label="Diagnóstico" />}
+        </Section>
+      )}
+      {resultados && (
+        <Section title="Resultados">
+          {on('instagram') && <InstagramItem />}
+          {on('instagram') && <Item to="/crm/anuncios" icon={Megaphone} label="Anúncios" />}
+          {on('site') && <SiteItem />}
+          {on('crm') && <Item to="/crm/operacao" icon={Activity} label="Operação" />}
+        </Section>
+      )}
+      {(on('agentes') || on('skills') || crm) && (
+        <Section title="IA e equipe">
+          {on('agentes') && <AgentsItem />}
+          {on('skills') && <Item to="/skills" icon={Wand2} label="Instruções de IA" />}
+          {crm && <Item to="/crm/equipe" icon={Users} label="Equipe" />}
+        </Section>
+      )}
+    </>
+  )
 }
-
-/** Os módulos ligados que o menu do produto não mostra, com a tela de cada um. */
-const ExtraItems: React.FC<{ product: Exclude<ProductId, 'completo'>; on: (id: ModuleId) => boolean }> = ({ product, on }) => {
-  const shown = new Set(PRODUCT_AREAS[product])
-  const extra: [ModuleId, React.ReactNode][] = ([
-    ['projetos', <Item key="projetos" to="/" end icon={FolderKanban} label="Projetos" />],
-    ['agentes', <AgentsItem key="agentes" />],
-    ['copy', <Item key="copy" to="/copy" icon={PenLine} label="Textos" />],
-    ['criativos', <Item key="criativos" to="/criativos" icon={Images} label="Criativos" />],
-    ['skills', <Item key="skills" to="/skills" icon={Wand2} label="Instruções de IA" />],
-    ['crm', <OportunidadesItem key="crm" />],
-    ['whatsapp', <WhatsAppItem key="whatsapp" />],
-    ['formularios', <Item key="formularios" to="/crm/formularios" icon={ListChecks} label="Formulários" />],
-    ['funis', <Item key="funis" to="/crm/funis" icon={Filter} label="Funis de venda" />],
-    ['social', <Item key="social" to="/crm/social" icon={Send} label="Relacionamento nas redes" />],
-    ['instagram', <InstagramItem key="instagram" />],
-    ['site', <SiteItem key="site" />],
-    ['prospeccao', <Item key="prospeccao" to="/prospeccao" icon={Radar} label="Prospecção" />],
-    ['diagnostico', <Item key="diagnostico" to="/crm/diagnostico" icon={ScanSearch} label="Diagnóstico" />],
-  ] as [ModuleId, React.ReactNode][]).filter(([id]) => !shown.has(id) && on(id))
-  if (!extra.length) return null
-  return <Section title="Mais">{extra.map(([, node]) => node)}</Section>
-}
-
-/** Sinfy: o caminho do anúncio à venda, na ordem em que o dinheiro anda. */
-const ResultsNav: React.FC<{ on: (id: ModuleId) => boolean }> = ({ on }) => (
-  <>
-    <div className="mb-5">
-      <Item to="/inicio" icon={House} label="Visão geral" />
-    </div>
-    {(on('instagram') || on('site') || on('crm') || on('formularios') || on('whatsapp')) && (
-      <Section title="O caminho">
-        {on('instagram') && <Item to="/crm/anuncios" icon={Megaphone} label="Anúncios" />}
-        {on('site') && <SiteItem label="Site" />}
-        {on('crm') && <OportunidadesItem label="Leads" />}
-        {on('formularios') && <Item to="/crm/formularios" icon={ListChecks} label="Formulários" />}
-        {on('whatsapp') && <WhatsAppItem name="Conversas" />}
-      </Section>
-    )}
-    {(on('copy') || on('criativos') || on('instagram')) && (
-      <Section title="Conteúdo">
-        {on('copy') && <Item to="/plano" icon={Target} label="Plano da empresa" />}
-        <Item to="/cerebro" icon={Brain} label="Cérebro" />
-        <Item to="/quadros" icon={Presentation} label="Quadros" />
-        {on('copy') && <Item to="/pauta" icon={CalendarRange} label="Pauta" />}
-        {on('copy') && <Item to="/conteudos" icon={CalendarDays} label="Conteúdos" />}
-        {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" />}
-        {on('criativos') && <Item to="/motion" icon={Clapperboard} label="Motion" />}
-        {on('instagram') && <InstagramItem />}
-        {on('copy') && <Item to="/copy" icon={PenLine} label="Textos" />}
-      </Section>
-    )}
-    <ExtraItems product="resultados" on={on} />
-    <Section title="Conta">
-      {on('clientes') && <Item to="/crm/clientes" icon={Building2} label="Clientes" />}
-      <Item to="/crm/equipe" icon={Users} label="Equipe" />
-    </Section>
-  </>
-)
-
-/** SuperElements: os sites e o que se produz para eles. */
-const BuilderNav: React.FC<{ on: (id: ModuleId) => boolean; teams: number }> = ({ on, teams }) => (
-  <>
-    <div className="mb-5">
-      <Item to="/inicio" icon={House} label="Início" />
-    </div>
-    <Section title="Sites">
-      {on('projetos') && <Item to="/" end icon={FolderKanban} label="Projetos" />}
-      {on('projetos') && <Item to="/sites" icon={Code2} label="Sites em código" />}
-      {on('agentes') && <AgentsItem />}
-      {on('skills') && <Item to="/skills" icon={Wand2} label="Instruções de IA" />}
-    </Section>
-    {(on('copy') || on('criativos')) && (
-      <Section title="Conteúdo">
-        {teams > 0 && on('copy') && <Item to="/plano" icon={Target} label="Plano da empresa" />}
-        {teams > 0 && <Item to="/cerebro" icon={Brain} label="Cérebro" />}
-        {teams > 0 && <Item to="/quadros" icon={Presentation} label="Quadros" />}
-        {teams > 0 && on('copy') && <Item to="/pauta" icon={CalendarRange} label="Pauta" />}
-        {teams > 0 && on('copy') && <Item to="/conteudos" icon={CalendarDays} label="Conteúdos" />}
-        {on('copy') && <Item to="/copy" icon={PenLine} label="Textos" />}
-        {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" />}
-        {on('criativos') && <Item to="/motion" icon={Clapperboard} label="Motion" />}
-      </Section>
-    )}
-    <ExtraItems product="builder" on={on} />
-    <Section title="Conta">
-      <Item to="/crm/equipe" icon={Users} label="Equipe" />
-    </Section>
-  </>
-)
 
 const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onToggleCollapsed?: () => void }> = ({ onClose, collapsed = false, onToggleCollapsed }) => {
   const { user, profile, signOut } = useAuth()
@@ -261,8 +230,7 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
   const crm = teams.length > 0 || platformAdmin
   // Módulos ligados na conta aberta (a Avence liga e desliga em Contas)
   const on = (id: ModuleId) => moduleOn(team, id)
-  const producao = on('projetos') || on('agentes') || on('copy') || on('criativos') || on('skills')
-  // O produto da conta aberta decide o desenho do menu; sem conta, o menu de sempre
+  // O produto só aparece como nota para o admin; o menu é o mesmo (os módulos é que escondem itens)
   const product: ProductId = team?.product ?? 'completo'
 
   return (
@@ -274,7 +242,7 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
             <PanelLeftOpen className="absolute h-4 w-4 text-gray-600 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden />
           </button>
         ) : <>
-        <Link to={crm ? '/inicio' : '/'} aria-label={crm ? 'Início' : 'Projetos'} className="transition-opacity hover:opacity-80">
+        <Link to={crm ? '/inicio' : '/'} aria-label={crm ? 'Início' : 'Sites'} className="transition-opacity hover:opacity-80">
           <Logo />
         </Link>
         {onToggleCollapsed && (
@@ -301,47 +269,7 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
       <Collapsed.Provider value={collapsed}>
       <NavigationQuery.Provider value={collapsed ? '' : query}>
       <nav aria-label="Navegação" className="se-navigation flex-1 overflow-y-auto px-3 py-4">
-        {product === 'resultados' && <ResultsNav on={on} />}
-        {product === 'builder' && <BuilderNav on={on} teams={teams.length} />}
-        {product === 'completo' && crm && (
-          <div className="mb-5">
-            <Item to="/inicio" icon={House} label="Início" />
-          </div>
-        )}
-        {product === 'completo' && producao && (
-          <Section title="Produção">
-            {on('projetos') && <Item to="/" end icon={FolderKanban} label="Projetos" />}
-            {on('projetos') && <Item to="/sites" icon={Code2} label="Sites em código" />}
-            {teams.length > 0 && on('copy') && <Item to="/plano" icon={Target} label="Plano da empresa" />}
-            {teams.length > 0 && <Item to="/cerebro" icon={Brain} label="Cérebro" />}
-            {teams.length > 0 && <Item to="/quadros" icon={Presentation} label="Quadros" />}
-            {teams.length > 0 && on('copy') && <Item to="/pauta" icon={CalendarRange} label="Pauta" />}
-            {teams.length > 0 && on('copy') && <Item to="/conteudos" icon={CalendarDays} label="Conteúdos" />}
-            {on('agentes') && <AgentsItem />}
-            {on('copy') && <Item to="/copy" icon={PenLine} label="Textos" />}
-            {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" />}
-            {on('criativos') && <Item to="/motion" icon={Clapperboard} label="Motion" />}
-            {on('skills') && <Item to="/skills" icon={Wand2} label="Instruções de IA" />}
-          </Section>
-        )}
-        {product === 'completo' && crm && (
-          <Section title="Clientes e vendas">
-            {on('crm') && <Item to="/crm/operacao" icon={Activity} label="Operação" />}
-            {on('crm') && <OportunidadesItem />}
-            {on('whatsapp') && <WhatsAppItem />}
-            {on('whatsapp') && <Item to="/crm/fluxos" icon={Workflow} label="Automações" />}
-            {on('formularios') && <Item to="/crm/formularios" icon={ListChecks} label="Formulários" />}
-            {on('funis') && <Item to="/crm/funis" icon={Filter} label="Funis de venda" />}
-            {on('clientes') && <Item to="/crm/clientes" icon={Building2} label="Clientes" />}
-            {on('social') && <Item to="/crm/social" icon={Send} label="Relacionamento nas redes" />}
-            {on('instagram') && <InstagramItem />}
-            {on('instagram') && <Item to="/crm/anuncios" icon={Megaphone} label="Anúncios" />}
-            {on('site') && <SiteItem />}
-            {on('prospeccao') && <Item to="/prospeccao" icon={Radar} label="Prospecção" />}
-            {on('diagnostico') && <Item to="/crm/diagnostico" icon={ScanSearch} label="Diagnóstico" />}
-            <Item to="/crm/equipe" icon={Users} label="Equipe" />
-          </Section>
-        )}
+        <JourneyNav on={on} teams={teams.length} crm={crm} />
         {platformAdmin && (
           <Section title="Plataforma">
             {product !== 'completo' && <p className="px-2.5 pb-1 text-[11px] text-gray-400">Produto desta conta: {productInfo(product).label}</p>}
