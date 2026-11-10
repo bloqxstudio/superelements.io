@@ -11,6 +11,9 @@ export const slideHasMotion = (slide: Slide) => !!slide.camera || !!slide.flashe
 /** O post sai animado: tem animação e não está marcado como estático. */
 export const hasMotion = (post: Post | undefined) => !!post && !post.motion?.paused && post.slides.some(slideHasMotion)
 
+/** O slide sai em vídeo neste post: anda e o post não está marcado como estático (2026-11-10). */
+export const slideMoves = (post: Post, slide: Slide) => !post.motion?.paused && slideHasMotion(slide)
+
 /** O post tem animação guardada (mesmo marcado como estático): para a tela de edição. */
 export const hasMotionData = (post: Post | undefined) => !!post?.slides.some(slideHasMotion)
 

@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils'
 import { crmContext, useCrm } from '@/features/crm/crmStore'
 import { moduleOn } from '@/features/crm/modules'
 import { loadAccounts, prepareImage, prepareVideo, publishPost, type IgAccount, type PublishStep } from '@/features/crm/instagram'
+import { TrialOption } from '@/features/crm/TrialOption'
+import type { TrialStrategy } from '@/features/crm/trialReels'
 import { accountBrand } from '@/features/conteudos/carousel'
 import { useEditor } from '../store'
 import { useAiAvailable } from '../link'
@@ -623,6 +625,8 @@ export const PublishPanel: React.FC<{ set: CreativeSet; scene: CodeScene }> = ({
   const [step, setStep] = useState<PublishStep | 'gerando' | null>(null)
   const [progress, setProgress] = useState(0)
   const [done, setDone] = useState<{ permalink?: string } | null>(null)
+  // Teste de reels (trial reel): só quem não segue vê
+  const [trial, setTrial] = useState<TrialStrategy | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -663,11 +667,11 @@ export const PublishPanel: React.FC<{ set: CreativeSet; scene: CodeScene }> = ({
       const blob = await explainerToMp4(scene, set, images, { onProgress: setProgress })
       const file = await prepareVideo(new File([blob], 'video-explicativo.mp4', { type: 'video/mp4' }))
       const cover = await prepareImage(await coverJpeg(scene, set, images), 'capa.jpg')
-      const published = await publishPost({ teamId, accountId: account.id, kind: 'reel', caption, files: [file], shareToFeed: true, cover, onStep: setStep })
+      const published = await publishPost({ teamId, accountId: account.id, kind: 'reel', caption, files: [file], shareToFeed: true, cover, trial: trial ? { strategy: trial, title: scene.name } : undefined, onStep: setStep })
       URL.revokeObjectURL(file.url)
       URL.revokeObjectURL(cover.url)
       setDone({ permalink: published.permalink })
-      toast.success('Reels publicado.')
+      toast.success(trial ? 'Teste publicado: só quem não segue vê.' : 'Reels publicado.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Não consegui publicar.')
     } finally {
@@ -689,11 +693,12 @@ export const PublishPanel: React.FC<{ set: CreativeSet; scene: CodeScene }> = ({
             <select className={field} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
               {accounts.map((a) => (<option key={a.id} value={a.id}>@{a.username}</option>))}
             </select>
-            <p className="mt-1.5 text-[11px] text-gray-500">Sai como reels, também no feed, com a capa no gancho. Publica só quando você clicar.</p>
+            <TrialOption value={trial} onChange={setTrial} disabled={!!step} className="mt-2" />
+            <p className="mt-1.5 text-[11px] text-gray-500">{trial ? 'Sai como teste, só para quem não segue, com a capa no gancho. Acompanhe em CRM › Instagram › Testes.' : 'Sai como reels, também no feed, com a capa no gancho.'} Publica só quando você clicar.</p>
             <Button className="mt-2 w-full gap-1.5" disabled={!!step || !videoSupported()} onClick={() => void publish()}>
               {step ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} {step ? `${STEP_LABEL[step]}${step === 'gerando' ? ` ${Math.round(progress * 100)}%` : '…'}` : 'Publicar agora'}
             </Button>
-            {done && <p className="mt-2 text-xs text-emerald-700">Publicado. {done.permalink && <a href={done.permalink} target="_blank" rel="noreferrer" className="underline">Ver no Instagram</a>}</p>}
+            {done && <p className="mt-2 text-xs text-emerald-700">{trial ? 'Teste publicado.' : 'Publicado.'} {done.permalink && <a href={done.permalink} target="_blank" rel="noreferrer" className="underline">Ver no Instagram</a>}</p>}
           </>
         )}
       </section>

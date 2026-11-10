@@ -1,38 +1,16 @@
 import React from 'react'
-import { useCreativeLink } from '@/features/criativos/link'
-import { IA_TASKS, useIa, type IaTask } from '@/features/ia/porTarefa'
-import { CHAT_AGENTS, type ChatAgentId } from '@/features/space/chat/protocol'
-import { cn } from '@/lib/utils'
+import { IaSwitch } from '@/features/ia/IaSwitch'
+import { IA_TASKS, type IaTask } from '@/features/ia/porTarefa'
 
-const Row: React.FC<{ task: IaTask; label: string; hint: string }> = ({ task, label, hint }) => {
-  const agents = useCreativeLink((s) => s.agents)
-  const { ia, pick } = useIa(task)
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 py-2">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-gray-900">{label}</p>
-        <p className="text-xs text-gray-500">{hint}</p>
-      </div>
-      <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-0.5" role="group" aria-label={`IA para ${label}`}>
-        {(['claude', 'codex'] as ChatAgentId[]).map((id) => {
-          const ok = !!agents.find((a) => a.id === id)?.available
-          return (
-            <button
-              key={id}
-              type="button"
-              disabled={!ok}
-              onClick={() => pick(id)}
-              title={ok ? CHAT_AGENTS[id].name : `${CHAT_AGENTS[id].name} não foi encontrado neste computador`}
-              className={cn('h-7 rounded-md px-3 text-xs font-semibold disabled:opacity-40', ia === id && ok ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800')}
-            >
-              {CHAT_AGENTS[id].name}
-            </button>
-          )
-        })}
-      </div>
+const Row: React.FC<{ task: IaTask; label: string; hint: string }> = ({ task, label, hint }) => (
+  <div className="flex flex-wrap items-center justify-between gap-2 py-2">
+    <div className="min-w-0">
+      <p className="text-sm font-medium text-gray-900">{label}</p>
+      <p className="text-xs text-gray-500">{hint}</p>
     </div>
-  )
-}
+    <IaSwitch task={task} label={label} />
+  </div>
+)
 
 /** Qual IA faz cada tipo de trabalho: vale para tudo o que roda daqui em diante, inclusive em segundo plano. */
 export const IaPorTarefa: React.FC = () => (

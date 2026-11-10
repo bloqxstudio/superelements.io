@@ -4,9 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { supabase } from '@/integrations/supabase/client'
 import { useCrm } from '@/features/crm/crmStore'
-import { listSets } from '@/features/criativos/storage'
+import { accountSets } from '@/features/criativos/accountSets'
 import type { SetSummary } from '@/features/criativos/types'
 import { useIara } from '@/features/iara/store'
 import { registerAttachment } from '@/features/iara/workControl'
@@ -27,14 +26,6 @@ import { KIND_LABEL } from './rules'
  * "Recriar como está" mantém a estrutura, o ritmo e a mensagem, reescritos na voz e na marca da conta. Nos dois
  * modos, nada de logo, nome, foto ou texto literal da outra empresa.
  */
-
-const db = supabase
-
-async function accountSets(teamId: string, isHome: boolean): Promise<SetSummary[]> {
-  const q = db.from('space_projects').select('id')
-  const { data } = await (isHome ? q.or(`team_id.eq.${teamId},team_id.is.null`) : q.eq('team_id', teamId))
-  return listSets(((data ?? []) as { id: string }[]).map((p) => p.id))
-}
 
 const toDataUrl = async (url: string) => {
   const blob = await (await fetch(url)).blob()

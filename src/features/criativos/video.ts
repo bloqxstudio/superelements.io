@@ -7,7 +7,7 @@
  */
 
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
-import { FPS, MotionRenderer, entrancesEnd, slideAsPost, slideHasMotion, timeline } from './motion'
+import { FPS, MotionRenderer, entrancesEnd, slideAsPost, slideMoves, timeline } from './motion'
 import { slideToBlob, type ImageMap } from './render'
 import { assetUrl } from './storage'
 import { sizeOf, type MotionAudio, type Post, type SetAsset } from './types'
@@ -236,13 +236,14 @@ export function carouselThumbAt(post: Post, slideIndex: number): number {
  * em foto, por exemplo.
  */
 export async function postToCarousel(post: Post, images: ImageMap, opts: { audio?: ArrayBuffer; onProgress?: (done: number) => void; base?: string } = {}): Promise<CarouselItem[]> {
-  const animated = post.slides.filter(slideHasMotion).length
+  // Post marcado como estático sai todo em foto, mesmo com a animação guardada (2026-11-10)
+  const animated = post.slides.filter((s) => slideMoves(post, s)).length
   let done = 0
   const items: CarouselItem[] = []
   const base = opts.base ?? 'slide'
   for (const [i, slide] of post.slides.entries()) {
     const n = String(i + 1).padStart(2, '0')
-    if (slideHasMotion(slide)) {
+    if (slideMoves(post, slide)) {
       const at = done
       // O primeiro quadro do arquivo é a capa (o Instagram ignora o thumb_offset no carrossel); o offset 0 aponta para ele
       const blob = await postToMp4(slideAsPost(post, slide), images, { audio: opts.audio, coverAt: carouselThumbAt(post, i), onProgress: (p) => opts.onProgress?.((at + p) / Math.max(1, animated)) })

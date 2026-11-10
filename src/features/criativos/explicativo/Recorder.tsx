@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Circle, Mic, RotateCcw, Sparkles, Square, Video } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { resolveIa } from '@/features/ia/porTarefa'
+import { iaFor } from '@/features/ia/porTarefa'
 import { callAiQuiet, useAiAvailable } from '../link'
 
 /**
@@ -126,7 +126,7 @@ export const Recorder: React.FC<{ kind: 'video' | 'audio'; brand?: string; onDon
     if (!topic.trim()) return
     setWriting(true)
     try {
-      const out = await callAiQuiet<{ items?: { ref: string; text: string }[] }>('agent', { engine: resolveIa('copy'), system: FALA_SYSTEM, prompt: `## Assunto\n${topic.trim()}\n\n## Quem fala\n${brand || '(a pessoa da conta)'}` })
+      const out = await callAiQuiet<{ items?: { ref: string; text: string }[] }>('agent', { ...iaFor('copy'), system: FALA_SYSTEM, prompt: `## Assunto\n${topic.trim()}\n\n## Quem fala\n${brand || '(a pessoa da conta)'}` })
       const text = out.items?.find((i) => i.ref === 'fala')?.text?.trim()
       if (!text) throw new Error('A IA não devolveu a fala.')
       setScript(text)

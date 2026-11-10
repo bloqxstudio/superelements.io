@@ -18,7 +18,8 @@ import { displayName } from '@/features/prospects/offer'
 import { STAGE_LABEL, STAGES, type Opportunity, type Stage } from '@/features/prospects/funnel'
 import { CHAT_AGENTS } from '@/features/space/chat/protocol'
 import { personaFor, profileNow } from './perfis'
-import { resolveIa } from './porTarefa'
+import { resolveIa, iaFor } from './porTarefa'
+import { modelFor } from './modelos'
 
 /**
  * As tarefas que uma rotina sabe fazer. Cada uma usa um agente de verdade (o
@@ -93,7 +94,7 @@ async function ask(agentId: string, prompt: string, job: ReturnType<typeof comme
   return callAi<{ reply: string; items: { ref: string; text: string }[] }>(
     'agent',
     // O Cérebro da conta (quem somos, oferta, tom e marca) vai em toda tarefa comercial (2026-11-09)
-    { engine: job.engine, system: personaFor(agentId), prompt: [(await accountContext().catch(() => undefined))?.context, prompt].filter(Boolean).join('\n\n'), web: web && p.web },
+    { engine: job.engine, model: modelFor('comercial', job.engine), system: personaFor(agentId), prompt: [(await accountContext().catch(() => undefined))?.context, prompt].filter(Boolean).join('\n\n'), web: web && p.web },
     job.controller.signal,
     (_s, detail) => detail && noteJob(job.id, detail)
   )
@@ -224,7 +225,7 @@ async function runCopyTask(run: TaskRun, role: 'pesquisador' | 'redator', resear
   if (!request) throw new Error('A rotina está sem o texto do pedido.')
   const format: FormatId = research ? researchFormat : ((run.params.format || 'post-instagram') as FormatId)
   const doc = await newDoc(format, `${formatById(format).label} · ${request.slice(0, 50)}`, request, run.params.niche, research ? (researchFormat === 'pesquisa' ? request : `${formatById(format).label}: ${request}`).slice(0, 60) : undefined)
-  const r = await runCopyAgent({ message: research ? request : request, role, engine: resolveIa('copy'), web: research ? true : undefined }, run.signal, doc)
+  const r = await runCopyAgent({ message: research ? request : request, role, ...iaFor('copy'), web: research ? true : undefined }, run.signal, doc)
   recordDelivery({ area: 'copy', kind: research ? (researchFormat === 'tendencias' ? 'Tendências da rotina' : researchFormat === 'oportunidades' ? 'Oportunidades da rotina' : 'Pesquisa da rotina') : 'Documento da rotina', label: doc.title.slice(0, 100), agent: profileNow(research ? 'caio' : 'bia').base, href: docLink(doc), docId: doc.id })
   return { message: `${doc.title}: ${r.reply || 'pronto'}` }
 }

@@ -1,4 +1,4 @@
-import { resolveIa } from '@/features/ia/porTarefa'
+import { iaFor } from '@/features/ia/porTarefa'
 import { accountContext } from '@/features/cerebro/accountContext'
 import { useCrm } from '@/features/crm/crmStore'
 import { standardBlock } from '@/features/cerebro/standard'
@@ -206,7 +206,7 @@ export async function writeScript(set: CreativeSet, data: ExplainerData, total: 
     data.look === 'recorte' ? EFFECT_RULES(data.photos.some((p) => p.kind !== 'video')) : '',
     opts.reference?.length ? `## Referência\n${opts.reference.length} quadros de um vídeo de referência vão anexados: siga o ritmo, o tipo de cena e o jeito de usar texto e elementos, mas nas fontes, cores e voz desta marca (nunca a marca nem os textos de outra pessoa).` : '',
   ].filter(Boolean).join('\n\n')
-  const out = await callAiQuiet<{ reply?: string; items?: { ref: string; text: string }[] }>('agent', { engine: resolveIa('criativos'), system: NARRATION_SYSTEM(), prompt, images: (opts.reference ?? []).slice(0, 10) }, opts.signal, (step, detail) => opts.onStep?.(detail || STEP[step] || 'Trabalhando…'))
+  const out = await callAiQuiet<{ reply?: string; items?: { ref: string; text: string }[] }>('agent', { ...iaFor('video'), system: NARRATION_SYSTEM(), prompt, images: (opts.reference ?? []).slice(0, 10) }, opts.signal, (step, detail) => opts.onStep?.(detail || STEP[step] || 'Trabalhando…'))
   const item = (ref: string) => (out.items ?? []).find((i) => i?.ref === ref)?.text ?? ''
   const beats = normalizeBeats(parseList(item('roteiro')), total, data.words, photos)
   let cuts: { s: number; e: number }[] = []
@@ -234,7 +234,7 @@ export async function writeBriefing(set: CreativeSet, data: ExplainerData, opts:
     mediaList(data),
     opts.reference?.length ? `## Referência\n${opts.reference.length} quadros de um vídeo de referência vão anexados: siga o ritmo, a estrutura e o jeito de animar, nas fontes, cores e voz desta marca (nunca a marca nem os textos de outra pessoa).` : '',
   ].filter(Boolean).join('\n\n')
-  const out = await callAiQuiet<{ reply?: string; items?: { ref: string; text: string }[] }>('agent', { engine: resolveIa('criativos'), system: BRIEFING_SYSTEM(), prompt, images: (opts.reference ?? []).slice(0, 10) }, opts.signal, (step, detail) => opts.onStep?.(detail || STEP[step] || 'Trabalhando…'))
+  const out = await callAiQuiet<{ reply?: string; items?: { ref: string; text: string }[] }>('agent', { ...iaFor('video'), system: BRIEFING_SYSTEM(), prompt, images: (opts.reference ?? []).slice(0, 10) }, opts.signal, (step, detail) => opts.onStep?.(detail || STEP[step] || 'Trabalhando…'))
   const item = (ref: string) => (out.items ?? []).find((i) => i?.ref === ref)?.text ?? ''
   const beats = briefingBeats(parseList(item('roteiro')), photos)
   if (beats.length) beats[0].transition = 'corte'
@@ -260,7 +260,7 @@ export async function writeNarration(set: CreativeSet, data: ExplainerData, opts
     opts.direction?.trim() ? `## Direção do usuário para a narração\n${opts.direction.trim()}` : '',
     await brandContext(opts.brand),
   ].filter(Boolean).join('\n\n')
-  const out = await callAiQuiet<{ items?: { ref: string; text: string }[] }>('agent', { engine: resolveIa('criativos'), system: NARRATION_WRITER(), prompt }, opts.signal, (step, detail) => opts.onStep?.(detail || 'Escrevendo a fala…'))
+  const out = await callAiQuiet<{ items?: { ref: string; text: string }[] }>('agent', { ...iaFor('video'), system: NARRATION_WRITER(), prompt }, opts.signal, (step, detail) => opts.onStep?.(detail || 'Escrevendo a fala…'))
   const raw = (out.items ?? []).find((i) => i?.ref === 'falas')?.text ?? ''
   let list: unknown
   try {

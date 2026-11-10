@@ -14,10 +14,10 @@ import { loadProjectDoc } from '@/features/projects/storage'
 import { setBrandFrom } from '@/features/criativos/brand'
 import { deleteSet, listSets, saveSet } from '@/features/criativos/storage'
 import { IMPORTED_NAME, importedSet } from '@/features/criativos/imported'
-import { POST_MODELS, buildPost } from '@/features/criativos/templates'
+import { CLIENT_POST_MODELS, POST_MODELS, buildPost } from '@/features/criativos/templates'
 import { generatePosts, type AiForm } from '@/features/criativos/ai'
 import { useAiAvailable } from '@/features/criativos/link'
-import { AiFields, EMPTY_AI } from '@/features/criativos/AiFields'
+import { AiFields, CLIENT_AI, EMPTY_AI } from '@/features/criativos/AiFields'
 import { uid, type CreativeSet, type SetBrand, type SetSummary } from '@/features/criativos/types'
 import { matchesSearch, useCovers } from '@/features/criativos/covers'
 import { CoverStrip } from '@/features/criativos/SetCovers'
@@ -37,16 +37,31 @@ const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClos
   const navigate = useNavigate()
   useProjectList()
   const projects = useProjectStore((s) => s.projects)
+  // Conta de cliente: só modelos neutros e nenhum case, exemplo ou voz da Avence (2026-11-10)
+  const client = useCrm((s) => !!s.team && !s.team.isHome)
+  const postModels = client ? CLIENT_POST_MODELS : POST_MODELS
   const [projectId, setProjectId] = useState('')
   const [name, setName] = useState('')
-  const [models, setModels] = useState<string[]>(['carrossel-5'])
+  const [models, setModels] = useState<string[]>(client ? ['cliente-carrossel'] : ['carrossel-5'])
   const [busy, setBusy] = useState(false)
   const [share, setShare] = useState(true)
   const [mode, setMode] = useState<'models' | 'ai'>('models')
   const ai = useAiAvailable()
-  const [form, setForm] = useState<AiForm>(EMPTY_AI)
+  const [form, setForm] = useState<AiForm>(client ? CLIENT_AI : EMPTY_AI)
+  // A conta pode terminar de carregar depois do modal: o pedido acompanha
+  useEffect(() => { setForm((f) => (client ? { ...f, cases: [] } : f)) }, [client])
 
   const project = projects.find((p) => p.id === projectId)
+  // A marca da conta (Cérebro, projeto da conta ou último conjunto): é o padrão sem projeto (2026-11-10)
+  const teamId = useCrm((s) => s.team?.id)
+  const [ownBrand, setOwnBrand] = useState<SetBrand | null | undefined>(undefined)
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    setOwnBrand(undefined)
+    accountBrand().then((b) => alive && setOwnBrand(b ?? null), () => alive && setOwnBrand(null))
+    return () => { alive = false }
+  }, [open, teamId])
 
   const create = async () => {
     setBusy(true)
@@ -63,19 +78,19 @@ const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClos
       // Na conta da casa um projeto é o site de um cliente: a marca da Avence nunca entra nele.
       const clientProjectAtHome = !!project && !!useCrm.getState().team?.isHome
       if (!parsed && !clientProjectAtHome) {
-        const fromAccount = await accountBrand().catch(() => undefined)
+        const fromAccount = ownBrand ?? (await accountBrand().catch(() => undefined))
         if (fromAccount) brand = fromAccount
         else toast.message(project ? 'Nem o projeto nem o Cérebro da conta têm marca. Usei cores e fontes neutras.' : 'O Cérebro da conta ainda não tem marca. Usei cores e fontes neutras.')
       } else if (!parsed) toast.message('Este projeto ainda não tem um DESIGN.md. Usei cores e fontes neutras.')
       const now = Date.now()
       const set: CreativeSet = {
         id: uid(),
-        name: name.trim() || (project ? `${project.name} · criativos` : 'Novo conjunto'),
+        name: name.trim() || (project ? `${project.name} · criativos` : ownBrand ? `${ownBrand.name} · criativos` : 'Novo conjunto'),
         projectId: project?.id,
         projectName: project?.name,
         shared: !!project && share,
         brand,
-        posts: mode === 'ai' ? await generatePosts(form, brand) : POST_MODELS.filter((m) => models.includes(m.id)).map((m) => buildPost(m, brand)),
+        posts: mode === 'ai' ? await generatePosts(form, brand) : postModels.filter((m) => models.includes(m.id)).map((m) => buildPost(m, brand)),
         assets: [],
         createdAt: now,
         updatedAt: now,
@@ -100,7 +115,7 @@ const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClos
           <label className="block text-sm">
             <span className="mb-1 block font-medium text-gray-800">Projeto (marca)</span>
             <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="h-9 w-full rounded-md border border-gray-200 bg-white px-2 text-sm">
-              <option value="">Sem projeto (cores neutras)</option>
+              <option value="">{ownBrand === undefined ? 'Marca da conta (carregando…)' : ownBrand ? `Marca da conta (${ownBrand.name})` : 'Sem projeto (cores neutras)'}</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
@@ -114,17 +129,17 @@ const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClos
           )}
           <label className="block text-sm">
             <span className="mb-1 block font-medium text-gray-800">Nome do conjunto</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={project ? `${project.name} · criativos` : 'Novo conjunto'} className="h-9 w-full rounded-md border border-gray-200 px-2 text-sm" />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={project ? `${project.name} · criativos` : ownBrand ? `${ownBrand.name} · criativos` : 'Novo conjunto'} className="h-9 w-full rounded-md border border-gray-200 px-2 text-sm" />
           </label>
           <div className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 text-sm font-medium">
             <button type="button" onClick={() => setMode('models')} className={cn('h-8 rounded-md', mode === 'models' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}>Modelos prontos</button>
             <button type="button" disabled={ai === false} title={ai === false ? 'A IA roda no app local (servidor de desenvolvimento com o Claude Code).' : undefined} onClick={() => setMode('ai')} className={cn('h-8 rounded-md disabled:opacity-40', mode === 'ai' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}>Gerar com IA</button>
           </div>
-          {mode === 'ai' ? <AiFields form={form} onChange={setForm} disabled={busy} /> : (
+          {mode === 'ai' ? <AiFields form={form} onChange={setForm} disabled={busy} hideCases={client} /> : (
           <fieldset>
             <legend className="mb-1 text-sm font-medium text-gray-800">Modelos de post</legend>
             <div className="grid gap-1.5">
-              {POST_MODELS.map((m) => {
+              {postModels.map((m) => {
                 const on = models.includes(m.id)
                 return (
                   <label key={m.id} className={cn('flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2', on ? 'border-violet-400 bg-violet-50' : 'border-gray-200 hover:bg-gray-50')}>

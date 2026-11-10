@@ -1,3 +1,4 @@
+import { modelFor } from '@/features/ia/modelos'
 import { toast } from 'sonner'
 import { accountContext } from '@/features/cerebro/accountContext'
 import { create } from 'zustand'
@@ -176,6 +177,7 @@ async function reviewIdeas(ideas: Story[], engine: ChatAgentId, signal: AbortSig
       'agent',
       {
         engine,
+        model: modelFor('stories', engine),
         system: personaFor('teo'),
         prompt: `## Stories da semana, antes da aprovação (JSON)\n${JSON.stringify(material)}\n\n## Regras\n${REVIEW_RULES.map((r) => `- ${r}`).join('\n')}\n\n## Tarefa\nLeia cada story como o dono do negócio leria no celular. Não reescreva o que está bom. Em \`items\`, só os stories que quebram uma regra ou estão fracos: ref = o ref do story, text = o problema e a correção, em uma ou duas frases. \`reply\`: uma frase de resumo.`,
         web: false,
@@ -278,7 +280,7 @@ async function buildCreative(story: Story, settings: StorySettings, engine: Chat
   try {
     const plan = await callAiQuiet<PlanResponse>(
       'plan',
-      { brief: [briefOf(story, settings, extra), (await accountContext('9x16').catch(() => undefined))?.context].filter(Boolean).join('\n\n'), format: '9x16', slides: frames, posts: 1, engine, story: true, photos: settings.photos, cases: casesFor([story.idea.case]) },
+      { brief: [briefOf(story, settings, extra), (await accountContext('9x16').catch(() => undefined))?.context].filter(Boolean).join('\n\n'), format: '9x16', slides: frames, posts: 1, engine, model: modelFor('stories', engine), story: true, photos: settings.photos, cases: casesFor([story.idea.case]) },
       job.signal,
       job.step
     )

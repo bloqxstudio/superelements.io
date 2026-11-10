@@ -43,8 +43,8 @@ const IMAGE = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/
 /**
  * Velocidade (2026-11-05, o usuário: "o agente demora muito pra responder"). A Iara conduz a
  * conversa e chama ações; o trabalho pesado (criativos) vai ao Codex. Então, por padrão, o modelo
- * rápido com pouco esforço (`IARA_MODEL`/`IARA_EFFORT` mudam) e sem a busca de ferramentas do
- * Claude Code (as da Iara vão direto, sem a volta extra do ToolSearch).
+ * rápido com pouco esforço (`IARA_MODEL`/`IARA_EFFORT` mudam). Desde 2026-11-10 as ações vêm pelo
+ * ToolSearch (uma volta a mais, ~11 mil tokens a menos por chamada): pedido do usuário para cortar tokens.
  */
 const MODES = {
   rapida: { model: process.env.IARA_MODEL ?? 'sonnet', effort: process.env.IARA_EFFORT ?? 'low' },
@@ -98,7 +98,7 @@ export function iara(): Plugin {
         const bin = findBin('claude')
         if (!bin) return emit({ id, type: 'error', text: 'O Claude Code não foi encontrado nesta máquina.' })
 
-        const env: NodeJS.ProcessEnv = { ...process.env, SPACE_AGENT: 'Iara', SPACE_SESSION: `iara-${id}`, NO_COLOR: '1', FORCE_COLOR: '0', ENABLE_TOOL_SEARCH: 'false' }
+        const env: NodeJS.ProcessEnv = { ...process.env, SPACE_AGENT: 'Iara', SPACE_SESSION: `iara-${id}`, NO_COLOR: '1', FORCE_COLOR: '0' }
         const mode = MODES[payload.mode === 'caprichada' ? 'caprichada' : 'rapida']
         const bridge = bridgeAddress()
         if (bridge) Object.assign(env, { SPACE_BRIDGE_URL: bridge.url, SPACE_BRIDGE_TOKEN: bridge.token })
@@ -126,6 +126,9 @@ export function iara(): Plugin {
           '--strict-mcp-config',
           '--mcp-config', JSON.stringify(mcp),
           '--append-system-prompt', String(payload.system ?? '').slice(0, 20_000),
+          // Só a web entre as ferramentas do Claude Code (2026-11-10): sem isto vinham as ~30 dele e a lista de skills da máquina.
+          // ToolSearch adia as ~70 ações da Iara: entram só as que o agente buscar (antes, ~11 mil tokens em toda chamada).
+          '--tools', 'WebFetch,WebSearch,ToolSearch',
           '--allowedTools', 'mcp__iara', 'WebFetch', 'WebSearch', 'TodoWrite',
           '--disallowedTools', 'Bash', 'PowerShell', 'Edit', 'Write', 'NotebookEdit', 'Read', 'Glob', 'Grep', 'Task',
           ...(resume ? ['--resume', resume] : []),

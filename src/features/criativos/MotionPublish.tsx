@@ -6,16 +6,19 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
+import { CaptionCheck } from '@/features/instagram-ia/CaptionCheck'
 import { crmContext, useCrm } from '@/features/crm/crmStore'
 import { moduleOn } from '@/features/crm/modules'
 import { FEED_RATIO, feedRatio, loadAccounts, prepareImage, prepareVideo, publishPost, type IgAccount, type Prepared, type PublishStep } from '@/features/crm/instagram'
+import { TrialOption } from '@/features/crm/TrialOption'
+import type { TrialStrategy } from '@/features/crm/trialReels'
 import { insertStories } from '@/features/crm/stories'
 import { approveStory } from '@/features/crm/storyPipeline'
 import type { StoryIdea } from '@/features/crm/storyPlan'
 import { useEditor } from './store'
 import { useAiAvailable } from './link'
 import { writeCaption } from './captionAi'
-import { clearSlideMotion, hasMotion, postOutput, slideAsPost, slideDuration, slideHasMotion, timeline } from './motion'
+import { clearSlideMotion, hasMotionData, postOutput, setPostStatic, slideAsPost, slideDuration, slideHasMotion, timeline } from './motion'
 import { slideToBlob } from './render'
 import { audioFor, coverAtOf, frameAt, imageCover, postToCarousel, postToMp4, videoSupported } from './video'
 import { CoverPicker } from './CoverPicker'
@@ -65,12 +68,15 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
   const { width, height } = sizeOf(post.format)
   const vertical = height / width > 1.7
   const multi = post.slides.length > 1
-  const motionOn = hasMotion(post)
+  // Animação guardada, mesmo num post marcado como estático: a modal deixa escolher
+  const motionOn = hasMotionData(post)
+  // Marcado como estático no canvas (2026-11-10): a modal abre em "Publicar parado"
+  const marked = !!post.motion?.paused
   // Post animado também sai parado, como foto ou carrossel de fotos (o usuário, 2026-11-06)
-  const [still, setStill] = useState(false)
+  const [still, setStill] = useState(marked)
   const animated = motionOn && !still
   const kinds = animated ? (['feed', 'reel', 'story'] as const) : (['feed', 'story'] as const)
-  const [kind, setKind] = useState<'reel' | 'story' | 'feed'>(() => (!motionOn ? (vertical ? 'story' : 'feed') : multi && (postOutput(post) === 'carousel' || !vertical) ? 'feed' : 'reel'))
+  const [kind, setKind] = useState<'reel' | 'story' | 'feed'>(() => (!motionOn || marked ? (vertical ? 'story' : 'feed') : multi && (postOutput(post) === 'carousel' || !vertical) ? 'feed' : 'reel'))
   const chooseStill = (on: boolean) => {
     setStill(on)
     if (on && kind === 'reel') setKind(vertical ? 'story' : 'feed')
@@ -78,11 +84,14 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
   }
   const [caption, setCaption] = useState(post.caption ?? '')
   const [shareToFeed, setShareToFeed] = useState(true)
+  // Teste de reels: só publicando agora (a fila programada não leva o teste)
+  const [trialPick, setTrial] = useState<TrialStrategy | null>(null)
   const [when, setWhen] = useState<When>('agora')
   const [at, setAt] = useState(() => localInput(Date.now() + 60 * 60_000))
   const [step, setStep] = useState<PublishStep | 'gerando' | null>(null)
   const [progress, setProgress] = useState(0)
   const [done, setDone] = useState<{ permalink?: string; scheduled?: number } | null>(null)
+  const trial = kind === 'reel' && when === 'agora' ? trialPick : null
   const images = useEditor((s) => s.images)
   const total = timeline(post).total
 
@@ -90,6 +99,7 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
     if (!open) return
     setDone(null)
     setStep(null)
+    setStill(!!post.motion?.paused)
     setCaption(post.caption ?? '')
     let alive = true
     ;(async () => {
@@ -110,7 +120,7 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
     return () => {
       alive = false
     }
-  }, [open, post.caption])
+  }, [open, post.caption, post.motion?.paused])
 
   const account = accounts?.find((a) => a.id === accountId)
   const busy = step !== null && !done
@@ -135,7 +145,7 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
         await useEditor.getState().ensureAssets()
         const { set: current, images } = useEditor.getState()
         const latest = current?.posts.find((p) => p.id === post.id) ?? post
-        const fresh = still ? { ...latest, slides: latest.slides.map(clearSlideMotion) } : latest
+        const fresh = still ? { ...latest, slides: latest.slides.map(clearSlideMotion) } : setPostStatic(latest, false)
         const items = await postToCarousel(fresh, images, { onProgress: setProgress, audio: current ? await audioFor(fresh, current.assets) : undefined, base: post.name || 'slide' })
         const files: Prepared[] = []
         for (const item of items) files.push(item.type === 'video' ? { ...(await prepareVideo(new File([item.blob], item.name, { type: 'video/mp4' }))), thumbOffset: item.thumbOffset } : await prepareImage(item.blob, item.name, feedRatio(width, height)))
@@ -192,15 +202,15 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
       setProgress(0)
       await useEditor.getState().ensureAssets()
       const { set: current, images } = useEditor.getState()
-      const fresh = current?.posts.find((p) => p.id === post.id) ?? post
+      const fresh = setPostStatic(current?.posts.find((p) => p.id === post.id) ?? post, false)
       const blob = await postToMp4(fresh, images, { onProgress: setProgress, audio: current ? await audioFor(fresh, current.assets) : undefined })
       const file = await prepareVideo(new File([blob], `${post.name || 'motion'}.mp4`, { type: 'video/mp4' }))
       const cover = kind === 'reel' ? await coverFile(fresh, images) : undefined
-      const published = await publishPost({ teamId, accountId: account.id, kind, caption: kind === 'reel' ? caption : '', files: [file], shareToFeed, cover, onStep: setStep })
+      const published = await publishPost({ teamId, accountId: account.id, kind, caption: kind === 'reel' ? caption : '', files: [file], shareToFeed, cover, trial: trial ? { strategy: trial, title: post.name } : undefined, onStep: setStep })
       URL.revokeObjectURL(file.url)
       if (cover) URL.revokeObjectURL(cover.url)
       setDone({ permalink: published.permalink })
-      toast.success(kind === 'reel' ? 'Reels publicado.' : 'Story publicado.')
+      toast.success(kind === 'reel' ? (trial ? 'Teste publicado: só quem não segue vê. Acompanhe em CRM › Instagram › Testes.' : 'Reels publicado.') : 'Story publicado.')
     } catch (err) {
       setStep(null)
       toast.error(err instanceof Error ? err.message : 'Não consegui publicar.')
@@ -248,7 +258,7 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
             )}
             {motionOn && (
               <label className="flex items-center justify-between gap-2 text-sm text-gray-700">
-                <span>Publicar parado<span className="block text-xs text-gray-500">{still ? 'Sai como foto (ou carrossel de fotos), sem a animação.' : 'O post tem motion e sai em vídeo. Ligue para sair como imagem.'}</span></span>
+                <span>Publicar parado<span className="block text-xs text-gray-500">{still ? `Sai como foto (ou carrossel de fotos), sem a animação.${marked ? ' Marcado como estático no canvas.' : ''}` : marked ? 'Marcado como estático no canvas, mas este envio sai em vídeo.' : 'O post tem motion e sai em vídeo. Ligue para sair como imagem.'}</span></span>
                 <Switch checked={still} onCheckedChange={chooseStill} disabled={busy} />
               </label>
             )}
@@ -282,7 +292,8 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
                 <label className="block text-xs font-medium text-gray-700">Legenda
                   <CaptionInput post={post} value={caption} onChange={setCaption} disabled={busy} placeholder="A legenda do reels." />
                 </label>
-                <label className="flex items-center justify-between gap-2 text-sm text-gray-700">Mostrar também no feed<Switch checked={shareToFeed} onCheckedChange={setShareToFeed} disabled={busy} /></label>
+                {when === 'agora' && <TrialOption value={trialPick} onChange={setTrial} disabled={busy} />}
+                {!trial && <label className="flex items-center justify-between gap-2 text-sm text-gray-700">Mostrar também no feed<Switch checked={shareToFeed} onCheckedChange={setShareToFeed} disabled={busy} /></label>}
               </>
             )}
             {(kind === 'reel' || (kind === 'feed' && !multi && animated)) && (
@@ -321,7 +332,7 @@ export const MotionPublish: React.FC<{ post: Post; open: boolean; onClose: () =>
               <p className="flex items-center gap-2 text-sm text-gray-600"><Loader2 className="h-4 w-4 animate-spin" /> {STEP_LABEL[step]}{step === 'gerando' && when === 'agora' ? `… ${Math.round(progress * 100)}%` : '…'}</p>
             )}
             <Button className="w-full gap-1.5" disabled={busy || !account || tooShort || storyTooLong || carouselBlocked || noVideo || (kind === 'story' && !vertical && when === 'programar')} onClick={() => void run()}>
-              {when === 'agora' ? <Send className="h-4 w-4" /> : <CalendarClock className="h-4 w-4" />} {when === 'agora' ? `Publicar ${kind === 'reel' ? 'o reels' : kind === 'story' ? 'o story' : multi ? 'o carrossel' : 'no feed'}` : 'Programar'}
+              {when === 'agora' ? <Send className="h-4 w-4" /> : <CalendarClock className="h-4 w-4" />} {when === 'agora' ? `Publicar ${kind === 'reel' ? (trial ? 'o teste' : 'o reels') : kind === 'story' ? 'o story' : multi ? 'o carrossel' : 'no feed'}` : 'Programar'}
             </Button>
           </div>
         )}
@@ -369,6 +380,16 @@ const CaptionInput: React.FC<{ post: Post; value: string; onChange: (v: string) 
         {!ai && <span className="text-[11px] font-normal text-gray-500">Conecte a IA desta máquina para escrever com ela.</span>}
         <span className="ml-auto text-[11px] font-normal tabular-nums text-gray-400">{value.length}/2200</span>
       </div>
+      {!writing && (
+        <CaptionCheck
+          value={value}
+          disabled={disabled}
+          onChange={(next) => {
+            onChange(next)
+            saveCaption(post.id, next)
+          }}
+        />
+      )}
       {writing && <p className="text-[11px] font-normal text-gray-500">Lendo o Plano, a marca, o Instagram da conta e o texto dos slides…</p>}
       {info && !writing && (
         <div className="space-y-0.5 rounded-md bg-gray-50 p-2 text-[11px] font-normal leading-snug text-gray-600">

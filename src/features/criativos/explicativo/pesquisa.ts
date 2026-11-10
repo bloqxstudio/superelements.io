@@ -1,4 +1,4 @@
-import { resolveIa } from '@/features/ia/porTarefa'
+import { iaFor } from '@/features/ia/porTarefa'
 import { accountContext } from '@/features/cerebro/accountContext'
 import { useCrm } from '@/features/crm/crmStore'
 import { standardBlock } from '@/features/cerebro/standard'
@@ -41,7 +41,7 @@ export async function researchCuriosity(topic: string, opts: { brand: SetBrand; 
     opts.extra?.trim() ? `## Pedido extra\n${opts.extra.trim()}` : '',
     `## A marca que publica\n${opts.brand.name || '(a marca da conta)'}${voice ? `\n\n${voice}` : ''}`,
   ].filter(Boolean).join('\n\n')
-  const out = await callAiQuiet<{ reply?: string; items?: { ref: string; text: string }[] }>('agent', { engine: resolveIa('copy'), system: RESEARCH_SYSTEM, prompt, web: true }, opts.signal, (step, detail) => opts.onStep?.(detail || STEP[step] || 'Pesquisando…'))
+  const out = await callAiQuiet<{ reply?: string; items?: { ref: string; text: string }[] }>('agent', { ...iaFor('copy'), system: RESEARCH_SYSTEM, prompt, web: true }, opts.signal, (step, detail) => opts.onStep?.(detail || STEP[step] || 'Pesquisando…'))
   const raw = (out.items ?? []).find((i) => i?.ref === 'pesquisa')?.text ?? ''
   let j: { titulo?: string; gancho?: string; angulo?: string; fatos?: { texto?: string; fonte?: string }[]; briefing?: string }
   try {

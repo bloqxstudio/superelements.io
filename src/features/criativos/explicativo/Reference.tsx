@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Film, Instagram, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { downloadReelViaLink, useCreativeLink } from '../link'
-import { referenceFrames } from '../sceneAi'
+import { referenceShots, type DenseReference } from '../sceneAi'
 
 /**
  * O vídeo de referência do vídeo explicativo: um arquivo, ou o link de um reel do Instagram
@@ -11,7 +11,8 @@ import { referenceFrames } from '../sceneAi'
  * IA seguir o ritmo e o jeito de animar; o vídeo não fica salvo em lugar nenhum.
  */
 
-export type Reference = { name: string; frames: string[] }
+/** `dense` e `times`: a referência quadro a quadro (2026-11-10), para o modo agente copiar o movimento. */
+export type Reference = { name: string; frames: string[]; times?: number[]; dense?: DenseReference }
 
 const IG = /instagram\.com\/(?:[\w.]+\/)?(reel|reels|p|tv)\//i
 
@@ -25,7 +26,7 @@ export const ReferencePicker: React.FC<{ value: Reference | null; onChange: (r: 
     if (!file) return
     setBusy('Lendo o vídeo…')
     try {
-      onChange({ name: file.name, frames: await referenceFrames(file, 10) })
+      onChange({ name: file.name, ...(await referenceShots(file, 12)) })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Não consegui ler a referência.')
     } finally {
@@ -42,7 +43,7 @@ export const ReferencePicker: React.FC<{ value: Reference | null; onChange: (r: 
       const out = await downloadReelViaLink(url)
       const blob = await (await fetch(out.data)).blob()
       setBusy('Lendo o vídeo…')
-      onChange({ name: `Instagram · ${out.name}`, frames: await referenceFrames(new File([blob], out.name, { type: out.type }), 10) })
+      onChange({ name: `Instagram · ${out.name}`, ...(await referenceShots(new File([blob], out.name, { type: out.type }), 12)) })
       setLink('')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Não consegui baixar o reel.'

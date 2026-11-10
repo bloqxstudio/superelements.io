@@ -118,6 +118,48 @@ export interface ChatMessage {
   costUsd?: number
   /** Tokens que a resposta gastou, como o agente informa no fim. */
   tokens?: ChatTokens
+  /** Modelo que respondeu, como o Claude Code informa ao abrir (`claude-sonnet-…`). */
+  model?: string
+}
+
+/**
+ * Modelos do Claude Code (2026-11-10, o usuário: "tem como selecionar pelo chat? avisar qual modelo selecionado";
+ * depois "mostre o tipo específico, ex. Opus 5.5"; "existem vários outros modelos… podemos listar?"). A lista usa o
+ * id exato de cada versão (o `--model` do Claude Code aceita), da família mais capaz para a mais rápida, a mais nova
+ * primeiro. Os apelidos (`sonnet`, `opus`, `haiku`) continuam valendo, mas viram o id exato ao ler o que estava salvo.
+ * Mythos ficou de fora: só para organizações verificadas. Modelo que a conta não pode usar volta erro na resposta.
+ */
+const CLAUDE_MODELS = [
+  { id: 'claude-fable-5-2', name: 'Fable 5.2', group: 'Fable', hint: 'O mais capaz de todos; respostas longas e o maior gasto do plano' },
+  { id: 'claude-fable-5-1', name: 'Fable 5.1', group: 'Fable', hint: 'Fable anterior' },
+  { id: 'claude-fable-5', name: 'Fable 5', group: 'Fable', hint: 'Primeiro Fable' },
+  { id: 'claude-opus-5-5', name: 'Opus 5.5', group: 'Opus', hint: 'O Opus mais novo; muito capaz, gasta o plano bem mais rápido' },
+  { id: 'claude-opus-5', name: 'Opus 5', group: 'Opus', hint: 'Opus anterior' },
+  { id: 'claude-opus-4-8', name: 'Opus 4.8', group: 'Opus', hint: 'Geração 4' },
+  { id: 'claude-opus-4-7', name: 'Opus 4.7', group: 'Opus', hint: 'Geração 4' },
+  { id: 'claude-opus-4-6', name: 'Opus 4.6', group: 'Opus', hint: 'Geração 4' },
+  { id: 'claude-sonnet-5-5', name: 'Sonnet 5.5', group: 'Sonnet', hint: 'Equilíbrio entre qualidade e uso do plano (padrão)' },
+  { id: 'claude-sonnet-5', name: 'Sonnet 5', group: 'Sonnet', hint: 'Sonnet anterior' },
+  { id: 'claude-sonnet-4-6', name: 'Sonnet 4.6', group: 'Sonnet', hint: 'Geração 4' },
+  { id: 'claude-haiku-5-5', name: 'Haiku 5.5', group: 'Haiku', hint: 'O mais rápido e econômico, para ajustes simples' },
+  { id: 'claude-haiku-4-5', name: 'Haiku 4.5', group: 'Haiku', hint: 'Geração 4' },
+] as const
+
+/** Apelido do Claude Code → a versão que ele usa hoje (para o que já estava salvo com o apelido). */
+export const CLAUDE_ALIASES: Record<string, string> = { sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5', haiku: 'claude-haiku-5-5', fable: 'claude-fable-5-2' }
+
+export type ChatModelId = (typeof CLAUDE_MODELS)[number]['id']
+export const CHAT_MODELS = Object.fromEntries(CLAUDE_MODELS.map((m) => [m.id, m])) as Record<ChatModelId, (typeof CLAUDE_MODELS)[number]>
+export const CHAT_MODEL_IDS = CLAUDE_MODELS.map((m) => m.id) as ChatModelId[]
+export const DEFAULT_CHAT_MODEL: ChatModelId = 'claude-sonnet-5-5'
+export const isChatModel = (v: unknown): v is ChatModelId => typeof v === 'string' && v in CHAT_MODELS
+/** O id exato de um modelo do Claude: aceita os da lista e os apelidos; o resto volta `undefined`. */
+export const claudeModelId = (v: unknown): ChatModelId | undefined =>
+  isChatModel(v) ? v : typeof v === 'string' && isChatModel(CLAUDE_ALIASES[v]) ? (CLAUDE_ALIASES[v] as ChatModelId) : undefined
+/** "claude-sonnet-5-5" → "Sonnet 5.5"; o que não reconhece volta como veio. */
+export const modelLabel = (model: string) => {
+  const m = /claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?!\d)/.exec(model)
+  return m ? `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}${m[3] ? `.${m[3]}` : ''}` : model
 }
 
 /** Tokens de uma resposta: entrada nova, saída e o que veio do cache (lido ou gravado). */
@@ -195,6 +237,17 @@ export interface ChatAgentAvailability {
   available: boolean
   version?: string
   reason?: string
+  /** Modelos que o agente oferece nesta máquina (o Codex lista os da conta; o Claude Code usa `CHAT_MODELS`). */
+  models?: ChatAgentModel[]
+}
+
+/** Um modelo que dá para escolher para um agente. */
+export interface ChatAgentModel {
+  id: string
+  name: string
+  hint?: string
+  /** Família, para agrupar na lista (Fable, Opus, Sonnet, Haiku). */
+  group?: string
 }
 
 /** Onde o cursor de um agente deve estar: vem das ações dele. */
@@ -246,6 +299,8 @@ export interface ChatSendPayload {
   images?: ChatImageUpload[]
   skill?: ChatSkillRef
   task?: ChatTask
+  /** Modelo escolhido na caixa: do Claude Code (`ChatModelId`) ou do Codex (o slug que ele lista); sem ele, o padrão. */
+  model?: string
   /**
    * A Iara (2026-11-05): o chat do projeto é o chat da Iara. `system` são as regras e as ações do
    * produto (vão na primeira mensagem); `screen`, a tela aberta agora. Na conversa da conta, fora

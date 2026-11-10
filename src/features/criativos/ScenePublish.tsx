@@ -6,9 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
+import { CaptionCheck } from '@/features/instagram-ia/CaptionCheck'
 import { crmContext, useCrm } from '@/features/crm/crmStore'
 import { moduleOn } from '@/features/crm/modules'
 import { loadAccounts, prepareImage, prepareVideo, publishPost, type IgAccount, type PublishStep } from '@/features/crm/instagram'
+import { TrialOption } from '@/features/crm/TrialOption'
+import type { TrialStrategy } from '@/features/crm/trialReels'
 import { writeCaption } from './captionAi'
 import { useAiAvailable } from './link'
 import { SceneRunner, type SceneInput } from './scene'
@@ -60,6 +63,7 @@ export const ScenePublish: React.FC<{
   const [caption, setCaption] = useState(scene.caption ?? '')
   const [writing, setWriting] = useState(false)
   const [shareToFeed, setShareToFeed] = useState(true)
+  const [trial, setTrial] = useState<TrialStrategy | null>(null)
   const [coverAt, setCoverAt] = useState(() => defaultCoverAt(scene))
   const [coverUrl, setCoverUrl] = useState<string>()
   const [step, setStep] = useState<PublishStep | 'gerando' | null>(null)
@@ -174,11 +178,11 @@ export const ScenePublish: React.FC<{
       const blob = await render(setProgress)
       const file = await prepareVideo(new File([blob], `${scene.name.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase() || 'reels'}.mp4`, { type: 'video/mp4' }))
       const cover = await prepareImage(await coverBlob(coverAt, 1080), 'capa.jpg')
-      const published = await publishPost({ teamId, accountId: account.id, kind: 'reel', caption, files: [file], shareToFeed, cover, onStep: setStep })
+      const published = await publishPost({ teamId, accountId: account.id, kind: 'reel', caption, files: [file], shareToFeed, cover, trial: trial ? { strategy: trial, title: scene.name } : undefined, onStep: setStep })
       URL.revokeObjectURL(file.url)
       URL.revokeObjectURL(cover.url)
       setDone({ permalink: published.permalink })
-      toast.success('Reels publicado.')
+      toast.success(trial ? 'Teste publicado: só quem não segue vê.' : 'Reels publicado.')
     } catch (err) {
       setStep(null)
       toast.error(err instanceof Error ? err.message : 'Não consegui publicar.')
@@ -206,7 +210,7 @@ export const ScenePublish: React.FC<{
           </div>
         ) : done ? (
           <div className="space-y-3 text-sm text-gray-700">
-            <p>Reels publicado em @{account?.username}.</p>
+            <p>{trial ? <>Teste publicado em @{account?.username}: só quem não segue vê. Acompanhe em CRM › Instagram › Testes.</> : <>Reels publicado em @{account?.username}.</>}</p>
             <div className="flex gap-2">
               {done.permalink && <Button asChild variant="outline" size="sm" className="gap-1.5 bg-white"><a href={done.permalink} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" /> Ver no Instagram</a></Button>}
               <Button size="sm" className="ml-auto" onClick={onClose}>Fechar</Button>
@@ -234,13 +238,24 @@ export const ScenePublish: React.FC<{
               <label className="block text-xs font-medium text-gray-700">Legenda
                 <textarea className={cn(field, 'mt-1 h-36 py-1.5 leading-snug')} maxLength={2200} value={caption} onChange={(e) => setCaption(e.target.value)} onBlur={(e) => saveCaption(e.target.value)} disabled={busy || writing} placeholder={writing ? 'A IA está escrevendo a legenda…' : 'A legenda do reels.'} />
               </label>
+              {!writing && (
+                <CaptionCheck
+                  value={caption}
+                  disabled={busy}
+                  onChange={(next) => {
+                    setCaption(next)
+                    saveCaption(next)
+                  }}
+                />
+              )}
               <div className="flex items-center gap-2">
                 <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 bg-white text-xs" disabled={busy || writing || !ai} onClick={() => void write()} title={ai ? 'A IA escreve a partir da narração, do Plano, da voz da marca e do Instagram da conta' : 'Conecte a IA desta máquina (o conector)'}>
                   {writing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-violet-600" />} {caption.trim() ? 'Reescrever com IA' : 'Escrever com IA'}
                 </Button>
                 <span className="ml-auto text-[11px] tabular-nums text-gray-400">{caption.length}/2200</span>
               </div>
-              <label className="flex items-center justify-between gap-2 text-sm text-gray-700">Mostrar também no feed<Switch checked={shareToFeed} onCheckedChange={setShareToFeed} disabled={busy} /></label>
+              <TrialOption value={trial} onChange={setTrial} disabled={busy} />
+              {!trial && <label className="flex items-center justify-between gap-2 text-sm text-gray-700">Mostrar também no feed<Switch checked={shareToFeed} onCheckedChange={setShareToFeed} disabled={busy} /></label>}
               {!vertical && <p className="text-xs text-amber-700">O vídeo não está em 9:16: no reels ele aparece com faixas.</p>}
               {tooShort && <p className="text-xs text-amber-700">O reels precisa de pelo menos 3 segundos.</p>}
               {tooLong && <p className="text-xs text-amber-700">O reels vai até 15 minutos.</p>}

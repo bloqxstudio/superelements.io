@@ -905,19 +905,72 @@ export const COMMERCIAL_PHOTOS = [
   { src: '/brands/avence-studio/cases/vizor-celular.webp', name: 'case-vizor', desc: 'Página do case Vizor Películas no celular', origin: 'marca' as const },
 ]
 
-/** O vídeo explicativo do comercial, pronto para o estúdio (briefing: sem fala; a narração vem de Estilo › Som). */
-export function commercialData(brandName: string): ExplainerData {
+/**
+ * O mesmo comercial (os 23 planos e o ritmo do reel de referência) contando o Marketing 360 (2026-11-09, o
+ * usuário: "quero criar o mesmo vídeo, exatamente como é… mas com a marca da Avence… que fale de marketing 360,
+ * a proposta de serviço que vamos rodar, focada em vender vários serviços ao cliente: criativo, conteúdo, vídeos,
+ * anúncios, site, acompanhamento, comercial, CRM").
+ */
+export function commercial360Beats(brandName: string): ExplainerBeat[] {
   const avence = /avence/i.test(brandName)
+  const at = (s: number, e: number) => ({ start: s, end: e })
+  const tr = (transition: TransitionId, sfx: SfxId) => ({ transition, sfx })
+  const beats: Beat[] = [
+    { ...at(0, 0.6), shot: 'abertura', pattern: 'gancho', headline: 'Se você', icon: 'mao', fala: 'Se você', ...tr('corte', 'swish') },
+    { ...at(0.6, 1.62), shot: 'objeto3d', pattern: 'titulo', headline: 'Quer', sub: 'Vender *mais*', kicker: '$', fala: 'quer vender mais,', ...tr('circulo', 'whoosh') },
+    { ...at(1.62, 2.62), shot: 'tipo', pattern: 'titulo', headline: 'O seu', sub: 'marketing', icon: 'grafico', fala: 'o seu marketing', ...tr('zoom', 'swish') },
+    { ...at(2.62, 3.76), shot: 'digitado', pattern: 'titulo', headline: 'Precisa funcionar *como um...*', fala: 'precisa funcionar como um', ...tr('corte', 'digitar') },
+    { ...at(3.76, 5.16), shot: 'passagem', pattern: 'titulo', headline: 'Time', sub: '*Completo*', kicker: '+', fala: 'time completo.', ...tr('corte', 'whoosh') },
+    { ...at(5.16, 6.28), shot: 'selo', pattern: 'titulo', headline: 'Não basta', sub: 'Postar', icon: 'celular', fala: 'Não basta postar.', ...tr('zoom', 'impacto') },
+    { ...at(6.28, 6.92), shot: 'frase', pattern: 'titulo', headline: 'É *preciso*', fala: 'É preciso', ...tr('corte', 'swish') },
+    { ...at(6.92, 8.26), shot: 'cartao', pattern: 'lista', headline: 'Atrair', sub: 'Atenção', number: { value: 1 }, icon: 'olho', items: ['Criativos, conteúdo e vídeos que param o dedo.'], fala: 'atrair atenção,', ...tr('zoom', 'impacto') },
+    { ...at(8.26, 9.42), shot: 'cartao', pattern: 'lista', headline: 'Gerar', sub: 'Demanda', number: { value: 2 }, icon: 'alvo', items: ['Anúncios e um site feitos para converter.'], fala: 'gerar demanda', ...tr('flash', 'whoosh') },
+    { ...at(9.42, 11.32), shot: 'cartao', pattern: 'lista', headline: 'E transformar contatos em', sub: 'Vendas', number: { value: 3 }, icon: 'pessoa', items: ['Comercial com CRM e acompanhamento de perto.'], fala: 'e transformar contatos em vendas.', ...tr('flash', 'whoosh') },
+    { ...at(11.32, 12.42), shot: 'logo', pattern: 'cta', headline: brandName, sub: 'Marketing 360', fala: `A ${brandName}`, ...tr('circulo', 'ding') },
+    { ...at(12.42, 13.82), shot: 'destaque', pattern: 'titulo', headline: 'Cuida do *marketing inteiro*', fala: 'cuida do marketing inteiro:', ...tr('corte', 'swish') },
+    { ...at(13.82, 14.86), shot: 'celular', pattern: 'foto', headline: 'Criativos e *conteúdo*', sub: 'Vídeos', photo: avence ? 'criacao-avence' : undefined, fala: 'criativos, conteúdo e vídeos,', ...tr('corte', 'whoosh') },
+    { ...at(14.86, 15.82), shot: 'celular', pattern: 'foto', headline: 'Anúncios e *site*', sub: 'CRM e comercial', photo: avence ? 'case-processbase' : undefined, fala: 'anúncios, site, CRM e comercial,', ...tr('corte', 'swish') },
+    { ...at(15.82, 16.62), shot: 'frase', pattern: 'titulo', headline: 'Tudo *integrado* para', surface: 'branco', fala: 'tudo integrado para', ...tr('zoom', 'swish') },
+    { ...at(16.62, 18.02), shot: 'chuva3d', pattern: 'numero', headline: 'Gerar mais', sub: 'vendas', kicker: '$', fala: 'gerar mais vendas,', ...tr('corte', 'subida') },
+    { ...at(18.02, 19.42), shot: 'escudo', pattern: 'icone', headline: 'Fortalecer', sub: 'Sua *marca*', icon: 'escudo', fala: 'fortalecer sua marca', ...tr('zoom', 'pop') },
+    { ...at(19.42, 21.92), shot: 'ranking', pattern: 'comparar', headline: 'Sua empresa', sub: 'na frente da concorrência', items: ['Concorrência', 'Concorrência', 'Concorrência'], fala: 'e colocar sua empresa na frente da concorrência.', ...tr('corte', 'clique') },
+    { ...at(21.92, 23.32), shot: 'orcamento', pattern: 'cta', headline: 'Solicite um', sub: 'orçamento', fala: 'Solicite um orçamento', ...tr('zoom', 'swish') },
+    { ...at(23.32, 24.76), shot: 'circulo', pattern: 'cta', headline: 'E comece a vender *mais*', icon: 'dinheiro', fala: 'e comece a vender mais', ...tr('circulo', 'whoosh') },
+    { ...at(24.76, 25.92), shot: 'frase', pattern: 'titulo', headline: 'Com um marketing', surface: 'tom', fala: 'com um marketing', ...tr('corte', 'swish') },
+    { ...at(25.92, 27.2), shot: 'circulo', pattern: 'cta', headline: '360', sub: 'de verdade', icon: 'mundo', fala: 'trezentos e sessenta de verdade.', ...tr('zoom', 'impacto') },
+    { ...at(27.2, 31.4), shot: 'assinatura', pattern: 'cta', headline: brandName, sub: avence ? 'avencestudio.com' : undefined, fullScreen: true, ...tr('corte', 'ding') },
+  ]
+  return beats.map((b, i) => ({ id: `m${i}`, ...b }))
+}
+
+/** As fotos do comercial Marketing 360 da Avence: a mesa de criação (story da marca) e a tela de um site no celular. */
+export const COMMERCIAL_360_PHOTOS = [
+  { src: '/brands/avence-studio/stories/antes-de-ir-ao-ar.png', name: 'criacao-avence', desc: 'Mesa de criação da Avence Studio: paleta, rascunhos e o post no celular', origin: 'marca' as const },
+  COMMERCIAL_PHOTOS[0],
+]
+
+export const COMMERCIAL_THEMES = {
+  site: { label: 'Comercial animado: site', text: 'Anúncio de 31 s com tipografia cinética, objeto 3D, cartões numerados, celular, ranking e orçamento, já na marca. Depois é só trocar os textos e narrar.' },
+  marketing360: { label: 'Comercial animado: Marketing 360', text: 'O mesmo comercial contando o Marketing 360: criativos, conteúdo, vídeos, anúncios, site, CRM, comercial e acompanhamento.' },
+} as const
+export type CommercialTheme = keyof typeof COMMERCIAL_THEMES
+
+/** O vídeo explicativo do comercial, pronto para o estúdio (briefing: sem fala; a narração vem de Estilo › Som). */
+export function commercialData(brandName: string, theme: CommercialTheme = 'site'): ExplainerData {
+  const avence = /avence/i.test(brandName)
+  const m360 = theme === 'marketing360'
   return {
     ...emptyExplainer(),
     mode: 'briefing',
     look: 'comercial',
     captions: 'nenhuma',
-    beats: commercialBeats(brandName),
-    photos: avence ? COMMERCIAL_PHOTOS.map((p) => ({ ...p })) : [],
+    beats: m360 ? commercial360Beats(brandName) : commercialBeats(brandName),
+    photos: avence ? (m360 ? COMMERCIAL_360_PHOTOS : COMMERCIAL_PHOTOS).map((p) => ({ ...p })) : [],
     sfxVolume: 0.55,
-    caption: avence
-      ? 'Não basta aparecer: o seu site precisa prender a atenção, gerar interesse e convencer quem está visitando. A Avence Studio faz sites em WordPress e Elementor, rápidos e feitos para o celular. Peça um orçamento.'
-      : undefined,
+    caption: !avence
+      ? undefined
+      : m360
+        ? 'Marketing que funciona como um time completo: criativos, conteúdo e vídeos, anúncios, site, CRM e comercial, com acompanhamento de perto. Tudo integrado para atrair atenção, gerar demanda e transformar contatos em vendas. Conheça o Marketing 360 da Avence Studio e peça um orçamento.'
+        : 'Não basta aparecer: o seu site precisa prender a atenção, gerar interesse e convencer quem está visitando. A Avence Studio faz sites em WordPress e Elementor, rápidos e feitos para o celular. Peça um orçamento.',
   }
 }

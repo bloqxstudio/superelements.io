@@ -1,11 +1,11 @@
 import { useIaraScreen, type IaraAction, type IaraDone } from '@/features/iara/store'
 import { useEditor } from './store'
-import { SceneRunner, sceneBitmaps } from './scene'
+import { sceneFrames } from './sceneCheck'
 import { writeSceneCode } from './sceneAi'
 import { CAPTION_STYLES, narrateParts, sceneDataOf, type CaptionStyle, type SceneCaptions } from './sceneEdit'
 import { DEFAULT_VOICE } from './explicativo/VoicePicker'
 import { tryScene } from './videoFromReference'
-import { sizeOf, type CodeScene, type CreativeSet } from './types'
+import type { CodeScene, CreativeSet } from './types'
 
 /**
  * O estúdio de animação na Iara (2026-11-09; o usuário, apontando o "prompt avançado" do estúdio: "esse comando
@@ -29,25 +29,7 @@ const editScene = (id: string, fn: (s: CodeScene) => CodeScene) =>
   useEditor.getState().edit((set: CreativeSet) => ({ ...set, scenes: (set.scenes ?? []).map((s) => (s.id === id ? { ...fn(s), updatedAt: Date.now() } : s)) }))
 
 /** Quadros do vídeo como a pessoa vê (JPEG pequeno), para a Iara conferir. */
-async function frames(set: CreativeSet, scene: CodeScene, times: number[]) {
-  const { width, height } = sizeOf(scene.format)
-  const r = new SceneRunner({ code: scene.code, width, height, duration: scene.duration, images: await sceneBitmaps(scene, useEditor.getState().images, set.brand), brand: { name: set.brand.name, colors: set.brand.colors.map((c) => c.hex), font: set.brand.headingFont }, data: scene.data })
-  try {
-    await r.load()
-    const out: { name: string; data: string }[] = []
-    for (const t of times) {
-      const bmp = await r.frame(Math.max(0, Math.min(scene.duration - 0.05, t)))
-      const w = 360, h = Math.round((360 * height) / width)
-      const c = Object.assign(document.createElement('canvas'), { width: w, height: h })
-      c.getContext('2d')!.drawImage(bmp, 0, 0, w, h)
-      bmp.close()
-      out.push({ name: `quadro-${t.toFixed(1)}s.jpg`, data: c.toDataURL('image/jpeg', 0.82) })
-    }
-    return out
-  } finally {
-    r.dispose()
-  }
-}
+const frames = async (set: CreativeSet, scene: CodeScene, times: number[]) => (await sceneFrames(set, scene, times)).map(({ name, data }) => ({ name, data }))
 const defaultTimes = (scene: CodeScene) => {
   const parts = sceneDataOf(scene.data).parts
   return parts?.length ? parts.slice(0, 6).map((p) => Math.min(p.end - 0.1, p.start + 1.4)) : [0.15, 0.35, 0.6, 0.85].map((k) => k * scene.duration)

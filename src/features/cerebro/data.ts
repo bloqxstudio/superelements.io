@@ -176,6 +176,30 @@ export async function mediaUrl(path: string, mtime?: number): Promise<string> {
   return data.signedUrl
 }
 
+/**
+ * As imagens guardadas no Cérebro da conta, já com endereço (2026-11-10, o usuário: "quero acesso aos
+ * arquivos da conta direto no editor de post… puxar um logo ou imagem diretamente"). Usa o mesmo cache
+ * de links de 7 dias do Cérebro e assina só o que falta, numa ida só.
+ */
+export async function accountImages(teamId: string): Promise<VaultMedia[]> {
+  activeTeam = teamId
+  const isImg = (p: string) => /\.(webp|png|jpe?g|gif|svg)$/i.test(p)
+  const files = (await loadFiles(teamId)).filter((m) => isImg(m.path) && !isAutoPath(m.path))
+  const cache = readCache()
+  const keyOf = (m: VaultMedia) => `${teamId}/${m.path}@${Math.round(m.mtime)}`
+  const missing = files.filter((m) => !(cache[keyOf(m)]?.until > Date.now() + 3_600_000))
+  if (missing.length) {
+    const { data, error } = await bucket().createSignedUrls(missing.map((m) => `${root(teamId)}/${m.path}`), TTL / 1000)
+    if (error) throw error
+    missing.forEach((m, i) => { const url = data?.[i]?.signedUrl; if (url) cache[keyOf(m)] = { url, until: Date.now() + TTL } })
+    try {
+      const now = Date.now()
+      localStorage.setItem(CACHE_KEY, JSON.stringify(Object.fromEntries(Object.entries(cache).filter(([, v]) => v.until > now).slice(-500))))
+    } catch { /* sem localStorage: só não guarda */ }
+  }
+  return files.map((m) => ({ ...m, url: cache[keyOf(m)]?.url })).filter((m) => m.url).sort((a, b) => b.mtime - a.mtime)
+}
+
 // ———————————————————————————————————— pasta "Da plataforma"
 
 const line = (label: string, value?: string) => (value?.trim() ? `- **${label}:** ${value.trim()}\n` : '')

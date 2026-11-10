@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Bookmark, Check, ExternalLink, Heart, MessageCircle, Play, ImagePlus, Lightbulb, Loader2, MessagesSquare, Pencil, Plus, RefreshCw, Search, Sparkles, Star, Trash2, X } from 'lucide-react'
+import { Bookmark, Check, Download, ExternalLink, Heart, MessageCircle, Play, ImagePlus, Lightbulb, Loader2, MessagesSquare, Pencil, Plus, RefreshCw, Search, Sparkles, Star, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useCrm } from '@/features/crm/crmStore'
 import { FIELD, Page, PageHeader } from '@/features/crm/ui'
 import { createContent } from '@/features/conteudos/api'
+import { ImportDialog } from '@/features/referencias/ImportDialog'
 import { RecreateDialog } from '@/features/referencias/RecreateDialog'
+import { useReferencesIara } from '@/features/referencias/referenciasIara'
 import { byRecent, createReference, createSource, deleteReference, deleteSource, listReferences, listSources, referenceShotUrl, updateReference, updateSource, uploadReferenceShot, type Reference, type ReferenceSource } from '@/features/referencias/api'
 import { KIND_LABEL, PLATFORM_LABEL, contentFormatOf, parseRefUrl, parseTags, threadUrlOf, type RefKind } from '@/features/referencias/rules'
 import { cn } from '@/lib/utils'
@@ -33,7 +35,7 @@ const Shot: React.FC<{ teamId: string; path: string; className?: string }> = ({ 
   return url ? <img src={url} alt="" loading="lazy" className={cn('h-full w-full object-cover', className)} /> : <div className="h-full w-full animate-pulse bg-gray-100" />
 }
 
-const Card: React.FC<{ r: Reference; teamId: string; onEdit: () => void; onChange: (r: Reference) => void; onDelete: () => void }> = ({ r, teamId, onEdit, onChange, onDelete }) => {
+const Card: React.FC<{ r: Reference; teamId: string; onEdit: () => void; onChange: (r: Reference) => void; onDelete: () => void; selected?: boolean; onSelect?: () => void }> = ({ r, teamId, onEdit, onChange, onDelete, selected, onSelect }) => {
   const navigate = useNavigate()
   const team = useCrm((s) => s.team)
   const [embed, setEmbed] = useState(false)
@@ -66,7 +68,7 @@ const Card: React.FC<{ r: Reference; teamId: string; onEdit: () => void; onChang
   const [recreating, setRecreating] = useState(false)
 
   return (
-    <article className="flex flex-col overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)]">
+    <article className={cn('flex flex-col overflow-hidden rounded-xl bg-white', selected ? 'shadow-[0_0_0_2px_rgb(124_58_237)]' : 'shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)]')}>
       <div className={cn('relative bg-gray-50', tall ? 'aspect-[9/14]' : 'aspect-[4/5]')}>
         {embed && parsed?.embed ? (
           <iframe src={parsed.embed} title={r.title || 'Referência'} loading="lazy" className="h-full w-full border-0 bg-white" allow="encrypted-media; picture-in-picture" />
@@ -89,6 +91,11 @@ const Card: React.FC<{ r: Reference; teamId: string; onEdit: () => void; onChang
         <button type="button" onClick={() => void star()} aria-pressed={r.starred} title={r.starred ? 'Tirar das melhores' : 'Marcar como uma das melhores (vai no contexto da IA)'} className={cn('absolute left-2 top-2 rounded-full p-1.5 shadow', r.starred ? 'bg-amber-400 text-white' : 'bg-white/90 text-gray-500 hover:text-amber-500')}>
           <Star className="h-3.5 w-3.5" fill={r.starred ? 'currentColor' : 'none'} />
         </button>
+        {!embed && onSelect && (
+          <button type="button" onClick={onSelect} aria-pressed={!!selected} title={selected ? 'Tirar a seleção' : 'Selecionar para a Iara (recriar ou criar um vídeo pelo chat)'} className={cn('absolute right-2 top-2 flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-semibold shadow', selected ? 'bg-violet-600 text-white' : 'bg-white/90 text-gray-600 hover:text-violet-700')}>
+            <Check className="h-3.5 w-3.5" /> {selected ? 'Selecionada' : 'Selecionar'}
+          </button>
+        )}
       </div>
       <div className="flex flex-1 flex-col p-3">
         <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
@@ -139,8 +146,10 @@ const ago = (t?: number) => {
  * (`services/referencias`, logado na conta pessoal) lê na rotina ou quando alguém pede "Ver novas agora",
  * classifica com a IA e cria as referências como "Nova".
  */
-const Groups: React.FC<{ teamId: string; onRun: () => void }> = ({ teamId, onRun }) => {
+const Groups: React.FC<{ teamId: string; onRun: () => void; onReview: () => void }> = ({ teamId, onRun, onReview }) => {
   const [list, setList] = useState<ReferenceSource[]>()
+  // "Importar do grupo": o fluxo por tela (escolher quantos → acompanhar → revisar as novas)
+  const [importing, setImporting] = useState<{ sourceId?: string }>()
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [link, setLink] = useState('')
@@ -179,8 +188,17 @@ const Groups: React.FC<{ teamId: string; onRun: () => void }> = ({ teamId, onRun
           <h2 id="grupos-ig" className="flex items-center gap-2 text-sm font-semibold text-gray-900"><MessagesSquare className="h-4 w-4 text-fuchsia-600" /> Grupos do Instagram</h2>
           <p className="mt-0.5 text-xs text-gray-500">Mande os posts no grupo do cliente: o Mac da equipe abre cada um, guarda a capa e os quadros, a IA classifica e a referência aparece aqui como Nova.</p>
         </div>
-        {!adding && <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> Grupo</Button>}
+        <div className="flex gap-2">
+          {!adding && <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> Grupo</Button>}
+          {!!list?.some((s) => s.enabled) && <Button size="sm" className="gap-1.5" onClick={() => setImporting({})}><Download className="h-4 w-4" /> Importar do grupo</Button>}
+        </div>
       </div>
+      {list && importing && (
+        <ImportDialog sources={list} teamId={teamId} open initialSourceId={importing.sourceId}
+          onClose={() => { setImporting(undefined); void load(); onRun() }}
+          onProgress={onRun}
+          onReview={() => { setImporting(undefined); void load(); onRun(); onReview() }} />
+      )}
       {adding && (
         <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_2fr_auto]" onSubmit={(e) => { e.preventDefault(); void add() }}>
           <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="Nome (ex.: Refs Vizor)" className={cn(FIELD, 'h-9')} />
@@ -202,7 +220,7 @@ const Groups: React.FC<{ teamId: string; onRun: () => void }> = ({ teamId, onRun
               <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg bg-gray-50 px-3 py-2 text-xs">
                 <span className="font-medium text-gray-900">{s.name}</span>
                 <span className={cn('text-gray-500', s.lastError && 'text-red-700')}>
-                  {s.lastError ? s.lastError : pending ? 'Esperando o Mac ler…' : `Lido ${ago(s.lastRunAt)}${s.lastFound !== undefined && s.lastRunAt ? ` · ${s.lastFound} nova${s.lastFound === 1 ? '' : 's'}` : ''}`}
+                  {s.lastError ? s.lastError : pending ? (s.runStage === 'importando' && s.runTotal ? `Importando ${s.runDone ?? 0} de ${s.runTotal}…` : s.runStage === 'lendo' ? 'Lendo o grupo…' : 'Esperando o Mac ler…') : `Lido ${ago(s.lastRunAt)}${s.lastFound !== undefined && s.lastRunAt ? ` · ${s.lastFound} nova${s.lastFound === 1 ? '' : 's'}` : ''}`}
                 </span>
                 <div className="ml-auto flex flex-wrap items-center gap-2">
                   <label className="flex items-center gap-1 text-gray-600">
@@ -212,8 +230,8 @@ const Groups: React.FC<{ teamId: string; onRun: () => void }> = ({ teamId, onRun
                     </select>
                   </label>
                   <label className="flex items-center gap-1 text-gray-600"><input type="checkbox" checked={s.enabled} onChange={(e) => void patch(s, { enabled: e.target.checked })} className="h-3.5 w-3.5" /> Ligado</label>
-                  <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" disabled={pending || !s.enabled} onClick={() => void patch(s, { requestRun: true })}>
-                    {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Ver novas agora
+                  <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" disabled={!s.enabled} onClick={() => setImporting({ sourceId: s.id })}>
+                    {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} {pending ? 'Ver andamento' : 'Importar'}
                   </Button>
                   <a href={s.threadUrl} target="_blank" rel="noreferrer" className="text-gray-500 hover:text-gray-900" title="Abrir o grupo"><ExternalLink className="h-3.5 w-3.5" /></a>
                   <button type="button" onClick={() => void remove(s)} className="text-gray-400 hover:text-red-700" title="Parar de ler este grupo"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -237,6 +255,8 @@ const References: React.FC = () => {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'recentes' | 'engajamento'>('recentes')
   const fileRef = useRef<HTMLInputElement>(null)
+  // A referência selecionada vai para o chat da Iara (2026-11-10)
+  const [selectedId, setSelectedId] = useState<string>()
 
   const load = useCallback(async () => {
     if (!team) return
@@ -282,6 +302,9 @@ const References: React.FC = () => {
       .filter((r) => !q || [r.title, r.notes, r.url, r.author ?? '', ...r.tags].join(' ').toLowerCase().includes(q))
       .sort(sort === 'engajamento' ? (a, b) => ((b.likes ?? -1) + (b.comments ?? 0)) - ((a.likes ?? -1) + (a.comments ?? 0)) : byRecent)
   }, [items, filter, query, sort])
+
+  const selected = items?.find((r) => r.id === selectedId)
+  useReferencesIara(items, selected, setSelectedId)
 
   if (teamStatus === 'ready' && !team) {
     return <Page><PageHeader title="Referências" text="As referências são de uma conta de empresa. Peça um convite em Equipe." /></Page>
@@ -339,7 +362,7 @@ const References: React.FC = () => {
         </form>
       )}
 
-      {team && <Groups teamId={team.id} onRun={() => window.setTimeout(() => void load(), 1500)} />}
+      {team && <Groups teamId={team.id} onRun={() => window.setTimeout(() => void load(), 1500)} onReview={() => { setFilter('novas'); setSort('recentes') }} />}
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         {(['todas', 'novas', 'melhores', ...KINDS] as const).map((f) => {
@@ -377,7 +400,8 @@ const References: React.FC = () => {
             <Card key={r.id} r={r} teamId={team!.id}
               onEdit={() => setForm({ id: r.id, url: r.url, kind: r.kind, title: r.title, notes: r.notes, tags: r.tags.join(', '), starred: r.starred, mediaPath: r.mediaPath })}
               onChange={(next) => setItems((list) => (list ?? []).map((x) => (x.id === next.id ? next : x)))}
-              onDelete={() => void remove(r)} />
+              onDelete={() => void remove(r)}
+              selected={selectedId === r.id} onSelect={() => setSelectedId((cur) => (cur === r.id ? undefined : r.id))} />
           ))}
         </div>
       )}

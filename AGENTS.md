@@ -73,7 +73,7 @@ Sem segredos e sem contatos de prospects ou clientes finais. O Cérebro **do app
 | Área | Arquivo |
 | --- | --- |
 | Produção × CRM, contas e módulos, Oportunidades, Social, Instagram da equipe, Anúncios, Stories programados, Site (visitas, mapa, Shopify), WhatsApp (serviço, inbox, fluxos, comandos, IA local, relatórios), leads por webhook | `crm.md` |
-| Instagram: link para o cliente conectar, análise de perfil, Meta em produção, DMs por webhook | `instagram.md` |
+| Instagram: link para o cliente conectar, análise de perfil, Meta em produção, DMs por webhook, inteligência de Instagram (ganchos, legenda, humanizador, virais, o que funcionou, skills `ig-*`) | `instagram.md` |
 | Produtos (Completo, Sinfy, SuperElements), conta Sinfy, criativos na marca da conta, MCP da Sinfy, piloto Vizor | `produtos-sinfy.md` |
 | Motion nos Criativos (estúdio, publicar, keyframes, cena em código) | `criativos-motion.md` |
 | Iara, a assistente (chat único, ações, troca de bastão, equipe, imagens) | `iara.md` |

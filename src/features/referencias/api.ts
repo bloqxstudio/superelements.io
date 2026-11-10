@@ -124,14 +124,35 @@ export interface ReferenceSource {
   lastRunAt?: number
   lastFound?: number
   lastError?: string
+  /** O andamento do "Importar do grupo" (migração 20261109200000), escrito pelo Mac. */
+  runLimit?: number
+  runStage?: 'lendo' | 'importando' | 'pronto' | 'erro'
+  runStartedAt?: number
+  runTotal?: number
+  runDone?: number
+  runNote?: string
 }
 
-type SourceRow = { id: string; name: string; thread_url: string; enabled: boolean; every_minutes: number; run_requested_at: string | null; last_run_at: string | null; last_found: number | null; last_error: string | null }
+type SourceRow = { id: string; name: string; thread_url: string; enabled: boolean; every_minutes: number; run_requested_at: string | null; last_run_at: string | null; last_found: number | null; last_error: string | null; run_limit?: number | null; run_stage?: ReferenceSource['runStage'] | null; run_started_at?: string | null; run_total?: number | null; run_done?: number | null; run_note?: string | null }
 const toSource = (r: SourceRow): ReferenceSource => ({
   id: r.id, name: r.name, threadUrl: r.thread_url, enabled: r.enabled, everyMinutes: r.every_minutes,
   runRequestedAt: r.run_requested_at ? Date.parse(r.run_requested_at) : undefined, lastRunAt: r.last_run_at ? Date.parse(r.last_run_at) : undefined,
   lastFound: r.last_found ?? undefined, lastError: r.last_error ?? undefined,
+  runLimit: r.run_limit ?? undefined, runStage: r.run_stage ?? undefined, runStartedAt: r.run_started_at ? Date.parse(r.run_started_at) : undefined,
+  runTotal: r.run_total ?? undefined, runDone: r.run_done ?? undefined, runNote: r.run_note ?? undefined,
 })
+
+/** Um grupo só (o andamento da importação, conferido de poucos em poucos segundos com a janela aberta). */
+export async function getSource(id: string): Promise<ReferenceSource | undefined> {
+  const { data } = await db.from('crm_reference_sources').select('*').eq('id', id).maybeSingle()
+  return data ? toSource(data as SourceRow) : undefined
+}
+
+/** As referências que um grupo trouxe desde um momento (o resumo do fim da importação). */
+export async function referencesSince(teamId: string, sourceId: string, since: number): Promise<Reference[]> {
+  const { data } = await db.from('crm_references').select('*').eq('team_id', teamId).eq('source_id', sourceId).gte('created_at', new Date(since).toISOString()).order('created_at', { ascending: false }).limit(60)
+  return ((data ?? []) as Row[]).map(toRef).sort(byRecent)
+}
 
 export async function listSources(teamId: string): Promise<ReferenceSource[]> {
   const { data, error } = await db.from('crm_reference_sources').select('*').eq('team_id', teamId).order('created_at')
@@ -148,12 +169,12 @@ export async function createSource(teamId: string, name: string, threadUrl: stri
   return toSource(data as SourceRow)
 }
 
-export async function updateSource(id: string, patch: { enabled?: boolean; everyMinutes?: number; requestRun?: boolean; name?: string }): Promise<ReferenceSource> {
+export async function updateSource(id: string, patch: { enabled?: boolean; everyMinutes?: number; requestRun?: boolean; runLimit?: number | null; name?: string }): Promise<ReferenceSource> {
   const { data, error } = await db.from('crm_reference_sources').update({
     ...(patch.enabled !== undefined && { enabled: patch.enabled }),
     ...(patch.everyMinutes !== undefined && { every_minutes: patch.everyMinutes }),
     ...(patch.name !== undefined && { name: patch.name.trim().slice(0, 80) }),
-    ...(patch.requestRun && { run_requested_at: new Date().toISOString() }),
+    ...(patch.requestRun && { run_requested_at: new Date().toISOString(), run_limit: patch.runLimit ?? null, run_stage: null, run_total: null, run_done: null, run_note: null }),
   }).eq('id', id).select('*').single()
   if (error) fail(error)
   return toSource(data as SourceRow)

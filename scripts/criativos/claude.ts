@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { findBin, kill, launch } from '../space/chatPlugin.ts'
 import { extractJson } from './codex.ts'
+import { claudeModel } from './modelos.ts'
 
 /**
  * Uma pergunta ao Claude Code desta máquina (o mesmo do chat, sem chave de
@@ -41,10 +42,12 @@ interface Ask {
   idleMs?: number
 }
 
-export const askClaude = <T>({ system, schema, content, model = 'sonnet', timeoutMs = 180_000, maxTurns = 2, signal, onStep, effort, idleMs = 90_000, web = false }: Ask): Promise<T> =>
+export const askClaude = <T>({ system, schema, content, model: explicitModel, timeoutMs = 180_000, maxTurns = 2, signal, onStep, effort, idleMs = 90_000, web = false }: Ask): Promise<T> =>
   new Promise((resolve, reject) => {
     const bin = findBin('claude')
     if (!bin) return reject(new Error('O Claude Code não foi encontrado nesta máquina (ou diga onde está em SPACE_CLAUDE_BIN).'))
+    // O modelo escolhido na tela para a tarefa (o pedido em andamento) ou o padrão, Sonnet
+    const model = claudeModel(explicitModel)
     const cwd = mkdtempSync(path.join(os.tmpdir(), 'se-criativos-'))
     const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }
     for (const key of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT']) delete env[key]

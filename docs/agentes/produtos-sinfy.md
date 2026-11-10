@@ -37,3 +37,12 @@ O usuário: validar com a Vizor (cliente, site em Astro) "análise da jornada co
 - **Marca da conta**: `brands/vizor-peliculas/DESIGN.md` (logos em `public/brands/vizor-peliculas/logo/`) guardado em `crm_account_context.brand_md` (migração `20261103160000_crm_account_brand.sql`, aplicada). `accountBrand` lê essa coluna depois dos projetos da conta, então conta sem projeto já cria Criativos na marca dela. Ainda sem tela para editar (SQL).
 - **Referência de conteúdo** @protlepeliculas (concorrente direta): padrões lidos dos 12 posts públicos em `brands/vizor-peliculas/REFERENCIA-CONTEUDO.md` (formatos e lógica, nunca a identidade dela); pauta de 15 conteúdos criada como `ideia` na conta.
 - **Instagram sem login**: a Business Discovery da Meta não foi testada (ler o token direto foi barrado; o caminho certo é uma ação na função `instagram`) e provavelmente exige o login pelo Facebook com a conta da Avence ligada a uma Página. Nunca raspar o Instagram.
+
+### Criativos numa conta de cliente sem nada da agência (2026-11-10)
+
+Pedido do usuário: numa conta de cliente, o "Novo conjunto de criativos" deve ser 100% do cliente, sem modelos
+da agência. Numa conta que não é a da casa (`team.isHome` falso, `isClientAccount()` em `src/features/criativos/ai.ts`):
+os modelos prontos são `CLIENT_POST_MODELS` (neutros, em `templates.ts`), sem cases nem exemplos da Avence no
+pedido para a IA (`CLIENT_AI`, `hideCases`), e `generatePosts` sempre manda a `company` da conta (nome + Plano:
+oferta, público, tom, restrições), para o servidor não usar a voz do Avence Studio. No editor, o chat não oferece
+"Cases da Avence" e `otherBrand` corta cases e ilustrações. Na conta da casa nada mudou.

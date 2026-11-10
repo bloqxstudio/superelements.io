@@ -2,7 +2,7 @@ import { DayPicker } from '@/components/DayPicker'
 import { addDays, dayLong, dayOfPeriod, dayPeriod, dayRange, isDayPeriod, todayKey, type DayPeriod } from '@/lib/day'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CalendarClock, CircleAlert, Copy, Inbox, ScanSearch, Instagram as InstagramIcon, KeyRound, Loader2, Plus, RefreshCw, Send } from 'lucide-react'
+import { CalendarClock, CircleAlert, Copy, FlaskConical, Inbox, ScanSearch, Instagram as InstagramIcon, KeyRound, Loader2, Plus, RefreshCw, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useCrm } from '@/features/crm/crmStore'
@@ -12,6 +12,7 @@ import { InboxArea } from '@/features/crm/InstagramInbox'
 import { PostPanel } from '@/features/crm/InstagramPost'
 import { PublishDialog } from '@/features/crm/InstagramPublish'
 import { StoriesArea } from '@/features/crm/InstagramStories'
+import { TrialsArea } from '@/features/crm/InstagramTrials'
 import { FORMAT_ICON, MediaThumb } from '@/features/crm/InstagramThumb'
 import {
   FORMAT_LABEL,
@@ -59,7 +60,7 @@ import { cn } from '@/lib/utils'
 type Period = 7 | 30 | DayPeriod
 type Tab = 'geral' | 'posts'
 /** As abas da tela: o perfil, os stories programados e os anúncios. */
-type Area = 'perfil' | 'analise' | 'caixa' | 'stories'
+type Area = 'perfil' | 'analise' | 'testes' | 'caixa' | 'stories'
 type SortKey = 'recentes' | 'alcance' | 'interacoes' | 'salvos' | 'taxa'
 
 // O servidor sincroniza cada conta a cada ~1 hora (cron `crm-social-sync`, 2026-11-09): a tela só lê a
@@ -850,7 +851,7 @@ const InstagramPage: React.FC = () => {
   }, [reload])
 
   const account = accounts?.find((a) => a.id === (selected ?? params.get('instagram'))) ?? accounts?.[0]
-  const area: Area = params.get('aba') === 'stories' ? 'stories' : params.get('aba') === 'caixa' ? 'caixa' : params.get('aba') === 'analise' ? 'analise' : 'perfil'
+  const area: Area = params.get('aba') === 'stories' ? 'stories' : params.get('aba') === 'caixa' ? 'caixa' : params.get('aba') === 'analise' ? 'analise' : params.get('aba') === 'testes' ? 'testes' : 'perfil'
   const showArea = (to: Area) =>
     setParams(
       (current) => {
@@ -870,6 +871,7 @@ const InstagramPage: React.FC = () => {
           [
             ['perfil', 'Perfil', InstagramIcon],
             ['analise', 'Análise', ScanSearch],
+            ['testes', 'Testes', FlaskConical],
             ['caixa', 'Caixa', Inbox],
             ['stories', 'Stories', CalendarClock],
           ] as [Area, string, React.ElementType][]
@@ -900,6 +902,18 @@ const InstagramPage: React.FC = () => {
             </label>
           )}
           <AnalysisArea key={account.id} account={account} />
+        </div>
+      ) : area === 'testes' && team && account && !error ? (
+        <div className="grid gap-4">
+          {accounts.length > 1 && (
+            <label className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+              Conta do Instagram
+              <select aria-label="Conta do Instagram" value={account.id} onChange={(event) => setSelected(event.target.value)} className={cn(FIELD, 'h-9 w-auto min-w-40')}>
+                {accounts.map((item) => <option key={item.id} value={item.id}>@{item.username}</option>)}
+              </select>
+            </label>
+          )}
+          <TrialsArea key={account.id} account={account} />
         </div>
       ) : area === 'caixa' && team && account && !error ? (
         <div className="grid gap-4">

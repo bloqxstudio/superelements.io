@@ -12,6 +12,10 @@ import { useProjectList, useProjectStore } from '@/features/projects/projectStor
 import { Chip } from '@/features/prospects/ui'
 import { cn } from '@/lib/utils'
 import { FIELD, plural } from './ui'
+import { TrialOption } from './TrialOption'
+import type { TrialStrategy } from './trialReels'
+import { CaptionCheck } from '@/features/instagram-ia/CaptionCheck'
+import { HASHTAG_LIMIT } from '@/features/instagram-ia/legenda'
 import {
   creativeFits,
   feedRatio,
@@ -141,8 +145,8 @@ const CreativePicker: React.FC<{ onPick: (set: CreativeSet, postId: string) => v
   )
 }
 
-export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; onPublished: () => void }> = ({ account, onClose, onPublished }) => {
-  const [kind, setKind] = useState<PublishKind>('feed')
+export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; onPublished: () => void; /** Abre em reels com "Publicar como teste" ligado (aba Testes). */ startAsTrial?: boolean }> = ({ account, onClose, onPublished, startAsTrial }) => {
+  const [kind, setKind] = useState<PublishKind>(startAsTrial ? 'reel' : 'feed')
   const [from, setFrom] = useState<'arquivos' | 'criativos'>('arquivos')
   const [sources, setSources] = useState<Source[]>([])
   const [prepared, setPrepared] = useState<Prepared[]>([])
@@ -150,6 +154,8 @@ export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; 
   const [rendering, setRendering] = useState(false)
   const [caption, setCaption] = useState('')
   const [shareToFeed, setShareToFeed] = useState(true)
+  // Reels como teste (trial reel): só quem não segue vê
+  const [trial, setTrial] = useState<TrialStrategy | null>(startAsTrial ? 'MANUAL' : null)
   const [step, setStep] = useState<PublishStep | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<Published | null>(null)
@@ -270,6 +276,8 @@ export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; 
             ? 'O Instagram aceita até 30 hashtags.'
             : null
   const busy = step !== null && step !== 'publicado'
+  const hasVideo = prepared.some((p) => p.type === 'video')
+  const isReel = kind === 'reel' || (kind === 'feed' && prepared.length === 1 && hasVideo)
 
   const publish = async () => {
     if (problem || busy) return
@@ -282,6 +290,7 @@ export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; 
         caption: kind === 'story' ? '' : caption,
         files: prepared,
         shareToFeed,
+        trial: trial && isReel ? { strategy: trial, title: prepared[0]?.name.replace(/\.[a-z0-9]+$/i, '') } : undefined,
         onStep: setStep,
       })
       setDone(result)
@@ -300,7 +309,6 @@ export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; 
     setError(null)
   }
 
-  const hasVideo = prepared.some((p) => p.type === 'video')
 
   return (
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
@@ -318,8 +326,8 @@ export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; 
             <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
               <Check className="h-5 w-5" />
             </span>
-            <p className="mt-3 text-base font-semibold text-gray-900">Publicado no Instagram</p>
-            <p className="mt-1 text-sm text-gray-500">Os números do post aparecem nas próximas atualizações.</p>
+            <p className="mt-3 text-base font-semibold text-gray-900">{trial && isReel ? 'Teste publicado' : 'Publicado no Instagram'}</p>
+            <p className="mt-1 text-sm text-gray-500">{trial && isReel ? 'Só quem não segue vê. Acompanhe em Instagram › Testes: o motor diz se vale levar aos seguidores.' : 'Os números do post aparecem nas próximas atualizações.'}</p>
             <div className="mt-5 flex justify-center gap-2">
               {done.permalink && (
                 <Button asChild variant="outline">
@@ -448,15 +456,19 @@ export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; 
               <label className="block">
                 <span className="flex items-baseline justify-between text-xs font-medium text-gray-700">
                   Legenda
-                  <span className={cn('font-normal tabular-nums', caption.length > 2200 || hashtags > 30 ? 'text-rose-600' : 'text-gray-400')}>
-                    {caption.length}/2.200 · {hashtags}/30 hashtags
+                  <span className={cn('font-normal tabular-nums', caption.length > 2200 || hashtags > HASHTAG_LIMIT ? 'text-rose-600' : 'text-gray-400')}>
+                    {caption.length}/2.200 · {hashtags}/{HASHTAG_LIMIT} hashtags
                   </span>
                 </span>
                 <textarea className={cn(FIELD, 'mt-1 py-2 leading-relaxed')} rows={6} value={caption} disabled={busy} onChange={(e) => setCaption(e.target.value)} placeholder="Escreva a legenda, com as hashtags no fim." />
               </label>
             )}
+            {kind !== 'story' && (
+              <CaptionCheck value={caption} onChange={setCaption} disabled={busy} />
+            )}
 
-            {(kind === 'reel' || (kind === 'feed' && prepared.length === 1 && hasVideo)) && (
+            {isReel && <TrialOption value={trial} onChange={setTrial} disabled={busy} />}
+            {isReel && !trial && (
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <Switch checked={shareToFeed} onCheckedChange={setShareToFeed} disabled={busy} />
                 Mostrar também na grade do perfil
@@ -487,7 +499,7 @@ export const PublishDialog: React.FC<{ account: IgAccount; onClose: () => void; 
                 Cancelar
               </Button>
               <Button onClick={() => void publish()} disabled={!!problem || busy || preparing || rendering}>
-                {busy ? 'Publicando…' : 'Publicar agora'}
+                {busy ? 'Publicando…' : trial && isReel ? 'Publicar teste' : 'Publicar agora'}
               </Button>
             </div>
           </div>

@@ -10,6 +10,7 @@ import { saveVideoCover } from './storage'
 import { useEditor } from './store'
 import type { CodeScene, CreativeSet } from './types'
 import { VideoCreator } from './VideoCreator'
+import { IaSwitch } from '@/features/ia/IaSwitch'
 
 /**
  * O estúdio único de vídeo (`/motion/:setId/video`, 2026-11-09; o usuário: "cena em código e vídeos explicativos
@@ -144,6 +145,7 @@ export const VideoStudio: React.FC = () => {
       <Clapperboard className="h-4 w-4 text-violet-700" />
       <span className="truncate text-sm font-semibold text-gray-900">{set.name}</span>
       <span className="text-sm text-gray-400">· {title}</span>
+      <div className="ml-auto flex items-center gap-2"><span className="hidden text-xs text-gray-500 sm:inline">IA do vídeo</span><IaSwitch task="video" label="Vídeos" compact /></div>
     </header>
   )
 

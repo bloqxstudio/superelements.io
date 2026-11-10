@@ -1,4 +1,4 @@
-import { resolveIa } from '@/features/ia/porTarefa'
+import { iaFor } from '@/features/ia/porTarefa'
 import { accountContext } from '@/features/cerebro/accountContext'
 import { AV_CASES } from '@/features/avence/cases'
 import type { PlanRequest, PlanResponse, FormatKey } from './plan'
@@ -11,6 +11,21 @@ import type { CreativeSet, Layer, Post, SetBrand, Slide } from './types'
 import { FORMATS, sizeOf } from './types'
 import { useCrm } from '@/features/crm/crmStore'
 import { standardBlock } from '@/features/cerebro/standard'
+import { loadContext } from '@/features/conteudos/api'
+
+/** Conta de cliente (não a da casa): nada da Avence (cases, ilustrações, modelos, voz do estúdio) entra (2026-11-10). */
+export const isClientAccount = () => {
+  const team = useCrm.getState().team
+  return !!team && !team.isHome
+}
+
+/** A empresa da conta aberta, para a IA escrever em nome dela e não do estúdio. */
+async function accountCompany(): Promise<PlanRequest['company'] | undefined> {
+  const team = useCrm.getState().team
+  if (!team || team.isHome) return undefined
+  const ctx = await loadContext(team.id).catch(() => null)
+  return { name: team.name, offer: ctx?.offer ?? '', audience: ctx?.audience ?? '', tone: ctx?.tone ?? '', restrictions: ctx?.restrictions ?? '' }
+}
 
 export interface AiForm {
   brief: string
@@ -31,7 +46,10 @@ export const AI_EXAMPLES = [
   'Post sobre site parado no tempo e o que muda com um site novo. Sem promessa de resultado.',
 ]
 
-export async function generatePosts(form: AiForm, brand: SetBrand, signal?: AbortSignal): Promise<Post[]> {
+export async function generatePosts(input: AiForm, brand: SetBrand, signal?: AbortSignal): Promise<Post[]> {
+  // Numa conta de cliente o pedido vai sempre em nome da empresa da conta e sem os cases da Avence
+  const company = input.company ?? (await accountCompany())
+  const form: AiForm = company ? { ...input, company, cases: [] } : input
   // O contexto da conta (Cérebro: quem é, Plano, marca e padrão de post marcado) vai em todo pedido
   const standard = (await accountContext(form.format).catch(() => undefined))?.context ?? (await standardBlock(useCrm.getState().team?.id, form.format))
   const request: PlanRequest = {
@@ -39,7 +57,7 @@ export async function generatePosts(form: AiForm, brand: SetBrand, signal?: Abor
     format: form.format,
     slides: form.slides,
     posts: form.posts,
-    engine: resolveIa('criativos'),
+    ...iaFor('criativos'),
     script: form.script,
     photos: form.photos,
     company: form.company,
@@ -127,7 +145,7 @@ export interface EditCall {
 }
 
 /** Conjunto de outra marca (veio de Conteúdos, ou a marca não é a Avence): nada da identidade da Avence entra. */
-const otherBrand = (set: CreativeSet) => !!set.source || !/avence/i.test(set.brand.name)
+const otherBrand = (set: CreativeSet) => !!set.source || isClientAccount() || !/avence/i.test(set.brand.name)
 
 /** O padrão aprendido do conjunto (`styleRules`) entra em toda edição, junto da skill escolhida. */
 const withStyleRules = (skill: EditRequest['skill'], rules?: string[]): EditRequest['skill'] => {

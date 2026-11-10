@@ -15,7 +15,7 @@ export const CREATIVE_EVENTS = {
 
 export interface CreativeCall {
   id: string
-  kind: 'edit' | 'plan' | 'image' | 'download' | 'capture' | 'copy' | 'copy-slides' | 'copy-plan' | 'agent' | 'story-plan' | 'reel' | 'voice' | 'voices' | 'transcribe' | 'media-search' | 'media-download' | 'clip' | 'voices-br' | 'voice-add'
+  kind: 'edit' | 'plan' | 'image' | 'download' | 'capture' | 'copy' | 'copy-slides' | 'copy-plan' | 'agent' | 'story-plan' | 'reel' | 'voice' | 'voices' | 'transcribe' | 'media-search' | 'media-download' | 'clip' | 'voices-br' | 'voice-add' | 'video-agent'
   request: unknown
 }
 
@@ -39,6 +39,8 @@ export interface CreativeAgentInfo {
   name: string
   available: boolean
   version?: string
+  /** Modelos que dá para escolher (o Codex lista os da conta; o Claude Code usa os fixos do chat). */
+  models?: { id: string; name: string; hint?: string }[]
 }
 
 /** Serviço de geração de imagens com chave neste computador. */

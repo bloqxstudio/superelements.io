@@ -13,6 +13,7 @@ import { AI_AREA_LABEL, deleteAnalysis, loadAnalyses, readWithAi, saveAnalysis, 
 import { HIGHLIGHT_MAX, auditProfile, scoreLabel, type Finding, type Level, type Pillar } from './profileAudit'
 import { nameOf, useTeamPeople } from './people'
 import { FIELD, Surface, dayLabel } from './ui'
+import { WhatWorked } from '@/features/instagram-ia/WhatWorked'
 
 /**
  * CRM › Instagram › Análise (`?aba=analise`): o perfil conectado como quem chega
@@ -534,6 +535,7 @@ export const AnalysisArea: React.FC<{ account: IgAccount }> = ({ account }) => {
               </div>
             )
           )}
+          <WhatWorked media={media} />
           {audit.pillars.map((p) => (
             <div key={p.id} id={`analise-${p.id}`} className="scroll-mt-4">
               <PillarCard pillar={p} note={NOTE_OF[p.id] ? viewing?.ai?.notes[NOTE_OF[p.id]!] : undefined} />

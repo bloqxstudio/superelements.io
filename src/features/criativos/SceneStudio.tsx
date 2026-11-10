@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { IaSwitch } from '@/features/ia/IaSwitch'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ArrowLeft, Code2, Download, Film, ImagePlus, Music, Pause, Play, Plus, Send, SkipBack, Sparkles, Trash2, Wand2 } from 'lucide-react'
@@ -220,6 +221,7 @@ export const SceneStudio: React.FC = () => {
         )}
         <span className="text-xs text-gray-500">{({ saved: 'Salvo', dirty: 'Alterações…', saving: 'Salvando…', error: 'Erro ao salvar' } as const)[saving]}</span>
         <div className="ml-auto flex items-center gap-1.5">
+          <IaSwitch task="video" label="Vídeos" compact />
           <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-white" onClick={() => setQuery((q) => { const n = new URLSearchParams(q); n.set('novo', 'escolher'); n.delete('id'); return n }, { replace: true })}><Plus className="h-4 w-4" /> Novo vídeo</Button>
           <NewSceneMenu onCreate={create} />
           {scene && (

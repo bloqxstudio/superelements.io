@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { generatePosts, type AiForm } from './ai'
+import { generatePosts, isClientAccount, type AiForm } from './ai'
 import { AiFields, aiFormFor } from './AiFields'
 import { useEditor } from './store'
 
@@ -14,6 +14,7 @@ export const AiDialog: React.FC<{ open: boolean; onClose: () => void }> = ({ ope
   const [busy, setBusy] = useState(false)
   const controller = useRef<AbortController | null>(null)
   const fromContent = !!set?.source
+  const client = isClientAccount()
 
   // Ao abrir, o pedido parte do briefing do conjunto (Conteúdos) ou do padrão de sempre
   useEffect(() => {
@@ -50,9 +51,9 @@ export const AiDialog: React.FC<{ open: boolean; onClose: () => void }> = ({ ope
       <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Gerar posts com IA</DialogTitle>
-          <DialogDescription>{fromContent ? 'A IA parte do briefing do plano da empresa, escolhe os modelos e escreve os textos e a legenda.' : 'A IA escolhe os modelos, escreve os textos e a legenda e usa as telas dos cases.'} Você ajusta tudo no editor. Leva cerca de 1 minuto.</DialogDescription>
+          <DialogDescription>{fromContent ? 'A IA parte do briefing do plano da empresa, escolhe os modelos e escreve os textos e a legenda.' : client ? 'A IA escolhe os modelos e escreve os textos e a legenda no contexto da conta.' : 'A IA escolhe os modelos, escreve os textos e a legenda e usa as telas dos cases.'} Você ajusta tudo no editor. Leva cerca de 1 minuto.</DialogDescription>
         </DialogHeader>
-        <AiFields form={form} onChange={setForm} disabled={busy} hideCases={fromContent} />
+        <AiFields form={form} onChange={setForm} disabled={busy} hideCases={fromContent || client} />
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={close}>{busy ? 'Parar' : 'Cancelar'}</Button>
           <Button onClick={() => void run()} disabled={busy || !form.brief.trim()} className="gap-1.5">

@@ -31,7 +31,7 @@ const folderOf = async (projectId?: string) => {
   return `${owner}/${projectId}/criativos`
 }
 
-type Where = Pick<CreativeSet, 'id' | 'projectId' | 'shared'>
+export type Where = Pick<CreativeSet, 'id' | 'projectId' | 'shared'>
 const placeOf = (set: Pick<CreativeSet, 'projectId' | 'shared'>) => (set.shared ? set.projectId : undefined)
 
 /** Arquivo que ainda não existe: o Storage responde 404, ou 400 com corpo vazio (StorageUnknownError). */

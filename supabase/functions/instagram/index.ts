@@ -545,6 +545,9 @@ async function sync(ctx: Ctx, account: AccountRow, token: string) {
   if (rows.length) writes.push(ctx.admin.from('crm_instagram_media').upsert(rows, { onConflict: 'account_id,media_id' }))
   for (const { error } of await Promise.all(writes)) if (error) throw dbError(error)
 
+  // Testes de reels no ar: os números de cada um, de hora em hora, junto da leitura da conta
+  await soft('testes de reels', () => readTrials(ctx, account, token))
+
   return { posts: rows.length, missing }
 }
 
@@ -664,19 +667,41 @@ async function containerStatus(token: string, id: string, wait: number) {
 }
 
 async function finish(ctx: Ctx, account: AccountRow, token: string, containerId: string, paths: unknown, wait: number) {
-  const code = await containerStatus(token, containerId, wait)
+  let code: string
+  try {
+    code = await containerStatus(token, containerId, wait)
+  } catch (error) {
+    // Teste de reels que a Meta recusou ao processar
+    await ctx.admin.from('crm_instagram_trials').update({ status: 'falhou', updated_at: new Date().toISOString() }).eq('account_id', account.id).eq('container_id', containerId)
+    throw error
+  }
   if (code === 'IN_PROGRESS') return { status: 'processing' as const, containerId }
   const published = await ig<{ id: string }>('me/media_publish', token, { method: 'POST', params: { creation_id: containerId } })
   await cleanup(ctx, account, paths)
   // O post entra na lista com quem publicou; os números chegam na próxima leitura
   let permalink: string | undefined
+  let media: MediaItem | undefined
   try {
-    const media = await ig<MediaItem>(metaId(published.id, 'post'), token, { params: { fields: MEDIA_FIELDS } })
+    media = await ig<MediaItem>(metaId(published.id, 'post'), token, { params: { fields: MEDIA_FIELDS } })
     permalink = media.permalink
     await ctx.admin.from('crm_instagram_media').upsert({ ...mediaRow(account, media, {}), published_by: ctx.userId }, { onConflict: 'account_id,media_id' })
   } catch (error) {
     console.warn('[instagram] publicado, mas não leu o post', error)
   }
+  // Teste de reels: o registro do contêiner passa a apontar para o post no ar
+  const { error: trialError } = await ctx.admin
+    .from('crm_instagram_trials')
+    .update({
+      media_id: published.id,
+      status: 'no_ar',
+      published_at: media?.timestamp ?? new Date().toISOString(),
+      permalink: permalink ?? null,
+      thumbnail_url: media?.thumbnail_url ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('account_id', account.id)
+    .eq('container_id', containerId)
+  if (trialError) console.warn('[instagram] teste de reels', trialError.message)
   return { status: 'published' as const, mediaId: published.id, permalink }
 }
 
@@ -701,6 +726,65 @@ async function publishCarousel(ctx: Ctx, account: AccountRow, token: string, bod
   return finish(ctx, account, token, containerId, body.paths, 20_000)
 }
 
+/** O pedido de teste de reels: `{ strategy: 'MANUAL' | 'SS_PERFORMANCE', title?, duration? }`. */
+function trialOf(value: unknown) {
+  if (!value || typeof value !== 'object') return null
+  const t = value as Record<string, unknown>
+  if (t.strategy !== 'MANUAL' && t.strategy !== 'SS_PERFORMANCE') throw new HttpError('Estratégia do teste inválida.')
+  const duration = typeof t.duration === 'number' && Number.isFinite(t.duration) && t.duration > 0 ? Math.round(t.duration * 10) / 10 : null
+  return { strategy: t.strategy, title: typeof t.title === 'string' ? t.title.slice(0, 120) : '', duration }
+}
+
+/** Retratos que o motor compara: 24 h e 72 h depois de publicar. */
+const TRIAL_CHECKPOINTS = [24, 72]
+/** Os testes são relidos por 30 dias. */
+const TRIAL_DAYS = 30
+
+/**
+ * Relê os números dos testes de reels no ar da conta (um pedido de insights por teste) e guarda o
+ * retrato de cada marco na primeira leitura depois dele. O cron chama dentro da leitura de hora em hora.
+ */
+async function readTrials(ctx: Ctx, account: AccountRow, token: string) {
+  const { data, error } = await ctx.admin
+    .from('crm_instagram_trials')
+    .select('id, media_id, published_at, checkpoints, thumbnail_url, permalink')
+    .eq('account_id', account.id)
+    .eq('status', 'no_ar')
+    .gte('published_at', new Date(Date.now() - TRIAL_DAYS * DAY * 1000).toISOString())
+    .limit(30)
+  if (error) throw dbError(error)
+  const rows = (data ?? []) as { id: string; media_id: string; published_at: string; checkpoints: Record<string, unknown> | null; thumbnail_url: string | null; permalink: string | null }[]
+  const results = await pool(rows, 4, async (row) => {
+    let media: MediaItem
+    try {
+      media = await ig<MediaItem>(metaId(row.media_id, 'post'), token, { params: { fields: MEDIA_FIELDS } })
+    } catch (e) {
+      if (e instanceof HttpError && (e.code === 'token' || e.code === 'rate')) throw e
+      return false
+    }
+    const insights = { ...(await mediaInsights(token, { ...media, media_product_type: 'REELS' })) }
+    if (typeof media.like_count === 'number' && insights.likes === undefined) insights.likes = media.like_count
+    if (typeof media.comments_count === 'number' && insights.comments === undefined) insights.comments = media.comments_count
+    const hours = (Date.now() - Date.parse(row.published_at)) / 3_600_000
+    const checkpoints = { ...(row.checkpoints ?? {}) }
+    for (const h of TRIAL_CHECKPOINTS) if (hours >= h && !checkpoints[String(h)]) checkpoints[String(h)] = { ...insights, at: new Date().toISOString(), hours: Math.round(hours * 10) / 10 }
+    const { error: upError } = await ctx.admin
+      .from('crm_instagram_trials')
+      .update({
+        insights,
+        checkpoints,
+        read_at: new Date().toISOString(),
+        thumbnail_url: media.thumbnail_url ?? row.thumbnail_url,
+        permalink: media.permalink ?? row.permalink,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', row.id)
+    if (upError) throw dbError(upError)
+    return true
+  })
+  return { trials: results.filter(Boolean).length }
+}
+
 async function publish(ctx: Ctx, account: AccountRow, token: string, body: Record<string, unknown>) {
   const kind = body.kind === 'story' ? 'story' : body.kind === 'reel' ? 'reel' : 'feed'
   const caption = typeof body.caption === 'string' ? body.caption.slice(0, 2200) : undefined
@@ -717,7 +801,28 @@ async function publish(ctx: Ctx, account: AccountRow, token: string, body: Recor
     containerId = (await create({ media_type: 'STORIES', ...media(files[0]) })).id
   } else if (kind === 'reel' || (files.length === 1 && files[0].type === 'video')) {
     if (files.length !== 1 || files[0].type !== 'video') throw new HttpError('O reels é um vídeo só.')
-    containerId = (await create({ media_type: 'REELS', video_url: files[0].url, caption, share_to_feed: body.shareToFeed !== false, ...(cover ? { cover_url: cover.url } : {}) })).id
+    const trial = trialOf(body.trial)
+    // Teste de reels (trial reel): o Instagram mostra só a quem não segue; a grade é decidida ao levar aos seguidores
+    containerId = (await create({
+      media_type: 'REELS',
+      video_url: files[0].url,
+      caption,
+      ...(trial ? { trial_params: JSON.stringify({ graduation_strategy: trial.strategy }) } : { share_to_feed: body.shareToFeed !== false }),
+      ...(cover ? { cover_url: cover.url } : {}),
+    })).id
+    if (trial) {
+      const { error } = await ctx.admin.from('crm_instagram_trials').insert({
+        team_id: account.team_id,
+        account_id: account.id,
+        created_by: ctx.userId || null,
+        container_id: containerId,
+        strategy: trial.strategy,
+        title: trial.title,
+        caption: caption ?? null,
+        duration_s: trial.duration,
+      })
+      if (error) throw dbError(error)
+    }
   } else if (files.length === 1) {
     containerId = (await create({ image_url: files[0].url, caption })).id
   } else {
@@ -1368,6 +1473,12 @@ Deno.serve(async (req) => {
         const account = await accountOf(ctx, body.accountId)
         const token = await tokenOf(ctx, account)
         return json(await guarded(ctx, account, () => publish(ctx, account, token, body)))
+      }
+
+      case 'trials_read': {
+        const account = await accountOf(ctx, body.accountId)
+        const token = await tokenOf(ctx, account)
+        return json(await guarded(ctx, account, () => readTrials(ctx, account, token)))
       }
 
       case 'publish_carousel': {

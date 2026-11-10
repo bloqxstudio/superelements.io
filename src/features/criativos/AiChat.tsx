@@ -9,7 +9,7 @@ import { isChatImage, readChatImage } from '@/features/space/chat/attachments'
 import type { ChatSkill } from '@/features/space/chat/skills'
 import { skillIcon } from '@/features/skills/skillIcon'
 import { useSkills, watchSkills } from '@/features/skills/skillsStore'
-import { requestEdit, type EditScope } from './ai'
+import { isClientAccount, requestEdit, type EditScope } from './ai'
 import { useIa } from '@/features/ia/porTarefa'
 import { chooseImageProvider, saveImageKey, useCreativeLink, type CreativeImageProvider } from './link'
 import { agentInfo, PHASE_LABEL, useAgent, type AgentPhase } from './agentStore'
@@ -383,7 +383,8 @@ export const AiChat: React.FC<{ available: boolean | null }> = ({ available }) =
       return q ? all.filter((i) => plain(i.ref.label).includes(q)) : all
     }
     const projectItems = projects.map((p): MentionItem => ({ group: 'Projetos da conta', hint: 'escolha o projeto e depois a página', ref: { id: `project:${p.id}`, kind: 'project', label: p.name, projectId: p.id } }))
-    const caseItems: MentionItem[] = [{ group: 'Cases da Avence', hint: `${AV_CASES.length} sites no ar`, ref: { id: 'case:*', kind: 'case', label: 'Todos os cases', slug: '*' } }, ...AV_CASES.map((c): MentionItem => ({ group: 'Cases da Avence', hint: c.segment, ref: { id: `case:${c.slug}`, kind: 'case', label: c.name, slug: c.slug } }))]
+    // Conta de cliente não menciona os cases da Avence
+    const caseItems: MentionItem[] = isClientAccount() ? [] : [{ group: 'Cases da Avence', hint: `${AV_CASES.length} sites no ar`, ref: { id: 'case:*', kind: 'case', label: 'Todos os cases', slug: '*' } }, ...AV_CASES.map((c): MentionItem => ({ group: 'Cases da Avence', hint: c.segment, ref: { id: `case:${c.slug}`, kind: 'case', label: c.name, slug: c.slug } }))]
     const postItems = set.posts.map((p): MentionItem => ({ group: 'Posts deste conjunto', hint: `${p.slides.length} slides`, ref: { id: `post:${p.id}`, kind: 'post', label: p.name, postId: p.id } }))
     const slideItems = set.posts.flatMap((p) => p.slides.map((sl, i): MentionItem => ({ group: 'Slides', hint: p.name, ref: { id: `slide:${sl.id}`, kind: 'slide', label: `${p.name} · slide ${i + 1}`, postId: p.id, slideId: sl.id } })))
     const match = (list: MentionItem[]) => (q ? list.filter((i) => plain(`${i.ref.label} ${i.hint ?? ''}`).includes(q)) : list)

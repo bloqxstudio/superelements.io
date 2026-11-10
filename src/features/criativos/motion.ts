@@ -48,7 +48,7 @@ export const postMotionOf = (post: Post): Required<Omit<PostMotion, 'audio' | 'o
 
 
 // Estático ou animado (as regras ficam em motionFlags.ts, sem imports, para os testes do Node)
-export { slideHasMotion, hasMotion, hasMotionData, setPostStatic } from './motionFlags'
+export { slideHasMotion, slideMoves, hasMotion, hasMotionData, setPostStatic } from './motionFlags'
 import { slideHasMotion } from './motionFlags'
 
 export type PostOutput = 'video' | 'carousel'

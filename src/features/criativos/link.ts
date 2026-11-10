@@ -5,6 +5,7 @@ import type { AgentChannel } from '@/features/space/connector/channel'
 import { finishJob, noteJob, patchJob, startJob } from '@/features/operations/jobs'
 import { checkpoint, joinSignals, workSignal } from '@/features/ia/work'
 import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageProvider, type CreativeCall, type CreativeProgress, type CreativeResult, type CreativeStep } from './protocol'
+import { withChosenModel } from '@/features/ia/modelos'
 
 /**
  * Lado da aba da IA dos criativos: usa o mesmo canal que o chat do Space
@@ -31,6 +32,8 @@ interface LinkState {
   /** Todos os serviços de imagem prontos neste computador, do preferido ao último. */
   providers: CreativeImageProvider[]
   keys: { openai: boolean; gemini: boolean; elevenlabs?: boolean }
+  /** O conector sabe fazer o vídeo em modo agente (`scripts/criativos/videoAgent.ts`, 2026-11-10). */
+  videoAgent?: boolean
 }
 
 export const useCreativeLink = create<LinkState>()(() => ({ connected: false, ia: null, stale: false, agents: [], legacy: false, images: null, providers: [], keys: { openai: false, gemini: false } }))
@@ -58,14 +61,14 @@ const failAll = (message: string) => {
 /** Liga a IA dos criativos a um canal; devolve a função que desliga. */
 export function startCreativeLink(channel: AgentChannel) {
   let helloTimer: ReturnType<typeof setTimeout> | undefined
-  const onStatus = (data: { ia?: boolean; agents?: CreativeAgentInfo[]; images?: CreativeImageProvider | null; providers?: CreativeImageProvider[]; keys?: { openai: boolean; gemini: boolean; elevenlabs?: boolean } }) => {
+  const onStatus = (data: { ia?: boolean; videoAgent?: boolean; agents?: CreativeAgentInfo[]; images?: CreativeImageProvider | null; providers?: CreativeImageProvider[]; keys?: { openai: boolean; gemini: boolean; elevenlabs?: boolean } }) => {
     clearTimeout(helloTimer)
     const images = { images: data?.images ?? null, providers: data?.providers ?? [], keys: data?.keys ?? { openai: false, gemini: false } }
     // Aviso só das chaves de imagem (depois de salvar uma): o resto continua como está
     if (data && data.ia === undefined && !data.agents) return void useCreativeLink.setState(images)
     // Conector anterior à escolha de IA: só diz se há uma (o Claude Code), sem a lista
     const agents = data?.agents ?? (data?.ia ? [{ id: 'claude' as const, name: 'Claude Code', available: true }] : [])
-    useCreativeLink.setState({ connected: true, ia: !!data?.ia, stale: false, agents, legacy: !data?.agents, ...images })
+    useCreativeLink.setState({ connected: true, ia: !!data?.ia, stale: false, agents, legacy: !data?.agents, videoAgent: !!data?.videoAgent, ...images })
   }
   const onResult = (result: CreativeResult) => {
     const call = pending.get(result?.id)
@@ -159,7 +162,9 @@ function callAiRaw<T>(kind: CreativeCall['kind'], request: unknown, signal?: Abo
   return checkpoint().then(() => callAiNow<T>(kind, request, joinSignals(signal, work), onStep))
 }
 
-function callAiNow<T>(kind: CreativeCall['kind'], request: unknown, signal?: AbortSignal, onStep?: (step: CreativeStep, detail?: string) => void): Promise<T> {
+function callAiNow<T>(kind: CreativeCall['kind'], rawRequest: unknown, signal?: AbortSignal, onStep?: (step: CreativeStep, detail?: string) => void): Promise<T> {
+  // O modelo escolhido para a tarefa (ou no chat) vai junto, se quem chamou não pôs (`ia/modelos.ts`)
+  const request = withChosenModel(kind, rawRequest)
   const { channel, connected, stale } = useCreativeLink.getState()
   if (!channel || !connected) return Promise.reject(new Error('A IA não está conectada. Abra o app local ou o conector.'))
   if (stale) return Promise.reject(new Error(STALE_MESSAGE))
@@ -167,6 +172,8 @@ function callAiNow<T>(kind: CreativeCall['kind'], request: unknown, signal?: Abo
   const r = (request ?? {}) as { engine?: string; agent?: string }
   const engine = r.engine ?? r.agent
   const who = engine === 'codex' ? 'Codex' : engine === 'claude' ? 'Claude Code' : 'agente'
+  // O vídeo em modo agente trabalha até ~25 min (o próprio conector corta antes)
+  const limit = kind === 'video-agent' ? 30 * 60_000 : TIMEOUT
   return new Promise<T>((resolve, reject) => {
     const abort = () => {
       if (!pending.delete(id)) return
@@ -176,8 +183,8 @@ function callAiNow<T>(kind: CreativeCall['kind'], request: unknown, signal?: Abo
     const timer = setTimeout(() => {
       pending.delete(id)
       channel.send(CREATIVE_EVENTS.stop, { id })
-      reject(new Error('A IA passou de 9 minutos sem responder.'))
-    }, TIMEOUT)
+      reject(new Error(`A IA passou de ${Math.round(limit / 60000)} minutos sem responder.`))
+    }, limit)
     // Sem nenhum passo vindo do outro lado, o conector provavelmente não conhece este pedido
     // Imagem não manda passos (leva até 1 minuto): só vale o limite total
     // Imagem, download e captura não mandam passos; a pesquisa lê a web por minutos entre um sinal e outro
