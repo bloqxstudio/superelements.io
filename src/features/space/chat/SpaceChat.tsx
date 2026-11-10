@@ -34,10 +34,12 @@ import { ConnectorPrompt } from './ConnectorPrompt'
 import { useConnector } from '@/features/space/connector/connectorStore'
 import { ChatComposer, ManageSkillsLink, hasFiles, type ChatComposerHandle, type ComposerMessage } from './ChatComposer'
 import { useChat } from './chatStore'
+import { AgentModelButton } from '@/features/ia/AgentModelDialog'
 import {
   CHAT_AGENTS,
   CHAT_AGENT_IDS,
   CHAT_IMAGE_LIMIT,
+  modelLabel,
   totalTokens,
   type ChatAgentId,
   type ChatContext,
@@ -254,6 +256,11 @@ const AgentMessage: React.FC<{ message: ChatMessage }> = ({ message }) => {
         <p className="flex items-center gap-1.5 text-[12px]">
           <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: info.color }} />
           <span className="font-semibold text-gray-900">{info.name}</span>
+          {message.model && (
+            <span className="rounded bg-gray-100 px-1 text-[10px] font-medium text-gray-500" title={message.model}>
+              {modelLabel(message.model)}
+            </span>
+          )}
           <time className="text-[10px] tabular-nums text-gray-400">{clock(message.at)}</time>
         </p>
         {groups.map((group, i) =>
@@ -381,9 +388,10 @@ export const SpaceChat: React.FC<{ chatId?: string; chatName?: string; iara?: Ia
   const canvas = !!projectId && projectId === openId
   const openName = useProjectStore((s) => s.projects.find((p) => p.id === projectId)?.name)
   const projectName = chatName ?? openName
-  const { connected, agents, agent, setAgent } = useChat(
-    useShallow((s) => ({ connected: s.connected, agents: s.agents, agent: s.agent, setAgent: s.setAgent }))
+  const { connected, agents, agent, setAgent, models } = useChat(
+    useShallow((s) => ({ connected: s.connected, agents: s.agents, agent: s.agent, setAgent: s.setAgent, models: s.models }))
   )
+  const model = models[agent] ?? ''
   const conversation = useChat((s) => (projectId ? s.conversations[projectId] : undefined))
   const context = useSelectionContext()
   const composer = useRef<ChatComposerHandle>(null)
@@ -496,7 +504,7 @@ export const SpaceChat: React.FC<{ chatId?: string; chatName?: string; iara?: Ia
     const { send } = useChat.getState()
     if (!send || status?.available === false) return false
     if (iara?.intercept?.(message)) return true
-    const payload = { projectId, projectName, agent, text: clean, context: shown, ...(images.length ? { images } : {}), ...(chosen && !command ? { skill: skillRef(chosen) } : {}) }
+    const payload = { projectId, projectName, agent, ...(model ? { model } : {}), text: clean, context: shown, ...(images.length ? { images } : {}), ...(chosen && !command ? { skill: skillRef(chosen) } : {}) }
     pinned.current = true
     if (!iara || command) {
       send(payload)
@@ -716,37 +724,8 @@ export const SpaceChat: React.FC<{ chatId?: string; chatName?: string; iara?: Ia
             </button>
         }
         footer={
-          <>
-          {available.length > 1 ? (
-              <div role="radiogroup" aria-label="Agente" className="flex items-center gap-0.5 rounded-lg bg-gray-100 p-0.5">
-                {available.map((id) => {
-                  const chosen = id === agent
-                  const working = running.includes(id)
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      role="radio"
-                      aria-checked={chosen}
-                      title={agents.find((a) => a.id === id)?.version}
-                      className={`relative inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-[background-color,color,box-shadow] active:scale-[0.97] ${
-                        chosen ? 'bg-white text-gray-900 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_rgb(0_0_0/0.08)]' : 'text-gray-500 hover:text-gray-900'
-                      }`}
-                      onClick={() => setAgent(id)}
-                    >
-                      <AgentDot agent={id} working={working} />
-                      {CHAT_AGENTS[id].name}
-                    </button>
-                  )
-                })}
-              </div>
-            ) : (
-              <span className="inline-flex h-6 items-center gap-1.5 px-1 text-[11px] font-medium text-gray-600" title={status?.version}>
-                <AgentDot agent={agent} working={busy} />
-                {info.name}
-              </span>
-            )}
-          </>
+          // Agente e modelo num botão só: a barra da Iara tem 400 px (2026-11-10, "não está abrindo a seleção")
+          <AgentModelButton busy={busy} working={running} />
         }
         busy={busy}
         onStop={stop}
@@ -1012,13 +991,6 @@ const HistoryList: React.FC<HistoryListProps> = ({ items, current, locked, onOpe
 }
 
 /** Ponto na cor do agente, pulsando enquanto ele trabalha. Sem logo: o nome diz quem é. */
-const AgentDot: React.FC<{ agent: ChatAgentId; working?: boolean }> = ({ agent, working }) => (
-  <span aria-label={working ? 'trabalhando' : undefined} className="relative flex h-1.5 w-1.5 shrink-0">
-    {working && <span className="absolute inline-flex h-full w-full rounded-full opacity-60 motion-safe:animate-ping" style={{ background: CHAT_AGENTS[agent].color }} />}
-    <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ background: CHAT_AGENTS[agent].color }} />
-  </span>
-)
-
 const EmptyAgents: React.FC<{ title: string; text: string; action?: React.ReactNode }> = ({ title, text, action }) => (
   <div className="flex flex-1 flex-col">
     {action}

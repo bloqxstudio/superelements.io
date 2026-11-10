@@ -23,6 +23,7 @@
  *   npm run referencias -- agora [20]        uma volta agora em todos os grupos (os N mais recentes), e sai
  *   npm run referencias -- diagnostico <url> lê um grupo sem gravar nada e mostra os links achados
  *   npm run referencias -- metricas [todas]  lê de novo o engajamento (curtidas, comentários, visualizações)
+ *   npm run referencias -- conferir [60] [corrigir]  o que do grupo não entrou ou entrou sem os quadros do vídeo
  */
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -82,6 +83,31 @@ const loggedOut = (page: Page) => /\/accounts\/login|\/challenge\//.test(page.ur
 const SEEN_FILE = path.join(path.dirname(PROFILE), 'cartoes-vistos.json')
 type Seen = Record<string, Record<string, string>>
 const readSeen = (): Seen => { try { return JSON.parse(readFileSync(SEEN_FILE, 'utf8')) as Seen } catch { return {} } }
+/**
+ * Os cartões ficam guardados pelo endereço do grupo, que não muda. Até 2026-11-09 a chave era o id do cadastro:
+ * quando o grupo foi tirado e cadastrado de novo, o leitor voltou a clicar em todos os cartões da conversa e
+ * ficou preso em "Lendo o grupo…". A primeira leitura de um grupo junta as chaves antigas (ids) que apontam para
+ * os mesmos posts deste grupo, que já estão no app.
+ */
+function seenFor(seen: Seen, threadUrl: string, knownUrls: Set<string>): Record<string, string> {
+  const mine = (seen[threadUrl] ??= {})
+  for (const [key, cards] of Object.entries(seen)) {
+    if (key.startsWith('https://')) continue
+    if (Object.values(cards).some((u) => knownUrls.has(u))) { Object.assign(mine, cards); delete seen[key] }
+  }
+  return mine
+}
+
+/** Abre o grupo; o Instagram às vezes não responde a tempo, e a segunda tentativa resolve. */
+async function openThread(page: Page, threadUrl: string) {
+  try {
+    await page.goto(threadUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  } catch (e) {
+    log('   o grupo não abriu a tempo; tentando de novo')
+    await sleep(humanPause(5000, 9000))
+    await page.goto(threadUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 })
+  }
+}
 const writeSeen = (seen: Seen) => { try { writeFileSync(SEEN_FILE, JSON.stringify(seen)) } catch { /* sem disco: clica de novo na próxima */ } }
 
 /**
@@ -92,18 +118,33 @@ const writeSeen = (seen: Seen) => { try { writeFileSync(SEEN_FILE, JSON.stringif
  * o leitor abre os cartões visíveis, sobe um pouco com a roda do mouse e repete. Links colados como texto
  * também valem.
  */
-async function readThread(page: Page, threadUrl: string, sourceKey: string, limit = 30): Promise<string[]> {
-  await page.goto(threadUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+/** "Só as novas": para ao chegar a 3 posts seguidos que já estão no app (os de cima deles são os novos). */
+const KNOWN_RUN = 3
+/** A leitura do grupo não passa disto (antes, sem achar os endereços, subia a conversa inteira). */
+const READ_BUDGET_MS = 6 * 60_000
+
+async function readThread(page: Page, threadUrl: string, knownUrls: Set<string>, limit = 30, onlyNew = false): Promise<string[]> {
+  const startedAt = Date.now()
+  await openThread(page, threadUrl)
   await sleep(humanPause(5000, 8000))
   if (loggedOut(page)) throw new Error('login')
   const found: string[] = []
-  const add = (u: string | undefined) => { if (u && !found.includes(u)) found.push(u) }
+  // Posts seguidos (do mais novo para o mais antigo) que já estão no app
+  let knownRun = 0
+  const add = (u: string | undefined) => {
+    if (!u || found.includes(u)) return
+    found.push(u)
+    knownRun = knownUrls.has(u) ? knownRun + 1 : 0
+  }
+  const enough = () => found.length >= limit || (onlyNew && knownRun >= KNOWN_RUN) || Date.now() - startedAt > READ_BUDGET_MS
+  let opened = 0
+  let missed = 0
   const seen = readSeen()
-  const mine = (seen[sourceKey] ??= {})
+  const mine = seenFor(seen, threadUrl, knownUrls)
   const done = new Set<string>()
   await page.mouse.move(860, 450)
   let still = 0
-  for (let step = 0; step < 160 && found.length < limit && still < 6; step++) {
+  for (let step = 0; step < 160 && !enough() && still < 6; step++) {
     const { hrefs, text } = await page.evaluate(() => ({
       hrefs: Array.from(document.querySelectorAll('a[href]')).map((a) => (a as HTMLAnchorElement).getAttribute('href') ?? ''),
       text: (document.querySelector('[role="main"]') as HTMLElement | null)?.innerText ?? document.body.innerText,
@@ -113,7 +154,7 @@ async function readThread(page: Page, threadUrl: string, sourceKey: string, limi
     const total = await cards.count()
     let fresh = 0
     // De baixo para cima: os mais novos primeiro
-    for (let i = total - 1; i >= 0 && found.length < limit; i--) {
+    for (let i = total - 1; i >= 0 && !enough(); i--) {
       const card = cards.nth(i)
       const sign = ((await card.innerText().catch(() => '')) + '|' + ((await card.locator('img').first().getAttribute('src').catch(() => '')) ?? '').split('?')[0].slice(-60)).slice(0, 300)
       if (done.has(sign)) continue
@@ -123,15 +164,36 @@ async function readThread(page: Page, threadUrl: string, sourceKey: string, limi
       const box = await card.boundingBox().catch(() => null)
       if (!box || box.y < 60 || box.y > 860) continue
       await card.click({ timeout: 6000 }).catch(() => undefined)
-      await sleep(humanPause(2000, 3500))
-      const opened = postUrlOf(page.url())
-      if (opened) { mine[sign] = opened; add(opened) }
+      // Espera o post abrir (antes, 2 a 3,5 s fixos) e uma pausa curta de pessoa
+      await page.waitForURL(/instagram\.com\/(?:[^/]+\/)?(?:p|reel|reels|tv)\//, { timeout: 6000 }).catch(() => undefined)
+      await sleep(humanPause(600, 1200))
+      const url = postUrlOf(page.url())
+      if (url) {
+        mine[sign] = url
+        add(url)
+        opened++
+        // Guarda na hora: uma volta interrompida não perde os cartões já abertos
+        writeSeen(seen)
+        log(`   cartão → ${url}${knownUrls.has(url) ? ' (já no app)' : ' (novo)'}`)
+      } else {
+        missed++
+        log(`   cartão sem endereço (a página ficou em ${page.url().replace('https://www.instagram.com', '')})`)
+      }
       await page.keyboard.press('Escape')
-      await sleep(humanPause(1000, 2000))
+      await page.waitForURL(/\/direct\/t\//, { timeout: 3000 }).catch(() => undefined)
+      await sleep(humanPause(500, 1000))
       if (!page.url().includes('/direct/t/')) {
-        // Saiu do grupo: volta (a rolagem recomeça de baixo, os já vistos são pulados pela assinatura)
-        await page.goto(threadUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-        await sleep(humanPause(4000, 6000))
+        // Saiu do grupo: primeiro o "voltar" do navegador (a conversa volta onde estava, sem recarregar); só
+        // recarrega o grupo se não der (aí a rolagem recomeça de baixo e os já vistos são pulados pela assinatura)
+        await page.goBack({ waitUntil: 'domcontentloaded', timeout: 20_000 }).catch(() => undefined)
+        await page.waitForURL(/\/direct\/t\//, { timeout: 5000 }).catch(() => undefined)
+        if (!page.url().includes('/direct/t/')) {
+          log('   saiu da conversa; abrindo o grupo de novo')
+          await openThread(page, threadUrl)
+          await sleep(humanPause(4000, 6000))
+        } else {
+          await sleep(humanPause(1500, 2500))
+        }
         await page.mouse.move(860, 450)
       }
     }
@@ -141,6 +203,8 @@ async function readThread(page: Page, threadUrl: string, sourceKey: string, limi
     await sleep(humanPause(1200, 2200))
   }
   writeSeen(seen)
+  const why = found.length >= limit ? `os ${limit} mais recentes` : onlyNew && knownRun >= KNOWN_RUN ? 'chegou aos que já estão no app' : Date.now() - startedAt > READ_BUDGET_MS ? 'tempo máximo de leitura' : 'fim da conversa ou sem cartões novos'
+  log(`   leitura: ${found.length} post(s), ${opened} cartão(ões) aberto(s), ${missed} sem endereço, em ${Math.round((Date.now() - startedAt) / 1000)} s (${why})`)
   return found.slice(0, limit)
 }
 
@@ -148,7 +212,14 @@ interface PostPage extends Metrics { author?: string; caption?: string; cover?: 
 
 /** Abre o post e lê o que a página mostra: autor, legenda, capa, se é vídeo e quantos slides. */
 async function readPost(page: Page, postUrl: string): Promise<PostPage> {
-  await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  try {
+    await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  } catch {
+    // O Instagram às vezes não responde a tempo (2026-11-09): uma segunda tentativa, depois de uma pausa
+    log('   o post não abriu a tempo; tentando de novo')
+    await sleep(humanPause(8000, 15000))
+    await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 })
+  }
   await sleep(humanPause(3500, 6000))
   if (loggedOut(page)) throw new Error('login')
   const info = await page.evaluate(() => {
@@ -275,16 +346,20 @@ function analyze(images: Buffer[], info: { url: string; author?: string; caption
 
 // ---------- uma volta num grupo ----------
 
-interface Source { id: string; team_id: string; name: string; thread_url: string; enabled: boolean; every_minutes: number; last_run_at: string | null; run_requested_at: string | null }
+interface Source { id: string; team_id: string; name: string; thread_url: string; enabled: boolean; every_minutes: number; last_run_at: string | null; run_requested_at: string | null; run_limit?: number | null }
+
+/** O andamento que a tela mostra no "Importar do grupo" (migração 20261109200000). */
+const progress = (src: Source, p: Record<string, unknown>) =>
+  src.id === '-' ? Promise.resolve() : db.from('crm_reference_sources').update(p).eq('id', src.id).then(({ error }) => { if (error) log('   andamento:', error.message) })
 
 async function upload(teamId: string, p: string, body: Buffer) {
   const { error } = await db.storage.from(BUCKET).upload(brainPath(teamId, p), body, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: true })
   if (error) throw new Error(`Não guardou ${p}: ${error.message}`)
 }
 
-async function processSource(ctx: BrowserContext, src: Source, dryRun = false, limit = 30, cap = MAX_POSTS): Promise<number> {
+async function processSource(ctx: BrowserContext, src: Source, dryRun = false, limit = 30, cap = MAX_POSTS, onlyNew = false): Promise<number> {
   const page = ctx.pages()[0] ?? (await ctx.newPage())
-  const links = await readThread(page, src.thread_url, src.id === '-' ? src.thread_url : src.id, limit)
+  const links = await readThread(page, src.thread_url, await knownUrlsOf(src.team_id), limit, onlyNew)
   log(`[${src.name}] ${links.length} link(s) de post no grupo`)
   if (dryRun) {
     for (const l of links) log('  ', l)
@@ -297,63 +372,158 @@ async function processSource(ctx: BrowserContext, src: Source, dryRun = false, l
   for (const r of (known ?? []) as { id: string; url: string }[]) await db.from('crm_references').update({ group_order: orders[r.url] }).eq('id', r.id)
   // A rotina abre no máximo 12 posts novos por volta; `agora 20` abre os 20
   const fresh = links.filter((l) => !seen.has(l)).slice(0, cap)
-  const { data: team } = await db.from('crm_teams').select('name').eq('id', src.team_id).maybeSingle()
+  await progress(src, { run_stage: 'importando', run_total: fresh.length, run_done: 0, run_note: `${links.length} post(s) lidos no grupo, ${fresh.length} novo(s)` })
+  const client = await clientName(src.team_id)
   let created = 0
-  for (const postUrl of fresh) {
+  // Em fila: o navegador lê o post N+1 enquanto o post N baixa o vídeo, passa pela IA e é gravado (um por vez)
+  let pending: Promise<void> = Promise.resolve()
+  const fail = (postUrl: string, e: unknown) => log(`   ✗ ${postUrl}: ${e instanceof Error ? e.message : e}`)
+  for (const [n, postUrl] of fresh.entries()) {
+    let finish: (() => Promise<string | undefined>) | undefined
     try {
-      const info = await readPost(page, postUrl)
-      const guess = kindOf(postUrl, info)
-      const shots: Buffer[] = []
-      if (info.video) shots.push(...(await videoFrames(ctx, postUrl).catch((e) => { log('   vídeo:', e instanceof Error ? e.message : e); return [] })))
-      for (const src2 of info.images.length ? info.images : info.cover ? [info.cover] : []) {
-        const img = await fetchImage(ctx, src2)
-        if (img) shots.push(img)
-      }
-      if (!shots.length && info.cover) { const c = await fetchImage(ctx, info.cover); if (c) shots.push(c) }
-      const ai = await analyze(shots, { url: postUrl, author: info.author, caption: info.caption, guess, client: (team as { name?: string } | null)?.name ?? 'o cliente' }).catch((e) => { log('   IA:', e instanceof Error ? e.message : e); return undefined })
-      const paths: string[] = []
-      for (const [i, s] of shots.slice(0, 8).entries()) {
-        const p = shotName(postUrl, i === 0 ? 'capa' : `q${i}`)
-        await upload(src.team_id, p, s)
-        paths.push(p)
-      }
-      const { error } = await db.from('crm_references').insert({
-        team_id: src.team_id,
-        url: postUrl,
-        platform: 'instagram',
-        kind: validKind(ai?.tipo, guess),
-        title: (ai?.titulo ?? '').slice(0, 160),
-        notes: (ai?.o_que_aproveitar ?? '').slice(0, 2000),
-        tags: (ai?.etiquetas ?? []).map((t) => t.toLowerCase().replace(/^#/, '').slice(0, 30)).slice(0, 6),
-        media_path: paths[0] ?? null,
-        frames: paths.slice(1),
-        author: info.author && /^[A-Za-z0-9._]{1,30}$/.test(info.author) ? info.author : null,
-        caption: info.caption ?? null,
-        source_id: src.id,
-        auto: true,
-        reviewed: false,
-        created_by: null,
-        likes: info.likes ?? null,
-        comments: info.comments ?? null,
-        views: info.views ?? null,
-        metrics_at: new Date().toISOString(),
-        group_order: orders[postUrl] ?? null,
-      })
-      if (error && error.code !== '23505') throw new Error(error.message)
-      if (error) { log(`   = ${postUrl} já estava salva`); continue }
-      created++
-      log(`   ✓ ${postUrl} → ${validKind(ai?.tipo, guess)}${ai?.titulo ? ` · ${ai.titulo}` : ''}${info.likes !== undefined ? ` · ♥ ${info.likes} 💬 ${info.comments ?? 0}${info.views !== undefined ? ` ▶ ${info.views}` : ''}` : ''}`)
+      finish = await startImport(ctx, page, src, postUrl, orders[postUrl], client)
     } catch (e) {
-      if (e instanceof Error && e.message === 'login') throw e
-      log(`   ✗ ${postUrl}: ${e instanceof Error ? e.message : e}`)
+      if (e instanceof Error && e.message === 'login') { await pending; throw e }
+      fail(postUrl, e)
     }
-    await sleep(humanPause())
+    await pending
+    pending = (async () => {
+      if (finish) {
+        try {
+          const r = await finish()
+          if (r) { created++; await progress(src, { run_note: r.slice(0, 200) }) }
+        } catch (e) { fail(postUrl, e) }
+      }
+      await progress(src, { run_done: n + 1 })
+    })()
+    if (n < fresh.length - 1) await sleep(humanPause())
   }
+  await pending
   return created
 }
 
+/** Os posts do Instagram que a conta já tem (para reaproveitar os cartões já abertos de um cadastro antigo). */
+const knownUrlsOf = async (teamId: string) => {
+  if (teamId === '-') return new Set<string>()
+  const { data } = await db.from('crm_references').select('url').eq('team_id', teamId).eq('platform', 'instagram').limit(2000)
+  return new Set(((data ?? []) as { url: string }[]).map((r) => r.url))
+}
+
+const clientName = async (teamId: string) => ((await db.from('crm_teams').select('name').eq('id', teamId).maybeSingle()).data as { name?: string } | null)?.name ?? 'o cliente'
+
+/**
+ * Lê um post e cria a referência (ou, com `existing`, refaz a que ficou incompleta: tipo, quadros e a
+ * classificação; o nome e o que aproveitar só mudam se a equipe ainda não revisou). Devolve o título.
+ */
+async function importPost(ctx: BrowserContext, page: Page, src: Source, postUrl: string, order: number | undefined, client: string, existing?: { id: string; reviewed: boolean }): Promise<string | undefined> {
+  return (await startImport(ctx, page, src, postUrl, order, client, existing))()
+}
+
+/**
+ * A parte do navegador (abrir e ler o post). Devolve o resto (vídeo, imagens, IA e gravar), que não usa a aba:
+ * a volta roda esse resto enquanto o navegador já abre o próximo post.
+ */
+async function startImport(ctx: BrowserContext, page: Page, src: Source, postUrl: string, order: number | undefined, client: string, existing?: { id: string; reviewed: boolean }): Promise<() => Promise<string | undefined>> {
+  const info = await readPost(page, postUrl)
+  return () => finishImport(ctx, src, postUrl, order, client, info, existing)
+}
+
+async function finishImport(ctx: BrowserContext, src: Source, postUrl: string, order: number | undefined, client: string, info: PostPage, existing?: { id: string; reviewed: boolean }): Promise<string | undefined> {
+  // O <video> da página nem sempre carregou a tempo: o yt-dlp tenta sempre (num post só de imagem ele
+  // falha logo) e decide se é vídeo. Antes, um Reels sem o player na página entrava sem quadros.
+  const frames = await videoFrames(ctx, postUrl).catch((e) => { if (info.video) log('   vídeo:', e instanceof Error ? e.message : e); return [] as Buffer[] })
+  if (frames.length) info.video = true
+  const guess = kindOf(postUrl, info)
+  const shots: Buffer[] = [...frames]
+  // Vídeo: a capa vem primeiro (é a imagem do cartão); carrossel: os slides
+  const stills = info.images.length && !frames.length ? info.images : info.cover ? [info.cover] : []
+  for (const src2 of stills) {
+    const img = await fetchImage(ctx, src2)
+    if (img) frames.length ? shots.unshift(img) : shots.push(img)
+  }
+  const ai = await analyze(shots, { url: postUrl, author: info.author, caption: info.caption, guess, client }).catch((e) => { log('   IA:', e instanceof Error ? e.message : e); return undefined })
+  const paths: string[] = []
+  for (const [i, s] of shots.slice(0, 8).entries()) {
+    const p = shotName(postUrl, i === 0 ? 'capa' : `q${i}`)
+    await upload(src.team_id, p, s)
+    paths.push(p)
+  }
+  const kind = validKind(ai?.tipo, guess)
+  const described = {
+    kind,
+    tags: (ai?.etiquetas ?? []).map((t) => t.toLowerCase().replace(/^#/, '').slice(0, 30)).slice(0, 6),
+    media_path: paths[0] ?? null,
+    frames: paths.slice(1),
+    likes: info.likes ?? null,
+    comments: info.comments ?? null,
+    views: info.views ?? null,
+    metrics_at: new Date().toISOString(),
+  }
+  const words = { title: (ai?.titulo ?? '').slice(0, 160), notes: (ai?.o_que_aproveitar ?? '').slice(0, 2000) }
+  const metrics = `${info.likes !== undefined ? ` · ♥ ${info.likes} 💬 ${info.comments ?? 0}` : ''} · ${paths.length} imagem(ns)`
+  if (existing) {
+    const { error } = await db.from('crm_references').update({ ...described, ...(existing.reviewed ? {} : words) }).eq('id', existing.id)
+    if (error) throw new Error(error.message)
+    log(`   ↻ ${postUrl} → ${kind}${ai?.titulo ? ` · ${ai.titulo}` : ''}${metrics}`)
+    return ai?.titulo ?? postUrl
+  }
+  const { error } = await db.from('crm_references').insert({
+    team_id: src.team_id,
+    url: postUrl,
+    platform: 'instagram',
+    ...described,
+    ...words,
+    author: info.author && /^[A-Za-z0-9._]{1,30}$/.test(info.author) ? info.author : null,
+    caption: info.caption ?? null,
+    source_id: src.id,
+    auto: true,
+    reviewed: false,
+    created_by: null,
+    group_order: order ?? null,
+  })
+  if (error && error.code !== '23505') throw new Error(error.message)
+  if (error) { log(`   = ${postUrl} já estava salva`); return undefined }
+  log(`   ✓ ${postUrl} → ${kind}${ai?.titulo ? ` · ${ai.titulo}` : ''}${metrics}`)
+  return ai?.titulo ?? postUrl
+}
+
+/**
+ * Confere um grupo contra o app: os posts dos N mais recentes que não entraram e as referências que entraram
+ * sem os quadros (vídeo não reconhecido). Com `corrigir`, importa as que faltam e refaz as incompletas.
+ */
+async function checkSource(ctx: BrowserContext, src: Source, limit: number, fix: boolean) {
+  const page = ctx.pages()[0] ?? (await ctx.newPage())
+  const links = await readThread(page, src.thread_url, await knownUrlsOf(src.team_id), limit)
+  const { data } = await db.from('crm_references').select('id, url, kind, frames, reviewed').eq('team_id', src.team_id).in('url', links.length ? links : ['-'])
+  const known = new Map(((data ?? []) as { id: string; url: string; kind: string; frames: string[] | null; reviewed: boolean }[]).map((r) => [r.url, r]))
+  const missing = links.filter((l) => !known.has(l))
+  // Sem quadros: vídeo que entrou só com a capa, ou estático/carrossel que pode ser vídeo
+  const thin = links.map((l) => known.get(l)).filter((r): r is NonNullable<typeof r> => !!r && (r.frames?.length ?? 0) < 2)
+  log(`[${src.name}] ${links.length} post(s) lidos · ${missing.length} fora do app · ${thin.length} sem quadros para conferir`)
+  for (const l of missing) log('   faltando:', l)
+  const orders = windowOrders(links)
+  const client = await clientName(src.team_id)
+  let fixed = 0
+  for (const r of thin) {
+    // Só refaz se o post for mesmo vídeo (o yt-dlp acha um vídeo nele)
+    const frames = await videoFrames(ctx, r.url).catch(() => [] as Buffer[])
+    if (!frames.length) continue
+    log(`   vídeo sem quadros: ${r.url} (estava como ${r.kind})`)
+    if (!fix) continue
+    try { if (await importPost(ctx, page, src, r.url, orders[r.url], client, { id: r.id, reviewed: r.reviewed })) fixed++ } catch (e) { if (e instanceof Error && e.message === 'login') throw e; log(`   ✗ ${r.url}: ${e instanceof Error ? e.message : e}`) }
+    await sleep(humanPause())
+  }
+  if (fix) {
+    for (const l of missing) {
+      try { if (await importPost(ctx, page, src, l, orders[l], client)) fixed++ } catch (e) { if (e instanceof Error && e.message === 'login') throw e; log(`   ✗ ${l}: ${e instanceof Error ? e.message : e}`) }
+      await sleep(humanPause())
+    }
+    log(`[${src.name}] ${fixed} corrigida(s) ou importada(s)`)
+  }
+}
+
 async function runSources(onlyDue: boolean, limit = 30, cap = MAX_POSTS) {
-  const { data, error } = await db.from('crm_reference_sources').select('id, team_id, name, thread_url, enabled, every_minutes, last_run_at, run_requested_at')
+  const { data, error } = await db.from('crm_reference_sources').select('id, team_id, name, thread_url, enabled, every_minutes, last_run_at, run_requested_at, run_limit')
   if (error) { log('Não li os grupos:', error.message); return }
   const list = ((data ?? []) as Source[]).filter((s) => (onlyDue ? due(s) : s.enabled))
   if (!list.length) return
@@ -361,13 +531,17 @@ async function runSources(onlyDue: boolean, limit = 30, cap = MAX_POSTS) {
   try {
     for (const src of list) {
       const started = new Date().toISOString()
+      // Pedido da tela com quantidade ("Importar do grupo"): lê os N mais recentes e importa os que faltam
+      const asked = src.run_limit && src.run_requested_at && Date.parse(src.run_requested_at) > (src.last_run_at ? Date.parse(src.last_run_at) : 0) ? Math.min(src.run_limit, 60) : undefined
+      await progress(src, { run_stage: 'lendo', run_started_at: started, run_total: null, run_done: 0, run_note: null })
       try {
-        const n = await processSource(ctx, src, false, limit, cap)
-        await db.from('crm_reference_sources').update({ last_run_at: started, last_found: n, last_error: null }).eq('id', src.id)
+        // Sem quantidade pedida ("Só as novas" e a rotina): para ao chegar aos que já estão no app
+        const n = await processSource(ctx, src, false, asked ?? limit, asked ?? cap, !asked && limit <= 30)
+        await db.from('crm_reference_sources').update({ last_run_at: started, last_found: n, last_error: null, run_stage: 'pronto', run_limit: null }).eq('id', src.id)
         log(`[${src.name}] ${n} referência(s) nova(s)`)
       } catch (e) {
         const msg = e instanceof Error && e.message === 'login' ? 'O Instagram saiu da conta neste Mac: rode "npm run referencias -- entrar" e entre de novo.' : (e instanceof Error ? e.message : String(e)).slice(0, 280)
-        await db.from('crm_reference_sources').update({ last_run_at: started, last_error: msg }).eq('id', src.id)
+        await db.from('crm_reference_sources').update({ last_run_at: started, last_error: msg, run_stage: 'erro', run_limit: null }).eq('id', src.id)
         log(`[${src.name}] erro: ${msg}`)
         if (e instanceof Error && e.message === 'login') break
       }
@@ -425,6 +599,17 @@ if (cmd === 'entrar') {
     } finally {
       await ctx.close().catch(() => undefined)
     }
+  }
+} else if (cmd === 'conferir') {
+  // `conferir [60] [corrigir]`: o que do grupo não entrou ou entrou sem os quadros do vídeo
+  const n = Number(arg)
+  const fix = process.argv.slice(2).includes('corrigir')
+  const { data } = await db.from('crm_reference_sources').select('id, team_id, name, thread_url, enabled, every_minutes, last_run_at, run_requested_at').eq('enabled', true)
+  const ctx = await openBrowser()
+  try {
+    for (const src of (data ?? []) as Source[]) await checkSource(ctx, src, Number.isFinite(n) && n > 0 ? Math.min(n, 80) : 60, fix)
+  } finally {
+    await ctx.close().catch(() => undefined)
   }
 } else if (cmd === 'agora') {
   // `agora 20`: os 20 posts mais recentes de cada grupo (importar o histórico); sem número, a volta normal

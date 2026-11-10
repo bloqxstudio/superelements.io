@@ -15,6 +15,7 @@ import { attachmentFiles, reportStep, useIara, type IaraAction, type IaraDone } 
 import { useEditor } from '@/features/criativos/store'
 import type { ResolvedRef } from '@/features/criativos/references'
 import { TOOL_ACTIONS } from './toolActions'
+import { INSTAGRAM_ACTIONS } from './instagramActions'
 import { agentBegin, agentEnd, agentPhase, applyInEditor, editorHas, followOn, goTo, liveSet, openInEditor } from './follow'
 
 /**
@@ -1572,7 +1573,7 @@ const NAV_ACTIONS: Full[] = [
   },
 ]
 
-export const allActions = (): Full[] => [...CONTENT_ACTIONS, ...CREATIVE_ACTIONS, ...DATA_ACTIONS, ...BRAIN_ACTIONS, ...TOOL_ACTIONS, ...PRODUCT_ACTIONS, ...NAV_ACTIONS, ...(useIara.getState().screen?.actions ?? [])]
+export const allActions = (): Full[] => [...CONTENT_ACTIONS, ...CREATIVE_ACTIONS, ...DATA_ACTIONS, ...BRAIN_ACTIONS, ...TOOL_ACTIONS, ...INSTAGRAM_ACTIONS, ...PRODUCT_ACTIONS, ...NAV_ACTIONS, ...(useIara.getState().screen?.actions ?? [])]
 
 export const isRisky = (a: IaraAction, args: Record<string, unknown>) => !!a.handoff?.(args) || (typeof a.risky === 'function' ? a.risky(args) : !!a.risky)
 

@@ -1,7 +1,7 @@
 import { loadSet } from '@/features/criativos/storage'
 import { sizeOf, type CreativeSet, type Layer, type Post } from '@/features/criativos/types'
 import { callAiQuiet, useCreativeLink } from '@/features/criativos/link'
-import { resolveIa } from '@/features/ia/porTarefa'
+import { iaFor } from '@/features/ia/porTarefa'
 import { loadStandard } from './standard'
 
 /**
@@ -151,7 +151,7 @@ export async function draftPattern(o: { teamId: string; href?: string; coverUrl?
   ].filter(Boolean).join('\n\n')
   try {
     o.onStep?.('A IA está lendo o padrão')
-    const out = await callAiQuiet<{ reply: string; items: { ref: string; text: string }[] }>('agent', { engine: resolveIa('criativos'), system: SYSTEM, prompt, images }, o.signal)
+    const out = await callAiQuiet<{ reply: string; items: { ref: string; text: string }[] }>('agent', { ...iaFor('criativos'), system: SYSTEM, prompt, images }, o.signal)
     const of = (ref: string) => (out.items ?? []).filter((x) => x.ref.toLowerCase().startsWith(ref)).map((x) => x.text.trim()).filter(Boolean)
     const rules = of('regra')
     if (!rules.length) return fallback()

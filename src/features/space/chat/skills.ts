@@ -4,14 +4,16 @@
  * equipe e as pessoais de cada um ficam na conta (`space_skills`, tela
  * Skills). A aba mostra o nome e a linha de cada uma; o servidor do chat
  * (`scripts/space/chatPlugin.ts`) põe as instruções no pedido ao agente.
- * Lido pelos dois lados: só dados e texto, sem import.
+ * Lido pelos dois lados: só dados e texto (o único import são as skills de Instagram, também só texto).
  *
  * As instruções falam dos comandos da ponte (`node scripts/space/space.mjs
  * <comando>`) e do JSON nativo do Elementor, que é o que o agente edita.
  */
 
-/** As padrão, que vêm no código. */
-export type ChatSkillId = 'designer' | 'copy' | 'seo' | 'conversao' | 'celular' | 'acessibilidade' | 'referencia' | 'pagina-copy'
+import { INSTAGRAM_SKILLS, type InstagramSkillId } from './instagramSkills.ts'
+
+/** As padrão, que vêm no código (as de Instagram ficam em `instagramSkills.ts`). */
+export type ChatSkillId = 'designer' | 'copy' | 'seo' | 'conversao' | 'celular' | 'acessibilidade' | 'referencia' | 'pagina-copy' | InstagramSkillId
 
 /** Padrão (no código), global (da equipe, na conta) ou pessoal (de quem criou). */
 export type ChatSkillSource = 'builtin' | 'global' | 'personal'
@@ -160,6 +162,9 @@ export const CHAT_SKILLS: Array<ChatSkill & { id: ChatSkillId }> = [
     ),
   },
 ]
+
+// As de Instagram (instagram-agent-skill em português), no fim da lista
+CHAT_SKILLS.push(...INSTAGRAM_SKILLS.map((s) => ({ ...s, source: 'builtin' as const })))
 
 export const CHAT_SKILL_IDS = CHAT_SKILLS.map((s) => s.id)
 

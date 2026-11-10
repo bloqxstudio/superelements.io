@@ -1,3 +1,4 @@
+import { modelFor } from '@/features/ia/modelos'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { accountContext } from '@/features/cerebro/accountContext'
 import { supabase } from '@/integrations/supabase/client'
@@ -222,7 +223,7 @@ export async function readWithAi(input: { account: IgAccount; media: IgMedia[]; 
       'Cada texto em até 3 frases. Sem emoji, exceto na bio sugerida se ajudar.',
     ].join('\n')
     step('Lendo o perfil')
-    const out = await callAiQuiet<{ reply: string; items: { ref: string; text: string }[] }>('agent', { engine, system: SYSTEM, prompt, web: false, images }, job.signal, (_s, detail) => detail && step(detail))
+    const out = await callAiQuiet<{ reply: string; items: { ref: string; text: string }[] }>('agent', { engine, model: modelFor('perfil', engine), system: SYSTEM, prompt, web: false, images }, job.signal, (_s, detail) => detail && step(detail))
     const items = (out.items ?? []).filter((i) => i?.ref && typeof i.text === 'string' && i.text.trim())
     const pick = (ref: string) => items.find((i) => i.ref === ref)?.text.trim()
     const notes: AiReading['notes'] = {}

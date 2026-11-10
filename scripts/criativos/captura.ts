@@ -34,7 +34,7 @@ export function findBrowser(): string | undefined {
   return undefined
 }
 
-async function openCdp(url: string) {
+export async function openCdp(url: string) {
   const ws = new WebSocket(url)
   await new Promise<void>((resolve, reject) => { ws.onopen = () => resolve(); ws.onerror = () => reject(new Error('Falha ao conectar à captura.')) })
   let id = 0

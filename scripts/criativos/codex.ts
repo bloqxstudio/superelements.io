@@ -1,9 +1,10 @@
 import type { ChildProcess } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { findBin, kill, launch } from '../space/chatPlugin.ts'
 import { codexIsolationArgs } from './codexIsolation.ts'
+import { codexModelArgs } from './modelos.ts'
 
 /**
  * Uma pergunta ao Codex desta máquina (`codex exec`), numa pasta vazia e só com
@@ -25,27 +26,8 @@ interface Ask {
   onStep?: (step: 'start' | 'thinking' | 'reading' | 'writing', detail?: string) => void
 }
 
-/**
- * O modelo do `config.toml` do Codex pode ter saído da lista da conta (erro "model is not supported
- * when using Codex with a ChatGPT account"). Se o configurado não está entre os que o próprio Codex
- * lista em `models_cache.json`, pede o primeiro da lista; `CODEX_MODEL` manda sobre tudo.
- */
-export function codexModelArgs(): string[] {
-  const forced = process.env.CODEX_MODEL?.trim()
-  if (forced) return ['-c', `model="${forced}"`]
-  try {
-    const home = process.env.CODEX_HOME?.trim() || path.join(os.homedir(), '.codex')
-    const cache = path.join(home, 'models_cache.json')
-    const config = path.join(home, 'config.toml')
-    if (!existsSync(cache) || !existsSync(config)) return []
-    const listed = ((JSON.parse(readFileSync(cache, 'utf8')) as { models?: { slug?: string; visibility?: string }[] }).models ?? []).filter((m) => m.visibility === 'list' && m.slug).map((m) => m.slug as string)
-    const current = /^\s*model\s*=\s*"([^"]+)"/m.exec(readFileSync(config, 'utf8'))?.[1]
-    if (!listed.length || (current && listed.includes(current))) return []
-    return ['-c', `model="${listed[0]}"`]
-  } catch {
-    return []
-  }
-}
+/** O modelo do Codex (o escolhido para o pedido ou o da máquina): ver `modelos.ts`. */
+export { codexModelArgs }
 
 /** O primeiro objeto JSON completo de um texto (a resposta pode vir com ``` ou uma frase antes). */
 export function extractJson<T>(text: string): T | undefined {

@@ -471,6 +471,18 @@ export const POST_MODELS: PostModel[] = [
   { id: 'quadrado', name: 'Carrossel quadrado', hint: 'Três lâminas 1:1.', format: '1x1', slides: [{ template: 'manifesto' }, { template: 'case-janela', case: 'contplan' }, { template: 'cta' }] },
 ]
 
+/**
+ * Sequências prontas para conta de cliente: só modelos neutros, com textos de exemplo para trocar.
+ * Sem cases, ilustrações nem a fala do estúdio (2026-11-10).
+ */
+export const CLIENT_POST_MODELS: PostModel[] = [
+  { id: 'cliente-carrossel', name: 'Carrossel de conteúdo', hint: 'Capa com foto, dois pontos, um dado e o fecho (4:5).', format: '4x5', slides: [{ template: 'viral-capa', label: 'Tema', title: 'Seu título *principal* aqui' }, { template: 'viral-foto', number: '01', title: 'Primeiro *ponto*', body: 'Uma frase curta que explica o ponto.' }, { template: 'viral-foto', number: '02', title: 'Segundo *ponto*', body: 'Uma frase curta que explica o ponto.' }, { template: 'viral-dado', label: 'O número', number: '00%', title: 'o dado que *prova* o ponto' }, { template: 'viral-fecho' }] },
+  { id: 'cliente-anuncio', name: 'Oferta e chamada', hint: 'Mensagem, lista de motivos e chamada (4:5).', format: '4x5', slides: [{ template: 'manifesto', title: 'Sua mensagem *principal* aqui.', body: 'Uma frase que diz o que você oferece.' }, { template: 'lista', label: 'Por que nós', title: 'Três *motivos*', items: ['Primeiro motivo.', 'Segundo motivo.', 'Terceiro motivo.'] }, { template: 'cta', label: 'Próximo passo', title: 'Fale com a gente *hoje*.', cta: 'Chamar no Direct' }] },
+  { id: 'cliente-foto', name: 'Foto com manchete', hint: 'Uma foto em tela cheia com a manchete (4:5).', format: '4x5', slides: [{ template: 'foto-manchete', title: 'Sua manchete *aqui*.' }] },
+  { id: 'cliente-frase', name: 'Frase de impacto', hint: 'Um card com uma frase forte (1:1).', format: '1x1', slides: [{ template: 'viral-frase', label: 'O insight', title: 'Uma frase *forte* sobre o seu negócio.' }] },
+  { id: 'cliente-stories', name: 'Sequência de stories', hint: 'Mensagem, frase e chamada (9:16).', format: '9x16', slides: [{ template: 'manifesto', title: 'Sua mensagem *principal* aqui.', body: 'Uma frase que diz o que você oferece.' }, { template: 'viral-frase', title: 'Uma frase *forte* sobre o seu negócio.' }, { template: 'cta', label: 'Próximo passo', title: 'Fale com a gente *hoje*.', cta: 'Chamar no Direct' }] },
+]
+
 export const buildPost = (model: Pick<PostModel, 'name' | 'format' | 'slides'> & { caption?: string }, brand: SetBrand, opts: { series?: string } = {}): Post => ({
   id: uid(),
   name: model.name,

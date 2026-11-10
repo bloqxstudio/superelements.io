@@ -6,8 +6,10 @@ import type { CopyRequest } from '../../src/features/copy/protocol.ts'
 import { CREATIVE_EVENTS, type CreativeAgentInfo, type CreativeImageRequest, type CreativeCall, type CreativeProgress, type CreativeResult } from '../../src/features/criativos/protocol.ts'
 import { CHAT_AGENTS } from '../../src/features/space/chat/protocol.ts'
 import { checkAgents } from '../space/chatPlugin.ts'
+import { codexModels, withModel } from './modelos.ts'
 import { runCopy } from '../copy/agent.ts'
 import { runAgent, type AgentRunRequest } from '../agente/run.ts'
+import { runVideoAgent, type VideoAgentRequest } from './videoAgent.ts'
 import { planFolder, type FolderPlanRequest } from '../copy/plan.ts'
 import { copyToSlides, type SlidesRequest } from '../copy/slides.ts'
 import { downloadImage } from './baixar.ts'
@@ -98,8 +100,8 @@ export const criativos = (): Plugin => ({
 
     server.ws.on(CREATIVE_EVENTS.hello, () => {
       void checkAgents().then((found) => {
-        const agents: CreativeAgentInfo[] = found.map((a) => ({ id: a.id, name: CHAT_AGENTS[a.id].name, available: a.available, version: a.version }))
-        server.ws.send(CREATIVE_EVENTS.status, { ia: agents.some((a) => a.available), agents, images: imageProvider(), providers: imageProviders(), keys: keyStatus(), browser: !!findBrowser() })
+        const agents: CreativeAgentInfo[] = found.map((a) => ({ id: a.id, name: CHAT_AGENTS[a.id].name, available: a.available, version: a.version, models: a.id === 'codex' ? codexModels() : undefined }))
+        server.ws.send(CREATIVE_EVENTS.status, { ia: agents.some((a) => a.available), agents, images: imageProvider(), providers: imageProviders(), keys: keyStatus(), browser: !!findBrowser(), videoAgent: !!findBrowser() })
       })
     })
 
@@ -110,69 +112,77 @@ export const criativos = (): Plugin => ({
         const controller = new AbortController()
         runs.set(id, controller)
         try {
-          if (call.kind === 'edit') {
-            const input = editInput(call.request as Partial<EditRequest>)
-            if (!input.message.trim()) throw new Error('Escreva o que quer mudar.')
-            send({ id, ok: true, data: await editCreatives(input, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
-          } else if (call.kind === 'plan') {
-            send({ id, ok: true, data: await planPosts(planInput(call.request as Partial<PlanRequest>), controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
-          } else if (call.kind === 'story-plan') {
-            const input = storyPlanInput(call.request as Partial<StoryPlanRequest>)
-            if (!input.slots.length) throw new Error('A semana não tem horário livre.')
-            send({ id, ok: true, data: await planStories(input, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
-          } else if (call.kind === 'image') {
-            const req = call.request as Partial<CreativeImageRequest>
-            const ratio = req.ratio === 'portrait' || req.ratio === 'landscape' ? req.ratio : 'square'
-            const prefer = req.provider === 'codex' || req.provider === 'openai' || req.provider === 'gemini' ? req.provider : undefined
-            const refs = Array.isArray(req.references) ? req.references.filter((r): r is string => typeof r === 'string' && r.startsWith('data:image/')).slice(0, 4) : []
-            send({ id, ok: true, data: await generateImage(String(req.prompt ?? ''), ratio, controller.signal, prefer, refs, { edit: req.edit === true, transparent: req.transparent === true }) })
-          } else if (call.kind === 'copy') {
-            const req = call.request as CopyRequest
-            if (!String(req?.message ?? '').trim()) throw new Error('Escreva o que você quer.')
-            send({ id, ok: true, data: await runCopy({ ...req, message: String(req.message).slice(0, 6000), doc: { ...req.doc, blocks: (req.doc?.blocks ?? []).slice(0, 400) }, history: (req.history ?? []).slice(-30) }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
-          } else if (call.kind === 'copy-plan') {
-            const req = call.request as FolderPlanRequest
-            if (!String(req?.request ?? '').trim()) throw new Error('Escreva o que você quer criar na pasta.')
-            send({ id, ok: true, data: await planFolder({ ...req, engine: req.engine === 'codex' ? 'codex' : 'claude', persona: typeof req.persona === 'string' ? req.persona : undefined, folder: String(req.folder ?? '').slice(0, 160), existing: (req.existing ?? []).slice(0, 60) }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
-          } else if (call.kind === 'copy-slides') {
-            const req = call.request as SlidesRequest
-            send({ id, ok: true, data: await copyToSlides({ name: String(req?.name ?? 'Post').slice(0, 120), kind: req?.kind === 'story' ? 'story' : req?.kind === 'pesquisa' ? 'pesquisa' : 'post', count: Number(req?.count) || undefined, text: String(req?.text ?? ''), engine: req?.engine === 'codex' ? 'codex' : 'claude', persona: typeof req?.persona === 'string' ? req.persona : undefined }, controller.signal) })
-          } else if (call.kind === 'agent') {
-            const req = call.request as Partial<AgentRunRequest>
-            if (!String(req?.prompt ?? '').trim()) throw new Error('O pedido veio vazio.')
-            send({ id, ok: true, data: await runAgent({ engine: req.engine === 'codex' ? 'codex' : 'claude', system: String(req.system ?? '').slice(0, 12000), prompt: String(req.prompt), web: !!req.web, images: Array.isArray(req.images) ? req.images.filter((i): i is string => typeof i === 'string').slice(0, 12) : undefined }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
-          } else if (call.kind === 'voice') {
-            // Narração do vídeo explicativo pela voz da OpenAI, com a chave guardada neste computador
-            const req = call.request as SpeakRequest
-            send({ id, ok: true, data: await speak({ provider: req?.provider === 'elevenlabs' ? 'elevenlabs' : 'openai', text: String(req?.text ?? ''), voice: typeof req?.voice === 'string' ? req.voice : undefined, instructions: typeof req?.instructions === 'string' ? req.instructions : undefined, speed: Number(req?.speed) || undefined, model: typeof req?.model === 'string' ? req.model : undefined, stability: req?.stability, style: req?.style, similarity: req?.similarity }, controller.signal) })
-          } else if (call.kind === 'media-search') {
-            send({ id, ok: true, data: await searchFreeImages(String((call.request as { q?: string })?.q ?? ''), controller.signal) })
-          } else if (call.kind === 'media-download') {
-            send({ id, ok: true, data: await downloadMedia(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
-          } else if (call.kind === 'clip') {
-            const req = call.request as { prompt?: string; seconds?: number }
-            send({ id, ok: true, data: await generateClip({ prompt: String(req?.prompt ?? ''), seconds: Number(req?.seconds) || 4 }, controller.signal, (detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step: 'writing', detail } satisfies CreativeProgress)) })
-          } else if (call.kind === 'voices-br') {
-            send({ id, ok: true, data: await elevenBrazilVoices(controller.signal) })
-          } else if (call.kind === 'voice-add') {
-            const req = call.request as { ownerId?: string; id?: string; name?: string }
-            send({ id, ok: true, data: await elevenAddShared(String(req?.ownerId ?? ''), String(req?.id ?? ''), String(req?.name ?? 'Voz'), controller.signal) })
-          } else if (call.kind === 'transcribe') {
-            // A narração gerada por IA, transcrita pela OpenAI com o tempo de cada palavra
-            send({ id, ok: true, data: await transcribeWords(String((call.request as { audio?: string })?.audio ?? ''), controller.signal) })
-          } else if (call.kind === 'voices') {
-            // As vozes da conta da ElevenLabs (prontas e clonadas)
-            send({ id, ok: true, data: await elevenVoices(controller.signal) })
-          } else if (call.kind === 'reel') {
-            // Referência do vídeo explicativo: um link de reel por vez, baixado aqui pelo yt-dlp
-            const url = String((call.request as { url?: string })?.url ?? '')
-            send({ id, ok: true, data: await downloadReel(url, controller.signal, (detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step: 'reading', detail } satisfies CreativeProgress)) })
-          } else if (call.kind === 'download') {
-            send({ id, ok: true, data: await downloadImage(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
-          } else if (call.kind === 'capture') {
-            const req = call.request as { html?: string; width?: number }
-            send({ id, ok: true, data: await capturePage(String(req?.html ?? '').slice(0, 25_000_000), Number(req?.width) || 1280, controller.signal) })
-          } else throw new Error('Pedido desconhecido.')
+          // O modelo escolhido para a tarefa (Configurações › IA de cada trabalho ou o chat) vale durante o pedido
+          await withModel((call.request as { model?: unknown } | undefined)?.model, async () => {
+            if (call.kind === 'edit') {
+              const input = editInput(call.request as Partial<EditRequest>)
+              if (!input.message.trim()) throw new Error('Escreva o que quer mudar.')
+              send({ id, ok: true, data: await editCreatives(input, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
+            } else if (call.kind === 'plan') {
+              send({ id, ok: true, data: await planPosts(planInput(call.request as Partial<PlanRequest>), controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
+            } else if (call.kind === 'story-plan') {
+              const input = storyPlanInput(call.request as Partial<StoryPlanRequest>)
+              if (!input.slots.length) throw new Error('A semana não tem horário livre.')
+              send({ id, ok: true, data: await planStories(input, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
+            } else if (call.kind === 'image') {
+              const req = call.request as Partial<CreativeImageRequest>
+              const ratio = req.ratio === 'portrait' || req.ratio === 'landscape' ? req.ratio : 'square'
+              const prefer = req.provider === 'codex' || req.provider === 'openai' || req.provider === 'gemini' ? req.provider : undefined
+              const refs = Array.isArray(req.references) ? req.references.filter((r): r is string => typeof r === 'string' && r.startsWith('data:image/')).slice(0, 4) : []
+              send({ id, ok: true, data: await generateImage(String(req.prompt ?? ''), ratio, controller.signal, prefer, refs, { edit: req.edit === true, transparent: req.transparent === true }) })
+            } else if (call.kind === 'copy') {
+              const req = call.request as CopyRequest
+              if (!String(req?.message ?? '').trim()) throw new Error('Escreva o que você quer.')
+              send({ id, ok: true, data: await runCopy({ ...req, message: String(req.message).slice(0, 6000), doc: { ...req.doc, blocks: (req.doc?.blocks ?? []).slice(0, 400) }, history: (req.history ?? []).slice(-30) }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
+            } else if (call.kind === 'copy-plan') {
+              const req = call.request as FolderPlanRequest
+              if (!String(req?.request ?? '').trim()) throw new Error('Escreva o que você quer criar na pasta.')
+              send({ id, ok: true, data: await planFolder({ ...req, engine: req.engine === 'codex' ? 'codex' : 'claude', persona: typeof req.persona === 'string' ? req.persona : undefined, folder: String(req.folder ?? '').slice(0, 160), existing: (req.existing ?? []).slice(0, 60) }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
+            } else if (call.kind === 'copy-slides') {
+              const req = call.request as SlidesRequest
+              send({ id, ok: true, data: await copyToSlides({ name: String(req?.name ?? 'Post').slice(0, 120), kind: req?.kind === 'story' ? 'story' : req?.kind === 'pesquisa' ? 'pesquisa' : 'post', count: Number(req?.count) || undefined, text: String(req?.text ?? ''), engine: req?.engine === 'codex' ? 'codex' : 'claude', persona: typeof req?.persona === 'string' ? req.persona : undefined }, controller.signal) })
+            } else if (call.kind === 'agent') {
+              const req = call.request as Partial<AgentRunRequest>
+              if (!String(req?.prompt ?? '').trim()) throw new Error('O pedido veio vazio.')
+              send({ id, ok: true, data: await runAgent({ engine: req.engine === 'codex' ? 'codex' : 'claude', system: String(req.system ?? '').slice(0, 12000), prompt: String(req.prompt), web: !!req.web, images: Array.isArray(req.images) ? req.images.filter((i): i is string => typeof i === 'string').slice(0, 12) : undefined }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
+            } else if (call.kind === 'video-agent') {
+              // O vídeo feito por um agente com o motor na mão (renderiza, compara com a referência, corrige)
+              const req = call.request as VideoAgentRequest
+              if (!String(req?.workerSource ?? '').includes('onmessage') || !req?.scene?.duration) throw new Error('O pedido do vídeo veio incompleto.')
+              send({ id, ok: true, data: await runVideoAgent({ ...req, engine: req.engine === 'codex' ? 'codex' : 'claude' }, controller.signal, (step, detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step, detail } satisfies CreativeProgress)) })
+            } else if (call.kind === 'voice') {
+              // Narração do vídeo explicativo pela voz da OpenAI, com a chave guardada neste computador
+              const req = call.request as SpeakRequest
+              send({ id, ok: true, data: await speak({ provider: req?.provider === 'elevenlabs' ? 'elevenlabs' : 'openai', text: String(req?.text ?? ''), voice: typeof req?.voice === 'string' ? req.voice : undefined, instructions: typeof req?.instructions === 'string' ? req.instructions : undefined, speed: Number(req?.speed) || undefined, model: typeof req?.model === 'string' ? req.model : undefined, stability: req?.stability, style: req?.style, similarity: req?.similarity }, controller.signal) })
+            } else if (call.kind === 'media-search') {
+              send({ id, ok: true, data: await searchFreeImages(String((call.request as { q?: string })?.q ?? ''), controller.signal) })
+            } else if (call.kind === 'media-download') {
+              send({ id, ok: true, data: await downloadMedia(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
+            } else if (call.kind === 'clip') {
+              const req = call.request as { prompt?: string; seconds?: number }
+              send({ id, ok: true, data: await generateClip({ prompt: String(req?.prompt ?? ''), seconds: Number(req?.seconds) || 4 }, controller.signal, (detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step: 'writing', detail } satisfies CreativeProgress)) })
+            } else if (call.kind === 'voices-br') {
+              send({ id, ok: true, data: await elevenBrazilVoices(controller.signal) })
+            } else if (call.kind === 'voice-add') {
+              const req = call.request as { ownerId?: string; id?: string; name?: string }
+              send({ id, ok: true, data: await elevenAddShared(String(req?.ownerId ?? ''), String(req?.id ?? ''), String(req?.name ?? 'Voz'), controller.signal) })
+            } else if (call.kind === 'transcribe') {
+              // A narração gerada por IA, transcrita pela OpenAI com o tempo de cada palavra
+              send({ id, ok: true, data: await transcribeWords(String((call.request as { audio?: string })?.audio ?? ''), controller.signal) })
+            } else if (call.kind === 'voices') {
+              // As vozes da conta da ElevenLabs (prontas e clonadas)
+              send({ id, ok: true, data: await elevenVoices(controller.signal) })
+            } else if (call.kind === 'reel') {
+              // Referência do vídeo explicativo: um link de reel por vez, baixado aqui pelo yt-dlp
+              const url = String((call.request as { url?: string })?.url ?? '')
+              send({ id, ok: true, data: await downloadReel(url, controller.signal, (detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step: 'reading', detail } satisfies CreativeProgress)) })
+            } else if (call.kind === 'download') {
+              send({ id, ok: true, data: await downloadImage(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
+            } else if (call.kind === 'capture') {
+              const req = call.request as { html?: string; width?: number }
+              send({ id, ok: true, data: await capturePage(String(req?.html ?? '').slice(0, 25_000_000), Number(req?.width) || 1280, controller.signal) })
+            } else throw new Error('Pedido desconhecido.')
+          })
         } catch (error) {
           if (controller.signal.aborted) return
           send({ id, ok: false, error: error instanceof Error ? error.message : String(error) })

@@ -2,10 +2,10 @@ import React from 'react'
 import { Sparkles } from 'lucide-react'
 import { AV_CASES } from '@/features/avence/cases'
 import { cn } from '@/lib/utils'
-import { AI_EXAMPLES, type AiForm } from './ai'
+import { AI_EXAMPLES, isClientAccount, type AiForm } from './ai'
 
 /** Os campos do pedido para a IA: briefing, cases que ela pode usar, formato e tamanho. */
-export const AiFields: React.FC<{ form: AiForm; onChange: (form: AiForm) => void; disabled?: boolean; /** Esconde os cases da Avence (conjunto de outra marca). */ hideCases?: boolean }> = ({ form, onChange, disabled, hideCases }) => {
+export const AiFields: React.FC<{ form: AiForm; onChange: (form: AiForm) => void; disabled?: boolean; /** Esconde os cases e os exemplos da Avence (conjunto de outra marca ou conta de cliente). */ hideCases?: boolean }> = ({ form, onChange, disabled, hideCases }) => {
   const set = (fields: Partial<AiForm>) => onChange({ ...form, ...fields })
   const toggle = (slug: string) => set({ cases: form.cases.includes(slug) ? form.cases.filter((s) => s !== slug) : [...form.cases, slug] })
   return (
@@ -58,6 +58,10 @@ export const AiFields: React.FC<{ form: AiForm; onChange: (form: AiForm) => void
  * O pedido inicial para a IA de um conjunto aberto. Um conjunto vindo de Conteúdos leva o briefing
  * do Plano e nenhum case da Avence; os demais conjuntos mantêm o pedido de sempre.
  */
-export const aiFormFor = (set: { source?: unknown; brief?: string } | undefined): AiForm => (set?.source ? { ...EMPTY_AI, brief: set.brief ?? '', cases: [] } : EMPTY_AI)
+export const aiFormFor = (set: { source?: unknown; brief?: string } | undefined): AiForm =>
+  set?.source ? { ...EMPTY_AI, brief: set.brief ?? '', cases: [] } : isClientAccount() ? CLIENT_AI : EMPTY_AI
 
 export const EMPTY_AI: AiForm ={ brief: '', format: '4x5', slides: 5, posts: 1, cases: AV_CASES.slice(0, 3).map((c) => c.slug) }
+
+/** Conta de cliente: o mesmo pedido, sem nenhum case da Avence. */
+export const CLIENT_AI: AiForm = { ...EMPTY_AI, cases: [] }

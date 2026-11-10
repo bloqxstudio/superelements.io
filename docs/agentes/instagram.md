@@ -81,3 +81,41 @@ quando alguém abria a tela. O Início mostrava o que tinha ficado da última ve
   - Realtime nas tabelas de relatório: o JSON é grande, e o egress conta. As telas releem a tabela.
   - Paginar além dos 50 posts mais recentes: os mais antigos ficam com o último número lido.
   - Prender o alcance diário ao dia de São Paulo: a Meta fecha o dia no horário do Pacífico.
+
+## Inteligência de Instagram (instagram-agent-skill em português, 2026-11-09)
+
+O usuário, com o link `github.com/Jakeschincariol/instagram-agent-skill` (13 skills, MIT): "quero que traga todas as skills e encaixar nas nossas, mas ter essa inteligência completa… e conseguimos fazer ler e comentar?".
+
+- **Núcleo sem IA** (`src/features/instagram-ia/`, sem imports `@/` exceto os dois componentes; testes em `scripts/tests/instagram-ia.test.mjs`): os 6 scripts Python reescritos em TypeScript e o conteúdo refeito para o português. `ganchos.ts` (26 fórmulas com modelo, exemplo, texto da tela, para que serve, armadilha e o regex que reconhece a fórmula; a nota do gancho em 5 propriedades: tamanho, concreto com R$ e número por extenso, tensão, o forte na frente, fala com alguém; problemas graves: saudação, "pare de rolar", "neste vídeo", emoji, hashtag), `tempos.ts` (roteiro em minutagem a 160 palavras/min: gancho acima de 3 s, batida acima de 4 s, três batidas sem nada concreto, loop, alvo), `legenda.ts` (o que o feed mostra antes do "mais", primeira linha, uma chamada, até 5 hashtags, links mortos, emoji, termos de busca), `humanizar.ts` (invisíveis, travessão, aspas curvas, léxico de clichês em português e as estruturas a reescrever; 5 checagens com a nota antes e depois; palavras comuns com sentido literal, como jornada, norte, mergulhar, incrível, ficaram de fora do léxico), `virais.ts` (múltiplo sobre a mediana do próprio perfil, fórmula, terço de cima × de baixo, confiança; Markdown para o Cérebro), `auditoria.ts` (os posts reais da conta: múltiplo sobre a mediana do mesmo formato, envios, salvos e seguidores a cada mil de alcance, tempo assistido; achados com confiança; o gancho é a 1ª linha da legenda, porque a Meta não entrega o falado nem a retenção aos 3 s), `perfil.ts` (a rubrica de 12 itens / 100 pontos, que complementa `crm/profileAudit.ts`).
+- **Ações da Iara** (`src/features/iara/instagramActions.ts`, em `allActions`; passos em `scripts/iara/labels.ts`): `ig_formulas`, `ig_ganchos`, `ig_tempos`, `ig_legenda_revisar`, `ig_humanizar`, `ig_virais` ("salvar" grava `instagram/virais.md` no Cérebro), `ig_o_que_funcionou`, `ig_perfil`, `ig_comentarios` (lê os comentários da conta conectada pela API oficial) e `ig_responder` (responde comentários da própria conta; `risky`, só sai com a confirmação da pessoa). A persona da Iara (`engine.ts`) manda usar as ferramentas e humanizar todo texto de Instagram.
+- **Skills do chat** (`src/features/space/chat/instagramSkills.ts`, somadas a `CHAT_SKILLS`; ícones em `skills/skillIcon.ts`): as 13 em português (Reels, Virais do nicho, Legenda, Carrossel, Stories, Perfil, Semana, Humanizar, Comentar, Responder comentários, Direct, Reaproveitar, O que funcionou) mais **Voz da conta** (o `voice.md` deles). Os arquivos `~/.claude/instagram/*.md` viraram notas do Cérebro da conta: `instagram/voz.md`, `virais.md`, `registro.md`, `semana.md`; o carrossel sai pelos Criativos, a semana vai para a Pauta (`criar_ideias`).
+- **Telas**: `CaptionCheck.tsx` embaixo da legenda em CRM › Instagram › Publicar, no Motion e na publicação da cena (o que o feed mostra, as checagens, "Cara de IA" e o botão "Tirar cara de IA"); o contador do Publicar passou a x/5 hashtags (o bloqueio de envio continua acima de 30, o limite que o app já tinha; acima de 5 a revisão marca "Corrigir"). `WhatWorked.tsx` na Análise (`?aba=analise`): "O que funcionou" em 30/90/180 dias, com "Pedir à Iara". A legenda escrita por IA (`criativos/captionAi.ts`) ganhou as regras (uma chamada, até 5 hashtags, sem link, sem travessão) e sai pelo humanizador.
+- **Ler e comentar**: na conta conectada, ler e responder comentários (com confirmação) funciona pela API oficial. Em perfil de outra pessoa, nada automatizado: a API da Meta não comenta em post de outra conta e a regra do projeto proíbe; as skills Comentar e Direct entregam o texto para a pessoa colar. Ler posts de outros perfis continua só pela tela Referências (leitor do Mac, grupos de direct cadastrados) e pelo que a pessoa colar; o Business Discovery da Meta (números públicos de contas profissionais) exige o login do Instagram pelo Facebook, que o app não usa, e não foi feito.
+- **Testado**: `npm test` (11 testes novos: as 26 fórmulas reconhecem o próprio exemplo, ganchos, tempos, legenda, humanizador, detector, virais, auditoria, rubrica, skills citando só ações que existem). **Não testado com login real**: as ações na aba logada, os comentários e respostas na Meta, as telas novas.
+
+## Testes de reels / trial reels (2026-11-09)
+
+O usuário: "crie o motor para trial reel pela plataforma, quero postar esse formato de conteúdo e validar vídeos
+antes de levar para conta real". Pela API oficial (`trial_params` no contêiner `REELS`, changelog da Meta de
+03/12/2025, todas as versões), o vídeo sai só para quem não segue a conta.
+
+- **Publicar como teste:** chave `TrialOption` (`src/features/crm/TrialOption.tsx`) em CRM › Instagram › Publicar
+  (reels ou vídeo único), no `MotionPublish` (só "Publicar agora": a fila programada não leva o teste), na cena em
+  código (`ScenePublish`) e no vídeo explicativo. Estratégias: `MANUAL` ("Eu decido": a pessoa leva aos seguidores
+  no app) e `SS_PERFORMANCE` (o Instagram leva sozinho se for bem). Com teste, `share_to_feed` não vai.
+- **Banco:** `crm_instagram_trials` (migração `20261109230000_crm_instagram_trials.sql`, aplicada): o contêiner, o
+  post, a estratégia, a duração do vídeo, os números da última leitura e os retratos de 24 h e 72 h. Só a função grava
+  os números; a equipe atualiza só `decision`/`note`; quem publicou ou gestor apaga; barrada com o módulo desligado.
+- **Função `instagram` v21:** `publish` aceita `trial: { strategy, title, duration }` e cria a linha; `finish` liga a
+  linha ao post publicado (ou marca `falhou`); `readTrials` relê os testes no ar dos últimos 30 dias (um pedido de
+  insights por teste) e roda no fim de cada `sync` (o cron de ~1 h) e pela ação `trials_read` ("Atualizar números").
+- **Motor** (`src/features/crm/trialReels.ts`, testes em `scripts/tests/trial-reels.test.mjs`): retenção (tempo médio
+  ÷ duração, ref. 40%, peso 35), compartilhamentos+salvos por mil visualizações (peso 30), interações por alcance
+  (70% da mediana dos reels normais, peso 20) e visualizações (metade da mediana, peso 15); sem 3 reels normais usa
+  referências fixas. Antes de 24 h ou com menos de 100 visualizações: "Rodando". Nota ≥ 70: "Levar aos seguidores";
+  < 45 depois de 72 h: "Refazer", com o ponto fraco; no meio: "Esperar".
+- **Tela:** CRM › Instagram › **Testes** (`?aba=testes`, `InstagramTrials.tsx`): resumo, cartão de cada teste com os
+  sinais, 24 h × 72 h × agora, e as decisões "Levei aos seguidores", "Refazer", "Arquivar".
+- **Limites da Meta:** a API não diz se o teste já foi levado aos seguidores nem permite levar por ela; a decisão
+  aqui é registrada pela equipe. A elegibilidade da conta para trial reels é decidida pelo Instagram. **Ainda não
+  testado com uma publicação real** (nenhum teste foi publicado nesta sessão).

@@ -3,6 +3,7 @@ import { publicAppUrl } from '@/features/approval/shares'
 import { EMPHASIS_FONT, loadFont, loadImage, loadVideo, slideToBlob, type ImageMap } from '@/features/criativos/render'
 import { assetUrl } from '@/features/criativos/storage'
 import { sizeOf, type CreativeSet, type Post, type Slide } from '@/features/criativos/types'
+import type { TrialDecision, TrialMetrics, TrialStrategy } from './trialReels'
 
 /**
  * O Instagram da equipe (`/crm/instagram`): a conta conectada pela API oficial
@@ -452,7 +453,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
  * Sobe os arquivos e publica. Foto sai na hora; vídeo o Instagram processa e
  * a tela pergunta a cada 10 segundos, por até 5 minutos.
  */
-export async function publishPost(input: { teamId: string; accountId: string; kind: PublishKind; caption: string; files: Prepared[]; shareToFeed?: boolean; /** Capa do reels (JPEG). */ cover?: Prepared; onStep?: (step: PublishStep) => void }): Promise<Published> {
+export async function publishPost(input: { teamId: string; accountId: string; kind: PublishKind; caption: string; files: Prepared[]; shareToFeed?: boolean; /** Capa do reels (JPEG). */ cover?: Prepared; /** Reels como teste: só para quem não segue (`trialReels.ts`). */ trial?: { strategy: TrialStrategy; title?: string }; onStep?: (step: PublishStep) => void }): Promise<Published> {
   input.onStep?.('enviando')
   const filePaths = await Promise.all(input.files.map((f) => upload(input.teamId, f)))
   const coverPath = input.cover ? await upload(input.teamId, input.cover) : undefined
@@ -466,6 +467,7 @@ export async function publishPost(input: { teamId: string; accountId: string; ki
     shareToFeed: input.shareToFeed,
     files: input.files.map((f, i) => ({ path: filePaths[i], type: f.type, ...(f.type === 'video' && f.thumbOffset !== undefined ? { thumbOffset: f.thumbOffset } : {}) })),
     cover: coverPath,
+    ...(input.trial && input.kind === 'reel' ? { trial: { strategy: input.trial.strategy, title: input.trial.title ?? '', duration: input.files[0]?.duration } } : {}),
   })
   const until = Date.now() + 5 * 60_000
   while (result.status === 'processing' || result.status === 'children') {
@@ -483,6 +485,78 @@ export async function publishPost(input: { teamId: string; accountId: string; ki
   }
   input.onStep?.('publicado')
   return { mediaId: result.mediaId, permalink: result.permalink }
+}
+
+// ---------- testes de reels (trial reels) ----------
+
+export interface IgTrial {
+  id: string
+  accountId: string
+  mediaId?: string
+  strategy: TrialStrategy
+  title: string
+  caption?: string
+  durationS?: number
+  status: 'processando' | 'no_ar' | 'falhou'
+  createdAt: number
+  publishedAt?: number
+  permalink?: string
+  thumbnail?: string
+  insights: TrialMetrics
+  checkpoints: Record<string, TrialMetrics & { at?: string; hours?: number }>
+  readAt?: number
+  decision?: TrialDecision
+  decidedBy?: string
+  note?: string
+  createdBy?: string
+}
+
+export async function loadTrials(accountId: string): Promise<IgTrial[]> {
+  const { data, error } = await supabase
+    .from('crm_instagram_trials' as never)
+    .select('id, account_id, media_id, strategy, title, caption, duration_s, status, created_at, published_at, permalink, thumbnail_url, insights, checkpoints, read_at, decision, decided_by, note, created_by')
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: false })
+    .limit(100)
+  if (error) throw noTables(error) ? new NoTablesError('sem tabelas') : error
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as Record<string, any>[]).map((r) => ({
+    id: r.id,
+    accountId: r.account_id,
+    mediaId: r.media_id ?? undefined,
+    strategy: r.strategy,
+    title: r.title ?? '',
+    caption: r.caption ?? undefined,
+    durationS: r.duration_s === null ? undefined : Number(r.duration_s),
+    status: r.status,
+    createdAt: Date.parse(r.created_at),
+    publishedAt: time(r.published_at),
+    permalink: r.permalink ?? undefined,
+    thumbnail: r.thumbnail_url ?? undefined,
+    insights: r.insights ?? {},
+    checkpoints: r.checkpoints ?? {},
+    readAt: time(r.read_at),
+    decision: r.decision ?? undefined,
+    decidedBy: r.decided_by ?? undefined,
+    note: r.note ?? undefined,
+    createdBy: r.created_by ?? undefined,
+  }))
+}
+
+/** Relê os números dos testes no ar agora (o cron já faz de hora em hora). */
+export const readTrials = (accountId: string) => call<{ trials: number }>('trials_read', { accountId })
+
+export async function decideTrial(id: string, userId: string, decision: TrialDecision | null, note?: string) {
+  const { error } = await supabase
+    .from('crm_instagram_trials' as never)
+    .update({ decision, decided_by: decision ? userId : null, decided_at: decision ? new Date().toISOString() : null, ...(note !== undefined ? { note } : {}), updated_at: new Date().toISOString() } as never)
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+export async function deleteTrial(id: string) {
+  const { error } = await supabase.from('crm_instagram_trials' as never).delete().eq('id', id)
+  if (error) throw new Error(error.message)
 }
 
 // ---------- a partir do Criativos ----------

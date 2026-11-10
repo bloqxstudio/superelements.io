@@ -4,7 +4,7 @@ import { useCrm } from '@/features/crm/crmStore'
 import { accountBrand } from '@/features/conteudos/carousel'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, Wand2, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, ImagePlus, Instagram, Plus, Redo2, Square, Trash2, Type, Undo2, SendHorizontal } from 'lucide-react'
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, Wand2, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, FolderOpen, ImagePlus, Instagram, Plus, Redo2, Square, Trash2, Type, Undo2, SendHorizontal } from 'lucide-react'
 import { LayersPanel } from './LayersPanel'
 import { MotionPanel, downloadMp4 } from './MotionPanel'
 import { videoSupported } from './video'
@@ -18,6 +18,8 @@ import { drawSlide, layerBox, slideToBlob, type ExportType } from './render'
 import { Stage } from './Stage'
 import { currentLayer, currentPost, currentSlide, reformat, useEditor } from './store'
 import { uploadAsset } from './storage'
+import { AccountFiles, type Picked } from './AccountFiles'
+import { prefetchInsumos } from './insumos'
 import { TEMPLATES, buildSlide } from './templates'
 import type { TemplateId } from './plan'
 import { FORMAT_LIST, sizeOf, uid, type CreativeSet, type FormatId, type ImageLayer, type Layer, type Post, type Slide, type TextLayer } from './types'
@@ -136,6 +138,7 @@ const Colors: React.FC<{ set: CreativeSet; value: string; onChange: (hex: string
 
 const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer }) => {
   const upload = useRef<HTMLInputElement>(null)
+  const [files, setFiles] = useState(false)
   const hasImages = !!useCreativeLink((l) => l.images)
   const fonts = [...new Set([set.brand.headingFont, set.brand.bodyFont, ...FONTS])]
   const set_ = (fields: Partial<Layer>) => editLayer(layer.id, fields)
@@ -152,6 +155,13 @@ const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer })
     } finally {
       if (upload.current) upload.current.value = ''
     }
+  }
+
+  /** Troca a imagem desta camada por um insumo da conta (já copiado para o conjunto). */
+  const pickFromAccount = async (got: Picked) => {
+    if (got.asset) useEditor.getState().edit((s) => ({ ...s, assets: [...s.assets, got.asset!] }))
+    set_({ src: got.src } as Partial<ImageLayer>)
+    await useEditor.getState().ensureImage(got.src)
   }
 
   const move = (dir: 1 | -1) =>
@@ -252,7 +262,11 @@ const Inspector: React.FC<{ set: CreativeSet; layer: Layer }> = ({ set, layer })
               <Button type="button" variant="outline" size="sm" className="w-full gap-1.5 bg-white" onClick={() => upload.current?.click()}>
                 <ImagePlus className="h-4 w-4" /> Enviar imagem
               </Button>
+              <Button type="button" variant="outline" size="sm" className="w-full gap-1.5 bg-white" onClick={() => setFiles(true)} title="Logos, fotos e imagens guardadas no Cérebro da conta">
+                <FolderOpen className="h-4 w-4" /> Insumos da conta
+              </Button>
               <input ref={upload} type="file" accept="image/*" className="hidden" onChange={(e) => void sendImage(e.target.files?.[0])} />
+              <AccountFiles open={files} onClose={() => setFiles(false)} onPick={pickFromAccount} set={set} iconSize={Math.max(layer.w, layer.h)} title="Trocar por um insumo da conta" />
             </div>
           </Field>
           <Field label="Imagem gerada por IA">
@@ -506,11 +520,16 @@ export const CreativeEditor: React.FC = () => {
   const grid = gridOf(post)
   const setGrid = (patch: Partial<PostGrid>) => editPost((p) => ({ ...p, grid: { ...gridOf(p), ...patch } }))
   const upload = useRef<HTMLInputElement>(null)
+  const [accountFiles, setAccountFiles] = useState(false)
   const pasteImage = useRef<(file: File) => void>(() => undefined)
 
   useEffect(() => {
     if (status === 'ready' && onlyPost) useEditor.getState().selectPost(onlyPost)
   }, [status, onlyPost])
+
+  // Os insumos da conta (logos, ícones, arquivos) carregam quando o navegador está livre: a janela abre na hora
+  const crmTeam = useCrm((st) => st.team)
+  useEffect(() => { prefetchInsumos(crmTeam) }, [crmTeam])
 
   useEffect(() => {
     void useEditor.getState().open(setId, projectParam)
@@ -698,6 +717,17 @@ export const CreativeEditor: React.FC = () => {
     }
   }
 
+  /** Um insumo da conta (logo, ícone, imagem) vira camada nova no slide aberto. */
+  const addAccountImage = async (got: Picked) => {
+    if (got.asset) useEditor.getState().edit((s) => ({ ...s, assets: [...s.assets, got.asset!] }))
+    const { width, height } = sizeOf(format)
+    const logo = got.kind !== 'imagem'
+    const w = Math.round(Math.min(got.kind === 'icone' ? 120 : logo ? 360 : Math.min(width - 168, 760), (got.width * (height - 400)) / Math.max(got.height, 1)))
+    const h = Math.round((w * got.height) / Math.max(got.width, 1))
+    addLayer({ id: uid(), type: 'image', name: got.name.replace(/\.[a-z0-9]+$/i, ''), src: got.src, x: Math.round((width - w) / 2), y: Math.round((height - h) / 2), w, h, fit: logo ? 'contain' : 'cover', radius: 0, frame: 'none' })
+    await useEditor.getState().ensureImage(got.src)
+  }
+
   pasteImage.current = (file) => void sendLayerImage(file.name === 'image.png' ? new File([file], 'imagem colada.png', { type: file.type }) : file)
 
   return (
@@ -863,6 +893,8 @@ export const CreativeEditor: React.FC = () => {
             </div>
 
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => upload.current?.click()}><ImagePlus className="h-4 w-4" /> Imagem</Button>
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5" title="Logos, ícones, produtos e imagens da conta" onClick={() => setAccountFiles(true)}><FolderOpen className="h-4 w-4" /> Insumos</Button>
+            <AccountFiles open={accountFiles} onClose={() => setAccountFiles(false)} onPick={addAccountImage} set={set} />
             <Button variant="ghost" size="sm" className={cn('h-8 gap-1.5', panel === 'motion' && 'bg-violet-50 text-violet-800')} title="Animar este post e baixar o vídeo MP4" onClick={() => setPanel(panel === 'motion' ? 'props' : 'motion')}><Clapperboard className="h-4 w-4" /> Motion</Button>
             {set && post && <Button asChild variant="ghost" size="sm" className="h-8 gap-1.5" title="Elevar o motion deste post no estúdio: keyframes, rastro, impactos, tudo na linha do tempo"><Link to={`/motion/${set.id}?${new URLSearchParams({ ...(set.shared && set.projectId ? { projeto: set.projectId } : {}), post: post.id }).toString()}`}><Wand2 className="h-4 w-4" /> Motion avançado</Link></Button>}
             <input ref={upload} type="file" accept="image/*,video/mp4,video/webm,video/quicktime" className="hidden" onChange={(e) => void sendLayerImage(e.target.files?.[0])} />

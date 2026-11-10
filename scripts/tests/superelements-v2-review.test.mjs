@@ -172,7 +172,9 @@ test('migração: logs imutáveis não têm chave para auth.users (excluir usuá
 
 test('Criativos: conjunto de conteúdo herda o briefing e não usa cases alheios; os demais seguem como antes', () => {
   const fields = read('../../src/features/criativos/AiFields.tsx')
-  assert.match(fields, /set\?\.source \? \{ \.\.\.EMPTY_AI, brief: set\.brief \?\? '', cases: \[\] \} : EMPTY_AI/)
+  assert.match(fields, /set\?\.source \? \{ \.\.\.EMPTY_AI, brief: set\.brief \?\? '', cases: \[\] \} : isClientAccount\(\) \? CLIENT_AI : EMPTY_AI/)
+  // Conta de cliente: nenhum case da Avence no pedido
+  assert.match(fields, /CLIENT_AI: AiForm = \{ \.\.\.EMPTY_AI, cases: \[\] \}/)
   const dialog = read('../../src/features/criativos/AiDialog.tsx')
   assert.match(dialog, /aiFormFor\(/)
   assert.doesNotMatch(dialog, /EMPTY_AI/)

@@ -2,7 +2,7 @@ import { callAiQuiet, useCreativeLink } from '@/features/criativos/link'
 import { accountContext } from '@/features/cerebro/accountContext'
 import { autoPostMotion, hasMotion, hasMotionData, setPostStatic } from '@/features/criativos/motion'
 import { saveSet } from '@/features/criativos/storage'
-import { resolveIa } from '@/features/ia/porTarefa'
+import { iaFor } from '@/features/ia/porTarefa'
 import { finishJob, noteJob, patchJob, startJob } from '@/features/operations/jobs'
 import { listLinks, saveContent } from './api'
 import { forwardToCriativos, readSet } from './forward'
@@ -40,7 +40,7 @@ async function writeScript(content: Content, ctx: AccountContext | null, signal?
     // O Cérebro da conta (quem é, marca e voz): o roteiro sai na voz da empresa, não numa genérica
     (await accountContext(content.format).catch(() => undefined))?.context ?? '',
   ].filter(Boolean).join('\n\n')
-  const out = await callAiQuiet<{ reply: string; items: { ref: string; text: string }[] }>('agent', { engine: resolveIa('copy'), system: SYSTEM, prompt, web: false }, signal)
+  const out = await callAiQuiet<{ reply: string; items: { ref: string; text: string }[] }>('agent', { ...iaFor('copy'), system: SYSTEM, prompt, web: false }, signal)
   const script = out.items.find((i) => i.ref === 'roteiro')?.text.trim() ?? ''
   const caption = out.items.find((i) => i.ref === 'legenda')?.text.trim() ?? ''
   if (!script) throw new Error('A IA não devolveu o roteiro. Tente de novo.')

@@ -33,3 +33,23 @@
   - Até 12 posts por volta, com pausas de pessoa.
   - O login é feito pela própria pessoa (`npm run referencias -- entrar`). A senha não passa pelo sistema.
 - **Quem decidiu:** Igor.
+
+## 2026-11-09 — Referências do Behance pela extensão do Chrome, não por busca automática
+
+- **Pedido:** "vamos fazer um motor para buscar referências do Behance para o projeto e organizar no app".
+- **Contexto:** o Behance bloqueia robôs (403) e o ambiente do agente recusou abrir a busca automatizada.
+- **Opções apresentadas:**
+  - extensão que salva a página aberta (recomendada);
+  - colar links para o Mac importar;
+  - busca por termo com rotina.
+- **Decisão:** a extensão ("pode ser a 3extensao", lido como a extensão). Só lê a página que a pessoa abriu e só
+  salva com o clique dela.
+- **Fica de fora:** a busca automática no Behance, que só volta com decisão explícita.
+- **Quem decidiu:** Igor.
+
+## 2026-11-09 — Extensão do Chrome das referências retirada
+
+- **Decisão:** depois de testar, Igor disse "retire a feature, não ficou legal, não vamos usar". A extensão, a
+  função `referencias-salvar` e as mudanças de banco foram retiradas (migração `20261109220000`).
+- **Fica no app:** as 2 referências do Behance salvas no teste, como referências comuns.
+- **Quem decidiu:** Igor.
