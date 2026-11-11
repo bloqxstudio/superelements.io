@@ -56,3 +56,56 @@
   display: flex; align-items: center; justify-content: center; aspect-ratio: 16 / 9; margin-bottom: 8px; border-radius: 8px; background-color: #f7f7f5;
   background-repeat: no-repeat; overflow: hidden;
 }
+
+/* "Do sistema" ao lado da nota */
+.qd-sticky { display: flex; gap: 6px; }
+.qd-system-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 8px;
+  background: #fff; color: #1e1e1e; font-size: 13px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.06);
+}
+.qd-system-btn:hover { background: #f5f3ff; }
+@media (max-width: 640px) { .qd-system-btn span { display: none; } }
+
+/* Camada por cima do canvas: "+" do fluxograma e fotos nas notas (abaixo da barra do Excalidraw) */
+.qd-overlay { position: absolute; inset: 0; z-index: var(--zIndex-canvasButtons, 3); pointer-events: none; overflow: hidden; }
+.qd-plus {
+  position: absolute; width: 24px; height: 24px; margin: -12px 0 0 -12px; display: flex; align-items: center; justify-content: center;
+  border-radius: 999px; background: #fff; color: #7c3aed; pointer-events: auto; cursor: pointer;
+  box-shadow: 0 0 0 1.5px #a78bfa, 0 2px 6px rgba(124,58,237,.18); transition: transform .12s ease, background .12s ease, color .12s ease;
+}
+.qd-plus:hover { transform: scale(1.18); background: #7c3aed; color: #fff; }
+.qd-plus:focus-visible { outline: 2px solid #7c3aed; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .qd-plus { transition: none; } .qd-plus:hover { transform: none; } }
+
+.qd-faces { position: absolute; display: flex; pointer-events: auto; }
+.qd-face {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: -6px;
+  border-radius: 999px; border: 2px solid #fff; overflow: hidden; color: #fff; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.15);
+}
+.qd-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.qd-face-more { background: #e5e7eb; color: #374151; }
+
+.qd-tag-people { position: absolute; pointer-events: auto; }
+.qd-tag-btn {
+  display: flex; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 8px; background: #fff; color: #4b5563;
+  box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.06);
+}
+.qd-tag-btn:hover { color: #7c3aed; }
+.qd-tag-menu {
+  position: absolute; right: 0; top: 32px; width: 240px; max-height: 300px; overflow-y: auto; padding: 6px; z-index: 5;
+  background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.14), 0 0 0 1px rgba(0,0,0,.06);
+}
+.qd-tag-menu p { margin: 2px 6px 6px; font-size: 11px; color: #6b7280; }
+.qd-tag-menu button { display: flex; width: 100%; align-items: center; gap: 8px; padding: 6px; border-radius: 8px; font-size: 13px; color: #111827; text-align: left; }
+.qd-tag-menu button:hover { background: #f5f3ff; }
+.qd-tag-menu .qd-face { margin-right: 0; border-width: 0; }
+.qd-tag-empty { display: block; padding: 6px; font-size: 12px; color: #6b7280; }
+
+/* Tela do sistema dentro do quadro */
+.qd-embed { display: flex; flex-direction: column; width: 100%; height: 100%; background: #fff; border-radius: 12px; overflow: hidden; }
+.qd-embed-bar { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; flex-shrink: 0; border-bottom: 1px solid #ececea; background: #fafaf9; font-size: 13px; }
+.qd-embed-kind { padding: 2px 8px; border-radius: 999px; background: #ede9fe; color: #5b21b6; font-size: 11px; font-weight: 600; }
+.qd-embed-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #111827; }
+.qd-embed-open { display: inline-flex; align-items: center; gap: 4px; color: #4b5563; font-size: 12px; }
+.qd-embed-open:hover { color: #7c3aed; }
+.qd-embed-frame { flex: 1; width: 100%; border: 0; background: #fff; }

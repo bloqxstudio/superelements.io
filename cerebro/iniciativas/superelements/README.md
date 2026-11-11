@@ -15,6 +15,7 @@
 
 ## Em andamento
 
+- Quadros (2026-11-11, na `main`): "+" que cria bloco ligado com um clique, fotos de quem colaborou nas notas e "Do sistema" (criativos, arquivos, páginas, sites, formulários, funis e dashboards ao vivo no quadro). Falta testar logado ([log](log/2026-11-11-quadros-fluxograma-com-um-clique-fotos-nas-notas-e-itens-do-.md)).
 - Direção do vídeo (2026-11-10, app local, sem commit): fim do formato viciado. Regras do usuário, decupagem, ficha da referência e estilos opcionais, com conferência das regras nos quadros. Falta testar logado e publicar ([log](log/2026-11-10-direcao-do-video-fim-do-formato-viciado.md)).
 - Testes de reels / trial reels (2026-11-09): "Publicar como teste" e a aba CRM › Instagram › Testes com o veredito (levar, esperar, refazer). Banco e função `instagram` v21 no ar; app local, sem commit. Falta o primeiro teste real numa conta elegível.
 - Efeitos com recorte no vídeo (2026-11-09, PR #26, no ar): 9 efeitos, entre eles carrossel, órbita de cartões, tela dividida e gráfico, vindos das skills de vídeo do usuário (`docs/agentes/skills-video/`). Falta um vídeo real com a IA escolhendo os efeitos; as skills de vídeo da plataforma ficam para depois.

@@ -8,8 +8,9 @@ import type { StoredFile } from './data'
  * `reconcileElements`) e o cursor de cada um. A gravação continua sendo da tabela.
  */
 
-export interface Peer { userId: string; name: string; color: string; avatarUrl?: string }
-export interface PointerMsg { userId: string; x: number; y: number; tool: 'pointer' | 'laser'; button: 'up' | 'down'; selected?: Record<string, true> }
+/** `clientId` é a aba: a mesma pessoa em duas abas (ou no computador e no celular) aparece nas duas. */
+export interface Peer { userId: string; clientId?: string; name: string; color: string; avatarUrl?: string }
+export interface PointerMsg { userId: string; clientId?: string; x: number; y: number; tool: 'pointer' | 'laser'; button: 'up' | 'down'; selected?: Record<string, true> }
 /** O cursor de um agente (Claude Code, Codex) mexendo no quadro pela Iara de alguém; `gone` tira. */
 export interface AgentMsg { key: string; name: string; color: string; x?: number; y?: number; gone?: boolean; selected?: string[] }
 
@@ -31,52 +32,62 @@ export interface LiveBoard {
   sendElements: (elements: unknown[], files?: Record<string, StoredFile>) => void
   sendPointer: (msg: Omit<PointerMsg, 'userId'>) => void
   sendAgent: (msg: AgentMsg) => void
+  /** Nome ou foto mudaram: a presença é refeita sem sair do canal. */
+  updateMe: (me: Peer) => void
   leave: () => void
 }
 
-export function joinBoard(boardId: string, me: Peer, h: LiveHandlers): LiveBoard {
+/** Uma por aba (e por quadro aberto): a chave da presença e de quem mandou cada mensagem. */
+const TAB_ID = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
+
+export function joinBoard(boardId: string, meIn: Peer, h: LiveHandlers): LiveBoard {
   const topic = `crm-board:${boardId}`
+  const clientId = TAB_ID
+  let me: Peer = { ...meIn, clientId }
   let channel: RealtimeChannel | null = null
   let ready = false
   let left = false
 
   const send = (event: string, payload: Record<string, unknown>) => {
     if (!channel || !ready) return
-    void channel.send({ type: 'broadcast', event, payload: { ...payload, userId: me.userId } })
+    void channel.send({ type: 'broadcast', event, payload: { ...payload, userId: me.userId, clientId } })
   }
+  /** Mensagem de outra aba (outra pessoa, ou a mesma pessoa em outro lugar). */
+  const fromOther = (p: { userId?: string; clientId?: string }) => !!p.userId && (p.clientId ? p.clientId !== clientId : p.userId !== me.userId)
 
-  if (supabase.getChannels().some((c) => c.topic === `realtime:${topic}`)) {
-    console.warn('[quadros] canal ao vivo já aberto nesta aba; segue sem ele')
-  } else {
-    const current = supabase.channel(topic, { config: { private: true, presence: { key: me.userId }, broadcast: { self: false } } })
+  const open = () => {
+    if (left) return
+    const current = supabase.channel(topic, { config: { private: true, presence: { key: clientId }, broadcast: { self: false } } })
     channel = current
     current
       .on('presence', { event: 'sync' }, () => {
         const seen = new Map<string, Peer>()
-        for (const entries of Object.values(current.presenceState<Peer>())) {
+        for (const [key, entries] of Object.entries(current.presenceState<Peer>())) {
           const e = entries[0]
-          if (e?.userId && e.userId !== me.userId) seen.set(e.userId, { userId: e.userId, name: e.name, color: e.color, avatarUrl: e.avatarUrl })
+          if (!e?.userId || key === clientId) continue
+          seen.set(key, { userId: e.userId, clientId: e.clientId ?? key, name: e.name, color: e.color, avatarUrl: e.avatarUrl })
         }
         h.onPeers([...seen.values()])
       })
       .on('broadcast', { event: 'qd-elements' }, ({ payload }) => {
-        const p = payload as { userId?: string; elements?: unknown[]; files?: Record<string, StoredFile> }
-        if (p.userId !== me.userId && Array.isArray(p.elements)) h.onElements(p.elements, p.files)
+        const p = payload as { userId?: string; clientId?: string; elements?: unknown[]; files?: Record<string, StoredFile> }
+        if (fromOther(p) && Array.isArray(p.elements)) h.onElements(p.elements, p.files)
       })
       .on('broadcast', { event: 'qd-pointer' }, ({ payload }) => {
         const p = payload as PointerMsg
-        if (p.userId && p.userId !== me.userId) h.onPointer(p)
+        if (fromOther(p)) h.onPointer(p)
       })
       .on('broadcast', { event: 'qd-agent' }, ({ payload }) => {
-        const p = payload as AgentMsg & { userId?: string }
-        if (p.userId !== me.userId && typeof p.key === 'string') h.onAgent?.({ ...p, key: `${p.userId}:${p.key}` })
+        const p = payload as AgentMsg & { userId?: string; clientId?: string }
+        if (fromOther(p) && typeof p.key === 'string') h.onAgent?.({ ...p, key: `${p.clientId ?? p.userId}:${p.key}` })
       })
       .on('broadcast', { event: 'qd-hello' }, ({ payload }) => {
-        const p = payload as { userId?: string }
-        // Quem tem o id menor entre os presentes responde, para não chegarem várias cópias
-        if (!p.userId || p.userId === me.userId) return
-        const present = Object.values(current.presenceState<Peer>()).map((e) => e[0]?.userId).filter((id): id is string => !!id && id !== p.userId).sort()
-        if (present[0] === me.userId) send('qd-elements', h.snapshot())
+        const p = payload as { userId?: string; clientId?: string }
+        // Quem tem a menor chave entre os presentes responde, para não chegarem várias cópias
+        if (!fromOther(p)) return
+        const asker = p.clientId ?? p.userId
+        const present = Object.keys(current.presenceState()).filter((k) => k !== asker).sort()
+        if (present[0] === clientId) send('qd-elements', h.snapshot())
       })
       .subscribe((status) => {
         ready = status === 'SUBSCRIBED'
@@ -88,6 +99,12 @@ export function joinBoard(boardId: string, me: Peer, h: LiveHandlers): LiveBoard
       })
   }
 
+  // A saída de um canal termina só quando o servidor responde: se a tela anterior deste quadro ainda está saindo,
+  // espera ela sair antes de entrar de novo (antes, a aba ficava sem o canal e sem os cursores dos outros).
+  const stale = supabase.getChannels().filter((c) => c.topic === `realtime:${topic}`)
+  if (stale.length) void Promise.all(stale.map((c) => supabase.removeChannel(c).catch(() => undefined))).then(open)
+  else open()
+
   // Cursor: no máximo ~20 por segundo
   let pending: Omit<PointerMsg, 'userId'> | null = null
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -97,6 +114,10 @@ export function joinBoard(boardId: string, me: Peer, h: LiveHandlers): LiveBoard
     sendElements: (elements, files) => { if (elements.length || files) send('qd-elements', { elements, files }) },
     sendPointer: (msg) => { pending = msg; if (!timer) timer = setTimeout(flush, 50) },
     sendAgent: (msg) => send('qd-agent', msg as unknown as Record<string, unknown>),
+    updateMe: (next) => {
+      me = { ...next, clientId }
+      if (channel && ready) void channel.track(me)
+    },
     leave: () => {
       left = true
       if (timer) clearTimeout(timer)

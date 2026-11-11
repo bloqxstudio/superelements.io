@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, Check, CloudOff, Loader2, StickyNote } from 'lucide-react'
+import { ArrowLeft, Check, CloudOff, Loader2, Plus, StickyNote } from 'lucide-react'
 import {
-  CaptureUpdateAction, Excalidraw, MainMenu, WelcomeScreen, convertToExcalidrawElements, exportToBlob, hashElementsVersion, reconcileElements, restoreElements,
+  CaptureUpdateAction, Excalidraw, MainMenu, WelcomeScreen, convertToExcalidrawElements, exportToBlob, hashElementsVersion, newElementWith, reconcileElements, restoreElements,
 } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI, AppState, BinaryFileData, BinaryFiles, Collaborator, SocketId } from '@excalidraw/excalidraw/types'
 import type { ExcalidrawElement, OrderedExcalidrawElement } from '@excalidraw/excalidraw/element/types'
@@ -16,6 +16,11 @@ import { FONT, STICKY_COLORS, STICKY_SIZE, stickySkeleton } from './templates'
 import { clearOpenBoard, setOpenBoard } from './openBoard'
 import { useIaraScreen } from '@/features/iara/store'
 import { boardOutline } from './outline'
+import { BoardOverlay } from './BoardOverlay'
+import { withPerson, type Person } from './quick'
+import { isAppLink, renderSystemEmbed } from './embed'
+
+const SystemPicker = React.lazy(() => import('./SystemPicker').then((m) => ({ default: m.SystemPicker })))
 import './quadros.css'
 
 /**
@@ -49,6 +54,12 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
   const [title, setTitle] = useState(board.title)
   const [peers, setPeers] = useState<Peer[]>([])
   const [palette, setPalette] = useState(false)
+  const [picker, setPicker] = useState(false)
+  const [host, setHost] = useState<HTMLElement | null>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const me = useMemo<Person | null>(() => (user ? { id: user.id, name: profile?.name ?? user.email ?? 'Alguém', avatar: profile?.avatarUrl ?? undefined, color: colorOf(user.id) } : null), [user, profile?.name, profile?.avatarUrl])
+  // O texto de cada elemento como estava: muda aqui (não por mexer a nota nem por outra pessoa) = a pessoa escreveu
+  const texts = useRef(new Map<string, string>())
 
   const rev = useRef(board.rev)
   const files = useRef<Record<string, StoredFile>>({ ...(board.scene.files ?? {}) })
@@ -70,7 +81,7 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
 
   const initialData = useMemo(() => {
     const elements = restoreElements(board.scene.elements as Els, null)
-    for (const e of elements) sent.current.set(e.id, e.version)
+    for (const e of elements) { sent.current.set(e.id, e.version); if (e.type === 'text') texts.current.set(e.id, e.text) }
     thumbHash.current = board.thumbPath ? hashElementsVersion(elements) : null
     return {
       elements,
@@ -115,7 +126,10 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
 
   const merge = useCallback((a: ExcalidrawImperativeAPI, remote: unknown[]) => {
     const merged = reconcileElements(a.getSceneElementsIncludingDeleted() as readonly OrderedExcalidrawElement[], restoreElements(remote as Els, null) as unknown as RemoteEls, a.getAppState())
-    for (const e of merged) if ((sent.current.get(e.id) ?? -1) < e.version) sent.current.set(e.id, e.version)
+    for (const e of merged) {
+      if ((sent.current.get(e.id) ?? -1) < e.version) sent.current.set(e.id, e.version)
+      if (e.type === 'text') texts.current.set(e.id, e.text)
+    }
     a.updateScene({ elements: merged, captureUpdate: CaptureUpdateAction.NEVER })
   }, [])
 
@@ -184,6 +198,24 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
     if (!a) return
     const all = a.getSceneElementsIncludingDeleted()
     const changed = all.filter((e) => (sent.current.get(e.id) ?? -1) < e.version)
+    // Escreveu numa nota: a foto da pessoa vai para cima dela
+    if (me) {
+      const wrote = new Set<string>()
+      for (const e of changed) {
+        if (e.type !== 'text' || e.isDeleted) continue
+        const before = texts.current.get(e.id)
+        texts.current.set(e.id, e.text)
+        if (e.containerId && e.text.trim() && before !== e.text) wrote.add(e.containerId)
+      }
+      const notes = all.filter((e) => wrote.has(e.id) && (e.customData as { sticky?: boolean } | undefined)?.sticky && !e.isDeleted)
+      const updates = new Map<string, ExcalidrawElement>()
+      for (const n of notes) {
+        const cd = (n.customData ?? {}) as { people?: Person[] }
+        const people = withPerson(cd.people, me)
+        if (people !== cd.people) updates.set(n.id, newElementWith(n, { customData: { ...cd, people } }))
+      }
+      if (updates.size) a.updateScene({ elements: all.map((e) => updates.get(e.id) ?? e), captureUpdate: CaptureUpdateAction.NEVER })
+    }
     if (changed.length) {
       for (const e of changed) sent.current.set(e.id, e.version)
       live.current?.sendElements(changed as unknown[])
@@ -204,7 +236,7 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
         .catch((e) => { toast.error(`A imagem não subiu: ${(e as Error).message}`) })
         .finally(() => uploading.current.delete(id))
     }
-  }, [api, board.id, board.teamId, scheduleSave])
+  }, [api, board.id, board.teamId, scheduleSave, me])
 
   const onChange = useCallback((_els: Els, appState: AppState, _files: BinaryFiles) => {
     if (!tickTimer.current) tickTimer.current = setTimeout(tick, 60)
@@ -238,40 +270,51 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
     api?.updateScene({ collaborators: new Map(collaborators.current) })
   }, [api])
 
-  // ——— abriu: imagens, ao vivo, e ao sair grava e atualiza a miniatura
+  // ——— abriu: imagens, ao vivo, e ao sair grava e atualiza a miniatura.
+  // O canal fica aberto enquanto o quadro estiver aberto: só reabre se mudar o quadro ou quem entrou. Antes ele
+  // reabria quando o login renovava ou o perfil carregava, e a aba ficava sem o canal (e sem os cursores dos outros).
+  const fns = useRef({ loadFiles, merge, save, makeThumb, tick, showAgent, hideAgent })
+  fns.current = { loadFiles, merge, save, makeThumb, tick, showAgent, hideAgent }
+  const meRef = useRef(me)
+  meRef.current = me
+  const userId = user?.id
   useEffect(() => {
-    if (!api || !user) return
-    void loadFiles(api)
-    const me: Peer = { userId: user.id, name: profile?.name ?? user.email ?? 'Alguém', color: colorOf(user.id), avatarUrl: profile?.avatarUrl ?? undefined }
+    if (!api || !userId || !meRef.current) return
+    const f = () => fns.current
+    void f().loadFiles(api)
+    const m = meRef.current
     const refreshCollaborators = () => api.updateScene({ collaborators: new Map(collaborators.current) })
-    live.current = joinBoard(board.id, me, {
+    live.current = joinBoard(board.id, { userId: m.id, name: m.name, color: m.color, avatarUrl: m.avatar }, {
       onPeers: (list) => {
-        setPeers(list)
-        const ids = new Set(list.map((p) => p.userId))
-        for (const key of [...collaborators.current.keys()]) if (!ids.has(key)) collaborators.current.delete(key)
+        // Na barra, uma foto por pessoa; no canvas, um cursor por aba
+        setPeers([...new Map(list.filter((p) => p.userId !== userId).map((p) => [p.userId, p])).values()])
+        const keys = new Set(list.map((p) => p.clientId ?? p.userId))
+        for (const key of [...collaborators.current.keys()]) if (!String(key).startsWith('agente:') && !keys.has(key)) collaborators.current.delete(key)
         for (const p of list) {
-          const prev = collaborators.current.get(p.userId as SocketId)
-          collaborators.current.set(p.userId as SocketId, { ...prev, id: p.userId, username: p.name, avatarUrl: p.avatarUrl, color: { background: p.color, stroke: p.color } })
+          const key = (p.clientId ?? p.userId) as SocketId
+          const prev = collaborators.current.get(key)
+          collaborators.current.set(key, { ...prev, id: p.userId, socketId: key, username: p.name, avatarUrl: p.avatarUrl, color: { background: p.color, stroke: p.color } } as Collaborator)
         }
         refreshCollaborators()
       },
       onElements: (els, fileMap) => {
         if (fileMap) Object.assign(files.current, fileMap)
-        if (els.length) merge(api, els)
-        void loadFiles(api)
+        if (els.length) f().merge(api, els)
+        void f().loadFiles(api)
       },
       onPointer: (msg) => {
-        const prev = collaborators.current.get(msg.userId as SocketId)
-        if (!prev) return
-        collaborators.current.set(msg.userId as SocketId, { ...prev, pointer: { x: msg.x, y: msg.y, tool: msg.tool }, button: msg.button, selectedElementIds: msg.selected ?? {} })
+        const key = (msg.clientId ?? msg.userId) as SocketId
+        const prev = collaborators.current.get(key)
+        // O cursor pode chegar antes da presença: entra com o que se sabe e a presença completa o nome e a foto
+        collaborators.current.set(key, { ...(prev ?? { id: msg.userId, socketId: key, username: '', color: { background: colorOf(msg.userId), stroke: colorOf(msg.userId) } }), pointer: { x: msg.x, y: msg.y, tool: msg.tool }, button: msg.button, selectedElementIds: msg.selected ?? {} } as Collaborator)
         refreshCollaborators()
       },
-      onAgent: (msg) => (msg.gone ? hideAgent(msg.key) : typeof msg.x === 'number' && typeof msg.y === 'number' && showAgent(msg.key, msg.name, msg.color, msg.x, msg.y, msg.selected)),
+      onAgent: (msg) => (msg.gone ? f().hideAgent(msg.key) : typeof msg.x === 'number' && typeof msg.y === 'number' && f().showAgent(msg.key, msg.name, msg.color, msg.x, msg.y, msg.selected)),
       snapshot: () => ({ elements: prune(api.getSceneElementsIncludingDeleted()) as unknown[], files: { ...files.current } }),
     })
 
-    const hide = () => { if (document.visibilityState === 'hidden') { void save(); void makeThumb(api) } }
-    const unload = (e: BeforeUnloadEvent) => { if (dirty.current || uploading.current.size) { void save(); e.preventDefault(); e.returnValue = '' } }
+    const hide = () => { if (document.visibilityState === 'hidden') { void f().save(); void f().makeThumb(api) } }
+    const unload = (e: BeforeUnloadEvent) => { if (dirty.current || uploading.current.size) { void f().save(); e.preventDefault(); e.returnValue = '' } }
     document.addEventListener('visibilitychange', hide)
     window.addEventListener('beforeunload', unload)
     return () => {
@@ -279,11 +322,14 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
       window.removeEventListener('beforeunload', unload)
       live.current?.leave()
       live.current = null
+      for (const key of [...collaborators.current.keys()]) if (!String(key).startsWith('agente:')) collaborators.current.delete(key)
       clearTimeout(saveTimer.current)
-      if (tickTimer.current) { clearTimeout(tickTimer.current); tick() }
-      void save().then(() => makeThumb(api))
+      if (tickTimer.current) { clearTimeout(tickTimer.current); f().tick() }
+      void f().save().then(() => f().makeThumb(api))
     }
-  }, [api, user, profile?.name, profile?.avatarUrl, board.id, loadFiles, merge, save, makeThumb, tick, showAgent, hideAgent])
+  }, [api, userId, board.id])
+  // Nome ou foto mudaram: atualiza a presença sem sair do canal
+  useEffect(() => { if (me) live.current?.updateMe({ userId: me.id, name: me.name, color: me.color, avatarUrl: me.avatar }) }, [me])
 
   // ——— a Iara: escreve neste quadro pelo próprio editor e sabe o que está nele e o que está escolhido
   useEffect(() => {
@@ -326,11 +372,15 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
     let y = -s.scrollY + s.height / 2 / z - STICKY_SIZE / 2
     const picked = api.getSceneElements().filter((e) => s.selectedElementIds[e.id])
     if (picked.length === 1) { x = picked[0].x + picked[0].width + 24; y = picked[0].y }
-    const [note] = convertToExcalidrawElements([stickySkeleton(x, y, color) as unknown as Parameters<typeof convertToExcalidrawElements>[0][number]])
+    const skel = { ...stickySkeleton(x, y, color), ...(me ? { customData: { sticky: true, people: [me] } } : {}) }
+    const [note] = convertToExcalidrawElements([skel as unknown as Parameters<typeof convertToExcalidrawElements>[0][number]])
     api.updateScene({ elements: [...api.getSceneElementsIncludingDeleted(), note], appState: { selectedElementIds: { [note.id]: true } }, captureUpdate: CaptureUpdateAction.IMMEDIATELY })
     api.setActiveTool({ type: 'selection' })
     setPalette(false)
-  }, [api])
+  }, [api, me])
+
+  // A camada dos "+" e das fotos fica dentro do `.excalidraw`, abaixo da barra de ferramentas
+  useEffect(() => { if (api) setHost(canvasRef.current?.querySelector<HTMLElement>('.excalidraw') ?? null) }, [api])
 
   const commitTitle = async () => {
     const t = title.trim() || 'Quadro sem título'
@@ -368,7 +418,7 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
         </div>
       </header>
 
-      <div className="qd-canvas">
+      <div className="qd-canvas" ref={canvasRef}>
         <Excalidraw
           excalidrawAPI={setApi}
           initialData={initialData}
@@ -376,10 +426,15 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
           onPointerUpdate={({ pointer, button }) => live.current?.sendPointer({ x: pointer.x, y: pointer.y, tool: pointer.tool, button, selected: api?.getAppState().selectedElementIds as Record<string, true> | undefined })}
           isCollaborating={peers.length > 0}
           langCode="pt-BR"
+          validateEmbeddable={(link) => isAppLink(link) || /^https:\/\//.test(link)}
+          renderEmbeddable={(el) => renderSystemEmbed(el)}
           name={title}
           UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false, toggleTheme: false, export: false } }}
           renderTopRightUI={() => (
             <div className="qd-sticky">
+              <button type="button" className="qd-system-btn" onClick={() => { setPalette(false); setPicker(true) }} title="Pôr no quadro um criativo, arquivo, página, site, formulário, funil ou dashboard">
+                <Plus className="h-4 w-4" /> <span>Do sistema</span>
+              </button>
               <button type="button" className="qd-sticky-btn" onClick={() => setPalette((v) => !v)} aria-expanded={palette} title="Nota adesiva">
                 <StickyNote className="h-4 w-4" /> <span>Nota</span>
               </button>
@@ -416,6 +471,12 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
             </WelcomeScreen.Center>
           </WelcomeScreen>
         </Excalidraw>
+        {api && host && me && <BoardOverlay api={api} host={host} me={me} teamId={board.teamId} colorOf={colorOf} />}
+        {api && picker && (
+          <React.Suspense fallback={null}>
+            <SystemPicker api={api} open={picker} onOpenChange={setPicker} />
+          </React.Suspense>
+        )}
       </div>
     </div>
   )
