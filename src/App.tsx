@@ -65,6 +65,8 @@ import CrmFunnelDetail from "@/pages/crm/FunnelDetail";
 import InstagramCallback from "@/pages/InstagramCallback";
 import { ConnectInstagram, ConnectInstagramReturn, comesFromLink } from "@/pages/ConnectInstagram";
 import AdsCallback from "@/pages/AdsCallback";
+import { ConnectAds, ConnectAdsReturn } from "@/pages/ConnectAds";
+import { comesFromAdsLink } from "@/features/crm/ads";
 import { CrmGate } from "@/features/crm/CrmGate";
 import MenuzitoModel from "@/pages/MenuzitoModel";
 import MenuzitoStyleGuide from "@/pages/MenuzitoStyleGuide";
@@ -106,7 +108,8 @@ function App() {
               <Route path="/instagram/retorno" element={comesFromLink() ? <ConnectInstagramReturn /> : <ProtectedRoute><InstagramCallback /></ProtectedRoute>} />
               <Route path="/conectar/instagram/:token" element={<ConnectInstagram />} />
               {/* Volta do login do Facebook: escolher as contas de anúncios da equipe */}
-              <Route path="/anuncios/retorno" element={<ProtectedRoute><AdsCallback /></ProtectedRoute>} />
+              <Route path="/anuncios/retorno" element={comesFromAdsLink() ? <ConnectAdsReturn /> : <ProtectedRoute><AdsCallback /></ProtectedRoute>} />
+              <Route path="/conectar/anuncios/:token" element={<ConnectAds />} />
               {/* Link de aprovação: o cliente abre sem login */}
               <Route path="/aprovar/:shareId" element={<PageApproval />} />
               {/* Pauta: o cliente aprova e comenta as peças de um envio, sem login */}

@@ -8,7 +8,8 @@ import { dayKey, dayOfPeriod, dayShort, isDayPeriod, type DayPeriod } from '@/li
  * (investimento, contatos, campanhas, plataformas, público, anúncios). Quem
  * fala com a Meta é a função `meta-ads` do Supabase (o token fica só lá);
  * daqui se leem as tabelas que ela grava (`crm_ad_accounts`, `crm_ad_reports`)
- * e se pede cada ação. Só leitura: nada muda campanha nem orçamento.
+ * e se pede cada ação. A leitura não muda nada; a única escrita é "Turbinar
+ * post" (`boost*`, 2026-11-11), que cria o anúncio pausado e só quem gerencia ativa.
  */
 
 export const ADS_CALLBACK_PATH = '/anuncios/retorno'
@@ -147,6 +148,8 @@ export interface AdAccount {
   tokenExpiresAt?: number
   syncedAt?: number
   syncError?: string
+  /** Permissões que o login aceitou (`null`: conectada antes de 2026-11-11) */
+  scopes?: string[]
 }
 
 export class NoAdTablesError extends Error {}
@@ -185,6 +188,7 @@ export async function loadAdAccounts(teamId: string): Promise<AdAccount[]> {
     tokenExpiresAt: time(r.token_expires_at),
     syncedAt: time(r.synced_at),
     syncError: r.sync_error ?? undefined,
+    scopes: Array.isArray(r.scopes) ? r.scopes : undefined,
   }))
 }
 
@@ -262,8 +266,8 @@ export const adsStatus = () => call<{ configured: boolean; systemLogin: boolean;
 export const adsRedirectUri = () => `${publicAppUrl()}${ADS_CALLBACK_PATH}`
 
 /** Abre o login do Facebook nesta aba; a volta cai em `/anuncios/retorno`. */
-export async function startAdsConnect(teamId: string) {
-  const { url } = await call<{ url: string }>('auth_url', { teamId, redirectUri: adsRedirectUri() })
+export async function startAdsConnect(teamId: string, mode?: 'boost') {
+  const { url } = await call<{ url: string }>('auth_url', { teamId, redirectUri: adsRedirectUri(), mode })
   window.location.assign(url)
 }
 
@@ -285,6 +289,8 @@ export interface Pending {
   who: string | null
   kind: 'user' | 'system' | null
   expiresAt: string | null
+  /** O login aceitou as permissões de turbinar */
+  canBoost?: boolean
 }
 
 /** Na tela de volta: o endereço dela é o que foi pedido à Meta. */
@@ -483,3 +489,254 @@ export const adsManagerAdUrl = (adAccountId: string, adId: string) => `https://a
 
 export const adsManagerUrl = (adAccountId: string, campaignId?: string) =>
   `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${adAccountId}${campaignId ? `&selected_campaign_ids=${campaignId}` : ''}`
+
+// ---------- turbinar post ----------
+
+/** Volta do login de turbinar: a aba Anúncios reabre o "Turbinar post". */
+export const BOOST_RETURN_KEY = 'superelements-ads-boost-return'
+
+export const startBoostLogin = (teamId: string) => {
+  try {
+    sessionStorage.setItem(BOOST_RETURN_KEY, '1')
+  } catch {
+    // sem armazenamento: a pessoa clica em Turbinar de novo
+  }
+  return startAdsConnect(teamId, 'boost')
+}
+
+/** Depois do login de turbinar, a aba reabre o "Turbinar post" uma vez. */
+export const takeBoostReturn = () => {
+  try {
+    const back = sessionStorage.getItem(BOOST_RETURN_KEY) === '1'
+    sessionStorage.removeItem(BOOST_RETURN_KEY)
+    return back
+  } catch {
+    return false
+  }
+}
+
+export interface BoostPage {
+  id: string
+  name: string
+  ig?: { id: string; username: string; picture?: string }
+}
+
+export interface BoostSetup {
+  ready: boolean
+  /** Permissões que faltam aceitar */
+  missing: string[]
+  /** Páginas com o Instagram desta conta, que a conta de anúncios pode usar */
+  pages: BoostPage[]
+  /** O(s) Instagram conectado(s) na aba Perfil desta conta */
+  instagram: string[]
+}
+
+export interface BoostMedia {
+  id: string
+  caption: string
+  type: string
+  thumbnail?: string
+  permalink?: string
+  timestamp?: string
+  /** `null`: a Meta não disse */
+  eligible: boolean | null
+}
+
+export interface BoostPlace {
+  key: string
+  type: 'city' | 'region'
+  name: string
+  radius?: number
+}
+
+export type BoostGoal = 'engajamento' | 'alcance' | 'site'
+export const BOOST_GOALS: { key: BoostGoal; label: string; hint: string }[] = [
+  { key: 'engajamento', label: 'Engajamento', hint: 'Curtidas, comentários e salvamentos no post' },
+  { key: 'alcance', label: 'Alcance', hint: 'Mostrar o post para o maior número de pessoas' },
+  { key: 'site', label: 'Visitas ao site', hint: 'Botão "Saiba mais" levando para um endereço' },
+]
+export const BOOST_MIN_DAILY = 6
+export const BOOST_MAX_DAILY = 1000
+export const BOOST_MAX_DAYS = 30
+
+export interface BoostRequest {
+  pageId: string
+  igUserId: string
+  mediaId: string
+  goal: BoostGoal
+  link?: string
+  dailyBudget: number
+  days: number
+  ageMin: number
+  ageMax: number
+  genders: 'todos' | 'mulheres' | 'homens'
+  places: BoostPlace[]
+}
+
+export interface Boost {
+  id: string
+  campaignId: string
+  adId: string
+  igUsername?: string
+  permalink?: string
+  thumbnail?: string
+  caption?: string
+  goal: BoostGoal
+  link?: string
+  dailyBudget: number
+  currency: string
+  startAt: number
+  endAt: number
+  status: 'pausado' | 'ativo' | 'encerrado'
+  metaStatus?: string
+  metaFeedback?: string
+  createdBy?: string
+  activatedBy?: string
+  createdAt: number
+}
+
+export const boostSetup = (accountId: string) => call<BoostSetup>('boost_setup', { accountId })
+export const boostMedia = (accountId: string, pageId: string, igUserId: string) => call<{ media: BoostMedia[] }>('boost_media', { accountId, pageId, igUserId })
+export const boostGeo = (accountId: string, q: string) => call<{ places: BoostPlace[] }>('boost_geo', { accountId, q })
+export const createBoost = (accountId: string, request: BoostRequest) => call<{ id: string; campaignId: string; adId: string }>('boost_create', { accountId, ...request })
+export const activateBoost = (accountId: string, boostId: string, confirmDaily: number) => call<{ ok: true }>('boost_activate', { accountId, boostId, confirmDaily })
+export const pauseBoost = (accountId: string, boostId: string) => call<{ ok: true }>('boost_pause', { accountId, boostId })
+export const refreshBoosts = (accountId: string) => call<{ ok: true }>('boost_refresh', { accountId })
+
+export async function loadBoosts(accountId: string): Promise<Boost[]> {
+  const { data, error } = await supabase.from('crm_ad_boosts' as never).select('*').eq('account_id', accountId).order('created_at', { ascending: false }).limit(20)
+  if (error) {
+    // Sem a migração 20261111120000: nenhum turbinado
+    if (error.code === '42P01' || error.code === 'PGRST205') return []
+    throw new Error(error.message)
+  }
+  interface Row {
+    id: string
+    campaign_id: string
+    ad_id: string
+    ig_username: string | null
+    permalink: string | null
+    thumbnail: string | null
+    caption: string | null
+    goal: BoostGoal
+    link: string | null
+    daily_budget: number | string
+    currency: string | null
+    start_at: string
+    end_at: string
+    status: Boost['status']
+    meta_status: string | null
+    meta_feedback: string | null
+    created_by: string | null
+    activated_by: string | null
+    created_at: string
+  }
+  return ((data ?? []) as unknown as Row[]).map((r) => ({
+    id: r.id,
+    campaignId: r.campaign_id,
+    adId: r.ad_id,
+    igUsername: r.ig_username ?? undefined,
+    permalink: r.permalink ?? undefined,
+    thumbnail: r.thumbnail ?? undefined,
+    caption: r.caption ?? undefined,
+    goal: r.goal,
+    link: r.link ?? undefined,
+    dailyBudget: Number(r.daily_budget),
+    currency: r.currency || 'BRL',
+    startAt: Date.parse(r.start_at),
+    endAt: Date.parse(r.end_at),
+    status: r.status,
+    metaStatus: r.meta_status ?? undefined,
+    metaFeedback: r.meta_feedback ?? undefined,
+    createdBy: r.created_by ?? undefined,
+    activatedBy: r.activated_by ?? undefined,
+    createdAt: Date.parse(r.created_at),
+  }))
+}
+
+/** A situação do anúncio na Meta, em português. */
+export function boostMetaLabel(status: string | undefined): { label: string; tone: 'ok' | 'wait' | 'bad' | 'off' } | undefined {
+  switch (status) {
+    case 'ACTIVE':
+      return { label: 'Rodando', tone: 'ok' }
+    case 'PENDING_REVIEW':
+    case 'IN_PROCESS':
+      return { label: 'Em análise pela Meta', tone: 'wait' }
+    case 'DISAPPROVED':
+      return { label: 'Recusado pela Meta', tone: 'bad' }
+    case 'WITH_ISSUES':
+      return { label: 'Com problema', tone: 'bad' }
+    case 'CAMPAIGN_PAUSED':
+    case 'ADSET_PAUSED':
+    case 'PAUSED':
+      return { label: 'Pausado', tone: 'off' }
+    case 'PENDING_BILLING_INFO':
+      return { label: 'Falta forma de pagamento', tone: 'bad' }
+    case 'ARCHIVED':
+    case 'DELETED':
+      return { label: 'Removido', tone: 'off' }
+    default:
+      return status ? { label: status, tone: 'off' } : undefined
+  }
+}
+
+// ---------- link para o cliente ----------
+
+/** Onde a página pública do link guarda o segredo enquanto o cliente está no Facebook. */
+export const ADS_LINK_KEY = 'ads-link-conexao'
+export const ADS_LINK_PATH = '/conectar/anuncios'
+
+export interface AdsConnectLink {
+  id: string
+  url: string
+  expiresAt: string
+}
+
+/** Alguém da conta cria o link (7 dias, uso único) para o cliente ligar a conta de anúncios pelo celular. */
+export async function createAdsLink(teamId: string, label = ''): Promise<AdsConnectLink> {
+  const { id, token, expiresAt } = await call<{ id: string; token: string; expiresAt: string }>('link_create', { teamId, label })
+  return { id, url: `${publicAppUrl()}${ADS_LINK_PATH}/${token}`, expiresAt }
+}
+
+export const revokeAdsLink = (linkId: string) => call<{ ok: true }>('link_revoke', { linkId })
+
+export interface AdsLinkInfo {
+  team: string
+  state: 'ok' | 'used' | 'expired' | 'revoked'
+  /** Contas já ligadas por este link */
+  accounts: string[]
+  /** Voltou do Facebook com várias contas e falta marcar */
+  choosing: boolean
+  expiresAt: string
+}
+
+export const adsLinkInfo = (token: string) => call<AdsLinkInfo>('link_info', { token })
+
+/** Na página do link: abre o login do Facebook; a volta cai em `/anuncios/retorno`. */
+export async function startAdsLinkConnect(token: string) {
+  const { url } = await call<{ url: string }>('link_auth_url', { token, redirectUri: `${window.location.origin}${ADS_CALLBACK_PATH}` })
+  try {
+    sessionStorage.setItem(ADS_LINK_KEY, token)
+  } catch {
+    // sem armazenamento: a volta pede para abrir o link de novo
+  }
+  window.location.assign(url)
+}
+
+export type AdsLinkResult =
+  | { done: true; team: string; accounts: string[]; canBoost: boolean }
+  | { done: false; team: string; pendingId: string; who: string | null; accounts: PendingAccount[]; canBoost: boolean }
+
+export const finishAdsLinkConnect = (token: string, code: string, state: string) =>
+  call<AdsLinkResult>('link_connect', { token, code, state, redirectUri: `${window.location.origin}${ADS_CALLBACK_PATH}` })
+
+export const chooseAdsLinkAccounts = (token: string, pendingId: string, accountIds: string[]) => call<{ team: string; accounts: string[] }>('link_choose', { token, pendingId, accountIds })
+
+/** Quem volta do Facebook pelo link não tem login aqui: decide qual retorno mostrar. */
+export const comesFromAdsLink = () => {
+  try {
+    return !!sessionStorage.getItem(ADS_LINK_KEY)
+  } catch {
+    return false
+  }
+}

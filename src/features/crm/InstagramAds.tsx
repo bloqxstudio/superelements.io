@@ -1,7 +1,7 @@
 import { DayPicker } from '@/components/DayPicker'
 import { addDays, dayOfPeriod, dayPeriod, dayStart, isDayPeriod, todayKey } from '@/lib/day'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, CircleAlert, Copy, ExternalLink, Eye, Facebook, Info, Instagram as InstagramIcon, KeyRound, ListFilter, Loader2, Megaphone, Plus, RefreshCw, Search, X } from 'lucide-react'
+import { ChevronDown, CircleAlert, Copy, ExternalLink, Eye, Facebook, Info, Instagram as InstagramIcon, KeyRound, ListFilter, Loader2, Megaphone, Plus, RefreshCw, Rocket, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -23,6 +23,7 @@ import { BarList, Sparkline, TrendChart, shortDay, type Point } from './Instagra
 import { compact, percent } from './instagram'
 import { nameOf, useTeamPeople } from './people'
 import { FIELD, Surface, dayLabel, plural, whenLabel } from './ui'
+import { AdsClientLink, BoostDialog, BoostList } from './AdsBoost'
 import {
   ACCOUNT_STATUS,
   AD_FIRST_DAY,
@@ -55,6 +56,7 @@ import {
   resultCost,
   resultLabel,
   startAdsConnect,
+  takeBoostReturn,
   type AdAccount,
   type AdCampaign,
   type AdCreative,
@@ -154,7 +156,14 @@ const AdsSetupGuide: React.FC<{ reason?: string }> = ({ reason }) => (
 )
 
 /** As contas de anúncios que o login enxerga: só as marcadas ficam ligadas à equipe. */
-export const AccountPicker: React.FC<{ pending: Pending; onDone: (ids: string[]) => void; onCancel?: () => void }> = ({ pending, onDone, onCancel }) => {
+export const AccountPicker: React.FC<{
+  pending: Pending
+  onDone: (ids: string[]) => void
+  onCancel?: () => void
+  /** No link do cliente: liga pelo segredo do link, sem login */
+  choose?: (ids: string[]) => Promise<{ accounts: { id: string; name: string }[] }>
+  intro?: React.ReactNode
+}> = ({ pending, onDone, onCancel, choose, intro }) => {
   const [chosen, setChosen] = useState<Set<string>>(() => new Set(pending.accounts.length === 1 ? [pending.accounts[0].id] : []))
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
@@ -171,7 +180,7 @@ export const AccountPicker: React.FC<{ pending: Pending; onDone: (ids: string[])
   const save = async () => {
     setBusy(true)
     try {
-      const result = await chooseAdAccounts(pending.pendingId, [...chosen])
+      const result = await (choose ? choose([...chosen]) : chooseAdAccounts(pending.pendingId, [...chosen]))
       toast.success(result.accounts.length === 1 ? `${result.accounts[0].name} ligada` : `${result.accounts.length} contas de anúncios ligadas`)
       onDone(result.accounts.map((a) => a.id))
     } catch (error) {
@@ -182,6 +191,7 @@ export const AccountPicker: React.FC<{ pending: Pending; onDone: (ids: string[])
 
   return (
     <div>
+      {intro ?? (
       <p className="text-sm text-gray-600">
         {pending.who ? (
           <>
@@ -190,6 +200,7 @@ export const AccountPicker: React.FC<{ pending: Pending; onDone: (ids: string[])
         ) : null}
         Marque só as contas de anúncios desta equipe: as outras que esse acesso enxerga não são lidas.
       </p>
+      )}
       {pending.accounts.length > 8 && <input className={cn(FIELD, 'mt-3 h-9')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar pelo nome, negócio ou número" aria-label="Buscar conta" />}
       <ul className="mt-3 grid max-h-[50vh] grid-cols-1 gap-1.5 overflow-y-auto">
         {list.map((a) => {
@@ -298,7 +309,7 @@ const AdsConnectCard: React.FC<{ teamId: string; again?: boolean; onDone: (ids: 
       </span>
       <h2 className="mt-4 text-lg font-semibold tracking-tight text-gray-900">{again ? 'Ligar outra conta de anúncios' : 'Ligar a conta de anúncios'}</h2>
       <p className="mt-1 text-sm text-gray-600">
-        As campanhas de Facebook e Instagram pela API oficial da Meta: investimento, contatos, alcance, cliques e o custo de cada resultado, por campanha, por dia e por público. Só leitura: nada aqui muda campanha ou orçamento.
+        As campanhas de Facebook e Instagram pela API oficial da Meta: investimento, contatos, alcance, cliques e o custo de cada resultado, por campanha, por dia e por público. A leitura não muda nada; turbinar um post cria o anúncio pausado e só quem gerencia ativa.
       </p>
 
       {pending ? (
@@ -326,6 +337,7 @@ const AdsConnectCard: React.FC<{ teamId: string; again?: boolean; onDone: (ids: 
             )}
           </div>
           {withToken && <AdsTokenForm teamId={teamId} onPending={setPending} />}
+          {ready && <AdsClientLink teamId={teamId} />}
           {!ready && (
             <AdsSetupGuide
               reason={
@@ -1017,6 +1029,8 @@ const AccountArea: React.FC<{
   const [confirmOff, setConfirmOff] = useState(false)
   const [selected, setSelected] = useState<string[] | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
+  const [boosting, setBoosting] = useState(() => takeBoostReturn())
+  const [boostVersion, setBoostVersion] = useState(0)
   const autoRefreshed = useRef(new Set<string>())
 
   useEffect(() => setSelected(null), [account.id])
@@ -1109,6 +1123,9 @@ const AccountArea: React.FC<{
           </p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <Button size="sm" onClick={() => setBoosting(true)} disabled={broken} className="gap-1.5">
+            <Rocket className="h-4 w-4" /> Turbinar post
+          </Button>
           <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={refreshing || broken} className="gap-1.5">
             <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} /> {refreshing ? 'Atualizando…' : 'Atualizar'}
           </Button>
@@ -1194,6 +1211,9 @@ const AccountArea: React.FC<{
           </AdsGuard>
         </div>
       )}
+
+      <BoostList account={account} manager={manager} version={boostVersion} />
+      {boosting && <BoostDialog account={account} manager={manager} onClose={() => { setBoosting(false); setBoostVersion((v) => v + 1) }} onCreated={() => setBoostVersion((v) => v + 1)} />}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-gray-200 pt-4 text-xs text-gray-500">
         <span>

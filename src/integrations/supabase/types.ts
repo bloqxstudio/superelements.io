@@ -571,6 +571,7 @@ export type Database = {
           token_expires_at: string | null
           synced_at: string | null
           sync_error: string | null
+          scopes: string[] | null
           created_at: string
           updated_at: string
         }
@@ -590,6 +591,7 @@ export type Database = {
           token_expires_at?: string | null
           synced_at?: string | null
           sync_error?: string | null
+          scopes?: string[] | null
           created_at?: string
           updated_at?: string
         }
@@ -609,6 +611,7 @@ export type Database = {
           token_expires_at?: string | null
           synced_at?: string | null
           sync_error?: string | null
+          scopes?: string[] | null
           created_at?: string
           updated_at?: string
         }

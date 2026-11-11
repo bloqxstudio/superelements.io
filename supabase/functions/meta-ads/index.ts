@@ -3,8 +3,11 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 /**
  * Os anúncios da equipe pela API de anúncios da Meta (Marketing API,
  * `graph.facebook.com`): conecta uma ou mais contas de anúncios e lê as
- * campanhas de Facebook e Instagram (aba Anúncios de `/crm/instagram`). Só
- * leitura: nada aqui cria, pausa ou muda campanha ou orçamento.
+ * campanhas de Facebook e Instagram (aba Anúncios de `/crm/instagram`). A
+ * leitura não muda nada. A única escrita é "Turbinar post" (2026-11-11, seção
+ * `turbinar`): com o login que aceitou `ads_management`, cria campanha, conjunto
+ * e anúncio de um post do Instagram da conta, sempre PAUSADOS; só quem gerencia
+ * a equipe ativa (`boost_activate`). Nada mais é criado, pausado ou alterado.
  *
  * Conectar: quem tem acesso à conta de anúncios entra com o Facebook (login
  * do Facebook para empresas) ou cola um token, e escolhe só as contas desta
@@ -27,6 +30,13 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 const VERSION = 'v26.0'
 const GRAPH = `https://graph.facebook.com/${VERSION}`
 const SCOPES = ['ads_read']
+/**
+ * Turbinar post: criar anúncios (`ads_management`), anunciar com a Página ligada ao Instagram
+ * (`pages_manage_ads`, `pages_show_list`, `pages_read_engagement`) e listar os posts do perfil
+ * (`instagram_basic`). Sem `business_management`: serve a conta de anúncios pessoal, a mesma que o
+ * perfil usa quando turbina pelo app, sem Gerenciador de Negócios.
+ */
+const BOOST_SCOPES = ['ads_read', 'ads_management', 'pages_show_list', 'pages_read_engagement', 'pages_manage_ads', 'instagram_basic']
 const CALLBACK_PATH = '/anuncios/retorno'
 const PRESETS = ['today', 'last_7d', 'last_30d', 'last_90d', 'this_month'] as const
 /** Um dia escolhido no calendário da tela: `dia:2026-10-30` (no fuso da conta de anúncios) */
@@ -71,7 +81,7 @@ interface MetaError {
 }
 
 /** A recusa da Meta em português, com o código que a tela entende (`token`: conectar de novo). */
-function metaError(error: MetaError | undefined, status: number): HttpError {
+function metaError(error: MetaError | undefined, status: number, writing = false): HttpError {
   const code = error?.code
   const sub = error?.error_subcode
   if (code === 190) return new HttpError('A conexão com a conta de anúncios expirou ou foi revogada. Conecte de novo.', 401, 'token')
@@ -79,7 +89,11 @@ function metaError(error: MetaError | undefined, status: number): HttpError {
     return new HttpError('A Meta pediu uma pausa (muitas leituras seguidas desta conta de anúncios). Tente de novo em alguns minutos.', 429, 'rate')
   if (code === 100 && sub === 33) return new HttpError('Esse acesso não enxerga a conta de anúncios (ela saiu do acesso de quem conectou?). Conecte de novo.', 403, 'token')
   if (code === 10 || code === 200 || code === 294 || (code !== undefined && code > 200 && code < 300))
-    return new HttpError(`Falta permissão para ler os anúncios (ads_read)${error?.message ? `: ${error.message}` : ''}.`, 403, 'permission')
+    return writing
+      ? new HttpError(`A Meta não deixou criar o anúncio com esse acesso${error?.error_user_msg || error?.message ? `: ${error.error_user_msg || error.message}` : ''}. Entre com o Facebook pelo "Turbinar post" e aceite todas as permissões.`, 403, 'boost_login')
+      : new HttpError(`Falta permissão para ler os anúncios (ads_read)${error?.message ? `: ${error.message}` : ''}.`, 403, 'permission')
+  // Recusa de criação (orçamento, público, post que não pode ser turbinado…): a frase da Meta para quem usa
+  if (writing && error?.error_user_msg) return new HttpError(error.error_user_msg, 400, 'meta')
   const text = error?.error_user_msg || error?.message || `A Meta respondeu com erro ${status}.`
   return new HttpError(text, status >= 400 && status < 600 ? status : 400, code === 100 ? 'field' : 'meta')
 }
@@ -99,6 +113,25 @@ function graph<T>(path: string, token: string, params: Params = {}): Promise<T> 
   for (const [key, value] of Object.entries(params)) if (value !== undefined) url.searchParams.set(key, String(value))
   url.searchParams.set('access_token', token)
   return getJson<T>(url)
+}
+
+/** Uma escrita na API da Meta (POST com formulário; objetos e listas vão como JSON). */
+async function graphPost<T>(path: string, token: string, params: Params | Record<string, unknown>, method: 'POST' | 'DELETE' = 'POST'): Promise<T> {
+  const form = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) continue
+    form.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value))
+  }
+  form.set('access_token', token)
+  const response = await fetch(`${GRAPH}/${path.replace(/^\/+/, '')}`, {
+    method,
+    headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: form,
+    signal: AbortSignal.timeout(60_000),
+  })
+  const data = (await response.json().catch(() => null)) as ({ error?: MetaError } & T) | null
+  if (!response.ok || !data || data.error) throw metaError(data?.error, response.status, true)
+  return data as T
 }
 
 interface Paged<T> {
@@ -152,6 +185,8 @@ interface LoginState {
   /** expira (ms) */
   e: number
   n: string
+  /** `boost`: o login pediu as permissões de turbinar */
+  m?: 'boost'
 }
 
 async function packState(state: LoginState, secret: string) {
@@ -338,6 +373,7 @@ const ACCOUNT_FIELDS = 'id,account_id,name,currency,timezone_name,account_status
 /** Guarda o login por 30 minutos e devolve as contas que ele enxerga, para a pessoa escolher. */
 async function hold(ctx: Ctx, teamId: string, grant: Grant) {
   const me = await graph<{ name?: string }>('me', grant.token, { fields: 'name' }).catch(() => ({ name: undefined }) as { name?: string })
+  const scopes = await grantedScopes(grant.token).catch(() => null)
   const found = await all<AdAccount>('me/adaccounts', grant.token, { fields: ACCOUNT_FIELDS, limit: 200 }, 1000)
   if (!found.length)
     throw new HttpError(
@@ -359,11 +395,11 @@ async function hold(ctx: Ctx, teamId: string, grant: Grant) {
   await ctx.admin.from('crm_ad_pending').delete().eq('user_id', ctx.userId)
   const { data, error } = await ctx.admin
     .from('crm_ad_pending')
-    .insert({ team_id: teamId, user_id: ctx.userId, access_token: grant.token, token_kind: grant.kind, token_expires_at: grant.expiresAt, connected_name: me.name ?? null, accounts })
+    .insert({ team_id: teamId, user_id: ctx.userId, access_token: grant.token, token_kind: grant.kind, token_expires_at: grant.expiresAt, connected_name: me.name ?? null, accounts, scopes })
     .select('id')
     .single()
   if (error) throw dbError(error)
-  return { pendingId: (data as { id: string }).id, accounts, who: me.name ?? null, kind: grant.kind, expiresAt: grant.expiresAt }
+  return { pendingId: (data as { id: string }).id, accounts, who: me.name ?? null, kind: grant.kind, expiresAt: grant.expiresAt, canBoost: !!scopes && BOOST_NEEDS.every((p) => scopes.includes(p)) }
 }
 
 async function choose(ctx: Ctx, body: Record<string, unknown>) {
@@ -373,9 +409,25 @@ async function choose(ctx: Ctx, body: Record<string, unknown>) {
   if (ids.length > 50) throw new HttpError('Escolha no máximo 50 contas de uma vez.')
   const { data, error } = await ctx.admin.from('crm_ad_pending').select('*').eq('id', pendingId).eq('user_id', ctx.userId).maybeSingle()
   if (error) throw dbError(error)
-  const pending = data as { team_id: string; access_token: string; token_kind: string | null; token_expires_at: string | null; connected_name: string | null; accounts: PendingAccount[]; valid_until: string } | null
+  const pending = data as { team_id: string; access_token: string; token_kind: string | null; token_expires_at: string | null; connected_name: string | null; accounts: PendingAccount[]; scopes: string[] | null; valid_until: string } | null
   if (!pending || Date.parse(pending.valid_until) < Date.now()) throw new HttpError('Essa conexão expirou (30 minutos). Entre com o Facebook de novo.', 410, 'expired')
   const teamId = await requireRole(ctx, pending.team_id, false)
+  const saved = await saveAccounts(ctx, teamId, pending, ids, ctx.userId)
+  await ctx.admin.from('crm_ad_pending').delete().eq('id', pendingId)
+  return { accounts: saved }
+}
+
+interface PendingRow {
+  access_token: string
+  token_kind: string | null
+  token_expires_at: string | null
+  connected_name: string | null
+  accounts: PendingAccount[]
+  scopes: string[] | null
+}
+
+/** Liga à equipe as contas escolhidas de um login, com o token dele. */
+async function saveAccounts(ctx: Ctx, teamId: string, pending: PendingRow, ids: string[], connectedBy: string | null) {
   const chosen = pending.accounts.filter((a) => ids.includes(a.id))
   if (chosen.length !== ids.length) throw new HttpError('Uma das contas escolhidas não veio desse login.')
 
@@ -391,11 +443,12 @@ async function choose(ctx: Ctx, body: Record<string, unknown>) {
         timezone_name: a.timezoneName ?? null,
         account_status: a.status ?? null,
         business_name: a.business ?? null,
-        connected_by: ctx.userId,
+        connected_by: connectedBy,
         connected_name: pending.connected_name,
         connected_at: now,
         token_kind: pending.token_kind,
         token_expires_at: pending.token_expires_at,
+        scopes: pending.scopes,
         sync_error: null,
       })),
       { onConflict: 'team_id,ad_account_id' }
@@ -407,8 +460,7 @@ async function choose(ctx: Ctx, body: Record<string, unknown>) {
     .from('crm_ad_tokens')
     .upsert(saved.map((r) => ({ account_id: r.id, access_token: pending.access_token, issued_at: now, expires_at: pending.token_expires_at })), { onConflict: 'account_id' })
   if (tokenError) throw dbError(tokenError)
-  await ctx.admin.from('crm_ad_pending').delete().eq('id', pendingId)
-  return { accounts: saved }
+  return saved
 }
 
 // ---------- relatório ----------
@@ -808,6 +860,513 @@ async function preview(account: AccountRow, token: string, body: Record<string, 
   return { src, width: num(attribute(html, 'width')) ?? null, height: num(attribute(html, 'height')) ?? null }
 }
 
+// ---------- turbinar ----------
+
+/** O mínimo para turbinar: criar anúncios, anunciar com a Página e ver os posts do Instagram dela. */
+const BOOST_NEEDS = ['ads_management', 'pages_manage_ads', 'pages_show_list', 'instagram_basic']
+
+async function grantedScopes(token: string): Promise<string[]> {
+  const { data } = await graph<{ data?: { permission: string; status: string }[] }>('me/permissions', token)
+  return (data ?? []).filter((p) => p.status === 'granted').map((p) => p.permission)
+}
+
+interface BoostPage {
+  id: string
+  name: string
+  ig?: { id: string; username: string; picture?: string }
+}
+
+interface PageRow {
+  id: string
+  name?: string
+  instagram_business_account?: { id: string; username?: string; profile_picture_url?: string }
+}
+
+const PAGE_FIELDS = 'id,name,instagram_business_account{id,username,profile_picture_url}'
+
+/** As Páginas com que esta conta de anúncios pode anunciar (e o Instagram ligado a cada uma). */
+async function boostPages(act: string, token: string): Promise<BoostPage[]> {
+  const shape = (rows: PageRow[]) =>
+    rows.map((p) => ({
+      id: p.id,
+      name: p.name || `Página ${p.id}`,
+      ig: p.instagram_business_account ? { id: p.instagram_business_account.id, username: p.instagram_business_account.username ?? '', picture: p.instagram_business_account.profile_picture_url } : undefined,
+    }))
+  const seen = new Map<string, BoostPage>()
+  // `promote_pages`: as Páginas da conta de anúncios; `me/accounts`: as que quem entrou administra (conta pessoal sem Página ligada à conta)
+  for (const read of [() => all<PageRow>(`act_${act}/promote_pages`, token, { fields: PAGE_FIELDS, limit: 100 }, 300), () => all<PageRow>('me/accounts', token, { fields: PAGE_FIELDS, limit: 100 }, 300)]) {
+    try {
+      for (const page of shape(await read())) if (!seen.has(page.id) || (!seen.get(page.id)!.ig && page.ig)) seen.set(page.id, page)
+    } catch (error) {
+      if (error instanceof HttpError && (error.code === 'token' || error.code === 'rate')) throw error
+      console.warn('[meta-ads] páginas', error)
+    }
+  }
+  return [...seen.values()]
+}
+
+/** O Instagram conectado na aba Perfil desta conta: o turbinar fica preso a ele. */
+async function teamInstagram(ctx: Ctx, teamId: string): Promise<string[]> {
+  const { data, error } = await ctx.admin.from('crm_instagram_accounts').select('username').eq('team_id', teamId)
+  if (error) return []
+  return ((data ?? []) as { username: string }[]).map((r) => r.username.toLowerCase()).filter(Boolean)
+}
+
+async function boostSetup(ctx: Ctx, account: AccountRow, token: string) {
+  const scopes = await grantedScopes(token)
+  await ctx.admin.from('crm_ad_accounts').update({ scopes }).eq('id', account.id)
+  const missing = BOOST_NEEDS.filter((p) => !scopes.includes(p))
+  const own = await teamInstagram(ctx, account.team_id)
+  if (missing.length) return { ready: false, missing, pages: [] as BoostPage[], instagram: own }
+  const pages = (await boostPages(account.ad_account_id, token)).filter((p) => p.ig && (!own.length || own.includes(p.ig.username.toLowerCase())))
+  return { ready: true, missing, pages, instagram: own }
+}
+
+/** A Página e o Instagram escolhidos, conferidos de novo na Meta (e presos ao Instagram desta conta). */
+async function boostTarget(ctx: Ctx, account: AccountRow, token: string, pageId: unknown, igUserId: unknown) {
+  const page = typeof pageId === 'string' && /^\d{1,40}$/.test(pageId) ? pageId : ''
+  const ig = typeof igUserId === 'string' && /^\d{1,40}$/.test(igUserId) ? igUserId : ''
+  if (!page || !ig) throw new HttpError('Escolha o perfil do Instagram.')
+  const setup = await boostSetup(ctx, account, token)
+  if (!setup.ready) throw new HttpError('Falta entrar com o Facebook com as permissões de turbinar.', 403, 'boost_login')
+  const found = setup.pages.find((p) => p.id === page && p.ig?.id === ig)
+  if (!found?.ig) throw new HttpError('Esse perfil não está ligado a uma Página que esta conta de anúncios usa, ou não é o Instagram desta conta.', 403, 'forbidden')
+  return found as BoostPage & { ig: NonNullable<BoostPage['ig']> }
+}
+
+interface MediaRow {
+  id: string
+  caption?: string
+  media_type?: string
+  media_product_type?: string
+  media_url?: string
+  thumbnail_url?: string
+  permalink?: string
+  timestamp?: string
+  boost_eligibility_info?: { eligible_to_boost?: boolean; eligible?: boolean }
+}
+
+const MEDIA_FIELDS = 'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp'
+
+async function boostMedia(ctx: Ctx, account: AccountRow, token: string, body: Record<string, unknown>) {
+  const target = await boostTarget(ctx, account, token, body.pageId, body.igUserId)
+  let rows: MediaRow[]
+  try {
+    rows = (await graph<Paged<MediaRow>>(`${target.ig.id}/media`, token, { fields: `${MEDIA_FIELDS},boost_eligibility_info`, limit: 30 })).data ?? []
+  } catch (error) {
+    if (!(error instanceof HttpError) || error.code !== 'field') throw error
+    rows = (await graph<Paged<MediaRow>>(`${target.ig.id}/media`, token, { fields: MEDIA_FIELDS, limit: 30 })).data ?? []
+  }
+  return {
+    media: rows.map((m) => {
+      const eligible = m.boost_eligibility_info?.eligible_to_boost ?? m.boost_eligibility_info?.eligible
+      return {
+        id: m.id,
+        caption: (m.caption ?? '').slice(0, 300),
+        type: m.media_product_type === 'REELS' ? 'REELS' : m.media_type ?? 'IMAGE',
+        thumbnail: m.thumbnail_url || (m.media_type === 'VIDEO' ? undefined : m.media_url),
+        permalink: m.permalink,
+        timestamp: m.timestamp,
+        eligible: eligible ?? null,
+      }
+    }),
+  }
+}
+
+async function boostGeo(token: string, body: Record<string, unknown>) {
+  const q = typeof body.q === 'string' ? body.q.trim().slice(0, 60) : ''
+  if (q.length < 2) return { places: [] }
+  const { data } = await graph<{ data?: { key: string; name: string; type: string; region?: string; country_code?: string }[] }>('search', token, {
+    type: 'adgeolocation',
+    q,
+    location_types: JSON.stringify(['city', 'region']),
+    country_code: 'BR',
+    limit: 8,
+  })
+  return { places: (data ?? []).filter((p) => p.type === 'city' || p.type === 'region').map((p) => ({ key: p.key, type: p.type, name: p.type === 'city' && p.region ? `${p.name}, ${p.region}` : p.name })) }
+}
+
+type Goal = 'engajamento' | 'alcance' | 'site'
+const GOALS: Record<Goal, { objective: string; optimization: string; destination?: string; label: string }> = {
+  engajamento: { objective: 'OUTCOME_ENGAGEMENT', optimization: 'POST_ENGAGEMENT', destination: 'ON_POST', label: 'Engajamento' },
+  alcance: { objective: 'OUTCOME_AWARENESS', optimization: 'REACH', label: 'Alcance' },
+  site: { objective: 'OUTCOME_TRAFFIC', optimization: 'LINK_CLICKS', destination: 'WEBSITE', label: 'Visitas ao site' },
+}
+
+/** Limites do turbinar pela plataforma (valor por dia na moeda da conta). */
+const BOOST_MIN_DAILY = 6
+const BOOST_MAX_DAILY = 1000
+const BOOST_MAX_DAYS = 30
+
+interface Place {
+  key: string
+  type: 'city' | 'region'
+  name: string
+  radius?: number
+}
+
+function boostInput(body: Record<string, unknown>) {
+  const goal = (typeof body.goal === 'string' && body.goal in GOALS ? body.goal : '') as Goal | ''
+  if (!goal) throw new HttpError('Escolha o objetivo.')
+  let link: string | null = null
+  if (goal === 'site') {
+    try {
+      const url = new URL(String(body.link ?? ''))
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error()
+      link = url.toString()
+    } catch {
+      throw new HttpError('Informe o endereço do site (https://…).')
+    }
+  }
+  const daily = Math.round(Number(body.dailyBudget) * 100) / 100
+  if (!Number.isFinite(daily) || daily < BOOST_MIN_DAILY || daily > BOOST_MAX_DAILY) throw new HttpError(`O valor por dia vai de ${BOOST_MIN_DAILY} a ${BOOST_MAX_DAILY}.`)
+  const days = Math.round(Number(body.days))
+  if (!Number.isFinite(days) || days < 1 || days > BOOST_MAX_DAYS) throw new HttpError(`A duração vai de 1 a ${BOOST_MAX_DAYS} dias.`)
+  const ageMin = Math.max(18, Math.min(65, Math.round(Number(body.ageMin) || 18)))
+  const ageMax = Math.max(ageMin, Math.min(65, Math.round(Number(body.ageMax) || 65)))
+  const genders = body.genders === 'mulheres' ? [2] : body.genders === 'homens' ? [1] : undefined
+  const places: Place[] = (Array.isArray(body.places) ? body.places : []).slice(0, 10).map((raw) => {
+    const p = raw as Partial<Place>
+    if (typeof p.key !== 'string' || !/^\d{1,20}$/.test(p.key) || (p.type !== 'city' && p.type !== 'region')) throw new HttpError('Local inválido.')
+    const radius = p.type === 'city' ? Math.max(10, Math.min(80, Math.round(Number(p.radius) || 17))) : undefined
+    return { key: p.key, type: p.type, name: String(p.name ?? '').slice(0, 80), radius }
+  })
+  const mediaId = typeof body.mediaId === 'string' && /^\d{1,40}$/.test(body.mediaId) ? body.mediaId : ''
+  if (!mediaId) throw new HttpError('Escolha o post.')
+  return { goal, link, daily, days, ageMin, ageMax, genders, places, mediaId }
+}
+
+async function boostCreate(ctx: Ctx, account: AccountRow, token: string, body: Record<string, unknown>) {
+  const input = boostInput(body)
+  const target = await boostTarget(ctx, account, token, body.pageId, body.igUserId)
+  const act = `act_${account.ad_account_id}`
+  const goal = GOALS[input.goal]
+
+  // O post precisa ser deste perfil
+  const media = await graph<MediaRow & { owner?: { id?: string } }>(input.mediaId, token, { fields: `${MEDIA_FIELDS},owner` })
+  if (media.owner?.id && media.owner.id !== target.ig.id) throw new HttpError('Esse post não é deste perfil.', 403, 'forbidden')
+
+  const info = await graph<{ currency?: string; account_status?: number }>(act, token, { fields: 'currency,account_status' })
+  if (info.account_status && info.account_status !== 1) throw new HttpError('A conta de anúncios não está ativa (pagamento pendente, em análise ou desativada). Resolva no Gerenciador de Anúncios.', 409, 'account')
+  const currency = info.currency || account.currency || 'BRL'
+  const cents = NO_CENTS.has(currency) ? Math.round(input.daily) : Math.round(input.daily * 100)
+
+  const start = new Date(Date.now() + 10 * 60_000)
+  const end = new Date(start.getTime() + input.days * DAY)
+  const label = `Turbinar @${target.ig.username} · ${new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`
+
+  const cities = input.places.filter((p) => p.type === 'city').map((p) => ({ key: p.key, radius: p.radius, distance_unit: 'kilometer' }))
+  const regions = input.places.filter((p) => p.type === 'region').map((p) => ({ key: p.key }))
+  const targeting = {
+    geo_locations: input.places.length ? { ...(cities.length ? { cities } : {}), ...(regions.length ? { regions } : {}) } : { countries: ['BR'] },
+    age_min: input.ageMin,
+    age_max: input.ageMax,
+    ...(input.genders ? { genders: input.genders } : {}),
+    publisher_platforms: ['instagram'],
+    instagram_positions: ['stream', 'story', 'reels', 'explore'],
+    targeting_automation: { advantage_audience: 0 },
+  }
+
+  const created: string[] = []
+  const undo = async () => {
+    for (const id of created.reverse()) await graphPost(id, token, {}, 'DELETE').catch((e) => console.warn('[meta-ads] desfazer', id, e))
+  }
+  try {
+    // Campanha sempre pausada: só quem gerencia a equipe ativa
+    const campaignParams: Record<string, unknown> = { name: label, objective: goal.objective, status: 'PAUSED', special_ad_categories: [], is_adset_budget_sharing_enabled: false }
+    let campaign: { id: string }
+    try {
+      campaign = await graphPost<{ id: string }>(`${act}/campaigns`, token, campaignParams)
+    } catch (error) {
+      if (!(error instanceof HttpError) || !/is_adset_budget_sharing_enabled/i.test(error.message)) throw error
+      delete campaignParams.is_adset_budget_sharing_enabled
+      campaign = await graphPost<{ id: string }>(`${act}/campaigns`, token, campaignParams)
+    }
+    created.push(campaign.id)
+
+    const adset = await graphPost<{ id: string }>(`${act}/adsets`, token, {
+      name: `${goal.label} · ${input.places.length ? input.places.map((p) => p.name).join(', ').slice(0, 80) : 'Brasil'}`,
+      campaign_id: campaign.id,
+      daily_budget: cents,
+      billing_event: 'IMPRESSIONS',
+      optimization_goal: goal.optimization,
+      bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+      ...(goal.destination ? { destination_type: goal.destination } : {}),
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      targeting,
+      status: 'ACTIVE',
+    })
+    created.push(adset.id)
+
+    const creative = await graphPost<{ id: string }>(`${act}/adcreatives`, token, {
+      name: label,
+      object_id: target.id,
+      instagram_user_id: target.ig.id,
+      source_instagram_media_id: input.mediaId,
+      ...(input.link ? { call_to_action: { type: 'LEARN_MORE', value: { link: input.link } } } : {}),
+    })
+    created.push(creative.id)
+
+    const ad = await graphPost<{ id: string }>(`${act}/ads`, token, { name: label, adset_id: adset.id, creative: { creative_id: creative.id }, status: 'ACTIVE' })
+    created.push(ad.id)
+
+    const { data, error } = await ctx.admin
+      .from('crm_ad_boosts')
+      .insert({
+        team_id: account.team_id,
+        account_id: account.id,
+        campaign_id: campaign.id,
+        adset_id: adset.id,
+        creative_id: creative.id,
+        ad_id: ad.id,
+        page_id: target.id,
+        ig_user_id: target.ig.id,
+        ig_username: target.ig.username,
+        ig_media_id: input.mediaId,
+        permalink: media.permalink ?? null,
+        thumbnail: media.thumbnail_url || (media.media_type === 'VIDEO' ? null : media.media_url) || null,
+        caption: (media.caption ?? '').slice(0, 300) || null,
+        goal: input.goal,
+        link: input.link,
+        daily_budget: input.daily,
+        currency,
+        start_at: start.toISOString(),
+        end_at: end.toISOString(),
+        audience: { places: input.places, ageMin: input.ageMin, ageMax: input.ageMax, genders: body.genders === 'mulheres' || body.genders === 'homens' ? body.genders : 'todos' },
+        status: 'pausado',
+        meta_status: 'CAMPAIGN_PAUSED',
+        created_by: ctx.userId,
+      })
+      .select('id')
+      .single()
+    if (error) throw dbError(error)
+    return { id: (data as { id: string }).id, campaignId: campaign.id, adId: ad.id }
+  } catch (error) {
+    await undo()
+    throw error
+  }
+}
+
+interface BoostRow {
+  id: string
+  team_id: string
+  account_id: string
+  campaign_id: string
+  ad_id: string
+  status: string
+  daily_budget: number
+  currency: string
+  end_at: string
+}
+
+async function boostOf(ctx: Ctx, account: AccountRow, boostId: unknown): Promise<BoostRow> {
+  const id = uuid(boostId, 'Turbinada')
+  const { data, error } = await ctx.admin.from('crm_ad_boosts').select('id, team_id, account_id, campaign_id, ad_id, status, daily_budget, currency, end_at').eq('id', id).eq('account_id', account.id).maybeSingle()
+  if (error) throw dbError(error)
+  if (!data) throw new HttpError('Esse post turbinado não é desta conta de anúncios.', 404, 'not_found')
+  return data as BoostRow
+}
+
+/** Liga ou pausa a campanha do post turbinado. Ligar é de quem gerencia e precisa repetir o valor confirmado. */
+async function boostSwitch(ctx: Ctx, account: AccountRow, token: string, body: Record<string, unknown>, on: boolean) {
+  const boost = await boostOf(ctx, account, body.boostId)
+  if (on) {
+    await requireRole(ctx, account.team_id, true)
+    if (Number(body.confirmDaily) !== Number(boost.daily_budget)) throw new HttpError('Confirme o valor por dia para ativar.', 400, 'confirm')
+    if (Date.parse(boost.end_at) <= Date.now()) throw new HttpError('O período desse anúncio já terminou. Turbine de novo.', 409, 'ended')
+  }
+  await graphPost(boost.campaign_id, token, { status: on ? 'ACTIVE' : 'PAUSED' })
+  const patch: Record<string, unknown> = { status: on ? 'ativo' : 'pausado', meta_status: on ? 'ACTIVE' : 'CAMPAIGN_PAUSED' }
+  if (on) Object.assign(patch, { activated_by: ctx.userId, activated_at: new Date().toISOString() })
+  const { error } = await ctx.admin.from('crm_ad_boosts').update(patch).eq('id', boost.id)
+  if (error) throw dbError(error)
+  return { ok: true }
+}
+
+/** Relê na Meta a situação dos últimos posts turbinados (em análise, recusado, rodando, terminado). */
+async function boostRefresh(ctx: Ctx, account: AccountRow, token: string) {
+  const { data, error } = await ctx.admin.from('crm_ad_boosts').select('id, ad_id, status, end_at').eq('account_id', account.id).order('created_at', { ascending: false }).limit(20)
+  if (error) throw dbError(error)
+  const rows = (data ?? []) as { id: string; ad_id: string; status: string; end_at: string }[]
+  if (!rows.length) return { ok: true }
+  const found = await graph<Record<string, { effective_status?: string; ad_review_feedback?: { global?: Record<string, string> } }>>('', token, {
+    ids: rows.map((r) => r.ad_id).join(','),
+    fields: 'effective_status,ad_review_feedback',
+  }).catch((e) => {
+    if (e instanceof HttpError && (e.code === 'token' || e.code === 'rate')) throw e
+    console.warn('[meta-ads] situação dos turbinados', e)
+    return {} as Record<string, { effective_status?: string; ad_review_feedback?: { global?: Record<string, string> } }>
+  })
+  const now = new Date().toISOString()
+  await Promise.all(
+    rows.map((r) => {
+      const ad = found[r.ad_id]
+      if (!ad) return null
+      const feedback = ad.ad_review_feedback?.global ? Object.values(ad.ad_review_feedback.global).join(' ').slice(0, 500) : null
+      const ended = Date.parse(r.end_at) <= Date.now() || ad.effective_status === 'DELETED' || ad.effective_status === 'ARCHIVED'
+      return ctx.admin
+        .from('crm_ad_boosts')
+        .update({ meta_status: ad.effective_status ?? null, meta_feedback: feedback, checked_at: now, ...(ended ? { status: 'encerrado' } : {}) })
+        .eq('id', r.id)
+    })
+  )
+  return { ok: true }
+}
+
+// ---------- link para o cliente ----------
+
+/**
+ * Link para o cliente ligar a conta de anúncios dele pelo celular (2026-11-11; o usuário: "podemos ter um
+ * link publico pro cliente fazer essa conexao pelo celular dele? pra mandar no wpp e ele só clicar").
+ * Alguém da conta cria (`link_create`, 7 dias, uso único); o cliente abre `/conectar/anuncios/<segredo>`
+ * sem login, entra com o Facebook pedindo as permissões de ler e turbinar, e volta em `/anuncios/retorno`.
+ * Uma conta de anúncios só: liga direto. Várias: ele marca qual (`link_choose`). O segredo só existe no
+ * link; aqui fica o hash.
+ */
+const LINK_DAYS = 7
+const sha256 = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(text))), (b) => b.toString(16).padStart(2, '0')).join('')
+
+interface LinkRow {
+  id: string
+  team_id: string
+  created_by: string | null
+  expires_at: string
+  used_at: string | null
+  revoked_at: string | null
+  pending_id: string | null
+  account_ids: string[] | null
+  connected_name: string | null
+}
+
+async function linkOf(admin: SupabaseClient, token: unknown): Promise<{ link: LinkRow; state: 'ok' | 'used' | 'expired' | 'revoked' }> {
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{32,80}$/.test(token)) throw new HttpError('Link inválido. Peça um novo a quem enviou.', 404, 'link')
+  const { data, error } = await admin
+    .from('crm_ad_connect_links')
+    .select('id, team_id, created_by, expires_at, used_at, revoked_at, pending_id, account_ids, connected_name')
+    .eq('token_hash', await sha256(token))
+    .maybeSingle()
+  if (error) throw dbError(error)
+  if (!data) throw new HttpError('Link inválido. Peça um novo a quem enviou.', 404, 'link')
+  const link = data as LinkRow
+  const state = link.revoked_at ? 'revoked' : link.used_at ? 'used' : Date.parse(link.expires_at) < Date.now() ? 'expired' : 'ok'
+  return { link, state }
+}
+
+const LINK_PROBLEM: Record<'used' | 'expired' | 'revoked', string> = {
+  used: 'Este link já foi usado. Peça um novo a quem enviou.',
+  expired: 'Este link venceu. Peça um novo a quem enviou.',
+  revoked: 'Este link foi cancelado. Peça um novo a quem enviou.',
+}
+
+/** As ações sem login: quem abriu o link. Tudo é conferido pelo segredo do link. */
+async function publicLink(admin: SupabaseClient, body: Record<string, unknown>, app: App | null) {
+  const { link, state } = await linkOf(admin, body.token)
+  const { data: team } = await admin.from('crm_teams').select('name').eq('id', link.team_id).maybeSingle()
+  const teamName = (team as { name?: string } | null)?.name ?? ''
+  const ctx: Ctx = { user: admin, admin, userId: link.created_by ?? '' }
+
+  if (body.action === 'link_info') {
+    let names: string[] = []
+    if (link.account_ids?.length) {
+      const { data } = await admin.from('crm_ad_accounts').select('name').in('id', link.account_ids)
+      names = ((data ?? []) as { name: string }[]).map((r) => r.name)
+    }
+    return { team: teamName, state, accounts: names, choosing: !!link.pending_id && !link.account_ids?.length, expiresAt: link.expires_at }
+  }
+
+  if (body.action === 'link_choose') {
+    // Volta do Facebook com várias contas: o link já está marcado como usado, esperando a escolha
+    const pendingId = uuid(body.pendingId, 'Conexão')
+    if (link.revoked_at || link.pending_id !== pendingId || link.account_ids?.length) throw new HttpError('Essa escolha não é deste link. Abra o link de novo.', 403, 'state')
+    const { data, error } = await admin.from('crm_ad_pending').select('*').eq('id', pendingId).eq('team_id', link.team_id).maybeSingle()
+    if (error) throw dbError(error)
+    const pending = data as (PendingRow & { valid_until: string }) | null
+    if (!pending || Date.parse(pending.valid_until) < Date.now()) {
+      await admin.from('crm_ad_connect_links').update({ used_at: null, pending_id: null }).eq('id', link.id)
+      throw new HttpError('A escolha demorou mais de 30 minutos. Abra o link de novo e entre com o Facebook outra vez.', 410, 'expired')
+    }
+    const ids = Array.isArray(body.accountIds) ? body.accountIds.map(adAccountId) : []
+    if (!ids.length) throw new HttpError('Escolha ao menos uma conta de anúncios.')
+    if (ids.length > 10) throw new HttpError('Escolha no máximo 10 contas.')
+    await requireModule(ctx, link.team_id)
+    const saved = await saveAccounts(ctx, link.team_id, pending, ids, link.created_by)
+    await admin.from('crm_ad_pending').delete().eq('id', pendingId)
+    await admin.from('crm_ad_connect_links').update({ pending_id: null, account_ids: saved.map((a) => a.id), connected_name: pending.connected_name, connected_at: new Date().toISOString() }).eq('id', link.id)
+    return { team: teamName, accounts: saved.map((a) => a.name) }
+  }
+
+  if (state !== 'ok') throw new HttpError(LINK_PROBLEM[state], 410, 'link_' + state)
+  if (!app) throw new HttpError('A conexão com a Meta ainda não está configurada. Avise quem mandou o link.', 503, 'not_configured')
+  await requireModule(ctx, link.team_id)
+
+  if (body.action === 'link_auth_url') {
+    const redirectUri = checkRedirect(body.redirectUri)
+    const packed = await packState({ t: link.team_id, u: `link:${link.id}`, r: redirectUri, e: Date.now() + 15 * 60_000, n: crypto.randomUUID(), m: 'boost' }, app.secret)
+    const dialog = new URL(`https://www.facebook.com/${VERSION}/dialog/oauth`)
+    const params = new URLSearchParams({ client_id: app.id, redirect_uri: redirectUri, response_type: 'code', state: packed })
+    const boostConfig = Deno.env.get('META_BOOST_CONFIG_ID') ?? ''
+    if (boostConfig) params.set('config_id', boostConfig)
+    else {
+      params.set('scope', BOOST_SCOPES.join(','))
+      params.set('auth_type', 'rerequest')
+    }
+    dialog.search = params.toString()
+    return { url: dialog.toString() }
+  }
+
+  // link_connect
+  const login = await unpackState(body.state, app.secret)
+  if (login.u !== `link:${link.id}` || login.t !== link.team_id) throw new HttpError('Este retorno do Facebook não é deste link. Abra o link de novo.', 403, 'state')
+  if (checkRedirect(body.redirectUri) !== login.r) throw new HttpError('Endereço de volta diferente do pedido.', 400, 'state')
+  const code = typeof body.code === 'string' ? body.code.replace(/#_=_$/, '') : ''
+  if (!code) throw new HttpError('O Facebook não devolveu o código do login.')
+  // Marca o link como usado antes de trocar o código: dois toques não ligam duas vezes
+  const { data: claimed, error: claimError } = await admin.from('crm_ad_connect_links').update({ used_at: new Date().toISOString() }).eq('id', link.id).is('used_at', null).select('id')
+  if (claimError) throw dbError(claimError)
+  if (!claimed?.length) throw new HttpError(LINK_PROBLEM.used, 410, 'link_used')
+  try {
+    const grant = await lengthen(await describe(await exchangeCode(code, login.r, app), app), app)
+    const me = await graph<{ name?: string }>('me', grant.token, { fields: 'name' }).catch(() => ({ name: undefined }) as { name?: string })
+    const scopes = await grantedScopes(grant.token).catch(() => null)
+    const found = await all<AdAccount>('me/adaccounts', grant.token, { fields: ACCOUNT_FIELDS, limit: 200 }, 1000)
+    if (!found.length)
+      throw new HttpError('Esse Facebook não tem nenhuma conta de anúncios. Turbine um post pelo Instagram uma vez (isso cria a conta) ou entre com o Facebook de quem cuida dos anúncios, e abra o link de novo.', 404, 'no_accounts')
+    const accounts: PendingAccount[] = found.map((a) => ({
+      id: a.account_id,
+      name: a.name || `Conta ${a.account_id}`,
+      currency: a.currency || 'BRL',
+      timezoneName: a.timezone_name,
+      status: a.account_status,
+      connected: false,
+    }))
+    const pending: PendingRow = { access_token: grant.token, token_kind: grant.kind, token_expires_at: grant.expiresAt, connected_name: me.name ?? null, accounts, scopes }
+    const canBoost = !!scopes && BOOST_NEEDS.every((p) => scopes.includes(p))
+    if (accounts.length === 1) {
+      const saved = await saveAccounts(ctx, link.team_id, pending, [accounts[0].id], link.created_by)
+      await admin.from('crm_ad_connect_links').update({ account_ids: saved.map((a) => a.id), connected_name: me.name ?? null, connected_at: new Date().toISOString() }).eq('id', link.id)
+      return { done: true, team: teamName, accounts: saved.map((a) => a.name), canBoost }
+    }
+    // Várias contas: guarda o login 30 minutos e o cliente marca a dele
+    if (!link.created_by) throw new HttpError('Quem criou este link saiu da conta. Peça um novo.', 410, 'link')
+    const { data, error } = await admin
+      .from('crm_ad_pending')
+      .insert({ team_id: link.team_id, user_id: link.created_by, ...pending })
+      .select('id')
+      .single()
+    if (error) throw dbError(error)
+    const pendingId = (data as { id: string }).id
+    await admin.from('crm_ad_connect_links').update({ pending_id: pendingId }).eq('id', link.id)
+    return { done: false, team: teamName, pendingId, who: me.name ?? null, accounts, canBoost }
+  } catch (error) {
+    // Não ligou: o link volta a valer para tentar de novo
+    await admin.from('crm_ad_connect_links').update({ used_at: null, pending_id: null }).eq('id', link.id)
+    throw error
+  }
+}
+
+const PUBLIC_ACTIONS = new Set(['link_info', 'link_auth_url', 'link_connect', 'link_choose'])
+
 // ---------- entrada ----------
 
 /**
@@ -855,6 +1414,21 @@ Deno.serve(async (req) => {
     }
   }
 
+  // O cliente que abriu o link: sem login, conferido pelo segredo do link
+  const peek = await req.clone().json().catch(() => ({})) as Record<string, unknown>
+  if (typeof peek.action === 'string' && PUBLIC_ACTIONS.has(peek.action)) {
+    try {
+      const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
+      const appId = Deno.env.get('META_APP_ID') ?? ''
+      const secret = Deno.env.get('META_APP_SECRET') ?? ''
+      return json(await publicLink(admin, peek, appId && secret ? { id: appId, secret } : null))
+    } catch (error) {
+      if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status)
+      console.error('[meta-ads] link', error)
+      return json({ error: error instanceof Error ? error.message : String(error), code: 'error' }, 500)
+    }
+  }
+
   try {
     const url = Deno.env.get('SUPABASE_URL')!
     const user = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } })
@@ -881,11 +1455,19 @@ Deno.serve(async (req) => {
         const { id, secret: key } = needsApp()
         const teamId = await requireRole(ctx, body.teamId, false)
         const redirectUri = checkRedirect(body.redirectUri)
-        const state = await packState({ t: teamId, u: ctx.userId, r: redirectUri, e: Date.now() + 15 * 60_000, n: crypto.randomUUID() }, key)
+        const boost = body.mode === 'boost'
+        const state = await packState({ t: teamId, u: ctx.userId, r: redirectUri, e: Date.now() + 15 * 60_000, n: crypto.randomUUID(), ...(boost ? { m: 'boost' as const } : {}) }, key)
         const dialog = new URL(`https://www.facebook.com/${VERSION}/dialog/oauth`)
         const params = new URLSearchParams({ client_id: id, redirect_uri: redirectUri, response_type: 'code', state })
-        // Com a configuração do login para empresas, o acesso é de usuário do sistema e não expira
-        if (configId) params.set('config_id', configId)
+        // Com a configuração do login para empresas, o acesso é de usuário do sistema e não expira.
+        // Turbinar usa a configuração própria (`META_BOOST_CONFIG_ID`) ou pede as permissões direto.
+        const boostConfig = Deno.env.get('META_BOOST_CONFIG_ID') ?? ''
+        if (boost && boostConfig) params.set('config_id', boostConfig)
+        else if (boost) {
+          params.set('scope', BOOST_SCOPES.join(','))
+          // Quem já recusou uma permissão vê a pergunta de novo
+          params.set('auth_type', 'rerequest')
+        } else if (configId) params.set('config_id', configId)
         else params.set('scope', SCOPES.join(','))
         dialog.search = params.toString()
         return json({ url: dialog.toString() })
@@ -936,6 +1518,50 @@ Deno.serve(async (req) => {
           if (error instanceof HttpError && error.code === 'token') await markBroken(ctx, account.id)
           throw error
         }
+      }
+
+      case 'boost_setup':
+      case 'boost_media':
+      case 'boost_geo':
+      case 'boost_create':
+      case 'boost_activate':
+      case 'boost_pause':
+      case 'boost_refresh': {
+        const account = await accountOf(ctx, body.accountId)
+        await requireRole(ctx, account.team_id, false)
+        const token = await tokenOf(ctx, account)
+        try {
+          if (body.action === 'boost_setup') return json(await boostSetup(ctx, account, token))
+          if (body.action === 'boost_media') return json(await boostMedia(ctx, account, token, body))
+          if (body.action === 'boost_geo') return json(await boostGeo(token, body))
+          if (body.action === 'boost_create') return json(await boostCreate(ctx, account, token, body))
+          if (body.action === 'boost_refresh') return json(await boostRefresh(ctx, account, token))
+          return json(await boostSwitch(ctx, account, token, body, body.action === 'boost_activate'))
+        } catch (error) {
+          if (error instanceof HttpError && error.code === 'token') await markBroken(ctx, account.id)
+          throw error
+        }
+      }
+
+      case 'link_create': {
+        needsApp()
+        const teamId = await requireRole(ctx, body.teamId, false)
+        const token = toB64(crypto.getRandomValues(new Uint8Array(32)))
+        const expiresAt = new Date(Date.now() + LINK_DAYS * DAY).toISOString()
+        const label = typeof body.label === 'string' ? body.label.slice(0, 120) : ''
+        const { data, error } = await admin.from('crm_ad_connect_links').insert({ team_id: teamId, token_hash: await sha256(token), label, created_by: ctx.userId, expires_at: expiresAt }).select('id').single()
+        if (error) throw dbError(error)
+        return json({ id: (data as { id: string }).id, token, expiresAt })
+      }
+
+      case 'link_revoke': {
+        const linkId = uuid(body.linkId, 'Link')
+        const { data: row } = await admin.from('crm_ad_connect_links').select('team_id').eq('id', linkId).maybeSingle()
+        if (!row) throw new HttpError('Link não encontrado.', 404)
+        await requireRole(ctx, (row as { team_id: string }).team_id, false)
+        const { error } = await admin.from('crm_ad_connect_links').update({ revoked_at: new Date().toISOString() }).eq('id', linkId).is('used_at', null)
+        if (error) throw dbError(error)
+        return json({ ok: true })
       }
 
       case 'disconnect': {

@@ -56,7 +56,11 @@ a aprovação ao usuário. Nenhum desses pedidos deve ser removido antes da resp
 
 Permissões efetivamente pedidas no código: Instagram Login moderno (basic,
 manage_insights, content_publish, manage_comments, manage_messages); anúncios
-`ads_read` (não usa business_management, nem escreve campanhas). No rascunho atual
+`ads_read` (não usa business_management). Desde 2026-11-11 o "Turbinar post" pede, num login
+separado, `ads_management`, `pages_manage_ads`, `pages_show_list`, `pages_read_engagement` e
+`instagram_basic`, e cria anúncios pausados (ativar é do gestor da conta). Para clientes sem papel
+no app, `ads_management` e as permissões de Página precisam de acesso avançado (App Review e
+verificação da empresa). No rascunho atual
 ainda faltam os três pedidos Instagram de insights, publicação e comentários.
 Preparar os pedidos corretos e evidência real por recurso; não enviar submissão
 com demonstração de DMs vazias como se a função estivesse operando.
