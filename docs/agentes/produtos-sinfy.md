@@ -57,3 +57,15 @@ O usuário: "vamos simplificar e focar somente no mcp como principal e acesso a 
 - Empacotamento: `npm run build:mcp` gera `_gerado/criativos.js` e `_gerado/inteligencia.js` (`scripts/mcp/inteligencia.ts`).
 - **Ainda fora do MCP**: páginas do Space (o documento do projeto vive no navegador), gerar imagem (serviço do Mac), vídeo explicativo, responder comentários e a skill social-media (usa o Codex local).
 - Testado: `deno check`, as funções empacotadas rodando no Deno, `tsc`, `vite build`, `npm test` (232). Função publicada e carregando (401 com chave falsa). **Não testado** com uma chave real nem com um quadro aberto recebendo a fila.
+
+### Editar, publicar e ajudar (2026-11-12, segunda rodada)
+
+O usuário, testando pelo ChatGPT na Vizor: "não tem todas as regras… não conseguimos editar um card… quero que consiga fazer postagens com facilidade, ajudar a usar a ferramenta". O log (`crm_mcp_log`) mostrou `sinfy_criativo_criar` três vezes: sem ferramenta de edição, a IA criava outro conjunto a cada ajuste. Ele escolheu **publicar e agendar com confirmação** e editar post, Pauta, oportunidade e quadro.
+- `sinfy_criativo_editar`: troca texto de camada (mantém o desenho), legenda, nome, refaz/acrescenta/apaga/duplica/move slide, apaga ou acrescenta post; devolve a prévia.
+- `sinfy_publicar` (feed ou story, agora ou "AAAA-MM-DD HH:MM" de Brasília): sem `confirmar` só mostra a prévia e o resumo; com `confirmar: true` desenha cada slide em JPEG 1080 (`renderJpegs`, resvg + jpeg-js), sobe em `crm/<conta>/instagram/stories/<id>/` e põe na fila `crm_stories` como a pessoa (entra como criativo e vira agendado; o gatilho grava `approved_by`). O cron publica em até 1–2 min. `sinfy_publicacoes` lista e cancela. Fotos não geradas bloqueiam; 9x16 não vai ao feed.
+- Fila: `kind = 'feed'` (migração `20261112140000_crm_stories_feed.sql`, aplicada) e `publishStory` na função `instagram` publica todas as imagens juntas (foto ou carrossel) com a legenda. Publicada.
+- `sinfy_conteudo_atualizar`: horário, canal e etiquetas (cria as que faltam), e `aprovado` com `confirmar` (só gestor, pela função da tela).
+- `sinfy_oportunidades` e `sinfy_oportunidade_salvar` (cria cliente + cartão, ou muda etapa, próximo passo, data, notas, oferta; fechado/perdido com `confirmar`).
+- `sinfy_quadro_editar` (itens pelo id, setas, organizar): entra na fila `pending` como `{op}` e o editor aplica com `editBoardItems`, `linkBoardItems`, `organizeBoard`.
+- `sinfy_ajuda` (guia por tópico) e as instruções do servidor reescritas (editar em vez de criar; confirmar antes de publicar, aprovar, mandar mensagem, apagar).
+- Testado: `deno check` das duas funções, conversão SVG→JPEG no Deno, `tsc`, `vite build`, `npm test` (232; o teste antigo "nada de aprovar nem publicar" virou "só com confirmação"). Funções publicadas e carregando. **Não testado** com chave real nem uma publicação de verdade.

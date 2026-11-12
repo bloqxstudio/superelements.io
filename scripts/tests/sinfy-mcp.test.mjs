@@ -14,13 +14,18 @@ test('período: padrão 30 dias e relatórios salvos dos Anúncios', () => {
   assert.equal(day.from.toISOString(), '2026-10-30T03:00:00.000Z')
 })
 
-test('MCP: nada de aprovar nem de publicar pela IA', () => {
+// 2026-11-12, decisão do usuário: aprovar e publicar pelo MCP, sempre com o "pode" da pessoa (confirmar: true)
+test('MCP: aprovar e publicar só com confirmação da pessoa', () => {
   const sql = readFileSync(new URL('../../supabase/migrations/20261103120000_crm_mcp.sql', import.meta.url), 'utf8')
   assert.match(sql, /p_args->>'p_to' = 'aprovado'/)
   assert.match(sql, /grant execute on function public\.crm_mcp_call\(uuid, text, jsonb\) to service_role/)
   assert.doesNotMatch(sql, /grant execute on function public\.crm_mcp_call\(uuid, text, jsonb\) to authenticated/)
   const fn = readFileSync(new URL('../../supabase/functions/sinfy-mcp/index.ts', import.meta.url), 'utf8')
-  assert.match(fn, /status: \{ type: 'string', enum: \['ideia', 'producao', 'revisao'\] \}/)
+  // A função antiga (crm_mcp_call) segue sem aprovar; o caminho novo exige confirmar
+  assert.match(fn, /if \(a\.status === 'aprovado'\) \{\n\s+if \(a\.confirmar !== true\) throw new ToolError/)
+  // Publicar: sem confirmar só mostra a prévia; com confirmar entra na fila como a pessoa (aprovação dela)
+  assert.match(fn, /if \(a\.confirmar !== true\) \{\n\s+const images = await renderSlides/)
+  assert.match(fn, /status = 'agendado', frames = /)
   // Conta de cliente não usa os modelos com cases e ilustrações da Avence
   assert.match(fn, /caller\.team\.is_home \? \[\.\.\.TEMPLATES, \.\.\.AVENCE_TEMPLATES\] : TEMPLATES/)
 })

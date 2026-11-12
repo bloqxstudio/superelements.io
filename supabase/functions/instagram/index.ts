@@ -1058,7 +1058,7 @@ interface StoryRow {
   frames: StoryFrame[]
   attempts: number
   approved_by: string | null
-  kind?: 'story' | 'reel'
+  kind?: 'story' | 'reel' | 'feed'
   caption?: string
   share_to_feed?: boolean
 }
@@ -1118,6 +1118,24 @@ async function publishStory(admin: SupabaseClient, row: StoryRow, started: numbe
   const ctx: Ctx = { user: admin, admin, userId: row.approved_by }
   try {
     const token = await tokenOf(ctx, account)
+    // Post do feed (fila do MCP): todas as imagens juntas, foto ou carrossel, com a legenda
+    if (row.kind === 'feed') {
+      if (!anyOut) {
+        const result = await guarded(ctx, account, () => publish(ctx, account, token, { kind: 'feed', caption: row.caption ?? '', files: frames.map((f) => ({ path: f.path, type: 'image' })) }))
+        if (result.status !== 'published') {
+          await save({ status: 'agendado', frames, attempts: Math.max(0, row.attempts - 1), next_try_at: new Date(Date.now() + 60_000).toISOString() })
+          return 'processando'
+        }
+        const at = new Date().toISOString()
+        for (const f of frames) {
+          f.mediaId = result.mediaId
+          if (result.permalink) f.permalink = result.permalink
+          f.publishedAt = at
+        }
+      }
+      await save({ status: 'publicado', frames, error: null, next_try_at: null, published_at: new Date().toISOString() })
+      return 'publicado'
+    }
     for (const frame of frames) {
       if (frame.mediaId) continue
       if (Date.now() - started > STORY_BUDGET_MS) {

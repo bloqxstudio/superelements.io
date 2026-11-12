@@ -10,6 +10,7 @@ import type { ExcalidrawElement, OrderedExcalidrawElement } from '@excalidraw/ex
 import '@excalidraw/excalidraw/index.css'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
+import type { BoardDraft } from './layout'
 import { fileDataUrl, loadBoard, renameBoard, saveScene, saveThumb, takePending, uploadImage, type Board, type BoardScene, type StoredFile } from './data'
 import { colorOf, joinBoard, type LiveBoard, type Peer } from './live'
 import { FONT, STICKY_COLORS, STICKY_SIZE, stickySkeleton } from './templates'
@@ -353,11 +354,20 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
       if (running || document.visibilityState !== 'visible') return
       running = true
       try {
-        const drafts = await takePending(board.id)
-        if (!drafts.length) return
-        const { addDraftToBoard } = await import('./compose')
-        for (const draft of drafts) await addDraftToBoard(board.id, board.teamId, draft)
-        toast.success(drafts.length > 1 ? `${drafts.length} blocos da sua IA entraram no quadro` : 'O bloco da sua IA entrou no quadro')
+        const queue = await takePending(board.id)
+        if (!queue.length) return
+        const { addDraftToBoard, editBoardItems, linkBoardItems, organizeBoard } = await import('./compose')
+        for (const item of queue) {
+          try {
+            if ('op' in item && item.op === 'editar') await editBoardItems(board.id, board.teamId, item.itens)
+            else if ('op' in item && item.op === 'ligar') await linkBoardItems(board.id, board.teamId, item.ligacoes)
+            else if ('op' in item && item.op === 'organizar') await organizeBoard(board.id, board.teamId)
+            else await addDraftToBoard(board.id, board.teamId, item as BoardDraft)
+          } catch (e) {
+            toast.error(`Um pedido da sua IA não entrou no quadro: ${(e as Error).message}`)
+          }
+        }
+        toast.success(queue.length > 1 ? `${queue.length} pedidos da sua IA entraram no quadro` : 'O pedido da sua IA entrou no quadro')
       } catch (e) {
         console.error('[quadros] fila da IA', e)
       } finally {

@@ -64,15 +64,22 @@ export async function saveScene(id: string, rev: number, scene: BoardScene): Pro
   return data ? (data.rev as number) : null
 }
 
+/** O que a IA conectada (MCP) pede ao quadro: um bloco novo ou uma mudança no que já existe. */
+export type PendingItem =
+  | BoardDraft
+  | { op: 'editar'; itens: { id: string; texto?: string; titulo?: string; cor?: string; apagar?: boolean; x?: number; y?: number }[] }
+  | { op: 'ligar'; ligacoes: { de: string; para: string; texto?: string; cor?: string }[] }
+  | { op: 'organizar' }
+
 /** A fila que a IA conectada (MCP) deixou no quadro, já esvaziada (`crm_board_take_pending`). */
-export async function takePending(id: string): Promise<BoardDraft[]> {
+export async function takePending(id: string): Promise<PendingItem[]> {
   const { data, error } = await db.rpc('crm_board_take_pending', { p_board: id })
   if (error) {
     // Sem a migração 20261112130000 ainda: nada na fila
     if (error.code === 'PGRST202' || error.code === '42883') return []
     throw new Error(error.message)
   }
-  return Array.isArray(data) ? (data as BoardDraft[]) : []
+  return Array.isArray(data) ? (data as PendingItem[]) : []
 }
 
 export async function renameBoard(id: string, title: string) {

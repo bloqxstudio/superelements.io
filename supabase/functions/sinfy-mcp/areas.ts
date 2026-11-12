@@ -24,6 +24,8 @@ const slugOf = (s: string, n = 60) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
 
 // ---------- quadros: o mesmo rascunho da Iara ----------
 
+const STAGES = ['novo', 'mapeado', 'selecionado', 'pagina', 'contatado', 'conversa', 'proposta', 'fechado', 'perdido']
+
 const DRAFT_PROPS = {
   titulo: { type: 'string' },
   subtitulo: { type: 'string' },
@@ -92,6 +94,45 @@ export function skillPrompts(): SkillPrompt[] {
   }))
 }
 
+
+// ---------- ajuda: como a plataforma funciona ----------
+
+const GUIDE: Record<string, string> = {
+  geral: [
+    'A Sinfy é a plataforma da empresa: Plano (quem somos, oferta, público, tom), Pauta (conteúdos com data), Criativos (posts na marca), Instagram (perfil, posts, comentários, stories), Anúncios da Meta, Site (visitas), CRM (clientes e oportunidades), WhatsApp, Formulários e funis, Quadros, Cérebro e Referências.',
+    'Você age como a pessoa da chave: só vê e muda o que ela pode na tela. Comece por sinfy_conta. Antes de agir, diga em uma linha o que vai fazer; depois, mostre o resultado (imagens, link).',
+    'Regras: nunca invente números, preços, depoimentos ou resultados. Publicar, mandar mensagem a cliente e apagar pedem o "pode" explícito da pessoa na conversa. Aprovar um conteúdo é sempre de uma pessoa, na tela (ou do cliente, pelo link de aprovação).',
+    'Tópicos: post, pauta, crm, quadros, cerebro, instagram, dados.',
+  ].join('\n'),
+  post: [
+    'Fazer um post do começo ao fim:',
+    '1. sinfy_conta (marca, Plano). Se houver um conteúdo na Pauta, sinfy_conteudos e use o id dele.',
+    '2. sinfy_criativo_criar com o roteiro (conteudo_id quando houver). A resposta traz as imagens: mostre.',
+    '3. Ajustes: SEMPRE sinfy_criativo_editar no mesmo conjunto (trocar texto, legenda, refazer slide, apagar ou mover). Nunca crie outro conjunto para corrigir.',
+    '4. Fotos: sinfy_criativo_foto com uma imagem (url ou base64), ou peça "prompt" no slide e gere no editor pelo link.',
+    '5. Legenda: escreva, passe por sinfy_ig_legenda_revisar e sinfy_ig_humanizar.',
+    '6. Publicar ou agendar: sinfy_publicar. Primeiro sem "confirmar" (mostra o que vai sair); depois de a pessoa dizer que pode, com "confirmar": true. Agendar = "quando" (data e hora de Brasília).',
+    'Conteúdo de cliente que precisa de aprovação: mande para "revisao" (sinfy_conteudo_atualizar) e a equipe envia ao cliente pela Pauta.',
+  ].join('\n'),
+  pauta: [
+    'A Pauta é a lista de conteúdos (cartões) com status ideia → producao → revisao → aprovado, data editorial, horário, canal e etiquetas.',
+    'Ler: sinfy_conteudos. Criar: sinfy_conteudo_criar. Mudar título, roteiro, data, horário, canal, etiquetas ou status: sinfy_conteudo_atualizar (aprovado só na tela).',
+    'Comentários dos cartões: tabela crm_content_comments (sinfy_dados_ler / sinfy_dados_gravar).',
+  ].join('\n'),
+  crm: [
+    'CRM: clientes (crm_clients), contatos, oportunidades (cartões do funil) e a linha do tempo (crm_activities).',
+    'Oportunidades: sinfy_oportunidades para ler e sinfy_oportunidade_salvar para criar ou mudar etapa, valor, próximo passo e responsável. Fechado ou perdido: confirme com a pessoa antes.',
+    'Outros dados: sinfy_dados_tabelas, sinfy_dados_ler, sinfy_dados_gravar (até 25 linhas por vez).',
+  ].join('\n'),
+  quadros: [
+    'Quadros são canvas livres (estilo Miro). sinfy_quadros, sinfy_quadro_ler (cada item com o id #…), sinfy_quadro_criar e sinfy_quadro_adicionar (bloco novo), sinfy_quadro_editar (texto, cor, posição ou apagar itens pelo id), sinfy_quadro_ligar (setas) e sinfy_quadro_organizar.',
+    'O servidor não desenha: o pedido entra na fila e o quadro aplica quando alguém abre ou volta à aba dele. Passe o link à pessoa.',
+  ].join('\n'),
+  cerebro: 'O Cérebro guarda o que a empresa sabe (produtos, voz, padrões de post, decisões, logs). sinfy_cerebro_ler / _buscar antes de escrever; sinfy_cerebro_escrever para guardar o que a pessoa ensinar; sinfy_cerebro_log ao fim de uma entrega.',
+  instagram: 'Números: sinfy_instagram. O que funcionou: sinfy_ig_o_que_funcionou. Perfil: sinfy_ig_perfil. Ganchos, roteiro e legenda: sinfy_ig_formulas, sinfy_ig_ganchos, sinfy_ig_tempos, sinfy_ig_legenda_revisar, sinfy_ig_humanizar. Comentários: sinfy_ig_comentarios (responder é na tela). As skills de Instagram estão nos prompts da Sinfy.',
+  dados: 'Qualquer tabela da lista: sinfy_dados_tabelas mostra as colunas; sinfy_dados_ler filtra e conta; sinfy_dados_gravar insere, atualiza ou apaga (apagar só com "confirmar"). Use as ferramentas próprias quando existirem (conteúdos, criativos, oportunidades, quadros).',
+}
+
 // ---------- ferramentas ----------
 
 export function areaTools(deps: PlatformDeps): PlatformTool[] {
@@ -147,6 +188,14 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
   const PENDING_NOTE = 'O bloco entra no quadro quando alguém da equipe abrir (ou voltar à aba do quadro): o editor mede cada texto e desenha embaixo do que já existe. Passe o link à pessoa.'
 
   return [
+    {
+      name: 'sinfy_ajuda',
+      title: 'Como usar a Sinfy',
+      description: 'Como a plataforma funciona e qual ferramenta usar para cada coisa: fazer e publicar um post, Pauta, CRM e oportunidades, quadros, Cérebro, Instagram, dados. Leia o tópico antes de uma tarefa nova ou quando a pessoa perguntar como fazer algo na Sinfy.',
+      inputSchema: { type: 'object', properties: { topico: { type: 'string', enum: Object.keys(GUIDE) } }, additionalProperties: false },
+      annotations: { readOnlyHint: true },
+      run: async (_c, a) => GUIDE[str(a.topico, 20)] ?? GUIDE.geral,
+    },
     // ---------- Cérebro ----------
     {
       name: 'sinfy_cerebro_ler',
@@ -269,6 +318,125 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
         if (b.pendentes >= 20) fail('Já há 20 blocos esperando: peça para alguém abrir o quadro antes de mandar mais.')
         await asUser(c, (tx) => tx`update crm_boards set pending = pending || ${JSON.stringify([draft])}::jsonb where id = ${b.id}::uuid and team_id = ${c.team.id}`)
         return { ok: true, quadro: b.id, link: boardUrl(b.id), aviso: PENDING_NOTE }
+      },
+    },
+
+    {
+      name: 'sinfy_quadro_editar',
+      title: 'Editar itens do quadro',
+      description: 'Muda itens que já estão num quadro, pelo id que sinfy_quadro_ler mostra (#…): texto, título (de cartão), cor (amarelo, laranja, rosa, roxo, azul, verde, cinza), posição (x, y) ou apagar. Também liga itens com setas ("ligacoes") e arruma o quadro ("organizar": true). ' + PENDING_NOTE,
+      inputSchema: {
+        type: 'object',
+        required: ['quadro'],
+        properties: {
+          quadro: { type: 'string' },
+          itens: { type: 'array', maxItems: 40, items: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, texto: { type: 'string' }, titulo: { type: 'string' }, cor: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, apagar: { type: 'boolean' } } } },
+          ligacoes: { type: 'array', maxItems: 40, items: { type: 'object', required: ['de', 'para'], properties: { de: { type: 'string' }, para: { type: 'string' }, texto: { type: 'string' }, cor: { type: 'string' } } } },
+          organizar: { type: 'boolean' },
+        },
+        additionalProperties: false,
+      },
+      run: async (c, a) => {
+        const b = await boardOf(c, a.quadro)
+        const id = (v: unknown) => str(v, 80).replace(/^#/, '')
+        const ops: Record<string, unknown>[] = []
+        const itens = (Array.isArray(a.itens) ? a.itens : []).slice(0, 40).map((x) => {
+          const o = (x ?? {}) as Args
+          return { id: id(o.id), texto: typeof o.texto === 'string' ? o.texto.slice(0, 600) : undefined, titulo: typeof o.titulo === 'string' ? o.titulo.slice(0, 160) : undefined, cor: typeof o.cor === 'string' ? o.cor.slice(0, 20) : undefined, x: typeof o.x === 'number' ? o.x : undefined, y: typeof o.y === 'number' ? o.y : undefined, apagar: o.apagar === true || undefined }
+        }).filter((x) => x.id)
+        if (itens.length) ops.push({ op: 'editar', itens })
+        const ligacoes = (Array.isArray(a.ligacoes) ? a.ligacoes : []).slice(0, 40).map((x) => {
+          const o = (x ?? {}) as Args
+          return { de: id(o.de), para: id(o.para), texto: typeof o.texto === 'string' ? o.texto.slice(0, 60) : undefined, cor: typeof o.cor === 'string' ? o.cor.slice(0, 20) : undefined }
+        }).filter((x) => x.de && x.para)
+        if (ligacoes.length) ops.push({ op: 'ligar', ligacoes })
+        if (a.organizar === true) ops.push({ op: 'organizar' })
+        if (!ops.length) fail('Mande "itens", "ligacoes" ou "organizar": true.')
+        if (b.pendentes + ops.length > 20) fail('Há muitos pedidos esperando: peça para alguém abrir o quadro antes de mandar mais.')
+        await asUser(c, (tx) => tx`update crm_boards set pending = pending || ${JSON.stringify(ops)}::jsonb where id = ${b.id}::uuid and team_id = ${c.team.id}`)
+        return { ok: true, quadro: b.id, link: boardUrl(b.id), aviso: PENDING_NOTE }
+      },
+    },
+
+    // ---------- Oportunidades (CRM) ----------
+    {
+      name: 'sinfy_oportunidades',
+      title: 'Oportunidades do CRM',
+      description: `Os cartões do funil de vendas: cliente, etapa (${STAGES.join(', ')}), oferta, próximo passo e data, responsável e notas. Filtre por "etapa" ou "busca" (nome do cliente).`,
+      inputSchema: { type: 'object', properties: { etapa: { type: 'string' }, busca: { type: 'string' }, limite: { type: 'integer', minimum: 1, maximum: 100 } }, additionalProperties: false },
+      annotations: { readOnlyHint: true },
+      run: async (c, a) => {
+        if (!moduleOn(c, 'crm')) fail('O módulo Oportunidades está desligado nesta conta.')
+        const etapa = str(a.etapa, 40) || null
+        const q = str(a.busca, 80)
+        const like = q ? `%${q.replace(/[\\%_]/g, (m) => '\\' + m)}%` : null
+        const rows = await asUser(c, (tx) => tx`
+          select o.id, o.stage, o.offer, o.next_step, o.next_date, o.notes, o.updated_at, o.closed_at, cl.id as client_id, cl.name as cliente, cl.city, cl.website, p.name as funil, u.full_name as responsavel
+          from crm_opportunities o
+          join crm_clients cl on cl.id = o.client_id
+          join crm_pipelines p on p.id = o.pipeline_id
+          left join profiles u on u.id = o.owner_id
+          where o.team_id = ${c.team.id}::uuid and (${etapa}::text is null or o.stage = ${etapa}) and (${like}::text is null or cl.name ilike ${like})
+          order by o.updated_at desc limit ${Math.min(100, Number(a.limite) || 40)}`).catch(async () =>
+          asUser(c, (tx) => tx`select o.id, o.stage, o.offer, o.next_step, o.next_date, o.notes, o.updated_at, cl.id as client_id, cl.name as cliente from crm_opportunities o join crm_clients cl on cl.id = o.client_id where o.team_id = ${c.team.id}::uuid and (${etapa}::text is null or o.stage = ${etapa}) order by o.updated_at desc limit 40`))
+        return { oportunidades: rows, link: `${appUrl}/crm` }
+      },
+    },
+    {
+      name: 'sinfy_oportunidade_salvar',
+      title: 'Criar ou editar oportunidade',
+      description: `Cria um cartão no funil (com "cliente": o cliente novo, ou "cliente_id" de um que existe) ou muda um que existe ("id"): etapa (${STAGES.join(', ')}), próximo passo, data (AAAA-MM-DD), notas, oferta (objeto, junta com a atual). Mudar a etapa grava na linha do tempo do cliente sozinho. Fechado ou perdido só com "confirmar": true, depois de a pessoa dizer.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          cliente_id: { type: 'string' },
+          cliente: { type: 'object', properties: { nome: { type: 'string' }, site: { type: 'string' }, cidade: { type: 'string' }, segmento: { type: 'string' }, telefone: { type: 'string' }, email: { type: 'string' }, instagram: { type: 'string' } } },
+          etapa: { type: 'string', enum: STAGES },
+          proximo_passo: { type: 'string' },
+          data: { type: 'string' },
+          notas: { type: 'string' },
+          oferta: { type: 'object' },
+          confirmar: { type: 'boolean' },
+        },
+        additionalProperties: false,
+      },
+      run: async (c, a) => {
+        if (!moduleOn(c, 'crm')) fail('O módulo Oportunidades está desligado nesta conta.')
+        const etapa = typeof a.etapa === 'string' ? a.etapa : undefined
+        if (etapa && !STAGES.includes(etapa)) fail(`Etapa inválida. Use: ${STAGES.join(', ')}.`)
+        if ((etapa === 'fechado' || etapa === 'perdido') && a.confirmar !== true) fail(`Marcar como ${etapa} pede o "pode" da pessoa: confirme com ela e chame de novo com "confirmar": true.`)
+        const date = typeof a.data === 'string' ? (/^\d{4}-\d{2}-\d{2}$/.test(a.data) ? a.data : a.data === '' ? null : fail('Data em AAAA-MM-DD.')) : undefined
+        const next = typeof a.proximo_passo === 'string' ? a.proximo_passo.slice(0, 300) : undefined
+        const notes = typeof a.notas === 'string' ? a.notas.slice(0, 4000) : undefined
+        const offer = a.oferta && typeof a.oferta === 'object' ? JSON.stringify(a.oferta) : null
+        if (a.id) {
+          const rows = await asUser(c, (tx) => tx`update crm_opportunities set
+              stage = coalesce(${etapa ?? null}, stage),
+              next_step = case when ${next !== undefined} then ${next ?? null} else next_step end,
+              next_date = case when ${date !== undefined} then ${date ?? null}::date else next_date end,
+              notes = case when ${notes !== undefined} then ${notes ?? null} else notes end,
+              offer = case when ${offer}::jsonb is null then offer else coalesce(offer, '{}'::jsonb) || ${offer}::jsonb end
+            where id = ${str(a.id, 60)}::uuid and team_id = ${c.team.id}::uuid returning id, stage, next_step, next_date`)
+          if (!rows.length) fail('Oportunidade não encontrada nesta conta (veja em sinfy_oportunidades).')
+          return { ok: true, oportunidade: rows[0], link: `${appUrl}/crm` }
+        }
+        return asUser(c, async (tx) => {
+          let clientId = str(a.cliente_id, 60)
+          if (!clientId) {
+            const cl = (a.cliente ?? {}) as Args
+            const name = str(cl.nome, 160)
+            if (!name) fail('Para criar, mande "cliente" com pelo menos "nome", ou "cliente_id".')
+            const [row] = await tx`insert into crm_clients (team_id, name, website, city, segment, phone, email, instagram, source, status)
+              values (${c.team.id}::uuid, ${name}, ${str(cl.site, 300) || null}, ${str(cl.cidade, 120) || null}, ${str(cl.segmento, 120) || null}, ${str(cl.telefone, 40) || null}, ${str(cl.email, 200) || null}, ${str(cl.instagram, 120) || null}, 'outro', 'lead') returning id`
+            clientId = row.id
+          }
+          const [pipe] = await tx`select id from crm_pipelines where team_id = ${c.team.id}::uuid order by position, created_at limit 1`
+          if (!pipe) fail('A conta ainda não tem funil: abra o CRM uma vez para criar.')
+          const [opp] = await tx`insert into crm_opportunities (pipeline_id, client_id, stage, next_step, next_date, notes, offer)
+            values (${pipe.id}::uuid, ${clientId}::uuid, ${etapa ?? 'novo'}, ${next ?? null}, ${date ?? null}::date, ${notes ?? null}, coalesce(${offer}::jsonb, '{}'::jsonb)) returning id, stage`
+          return { ok: true, oportunidade: opp, cliente_id: clientId, link: `${appUrl}/crm` }
+        })
       },
     },
 

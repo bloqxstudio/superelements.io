@@ -9,7 +9,7 @@ export interface FontLib {
   parse: (buffer: ArrayBuffer) => { getAdvanceWidth: (text: string, size: number, options?: Record<string, unknown>) => number }
 }
 export interface ResvgLike {
-  new (svg: string, options: Record<string, unknown>): { render: () => { asPng: () => Uint8Array } }
+  new (svg: string, options: Record<string, unknown>): { render: () => { asPng: () => Uint8Array; pixels: Uint8Array; width: number; height: number } }
 }
 
 interface Face {
@@ -145,4 +145,19 @@ export function sniff(bytes: Uint8Array): { mime: string; width: number; height:
 export function rasterize(Resvg: ResvgLike, svg: string, fontBytes: Uint8Array[], width: number): Uint8Array {
   const r = new Resvg(svg, { fitTo: { mode: 'width', value: width }, font: { fontBuffers: fontBytes, loadSystemFonts: false, defaultFontFamily: 'Inter' }, imageRendering: 0, shapeRendering: 2, textRendering: 1 })
   return r.render().asPng()
+}
+
+/** Os pixels RGBA do slide sobre fundo branco (para virar o JPEG que o Instagram aceita). */
+export function rasterizeRgb(Resvg: ResvgLike, svg: string, fontBytes: Uint8Array[], width: number): { data: Uint8Array; width: number; height: number } {
+  const r = new Resvg(svg, { fitTo: { mode: 'width', value: width }, font: { fontBuffers: fontBytes, loadSystemFonts: false, defaultFontFamily: 'Inter' }, imageRendering: 0, shapeRendering: 2, textRendering: 1 }).render()
+  const px = r.pixels
+  const out = new Uint8Array(px.length)
+  for (let i = 0; i < px.length; i += 4) {
+    const a = px[i + 3] / 255
+    out[i] = Math.round(px[i] * a + 255 * (1 - a))
+    out[i + 1] = Math.round(px[i + 1] * a + 255 * (1 - a))
+    out[i + 2] = Math.round(px[i + 2] * a + 255 * (1 - a))
+    out[i + 3] = 255
+  }
+  return { data: out, width: r.width, height: r.height }
 }
