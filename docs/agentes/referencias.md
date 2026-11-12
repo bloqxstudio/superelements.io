@@ -212,3 +212,22 @@ agora tá demorando muito".
 - **Resultado:** a volta das 20:12 leu 11 posts em 331 s e parou nos que já estavam no app. Importou 4. Dois
   (`DfKmV_ZP-Ss`, `DfiP3SPCByW`) estouraram o tempo e ficaram para a próxima rotina.
 - **Não testado:** a fila e as esperas novas (o serviço foi reiniciado com elas às 20:24, sem volta ainda).
+
+## Grupo da Vizor importado pela metade (2026-11-11)
+
+O usuário: "usei a importação de referências do grupo do instagram e retornou só algumas, não todas".
+
+- **O que havia no grupo:** 11 posts e uma mensagem "Mensagem não aceita — use o app do Instagram para celular",
+  que o Instagram web não mostra (o leitor não consegue lê-la).
+- **O leitor achou só 3.** Dois defeitos em `readThread` (`services/referencias/src/main.ts`):
+  - O cartão era marcado como visto antes de conferir a posição. Um cartão com o topo fora da área lida (y < 60)
+    nunca era aberto, nem depois de a rolagem trazê-lo para a tela. Agora só é marcado quando abre.
+  - A assinatura do cartão usava a primeira imagem, que é a foto de perfil do autor. Dois Reels do mesmo perfil
+    tinham a mesma assinatura, e o segundo recebia o endereço do primeiro. Agora usa a maior imagem do cartão.
+  - As assinaturas antigas em `cartoes-vistos.json` deixam de valer; a primeira volta reabre os cartões até chegar
+    a 3 que já estão no app.
+- **Cadastro em duas contas:** o mesmo grupo (`direct/t/2572820396515864`) estava cadastrado na **Sinfy** ("Refs",
+  com as 3 primeiras importadas) e foi cadastrado de novo na **Vizor Películas** ("refs"). A volta na Vizor, com o
+  leitor corrigido, importou os 11. As 3 da Sinfy continuam lá, sem grupo (`source_id` nulo), com o cadastro "Refs".
+- **Não feito:** conferir o grupo da Avence com o leitor corrigido (`conferir 60`), que pode ter pulado posts
+  pelo mesmo motivo.

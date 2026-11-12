@@ -1,17 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { addDays, dayKey, dayLong, dayShort, dayStart, todayKey } from '@/lib/day'
+import { addDays, dayKey, dayLong, dayStart, daySpan, spanBounds, spanLong, spanShort, todayKey, type DaySpan } from '@/lib/day'
 
 const WEEK = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
 
 /**
- * O botão "Dia" dos seletores de período: abre um calendário de um mês e escolhe um dia só.
- * Fica dentro do grupo de pílulas de período; com um dia escolhido, a pílula mostra a data e fica ativa.
+ * O botão "Dia" dos seletores de período: abre um calendário de um mês e escolhe um dia ou um intervalo.
+ * O primeiro clique marca o começo, o segundo o fim (o mesmo dia duas vezes é um dia só); dá para trocar de
+ * mês entre os dois. Fica dentro do grupo de pílulas de período; com algo escolhido, a pílula mostra as datas
+ * e fica ativa. O valor é o trecho de `@/lib/day` (`2026-10-30` ou `2026-10-25~2026-10-31`).
  */
 export const DayPicker: React.FC<{
-  value?: string | null
-  onChange: (key: string) => void
+  value?: DaySpan | null
+  onChange: (span: DaySpan) => void
   /** Primeiro dia possível (`YYYY-MM-DD`); antes dele os dias ficam apagados */
   min?: string
   /** Último dia possível; hoje quando não vem */
@@ -23,12 +25,19 @@ export const DayPicker: React.FC<{
   className?: string
 }> = ({ value, onChange, min, max, hint, variant = 'pill', className }) => {
   const last = max ?? todayKey()
+  const chosen = value ? spanBounds(value) : null
   const [open, setOpen] = useState(false)
-  const [month, setMonth] = useState(() => (value ?? last).slice(0, 7))
+  const [month, setMonth] = useState(() => (chosen?.to ?? last).slice(0, 7))
+  /** O começo marcado, à espera do fim */
+  const [start, setStart] = useState<string | null>(null)
+  const [hover, setHover] = useState<string | null>(null)
   const box = useRef<HTMLSpanElement>(null)
 
   useEffect(() => {
-    if (open) setMonth((value ?? last).slice(0, 7))
+    if (open) setMonth((chosen?.to ?? last).slice(0, 7))
+    setStart(null)
+    setHover(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, value, last])
 
   useEffect(() => {
@@ -61,10 +70,29 @@ export const DayPicker: React.FC<{
   const canNext = dayKey(nextFirst) <= last
   const title = dayStart(`${month}-01`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
   const today = todayKey()
-  const pick = (key: string) => {
-    onChange(key)
+  const done = (span: DaySpan) => {
+    onChange(span)
     setOpen(false)
   }
+  const click = (key: string) => {
+    if (!start) return setStart(key)
+    done(daySpan(start, key))
+  }
+  // O que aparece marcado: o trecho sendo escolhido (começo até o dia sob o mouse) ou o escolhido
+  const shown = start ? spanBounds(daySpan(start, hover ?? start)) : chosen
+  const inShown = (key: string) => !!shown && key >= shown.from && key <= shown.to
+  const isEdge = (key: string) => !!shown && (key === shown.from || key === shown.to)
+  const clampFrom = (key: string) => (min && key < min ? min : key)
+  const lastWeek = (() => {
+    // De domingo a sábado da semana passada
+    const sunday = addDays(today, -dayStart(today).getDay() - 7)
+    return daySpan(clampFrom(sunday), addDays(sunday, 6))
+  })()
+  const lastMonth = (() => {
+    const d = dayStart(`${today.slice(0, 7)}-01`)
+    const end = addDays(dayKey(d), -1)
+    return daySpan(clampFrom(`${end.slice(0, 7)}-01`), end)
+  })()
 
   return (
     <span ref={box} className={cn('relative inline-flex', className)}>
@@ -74,7 +102,7 @@ export const DayPicker: React.FC<{
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        title={value ? `Dia escolhido: ${dayLong(value)}` : 'Ver um dia específico'}
+        title={value ? `Escolhido: ${spanLong(value)}` : 'Ver um dia ou um intervalo de datas'}
         className={cn(
           'inline-flex items-center gap-1.5 font-medium transition-colors',
           variant === 'pill' ? 'h-7 rounded-full px-3 text-xs' : 'h-8 rounded-md px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -82,10 +110,10 @@ export const DayPicker: React.FC<{
         )}
       >
         <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-        {value ? dayShort(value) : 'Dia'}
+        {value ? spanShort(value) : 'Datas'}
       </button>
       {open && (
-        <div role="dialog" aria-label="Escolher um dia" className="absolute right-0 top-full z-50 mt-2 w-[264px] rounded-xl bg-white p-3 text-gray-900 shadow-lg ring-1 ring-gray-200">
+        <div role="dialog" aria-label="Escolher um dia ou um intervalo" className="absolute right-0 top-full z-50 mt-2 w-[264px] rounded-xl bg-white p-3 text-gray-900 shadow-lg ring-1 ring-gray-200">
           <div className="mb-2 flex items-center justify-between">
             <button type="button" onClick={() => shift(-1)} disabled={!canBack} aria-label="Mês anterior" className="flex h-7 w-7 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 disabled:opacity-30">
               <ChevronLeft className="h-4 w-4" />
@@ -95,7 +123,7 @@ export const DayPicker: React.FC<{
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-          <div className="grid grid-cols-7 gap-0.5 text-center">
+          <div className="grid grid-cols-7 gap-y-0.5 text-center" onPointerLeave={() => setHover(null)}>
             {WEEK.map((w, i) => (
               <span key={i} className="pb-1 text-[11px] font-medium text-gray-400" aria-hidden>
                 {w}
@@ -107,13 +135,20 @@ export const DayPicker: React.FC<{
                   key={key}
                   type="button"
                   disabled={key > last || (!!min && key < min)}
-                  onClick={() => pick(key)}
+                  onClick={() => click(key)}
+                  onPointerEnter={() => start && setHover(key)}
+                  onFocus={() => start && setHover(key)}
                   aria-label={dayLong(key)}
+                  aria-pressed={inShown(key)}
                   aria-current={key === today ? 'date' : undefined}
                   className={cn(
-                    'h-8 rounded-md text-xs tabular-nums transition-colors disabled:cursor-default disabled:text-gray-300 disabled:hover:bg-transparent',
-                    key === value ? 'bg-gray-900 font-semibold text-white' : 'hover:bg-gray-100',
-                    key === today && key !== value && 'font-semibold text-violet-700'
+                    'h-8 text-xs tabular-nums transition-colors disabled:cursor-default disabled:text-gray-300 disabled:hover:bg-transparent',
+                    isEdge(key)
+                      ? 'rounded-md bg-gray-900 font-semibold text-white'
+                      : inShown(key)
+                        ? 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                        : 'rounded-md hover:bg-gray-100',
+                    key === today && !isEdge(key) && 'font-semibold text-violet-700'
                   )}
                 >
                   {Number(key.slice(8))}
@@ -123,15 +158,24 @@ export const DayPicker: React.FC<{
               )
             )}
           </div>
-          <div className="mt-2 flex items-center gap-1.5 border-t border-gray-100 pt-2">
-            <button type="button" onClick={() => pick(addDays(today, -1))} disabled={!!min && addDays(today, -1) < min} className="h-7 rounded-md px-2 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-30">
+          <p className="mt-1.5 text-[11px] leading-snug text-gray-500" aria-live="polite">
+            {start ? 'Agora o último dia (ou o mesmo, para um dia só).' : 'Clique no primeiro e no último dia.'}
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1 border-t border-gray-100 pt-2">
+            <button type="button" onClick={() => done(addDays(today, -1))} disabled={!!min && addDays(today, -1) < min} className="h-7 rounded-md px-2 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-30">
               Ontem
             </button>
             {last >= today && (
-              <button type="button" onClick={() => pick(today)} className="h-7 rounded-md px-2 text-xs font-medium text-gray-700 hover:bg-gray-100">
+              <button type="button" onClick={() => done(today)} className="h-7 rounded-md px-2 text-xs font-medium text-gray-700 hover:bg-gray-100">
                 Hoje
               </button>
             )}
+            <button type="button" onClick={() => done(lastWeek)} disabled={!!min && spanBounds(lastWeek).to < min} className="h-7 rounded-md px-2 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-30">
+              Semana passada
+            </button>
+            <button type="button" onClick={() => done(lastMonth)} disabled={!!min && spanBounds(lastMonth).to < min} className="h-7 rounded-md px-2 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-30">
+              Mês passado
+            </button>
           </div>
           {hint && <p className="mt-1.5 text-[11px] leading-snug text-gray-500">{hint}</p>}
         </div>

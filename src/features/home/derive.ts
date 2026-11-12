@@ -23,13 +23,17 @@ export interface Window {
 
 /** Do começo do primeiro dia (no fuso de quem abre) até agora, como o `site_report` conta. */
 export function windowOf(days: number, now = Date.now(), day?: string): Window {
-  // Um dia escolhido no calendário: da meia-noite à seguinte (ou até agora, se for hoje), contra o dia anterior
+  // Um dia ou intervalo escolhido no calendário (`2026-10-30` ou `2026-10-25~2026-10-31`): da meia-noite do
+  // primeiro dia à depois do último (ou até agora, se chega a hoje), contra os mesmos tantos dias antes
   if (day) {
-    const [y, m, d] = day.split('-').map(Number)
+    const [first, last = first] = day.split('~')
+    const [y, m, d] = first.split('-').map(Number)
+    const [y2, m2, d2] = last.split('-').map(Number)
     const from = new Date(y, m - 1, d).getTime()
-    const next = new Date(y, m - 1, d + 1).getTime()
-    const before = new Date(y, m - 1, d - 1).getTime()
-    return { days: 1, from, to: Math.min(now, next), prevFrom: before, prevTo: from }
+    const next = new Date(y2, m2 - 1, d2 + 1).getTime()
+    const n = Math.max(1, Math.round((next - from) / 86_400_000))
+    const before = new Date(y, m - 1, d - n).getTime()
+    return { days: n, from, to: Math.min(now, next), prevFrom: before, prevTo: from }
   }
   const start = new Date(now)
   start.setHours(0, 0, 0, 0)

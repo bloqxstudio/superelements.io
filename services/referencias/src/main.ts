@@ -156,13 +156,20 @@ async function readThread(page: Page, threadUrl: string, knownUrls: Set<string>,
     // De baixo para cima: os mais novos primeiro
     for (let i = total - 1; i >= 0 && !enough(); i--) {
       const card = cards.nth(i)
-      const sign = ((await card.innerText().catch(() => '')) + '|' + ((await card.locator('img').first().getAttribute('src').catch(() => '')) ?? '').split('?')[0].slice(-60)).slice(0, 300)
-      if (done.has(sign)) continue
-      done.add(sign)
-      fresh++
-      if (mine[sign]) { add(mine[sign]); continue }
+      // Assinatura: o texto e a imagem do post (a maior do cartão). Até 2026-11-11 era a primeira imagem, que é a
+      // foto de perfil do autor: dois Reels do mesmo perfil tinham a mesma assinatura e o segundo nunca era aberto
+      const sign = await card.evaluate((el) => {
+        const imgs = Array.from(el.querySelectorAll('img')) as HTMLImageElement[]
+        const big = imgs.sort((a, b) => b.width * b.height - a.width * a.height)[0]
+        return ((el as HTMLElement).innerText + '|' + (big?.getAttribute('src') ?? '').split('?')[0].slice(-60)).slice(0, 300)
+      }).catch(() => '')
+      if (!sign || done.has(sign)) continue
+      if (mine[sign]) { done.add(sign); fresh++; add(mine[sign]); continue }
+      // Fora da área lida: fica para o próximo passo da rolagem (antes era marcado como visto e nunca abria)
       const box = await card.boundingBox().catch(() => null)
       if (!box || box.y < 60 || box.y > 860) continue
+      done.add(sign)
+      fresh++
       await card.click({ timeout: 6000 }).catch(() => undefined)
       // Espera o post abrir (antes, 2 a 3,5 s fixos) e uma pausa curta de pessoa
       await page.waitForURL(/instagram\.com\/(?:[^/]+\/)?(?:p|reel|reels|tv)\//, { timeout: 6000 }).catch(() => undefined)

@@ -150,7 +150,7 @@ const Funnel: React.FC<{ steps: FunnelStep[]; pastDay?: string }> = ({ steps, pa
     <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5" aria-label="Funil de conversão">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-900">Funil de conversão</h2>
-        <span className="text-[11px] text-gray-500">{pastDay ? 'Do dia escolhido' : 'Do período · atualiza sozinho'}</span>
+        <span className="text-[11px] text-gray-500">{pastDay ? (pastDay.includes('~') ? 'Das datas escolhidas' : 'Do dia escolhido') : 'Do período · atualiza sozinho'}</span>
       </div>
       <div className="mt-4 overflow-x-auto">
         <div className="min-w-[640px]">

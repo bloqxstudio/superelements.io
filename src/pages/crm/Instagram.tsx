@@ -1,5 +1,5 @@
 import { DayPicker } from '@/components/DayPicker'
-import { addDays, dayLong, dayOfPeriod, dayPeriod, dayRange, isDayPeriod, todayKey, type DayPeriod } from '@/lib/day'
+import { addDays, dayPeriod, isDayPeriod, isSingleDay, spanBounds, spanLong, spanOfPeriod, spanRange, todayKey, type DayPeriod, type DaySpan } from '@/lib/day'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { CalendarClock, CircleAlert, Copy, FlaskConical, Inbox, ScanSearch, Instagram as InstagramIcon, KeyRound, Loader2, Plus, RefreshCw, Send } from 'lucide-react'
@@ -56,7 +56,7 @@ import { cn } from '@/lib/utils'
  * a tela própria `/crm/anuncios` (`Anuncios.tsx`).
  */
 
-/** 7 ou 30 dias, ou um dia escolhido no calendário (`dia:2026-10-30`) */
+/** 7 ou 30 dias, ou um dia/intervalo escolhido no calendário (`dia:2026-10-30`, `dia:2026-10-25~2026-10-31`) */
 type Period = 7 | 30 | DayPeriod
 type Tab = 'geral' | 'posts'
 /** As abas da tela: o perfil, os stories programados e os anúncios. */
@@ -325,22 +325,31 @@ const PostRow: React.FC<{ media: IgMedia; onOpen: () => void }> = ({ media, onOp
 )
 
 /**
- * Um dia escolhido: a Meta não entrega por dia os totais da conta (visualizações, contas engajadas,
- * toques nos links), só 7 e 30 dias. Por dia ficam guardados o alcance e os seguidores, e os posts
- * e stories publicados naquele dia trazem os próprios números.
+ * Um dia ou intervalo escolhido: a Meta não entrega por dia os totais da conta (visualizações, contas
+ * engajadas, toques nos links), só 7 e 30 dias. Por dia ficam guardados o alcance e os seguidores, e os
+ * posts e stories publicados nessas datas trazem os próprios números. Num intervalo, o alcance é a soma
+ * do alcance de cada dia (uma conta alcançada em dois dias conta duas vezes).
  */
-const DayOverview: React.FC<{ account: IgAccount; days: IgDay[]; media: IgMedia[]; day: string; onOpen: (m: IgMedia) => void }> = ({ account, days, media, day, onOpen }) => {
+const DayOverview: React.FC<{ account: IgAccount; days: IgDay[]; media: IgMedia[]; span: DaySpan; onOpen: (m: IgMedia) => void }> = ({ account, days, media, span, onOpen }) => {
+  const one = isSingleDay(span)
+  const { from: first, to: day } = spanBounds(span)
   const row = days.find((d) => d.day === day)
-  const before = [...days].reverse().find((d) => d.day < day && d.followers !== undefined)
+  const before = [...days].reverse().find((d) => d.day < first && d.followers !== undefined)
   const followers = row?.followers ?? (day === todayKey() ? account.followers : undefined)
   const gained = followers !== undefined && before?.followers !== undefined ? followers - before.followers : undefined
-  const { from, to } = dayRange(day)
+  const { from, to } = spanRange(span)
   const posted = media.filter((m) => m.postedAt >= from.getTime() && m.postedAt < to.getTime())
   const feed = posted.filter((m) => formatOf(m) !== 'story').sort((a, b) => (b.insights.reach ?? -1) - (a.insights.reach ?? -1))
   const stories = posted.filter((m) => formatOf(m) === 'story')
-  const week = days.filter((d) => d.day > addDays(day, -14) && d.day <= day && d.reach !== undefined).map((d) => ({ day: d.day, value: d.reach! }))
+  const inSpan = days.filter((d) => d.day >= first && d.day <= day && d.reach !== undefined)
+  const reachSum = inSpan.length ? inSpan.reduce((a, d) => a + d.reach!, 0) : undefined
+  const chartFrom = one || first > addDays(day, -13) ? addDays(day, -13) : first
+  const week = days.filter((d) => d.day >= chartFrom && d.day <= day && d.reach !== undefined).map((d) => ({ day: d.day, value: d.reach! }))
   const sum = (list: IgMedia[], pick: (m: IgMedia) => number | undefined) => list.reduce((a, m) => a + (pick(m) ?? 0), 0)
-  const title = dayLong(day).replace(/^./, (c) => c.toUpperCase())
+  const title = spanLong(span).replace(/^./, (c) => c.toUpperCase())
+  const here = one ? 'nesse dia' : 'nessas datas'
+  const storyWhen = (at: number) =>
+    one ? new Date(at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : new Date(at).toLocaleString('pt-BR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
   return (
     <div className="grid grid-cols-1 gap-4">
@@ -349,11 +358,15 @@ const DayOverview: React.FC<{ account: IgAccount; days: IgDay[]; media: IgMedia[
           dark
           label="Seguidores"
           value={compact(followers)}
-          sub={gained !== undefined && before ? `${signed(gained)} desde ${shortDay(before.day)}` : followers === undefined ? 'sem leitura nesse dia' : undefined}
+          sub={gained !== undefined && before ? `${signed(gained)} desde ${shortDay(before.day)}` : followers === undefined ? `sem leitura ${one ? 'nesse dia' : `em ${shortDay(day)}`}` : undefined}
         />
-        <Stat label="Alcance do dia" value={compact(row?.reach)} sub={row?.reach !== undefined ? 'contas alcançadas' : 'sem leitura desse dia'} />
-        <Stat label="Posts publicados" value={compact(feed.length)} sub={feed.length ? `${compact(sum(feed, (m) => m.insights.reach))} de alcance somado` : 'nenhum post nesse dia'} />
-        <Stat label="Stories publicados" value={compact(stories.length)} sub={stories.length ? `${compact(sum(stories, (m) => m.insights.reach))} de alcance somado` : 'nenhum story lido nesse dia'} />
+        {one ? (
+          <Stat label="Alcance do dia" value={compact(row?.reach)} sub={row?.reach !== undefined ? 'contas alcançadas' : 'sem leitura desse dia'} />
+        ) : (
+          <Stat label="Alcance somado" value={compact(reachSum)} sub={reachSum !== undefined ? `soma de ${inSpan.length} dia${inSpan.length === 1 ? '' : 's'} com leitura` : 'sem leitura dessas datas'} />
+        )}
+        <Stat label="Posts publicados" value={compact(feed.length)} sub={feed.length ? `${compact(sum(feed, (m) => m.insights.reach))} de alcance somado` : `nenhum post ${here}`} />
+        <Stat label="Stories publicados" value={compact(stories.length)} sub={stories.length ? `${compact(sum(stories, (m) => m.insights.reach))} de alcance somado` : `nenhum story lido ${here}`} />
       </div>
       <p className="text-xs text-gray-500">
         {title}. A Meta só entrega visualizações, contas engajadas e toques nos links em totais de 7 e 30 dias; por dia ficam o alcance, os seguidores e os números de cada post.
@@ -362,8 +375,8 @@ const DayOverview: React.FC<{ account: IgAccount; days: IgDay[]; media: IgMedia[
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <section className="rounded-xl bg-zinc-900 p-4 text-white md:p-5">
           <div className="mb-3">
-            <h2 className="text-sm font-semibold">Alcance nos 14 dias até {shortDay(day)}</h2>
-            <p className="text-xs text-zinc-400">Para comparar o dia com os anteriores</p>
+            <h2 className="text-sm font-semibold">{chartFrom === first ? `Alcance de ${shortDay(first)} a ${shortDay(day)}` : `Alcance nos 14 dias até ${shortDay(day)}`}</h2>
+            <p className="text-xs text-zinc-400">{one ? 'Para comparar o dia com os anteriores' : 'Por dia, no intervalo escolhido'}</p>
           </div>
           {week.length ? (
             <TrendChart points={week} unit="contas" label={`Alcance por dia até ${shortDay(day)}`} tone="dark" height={240} />
@@ -371,25 +384,25 @@ const DayOverview: React.FC<{ account: IgAccount; days: IgDay[]; media: IgMedia[
             <p className="flex h-[240px] items-center justify-center text-sm text-zinc-400">Sem alcance guardado para esses dias.</p>
           )}
         </section>
-        <Surface title="Stories do dia">
+        <Surface title={one ? 'Stories do dia' : 'Stories do período'}>
           {stories.length ? (
             <ul className="grid grid-cols-1 gap-2">
               {stories.map((m) => (
                 <li key={m.id}>
                   <button type="button" onClick={() => onOpen(m)} className="flex w-full items-baseline justify-between gap-3 rounded-md px-1 py-1 text-left text-sm hover:bg-gray-50">
-                    <span className="text-gray-800">{new Date(m.postedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-gray-800">{storyWhen(m.postedAt)}</span>
                     <span className="tabular-nums text-gray-600">{compact(m.insights.reach)} de alcance</span>
                   </button>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-500">Nenhum story lido nesse dia. A Meta apaga os stories depois de 24 h: só ficam os que a tela leu antes.</p>
+            <p className="text-sm text-gray-500">Nenhum story lido {here}. A Meta apaga os stories depois de 24 h: só ficam os que a tela leu antes.</p>
           )}
         </Surface>
       </div>
 
-      <Surface title="Posts do dia">
+      <Surface title={one ? 'Posts do dia' : 'Posts do período'}>
         {feed.length ? (
           <div className="-mx-1 overflow-x-auto px-1">
             <table className="se-table w-full min-w-[480px] text-left">
@@ -409,10 +422,10 @@ const DayOverview: React.FC<{ account: IgAccount; days: IgDay[]; media: IgMedia[
                 ))}
               </tbody>
             </table>
-            <p className="mt-3 text-[11px] text-gray-400">Os números de cada post são de toda a vida dele até a última leitura, não só desse dia.</p>
+            <p className="mt-3 text-[11px] text-gray-400">Os números de cada post são de toda a vida dele até a última leitura, não só {one ? 'desse dia' : 'dessas datas'}.</p>
           </div>
         ) : (
-          <p className="text-sm text-gray-500">Nenhum post publicado nesse dia.</p>
+          <p className="text-sm text-gray-500">Nenhum post publicado {here}.</p>
         )}
       </Surface>
     </div>
@@ -755,10 +768,10 @@ const Dashboard: React.FC<{ account: IgAccount; accounts: IgAccount[]; manager: 
               </button>
             ))}
             <DayPicker
-              value={isDayPeriod(period) ? dayOfPeriod(period) : null}
-              onChange={(key) => setPeriod(dayPeriod(key))}
+              value={isDayPeriod(period) ? spanOfPeriod(period) : null}
+              onChange={(span) => setPeriod(dayPeriod(span))}
               min={days[0]?.day}
-              hint="Os dias guardados desde a conexão: alcance e seguidores de cada leitura, e os posts publicados no dia."
+              hint="Os dias guardados desde a conexão: alcance e seguidores de cada leitura, e os posts publicados nessas datas."
             />
           </div>
         )}
@@ -772,7 +785,7 @@ const Dashboard: React.FC<{ account: IgAccount; accounts: IgAccount[]; manager: 
         <div className={cn('transition-opacity', syncing && 'opacity-70')}>
           {tab === 'geral' ? (
             isDayPeriod(period) ? (
-              <DayOverview account={account} days={days} media={media} day={dayOfPeriod(period)} onOpen={setOpen} />
+              <DayOverview account={account} days={days} media={media} span={spanOfPeriod(period)} onOpen={setOpen} />
             ) : (
               <Overview account={account} days={days} media={media} period={period} onOpen={setOpen} />
             )

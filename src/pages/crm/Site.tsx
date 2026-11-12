@@ -1,5 +1,5 @@
 import { DayPicker } from '@/components/DayPicker'
-import { dayLong, dayOfPeriod, dayPeriod, isDayPeriod, todayKey } from '@/lib/day'
+import { dayLong, dayPeriod, isDayPeriod, spanOfPeriod, todayKey } from '@/lib/day'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ArrowDownRight, ArrowUpRight, ExternalLink, Globe, Loader2, RefreshCw } from 'lucide-react'
@@ -228,7 +228,7 @@ const Overview: React.FC<{
   const p = report.previous
   const today = isOneDay(period)
   const label = periodLabel(period).toLowerCase()
-  const pastDay = isDayPeriod(period) && dayOfPeriod(period) !== todayKey()
+  const pastDay = isDayPeriod(period) && spanOfPeriod(period) !== todayKey()
 
   const series = useMemo(() => dailySeries(report, period, (d) => d[metric]), [report, period, metric])
   const visitorsLine = useMemo(() => dailySeries(report, period, (d) => d.visitors).map((d) => d.value), [report, period])
@@ -328,7 +328,7 @@ const Overview: React.FC<{
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold">{today ? 'Visitas por hora' : METRIC_LABEL[metric].title}</h2>
-              <p className="text-xs text-zinc-400">{today ? `${isDayPeriod(period) ? dayLong(dayOfPeriod(period)).replace(/^./, (c) => c.toUpperCase()) : 'Hoje'}, no seu fuso` : METRIC_LABEL[metric].hint}</p>
+              <p className="text-xs text-zinc-400">{today ? `${isDayPeriod(period) ? dayLong(spanOfPeriod(period)).replace(/^./, (c) => c.toUpperCase()) : 'Hoje'}, no seu fuso` : METRIC_LABEL[metric].hint}</p>
             </div>
             {!today && (
               <div className="flex flex-wrap gap-1" role="group" aria-label="Métrica do gráfico">
@@ -714,7 +714,7 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
                 {PERIOD_LABEL[p]}
               </button>
             ))}
-            <DayPicker value={isDayPeriod(period) ? dayOfPeriod(period) : null} onChange={(key) => setPeriod(key === todayKey() ? 'hoje' : dayPeriod(key))} />
+            <DayPicker value={isDayPeriod(period) ? spanOfPeriod(period) : null} onChange={(span) => setPeriod(span === todayKey() ? 'hoje' : dayPeriod(span))} />
           </div>
         )}
       </div>

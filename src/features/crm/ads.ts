@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client'
 import { publicAppUrl } from '@/features/approval/shares'
-import { dayKey, dayOfPeriod, dayShort, isDayPeriod, type DayPeriod } from '@/lib/day'
+import { dayKey, isDayPeriod, spanOfPeriod, spanShort, type DayPeriod } from '@/lib/day'
 
 /**
  * Os anúncios da equipe (tela `/crm/anuncios`): as contas de
@@ -14,12 +14,12 @@ import { dayKey, dayOfPeriod, dayShort, isDayPeriod, type DayPeriod } from '@/li
 
 export const ADS_CALLBACK_PATH = '/anuncios/retorno'
 
-/** Os períodos da Meta ou um dia escolhido no calendário (`dia:2026-10-30`, no fuso da conta de anúncios) */
+/** Os períodos da Meta ou um dia/intervalo escolhido no calendário (`dia:2026-10-30`, `dia:2026-10-25~2026-10-31`, no fuso da conta de anúncios) */
 export type AdPreset = 'today' | 'last_7d' | 'last_30d' | 'last_90d' | 'this_month' | DayPeriod
 type FixedPreset = Exclude<AdPreset, DayPeriod>
 export const AD_PRESETS: FixedPreset[] = ['today', 'last_7d', 'last_30d', 'last_90d', 'this_month']
 export const PRESET_LABEL: Record<FixedPreset, string> = { today: 'Hoje', last_7d: '7 dias', last_30d: '30 dias', last_90d: '90 dias', this_month: 'Este mês' }
-export const presetLabel = (preset: AdPreset) => (isDayPeriod(preset) ? dayShort(dayOfPeriod(preset)) : PRESET_LABEL[preset])
+export const presetLabel = (preset: AdPreset) => (isDayPeriod(preset) ? spanShort(spanOfPeriod(preset)) : PRESET_LABEL[preset])
 /** A Meta guarda os números de 37 meses */
 export const AD_FIRST_DAY = () => {
   const d = new Date()
@@ -304,9 +304,9 @@ export const chooseAdAccounts = (pendingId: string, accountIds: string[]) => cal
 export async function fetchAdReport(accountId: string, preset: AdPreset): Promise<AdReport> {
   const raw = await call<{ fetchedAt?: string }>('report', { accountId, preset })
   const report = asReport(raw, raw.fetchedAt ? Date.parse(raw.fetchedAt) : Date.now())
-  // A versão anterior da função não conhece um dia: devolveria 30 dias no lugar
+  // A versão anterior da função não conhece um dia (ou um intervalo): devolveria 30 dias no lugar
   if (report && isDayPeriod(preset) && report.preset !== preset)
-    throw new AdsError('Ver um dia específico precisa da versão nova da função meta-ads. Publique de novo a função meta-ads e clique em Atualizar.', 'outdated')
+    throw new AdsError('Ver um dia ou um intervalo de datas precisa da versão nova da função meta-ads. Publique de novo a função meta-ads e clique em Atualizar.', 'outdated')
   if (!report) throw new AdsError('A função meta-ads publicada no Supabase é a versão anterior. Publique de novo a função meta-ads e clique em Atualizar.', 'outdated')
   return report
 }

@@ -1,5 +1,5 @@
 import { DayPicker } from '@/components/DayPicker'
-import { dayOfPeriod, dayPeriod, isDayPeriod } from '@/lib/day'
+import { dayPeriod, isDayPeriod, spanOfPeriod } from '@/lib/day'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, GitBranch, LayoutList, Loader2, Network, RefreshCw } from 'lucide-react'
@@ -73,7 +73,7 @@ const Follow: React.FC<{ teamId: string; funnel: Funnel; manager: boolean; onReo
               {FUNNEL_PERIOD_LABEL[p]}
             </button>
           ))}
-          <DayPicker value={isDayPeriod(period) ? dayOfPeriod(period) : null} onChange={(key) => setPeriod(dayPeriod(key))} variant="segment" className="[&>button]:h-auto [&>button]:py-1.5 [&>button[aria-pressed=true]]:bg-gray-900 [&>button[aria-pressed=true]]:text-white" />
+          <DayPicker value={isDayPeriod(period) ? spanOfPeriod(period) : null} onChange={(span) => setPeriod(dayPeriod(span))} variant="segment" className="[&>button]:h-auto [&>button]:py-1.5 [&>button[aria-pressed=true]]:bg-gray-900 [&>button[aria-pressed=true]]:text-white" />
         </div>
         <div className="flex items-center gap-3 text-xs text-gray-500">
           <div role="radiogroup" aria-label="Visão" className="inline-flex rounded-lg bg-white p-0.5 shadow-[0_0_0_1px_rgb(0_0_0/0.08)]">

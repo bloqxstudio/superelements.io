@@ -18,7 +18,7 @@ import {
 import { Block, Condition, conditionOf, ago, clock, dayTime, Delta, Empty, LIME, Skeleton, Stat, useNow } from '@/features/home/HomeParts'
 import { metaCampaigns, sitePeriod, useHome, type Days } from '@/features/home/useHome'
 import { DayPicker } from '@/components/DayPicker'
-import { dayLong, dayShort, isDayKey, todayKey } from '@/lib/day'
+import { isDaySpan, isSingleDay, spanLong, spanShort, todayKey } from '@/lib/day'
 import { HomeToday } from '@/features/home/HomeToday'
 import { HomeCharts } from '@/features/home/HomeCharts'
 import { PlanBlock } from '@/features/conteudos/PlanBlock'
@@ -50,9 +50,9 @@ const plainText = (value: string | undefined, max = 90) => {
 
 const Home: React.FC = () => {
   const [params, setParams] = useSearchParams()
-  // `?periodo=2026-10-30`: um dia escolhido no calendário
+  // `?periodo=2026-10-30` ou `?periodo=2026-10-25~2026-10-31`: um dia ou intervalo escolhido no calendário
   const chosen = params.get('periodo')
-  const day = isDayKey(chosen) && chosen !== todayKey() ? chosen : undefined
+  const day = isDaySpan(chosen) && chosen !== todayKey() ? chosen : undefined
   const days: Days = day ? 1 : chosen === '30' ? 30 : chosen === 'hoje' || chosen === todayKey() ? 1 : 7
   const now = useNow()
   const h = useHome(days, day)
@@ -115,8 +115,8 @@ const Home: React.FC = () => {
   }
 
   const attention = buildAttention(h, now)
-  const win = day ? dayLong(day).replace(/^./, (c) => c.toUpperCase()) : `${shortDay(w.from)} a hoje`
-  const prevWin = day ? shortDay(w.prevFrom) : `${shortDay(w.prevFrom)} a ${shortDay(w.prevTo - 1)}`
+  const win = day ? spanLong(day).replace(/^./, (c) => c.toUpperCase()) : `${shortDay(w.from)} a hoje`
+  const prevWin = day && isSingleDay(day) ? shortDay(w.prevFrom) : `${shortDay(w.prevFrom)} a ${shortDay(w.prevTo - 1)}`
 
   return (
     <Page wide>
@@ -203,7 +203,7 @@ const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { cur
   if (spend.length) parts.push(`Investimos ${spend.map((s) => adMoney(s.spend, s.currency)).join(' + ')} em anúncios da Meta`)
   if (siteData) parts.push(`o site recebeu ${siteData.totals.sessions.toLocaleString('pt-BR')} visitas e ${plural(siteData.totals.converted, 'chegou', 'chegaram')} a um contato`)
   if (summary) parts.push(`${plural(summary.created, 'oportunidade entrou', 'oportunidades entraram')} no funil e ${plural(summary.won, 'foi ganha', 'foram ganhas')}`)
-  const sentence = parts.length ? `${day ? `Em ${dayShort(day)}` : days === 1 ? 'Hoje' : `Nos últimos ${days} dias`}: ${parts.join('; ')}.` : undefined
+  const sentence = parts.length ? `${day ? (isSingleDay(day) ? `Em ${spanShort(day)}` : spanLong(day).replace(/^./, (c) => c.toUpperCase())) : days === 1 ? 'Hoje' : `Nos últimos ${days} dias`}: ${parts.join('; ')}.` : undefined
 
   return (
     <Block id="leitura" title="Resumo do período" hint="Veja os resultados do período. Selecione um indicador para ver os detalhes.">
@@ -217,7 +217,7 @@ const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { cur
           note={
             spend.length
               ? day
-                ? `Só Meta Ads, gasto de ${dayShort(day)} no fuso da conta de anúncios. Gasto de outras plataformas não entra.`
+                ? `Só Meta Ads, gasto de ${spanShort(day)} no fuso da conta de anúncios. Gasto de outras plataformas não entra.`
                 : days === 1
                 ? 'Só Meta Ads, gasto de hoje até a última leitura (a Meta pode levar alguns minutos para contar). Gasto de outras plataformas não entra.'
                 : `Só Meta Ads${adsWindow ? `, ${adsWindow} (a Meta fecha o período no dia anterior)` : ''}. Gasto de outras plataformas não entra.`
@@ -274,7 +274,7 @@ const Reading: React.FC<{ h: HomeData; w: Window; summary: Summary; spend: { cur
         </Stat>
       </div>
       <p className="mt-3 text-xs text-gray-500">
-        {day ? `${dayShort(day).replace(/^./, (c) => c.toUpperCase())} é comparado ao dia anterior.` : days === 1 ? 'Hoje é comparado a ontem.' : `Variações comparam períodos do mesmo tamanho (${days} dias).`} O gasto não é comparado: a Meta não entrega o período anterior no mesmo formato.
+        {day ? (isSingleDay(day) ? `${spanShort(day).replace(/^./, (c) => c.toUpperCase())} é comparado ao dia anterior.` : `${spanShort(day).replace(/^./, (c) => c.toUpperCase())} é comparado aos ${w.days} dias anteriores.`) : days === 1 ? 'Hoje é comparado a ontem.' : `Variações comparam períodos do mesmo tamanho (${days} dias).`} O gasto não é comparado: a Meta não entrega o período anterior no mesmo formato.
       </p>
     </Block>
   )
@@ -643,7 +643,7 @@ const CampaignDetail: React.FC<{ id: string; r: CampaignRow; h: HomeData; w: Win
           Ver no funil <ArrowUpRight aria-hidden className="h-3 w-3" />
         </Link>
       </div>
-      <span className="sr-only">{day ? `Dia ${dayShort(day)}` : `Período de ${w.days} dias`}</span>
+      <span className="sr-only">{day ? (isSingleDay(day) ? `Dia ${spanShort(day)}` : `Datas ${spanShort(day)}`) : `Período de ${w.days} dias`}</span>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { addDays, dayOfPeriod, dayPeriod, dayStart, isDayPeriod, todayKey } from '@/lib/day'
+import { addDays, dayPeriod, dayStart, isDayPeriod, spanEnd, spanOfPeriod, todayKey } from '@/lib/day'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useCrm } from '@/features/crm/crmStore'
@@ -96,9 +96,9 @@ const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() +
 /** O relatório guardado do período; em "Hoje", só vale o do dia, e um velho é relido da Meta (se falhar, fica o guardado do dia). */
 async function adReportFor(accountId: string, preset: AdPreset): Promise<AdReport | null> {
   const saved = await loadAdReport(accountId, preset).catch(() => null)
-  // Um dia escolhido: o guardado vale (relido só se já é de depois do dia fechar e veio antes); sem guardado, lê a Meta
+  // Um dia ou intervalo escolhido: o guardado vale (relido só se já é de depois do último dia fechar e veio antes); sem guardado, lê a Meta
   if (isDayPeriod(preset)) {
-    const day = dayOfPeriod(preset)
+    const day = spanEnd(spanOfPeriod(preset))
     const closed = dayStart(addDays(day, 2)).getTime()
     if (saved && (saved.fetchedAt > closed || (day === todayKey() ? Date.now() - saved.fetchedAt < TODAY_STALE : Date.now() - saved.fetchedAt < 30 * 60_000))) return saved
     return fetchAdReport(accountId, preset).catch(() => saved)
@@ -224,7 +224,7 @@ export function metaCampaigns(data: AdsData | undefined): MetaCampaignInput[] {
 
 // ---------- o hook ----------
 
-/** `day`: um dia escolhido no calendário (`2026-10-30`); `days` é então 1 */
+/** `day`: um dia ou intervalo escolhido no calendário (`2026-10-30`, `2026-10-25~2026-10-31`); `days` é então 1 */
 export function useHome(days: Days, day?: string) {
   const team = useCrm((s) => s.team)
   const pipeline = useCrm((s) => s.pipeline)

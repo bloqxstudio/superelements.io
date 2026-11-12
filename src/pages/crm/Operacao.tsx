@@ -11,7 +11,7 @@ import { activityEvents, byRecent, spendByCurrency, windowOf, wonAt, type FeedEv
 import { ago, LIME, useNow } from '@/features/home/HomeParts'
 import { useHome, type Days } from '@/features/home/useHome'
 import { DayPicker } from '@/components/DayPicker'
-import { dayLong, isDayKey, todayKey } from '@/lib/day'
+import { isDaySpan, spanLong, todayKey } from '@/lib/day'
 import { OperacaoAoVivo } from '@/features/crm/OperacaoAoVivo'
 
 /**
@@ -91,7 +91,7 @@ const OperacaoPage: React.FC = () => {
   const [params, setParams] = useSearchParams()
   // `?periodo=2026-10-30`: um dia que já passou, escolhido no calendário (sem o "agora")
   const chosen = params.get('periodo')
-  const day = isDayKey(chosen) && chosen !== todayKey() ? chosen : undefined
+  const day = isDaySpan(chosen) && chosen !== todayKey() ? chosen : undefined
   const days: Days = day ? 1 : chosen === '30' ? 30 : chosen === '7' ? 7 : 1
   // `?vista=ao-vivo`: quem está agora, o funil em faixas, o mapa e os aparelhos
   const view: 'quadro' | 'ao-vivo' = params.get('vista') === 'ao-vivo' ? 'ao-vivo' : 'quadro'
@@ -154,7 +154,7 @@ const OperacaoPage: React.FC = () => {
   // ---- as bolinhas: o que está acontecendo agora ----
   const dots = useMemo(() => {
     const out: Dot[] = []
-    // Num dia que já passou, as bolinhas são só as vendas daquele dia: quem está no site e as etapas são de agora
+    // Num dia (ou intervalo) escolhido, as bolinhas são só as vendas dele: quem está no site e as etapas são de agora
     for (const s of day ? [] : siteData?.live ?? []) {
       out.push({
         key: `v:${s.id}`,
@@ -225,7 +225,7 @@ const OperacaoPage: React.FC = () => {
             </span>
             <div className="leading-tight">
               <h1 className="text-[15px] font-semibold tracking-tight text-gray-900">Operação</h1>
-              <p className="text-xs text-gray-500">Do clique ao cliente · {loading ? 'lendo…' : day ? dayLong(day) : 'ao vivo'}</p>
+              <p className="text-xs text-gray-500">Do clique ao cliente · {loading ? 'lendo…' : day ? spanLong(day) : 'ao vivo'}</p>
             </div>
           </div>
           <div className="mx-auto flex rounded-lg border border-gray-200 bg-gray-50 p-0.5" role="group" aria-label="Período">

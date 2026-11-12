@@ -1,18 +1,18 @@
 import { useJobs } from '@/features/operations/jobs'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { ChevronsUpDown, LayoutGrid, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { navigationMatches } from '@/features/navigation/workspace'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { areaPaths, type AreaId } from '@/features/navigation/AreaTabs'
-import { Activity, Bookmark, Bot, Brain, Building2, CalendarRange, Filter, House, Building, Globe, ListChecks, Images, Instagram, Megaphone, PenLine, Presentation, KanbanSquare, LayoutTemplate, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, Workflow, X } from 'lucide-react'
+import { Activity, Bookmark, Bot, Brain, Building2, CalendarRange, Filter, House, Building, Globe, ListChecks, Images, Instagram, Megaphone, Palette, PenLine, Presentation, KanbanSquare, LayoutTemplate, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { PersonAvatar } from '@/features/profile/PersonAvatar'
 import { useAuth } from '@/contexts/AuthContext'
 import { AccountSwitcher } from '@/features/crm/AccountSwitcher'
 import { useCrm } from '@/features/crm/crmStore'
 import { moduleOn, productInfo, type ModuleId, type ProductId } from '@/features/crm/modules'
-import { useMenuBadges, useMenuFeed } from '@/features/crm/menuBadges'
+import { useMenuBadges, useMenuFeed, type MenuBadges } from '@/features/crm/menuBadges'
 import { plural } from '@/features/crm/ui'
 import { AGENT_COLOR } from '@/features/agents/agentStatus'
 import { useTick } from '@/features/agents/useTick'
@@ -23,7 +23,11 @@ import { cn } from '@/lib/utils'
  * Menu lateral das telas da conta. Desde 2026-11-09 (nova jornada de criação, aprovada pelo usuário:
  * "Sites e projetos é a mesma coisa", "cérebro deve vir primeiro", "Pauta, conteúdo e texto é meio que
  * a mesma coisa") é um menu só para os três produtos, na ordem da jornada: o grupo Criação (Cérebro
- * primeiro, depois Pauta, Quadros, Sites e Criativos), Vendas e Resultados. Os módulos da conta só
+ * primeiro, depois Pauta, Quadros, Sites e Criativos), Vendas e Resultados. Desde 2026-11-11 o menu é por módulo (o usuário:
+ * "um menu global com todos os módulos; dentro do módulo vão as funcionalidades, no sidebar como é hoje",
+ * "Criação é um módulo também" e, como referência, a janela de apps do Mac): Início, o botão do módulo atual,
+ * que abre a janela com todos (`ModulesWindow`: Criação, Vendas, Prospecção, Instagram, Resultados, IA e equipe e
+ * Plataforma), e logo abaixo só as telas do módulo atual. Automações saiu do menu (a rota segue). Os módulos da conta só
  * escondem itens; não mudam a ordem nem os nomes. Telas irmãs viram abas no topo da área
  * (`AreaTabs`). Dentro de um projeto o Space ocupa a tela e o menu some.
  * Plano: cerebro/iniciativas/superelements/jornada-de-criacao.md.
@@ -57,25 +61,90 @@ const Item: React.FC<{ to: string; icon: React.ElementType; label: string; end?:
   )
 }
 
-/**
- * Um grupo do menu. `rail`: o grupo Criação, com os ícones em círculos (o Cérebro primeiro, porque é o
- * contexto de tudo; os outros não são um passo a passo).
- */
-const Section: React.FC<{ title: string; rail?: boolean; children: React.ReactNode }> = ({ title, rail, children }) => {
-  const key = `superelements-menu-grupo:${title}`
-  const [open, setOpen] = useState(() => { try { return localStorage.getItem(key) !== '0' } catch { return true } })
-  const query = useContext(NavigationQuery)
-  const collapsed = useContext(Collapsed)
-  // Recolhido não há como abrir o grupo: mostra todos, separados por uma linha
-  const shown = open || !!query || collapsed
-  const toggle = () => setOpen((v) => { try { localStorage.setItem(key, v ? '0' : '1') } catch { /* sem armazenamento */ } return !v })
+/** Um módulo do menu: nome, cor do ícone na janela de módulos, rotas que são dele e as telas que aparecem no menu. */
+interface MenuModule {
+  id: string
+  title: string
+  hint: string
+  icon: React.ElementType
+  /** Cor do quadrado do ícone na janela de módulos. */
+  color: string
+  paths: string[]
+  exact?: string[]
+  news?: (b: MenuBadges) => boolean
+  items: { to: string; label: string; node: React.ReactNode }[]
+}
+
+const STORED_MODULE = 'superelements-menu-modulo'
+
+const ModuleTile: React.FC<{ module: MenuModule; size?: 'sm' | 'lg' }> = ({ module, size = 'sm' }) => {
+  const Icon = module.icon
   return (
-    <div className="se-sidebar-section mt-5 first:mt-0">
-      {collapsed ? <div className="se-section-rule" role="separator" aria-label={title} /> : <button type="button" onClick={toggle} aria-expanded={shown} className="se-section-toggle group mb-1 flex w-full items-center justify-between rounded-md px-2.5 py-0.5 text-xs font-medium text-gray-400 transition-colors hover:text-gray-700">
-        {title}<ChevronDown className={cn('h-3 w-3 opacity-0 transition-[opacity,transform] group-hover:opacity-100 group-focus-visible:opacity-100', !shown && '-rotate-90 opacity-100')} aria-hidden />
-      </button>}
-      {shown && <div className={cn('grid gap-px', rail && 'se-nav-rail')}>{children}</div>}
-    </div>
+    <span className={cn('flex shrink-0 items-center justify-center text-white shadow-[inset_0_1px_0_rgb(255_255_255/.25),0_1px_2px_rgb(0_0_0/.12)]', size === 'lg' ? 'h-12 w-12 rounded-[14px]' : 'h-6 w-6 rounded-[7px]')} style={{ background: module.color }} aria-hidden>
+      <Icon className={size === 'lg' ? 'h-6 w-6' : 'h-3.5 w-3.5'} strokeWidth={size === 'lg' ? 1.8 : 2.2} />
+    </span>
+  )
+}
+
+const hasNews = (m: MenuModule, b: MenuBadges) => !!m.news?.(b)
+
+/**
+ * A janela com todos os módulos da conta, como a de apps do Mac (pedido do usuário, 2026-11-11): busca no
+ * topo e a grade de ícones. Escolher um módulo abre a primeira tela dele; o menu passa a mostrar as telas dele.
+ */
+const ModulesWindow: React.FC<{ modules: MenuModule[]; current?: MenuModule; open: boolean; onOpenChange: (open: boolean) => void; onPick: (m: MenuModule) => void }> = ({ modules, current, open, onOpenChange, onPick }) => {
+  const [query, setQuery] = useState('')
+  const badges = useMenuBadges((b) => b)
+  useEffect(() => { if (!open) setQuery('') }, [open])
+  const shown = modules.filter((m) => !query || [m.title, m.hint, ...m.items.map((i) => i.label)].some((t) => navigationMatches(query, t, '')))
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-gray-900/20 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content className="fixed inset-x-0 top-[12vh] z-[61] mx-auto w-[min(640px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-black/5 bg-white/95 shadow-2xl outline-none backdrop-blur-xl duration-200 ease-out data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-left-12 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-left-12">
+          <DialogPrimitive.Description className="sr-only">Escolha um módulo; o menu passa a mostrar as telas dele.</DialogPrimitive.Description>
+          <div className="flex items-center gap-2.5 border-b border-gray-100 px-4">
+            <Search className="h-4 w-4 shrink-0 text-gray-400" aria-hidden />
+            <DialogPrimitive.Title className="sr-only">Módulos</DialogPrimitive.Title>
+            <input autoFocus type="search" aria-label="Buscar módulo" placeholder="Módulos" value={query} onChange={(e) => setQuery(e.target.value)} className="h-14 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-tight text-gray-900 outline-none placeholder:text-gray-400" />
+            <DialogPrimitive.Close aria-label="Fechar" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-900">
+              <X className="h-4 w-4" />
+            </DialogPrimitive.Close>
+          </div>
+          <div className="grid max-h-[60vh] grid-cols-2 gap-1 overflow-y-auto p-3 sm:grid-cols-3">
+            {shown.map((m) => (
+              <button key={m.id} type="button" onClick={() => onPick(m)} aria-current={m.id === current?.id ? 'true' : undefined} className={cn('relative flex flex-col items-center gap-2 rounded-xl px-2 pb-3 pt-4 text-center transition-colors hover:bg-gray-100 focus-visible:bg-gray-100 focus-visible:outline-none', m.id === current?.id && 'bg-gray-100/80')}>
+                <ModuleTile module={m} size="lg" />
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-semibold text-gray-900">{m.title}</span>
+                  <span className="mt-0.5 line-clamp-2 block text-[11px] leading-snug text-gray-500">{m.hint}</span>
+                </span>
+                {hasNews(m, badges) && <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-violet-600" aria-label="Novidades" />}
+              </button>
+            ))}
+            {shown.length === 0 && <p className="col-span-full px-2 py-8 text-center text-sm text-gray-500">Nenhum módulo com esse nome.</p>}
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  )
+}
+
+/** O botão do módulo atual, logo abaixo de Início: abre a janela de módulos. Um ponto avisa novidade em outro módulo. */
+const ModuleSwitcher: React.FC<{ current: MenuModule; othersNews: boolean; onOpen: () => void }> = ({ current, othersNews, onOpen }) => {
+  const collapsed = useContext(Collapsed)
+  return (
+    <button type="button" onClick={onOpen} title={collapsed ? `${current.title} · trocar de módulo` : 'Trocar de módulo'} aria-haspopup="dialog" className={cn('se-module-switcher relative flex w-full items-center gap-2.5 rounded-xl text-left transition-colors hover:bg-black/[.045]', collapsed ? 'h-10 justify-center' : 'h-11 px-2')}>
+      <ModuleTile module={current} />
+      {!collapsed && <>
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className="block text-[10px] font-medium uppercase tracking-wide text-gray-400">Módulo</span>
+          <span className="block truncate text-[13px] font-semibold text-gray-900">{current.title}</span>
+        </span>
+        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden />
+      </>}
+      {othersNews && <span className={cn('absolute h-1.5 w-1.5 rounded-full bg-violet-600', collapsed ? 'right-2 top-2' : 'right-7 top-2.5')} aria-label="Novidades em outro módulo" />}
+    </button>
   )
 }
 
@@ -125,7 +194,7 @@ const OportunidadesItem: React.FC<{ label?: string }> = ({ label = 'Leads' }) =>
 const InstagramItem: React.FC = () => {
   const count = useMenuBadges((s) => s.followers)
   return (
-    <Item to="/crm/instagram" icon={Instagram} label="Instagram">
+    <Item to="/crm/instagram" icon={Instagram} label="Perfil">
       <NewBadge count={count} label={plural(count, 'seguidor novo', 'seguidores novos')} />
     </Item>
   )
@@ -166,59 +235,128 @@ const SiteItem: React.FC<{ label?: string }> = ({ label = 'Visitas do site' }) =
   )
 }
 
-/** O menu da jornada, o mesmo em todos os produtos. */
-const JourneyNav: React.FC<{ on: (id: ModuleId) => boolean; teams: number; crm: boolean }> = ({ on, teams, crm }) => {
-  const team = teams > 0
-  const criar = on('projetos') || on('criativos')
-  const vender = crm && (on('crm') || on('whatsapp') || on('formularios') || on('funis') || on('clientes') || on('social') || on('prospeccao') || on('diagnostico'))
-  const resultados = crm && (on('instagram') || on('site') || on('crm'))
+/** As telas do módulo Criação (as abas de cada área contam como dela). */
+const CRIACAO_PATHS = [...(['cerebro', 'pauta', 'sites', 'criativos'] as AreaId[]).flatMap(areaPaths), '/quadros', '/referencias', '/copy']
+
+/**
+ * Os módulos da conta, na ordem da jornada, o mesmo em todos os produtos. Os módulos ligados na conta
+ * escondem telas; módulo sem tela ligada não aparece.
+ */
+const buildModules = (on: (id: ModuleId) => boolean, team: boolean, crm: boolean, platformAdmin: boolean, product: ProductId): MenuModule[] => {
+  const list: MenuModule[] = [
+    {
+      id: 'criacao', title: 'Criação', hint: 'Cérebro, pauta, sites e criativos', icon: Palette, color: 'linear-gradient(160deg,#a78bfa,#7c3aed)', paths: CRIACAO_PATHS,
+      items: [
+        team && { to: '/cerebro', label: 'Cérebro', node: <Item to="/cerebro" icon={Brain} label="Cérebro" area="cerebro" /> },
+        team && on('copy') && { to: '/pauta', label: 'Pauta', node: <Item to="/pauta" icon={CalendarRange} label="Pauta" area="pauta" /> },
+        team && { to: '/quadros', label: 'Quadros', node: <Item to="/quadros" icon={Presentation} label="Quadros" /> },
+        team && { to: '/referencias', label: 'Referências', node: <Item to="/referencias" icon={Bookmark} label="Referências" /> },
+        // sem conta de empresa não há Pauta: os Textos continuam com caminho próprio
+        !team && on('copy') && { to: '/copy', label: 'Textos', node: <Item to="/copy" icon={PenLine} label="Textos" /> },
+        on('projetos') && { to: '/', label: 'Sites', node: <Item to="/" icon={LayoutTemplate} label="Sites" area="sites" /> },
+        on('criativos') && { to: '/criativos', label: 'Criativos', node: <Item to="/criativos" icon={Images} label="Criativos" area="criativos" /> },
+      ].filter(Boolean) as MenuModule['items'],
+    },
+    {
+      id: 'vendas', title: 'Vendas', hint: 'Leads, conversas e clientes', icon: KanbanSquare, color: 'linear-gradient(160deg,#fb7185,#e11d48)', exact: ['/crm'], paths: ['/crm/whatsapp', '/crm/fluxos', '/crm/formularios', '/crm/funis', '/crm/clientes', '/crm/social'], news: (b) => b.opportunities > 0 || b.whatsapp > 0,
+      items: (crm ? [
+        on('crm') && { to: '/crm', label: 'Leads', node: <OportunidadesItem /> },
+        on('whatsapp') && { to: '/crm/whatsapp', label: 'Conversas', node: <WhatsAppItem /> },
+        on('formularios') && { to: '/crm/formularios', label: 'Formulários', node: <Item to="/crm/formularios" icon={ListChecks} label="Formulários" /> },
+        on('funis') && { to: '/crm/funis', label: 'Funis de venda', node: <Item to="/crm/funis" icon={Filter} label="Funis de venda" /> },
+        on('clientes') && { to: '/crm/clientes', label: 'Clientes', node: <Item to="/crm/clientes" icon={Building2} label="Clientes" /> },
+        on('social') && { to: '/crm/social', label: 'Relacionamento nas redes', node: <Item to="/crm/social" icon={Send} label="Relacionamento nas redes" /> },
+      ] : []).filter(Boolean) as MenuModule['items'],
+    },
+    {
+      id: 'prospeccao', title: 'Prospecção', hint: 'Buscar empresas e diagnóstico de site', icon: Radar, color: 'linear-gradient(160deg,#fcd34d,#d97706)', paths: ['/prospeccao', '/crm/diagnostico'],
+      items: (crm ? [
+        on('prospeccao') && { to: '/prospeccao', label: 'Buscar empresas', node: <Item to="/prospeccao" icon={Radar} label="Buscar empresas" /> },
+        on('diagnostico') && { to: '/crm/diagnostico', label: 'Diagnóstico', node: <Item to="/crm/diagnostico" icon={ScanSearch} label="Diagnóstico" /> },
+      ] : []).filter(Boolean) as MenuModule['items'],
+    },
+    {
+      id: 'instagram', title: 'Instagram', hint: 'Perfil, posts, caixa, stories e anúncios', icon: Instagram, color: 'linear-gradient(160deg,#fb923c,#db2777 70%)', paths: ['/crm/instagram', '/crm/anuncios'], news: (b) => b.followers > 0,
+      items: (crm ? [
+        on('instagram') && { to: '/crm/instagram', label: 'Perfil', node: <InstagramItem /> },
+        on('instagram') && { to: '/crm/anuncios', label: 'Anúncios', node: <Item to="/crm/anuncios" icon={Megaphone} label="Anúncios" /> },
+      ] : []).filter(Boolean) as MenuModule['items'],
+    },
+    {
+      id: 'resultados', title: 'Resultados', hint: 'Visitas do site e operação', icon: Activity, color: 'linear-gradient(160deg,#60a5fa,#2563eb)', paths: ['/crm/site', '/crm/operacao'], news: (b) => b.live > 0 || b.contacts > 0,
+      items: (crm ? [
+        on('site') && { to: '/crm/site', label: 'Visitas do site', node: <SiteItem /> },
+        on('crm') && { to: '/crm/operacao', label: 'Operação', node: <Item to="/crm/operacao" icon={Activity} label="Operação" /> },
+      ] : []).filter(Boolean) as MenuModule['items'],
+    },
+    {
+      id: 'ia', title: 'IA e equipe', hint: 'Agentes, instruções de IA e equipe', icon: Bot, color: 'linear-gradient(160deg,#34d399,#059669)', paths: ['/agentes', '/skills', '/crm/equipe'],
+      items: [
+        on('agentes') && { to: '/agentes', label: 'Agentes de IA', node: <AgentsItem /> },
+        on('skills') && { to: '/skills', label: 'Instruções de IA', node: <Item to="/skills" icon={Wand2} label="Instruções de IA" /> },
+        crm && { to: '/crm/equipe', label: 'Equipe', node: <Item to="/crm/equipe" icon={Users} label="Equipe" /> },
+      ].filter(Boolean) as MenuModule['items'],
+    },
+  ]
+  if (platformAdmin) list.push({
+    id: 'plataforma', title: 'Plataforma', hint: product !== 'completo' ? `Contas e módulos · produto: ${productInfo(product).label}` : 'Contas e módulos', icon: Building, color: 'linear-gradient(160deg,#94a3b8,#475569)', paths: ['/contas'],
+    items: [{ to: '/contas', label: 'Contas e módulos', node: <Item to="/contas" icon={Building} label="Contas e módulos" /> }],
+  })
+  return list.filter((m) => m.items.length > 0)
+}
+
+/** O menu: Início, o módulo atual (que abre a janela de módulos) e as telas dele; a busca mostra as telas de todos. */
+const ModuleNav: React.FC<{ modules: MenuModule[]; crm: boolean; onNavigate?: () => void }> = ({ modules, crm, onNavigate }) => {
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const query = useContext(NavigationQuery)
+  const collapsed = useContext(Collapsed)
+  const [stored, setStored] = useState(() => { try { return localStorage.getItem(STORED_MODULE) ?? '' } catch { return '' } })
+  const [windowOpen, setWindowOpen] = useState(false)
+  const fromRoute = modules.find((m) => inArea(pathname, m.paths) || !!m.exact?.includes(pathname))
+  const current = fromRoute ?? modules.find((m) => m.id === stored) ?? modules[0]
+  const othersNews = useMenuBadges((b) => modules.some((m) => m.id !== current?.id && hasNews(m, b)))
+  useEffect(() => {
+    if (!fromRoute) return
+    setStored(fromRoute.id)
+    try { localStorage.setItem(STORED_MODULE, fromRoute.id) } catch { /* sem armazenamento */ }
+  }, [fromRoute])
+  const pick = (m: MenuModule) => {
+    setWindowOpen(false)
+    setStored(m.id)
+    try { localStorage.setItem(STORED_MODULE, m.id) } catch { /* sem armazenamento */ }
+    navigate(m.items[0].to)
+    onNavigate?.()
+  }
   return (
     <>
       {crm && (
-        <div className="mb-4">
+        <div className="mb-3">
           <Item to="/inicio" icon={House} label="Início" />
         </div>
       )}
-      {(team || criar || on('copy')) && (
-        <Section title="Criação" rail>
-          {team && <Item to="/cerebro" icon={Brain} label="Cérebro" area="cerebro" />}
-          {team && on('copy') && <Item to="/pauta" icon={CalendarRange} label="Pauta" area="pauta" />}
-          {team && <Item to="/quadros" icon={Presentation} label="Quadros" />}
-          {team && <Item to="/referencias" icon={Bookmark} label="Referências" />}
-          {/* sem conta de empresa não há Pauta: os Textos continuam com caminho próprio */}
-          {!team && on('copy') && <Item to="/copy" icon={PenLine} label="Textos" />}
-          {on('projetos') && <Item to="/" icon={LayoutTemplate} label="Sites" area="sites" />}
-          {on('criativos') && <Item to="/criativos" icon={Images} label="Criativos" area="criativos" />}
-        </Section>
+      {query ? (
+        modules.map((m) => (
+          <div key={m.id} className="se-sidebar-section mt-4 first:mt-0">
+            <p className="mb-1 px-2.5 py-0.5 text-xs font-medium text-gray-400">{m.title}</p>
+            <div className="grid gap-px">{m.items.map((i) => <React.Fragment key={i.to + i.label}>{i.node}</React.Fragment>)}</div>
+          </div>
+        ))
+      ) : current && (
+        <>
+          <ModuleSwitcher current={current} othersNews={othersNews} onOpen={() => setWindowOpen(true)} />
+          <div className={cn('grid gap-px', collapsed ? 'mt-1' : 'mt-1.5')}>
+            {current.items.map((i) => <React.Fragment key={i.to + i.label}>{i.node}</React.Fragment>)}
+          </div>
+          {!collapsed && modules.length > 1 && (
+            <button type="button" onClick={() => setWindowOpen(true)} className="mt-4 flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px] text-gray-500 transition-colors hover:bg-black/[.045] hover:text-gray-900">
+              <LayoutGrid className="h-4 w-4 shrink-0" aria-hidden />
+              Todos os módulos
+            </button>
+          )}
+        </>
       )}
-      {vender && (
-        <Section title="Vendas">
-          {on('crm') && <OportunidadesItem />}
-          {on('whatsapp') && <WhatsAppItem />}
-          {on('whatsapp') && <Item to="/crm/fluxos" icon={Workflow} label="Automações" />}
-          {on('formularios') && <Item to="/crm/formularios" icon={ListChecks} label="Formulários" />}
-          {on('funis') && <Item to="/crm/funis" icon={Filter} label="Funis de venda" />}
-          {on('clientes') && <Item to="/crm/clientes" icon={Building2} label="Clientes" />}
-          {on('social') && <Item to="/crm/social" icon={Send} label="Relacionamento nas redes" />}
-          {on('prospeccao') && <Item to="/prospeccao" icon={Radar} label="Prospecção" />}
-          {on('diagnostico') && <Item to="/crm/diagnostico" icon={ScanSearch} label="Diagnóstico" />}
-        </Section>
-      )}
-      {resultados && (
-        <Section title="Resultados">
-          {on('instagram') && <InstagramItem />}
-          {on('instagram') && <Item to="/crm/anuncios" icon={Megaphone} label="Anúncios" />}
-          {on('site') && <SiteItem />}
-          {on('crm') && <Item to="/crm/operacao" icon={Activity} label="Operação" />}
-        </Section>
-      )}
-      {(on('agentes') || on('skills') || crm) && (
-        <Section title="IA e equipe">
-          {on('agentes') && <AgentsItem />}
-          {on('skills') && <Item to="/skills" icon={Wand2} label="Instruções de IA" />}
-          {crm && <Item to="/crm/equipe" icon={Users} label="Equipe" />}
-        </Section>
-      )}
+      <ModulesWindow modules={modules} current={current} open={windowOpen} onOpenChange={setWindowOpen} onPick={pick} />
     </>
   )
 }
@@ -233,6 +371,8 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
   const on = (id: ModuleId) => moduleOn(team, id)
   // O produto só aparece como nota para o admin; o menu é o mesmo (os módulos é que escondem itens)
   const product: ProductId = team?.product ?? 'completo'
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `on` lê só `team`
+  const modules = useMemo(() => buildModules(on, teams.length > 0, crm, platformAdmin, product), [team, teams.length, crm, platformAdmin, product])
 
   return (
     <>
@@ -270,13 +410,7 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
       <Collapsed.Provider value={collapsed}>
       <NavigationQuery.Provider value={collapsed ? '' : query}>
       <nav aria-label="Navegação" className="se-navigation flex-1 overflow-y-auto px-3 py-4">
-        <JourneyNav on={on} teams={teams.length} crm={crm} />
-        {platformAdmin && (
-          <Section title="Plataforma">
-            {product !== 'completo' && <p className="px-2.5 pb-1 text-[11px] text-gray-400">Produto desta conta: {productInfo(product).label}</p>}
-            <Item to="/contas" icon={Building} label="Contas e módulos" />
-          </Section>
-        )}
+        <ModuleNav modules={modules} crm={crm} onNavigate={onClose} />
         <p className="se-nav-no-results px-2.5 py-6 text-xs leading-relaxed text-gray-500" role="status">Nenhuma área encontrada. Tente outro nome.</p>
       </nav>
       </NavigationQuery.Provider>

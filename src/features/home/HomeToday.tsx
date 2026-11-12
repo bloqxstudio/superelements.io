@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { dayIn, dayLong, dayStart, todayKey } from '@/lib/day'
+import { dayLong, dayStart, isSingleDay, spanIn, todayKey } from '@/lib/day'
 import { Block } from '@/features/home/HomeParts'
 import { Area, Boundary, PALETTE } from '@/features/home/HomeCharts'
 import { SiteMap } from '@/features/crm/SiteMap'
@@ -23,7 +23,7 @@ const Inner: React.FC<{ trackers: SiteTracker[]; live: SiteSession[]; days: Days
   }, [siteId, days, day])
 
   const hourly = useMemo(() => {
-    if (days !== 1) return []
+    if (days !== 1 || (day && !isSingleDay(day))) return []
     const past = !!day && day !== todayKey()
     const dow = (past ? dayStart(day).getDay() : new Date().getDay()) || 7
     const by = new Array(24).fill(0) as number[]
@@ -34,7 +34,7 @@ const Inner: React.FC<{ trackers: SiteTracker[]; live: SiteSession[]; days: Days
   if (!report) return null
   const go = () => navigate('/crm/site?aba=visitas')
   return (
-    <Block id="mapa" title="De onde vêm as visitas" hint={`Mapa do Brasil ${day ? `com as visitas ${dayIn(day)}` : days === 1 ? 'com as visitas de hoje' : `dos últimos ${days} dias`}, com quem está no site agora.`}>
+    <Block id="mapa" title="De onde vêm as visitas" hint={`Mapa do Brasil ${day ? `com as visitas ${spanIn(day)}` : days === 1 ? 'com as visitas de hoje' : `dos últimos ${days} dias`}, com quem está no site agora.`}>
       {hourly.length > 1 && (
         <div className="mb-4 rounded-[14px] bg-[#f5f5f7] p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.04)]">
           <p className="text-[13px] font-semibold text-gray-900">Visitas por hora</p>

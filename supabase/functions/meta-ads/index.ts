@@ -39,18 +39,25 @@ const SCOPES = ['ads_read']
 const BOOST_SCOPES = ['ads_read', 'ads_management', 'pages_show_list', 'pages_read_engagement', 'pages_manage_ads', 'instagram_basic']
 const CALLBACK_PATH = '/anuncios/retorno'
 const PRESETS = ['today', 'last_7d', 'last_30d', 'last_90d', 'this_month'] as const
-/** Um dia escolhido no calendário da tela: `dia:2026-10-30` (no fuso da conta de anúncios) */
+/** Um dia ou intervalo escolhido no calendário da tela: `dia:2026-10-30` ou `dia:2026-10-25~2026-10-31` (no fuso da conta de anúncios) */
 type DayPreset = `dia:${string}`
 type Preset = (typeof PRESETS)[number] | DayPreset
-const DAY_PRESET = /^dia:(\d{4}-\d{2}-\d{2})$/
+const DAY_PRESET = /^dia:(\d{4}-\d{2}-\d{2})(?:~(\d{4}-\d{2}-\d{2}))?$/
+/** Um dia que existe (não 2026-02-31), não futuro e nos 37 meses que a Meta guarda */
+const validDay = (day: string) =>
+  !Number.isNaN(Date.parse(`${day}T00:00:00Z`)) && new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day && Date.parse(day) <= Date.now() + 2 * DAY && Date.parse(day) >= Date.now() - 37 * 31 * DAY
 function presetOf(value: unknown): Preset {
   const text = String(value)
   if ((PRESETS as readonly string[]).includes(text)) return text as Preset
-  const day = DAY_PRESET.exec(text)?.[1]
-  // A Meta guarda 37 meses; um dia que não existe (2026-02-31) ou futuro cai no padrão
-  if (day && !Number.isNaN(Date.parse(`${day}T00:00:00Z`)) && new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day && Date.parse(day) <= Date.now() + 2 * DAY && Date.parse(day) >= Date.now() - 37 * 31 * DAY)
-    return `dia:${day}`
+  const m = DAY_PRESET.exec(text)
+  // Fora disso (ou fim antes do começo) cai no padrão
+  if (m && validDay(m[1]) && (!m[2] || (validDay(m[2]) && m[2] > m[1]))) return text as DayPreset
   return 'last_30d'
+}
+/** `{ since, until }` de um preset de calendário */
+function presetRange(preset: Preset) {
+  const m = DAY_PRESET.exec(preset)
+  return m ? { since: m[1], until: m[2] ?? m[1] } : null
 }
 const DAY = 86_400_000
 
@@ -691,8 +698,8 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
 
   const info = await graph<AdAccount & { disable_reason?: number }>(`act_${act}`, token, { fields: `${ACCOUNT_FIELDS},disable_reason` })
   const currency = info.currency || account.currency || 'BRL'
-  const day = DAY_PRESET.exec(preset)?.[1]
-  const base: Params = day ? { time_range: JSON.stringify({ since: day, until: day }) } : { date_preset: preset }
+  const range = presetRange(preset)
+  const base: Params = range ? { time_range: JSON.stringify(range) } : { date_preset: preset }
 
   // A conta inteira (o alcance não soma entre campanhas) e cada campanha, no total e por dia
   const [totalsRows, dayRows, campaignRows, campaignList, campaignDayRows] = await Promise.all([
