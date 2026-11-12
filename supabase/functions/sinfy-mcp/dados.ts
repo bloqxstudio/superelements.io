@@ -23,6 +23,11 @@ const dayStart = (daysAgo: number) => {
   const sp = new Date(Date.now() + SP * 3_600_000)
   return new Date(Date.UTC(sp.getUTCFullYear(), sp.getUTCMonth(), sp.getUTCDate() - daysAgo) - SP * 3_600_000)
 }
+/** Só os números que mudam a leitura (o objeto da Meta traz dezenas de campos). */
+const pickInsights = (v: unknown) => {
+  const o = (v ?? {}) as Record<string, unknown>
+  return Object.fromEntries(['reach', 'views', 'saved', 'shares', 'total_interactions', 'follows', 'ig_reels_avg_watch_time'].filter((k) => o[k] != null).map((k) => [k, o[k]]))
+}
 const isoDay = (d: Date) => new Date(d.getTime() + SP * 3_600_000).toISOString().slice(0, 10)
 
 /** "hoje", "ontem", "7", "30", "90", "mes" ou "AAAA-MM-DD" (um dia). Sem nada: 30 dias. */
@@ -143,7 +148,7 @@ export async function instagramData(db: Db, teamId: string, period: Period) {
       db.from('crm_instagram_media').select('media_type, product_type, caption, permalink, posted_at, like_count, comments_count, insights').eq('account_id', a.id).gte('posted_at', since).order('posted_at', { ascending: false }).limit(60),
     ])
     const posts = (media ?? [])
-      .map((m) => ({ formato: m.product_type === 'REELS' ? 'reels' : m.product_type === 'STORY' ? 'story' : m.media_type === 'CAROUSEL_ALBUM' ? 'carrossel' : 'feed', data: m.posted_at, legenda: String(m.caption ?? '').slice(0, 280), link: m.permalink, curtidas: m.like_count, comentarios: m.comments_count, insights: m.insights }))
+      .map((m) => ({ formato: m.product_type === 'REELS' ? 'reels' : m.product_type === 'STORY' ? 'story' : m.media_type === 'CAROUSEL_ALBUM' ? 'carrossel' : 'feed', data: m.posted_at, legenda: String(m.caption ?? '').slice(0, 140), link: m.permalink, curtidas: m.like_count, comentarios: m.comments_count, insights: pickInsights(m.insights) }))
       .sort((x, y) => Number((y.insights as Record<string, number>)?.reach ?? 0) - Number((x.insights as Record<string, number>)?.reach ?? 0))
     out.push({
       perfil: `@${a.username}`,
@@ -156,7 +161,7 @@ export async function instagramData(db: Db, teamId: string, period: Period) {
       [`totais_${period.igDays}_dias`]: ((a.totals ?? {}) as Record<string, unknown>)[period.igDays],
       publico: a.audience,
       por_dia: days,
-      posts_do_periodo_por_alcance: posts.slice(0, 25),
+      posts_do_periodo_por_alcance: posts.slice(0, 12),
     })
   }
   return { periodo: period.label, contas: out }
@@ -192,7 +197,7 @@ export async function funnelData(db: Db, teamId: string, period: Period) {
     novos_no_periodo: inPeriod.length,
     novos_por_canal: channels,
     fechados_no_periodo: rows.filter((r) => r.stage === 'fechado' && r.closed_at && new Date(r.closed_at as string) >= period.from).length,
-    recentes: inPeriod.slice(0, 25).map((r) => {
+    recentes: inPeriod.slice(0, 12).map((r) => {
       const c = r.crm_clients as { name?: string; segment?: string; city?: string; source?: string } | null
       const o = r.origin as { channel?: string; campaign?: { name?: string }; page?: string; utm?: Record<string, string> } | null
       return { id: r.id, empresa: c?.name, segmento: c?.segment, cidade: c?.city, etapa: STAGES[r.stage as string] ?? r.stage, canal: o?.channel, campanha: o?.campaign?.name ?? o?.utm?.utm_campaign, pagina: o?.page, proximo_passo: r.next_step, criado_em: r.created_at }

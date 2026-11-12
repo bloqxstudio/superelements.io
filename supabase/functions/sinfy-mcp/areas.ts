@@ -29,12 +29,12 @@ const STAGES = ['novo', 'mapeado', 'selecionado', 'pagina', 'contatado', 'conver
 const DRAFT_PROPS = {
   titulo: { type: 'string' },
   subtitulo: { type: 'string' },
-  cartoes: { type: 'array', items: { type: 'object' }, description: '[{"id"?,"titulo","texto"?,"icone"?,"cor"?,"tag"?}]' },
-  notas: { type: 'array', items: {}, description: '[string | {"texto","cor"?,"icone"?}]' },
-  colunas: { type: 'array', items: { type: 'object' }, description: '[{"nome","cor"?,"cartoes"?:[...],"notas"?:[...]}]' },
-  centro: { type: 'string', description: 'Mapa: o tema no meio e cada item ligado a ele.' },
-  fluxo: { type: 'boolean', description: 'Cartões em sequência, com setas.' },
-  ligacoes: { type: 'array', items: { type: 'object' }, description: '[{"de","para","texto"?}] (id que você deu, posição 1, 2… ou começo do título).' },
+  cartoes: { type: 'array', items: { type: 'object' } },
+  notas: { type: 'array', items: {} },
+  colunas: { type: 'array', items: { type: 'object' } },
+  centro: { type: 'string' },
+  fluxo: { type: 'boolean' },
+  ligacoes: { type: 'array', items: { type: 'object' } },
 }
 const DRAFT_HELP = 'Prefira "cartoes" (cartão branco com ícone, título, texto curto e etiqueta) para planos, posts, etapas e ideias com detalhe; "notas" para frases curtas. "icone": nome do Lucide em inglês (camera, megaphone, target, users, calendar, rocket, lightbulb, check…) ou palavra em português. "tag": etiqueta curta (Reels, Carrossel, Urgente, R$ 300). "colunas" = frames lado a lado; "centro" = mapa; "fluxo": true = sequência com setas. Cores: amarelo, laranja, rosa, roxo, azul, verde, cinza. Texto do cartão até ~200 caracteres.'
 
@@ -97,12 +97,12 @@ export function skillPrompts(): SkillPrompt[] {
 
 // ---------- ajuda: como a plataforma funciona ----------
 
-const GUIDE: Record<string, string> = {
+export const GUIDE: Record<string, string> = {
   geral: [
     'A Sinfy é a plataforma da empresa: Plano (quem somos, oferta, público, tom), Pauta (conteúdos com data), Criativos (posts na marca), Instagram (perfil, posts, comentários, stories), Anúncios da Meta, Site (visitas), CRM (clientes e oportunidades), WhatsApp, Formulários e funis, Quadros, Cérebro e Referências.',
     'Você age como a pessoa da chave: só vê e muda o que ela pode na tela. Comece por sinfy_conta. Antes de agir, diga em uma linha o que vai fazer; depois, mostre o resultado (imagens, link).',
     'Regras: nunca invente números, preços, depoimentos ou resultados. Publicar, mandar mensagem a cliente e apagar pedem o "pode" explícito da pessoa na conversa. Aprovar um conteúdo é sempre de uma pessoa, na tela (ou do cliente, pelo link de aprovação).',
-    'Tópicos: post, pauta, crm, quadros, cerebro, instagram, dados.',
+    'Tópicos: post, modelos, editar_criativo, pauta, crm, quadros, bloco_quadro, formulario, cerebro, instagram, dados.',
   ].join('\n'),
   post: [
     'Fazer um post do começo ao fim:',
@@ -130,6 +130,7 @@ const GUIDE: Record<string, string> = {
   ].join('\n'),
   cerebro: 'O Cérebro guarda o que a empresa sabe (produtos, voz, padrões de post, decisões, logs). sinfy_cerebro_ler / _buscar antes de escrever; sinfy_cerebro_escrever para guardar o que a pessoa ensinar; sinfy_cerebro_log ao fim de uma entrega.',
   instagram: 'Números: sinfy_instagram. O que funcionou: sinfy_ig_o_que_funcionou. Perfil: sinfy_ig_perfil. Ganchos, roteiro e legenda: sinfy_ig_formulas, sinfy_ig_ganchos, sinfy_ig_tempos, sinfy_ig_legenda_revisar, sinfy_ig_humanizar. Comentários: sinfy_ig_comentarios (responder é na tela). As skills de Instagram estão nos prompts da Sinfy.',
+  bloco_quadro: `Bloco de quadro (sinfy_quadro_criar e sinfy_quadro_adicionar): "titulo", "subtitulo", "cartoes": [{"id"?,"titulo","texto"?,"icone"?,"cor"?,"tag"?}], "notas": [texto ou {"texto","cor"?,"icone"?}], "colunas": [{"nome","cor"?,"cartoes"?,"notas"?}], "centro" (mapa), "fluxo": true, "ligacoes": [{"de","para","texto"?}]. ${DRAFT_HELP}`,
   dados: 'Qualquer tabela da lista: sinfy_dados_tabelas mostra as colunas; sinfy_dados_ler filtra e conta; sinfy_dados_gravar insere, atualiza ou apaga (apagar só com "confirmar"). Use as ferramentas próprias quando existirem (conteúdos, criativos, oportunidades, quadros).',
 }
 
@@ -191,8 +192,8 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_ajuda',
       title: 'Como usar a Sinfy',
-      description: 'Como a plataforma funciona e qual ferramenta usar para cada coisa: fazer e publicar um post, Pauta, CRM e oportunidades, quadros, Cérebro, Instagram, dados. Leia o tópico antes de uma tarefa nova ou quando a pessoa perguntar como fazer algo na Sinfy.',
-      inputSchema: { type: 'object', properties: { topico: { type: 'string', enum: Object.keys(GUIDE) } }, additionalProperties: false },
+      description: 'Como fazer cada coisa na Sinfy e qual ferramenta usar. Tópicos: geral, post, modelos, editar_criativo, pauta, crm, quadros, bloco_quadro, formulario, cerebro, instagram, dados.',
+      inputSchema: { type: 'object', properties: { topico: { type: 'string' } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (_c, a) => GUIDE[str(a.topico, 20)] ?? GUIDE.geral,
     },
@@ -200,8 +201,8 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_cerebro_ler',
       title: 'Ler o Cérebro',
-      description: 'O Cérebro (base de conhecimento) da conta: sem "nota", a lista das notas (caminho, data) e a visão geral (README.md); com "nota" (ex.: "produtos/README.md", "instagram/voz.md"), o texto inteiro. Quem é a empresa, produtos, padrões de post (marca/padroes/), voz do Instagram, decisões e logs. A marca (cores e fontes) vem em sinfy_conta.',
-      inputSchema: { type: 'object', properties: { nota: { type: 'string' } }, additionalProperties: false },
+      description: 'O Cérebro da conta: sem "nota", a lista (use "pasta" para filtrar); com "nota", o texto inteiro.',
+      inputSchema: { type: 'object', properties: { nota: { type: 'string' }, pasta: { type: 'string' } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (c, a) => {
         const path = notePath(a.nota)
@@ -210,10 +211,13 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
           if (!rows.length) return `Nota não encontrada: ${path}. Veja a lista com sinfy_cerebro_ler sem "nota".`
           return { nota: rows[0].path, atualizada: rows[0].updated_at, texto: String(rows[0].content).slice(0, 40000), link: `${appUrl}/cerebro?nota=${encodeURIComponent(rows[0].path)}` }
         }
-        const rows = await asUser(c, (tx) => tx`select path, updated_at, length(content) as tamanho, case when path = 'README.md' then left(content, 6000) end as texto from crm_knowledge_notes where team_id = ${c.team.id} order by path limit 500`)
+        const pasta = str(a.pasta, 200).replace(/^\/+|\/+$/g, '')
+        const prefix = pasta ? `${pasta.replace(/[\\%_]/g, (m) => '\\' + m)}/%` : '%'
+        const rows = await asUser(c, (tx) => tx`select path, updated_at, length(content) as tamanho, case when path = 'README.md' then left(content, 3000) end as texto from crm_knowledge_notes where team_id = ${c.team.id} and path like ${prefix} order by path limit 150`)
         const readme = rows.find((r) => r.path === 'README.md')
         return {
-          notas: rows.map((r) => ({ nota: r.path, atualizada: String(r.updated_at).slice(0, 10), caracteres: r.tamanho })),
+          notas: rows.map((r) => ({ nota: r.path, atualizada: String(r.updated_at).slice(0, 10) })),
+          mais: rows.length === 150 ? 'há mais notas: filtre por "pasta"' : undefined,
           visao_geral: readme ? readme.texto : '(sem README.md: crie a visão geral da empresa com sinfy_cerebro_escrever)',
         }
       },
@@ -221,7 +225,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_cerebro_buscar',
       title: 'Buscar no Cérebro',
-      description: 'Busca uma palavra ou frase nas notas do Cérebro da conta; devolve as notas que falam disso, com um trecho.',
+      description: 'Busca nas notas do Cérebro; devolve nota e trecho.',
       inputSchema: { type: 'object', required: ['texto'], properties: { texto: { type: 'string' } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (c, a) => {
@@ -240,7 +244,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_cerebro_escrever',
       title: 'Escrever no Cérebro',
-      description: 'Grava uma nota .md no Cérebro da conta (o texto inteiro em Markdown substitui o anterior: leia antes com sinfy_cerebro_ler e mantenha o que não muda). "nova": true para criar sem sobrescrever. Pastas livres (ex.: "produtos/linha-x.md", "instagram/voz.md"); "plataforma/" e a marca não se mudam por aqui.',
+      description: 'Grava uma nota .md do Cérebro (substitui o texto: leia antes). "nova": true para criar.',
       inputSchema: { type: 'object', required: ['nota', 'texto'], properties: { nota: { type: 'string' }, texto: { type: 'string' }, nova: { type: 'boolean' } }, additionalProperties: false },
       run: async (c, a) => {
         const path = notePath(a.nota)
@@ -255,7 +259,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_cerebro_log',
       title: 'Registrar no log do Cérebro',
-      description: 'Registra no log do Cérebro da conta o que aconteceu hoje (entrega, decisão, aprovação, resultado). "texto" em Markdown com O que aconteceu, O que entregamos, O que aprendemos e Próximo passo.',
+      description: 'Registra no log do Cérebro o que aconteceu hoje (entrega, decisão, resultado).',
       inputSchema: { type: 'object', required: ['titulo', 'texto'], properties: { titulo: { type: 'string' }, texto: { type: 'string' } }, additionalProperties: false },
       run: async (c, a) => {
         const title = str(a.titulo, 120)
@@ -273,7 +277,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_quadros',
       title: 'Quadros',
-      description: 'Os quadros da conta (canvas livre, estilo Miro/FigJam): id, título, última mudança e link.',
+      description: 'Os quadros da conta (canvas livre), com id e link.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (c) => {
@@ -284,7 +288,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_quadro_ler',
       title: 'Ler um quadro',
-      description: 'O que está escrito num quadro: cada nota, cartão e texto (com a cor e a coluna em que está) e as setas entre eles.',
+      description: 'O que está escrito num quadro: cada item com id (#…), cor, coluna e setas.',
       inputSchema: { type: 'object', required: ['quadro'], properties: { quadro: { type: 'string' } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (c, a) => {
@@ -296,7 +300,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_quadro_criar',
       title: 'Criar quadro',
-      description: `Cria um quadro na conta, já com um bloco desenhado (opcional). ${DRAFT_HELP} ${PENDING_NOTE}`,
+      description: 'Cria um quadro, com um bloco opcional (cartões, notas, colunas, mapa ou fluxo; formato em sinfy_ajuda("bloco_quadro")). O bloco aparece quando alguém abrir o quadro.',
       inputSchema: { type: 'object', required: ['titulo'], properties: DRAFT_PROPS, additionalProperties: false },
       run: async (c, a) => {
         const title = str(a.titulo, 120) || 'Quadro sem título'
@@ -309,7 +313,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_quadro_adicionar',
       title: 'Pôr um bloco no quadro',
-      description: `Põe num quadro que já existe um bloco novo, embaixo do que já está lá, sem mexer no resto. ${DRAFT_HELP} ${PENDING_NOTE}`,
+      description: 'Põe um bloco novo num quadro, embaixo do que existe (formato em sinfy_ajuda("bloco_quadro")). Aparece quando alguém abrir o quadro.',
       inputSchema: { type: 'object', required: ['quadro'], properties: { quadro: { type: 'string' }, ...DRAFT_PROPS }, additionalProperties: false },
       run: async (c, a) => {
         const b = await boardOf(c, a.quadro)
@@ -324,7 +328,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_quadro_editar',
       title: 'Editar itens do quadro',
-      description: 'Muda itens que já estão num quadro, pelo id que sinfy_quadro_ler mostra (#…): texto, título (de cartão), cor (amarelo, laranja, rosa, roxo, azul, verde, cinza), posição (x, y) ou apagar. Também liga itens com setas ("ligacoes") e arruma o quadro ("organizar": true). ' + PENDING_NOTE,
+      description: 'Muda itens de um quadro pelo id (texto, título, cor, x/y, apagar), liga itens com setas ou organiza. Aplicado quando alguém abrir o quadro.',
       inputSchema: {
         type: 'object',
         required: ['quadro'],
@@ -362,7 +366,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_oportunidades',
       title: 'Oportunidades do CRM',
-      description: `Os cartões do funil de vendas: cliente, etapa (${STAGES.join(', ')}), oferta, próximo passo e data, responsável e notas. Filtre por "etapa" ou "busca" (nome do cliente).`,
+      description: 'Os cartões do funil de vendas (cliente, etapa, oferta, próximo passo). Filtre por etapa ou busca.',
       inputSchema: { type: 'object', properties: { etapa: { type: 'string' }, busca: { type: 'string' }, limite: { type: 'integer', minimum: 1, maximum: 100 } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (c, a) => {
@@ -385,7 +389,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_oportunidade_salvar',
       title: 'Criar ou editar oportunidade',
-      description: `Cria um cartão no funil (com "cliente": o cliente novo, ou "cliente_id" de um que existe) ou muda um que existe ("id"): etapa (${STAGES.join(', ')}), próximo passo, data (AAAA-MM-DD), notas, oferta (objeto, junta com a atual). Mudar a etapa grava na linha do tempo do cliente sozinho. Fechado ou perdido só com "confirmar": true, depois de a pessoa dizer.`,
+      description: 'Cria um cartão no funil (com "cliente" novo ou "cliente_id") ou muda um ("id"): etapa, próximo passo, data, notas, oferta. Fechado ou perdido só com "confirmar": true.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -444,7 +448,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_referencias',
       title: 'Referências',
-      description: 'As referências visuais da conta (posts, reels, sites que a equipe guardou): link, plataforma, tipo, título, notas, etiquetas, estrela, autor, legenda e números. Filtre por "busca", "estrela", "tipo" (estatico, carrossel, video, motion, reels, story) ou "etiqueta".',
+      description: 'As referências visuais da conta; filtre por busca, estrela, tipo ou etiqueta.',
       inputSchema: {
         type: 'object',
         properties: { busca: { type: 'string' }, estrela: { type: 'boolean' }, tipo: { type: 'string' }, etiqueta: { type: 'string' }, limite: { type: 'integer', minimum: 1, maximum: 100 } },
@@ -473,7 +477,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_referencia_salvar',
       title: 'Salvar referência',
-      description: 'Guarda um link como referência visual da conta, ou muda uma que existe ("id"): título, notas (o que copiar dela), etiquetas, tipo e estrela. Nunca raspe o Instagram: o link é o que a pessoa mandou.',
+      description: 'Guarda um link como referência, ou muda uma ("id"): título, notas, etiquetas, tipo, estrela.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -516,7 +520,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_ig_formulas',
       title: 'Instagram · fórmulas de gancho',
-      description: 'As 26 fórmulas de gancho de Reels (nome, modelo, exemplo, texto da tela, para que serve, armadilha) e as regras do gancho. Leia antes de escrever ganchos, roteiro, pauta ou repurpose.',
+      description: 'As 26 fórmulas de gancho de Reels e as regras do gancho.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async () => ({ regras: IA.HOOK_RULES, formulas: IA.hooksForPrompt() }),
@@ -524,7 +528,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_ig_ganchos',
       title: 'Instagram · nota dos ganchos',
-      description: 'Dá nota de 0 a 100 a cada gancho (a frase falada) em 5 propriedades (tamanho, concreto, tensão, o forte na frente, fala com alguém), aponta problemas graves (saudação, "pare de rolar", "neste vídeo", emoji, hashtag), diz a fórmula e ordena. Passe 3 ganchos de fórmulas diferentes. Abaixo de 50 no primeiro: ainda não tem gancho.',
+      description: 'Nota de 0 a 100 para cada gancho, com a fórmula e os problemas. Mande 3 de fórmulas diferentes.',
       inputSchema: { type: 'object', required: ['ganchos'], properties: { ganchos: { type: 'array', items: { type: 'string' } } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (_c, a) => {
@@ -537,7 +541,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_ig_tempos',
       title: 'Instagram · tempos do roteiro',
-      description: 'Transforma o roteiro (uma fala por linha) em minutagem (160 palavras por minuto, ou "ppm"): marca gancho, meio e chamada, e aponta gancho passando de 3 s, batida acima de 4 s, três batidas sem nada concreto, falta de loop e a diferença para o "alvo" em segundos. Corrija e rode de novo antes de entregar.',
+      description: 'Minutagem do roteiro (uma fala por linha) com os alertas de ritmo, gancho e loop.',
       inputSchema: { type: 'object', required: ['roteiro'], properties: { roteiro: { type: 'string' }, alvo: { type: 'number' }, ppm: { type: 'number' } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (_c, a) => {
@@ -549,7 +553,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_ig_legenda_revisar',
       title: 'Instagram · revisar legenda',
-      description: 'Revisa uma legenda: o que o feed mostra antes do "mais" (~125 caracteres), primeira linha, gancho concreto, hashtags (máximo 5, nada de #viral), links mortos, UMA chamada, emoji e os termos de busca ("palavras"), mais a nota de "cara de IA". Corrija cada CORRIGIR e decida cada ATENCAO.',
+      description: 'Revisa uma legenda (primeira linha, hashtags, chamada, termos de busca) e dá a nota de "cara de IA".',
       inputSchema: { type: 'object', required: ['texto'], properties: { texto: { type: 'string' }, palavras: { type: 'array', items: { type: 'string' } } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (_c, a) => {
@@ -561,7 +565,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_ig_humanizar',
       title: 'Instagram · humanizar texto',
-      description: 'Tira a marca de máquina de qualquer texto (legenda, roteiro, comentário, direct, bio): caracteres invisíveis, travessão, aspas curvas e clichês de IA em português. Devolve o texto limpo, cada troca, as estruturas para reescrever à mão ("não é só X, é Y", trio, "O resultado?") e a nota antes e depois (passa com 70 e nenhuma abaixo de 55). Use antes de mostrar qualquer texto de Instagram; é heurística, não prometa "indetectável".',
+      description: 'Tira a cara de IA de um texto e diz o que reescrever à mão, com a nota antes e depois.',
       inputSchema: { type: 'object', required: ['texto'], properties: { texto: { type: 'string' } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (_c, a) => {
@@ -573,7 +577,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_ig_virais',
       title: 'Instagram · arquivo de virais',
-      description: 'Ordena reels de outros perfis pelo múltiplo sobre a MEDIANA do próprio perfil (não por views brutas; acima de 3x é sinal), dá a fórmula e a nota de cada gancho, mostra o que o terço de cima tem que o de baixo não tem e diz quanto confiar. Números aceitam "12 mil", "1,2 mi". "salvar": grava em instagram/virais.md no Cérebro, que as outras skills leem. Os reels vêm do que a pessoa colou ou das Referências; nunca raspe o Instagram.',
+      description: 'Ordena reels de outros perfis pelo múltiplo sobre a mediana e mostra o que os melhores têm em comum. "salvar" grava no Cérebro.',
       inputSchema: {
         type: 'object',
         required: ['reels'],
@@ -594,7 +598,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_ig_o_que_funcionou',
       title: 'Instagram · o que funcionou',
-      description: 'Auditoria dos posts reais do Instagram conectado (padrão 90 dias): ordena pelo múltiplo sobre a mediana da conta (do mesmo formato quando dá), com envios, salvos e seguidores a cada mil de alcance e tempo assistido dos reels; os 5 de cima e os 5 de baixo; por formato; pela fórmula da primeira linha; achados com a confiança; o que parar e o que fazer mais.',
+      description: 'Auditoria dos posts do Instagram conectado (padrão 90 dias): os melhores e piores, por formato e por gancho, e o que fazer mais. "detalhe": true traz todas as linhas.',
       inputSchema: { type: 'object', properties: { dias: { type: 'integer', enum: [30, 60, 90, 180] } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (c, a) => {
@@ -608,7 +612,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_ig_perfil',
       title: 'Instagram · nota do perfil',
-      description: 'O perfil do Instagram conectado com a nota do app (bio, foto, destaques, ritmo, formatos, legendas, desempenho, horários; 0 a 100 por parte) e a rubrica de 12 itens / 100 pontos. Dê nota honesta a cada item, reescreva na ordem do que perdeu mais pontos (3 opções de Nome com até 30 caracteres; bio até 150), humanize e diga a nota de novo. Nada é mudado no Instagram.',
+      description: 'Nota do perfil do Instagram conectado (bio, foto, ritmo, formatos, desempenho) e a rubrica de 12 itens.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (c) => {
@@ -634,7 +638,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_ig_comentarios',
       title: 'Instagram · comentários',
-      description: 'Os comentários dos posts do Instagram conectado, como a Sinfy sincronizou: de um "post" (id ou link) ou dos últimos "posts" com comentário (padrão 5, máximo 10), com quem comentou, texto, curtidas, se é nosso, se já foi respondido ou resolvido. Separe em PALAVRA-CHAVE, LEAD, SUBSTÂNCIA, PERGUNTA, APOIO e RUÍDO e escreva as respostas. Só lê: a resposta sai pela tela CRM › Instagram.',
+      description: 'Os comentários dos posts recentes (ou de um "post"). Só lê: responder é na tela.',
       inputSchema: { type: 'object', properties: { post: { type: 'string' }, posts: { type: 'integer', minimum: 1, maximum: 10 } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (c, a) => {
@@ -655,7 +659,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
             link: m.permalink,
             data: new Date(m.postedAt).toISOString().slice(0, 10),
             legenda: (m.caption ?? '').slice(0, 300),
-            comentarios: rows.filter((r) => r.media_id === m.id).slice(0, 80).map((r) => ({ id: r.comment_id, resposta_a: r.parent_id ?? undefined, de: r.username ? `@${r.username}` : '?', texto: r.body, curtidas: r.like_count ?? 0, nosso: r.own || undefined, oculto: r.hidden || undefined, respondido: r.replied || undefined, resolvido: r.handled || undefined, quando: r.ts })),
+            comentarios: rows.filter((r) => r.media_id === m.id).slice(0, 30).map((r) => ({ id: r.comment_id, resposta_a: r.parent_id ?? undefined, de: r.username ? `@${r.username}` : '?', texto: r.body, curtidas: r.like_count ?? 0, nosso: r.own || undefined, oculto: r.hidden || undefined, respondido: r.replied || undefined, resolvido: r.handled || undefined, quando: r.ts })),
           })),
           responder: `${appUrl}/crm/instagram`,
         }

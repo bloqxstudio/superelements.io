@@ -69,3 +69,9 @@ O usuário, testando pelo ChatGPT na Vizor: "não tem todas as regras… não co
 - `sinfy_quadro_editar` (itens pelo id, setas, organizar): entra na fila `pending` como `{op}` e o editor aplica com `editBoardItems`, `linkBoardItems`, `organizeBoard`.
 - `sinfy_ajuda` (guia por tópico) e as instruções do servidor reescritas (editar em vez de criar; confirmar antes de publicar, aprovar, mandar mensagem, apagar).
 - Testado: `deno check` das duas funções, conversão SVG→JPEG no Deno, `tsc`, `vite build`, `npm test` (232; o teste antigo "nada de aprovar nem publicar" virou "só com confirmação"). Funções publicadas e carregando. **Não testado** com chave real nem uma publicação de verdade.
+
+### Menos tokens (2026-11-12, terceira rodada)
+
+O usuário, com medo do gasto de tokens, escolheu os itens 1 (descrições enxutas) e 3 (respostas menores); imagens continuam como estavam.
+- Lista de ferramentas medida (JSON do `tools/list` ÷ 3,5): **11,3 mil → 7,5 mil tokens** por conversa. Cada descrição tem uma ou duas frases; as regras longas foram para `sinfy_ajuda` (tópicos `modelos`, `editar_criativo`, `formulario`, `bloco_quadro`, além dos que já havia). O resto é a estrutura dos campos.
+- Respostas: `sinfy_dados_ler` padrão 20 linhas, texto até 300 caracteres, objeto grande resumido e ~30 mil caracteres no total (`detalhe: true` volta a 4000 / 120 mil); `sinfy_conteudos` padrão 15 com ideia, objetivo e roteiro cortados (`detalhe`); `sinfy_instagram` 12 posts, legenda 140 e só os números principais; `sinfy_funil` 12 recentes; Cérebro lista até 150 notas com filtro `pasta`; comentários até 30 por post.

@@ -6,7 +6,7 @@ import * as Criativos from './_gerado/criativos.js'
 import { loadFamilies, measureContext, rasterize, rasterizeRgb, sniff, toBase64, type FontLib, type ResvgLike } from './previa.ts'
 import jpeg from 'npm:jpeg-js@0.4.4'
 import { asUser, fetchFile, platformTools } from './plataforma.ts'
-import { areaTools, skillPrompts } from './areas.ts'
+import { areaTools, GUIDE, skillPrompts } from './areas.ts'
 
 /**
  * MCP da Sinfy: qualquer IA (Claude, ChatGPT, Cursor, Claude Code…) conecta na conta da empresa.
@@ -386,8 +386,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_conta',
     title: 'Quem somos',
-    description:
-      'Comece por aqui. Devolve quem é a empresa desta conta (nome, segmento, site, observações), o Cérebro da conta (visão geral e a marca escrita, a fonte de verdade sobre a empresa), o Plano da empresa (oferta, público, tom de voz, objetivo, restrições e pilares de conteúdo), a marca usada nos criativos (cores e fontes), os projetos, os módulos ligados e os canais conectados. Use isso como contexto de tudo que escrever ou criar para a empresa: escreva no tom dela, para o público dela e respeite as restrições.',
+    description: 'A empresa da chave: Plano (oferta, público, tom, restrições), marca e módulos ligados. Comece por aqui.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true },
     run: async (caller) => {
@@ -422,7 +421,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_plano_salvar',
     title: 'Salvar o Plano da empresa',
-    description: 'Grava o Plano da empresa (o contexto que todo conteúdo e criativo reaproveita). Só dono ou gestor. Mande só os campos que mudam; os outros ficam como estão. Confirme com a pessoa antes de gravar.',
+    description: 'Grava campos do Plano da empresa (só dono ou gestor). Mande só o que muda e confirme antes com a pessoa.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -453,19 +452,20 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_conteudos',
     title: 'Listar conteúdos',
-    description: 'Lista os conteúdos do Plano editorial da conta (ideia → produção → revisão → aprovado), do mais recente ao mais antigo, com título, formato, status, data editorial e roteiro.',
+    description: 'Lista os conteúdos da Pauta (status, formato, data, horário, canal, roteiro).',
     inputSchema: {
       type: 'object',
       properties: {
         status: { type: 'string', enum: ['ideia', 'producao', 'revisao', 'aprovado'], description: 'Filtra por status.' },
-        limite: { type: 'integer', minimum: 1, maximum: 100, description: 'Quantos (padrão 30).' },
+        limite: { type: 'integer', minimum: 1, maximum: 100, description: 'Quantos (padrão 15).' },
+        detalhe: { type: 'boolean', description: 'Roteiro e ideia inteiros.' },
       },
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true },
     run: async (caller, a) => {
       need(caller, 'copy', 'Conteúdos (Copy)')
-      let q = admin.from('crm_contents').select('*').eq('team_id', caller.team.id).order('updated_at', { ascending: false }).limit(Math.min(100, Math.max(1, Number(a.limite) || 30)))
+      let q = admin.from('crm_contents').select('*').eq('team_id', caller.team.id).order('updated_at', { ascending: false }).limit(Math.min(100, Math.max(1, Number(a.limite) || 15)))
       if (typeof a.status === 'string') q = q.eq('status', a.status)
       const { data, error } = await q
       if (error) throw new ToolError('Não consegui ler os conteúdos.')
@@ -474,14 +474,15 @@ const TOOLS: Tool[] = [
       return (data ?? []).map((c) => {
         const own = (links ?? []).filter((l) => l.content_id === c.id)
         const set = own.find((l) => l.kind === 'criativos')
-        return { ...slimContent(c), roteiro: String(c.script ?? '').slice(0, 1200), criativo: set ? setUrl(set.artifact_id, set.project_id ?? undefined, c.id) : null, tem_texto_no_copy: own.some((l) => l.kind === 'copy') }
+        const cut = (t: unknown, n: number) => { const x = String(t ?? ''); return a.detalhe === true || x.length <= n ? x : `${x.slice(0, n)}… (+${x.length - n}; leia com detalhe)` }
+        return { ...slimContent(c), ideia: cut(c.idea, 240), objetivo: cut(c.goal, 160), roteiro: cut(c.script, a.detalhe === true ? 20000 : 300), criativo: set ? setUrl(set.artifact_id, set.project_id ?? undefined, c.id) : null, tem_texto_no_copy: own.some((l) => l.kind === 'copy') }
       })
     },
   },
   {
     name: 'sinfy_conteudo_criar',
     title: 'Criar conteúdo no Plano',
-    description: 'Cria um conteúdo no Plano editorial da conta (nasce como "ideia"). Escreva no tom e para o público do Plano (leia sinfy_conta antes). Para vários, chame uma vez por conteúdo. Depois, sinfy_criativo_criar com o id deste conteúdo gera o criativo ligado a ele.',
+    description: 'Cria um conteúdo na Pauta (nasce como ideia), no tom do Plano. Depois, sinfy_criativo_criar com o id gera o criativo ligado.',
     inputSchema: {
       type: 'object',
       required: ['titulo'],
@@ -510,7 +511,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_conteudo_atualizar',
     title: 'Atualizar conteúdo',
-    description: 'Edita o cartão de um conteúdo da Pauta: título, ideia, objetivo, formato, roteiro, data, horário, canal, etiquetas (pelo nome; as que não existem são criadas) e status (ideia, producao, revisao, aprovado). Aprovar só com "confirmar": true depois de a pessoa dizer que aprova, e só gestor. Mudar o texto de um aprovado volta para produção. Mande só o que muda.',
+    description: 'Edita um cartão da Pauta: textos, data, horário, canal, etiquetas (por nome) e status. Aprovar: só gestor, com "confirmar": true depois do "aprovo" da pessoa. Mande só o que muda.',
     inputSchema: {
       type: 'object',
       required: ['id'],
@@ -587,21 +588,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_criativo_criar',
     title: 'Criar criativos na marca',
-    description: [
-      'Cria posts de Instagram (feed, carrossel ou story) na marca da empresa, dentro dos Criativos da Sinfy. Você escreve o roteiro de cada slide (o modelo e os textos); a Sinfy monta na identidade da conta (cores, fontes, logo) e devolve a IMAGEM de cada slide para você mostrar à pessoa no chat, mais o link para editar, gerar as fotos e publicar.',
-      'Antes: leia sinfy_conta (Plano e marca). Se houver um conteúdo do Plano, passe o id em conteudo_id e siga o roteiro dele.',
-      'Modelos de slide (campos entre parênteses):',
-      '- manifesto: título grande e uma frase; abre ou fecha uma ideia (label, title, body, dark).',
-      '- lista: pergunta e 3 a 4 linhas curtas que o público reconhece (label, title, items).',
-      '- cta: chamada final com botão (label, title, cta = texto do botão, body = contato).',
-      '- viral-frase: uma ideia em letras grandes com rótulo e frase de apoio (label, title, body, dark).',
-      '- viral-dado: número enorme até 4 caracteres ("73%", "5 s") e o que quer dizer (number, title, body = de onde vem o número). Só números verdadeiros.',
-      '- viral-capa: foto gerada em tela cheia com título pesado embaixo (prompt, title, body, label). Boa para abrir.',
-      '- foto-manchete: foto gerada em tela cheia com manchete no alto (prompt, title, body).',
-      '- viral-foto: foto gerada em cima, número da tela e título embaixo (prompt, number "02", title, body, dark).',
-      '- viral-fecho: fechamento do carrossel com chamada (title, body, cta).',
-      'Regras: title com até ~70 caracteres; marque UMA palavra de destaque por título com *asteriscos*; label curto (até 4 palavras). prompt descreve a cena da foto EM INGLÊS, concreta, sem texto, logotipo ou rosto conhecido (a foto é gerada depois, no editor). Use foto em no máximo 2 ou 3 slides. Carrossel: capa com gancho, um slide por ideia, último slide cta. Story (9x16): uma tela por slide, sem "arraste", "link na bio" nem viral-fecho; o último convida a responder ou mandar DM. caption: a legenda, até ~900 caracteres, no máximo 4 hashtags no fim. Nunca invente números, depoimentos, preços ou resultados.',
-    ].join('\n'),
+    description: 'Cria um conjunto NOVO de posts (feed, carrossel ou story) na marca da conta e devolve a prévia. Antes, leia sinfy_ajuda("modelos") para os modelos de slide e as regras de texto. Para ajustar um que existe, use sinfy_criativo_editar.',
     inputSchema: {
       type: 'object',
       required: ['posts'],
@@ -743,7 +730,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_criativos',
     title: 'Listar criativos',
-    description: 'Lista os conjuntos de Criativos da conta (os da pessoa da chave e os dos projetos da conta), com link para abrir.',
+    description: 'Lista os conjuntos de Criativos da conta, com id e link.',
     inputSchema: { type: 'object', properties: { limite: { type: 'integer', minimum: 1, maximum: 50 } }, additionalProperties: false },
     annotations: { readOnlyHint: true },
     run: async (caller, a) => {
@@ -754,7 +741,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_criativo',
     title: 'Ler um criativo',
-    description: 'Lê um conjunto de Criativos: os textos de cada slide e a legenda de cada post (para revisar, reaproveitar ou criar variações).',
+    description: 'Lê os textos de cada slide e a legenda de cada post de um conjunto.',
     inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, projeto_id: { type: 'string' } }, additionalProperties: false },
     annotations: { readOnlyHint: true },
     run: async (caller, a) => {
@@ -774,7 +761,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_criativo_ver',
     title: 'Ver o criativo',
-    description: 'Mostra a imagem de cada slide de um post de um conjunto de Criativos, como vai ficar (marca, textos e fotos já geradas). Use para mostrar à pessoa o que está sendo entregue. Fotos ainda não geradas aparecem como um bloco listrado.',
+    description: 'Mostra as imagens de um post de um conjunto (padrão: o primeiro).',
     inputSchema: {
       type: 'object',
       required: ['id'],
@@ -815,7 +802,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_criativo_foto',
     title: 'Pôr uma foto no criativo',
-    description: 'Sobe uma foto (url https ou base64) para um conjunto de Criativos e põe num slide: no lugar da foto pedida ainda não gerada, ou trocando a imagem do slide. Devolve a prévia do slide com a foto.',
+    description: 'Põe uma foto (url https ou base64) num slide de um conjunto: no lugar da foto pedida ou trocando a imagem.',
     inputSchema: {
       type: 'object',
       required: ['id'],
@@ -874,16 +861,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_criativo_editar',
     title: 'Editar um criativo',
-    description: [
-      'Edita um conjunto de Criativos que já existe, sem criar outro: troca o texto de um slide mantendo o desenho, muda a legenda ou o nome, refaz um slide com outro modelo, apaga, duplica ou move slides, apaga um post ou acrescenta um post novo. SEMPRE use esta ferramenta para ajustes; sinfy_criativo_criar é só para um conjunto novo.',
-      'Leia antes com sinfy_criativo (os textos de cada slide) e mostre o resultado à pessoa (a resposta traz a prévia dos posts mudados).',
-      'Mudanças (lista, aplicadas em ordem; post e slide contam a partir de 1):',
-      '- {"post":1,"slide":2,"texto":{"de":"trecho do texto atual","para":"texto novo"}}: troca o texto da camada que contém "de" (marque o destaque com *asteriscos*).',
-      '- {"post":1,"legenda":"..."} · {"post":1,"nome":"..."} · {"nome_conjunto":"..."}',
-      '- {"post":1,"slide":2,"refazer":SLIDE} (o mesmo SLIDE de sinfy_criativo_criar: template, title, body…; a foto do slide se perde, peça de novo com "prompt").',
-      '- {"post":1,"novo_slide":SLIDE,"posicao"?:3} · {"post":1,"apagar_slide":2} · {"post":1,"duplicar_slide":2} · {"post":1,"mover_slide":{"de":4,"para":2}}',
-      '- {"apagar_post":2} · {"novo_post":POST} (o mesmo POST de sinfy_criativo_criar).',
-    ].join('\n'),
+    description: 'Ajusta um conjunto que já existe, sem criar outro: texto de slide, legenda, refazer, acrescentar, apagar, duplicar ou mover slides e posts. As mudanças possíveis estão em sinfy_ajuda("editar_criativo").',
     inputSchema: {
       type: 'object',
       required: ['id', 'mudancas'],
@@ -1023,11 +1001,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_publicar',
     title: 'Publicar ou agendar no Instagram',
-    description: [
-      'Publica ou agenda um post de um conjunto de Criativos no Instagram conectado da conta: no feed (foto ou carrossel, com a legenda) ou como story (cada slide uma tela).',
-      'Duas etapas, sempre: 1) chame SEM "confirmar": a resposta mostra as imagens, a legenda, a conta e o horário. Mostre tudo à pessoa e pergunte se pode. 2) Só depois de ela dizer que pode, chame de novo igual, com "confirmar": true.',
-      '"quando": "agora" (padrão; sai em até 1 a 2 minutos) ou "AAAA-MM-DD HH:MM" no horário de Brasília. Fotos ainda não geradas bloqueiam: gere antes. Feed aceita 4x5 e 1x1; story, qualquer formato (9x16 é o certo). Acompanhe e cancele com sinfy_publicacoes.',
-    ].join('\n'),
+    description: 'Publica ou agenda um post no Instagram (feed ou story). Sempre em 2 passos: sem "confirmar" mostra a prévia e o resumo; só depois do "pode" da pessoa, de novo com "confirmar": true. "quando": "agora" ou "AAAA-MM-DD HH:MM" (Brasília).',
     inputSchema: {
       type: 'object',
       required: ['id'],
@@ -1110,7 +1084,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_publicacoes',
     title: 'Publicações agendadas',
-    description: 'A fila de publicação do Instagram da conta (posts e stories agendados, publicando, publicados ou com falha), com horário, erro e link do post. "cancelar": id de uma publicação ainda agendada para desistir dela.',
+    description: 'A fila de publicação do Instagram (agendado, publicado, falhou, com link). "cancelar": id de uma ainda agendada.',
     inputSchema: { type: 'object', properties: { cancelar: { type: 'string' }, limite: { type: 'integer', minimum: 1, maximum: 50 } }, additionalProperties: false },
     run: async (caller, a) => {
       need(caller, 'instagram', 'Instagram')
@@ -1134,7 +1108,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_site',
     title: 'Métricas do site',
-    description: 'Visitas do site da conta no período: totais e período anterior, por dia, canais de origem, campanhas e anúncios que trouxeram visitas, páginas, entradas, cliques, eventos, contatos (WhatsApp, telefone, formulário), aparelhos, estados, cidades, horários e loja (vendas e faturamento, quando há). Use para analisar o que funciona e sugerir conteúdos e ajustes.',
+    description: 'Visitas do site no período: totais, origem, campanhas, páginas, contatos, aparelhos, cidades e vendas.',
     inputSchema: { type: 'object', properties: { periodo: PERIOD }, additionalProperties: false },
     annotations: { readOnlyHint: true },
     run: async (caller, a) => {
@@ -1145,7 +1119,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_anuncios',
     title: 'Anúncios da Meta',
-    description: 'Campanhas e anúncios da Meta (Facebook e Instagram) da conta no período, do relatório que a Sinfy guarda: valor usado, alcance, impressões, cliques no link, leads, conversas, por dia, por campanha, por anúncio, por estado, idade e gênero e plataforma. Só leitura: nada muda campanha ou orçamento.',
+    description: 'Campanhas e anúncios da Meta no período: gasto, alcance, cliques, leads, conversas, por campanha e anúncio. Só leitura.',
     inputSchema: { type: 'object', properties: { periodo: PERIOD }, additionalProperties: false },
     annotations: { readOnlyHint: true },
     run: async (caller, a) => {
@@ -1156,7 +1130,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_instagram',
     title: 'Instagram',
-    description: 'O Instagram da conta: perfil e bio, seguidores, totais de 7 ou 30 dias (alcance, visualizações, interações, toques no link), público, alcance e seguidores por dia e os posts do período ordenados por alcance, com legenda e números. Use para ver o que o público responde e planejar os próximos criativos.',
+    description: 'O Instagram da conta: perfil, seguidores, totais do período, público e os posts ordenados por alcance.',
     inputSchema: { type: 'object', properties: { periodo: PERIOD }, additionalProperties: false },
     annotations: { readOnlyHint: true },
     run: async (caller, a) => {
@@ -1167,7 +1141,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_funil',
     title: 'Funil de vendas',
-    description: 'O funil da conta: cartões e valor por etapa, leads novos no período e por canal (Google Ads, Meta Ads, orgânico…), vendas fechadas e os leads recentes com empresa, etapa, canal e campanha. Sem telefone nem e-mail dos clientes.',
+    description: 'O funil de vendas: cartões e valor por etapa, leads novos por canal, vendas e leads recentes.',
     inputSchema: { type: 'object', properties: { periodo: PERIOD }, additionalProperties: false },
     annotations: { readOnlyHint: true },
     run: async (caller, a) => {
@@ -1200,6 +1174,39 @@ const PROMPTS = [
       `Use as ferramentas da Sinfy com o período "${args.periodo || '30'}". Leia sinfy_conta, sinfy_anuncios, sinfy_site, sinfy_instagram e sinfy_funil. Diga em poucos pontos: de onde vêm os contatos e as vendas, quanto custa cada um, o que melhorou ou piorou contra o período anterior, quais posts e anúncios funcionaram e por quê. Termine com 3 a 5 ações para a próxima semana, incluindo ideias de conteúdo que eu possa criar com sinfy_conteudo_criar e sinfy_criativo_criar.`,
   },
 ]
+
+// As regras longas saíram das descrições (custo fixo de tokens em toda conversa) e ficam no guia
+GUIDE.modelos = [
+      'Cria posts de Instagram (feed, carrossel ou story) na marca da empresa, dentro dos Criativos da Sinfy. Você escreve o roteiro de cada slide (o modelo e os textos); a Sinfy monta na identidade da conta (cores, fontes, logo) e devolve a IMAGEM de cada slide para você mostrar à pessoa no chat, mais o link para editar, gerar as fotos e publicar.',
+      'Antes: leia sinfy_conta (Plano e marca). Se houver um conteúdo do Plano, passe o id em conteudo_id e siga o roteiro dele.',
+      'Modelos de slide (campos entre parênteses):',
+      '- manifesto: título grande e uma frase; abre ou fecha uma ideia (label, title, body, dark).',
+      '- lista: pergunta e 3 a 4 linhas curtas que o público reconhece (label, title, items).',
+      '- cta: chamada final com botão (label, title, cta = texto do botão, body = contato).',
+      '- viral-frase: uma ideia em letras grandes com rótulo e frase de apoio (label, title, body, dark).',
+      '- viral-dado: número enorme até 4 caracteres ("73%", "5 s") e o que quer dizer (number, title, body = de onde vem o número). Só números verdadeiros.',
+      '- viral-capa: foto gerada em tela cheia com título pesado embaixo (prompt, title, body, label). Boa para abrir.',
+      '- foto-manchete: foto gerada em tela cheia com manchete no alto (prompt, title, body).',
+      '- viral-foto: foto gerada em cima, número da tela e título embaixo (prompt, number "02", title, body, dark).',
+      '- viral-fecho: fechamento do carrossel com chamada (title, body, cta).',
+      'Regras: title com até ~70 caracteres; marque UMA palavra de destaque por título com *asteriscos*; label curto (até 4 palavras). prompt descreve a cena da foto EM INGLÊS, concreta, sem texto, logotipo ou rosto conhecido (a foto é gerada depois, no editor). Use foto em no máximo 2 ou 3 slides. Carrossel: capa com gancho, um slide por ideia, último slide cta. Story (9x16): uma tela por slide, sem "arraste", "link na bio" nem viral-fecho; o último convida a responder ou mandar DM. caption: a legenda, até ~900 caracteres, no máximo 4 hashtags no fim. Nunca invente números, depoimentos, preços ou resultados.',
+    ].join('\n')
+GUIDE.editar_criativo = [
+      'Edita um conjunto de Criativos que já existe, sem criar outro: troca o texto de um slide mantendo o desenho, muda a legenda ou o nome, refaz um slide com outro modelo, apaga, duplica ou move slides, apaga um post ou acrescenta um post novo. SEMPRE use esta ferramenta para ajustes; sinfy_criativo_criar é só para um conjunto novo.',
+      'Leia antes com sinfy_criativo (os textos de cada slide) e mostre o resultado à pessoa (a resposta traz a prévia dos posts mudados).',
+      'Mudanças (lista, aplicadas em ordem; post e slide contam a partir de 1):',
+      '- {"post":1,"slide":2,"texto":{"de":"trecho do texto atual","para":"texto novo"}}: troca o texto da camada que contém "de" (marque o destaque com *asteriscos*).',
+      '- {"post":1,"legenda":"..."} · {"post":1,"nome":"..."} · {"nome_conjunto":"..."}',
+      '- {"post":1,"slide":2,"refazer":SLIDE} (o mesmo SLIDE de sinfy_criativo_criar: template, title, body…; a foto do slide se perde, peça de novo com "prompt").',
+      '- {"post":1,"novo_slide":SLIDE,"posicao"?:3} · {"post":1,"apagar_slide":2} · {"post":1,"duplicar_slide":2} · {"post":1,"mover_slide":{"de":4,"para":2}}',
+      '- {"apagar_post":2} · {"novo_post":POST} (o mesmo POST de sinfy_criativo_criar).',
+    ].join('\n')
+GUIDE.formulario = [
+        'Cria ou muda um formulário ou quiz da conta, que tem página pública própria (link /f/<id>) e pode ir no site. Bom para testar uma oferta: a página com a proposta, as perguntas que qualificam e o botão de WhatsApp no fim. As respostas caem em Leads (crm_form_submissions) e viram oportunidade.',
+        'definicao: {"kind":"form"|"quiz","steps":[{"title","description","fields":[{"id","type","label","help","placeholder","required","options":[{"id","label","score"}],"map":"name"|"email"|"phone"|"message","width":"half"}]}],"results":[{"min","title","text","ctaLabel","ctaUrl","qualified"}]}. Tipos de campo: short, long, email, phone, number, choice, multi, select, yesno, rating. Use map para nome, e-mail e telefone. No quiz, cada opção soma score e o resultado sai pela faixa (min).',
+        'tema: {"primary","background","text","field","radius","font":"inherit"|"Inter"|"system","frame":"card"|"plain"}. config: {"submitLabel","nextLabel","successTitle","successText","redirectUrl","whatsapp":{"number","text"},"autoAdvance","showProgress","footnote"}.',
+        'publicar=true deixa a página no ar; sem isso fica rascunho. Para mudar, mande o id.',
+      ].join('\n')
 
 // As skills de Instagram, como prompts (no Claude: menu + › Sinfy)
 PROMPTS.push(...skillPrompts())

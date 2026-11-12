@@ -145,11 +145,25 @@ function whereOf(cols: Column[], filters: unknown, teamId: string, deps: Platfor
 }
 
 /** Corta textos longos e o tamanho total, para a resposta caber no chat. */
-function trimRows(rows: Record<string, unknown>[], budget = 180_000) {
+/**
+ * Corta o que vai para a conversa da IA (cada caractere é token no plano de quem usa, 2026-11-12):
+ * normal, texto até 300 caracteres, objeto grande resumido e ~30 mil caracteres no total;
+ * com `detalhe`, texto até 4000 e ~120 mil no total.
+ */
+function trimRows(rows: Record<string, unknown>[], detail = false) {
+  const budget = detail ? 120_000 : 30_000
+  const cut = detail ? 4000 : 300
   const out: Record<string, unknown>[] = []
   let used = 0
   for (const row of rows) {
-    const slim = Object.fromEntries(Object.entries(row).map(([k, v]) => [k, typeof v === 'string' && v.length > 4000 ? `${v.slice(0, 4000)}… (+${v.length - 4000})` : v]))
+    const slim = Object.fromEntries(Object.entries(row).map(([k, v]) => {
+      if (typeof v === 'string' && v.length > cut) return [k, `${v.slice(0, cut)}… (+${v.length - cut})`]
+      if (!detail && v && typeof v === 'object' && !(v instanceof Date)) {
+        const size = JSON.stringify(v).length
+        if (size > 600) return [k, `(objeto com ${size} caracteres: peça "detalhe": true ou só esta coluna)`]
+      }
+      return [k, v]
+    }))
     const size = JSON.stringify(slim).length
     if (used + size > budget && out.length) return { rows: out, cortado: true }
     used += size
@@ -222,7 +236,7 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_dados_tabelas',
       title: 'Tabelas da plataforma',
-      description: 'Lista os dados da conta que você pode ler (e quais pode gravar) com as colunas de cada tabela. Use antes de sinfy_dados_ler ou sinfy_dados_gravar.',
+      description: 'Lista as tabelas da conta que dá para ler e gravar, com as colunas.',
       inputSchema: { type: 'object', properties: { tabela: { type: 'string', description: 'Uma tabela só, com as colunas e os tipos.' } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (caller, a) => {
@@ -241,7 +255,7 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_dados_ler',
       title: 'Ler dados',
-      description: 'Lê linhas de uma tabela da conta (clientes, oportunidades, atividades, conversas e mensagens do WhatsApp, formulários e respostas, visitas do site, Instagram, anúncios, conteúdos…), com filtros, ordem e limite. Sempre só a conta da chave e só o que a pessoa da chave pode ver. Para contar, peça `contar: true`.',
+      description: 'Lê linhas de uma tabela da conta (filtros, ordem, limite; padrão 20). Textos longos vêm cortados; "detalhe": true traz inteiros. "contar": true só conta.',
       inputSchema: {
         type: 'object',
         required: ['tabela'],
@@ -250,7 +264,8 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
           colunas: { type: 'array', items: { type: 'string' }, description: 'Padrão: todas.' },
           filtros: FILTERS,
           ordem: { type: 'object', properties: { coluna: { type: 'string' }, desc: { type: 'boolean' } } },
-          limite: { type: 'integer', minimum: 1, maximum: 200, description: 'Padrão 50.' },
+          limite: { type: 'integer', minimum: 1, maximum: 200, description: 'Padrão 20.' },
+          detalhe: { type: 'boolean', description: 'Textos e objetos inteiros.' },
           pular: { type: 'integer', minimum: 0, description: 'Para paginar.' },
           contar: { type: 'boolean', description: 'Devolve só a contagem.' },
         },
@@ -269,7 +284,7 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
         const order = a.ordem && typeof a.ordem === 'object' ? (a.ordem as { coluna?: string; desc?: boolean }) : undefined
         if (order?.coluna && !known.has(order.coluna)) fail(`Coluna desconhecida na ordem: ${order.coluna}.`)
         const orderBy = order?.coluna ? `order by "${order.coluna}" ${order.desc ? 'desc' : 'asc'} nulls last` : known.has('created_at') ? 'order by created_at desc' : known.has('ts') ? 'order by ts desc' : ''
-        const limit = Math.min(200, Math.max(1, Number(a.limite) || 50))
+        const limit = Math.min(200, Math.max(1, Number(a.limite) || 20))
         const offset = Math.max(0, Number(a.pular) || 0)
         return asUser(caller, async (tx) => {
           if (a.contar) {
@@ -277,7 +292,7 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
             return { tabela: name, total: row.total }
           }
           const rows = await tx.unsafe(`select ${picked.map((c) => `"${c}"`).join(', ')} from public."${name}" ${where} ${orderBy} limit ${limit} offset ${offset}`, params as never[])
-          const { rows: out, cortado } = trimRows(rows as unknown as Record<string, unknown>[])
+          const { rows: out, cortado } = trimRows(rows as unknown as Record<string, unknown>[], a.detalhe === true)
           return { tabela: name, linhas: out.length, mais: rows.length === limit ? `pode haver mais: use pular=${offset + limit}` : undefined, cortado: cortado || undefined, dados: out }
         })
       },
@@ -285,7 +300,7 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_dados_gravar',
       title: 'Gravar dados',
-      description: 'Cria, muda ou apaga linhas nas tabelas que aceitam gravação (veja sinfy_dados_tabelas): clientes, contatos, oportunidades (mover de etapa, próximo passo, notas), atividades e comentários na linha do tempo, fluxos, funis. Grava como a pessoa da chave, com as permissões dela. Mudar ou apagar exige filtros e afeta no máximo 25 linhas; apagar exige confirmar=true. Confirme com a pessoa antes de mudanças em massa.',
+      description: 'Insere, atualiza ou apaga linhas de uma tabela que aceita gravação (até 25 por vez; apagar só com "confirmar"). Prefira as ferramentas próprias quando existirem.',
       inputSchema: {
         type: 'object',
         required: ['tabela', 'acao'],
@@ -345,7 +360,7 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_whatsapp_conversas',
       title: 'Conversas do WhatsApp',
-      description: 'As conversas do WhatsApp da conta, da mais recente à mais antiga: nome, telefone, última mensagem, se foi nossa ou do cliente, não lidas e etiquetas (Quente, Morno, Frio…). Use "respondeu" para ver só onde o cliente falou por último.',
+      description: 'As conversas do WhatsApp da conta (última mensagem, não lidas, etiquetas).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -377,7 +392,7 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_whatsapp_mensagens',
       title: 'Mensagens de uma conversa',
-      description: 'As mensagens de uma conversa do WhatsApp, em ordem (as mais recentes no fim). Diga a conversa pelo jid (de sinfy_whatsapp_conversas) ou pelo telefone.',
+      description: 'As mensagens de uma conversa do WhatsApp.',
       inputSchema: { type: 'object', required: ['conversa'], properties: { conversa: { type: 'string' }, limite: { type: 'integer', minimum: 1, maximum: 200 }, marcar_lida: { type: 'boolean', description: 'Zera as não lidas, como abrir na tela.' } }, additionalProperties: false },
       annotations: { readOnlyHint: true },
       run: async (caller, a) => {
@@ -396,7 +411,7 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_whatsapp_enviar',
       title: 'Enviar no WhatsApp',
-      description: `Envia uma mensagem (e, se quiser, um arquivo: foto, vídeo, áudio ou documento até 25 MB, por url https ou base64) pelo WhatsApp da conta, numa conversa existente ou para um número novo (sem DDI = Brasil). Sai em nome da pessoa da chave, no mesmo limite da tela: ${WHATSAPP_DAILY_LIMIT} envios por pessoa por dia. Antes de mandar para um cliente, mostre o texto à pessoa e confirme.`,
+      description: 'Envia texto ou arquivo no WhatsApp da conta. Mostre a mensagem e só envie com o "pode" da pessoa. Limite de 30 por dia.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -440,7 +455,7 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_whatsapp_etiquetas',
       title: 'Etiquetas da conversa',
-      description: 'Troca as etiquetas de uma conversa do WhatsApp (até 8): Quente, Morno, Frio, Cliente, Perdido ou outras.',
+      description: 'Troca as etiquetas de uma conversa do WhatsApp.',
       inputSchema: { type: 'object', required: ['conversa', 'etiquetas'], properties: { conversa: { type: 'string' }, etiquetas: { type: 'array', items: { type: 'string' }, maxItems: 8 } }, additionalProperties: false },
       run: async (caller, a) => {
         needModule(caller, 'whatsapp', 'WhatsApp')
@@ -454,12 +469,7 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_formulario_salvar',
       title: 'Criar ou mudar página de formulário',
-      description: [
-        'Cria ou muda um formulário ou quiz da conta, que tem página pública própria (link /f/<id>) e pode ir no site. Bom para testar uma oferta: a página com a proposta, as perguntas que qualificam e o botão de WhatsApp no fim. As respostas caem em Leads (crm_form_submissions) e viram oportunidade.',
-        'definicao: {"kind":"form"|"quiz","steps":[{"title","description","fields":[{"id","type","label","help","placeholder","required","options":[{"id","label","score"}],"map":"name"|"email"|"phone"|"message","width":"half"}]}],"results":[{"min","title","text","ctaLabel","ctaUrl","qualified"}]}. Tipos de campo: short, long, email, phone, number, choice, multi, select, yesno, rating. Use map para nome, e-mail e telefone. No quiz, cada opção soma score e o resultado sai pela faixa (min).',
-        'tema: {"primary","background","text","field","radius","font":"inherit"|"Inter"|"system","frame":"card"|"plain"}. config: {"submitLabel","nextLabel","successTitle","successText","redirectUrl","whatsapp":{"number","text"},"autoAdvance","showProgress","footnote"}.',
-        'publicar=true deixa a página no ar; sem isso fica rascunho. Para mudar, mande o id.',
-      ].join('\n'),
+      description: 'Cria ou muda um formulário ou quiz com página pública (/f/<id>). Formato da definição, tema e config em sinfy_ajuda("formulario"). "publicar": true põe no ar.',
       inputSchema: {
         type: 'object',
         properties: {
