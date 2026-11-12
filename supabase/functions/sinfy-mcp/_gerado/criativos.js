@@ -215,7 +215,7 @@ var FORMAT_LIST = Object.values(FORMATS);
 var uid = () => Math.random().toString(36).slice(2, 10);
 
 // src/features/criativos/render.ts
-var fontCss = (layer) => `${layer.weight} ${layer.size}px "${layer.font}", system-ui, sans-serif`;
+var fontCss = (layer) => `${layer.italic ? "italic " : ""}${layer.weight} ${layer.size}px "${layer.font}", system-ui, sans-serif`;
 var scratch = typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
 function setMeasureContext(ctx) {
   scratch = ctx;
@@ -350,7 +350,7 @@ function placeText(layer, ctx = scratch) {
         y: layer.y + ascent + i * lineHeight,
         font: serif ? EMPHASIS_FONT : run.em ? layer.emphasisFont : layer.font,
         weight: serif ? 400 : layer.weight,
-        italic: serif,
+        italic: serif || !!layer.italic,
         size: serif ? layer.size * 1.12 : layer.size,
         letterSpacing: serif ? 0 : layer.letterSpacing * layer.size,
         color: run.em ? layer.emphasisColor ?? layer.color : layer.color

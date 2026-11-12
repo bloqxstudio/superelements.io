@@ -46,3 +46,14 @@ os modelos prontos são `CLIENT_POST_MODELS` (neutros, em `templates.ts`), sem c
 pedido para a IA (`CLIENT_AI`, `hideCases`), e `generatePosts` sempre manda a `company` da conta (nome + Plano:
 oferta, público, tom, restrições), para o servidor não usar a voz do Avence Studio. No editor, o chat não oferece
 "Cases da Avence" e `otherBrand` corta cases e ilustrações. Na conta da casa nada mudou.
+
+## MCP como caminho principal (2026-11-12)
+
+O usuário: "vamos simplificar e focar somente no mcp como principal e acesso a tudo que temos ali"; escolheu **esconder a Iara do app** e começar por **dados + skills**.
+- **App**: `src/features/mcp/connect.ts` (`iaraEnabled`, `useMcpConnect`) e `McpHost.tsx` (montado no `Layout`). A Iara (`IaraPanel`) só aparece com `?iara=1` naquele navegador (`?iara=0` desliga). "Conectar sua IA" no rodapé do menu lateral abre o `McpDialog` em qualquer tela. Os botões que pediam algo à Iara (`useIara.ask` e o evento `iara:draft`) copiam o pedido e abrem o diálogo com "Pedido copiado".
+- **Ferramentas novas** (`supabase/functions/sinfy-mcp/areas.ts`): `sinfy_cerebro_ler`, `_buscar`, `_escrever`, `_log` (sem `plataforma/` nem `marca/DESIGN.md`); `sinfy_quadros`, `sinfy_quadro_ler`, `_criar`, `_adicionar`; `sinfy_referencias`, `sinfy_referencia_salvar`; `sinfy_ig_formulas`, `_ganchos`, `_tempos`, `_legenda_revisar`, `_humanizar`, `_virais`, `_o_que_funcionou`, `_perfil`, `_comentarios` (lê os sincronizados; responder fica na tela). Tabelas novas em `sinfy_dados_*`: `crm_story_settings`, `crm_content_comments` (grava), `crm_approval_items`, `crm_content_tags`, `crm_references`, `crm_knowledge_notes`.
+- **Quadros pelo servidor**: o Excalidraw só monta elementos no navegador. O MCP grava o `BoardDraft` em `crm_boards.pending` (migração `20261112130000_crm_boards_pending.sql`, aplicada) e o editor, ao abrir ou voltar à aba, esvazia a fila (`crm_board_take_pending`) e desenha com `addDraftToBoard`.
+- **Skills como prompts**: as 14 de Instagram (`instagramSkills.ts`) viram prompts do MCP, com os nomes das ações da Iara trocados pelas ferramentas `sinfy_*` (`RENAME` em `areas.ts`).
+- Empacotamento: `npm run build:mcp` gera `_gerado/criativos.js` e `_gerado/inteligencia.js` (`scripts/mcp/inteligencia.ts`).
+- **Ainda fora do MCP**: páginas do Space (o documento do projeto vive no navegador), gerar imagem (serviço do Mac), vídeo explicativo, responder comentários e a skill social-media (usa o Codex local).
+- Testado: `deno check`, as funções empacotadas rodando no Deno, `tsc`, `vite build`, `npm test` (232). Função publicada e carregando (401 com chave falsa). **Não testado** com uma chave real nem com um quadro aberto recebendo a fila.

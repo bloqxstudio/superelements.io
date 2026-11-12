@@ -8,6 +8,7 @@ import { useCrm } from '@/features/crm/crmStore'
 import { accountSets } from '@/features/criativos/accountSets'
 import type { SetSummary } from '@/features/criativos/types'
 import { useIara } from '@/features/iara/store'
+import { iaraEnabled } from '@/features/mcp/connect'
 import { registerAttachment } from '@/features/iara/workControl'
 import { cn } from '@/lib/utils'
 import { referenceShotUrl, type Reference } from './api'
@@ -103,7 +104,8 @@ export const RecreateDialog: React.FC<{ reference: Reference; open: boolean; onC
             ref, content, rules,
           ].filter(Boolean).join(' ')
       useIara.getState().ask(prompt)
-      toast.success('Pedido enviado à Iara', { description: `${what === 'post' ? 'O designer monta o post' : 'A linha do vídeo começa'} no conjunto ${chosen.name}. Acompanhe no painel da Iara.` })
+      if (!iaraEnabled()) toast.success('Pedido copiado', { description: 'Cole na sua IA conectada à conta (Claude, ChatGPT ou Cursor).' })
+      else toast.success('Pedido enviado à Iara', { description: `${what === 'post' ? 'O designer monta o post' : 'A linha do vídeo começa'} no conjunto ${chosen.name}. Acompanhe no painel da Iara.` })
       onClose()
     } finally {
       setBusy(false)
@@ -170,7 +172,7 @@ export const RecreateDialog: React.FC<{ reference: Reference; open: boolean; onC
           </div>
           <div className="flex items-center gap-2 pt-1">
             <Button onClick={() => void start()} disabled={!ready || busy} className="gap-1.5">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Criar com a Iara
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {iaraEnabled() ? 'Criar com a Iara' : 'Copiar pedido para a IA'}
             </Button>
             <span className="text-xs text-gray-500">{what === 'video' ? 'Abre o estúdio de vídeo e cria lá (2 a 5 minutos).' : 'O post aparece no conjunto escolhido.'}</span>
           </div>

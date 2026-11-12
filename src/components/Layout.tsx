@@ -11,6 +11,8 @@ import { useRoutineScheduler } from '@/features/ia/rotinas';
 import { PreviewDrawer } from '@/features/operations/Preview';
 import { GuardedOutlet } from '@/features/crm/GuardedOutlet';
 import { IaraPanel } from '@/features/iara/IaraPanel';
+import { iaraEnabled } from '@/features/mcp/connect';
+import { McpHost } from '@/features/mcp/McpHost';
 
 /**
  * Telas da conta: menu lateral com Produção e CRM (no celular, uma barra com
@@ -87,6 +89,8 @@ const Layout: React.FC = () => {
 
   // Trocou de tela pelo menu do celular: ele fecha
   useEffect(() => setOpen(false), [pathname]);
+  // A Iara saiu das telas (2026-11-12): a IA da pessoa entra pelo MCP. `?iara=1` religa neste navegador
+  const [iara] = useState(iaraEnabled);
   const gutters = usePageGutters(mainRef, barRef, [pathname, collapsed, inProject, embedded, editorRoute]);
 
   // Dentro de um projeto a Iara também está (o iframe embutido de um agente fica sem ela)
@@ -94,7 +98,8 @@ const Layout: React.FC = () => {
     return (
       <div className="se-product se-project" style={embedded ? undefined : { paddingRight: 'var(--iara-dock, 0px)' }}>
         <GuardedOutlet />
-        {!embedded && <IaraPanel />}
+        {!embedded && iara && <IaraPanel />}
+        {!embedded && <McpHost />}
       </div>
     );
 
@@ -133,7 +138,8 @@ const Layout: React.FC = () => {
           <GuardedOutlet />
         </main>
         <PreviewDrawer />
-        <IaraPanel />
+        {iara && <IaraPanel />}
+        <McpHost />
       </div>
     </div>
   );

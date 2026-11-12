@@ -5,6 +5,7 @@ import { adsData, funnelData, instagramData, periodOf, siteData } from './dados.
 import * as Criativos from './_gerado/criativos.js'
 import { loadFamilies, measureContext, rasterize, sniff, toBase64, type FontLib, type ResvgLike } from './previa.ts'
 import { fetchFile, platformTools } from './plataforma.ts'
+import { areaTools, skillPrompts } from './areas.ts'
 
 /**
  * MCP da Sinfy: qualquer IA (Claude, ChatGPT, Cursor, Claude Code…) conecta na conta da empresa.
@@ -838,6 +839,8 @@ const TOOLS: Tool[] = [
 
 // A plataforma inteira (dados, WhatsApp, formulários), como a pessoa da chave
 TOOLS.push(...(platformTools({ admin, appUrl: APP_URL, fail: (m) => { throw new ToolError(m) } }) as unknown as Tool[]))
+// Cérebro, quadros, referências e a inteligência de Instagram (o que antes só a Iara fazia)
+TOOLS.push(...(areaTools({ admin, appUrl: APP_URL, fail: (m) => { throw new ToolError(m) } }) as unknown as Tool[]))
 
 const PROMPTS = [
   {
@@ -857,6 +860,9 @@ const PROMPTS = [
       `Use as ferramentas da Sinfy com o período "${args.periodo || '30'}". Leia sinfy_conta, sinfy_anuncios, sinfy_site, sinfy_instagram e sinfy_funil. Diga em poucos pontos: de onde vêm os contatos e as vendas, quanto custa cada um, o que melhorou ou piorou contra o período anterior, quais posts e anúncios funcionaram e por quê. Termine com 3 a 5 ações para a próxima semana, incluindo ideias de conteúdo que eu possa criar com sinfy_conteudo_criar e sinfy_criativo_criar.`,
   },
 ]
+
+// As skills de Instagram, como prompts (no Claude: menu + › Sinfy)
+PROMPTS.push(...skillPrompts())
 
 // ---------- JSON-RPC ----------
 

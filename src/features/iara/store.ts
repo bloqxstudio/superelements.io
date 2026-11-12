@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { create } from 'zustand'
+import { iaraEnabled, useMcpConnect } from '@/features/mcp/connect'
 
 /**
  * Iara: a assistente que conversa e mexe nas telas (2026-11-05). O usuário: "um chat, aonde
@@ -310,7 +311,8 @@ export const useIara = create<IaraState>()((set) => ({
   messages: [],
   conversations: [],
   setOpen: (open) => set({ open }),
-  ask: (text) => set({ open: true, queued: text }),
+  // Iara fora das telas (o MCP é o caminho): o pedido vai copiado para a IA conectada da pessoa
+  ask: (text) => (iaraEnabled() ? set({ open: true, queued: text }) : useMcpConnect.getState().show(text)),
 }))
 
 /** Abre as conversas da conta: a mais recente fica aberta (ou uma nova, se não houver). */

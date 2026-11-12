@@ -5,7 +5,7 @@ import { ChevronsUpDown, LayoutDashboard, LayoutGrid, PanelLeftClose, PanelLeftO
 import { navigationMatches } from '@/features/navigation/workspace'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { areaPaths, type AreaId } from '@/features/navigation/AreaTabs'
-import { Activity, Bookmark, Bot, Brain, Building2, CalendarRange, Filter, House, Building, Globe, ListChecks, Images, Instagram, Megaphone, Palette, PenLine, Presentation, KanbanSquare, LayoutTemplate, LogOut, MessageCircle, Radar, ScanSearch, Send, Users, Wand2, X } from 'lucide-react'
+import { Activity, Bookmark, Bot, Brain, Building2, CalendarRange, Filter, House, Building, Globe, ListChecks, Images, Instagram, Megaphone, Palette, PenLine, Presentation, KanbanSquare, LayoutTemplate, LogOut, MessageCircle, Radar, ScanSearch, Send, Sparkles, Users, Wand2, X } from 'lucide-react'
 import { Logo } from '@/components/Logo'
 import { PersonAvatar } from '@/features/profile/PersonAvatar'
 import { useAuth } from '@/contexts/AuthContext'
@@ -18,6 +18,7 @@ import { AGENT_COLOR } from '@/features/agents/agentStatus'
 import { useTick } from '@/features/agents/useTick'
 import { agentStatus, useAgents } from '@/features/space/bridge/agentsStore'
 import { cn } from '@/lib/utils'
+import { useMcpConnect } from '@/features/mcp/connect'
 import { moduleHomePath, useMenuModules } from '@/features/navigation/moduleHome'
 
 /**
@@ -428,6 +429,18 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
       </Collapsed.Provider>
 
       <div className="se-sidebar-user shrink-0 space-y-2 px-3 py-3">
+        {user && team && (
+          <button
+            type="button"
+            onClick={() => { onClose?.(); useMcpConnect.getState().show() }}
+            title="Conectar sua IA (Claude, ChatGPT, Cursor) a esta conta"
+            aria-label={collapsed ? 'Conectar sua IA' : undefined}
+            className={cn('flex h-8 w-full items-center gap-2.5 rounded-lg text-[13px] text-gray-600 transition-colors hover:bg-black/[.045] hover:text-gray-900', collapsed ? 'justify-center' : 'px-2.5')}
+          >
+            <Sparkles className="h-4 w-4 shrink-0 text-violet-500" aria-hidden />
+            {!collapsed && 'Conectar sua IA'}
+          </button>
+        )}
         {user && (
           <div className={cn('flex items-center gap-1', collapsed && 'flex-col')}>
             <NavLink

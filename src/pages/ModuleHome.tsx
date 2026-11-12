@@ -86,7 +86,7 @@ const ModuleHome: React.FC = () => {
       {prompts.length > 0 && (
         <section className="mt-10" aria-labelledby="module-iara">
           <h2 id="module-iara" className="flex items-center gap-2 text-sm font-medium text-gray-700">
-            <Sparkles className="h-4 w-4 text-violet-500" aria-hidden /> Peça à Iara
+            <Sparkles className="h-4 w-4 text-violet-500" aria-hidden /> Peça à sua IA
           </h2>
           <div className="mt-3 flex flex-wrap gap-2">
             {prompts.map((p) => (

@@ -28,7 +28,7 @@ const copy = (text: string) =>
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'nunca')
 
-export const McpDialog: React.FC<{ open: boolean; onOpenChange: (open: boolean) => void; teamId: string; teamName: string }> = ({ open, onOpenChange, teamId, teamName }) => {
+export const McpDialog: React.FC<{ open: boolean; onOpenChange: (open: boolean) => void; teamId: string; teamName: string; request?: string }> = ({ open, onOpenChange, teamId, teamName, request }) => {
   const [keys, setKeys] = useState<KeyRow[] | null>(null)
   const [me, setMe] = useState<string>()
   const [error, setError] = useState<string | null>(null)
@@ -79,9 +79,19 @@ export const McpDialog: React.FC<{ open: boolean; onOpenChange: (open: boolean) 
         <DialogHeader>
           <DialogTitle>Conectar sua IA à Sinfy</DialogTitle>
           <DialogDescription>
-            Use o Claude, o ChatGPT, o Cursor ou outra IA com MCP na conta {teamName}: ela lê quem vocês são e o Plano, cria conteúdos e criativos na marca e analisa site, anúncios, Instagram e funil. Ela age em seu nome; aprovar e publicar continuam sendo na Sinfy.
+            Use o Claude (no computador, no navegador ou no celular), o ChatGPT, o Cursor ou outra IA com MCP na conta {teamName}: ela lê quem vocês são, o Plano e o Cérebro, cria conteúdos, criativos, quadros, formulários e referências, analisa site, anúncios, Instagram e funil e usa as skills de Instagram. Ela age em seu nome; aprovar e publicar continuam sendo na Sinfy.
           </DialogDescription>
         </DialogHeader>
+
+        {request && (
+          <div className="rounded-lg bg-violet-50 p-3 ring-1 ring-inset ring-violet-200">
+            <p className="text-xs font-medium text-violet-900">Pedido copiado. Cole na sua IA conectada:</p>
+            <p className="mt-1 line-clamp-3 text-xs text-violet-900/80">{request}</p>
+            <Button type="button" variant="outline" size="sm" className="mt-2 gap-1.5" onClick={() => void copy(request)}>
+              <Copy className="h-3.5 w-3.5" /> Copiar de novo
+            </Button>
+          </div>
+        )}
 
         {error ? (
           <p className="text-sm text-rose-700" role="alert">{error}</p>
@@ -119,12 +129,12 @@ export const McpDialog: React.FC<{ open: boolean; onOpenChange: (open: boolean) 
             <div className="text-sm text-gray-700">
               <p className="font-medium text-gray-900">Como ligar</p>
               <ul className="mt-1.5 grid list-disc gap-1 pl-5 text-xs text-gray-600 marker:text-gray-400">
-                <li><strong>Claude</strong> (claude.ai ou app): Configurações › Conectores › Adicionar conector personalizado › cole o endereço.</li>
+                <li><strong>Claude</strong> (claude.ai, app do computador ou do celular): Configurações › Conectores › Adicionar conector personalizado › cole o endereço. Ligado uma vez, aparece em todos os aparelhos da sua conta do Claude.</li>
                 <li><strong>ChatGPT</strong>: Configurações › Apps e conectores › Configurações avançadas › ligue o Modo desenvolvedor; depois Criar › cole o endereço e, em Autenticação, escolha <strong>Sem autenticação</strong> (a chave já está no endereço; em OAuth o ChatGPT diz que não acha a configuração).</li>
                 <li><strong>Claude Code</strong>: <code>claude mcp add --transport http sinfy &lt;endereço&gt;</code></li>
                 <li><strong>Cursor e outros</strong>: servidor MCP do tipo HTTP (Streamable HTTP) com o endereço.</li>
               </ul>
-              <p className="mt-2 text-xs text-gray-600">Depois peça, por exemplo: "Leia a Sinfy e crie 3 carrosséis do Plano desta semana" ou "Analise os anúncios e o site dos últimos 30 dias e me diga o que fazer".</p>
+              <p className="mt-2 text-xs text-gray-600">Depois peça, por exemplo: "Leia a Sinfy e crie 3 carrosséis do Plano desta semana", "Analise os anúncios e o site dos últimos 30 dias e me diga o que fazer" ou "Monte um quadro com a campanha do mês". No Claude, as skills de Instagram aparecem no menu + › Sinfy.</p>
             </div>
 
             <div>

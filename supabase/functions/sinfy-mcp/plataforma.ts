@@ -79,6 +79,12 @@ const TABLES: Record<string, TableInfo> = {
   crm_contents: { module: 'copy', label: 'Conteúdos do Plano editorial. Para criar ou mudar use sinfy_conteudo_*.' },
   crm_account_context: { module: 'copy', label: 'O Plano da empresa (oferta, público, tom, pilares).' },
   space_projects: { module: 'projetos', label: 'Projetos de site no Space.' },
+  crm_story_settings: { module: 'instagram', label: 'Ajustes dos stories programados (dias, horários, pilares, briefing).' },
+  crm_content_comments: { module: 'copy', label: 'Comentários nos conteúdos da Pauta (da equipe e do cliente na aprovação).', write: true },
+  crm_approval_items: { module: 'copy', label: 'Itens mandados ao cliente para aprovar e a resposta dele (só leitura: aprovar é na tela).' },
+  crm_content_tags: { module: 'copy', label: 'Etiquetas da Pauta.' },
+  crm_references: { label: 'Referências visuais da conta. Para salvar use sinfy_referencia_salvar.' },
+  crm_knowledge_notes: { label: 'Notas do Cérebro da conta. Para ler e gravar use sinfy_cerebro_*.' },
 }
 
 interface Column { name: string; type: string; udt: string }

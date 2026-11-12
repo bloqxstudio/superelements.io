@@ -10,7 +10,7 @@ import type { ExcalidrawElement, OrderedExcalidrawElement } from '@excalidraw/ex
 import '@excalidraw/excalidraw/index.css'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
-import { fileDataUrl, loadBoard, renameBoard, saveScene, saveThumb, uploadImage, type Board, type BoardScene, type StoredFile } from './data'
+import { fileDataUrl, loadBoard, renameBoard, saveScene, saveThumb, takePending, uploadImage, type Board, type BoardScene, type StoredFile } from './data'
 import { colorOf, joinBoard, type LiveBoard, type Peer } from './live'
 import { FONT, STICKY_COLORS, STICKY_SIZE, stickySkeleton } from './templates'
 import { clearOpenBoard, setOpenBoard } from './openBoard'
@@ -344,6 +344,32 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
     })
     return () => clearOpenBoard(board.id)
   }, [api, board.id, showAgent, hideAgent])
+
+  // ——— o que a IA conectada (MCP) pediu para pôr no quadro: desenha aqui, embaixo do que existe
+  useEffect(() => {
+    if (!api) return
+    let running = false
+    const drain = async () => {
+      if (running || document.visibilityState !== 'visible') return
+      running = true
+      try {
+        const drafts = await takePending(board.id)
+        if (!drafts.length) return
+        const { addDraftToBoard } = await import('./compose')
+        for (const draft of drafts) await addDraftToBoard(board.id, board.teamId, draft)
+        toast.success(drafts.length > 1 ? `${drafts.length} blocos da sua IA entraram no quadro` : 'O bloco da sua IA entrou no quadro')
+      } catch (e) {
+        console.error('[quadros] fila da IA', e)
+      } finally {
+        running = false
+      }
+    }
+    // Espera o registro do quadro aberto (setOpenBoard) para desenhar pelo editor
+    const first = setTimeout(() => void drain(), 400)
+    window.addEventListener('focus', drain)
+    document.addEventListener('visibilitychange', drain)
+    return () => { clearTimeout(first); window.removeEventListener('focus', drain); document.removeEventListener('visibilitychange', drain) }
+  }, [api, board.id, board.teamId])
   useIaraScreen({
     id: `quadro-${board.id}`,
     title: `Quadro ${title}`,

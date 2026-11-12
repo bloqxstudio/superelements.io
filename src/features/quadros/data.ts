@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { BoardDraft } from './layout'
 
 /**
  * Quadros da conta (2026-11-07, o usuário: "uma aba aonde vamos ter um canva livre exatamente como
@@ -61,6 +62,17 @@ export async function saveScene(id: string, rev: number, scene: BoardScene): Pro
   const { data, error } = await db.from('crm_boards').update({ scene }).eq('id', id).eq('rev', rev).select('rev').maybeSingle()
   if (error) throw new Error(error.message)
   return data ? (data.rev as number) : null
+}
+
+/** A fila que a IA conectada (MCP) deixou no quadro, já esvaziada (`crm_board_take_pending`). */
+export async function takePending(id: string): Promise<BoardDraft[]> {
+  const { data, error } = await db.rpc('crm_board_take_pending', { p_board: id })
+  if (error) {
+    // Sem a migração 20261112130000 ainda: nada na fila
+    if (error.code === 'PGRST202' || error.code === '42883') return []
+    throw new Error(error.message)
+  }
+  return Array.isArray(data) ? (data as BoardDraft[]) : []
 }
 
 export async function renameBoard(id: string, title: string) {
