@@ -5,8 +5,8 @@ import { adsData, funnelData, instagramData, periodOf, siteData } from './dados.
 import * as Criativos from './_gerado/criativos.js'
 import { loadFamilies, measureContext, rasterize, rasterizeRgb, sniff, toBase64, type FontLib, type ResvgLike } from './previa.ts'
 import jpeg from 'npm:jpeg-js@0.4.4'
-import { asUser, fetchFile, platformTools } from './plataforma.ts'
-import { areaTools, GUIDE, skillPrompts } from './areas.ts'
+import { asUser, fetchFile, liveSend, platformTools } from './plataforma.ts'
+import { areaTools, BRAIN_BUCKET, brainRoot, cleanFolder, GUIDE, IMAGE_EXT, saveBrainImage, skillPrompts, sniffMime } from './areas.ts'
 
 /**
  * MCP da Sinfy: qualquer IA (Claude, ChatGPT, Cursor, Claude Code…) conecta na conta da empresa.
@@ -31,7 +31,7 @@ const SERVER = { name: 'sinfy', title: 'Sinfy', version: '1.0.0' }
 
 const cors = {
   'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'content-type, authorization, mcp-protocol-version, mcp-session-id, accept',
+  'access-control-allow-headers': 'content-type, authorization, mcp-protocol-version, mcp-session-id, accept, x-file-name',
   'access-control-allow-methods': 'POST, GET, OPTIONS, DELETE',
   'access-control-expose-headers': 'mcp-session-id',
 }
@@ -62,6 +62,8 @@ interface Caller {
   userId: string
   role: string
   team: Team
+  /** Para o aviso ao vivo nas telas: o nome da conexão (Claude, gpt…) e o da pessoa. */
+  who?: { ia: string; pessoa: string }
 }
 
 const moduleOn = (team: Team, key: string) => team.status !== 'pausada' && (team.modules ?? {})[key] !== false
@@ -73,7 +75,12 @@ async function resolveCaller(token: string): Promise<Caller | null> {
   if (error || !row) return null
   const { data: team } = await admin.from('crm_teams').select('id, name, segment, website, contact_name, notes, status, modules, is_home, product').eq('id', row.team_id).maybeSingle()
   if (!team) return null
-  return { keyId: row.key_id, userId: row.user_id, role: row.role, team: team as Team }
+  const [{ data: key }, { data: person }] = await Promise.all([
+    admin.from('crm_mcp_keys').select('name').eq('id', row.key_id).maybeSingle(),
+    admin.from('profiles').select('full_name, email').eq('id', row.user_id).maybeSingle(),
+  ])
+  const pessoa = String(person?.full_name || person?.email || '').split(/[\s@]/)[0]
+  return { keyId: row.key_id, userId: row.user_id, role: row.role, team: team as Team, who: { ia: String(key?.name ?? 'IA'), pessoa } }
 }
 
 class ToolError extends Error {}
@@ -300,6 +307,7 @@ const AVENCE_TEMPLATES = ['case-janela', 'case-duo', 'case-capa', 'ilustracao'] 
 const FORMATS = ['4x5', '1x1', '9x16'] as const
 const SLIDE_FIELDS = ['template', 'label', 'title', 'body', 'items', 'cta', 'dark', 'prompt', 'number', 'photo', 'case', 'view', 'illustration', 'focus'] as const
 
+const safeSlug = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'conjunto'
 const str = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined)
 
 function cleanPost(raw: unknown, caller: Caller, index: number) {
@@ -802,7 +810,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_criativo_foto',
     title: 'Pôr uma foto no criativo',
-    description: 'Põe uma foto (url https ou base64) num slide de um conjunto: no lugar da foto pedida ou trocando a imagem.',
+    description: 'Põe uma foto num slide de um conjunto (no lugar da foto pedida ou trocando a imagem): "arquivo" do Cérebro, "url" pública ou "base64". A foto anexada no chat não chega aqui: use sinfy_link_envio. Slide só de texto: a foto vira fundo, com véu para ler ("como": "fundo" força isso). A foto também fica guardada no Cérebro.',
     inputSchema: {
       type: 'object',
       required: ['id'],
@@ -811,6 +819,8 @@ const TOOLS: Tool[] = [
         projeto_id: { type: 'string' },
         post: { type: 'integer', minimum: 1, description: 'Post do conjunto (padrão 1).' },
         slide: { type: 'integer', minimum: 1, description: 'Slide do post (padrão 1).' },
+        como: { type: 'string', enum: ['auto', 'trocar', 'fundo'], description: 'auto (padrão): troca a foto do slide; sem lugar de foto, vira fundo. fundo: a foto cobre o slide atrás dos textos, com véu para ler.' },
+        arquivo: { type: 'string', description: 'Caminho de uma imagem do Cérebro (sinfy_cerebro_arquivos), ex.: fotos/enviadas/x.jpg.' },
         url: { type: 'string', description: 'Endereço https da foto.' },
         base64: { type: 'string', description: 'Ou a foto em base64 (data URL).' },
         nome_arquivo: { type: 'string' },
@@ -837,25 +847,57 @@ const TOOLS: Tool[] = [
       const slide = post.slides[Math.max(1, Number(a.slide) || 1) - 1]
       if (!slide) throw new ToolError('Esse slide não existe no post.')
       const images = slide.layers.filter((l) => l.type === 'image' && !l.hidden) as (Layer & { prompt?: string; genFailed?: boolean; name?: string })[]
-      const target = images.find((l) => !l.src && l.prompt) ?? images.find((l) => !(l.name ?? '').toLowerCase().includes('logo') && !(l.src ?? '').includes('/logo')) ?? undefined
-      if (!target) throw new ToolError('Este slide não tem lugar de foto. Use um modelo com foto (viral-capa, foto-manchete, viral-foto) ou ponha a foto noutro slide.')
-      const file = await fetchFile({ admin, appUrl: APP_URL, fail: (m) => { throw new ToolError(m) } }, a, 15 * 1024 * 1024)
+      const como = a.como === 'fundo' || a.como === 'trocar' ? a.como : 'auto'
+      const slot = images.find((l) => !l.src && l.prompt) ?? images.find((l) => !(l.name ?? '').toLowerCase().includes('logo') && !(l.src ?? '').includes('/logo')) ?? undefined
+      if (como === 'trocar' && !slot) throw new ToolError('Este slide não tem foto para trocar. Use "como": "fundo" para pôr a foto atrás dos textos.')
+      // Sem lugar de foto (slides só de texto) ou pedido de fundo: a foto cobre o slide, atrás de tudo, com um véu na cor do fundo
+      const asBackground = como === 'fundo' || !slot
+      // A foto vem do Cérebro (o que a pessoa mandou pelo link de envio) ou de um endereço/base64, que também fica guardado no Cérebro
+      let file: { bytes: Uint8Array; mime: string; name: string }
+      let noCerebro: string | undefined
+      if (typeof a.arquivo === 'string' && a.arquivo.trim()) {
+        const rel = a.arquivo.trim().replace(/^\/+/, '').replace(/^cerebro\//, '')
+        if (rel.includes('..')) throw new ToolError('Caminho inválido.')
+        const { data } = await admin.storage.from(BRAIN_BUCKET).download(`${brainRoot(caller.team.id)}/${rel}`)
+        if (!data) throw new ToolError(`Não achei "${rel}" no Cérebro. Veja os caminhos com sinfy_cerebro_arquivos.`)
+        file = { bytes: new Uint8Array(await data.arrayBuffer()), mime: data.type, name: rel.split('/').pop() ?? 'foto' }
+        noCerebro = rel
+      } else {
+        if (!a.url && !a.base64) throw new ToolError('Mande "arquivo" (do Cérebro), "url" ou "base64". Foto anexada no chat não chega aqui: gere um link com sinfy_link_envio.')
+        file = await fetchFile({ admin, appUrl: APP_URL, fail: (m) => { throw new ToolError(m) } }, a, 15 * 1024 * 1024)
+      }
       const info = sniff(file.bytes)
       if (!info || !info.mime.startsWith('image/')) throw new ToolError('O arquivo não é uma imagem que eu reconheça (PNG, JPEG, WebP ou GIF).')
+      if (!noCerebro && IMAGE_EXT[info.mime]) {
+        const folder = cleanFolder(`fotos/criativos/${safeSlug(set.name)}`, 'fotos/criativos') ?? 'fotos/criativos'
+        noCerebro = await saveBrainImage(admin, caller.team.id, folder, file.name, file.bytes, info.mime).catch((err) => {
+          console.error('[sinfy-mcp] cérebro', err)
+          return undefined
+        })
+      }
       const assetId = crypto.randomUUID().slice(0, 8)
       const assetPath = `${found.folder}/${found.id}/${assetId}.${info.mime.split('/')[1].replace('jpeg', 'jpg').replace('svg+xml', 'svg')}`
       const { error } = await admin.storage.from(BUCKET).upload(assetPath, file.bytes, { contentType: info.mime, upsert: false })
       if (error) throw new ToolError(`Não consegui subir a foto (${error.message}).`)
       set.assets = [...(set.assets ?? []), { id: assetId, name: file.name, path: assetPath, width: info.width, height: info.height }]
-      target.src = `asset:${assetId}`
-      delete target.prompt
-      delete target.genFailed
+      if (asBackground) {
+        const size = (Criativos.sizeOf as (f: string) => { width: number; height: number })(post.format)
+        const bg = /^#[0-9a-f]{6}$/i.test(slide.background) ? slide.background : '#000000'
+        const photo = { id: crypto.randomUUID().slice(0, 8), type: 'image', name: 'Foto de fundo', src: `asset:${assetId}`, fit: 'cover', radius: 0, frame: 'none', x: 0, y: 0, w: size.width, h: size.height }
+        const veil = { id: crypto.randomUUID().slice(0, 8), type: 'rect', name: 'Véu da foto', fill: bg, radius: 0, opacity: bg === '#000000' ? 0.5 : 0.68, x: 0, y: 0, w: size.width, h: size.height }
+        slide.layers.unshift(photo as unknown as Layer, veil as unknown as Layer)
+      } else {
+        const target = slot!
+        target.src = `asset:${assetId}`
+        delete target.prompt
+        delete target.genFailed
+      }
       set.updatedAt = Date.now()
       await writeJson(path, set)
       const index = (await readJson<Summary[]>(`${found.folder}/index.json`)) ?? []
       await writeJson(`${found.folder}/index.json`, index.map((s) => (s.id === found.id ? { ...s, posts: set.posts.length, updatedAt: set.updatedAt as number } : s)))
       const preview = await renderSlides([{ ...post, slides: [slide] }], set.assets, 540, 1)
-      return new WithImages({ ok: true, conjunto: found.id, post: Number(a.post) || 1, slide: Number(a.slide) || 1, link: setUrl(found.id, found.projectId), aviso: 'Se o conjunto estiver aberto no editor agora, recarregue a página para não gravar por cima.' }, preview)
+      return new WithImages({ ok: true, conjunto: found.id, post: Number(a.post) || 1, slide: Number(a.slide) || 1, no_cerebro: noCerebro, como: asBackground ? 'foto de fundo com véu (ajuste a opacidade do véu no editor, se quiser)' : 'foto do slide trocada', link: setUrl(found.id, found.projectId), aviso: 'Se o conjunto estiver aberto no editor agora, recarregue a página para não gravar por cima.' }, preview)
     },
   },
   {
@@ -1071,7 +1113,7 @@ const TOOLS: Tool[] = [
         await asUser(caller, async (tx) => {
           await tx`insert into crm_stories (id, team_id, account_id, publish_at, status, kind, title, caption, set_id, post_id, created_by)
             values (${storyId}::uuid, ${caller.team.id}::uuid, ${acc.id}::uuid, ${at.toISOString()}::timestamptz, 'criativo', ${kind}, ${title}, ${kind === 'feed' ? caption : ''}, ${found.id}, ${post.id}, ${caller.userId}::uuid)`
-          await tx`update crm_stories set status = 'agendado', frames = ${JSON.stringify(frames)}::jsonb where id = ${storyId}::uuid`
+          await tx`update crm_stories set status = 'agendado', frames = ${JSON.stringify(frames)}::text::jsonb where id = ${storyId}::uuid`
         })
       } catch (err) {
         await admin.storage.from(BUCKET).remove(frames.map((f) => f.path))
@@ -1211,6 +1253,23 @@ GUIDE.formulario = [
 // As skills de Instagram, como prompts (no Claude: menu + › Sinfy)
 PROMPTS.push(...skillPrompts())
 
+
+// ---------- ao vivo nas telas ----------
+
+/** Os campos que dizem ONDE a ferramenta mexe (nunca o conteúdo). */
+const WHERE_KEYS = ['id', 'conjunto', 'projeto_id', 'post', 'slide', 'quadro', 'tabela', 'nota', 'pasta', 'conteudo_id', 'como', 'quando']
+
+/**
+ * Aviso no canal privado `mcp:<conta>` (migração 20261112160000), por `realtime.send` no banco: a tela aberta mostra o cursor da IA indo até
+ * o que ela mexe e recarrega o que mudou. Sem conteúdo no aviso; falha no aviso nunca derruba a ferramenta.
+ */
+function liveEvent(caller: Caller, tool: Tool, phase: 'start' | 'done', args: Args, extra: Record<string, unknown> = {}) {
+  const where: Record<string, unknown> = {}
+  for (const k of WHERE_KEYS) if (args[k] !== undefined && (typeof args[k] !== 'string' || (args[k] as string).length <= 120)) where[k] = args[k]
+  const payload = { phase, tool: tool.name, titulo: tool.title, muda: !tool.annotations?.readOnlyHint, onde: where, ia: caller.who?.ia ?? 'IA', pessoa: caller.who?.pessoa ?? '', at: Date.now(), ...extra }
+  return liveSend(`mcp:${caller.team.id}`, 'ia', payload)
+}
+
 // ---------- JSON-RPC ----------
 
 interface Rpc { jsonrpc: '2.0'; id?: string | number | null; method: string; params?: Record<string, unknown> }
@@ -1247,26 +1306,77 @@ async function handle(msg: Rpc, caller: Caller) {
       const tool = TOOLS.find((t) => t.name === p.name)
       if (!tool) return failure(msg.id, -32602, `Ferramenta desconhecida: ${String(p.name)}`)
       let ok = true
+      let errorText: string | undefined
       let payload: { content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; structuredContent?: unknown; isError?: boolean }
+      const args = (p.arguments ?? {}) as Args
+      const started = liveEvent(caller, tool, 'start', args)
+      const made: Record<string, unknown> = {}
       try {
-        const value = await tool.run(caller, (p.arguments ?? {}) as Args)
+        const value = await tool.run(caller, args)
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          const v = (value instanceof WithImages ? value.value : value) as Record<string, unknown>
+          // O que a ferramenta criou (para a tela abrir e o cursor achar)
+          for (const k of ['conjunto', 'quadro', 'publicacao', 'referencia', 'nota', 'arquivo']) if (typeof v[k] === 'string') made[k] = v[k]
+          if (v.conteudo && typeof v.conteudo === 'object') made.conteudo = (v.conteudo as { id?: string }).id
+        }
         if (value instanceof WithImages) payload = { content: [{ type: 'text', text: JSON.stringify(value.value) }, ...value.images.map((img) => ({ type: 'image' as const, data: img.data, mimeType: img.mimeType }))] }
-        else {
+        else if (value && typeof value === 'object' && Array.isArray((value as { __imagens?: unknown }).__imagens)) {
+          const { __imagens, ...rest } = value as { __imagens: { data: string; mimeType: string }[] }
+          payload = { content: [{ type: 'text', text: JSON.stringify(rest) }, ...__imagens.map((img) => ({ type: 'image' as const, data: img.data, mimeType: img.mimeType }))] }
+        } else {
           payload = { content: [{ type: 'text', text: JSON.stringify(value) }] }
           if (value && typeof value === 'object' && !Array.isArray(value)) payload.structuredContent = value
         }
       } catch (err) {
         ok = false
         const text = err instanceof ToolError ? err.message : 'Algo deu errado do lado da Sinfy. Tente de novo em instantes.'
+        errorText = (err instanceof ToolError ? err.message : `interno: ${err instanceof Error ? err.message : String(err)}`).slice(0, 500)
         if (!(err instanceof ToolError)) console.error('[sinfy-mcp]', tool.name, err)
         payload = { content: [{ type: 'text', text }], isError: true }
       }
-      await admin.from('crm_mcp_log').insert({ key_id: caller.keyId, team_id: caller.team.id, tool: tool.name, ok })
+      await started
+      await Promise.all([
+        admin.from('crm_mcp_log').insert({ key_id: caller.keyId, team_id: caller.team.id, tool: tool.name, ok, error: errorText ?? null }),
+        liveEvent(caller, tool, 'done', args, { ok, criado: made, erro: ok ? undefined : errorText?.slice(0, 160) }),
+      ])
       return result(msg.id, payload)
     }
     default:
       if (msg.id === undefined || msg.id === null) return null // notificação (initialized, cancelled…)
       return failure(msg.id, -32601, `Método não suportado: ${msg.method}`)
+  }
+}
+
+
+// ---------- link de envio de fotos ----------
+
+async function handleUpload(request: Request, token: string) {
+  const { data: row } = await admin.from('crm_mcp_uploads').select('id, team_id, folder, files, max_files, expires_at').eq('token_hash', await sha256(token)).maybeSingle()
+  if (!row) return json({ error: 'Link de envio inválido.' }, 404)
+  const expired = Date.parse(row.expires_at) < Date.now()
+  const left = row.max_files - (row.files?.length ?? 0)
+  if (request.method === 'GET') {
+    const { data: team } = await admin.from('crm_teams').select('name').eq('id', row.team_id).maybeSingle()
+    return json({ conta: team?.name ?? '', pasta: row.folder, restantes: Math.max(0, left), expirado: expired, enviados: row.files ?? [] })
+  }
+  if (request.method !== 'POST') return new Response(null, { status: 405, headers: { allow: 'GET, POST, OPTIONS', ...cors } })
+  if (expired) return json({ error: 'Este link venceu. Peça um novo à sua IA.' }, 410)
+  if (left <= 0) return json({ error: 'Este link já recebeu o máximo de fotos. Peça um novo à sua IA.' }, 409)
+  const bytes = new Uint8Array(await request.arrayBuffer())
+  if (!bytes.length) return json({ error: 'Arquivo vazio.' }, 400)
+  if (bytes.length > 15 * 1024 * 1024) return json({ error: 'Foto grande demais (até 15 MB).' }, 413)
+  const mime = sniffMime(bytes)
+  if (!mime) return json({ error: 'Só fotos JPEG, PNG, WebP ou GIF.' }, 415)
+  const name = decodeURIComponent(request.headers.get('x-file-name') ?? 'foto').slice(0, 120)
+  try {
+    const path = await saveBrainImage(admin, row.team_id, row.folder, name, bytes, mime)
+    await admin.from('crm_mcp_uploads').update({ files: [...(row.files ?? []), path] }).eq('id', row.id)
+    // Ao vivo: o Cérebro aberto recarrega e o aviso mostra que a foto chegou
+    const live = await liveSend(`mcp:${row.team_id}`, 'ia', { phase: 'upload', tool: 'envio', muda: true, onde: { pasta: row.folder }, ia: 'Link de envio', pessoa: '', at: Date.now(), ok: true, criado: { arquivo: path } })
+    return json({ ok: true, arquivo: path, restantes: left - 1, ...(live ? { ao_vivo: live } : {}) })
+  } catch (err) {
+    console.error('[sinfy-mcp] envio', err)
+    return json({ error: 'Não consegui guardar a foto. Tente de novo.' }, 500)
   }
 }
 
@@ -1282,10 +1392,14 @@ const tokenOf = (request: Request, url: URL) => {
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
+  const url = new URL(request.url)
+  // Link de envio (/sinfy-mcp/enviar/<token>): a página /enviar do app manda as fotos para o Cérebro
+  const sent = /\/enviar\/(env_[0-9a-f]{48})\/?$/.exec(url.pathname)
+  if (sent) return handleUpload(request, sent[1])
+
   // Sem sessão e sem fluxo do servidor: GET (SSE) e DELETE não se aplicam
   if (request.method !== 'POST') return new Response(null, { status: 405, headers: { allow: 'POST, OPTIONS', ...cors } })
 
-  const url = new URL(request.url)
   const caller = await resolveCaller(tokenOf(request, url))
   if (!caller) return json(failure(null, -32001, 'Chave da Sinfy inválida ou revogada. Gere uma em Sinfy › Plano › Conectar sua IA.'), 401)
 

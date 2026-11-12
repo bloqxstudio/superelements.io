@@ -1,5 +1,9 @@
 import * as IA from './_gerado/inteligencia.js'
-import { asUser, type PlatformCaller, type PlatformDeps, type PlatformTool } from './plataforma.ts'
+import { asUser, fetchFile, type PlatformCaller, type PlatformDeps, type PlatformTool } from './plataforma.ts'
+
+/** O tipo da imagem pelos primeiros bytes. */
+export const sniffMime = (b: Uint8Array) =>
+  b[0] === 0xff && b[1] === 0xd8 ? 'image/jpeg' : b[0] === 0x89 && b[1] === 0x50 ? 'image/png' : b[0] === 0x47 && b[1] === 0x49 ? 'image/gif' : b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50 ? 'image/webp' : undefined
 
 /**
  * O MCP como caminho principal (2026-11-12, o usuário: "vamos simplificar e focar somente no mcp como
@@ -95,6 +99,47 @@ export function skillPrompts(): SkillPrompt[] {
 }
 
 
+
+// ---------- arquivos do Cérebro (Storage `space-projects`, `crm/<conta>/cerebro/…`, igual à tela) ----------
+
+export const BRAIN_BUCKET = 'space-projects'
+export const brainRoot = (teamId: string) => `crm/${teamId}/cerebro`
+export const IMAGE_EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' }
+export const safeBase = (name: string) => name.replace(/\.[^.]+$/, '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'imagem'
+export const cleanFolder = (v: unknown, fallback: string) => {
+  const f = (typeof v === 'string' ? v : '').trim().replace(/^\/+|\/+$/g, '').replace(/^cerebro\//, '').replace(/\/{2,}/g, '/')
+  if (!f) return fallback
+  if (f.split('/').some((x) => !x || x === '..' || x.startsWith('.')) || /^plataforma(\/|$)/.test(f) || !/^[A-Za-z0-9À-ÿ _().,&+-]+(\/[A-Za-z0-9À-ÿ _().,&+-]+)*$/.test(f)) return null
+  return f.slice(0, 200)
+}
+
+/** Grava uma imagem no Cérebro da conta; devolve o caminho dentro do Cérebro. */
+export async function saveBrainImage(admin: PlatformDeps['admin'], teamId: string, folder: string, name: string, bytes: Uint8Array, mime: string): Promise<string> {
+  const ext = IMAGE_EXT[mime]
+  if (!ext) throw new Error('Só imagens JPEG, PNG, WebP ou GIF.')
+  const path = `${folder}/${safeBase(name)}-${Date.now().toString(36).slice(-5)}.${ext}`
+  const { error } = await admin.storage.from(BRAIN_BUCKET).upload(`${brainRoot(teamId)}/${path}`, bytes, { contentType: mime, cacheControl: '31536000', upsert: false })
+  if (error) throw new Error(error.message)
+  return path
+}
+
+/** Os arquivos do Cérebro (o Storage não lista em profundidade: percorre as pastas). */
+async function listBrainFiles(admin: PlatformDeps['admin'], teamId: string, folder: string) {
+  const out: { path: string; size: number; at: string }[] = []
+  const walk = async (rel: string, depth: number) => {
+    if (depth > 5 || out.length > 600) return
+    const { data } = await admin.storage.from(BRAIN_BUCKET).list(rel ? `${brainRoot(teamId)}/${rel}` : brainRoot(teamId), { limit: 1000 })
+    await Promise.all((data ?? []).map(async (it: { name: string; id: string | null; updated_at?: string | null; metadata?: { size?: number } | null }) => {
+      const path = rel ? `${rel}/${it.name}` : it.name
+      if (it.id === null) return walk(path, depth + 1)
+      if (it.name === '.emptyFolderPlaceholder') return
+      out.push({ path, size: it.metadata?.size ?? 0, at: it.updated_at ?? '' })
+    }))
+  }
+  await walk(folder, 0)
+  return out.sort((a, b) => (a.at < b.at ? 1 : -1))
+}
+
 // ---------- ajuda: como a plataforma funciona ----------
 
 export const GUIDE: Record<string, string> = {
@@ -109,7 +154,7 @@ export const GUIDE: Record<string, string> = {
     '1. sinfy_conta (marca, Plano). Se houver um conteúdo na Pauta, sinfy_conteudos e use o id dele.',
     '2. sinfy_criativo_criar com o roteiro (conteudo_id quando houver). A resposta traz as imagens: mostre.',
     '3. Ajustes: SEMPRE sinfy_criativo_editar no mesmo conjunto (trocar texto, legenda, refazer slide, apagar ou mover). Nunca crie outro conjunto para corrigir.',
-    '4. Fotos: sinfy_criativo_foto com uma imagem (url ou base64), ou peça "prompt" no slide e gere no editor pelo link.',
+    '4. Fotos: a foto anexada no chat NÃO chega aqui. Gere um link com sinfy_link_envio, a pessoa manda por ele (vai para o Cérebro), confira com sinfy_cerebro_arquivos e use sinfy_criativo_foto com "arquivo". Também vale "url" pública. Ou peça "prompt" no slide e gere a foto no editor pelo link.',
     '5. Legenda: escreva, passe por sinfy_ig_legenda_revisar e sinfy_ig_humanizar.',
     '6. Publicar ou agendar: sinfy_publicar. Primeiro sem "confirmar" (mostra o que vai sair); depois de a pessoa dizer que pode, com "confirmar": true. Agendar = "quando" (data e hora de Brasília).',
     'Conteúdo de cliente que precisa de aprovação: mande para "revisao" (sinfy_conteudo_atualizar) e a equipe envia ao cliente pela Pauta.',
@@ -128,7 +173,7 @@ export const GUIDE: Record<string, string> = {
     'Quadros são canvas livres (estilo Miro). sinfy_quadros, sinfy_quadro_ler (cada item com o id #…), sinfy_quadro_criar e sinfy_quadro_adicionar (bloco novo), sinfy_quadro_editar (texto, cor, posição ou apagar itens pelo id), sinfy_quadro_ligar (setas) e sinfy_quadro_organizar.',
     'O servidor não desenha: o pedido entra na fila e o quadro aplica quando alguém abre ou volta à aba dele. Passe o link à pessoa.',
   ].join('\n'),
-  cerebro: 'O Cérebro guarda o que a empresa sabe (produtos, voz, padrões de post, decisões, logs). sinfy_cerebro_ler / _buscar antes de escrever; sinfy_cerebro_escrever para guardar o que a pessoa ensinar; sinfy_cerebro_log ao fim de uma entrega.',
+  cerebro: 'O Cérebro guarda o que a empresa sabe (produtos, voz, padrões de post, decisões, logs) e as imagens (sinfy_cerebro_arquivos, sinfy_cerebro_imagem_salvar, sinfy_link_envio para a pessoa mandar fotos; as fotos usadas nos criativos também ficam em fotos/criativos/). sinfy_cerebro_ler / _buscar antes de escrever; sinfy_cerebro_escrever para guardar o que a pessoa ensinar; sinfy_cerebro_log ao fim de uma entrega.',
   instagram: 'Números: sinfy_instagram. O que funcionou: sinfy_ig_o_que_funcionou. Perfil: sinfy_ig_perfil. Ganchos, roteiro e legenda: sinfy_ig_formulas, sinfy_ig_ganchos, sinfy_ig_tempos, sinfy_ig_legenda_revisar, sinfy_ig_humanizar. Comentários: sinfy_ig_comentarios (responder é na tela). As skills de Instagram estão nos prompts da Sinfy.',
   bloco_quadro: `Bloco de quadro (sinfy_quadro_criar e sinfy_quadro_adicionar): "titulo", "subtitulo", "cartoes": [{"id"?,"titulo","texto"?,"icone"?,"cor"?,"tag"?}], "notas": [texto ou {"texto","cor"?,"icone"?}], "colunas": [{"nome","cor"?,"cartoes"?,"notas"?}], "centro" (mapa), "fluxo": true, "ligacoes": [{"de","para","texto"?}]. ${DRAFT_HELP}`,
   dados: 'Qualquer tabela da lista: sinfy_dados_tabelas mostra as colunas; sinfy_dados_ler filtra e conta; sinfy_dados_gravar insere, atualiza ou apaga (apagar só com "confirmar"). Use as ferramentas próprias quando existirem (conteúdos, criativos, oportunidades, quadros).',
@@ -273,6 +318,62 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
       },
     },
 
+    {
+      name: 'sinfy_link_envio',
+      title: 'Link para mandar fotos',
+      description: 'Gera um link (vale 2 horas, até 20 fotos) para a pessoa mandar fotos do celular ou do computador direto para o Cérebro da conta. Use sempre que ela quiser usar uma foto que anexou no chat: a imagem do chat não chega a este servidor. Depois, sinfy_cerebro_arquivos mostra o que chegou e sinfy_criativo_foto usa pelo "arquivo".',
+      inputSchema: { type: 'object', properties: { pasta: { type: 'string', description: 'Pasta do Cérebro (padrão fotos/enviadas).' } }, additionalProperties: false },
+      run: async (c, a) => {
+        const folder = cleanFolder(a.pasta, 'fotos/enviadas')
+        if (!folder) fail('Pasta inválida (e "plataforma/" é só leitura).')
+        const bytes = crypto.getRandomValues(new Uint8Array(24))
+        const token = 'env_' + [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+        const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)))].map((b) => b.toString(16).padStart(2, '0')).join('')
+        const { error } = await deps.admin.from('crm_mcp_uploads').insert({ token_hash: hash, team_id: c.team.id, user_id: c.userId, key_id: c.keyId, folder })
+        if (error) fail('Não consegui gerar o link agora.')
+        return { link: `${appUrl}/enviar/${token}`, pasta: folder, vale: '2 horas, até 20 fotos', proximo_passo: 'Passe o link à pessoa. Quando ela disser que mandou, veja com sinfy_cerebro_arquivos (pasta acima).' }
+      },
+    },
+    {
+      name: 'sinfy_cerebro_arquivos',
+      title: 'Arquivos do Cérebro',
+      description: 'Lista as imagens e arquivos do Cérebro da conta (mais recentes primeiro), por pasta. Com "ver": caminho de uma imagem, mostra a imagem.',
+      inputSchema: { type: 'object', properties: { pasta: { type: 'string' }, ver: { type: 'string' }, limite: { type: 'integer', minimum: 1, maximum: 100 } }, additionalProperties: false },
+      annotations: { readOnlyHint: true },
+      run: async (c, a) => {
+        if (typeof a.ver === 'string' && a.ver) {
+          const path = notePath(a.ver)
+          if (path.includes('..')) fail('Caminho inválido.')
+          const { data } = await deps.admin.storage.from(BRAIN_BUCKET).download(`${brainRoot(c.team.id)}/${path}`)
+          if (!data) return fail('Arquivo não encontrado no Cérebro.')
+          const mime = data.type || 'image/jpeg'
+          if (!mime.startsWith('image/')) return { arquivo: path, tipo: mime }
+          const bytes = new Uint8Array(await data.arrayBuffer())
+          if (bytes.length > 4 * 1024 * 1024) return { arquivo: path, aviso: 'Imagem grande demais para mostrar aqui; use pelo caminho.' }
+          return { __imagens: [{ data: btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join('')), mimeType: mime }], arquivo: path }
+        }
+        const folder = a.pasta ? cleanFolder(a.pasta, '') : ''
+        if (folder === null) fail('Pasta inválida.')
+        const files = await listBrainFiles(deps.admin, c.team.id, folder ?? '')
+        const limit = Math.min(100, Number(a.limite) || 30)
+        return { arquivos: files.slice(0, limit).map((f) => ({ arquivo: f.path, kb: Math.round(f.size / 1024), em: f.at.slice(0, 16) })), mais: files.length > limit ? files.length - limit : undefined, link: `${appUrl}/cerebro` }
+      },
+    },
+    {
+      name: 'sinfy_cerebro_imagem_salvar',
+      title: 'Guardar imagem no Cérebro',
+      description: 'Guarda uma imagem (url https pública ou base64) no Cérebro da conta, na pasta pedida (padrão fotos). Para fotos que a pessoa anexou no chat, use sinfy_link_envio.',
+      inputSchema: { type: 'object', properties: { url: { type: 'string' }, base64: { type: 'string' }, nome_arquivo: { type: 'string' }, pasta: { type: 'string' } }, additionalProperties: false },
+      run: async (c, a) => {
+        const folder = cleanFolder(a.pasta, 'fotos')
+        if (!folder) fail('Pasta inválida.')
+        const file = await fetchFile(deps, a, 15 * 1024 * 1024)
+        const mime = sniffMime(file.bytes)
+        if (!mime) fail('Não é uma imagem JPEG, PNG, WebP ou GIF.')
+        const path = await saveBrainImage(deps.admin, c.team.id, folder!, file.name, file.bytes, mime!).catch((e) => fail(`Não guardei: ${e.message}`))
+        return { ok: true, arquivo: path, link: `${appUrl}/cerebro` }
+      },
+    },
     // ---------- Quadros ----------
     {
       name: 'sinfy_quadros',
@@ -306,7 +407,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
         const title = str(a.titulo, 120) || 'Quadro sem título'
         const { draft, empty } = draftOf({ ...a, titulo: undefined })
         const pending = empty ? [] : [draft]
-        const [row] = await asUser(c, (tx) => tx`insert into crm_boards (team_id, title, pending) values (${c.team.id}, ${title}, ${JSON.stringify(pending)}::jsonb) returning id`)
+        const [row] = await asUser(c, (tx) => tx`insert into crm_boards (team_id, title, pending) values (${c.team.id}, ${title}, ${JSON.stringify(pending)}::text::jsonb) returning id`)
         return { ok: true, quadro: row.id, link: boardUrl(row.id), aviso: pending.length ? PENDING_NOTE : undefined }
       },
     },
@@ -320,7 +421,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
         const { draft, empty } = draftOf(a)
         if (empty) fail('Mande "cartoes", "notas", "colunas", "centro" ou "titulo".')
         if (b.pendentes >= 20) fail('Já há 20 blocos esperando: peça para alguém abrir o quadro antes de mandar mais.')
-        await asUser(c, (tx) => tx`update crm_boards set pending = pending || ${JSON.stringify([draft])}::jsonb where id = ${b.id}::uuid and team_id = ${c.team.id}`)
+        await asUser(c, (tx) => tx`update crm_boards set pending = pending || ${JSON.stringify([draft])}::text::jsonb where id = ${b.id}::uuid and team_id = ${c.team.id}`)
         return { ok: true, quadro: b.id, link: boardUrl(b.id), aviso: PENDING_NOTE }
       },
     },
@@ -357,7 +458,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
         if (a.organizar === true) ops.push({ op: 'organizar' })
         if (!ops.length) fail('Mande "itens", "ligacoes" ou "organizar": true.')
         if (b.pendentes + ops.length > 20) fail('Há muitos pedidos esperando: peça para alguém abrir o quadro antes de mandar mais.')
-        await asUser(c, (tx) => tx`update crm_boards set pending = pending || ${JSON.stringify(ops)}::jsonb where id = ${b.id}::uuid and team_id = ${c.team.id}`)
+        await asUser(c, (tx) => tx`update crm_boards set pending = pending || ${JSON.stringify(ops)}::text::jsonb where id = ${b.id}::uuid and team_id = ${c.team.id}`)
         return { ok: true, quadro: b.id, link: boardUrl(b.id), aviso: PENDING_NOTE }
       },
     },
@@ -420,7 +521,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
               next_step = case when ${next !== undefined} then ${next ?? null} else next_step end,
               next_date = case when ${date !== undefined} then ${date ?? null}::date else next_date end,
               notes = case when ${notes !== undefined} then ${notes ?? null} else notes end,
-              offer = case when ${offer}::jsonb is null then offer else coalesce(offer, '{}'::jsonb) || ${offer}::jsonb end
+              offer = case when ${offer}::text::jsonb is null then offer else coalesce(offer, '{}'::jsonb) || ${offer}::text::jsonb end
             where id = ${str(a.id, 60)}::uuid and team_id = ${c.team.id}::uuid returning id, stage, next_step, next_date`)
           if (!rows.length) fail('Oportunidade não encontrada nesta conta (veja em sinfy_oportunidades).')
           return { ok: true, oportunidade: rows[0], link: `${appUrl}/crm` }
@@ -438,7 +539,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
           const [pipe] = await tx`select id from crm_pipelines where team_id = ${c.team.id}::uuid order by position, created_at limit 1`
           if (!pipe) fail('A conta ainda não tem funil: abra o CRM uma vez para criar.')
           const [opp] = await tx`insert into crm_opportunities (pipeline_id, client_id, stage, next_step, next_date, notes, offer)
-            values (${pipe.id}::uuid, ${clientId}::uuid, ${etapa ?? 'novo'}, ${next ?? null}, ${date ?? null}::date, ${notes ?? null}, coalesce(${offer}::jsonb, '{}'::jsonb)) returning id, stage`
+            values (${pipe.id}::uuid, ${clientId}::uuid, ${etapa ?? 'novo'}, ${next ?? null}, ${date ?? null}::date, ${notes ?? null}, coalesce(${offer}::text::jsonb, '{}'::jsonb)) returning id, stage`
           return { ok: true, oportunidade: opp, cliente_id: clientId, link: `${appUrl}/crm` }
         })
       },

@@ -11,6 +11,8 @@ import '@excalidraw/excalidraw/index.css'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
 import type { BoardDraft } from './layout'
+import type { AgentPointer } from './openBoard'
+import { actorColor, actorLabel, useMcpEvent } from '@/features/mcp/live'
 import { fileDataUrl, loadBoard, renameBoard, saveScene, saveThumb, takePending, uploadImage, type Board, type BoardScene, type StoredFile } from './data'
 import { colorOf, joinBoard, type LiveBoard, type Peer } from './live'
 import { FONT, STICKY_COLORS, STICKY_SIZE, stickySkeleton } from './templates'
@@ -346,40 +348,62 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
     return () => clearOpenBoard(board.id)
   }, [api, board.id, showAgent, hideAgent])
 
-  // ——— o que a IA conectada (MCP) pediu para pôr no quadro: desenha aqui, embaixo do que existe
+  // ——— o que a IA conectada (MCP) pediu para pôr no quadro: desenha aqui, embaixo do que existe. Ao vivo: o aviso
+  // da IA (canal `mcp:<conta>`) dispara na hora e o cursor dela monta peça por peça; sem aviso, ao abrir ou voltar à aba
+  const drainRef = useRef<(who?: AgentPointer) => Promise<void>>()
   useEffect(() => {
     if (!api) return
     let running = false
-    const drain = async () => {
+    const drain = async (who?: AgentPointer) => {
       if (running || document.visibilityState !== 'visible') return
       running = true
       try {
         const queue = await takePending(board.id)
         if (!queue.length) return
         const { addDraftToBoard, editBoardItems, linkBoardItems, organizeBoard } = await import('./compose')
+        const agents = who ? [who] : undefined
         for (const item of queue) {
           try {
-            if ('op' in item && item.op === 'editar') await editBoardItems(board.id, board.teamId, item.itens)
-            else if ('op' in item && item.op === 'ligar') await linkBoardItems(board.id, board.teamId, item.ligacoes)
-            else if ('op' in item && item.op === 'organizar') await organizeBoard(board.id, board.teamId)
-            else await addDraftToBoard(board.id, board.teamId, item as BoardDraft)
+            if ('op' in item && item.op === 'editar') await editBoardItems(board.id, board.teamId, item.itens, agents)
+            else if ('op' in item && item.op === 'ligar') await linkBoardItems(board.id, board.teamId, item.ligacoes, agents)
+            else if ('op' in item && item.op === 'organizar') await organizeBoard(board.id, board.teamId, {}, agents)
+            else await addDraftToBoard(board.id, board.teamId, item as BoardDraft, agents)
           } catch (e) {
             toast.error(`Um pedido da sua IA não entrou no quadro: ${(e as Error).message}`)
           }
         }
-        toast.success(queue.length > 1 ? `${queue.length} pedidos da sua IA entraram no quadro` : 'O pedido da sua IA entrou no quadro')
+        if (!who) toast.success(queue.length > 1 ? `${queue.length} pedidos da sua IA entraram no quadro` : 'O pedido da sua IA entrou no quadro')
       } catch (e) {
         console.error('[quadros] fila da IA', e)
       } finally {
         running = false
       }
     }
+    drainRef.current = drain
+    const onShow = () => void drain()
     // Espera o registro do quadro aberto (setOpenBoard) para desenhar pelo editor
-    const first = setTimeout(() => void drain(), 400)
-    window.addEventListener('focus', drain)
-    document.addEventListener('visibilitychange', drain)
-    return () => { clearTimeout(first); window.removeEventListener('focus', drain); document.removeEventListener('visibilitychange', drain) }
+    const first = setTimeout(onShow, 400)
+    window.addEventListener('focus', onShow)
+    document.addEventListener('visibilitychange', onShow)
+    return () => { clearTimeout(first); window.removeEventListener('focus', onShow); document.removeEventListener('visibilitychange', onShow) }
   }, [api, board.id, board.teamId])
+  useMcpEvent((e) => {
+    if (!e.tool.startsWith('sinfy_quadro')) return
+    const id = typeof e.onde.quadro === 'string' ? e.onde.quadro : e.criado?.quadro
+    if (id !== board.id || !api) return
+    const who: AgentPointer = { key: `mcp-${e.ia}`, name: actorLabel(e), color: actorColor(e) }
+    if (e.phase === 'start') {
+      // O cursor da IA aparece no meio da tela enquanto ela pensa
+      const st = api.getAppState()
+      const z = st.zoom.value
+      showAgent(who.key, who.name, who.color, -st.scrollX + st.width / 2 / z, -st.scrollY + st.height / 2 / z)
+      return
+    }
+    if (e.phase === 'done') {
+      hideAgent(who.key)
+      if (e.muda && e.ok !== false) void drainRef.current?.(who)
+    }
+  }, [api, board.id, showAgent, hideAgent])
   useIaraScreen({
     id: `quadro-${board.id}`,
     title: `Quadro ${title}`,

@@ -28,6 +28,18 @@ type Args = Record<string, unknown>
 
 const sql = postgres(Deno.env.get('SUPABASE_DB_URL')!, { prepare: false, max: 3, idle_timeout: 20, connect_timeout: 10 })
 
+/** Aviso ao vivo num canal privado do Realtime (`realtime.send`, grava e entrega a quem pode ouvir o tópico). */
+export async function liveSend(topic: string, event: string, payload: Record<string, unknown>): Promise<string | undefined> {
+  try {
+    await sql`select realtime.send(${JSON.stringify(payload)}::text::jsonb, ${event}::text, ${topic}::text, true)`
+    return undefined
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[sinfy-mcp] ao vivo', message)
+    return message
+  }
+}
+
 /** Roda `fn` numa transação como a pessoa: RLS, `auth.uid()` e papéis iguais aos da tela. */
 export async function asUser<T>(caller: PlatformCaller, fn: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> {
   return (await sql.begin(async (tx) => {
@@ -331,7 +343,7 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
             const keys = Object.keys(values)
             if (!keys.length) fail('Mande os valores.')
             const list = keys.map((k) => `"${k}"`).join(', ')
-            const rows = await tx.unsafe(`insert into public."${name}" (${list}) select ${list} from jsonb_populate_record(null::public."${name}", $1::jsonb) returning *`, [JSON.stringify(values)] as never[])
+            const rows = await tx.unsafe(`insert into public."${name}" (${list}) select ${list} from jsonb_populate_record(null::public."${name}", $1::text::jsonb) returning *`, [JSON.stringify(values)] as never[])
             return { ok: true, criado: rows[0] }
           }
           const filters = Array.isArray(a.filtros) ? a.filtros : []
@@ -351,7 +363,7 @@ export function platformTools(deps: PlatformDeps): PlatformTool[] {
           if (!keys.length) fail('Mande os valores a mudar.')
           params.push(JSON.stringify(values))
           const list = keys.map((k) => `"${k}"`).join(', ')
-          const rows = await tx.unsafe(`update public."${name}" set (${list}) = (select ${list} from jsonb_populate_record(null::public."${name}", $${params.length}::jsonb)) ${where} returning *`, params as never[])
+          const rows = await tx.unsafe(`update public."${name}" set (${list}) = (select ${list} from jsonb_populate_record(null::public."${name}", $${params.length}::text::jsonb)) ${where} returning *`, params as never[])
           if (rows.length !== total) fail('Sem permissão para mudar todas essas linhas.')
           return { ok: true, linhas: rows.length, dados: trimRows(rows as unknown as Record<string, unknown>[]).rows }
         })

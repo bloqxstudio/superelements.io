@@ -29,6 +29,7 @@ import { AiDialog } from './AiDialog'
 import { LIBRARY } from './library'
 import { Board } from './Board'
 import { joinSetLive, useLive } from './live'
+import { useMcpCreativeLive } from './mcpLive'
 import { shareSet } from './storage'
 import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
 import { alpha } from './color'
@@ -535,6 +536,8 @@ export const CreativeEditor: React.FC = () => {
     void useEditor.getState().open(setId, projectParam)
     return () => useEditor.getState().close()
   }, [setId, projectParam])
+  // A IA conectada (MCP) mexendo neste conjunto: cursor dela no slide e o conjunto relido ao vivo
+  useMcpCreativeLive(setId, projectParam)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

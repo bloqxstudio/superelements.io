@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMcpEvent } from '@/features/mcp/live'
 import { AreaTabs } from '@/features/navigation/AreaTabs'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -410,6 +411,11 @@ export default function Cerebro() {
       .subscribe()
     return () => { window.clearTimeout(timer); void supabase.removeChannel(ch) }
   }, [teamId, reload])
+  // Ao vivo: a IA conectada (MCP) guardou um arquivo (foto pelo link de envio, imagem salva ou foto de criativo)
+  useMcpEvent((e) => {
+    const files = e.phase === 'upload' || (e.phase === 'done' && e.ok !== false && ['sinfy_cerebro_imagem_salvar', 'sinfy_criativo_foto'].includes(e.tool))
+    if (files && !editingRef.current) window.setTimeout(() => void reload(), 300)
+  }, [reload])
 
   const graph = useMemo(() => vault ? buildGraph(vault) : null, [vault])
   const tree = useMemo(() => vault ? buildTree(vault) : null, [vault])

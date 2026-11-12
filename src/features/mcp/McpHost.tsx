@@ -2,6 +2,8 @@ import React, { useEffect } from 'react'
 import { useCrm } from '@/features/crm/crmStore'
 import { McpDialog } from '@/features/crm/McpDialog'
 import { iaraEnabled, useMcpConnect } from './connect'
+import { useMcpChannel } from './live'
+import { McpLiveBadge } from './McpLiveBadge'
 
 /**
  * O "Conectar sua IA" de qualquer tela (menu lateral, botões que antes chamavam a Iara). Com a Iara
@@ -10,6 +12,8 @@ import { iaraEnabled, useMcpConnect } from './connect'
 export const McpHost: React.FC = () => {
   const team = useCrm((s) => s.team)
   const { open, request, show, close } = useMcpConnect()
+  // A IA conectada ao vivo: o canal da conta e o aviso flutuante
+  useMcpChannel(team?.id)
 
   useEffect(() => {
     if (iaraEnabled()) return
@@ -22,5 +26,10 @@ export const McpHost: React.FC = () => {
   }, [show])
 
   if (!team) return null
-  return <McpDialog open={open} onOpenChange={(v) => (v ? show() : close())} teamId={team.id} teamName={team.name} request={request} />
+  return (
+    <>
+      <McpLiveBadge />
+      <McpDialog open={open} onOpenChange={(v) => (v ? show() : close())} teamId={team.id} teamName={team.name} request={request} />
+    </>
+  )
 }

@@ -38,6 +38,7 @@ import PageApproval from "@/pages/PageApproval";
 import ProjectInvite from "@/pages/ProjectInvite";
 import TeamInvite from "@/pages/TeamInvite";
 import PublicForm from "@/pages/PublicForm";
+import EnviarFotos from "@/pages/EnviarFotos";
 import CrmOpportunities from "@/pages/crm/Opportunities";
 import CrmClients from "@/pages/crm/Clients";
 import CrmClientDetail from "@/pages/crm/ClientDetail";
@@ -121,6 +122,7 @@ function App() {
               <Route path="/equipe/convite/:inviteId" element={<TeamInvite />} />
               {/* Link direto para um formulário (campanhas, WhatsApp, e-mail): público, sem login */}
               <Route path="/f/:id" element={<PublicForm />} />
+              <Route path="/enviar/:token" element={<EnviarFotos />} />
               <Route path="/menuzito-modelo" element={<MenuzitoModel />} />
               <Route path="/menuzito-style-guide" element={<MenuzitoStyleGuide />} />
               <Route path="/uglycash-modelo" element={<UglyCashModel />} />
