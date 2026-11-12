@@ -25,6 +25,7 @@ import CodeSites from "@/pages/sites/CodeSites";
 import SiteEditor from "@/pages/sites/SiteEditor";
 import Copy from "@/pages/Copy";
 import Boards from "@/pages/Boards";
+import ModuleHome from "@/pages/ModuleHome";
 import References from "@/pages/References";
 import { BoardRoute } from "@/features/quadros/BoardRoute";
 import { CreativeEditor } from "@/features/criativos/Editor";
@@ -190,6 +191,7 @@ function App() {
                 {/* Segundo cérebro (cerebro/ do repositório): só o admin da plataforma; no dev edita os arquivos */}
                 <Route path="cerebro" element={<Cerebro />} />
                 <Route path="quadros" element={<Boards />} />
+                <Route path="modulo/:moduleId" element={<ModuleHome />} />
                 <Route path="referencias" element={<References />} />
                 <Route path="quadros/:boardId" element={<BoardRoute />} />
                 <Route path="contas/nova" element={<AccountWizard />} />

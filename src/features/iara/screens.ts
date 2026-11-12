@@ -18,6 +18,7 @@ export interface ScreenInfo {
 }
 
 const SCREENS: Array<[string, ScreenInfo]> = [
+  ['/modulo/:moduleId', { name: 'Visão geral do módulo', purpose: 'a entrada de um módulo (Criação, Vendas, Prospecção, Instagram, Resultados, IA e equipe): as telas dele, o que há de novo em cada uma e pedidos de partida', suggestions: ['Por onde eu começo neste módulo?', 'O que tem de novo aqui desde ontem?', 'Qual tela deste módulo resolve o que eu preciso agora?'] }],
   ['/inicio', { name: 'Início', purpose: 'o resumo do caminho anúncio → site → contato → venda da conta', suggestions: ['Me explica o que mudou nos números desta semana', 'Onde estamos perdendo mais gente no caminho?', 'Que três coisas eu faço hoje para vender mais?'] }],
   ['/projetos/:projectId', { name: 'Projeto no Space', purpose: 'o canvas com as páginas do site do cliente, para criar e ajustar seções', suggestions: ['Revise os títulos desta página e diga o que melhorar', 'Crie uma seção de perguntas frequentes no fim da página', 'Deixe a primeira dobra mais clara no celular'] }],
   ['/sites/:siteId', { name: 'Editor de site em código', purpose: 'o editor visual de um site Astro: prévia do astro dev, o elemento escolhido com arquivo e linha, e a publicação pelo GitHub', suggestions: ['Deixa o elemento escolhido mais destacado no celular', 'Cria uma seção de perguntas frequentes antes do rodapé', 'Revisa os textos desta página e melhora os títulos'] }],

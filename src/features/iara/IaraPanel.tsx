@@ -1,7 +1,7 @@
 import { openViewer } from '@/components/MediaViewer'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useMatch, useNavigate } from 'react-router-dom'
-import { ArrowRight, Check, CircleAlert, Eye, EyeOff, Lightbulb, Loader2, MousePointer2, PanelRight, PanelRightClose, Sparkles, X } from 'lucide-react'
+import { ArrowRight, Check, CircleAlert, Eye, EyeOff, Lightbulb, Loader2, Maximize2, Minimize2, MousePointer2, Sparkles, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCrm } from '@/features/crm/crmStore'
 import { useProjectStore } from '@/features/projects/projectStore'
@@ -23,10 +23,12 @@ import { SquadBoard } from './SquadBoard'
 import { runOrchestra, type OrchestraArgs } from './orchestra'
 import { ROLES, readRole, writeRole, type IaraRole } from './roles'
 import { IaraWelcome } from './IaraWelcome'
+import { IaraBar } from './IaraBar'
 import { clearPickedText, describeScreen, pickedText, rememberScreen, screenOf } from './screens'
 
 /**
- * A Iara: botão no canto, janela ou barra lateral, em qualquer tela (⌘/Ctrl + J). Desde 2026-11-05
+ * A Iara, em qualquer tela (⌘/Ctrl + J): fechada é a caixa "Pergunte à Iara" no pé da tela (`IaraBar`);
+ * expandida é o painel lateral, que ainda pode ocupar a tela toda (2026-11-12). Desde 2026-11-05
  * o chat dela é o mesmo do canvas (`SpaceChat`: Claude Code ou Codex, skills, imagens, /usage,
  * /login, conversas anteriores), com as ações do produto como ferramentas. Num projeto a conversa
  * é a do projeto e o canvas vai junto; no resto do produto, a da conta.
@@ -269,7 +271,6 @@ export const IaraPanel: React.FC = () => {
   const siteMatch = useMatch('/sites/:siteId')
   const codeSite = useSitesLink((s) => s.state?.sites.find((x) => x.id === siteMatch?.params.siteId))
   const inSite = !!siteMatch && !!codeSite
-  const inBoard = !!useMatch('/quadros/:boardId')
   const chatId = inProject ? openProject : inSite ? `site-${codeSite.id}` : team ? `conta-${team.id}` : undefined
   const projectName = useProjectStore((s) => s.projects.find((p) => p.id === openProject)?.name)
   useEffect(() => {
@@ -288,14 +289,25 @@ export const IaraPanel: React.FC = () => {
   const [role, setRole] = useState<IaraRole>(readRole)
   const roleRef = useRef(role)
   roleRef.current = role
-  // Na lateral por padrão (a janela flutuante cobria as telas); a pessoa ainda pode voltar à janela
-  const [dock, setDock] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('iara-lateral') !== '0'
-    } catch {
-      return true
-    }
-  })
+  // Expandida ao máximo: a conversa ocupa a tela, numa coluna central (volta à lateral pelo mesmo botão ou Esc)
+  const [maxed, setMaxed] = useState(false)
+  // O mesmo movimento da janela "Todos os módulos" do menu (fade + deslize curto, 200 ms, ease-out),
+  // em espelho: o painel entra e sai pela direita; ao fechar fica montado o tempo da saída
+  const [leaving, setLeaving] = useState(false)
+  const wasOpen = useRef(open)
+  useEffect(() => {
+    const closed = wasOpen.current && !open
+    wasOpen.current = open
+    if (!closed) return setLeaving(false)
+    setLeaving(true)
+    const timer = setTimeout(() => setLeaving(false), 200)
+    return () => clearTimeout(timer)
+  }, [open])
+  useEffect(() => {
+    if (!open) setMaxed(false)
+  }, [open])
+  // Telas de canvas: a caixa do pé cobriria as ferramentas de baixo, então fica só o botão no canto
+  const canvasRoute = /^\/(projetos|sites|quadros|copy|criativos|motion)\/[^/]+/.test(pathname)
   // No celular não há coluna: a Iara abre por cima, em tela cheia, e nada é empurrado
   const [wide, setWide] = useState(() => window.matchMedia('(min-width: 768px)').matches)
   const [width, setWidth] = useState(() => dockWidth())
@@ -321,17 +333,8 @@ export const IaraPanel: React.FC = () => {
       // vale até recarregar
     }
   }, [open, wide])
-  // Um painel lateral aberto (a peça da Pauta, o cartão da oportunidade): a Iara vira coluna e ele fica à esquerda dela
-  const [sidePanel, setSidePanel] = useState(false)
-  useEffect(() => {
-    if (!open) return
-    const check = () => setSidePanel(!!document.querySelector('.se-side-panel'))
-    check()
-    const timer = setInterval(check, 400)
-    return () => clearInterval(timer)
-  }, [open])
-  // Num projeto a Iara é a coluna da direita (o chat do canvas mora nela) e abre ao entrar
-  const docked = wide && (dock || inProject || inSite || inBoard || sidePanel)
+  // No computador a Iara aberta é sempre a coluna da direita; num projeto ela abre ao entrar
+  const docked = wide
   useEffect(() => {
     if (inProject && openProject && !closedIn.has(openProject)) useIara.setState({ open: true })
   }, [inProject, openProject])
@@ -346,16 +349,6 @@ export const IaraPanel: React.FC = () => {
       root.removeAttribute('data-iara-docked')
     }
   }, [open, docked, width])
-  const toggleDock = () => {
-    setDock((d) => {
-      try {
-        localStorage.setItem('iara-lateral', d ? '0' : '1')
-      } catch {
-        // vale até recarregar
-      }
-      return !d
-    })
-  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -363,12 +356,12 @@ export const IaraPanel: React.FC = () => {
         e.preventDefault()
         useIara.setState((s) => ({ open: !s.open }))
       }
-      // Esc só fecha a janela flutuante com o foco nela (no canvas o Esc é da seleção)
-      if (e.key === 'Escape' && useIara.getState().open && !useIara.getState().busy && !docked && (e.target as HTMLElement | null)?.closest?.('[data-iara-panel]')) useIara.setState({ open: false })
+      // Esc com o foco na Iara: da tela toda volta à lateral (no canvas o Esc é da seleção)
+      if (e.key === 'Escape' && useIara.getState().open && (e.target as HTMLElement | null)?.closest?.('[data-iara-panel]')) setMaxed(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [docked])
+  }, [])
 
   // "Pedir à Iara" de outras telas: vai como mensagem quando o chat estiver pronto
   useEffect(() => {
@@ -499,30 +492,19 @@ export const IaraPanel: React.FC = () => {
 
   return (
     <>
-      {!open && (
-        <button
-          type="button"
-          onClick={() => useIara.setState({ open: true })}
-          aria-label="Abrir a Iara (⌘J)"
-          className="fixed bottom-5 right-5 z-50 inline-flex h-11 items-center gap-2 rounded-full bg-gray-900 pl-3.5 pr-4 text-sm font-semibold text-white shadow-[0_8px_24px_-8px_rgb(0_0_0/0.45)] transition-transform hover:bg-black active:scale-[0.97]"
-        >
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-violet-400 to-fuchsia-500">
-            <Sparkles className="h-3.5 w-3.5" aria-hidden />
-          </span>
-          Iara
-        </button>
-      )}
-      {open && (
+      {!open && <IaraBar compact={canvasRoute} placeholder={here ? `Pergunte à Iara sobre ${here.name.toLowerCase()}…` : 'Pergunte à Iara…'} />}
+      {(open || leaving) && (
         <section
           aria-label="Iara, assistente"
           data-iara-panel
           className={cn(
             'fixed z-50 flex flex-col overflow-hidden bg-white',
-            docked
-              ? 'inset-y-0 right-0 w-[var(--iara-w,400px)] border-l border-gray-200'
-              : wide
-                ? 'bottom-4 right-4 h-[min(680px,calc(100vh-32px))] w-[min(400px,calc(100vw-32px))] rounded-2xl shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_24px_64px_-16px_rgb(0_0_0/0.35)]'
-                : 'inset-0'
+            maxed || !docked ? 'inset-0' : 'inset-y-0 right-0 w-[var(--iara-w,400px)] border-l border-gray-200',
+            maxed && 'se-iara-max',
+            'duration-200 ease-out motion-reduce:animate-none',
+            open
+              ? cn('animate-in fade-in-0', maxed ? 'zoom-in-[0.98]' : docked ? 'slide-in-from-right-12' : 'slide-in-from-bottom-12')
+              : cn('pointer-events-none animate-out fade-out-0 fill-mode-forwards', maxed ? 'zoom-out-[0.98]' : docked ? 'slide-out-to-right-12' : 'slide-out-to-bottom-12')
           )}
         >
           <header className="flex items-center gap-2.5 border-b border-gray-100 px-4 py-3">
@@ -556,18 +538,17 @@ export const IaraPanel: React.FC = () => {
             >
               <Lightbulb className="h-4 w-4" aria-hidden />
             </button>
-            {!inProject && !inSite && !inBoard && !sidePanel && (
-              <button type="button" onClick={toggleDock} aria-label={dock ? 'Voltar para a janela flutuante' : 'Abrir como barra lateral'} title={dock ? 'Voltar para a janela flutuante' : 'Abrir como barra lateral'} className="hidden h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 md:flex">
-                {dock ? <PanelRightClose className="h-4 w-4" aria-hidden /> : <PanelRight className="h-4 w-4" aria-hidden />}
-              </button>
-            )}
+            <button type="button" onClick={() => setMaxed((m) => !m)} aria-label={maxed ? 'Voltar à lateral' : 'Ocupar a tela toda'} title={maxed ? 'Voltar à lateral (Esc)' : 'Ocupar a tela toda'} className="hidden h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 md:flex">
+              {maxed ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}
+            </button>
             <button
               type="button"
               onClick={() => {
                 if (inProject && openProject) closedIn.add(openProject)
                 useIara.setState({ open: false })
               }}
-              aria-label="Fechar"
+              aria-label="Recolher para a caixa (⌘J)"
+              title="Recolher para a caixa (⌘J)"
               className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900"
             >
               <X className="h-4 w-4" aria-hidden />
@@ -591,7 +572,7 @@ export const IaraPanel: React.FC = () => {
               </button>
             ))}
           </div>
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className={cn('flex min-h-0 flex-1 flex-col', maxed && 'mx-auto w-full max-w-3xl')}>
             {inProject && <ClaudePanel inline />}
             <SpaceChat chatId={chatId} chatName={inProject ? projectName : inSite ? codeSite.name : `Iara · ${team.name}`} iara={hooks} />
           </div>

@@ -1,7 +1,7 @@
 import { useJobs } from '@/features/operations/jobs'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { ChevronsUpDown, LayoutGrid, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { ChevronsUpDown, LayoutDashboard, LayoutGrid, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
 import { navigationMatches } from '@/features/navigation/workspace'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { areaPaths, type AreaId } from '@/features/navigation/AreaTabs'
@@ -18,6 +18,7 @@ import { AGENT_COLOR } from '@/features/agents/agentStatus'
 import { useTick } from '@/features/agents/useTick'
 import { agentStatus, useAgents } from '@/features/space/bridge/agentsStore'
 import { cn } from '@/lib/utils'
+import { moduleHomePath, useMenuModules } from '@/features/navigation/moduleHome'
 
 /**
  * Menu lateral das telas da conta. Desde 2026-11-09 (nova jornada de criação, aprovada pelo usuário:
@@ -29,7 +30,8 @@ import { cn } from '@/lib/utils'
  * que abre a janela com todos (`ModulesWindow`: Criação, Vendas, Prospecção, Instagram, Resultados, IA e equipe e
  * Plataforma), e logo abaixo só as telas do módulo atual. Automações saiu do menu (a rota segue). Os módulos da conta só
  * escondem itens; não mudam a ordem nem os nomes. Telas irmãs viram abas no topo da área
- * (`AreaTabs`). Dentro de um projeto o Space ocupa a tela e o menu some.
+ * (`AreaTabs`). Dentro de um projeto o Space ocupa a tela e o menu some. Desde 2026-11-12 cada módulo com mais de uma
+ * tela começa pela Visão geral (`/modulo/:id`, `pages/ModuleHome.tsx`), que é onde se cai ao escolher o módulo.
  * Plano: cerebro/iniciativas/superelements/jornada-de-criacao.md.
  */
 
@@ -302,7 +304,12 @@ const buildModules = (on: (id: ModuleId) => boolean, team: boolean, crm: boolean
     id: 'plataforma', title: 'Plataforma', hint: product !== 'completo' ? `Contas e módulos · produto: ${productInfo(product).label}` : 'Contas e módulos', icon: Building, color: 'linear-gradient(160deg,#94a3b8,#475569)', paths: ['/contas'],
     items: [{ to: '/contas', label: 'Contas e módulos', node: <Item to="/contas" icon={Building} label="Contas e módulos" /> }],
   })
-  return list.filter((m) => m.items.length > 0)
+  // A Visão geral abre o módulo (o usuário não quer cair direto numa tela, como o Cérebro em Criação)
+  return list.filter((m) => m.items.length > 0).map((m) => m.items.length < 2 ? m : {
+    ...m,
+    paths: [...m.paths, moduleHomePath(m.id)],
+    items: [{ to: moduleHomePath(m.id), label: 'Visão geral', node: <Item to={moduleHomePath(m.id)} end icon={LayoutDashboard} label="Visão geral" /> }, ...m.items],
+  })
 }
 
 /** O menu: Início, o módulo atual (que abre a janela de módulos) e as telas dele; a busca mostra as telas de todos. */
@@ -373,6 +380,10 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
   const product: ProductId = team?.product ?? 'completo'
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `on` lê só `team`
   const modules = useMemo(() => buildModules(on, teams.length > 0, crm, platformAdmin, product), [team, teams.length, crm, platformAdmin, product])
+  // A Visão geral de cada módulo lê daqui o que mostrar
+  useEffect(() => {
+    useMenuModules.setState({ modules: modules.map(({ id, title, hint, icon, color, items }) => ({ id, title, hint, icon, color, items: items.filter((i) => !i.to.startsWith('/modulo/')).map(({ to, label }) => ({ to, label })) })) })
+  }, [modules])
 
   return (
     <>

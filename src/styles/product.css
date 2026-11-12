@@ -247,3 +247,14 @@ body:has(.se-product) .se-dialog-content h2 + p { font-size: 13px; line-height: 
   /* Telas cheias por cima do app (visualizador de imagens, prévia grande): param na borda da Iara */
   :root .se-dock-inset { right: var(--iara-dock, 0px); }
 }
+
+/*
+ * A caixa "Pergunte à Iara" (Iara fechada, 2026-11-12): centrada na área de trabalho, à direita do
+ * menu; o conteúdo ganha espaço embaixo para o fim da página não ficar atrás dela.
+ */
+.se-iara-bar { left: 50%; }
+@media (min-width: 768px) {
+  .se-app .se-iara-bar { left: calc(50% + 132px); }
+  .se-app.se-menu-collapsed .se-iara-bar { left: calc(50% + 44px); }
+}
+:root[data-iara-bar] .se-app .se-content { padding-bottom: 96px; }

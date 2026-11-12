@@ -6,7 +6,7 @@ const AREAS: [string, string][] = [
   ['/crm/site', 'Visitas do site'], ['/crm/diagnostico', 'Diagnóstico'], ['/crm', 'Leads'],
   ['/conteudos', 'Pauta'], ['/pauta', 'Pauta'], ['/plano', 'Cérebro · Plano da empresa'], ['/copy', 'Pauta · Textos'], ['/criativos', 'Criativos'], ['/motion', 'Criativos · Motion'], ['/sites', 'Sites'],
   ['/agentes', 'Agentes de IA'], ['/skills', 'Instruções de IA'], ['/prospeccao', 'Prospecção'],
-  ['/contas', 'Contas e módulos'], ['/cerebro', 'Cérebro'], ['/quadros', 'Quadros'], ['/referencias', 'Referências'], ['/inicio', 'Início'],
+  ['/contas', 'Contas e módulos'], ['/cerebro', 'Cérebro'], ['/quadros', 'Quadros'], ['/referencias', 'Referências'], ['/inicio', 'Início'], ['/modulo', 'Visão geral do módulo'],
 ]
 export const workspaceTitle = (pathname: string) => AREAS.find(([path]) => pathname === path || pathname.startsWith(`${path}/`))?.[1] ?? 'Sites'
 export const normalizeNavigation = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim()

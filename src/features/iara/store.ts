@@ -291,14 +291,14 @@ const listOf = (conv: string): IaraMessage[] => {
 }
 
 /**
- * A Iara abre sozinha no computador (2026-11-07, o usuário: "pode vir como padrão aberto a tela da Iara
- * e o app todo adaptado pra isso"): aberta na lateral, a menos que a pessoa tenha fechado
- * (`iara-aberta` = 0). No celular começa fechada (ela cobriria a tela inteira).
+ * Desde 2026-11-12 a Iara fechada já é um chat aberto (a caixa "Pergunte à Iara" no pé de cada tela),
+ * então o painel lateral só começa expandido se a pessoa o deixou assim (`iara-aberta` = 1).
+ * No celular começa fechada (ele cobriria a tela inteira).
  */
 const startsOpen = () => {
   try {
     if (typeof window === 'undefined' || !window.matchMedia('(min-width: 768px)').matches) return false
-    return localStorage.getItem('iara-aberta') !== '0'
+    return localStorage.getItem('iara-aberta') === '1'
   } catch {
     return false
   }
