@@ -497,7 +497,10 @@ function serve() {
       async (teamId, jid, text) => !(await db.rpc('crm_whatsapp_enqueue_reply', { p_team: teamId, p_jid: jid, p_text: text })).error,
       async (teamId, jid, text) => {
         try {
-          await sessions.get(teamId)?.send(jid, text)
+          // Sem sessão (o número caiu), o aviso não saiu: devolve falso para aparecer no log
+          const session = sessions.get(teamId)
+          if (!session) return false
+          await session.send(jid, text)
           return true
         } catch (error) {
           console.error(`[${teamId.slice(0, 8)}] grupo: ${error instanceof Error ? error.message : String(error)}`)

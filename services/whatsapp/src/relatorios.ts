@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { clientReportMessage, type ClientContact, type ReportKind, type Topic } from './clientes.ts'
-import { anuncios, funil, periodOf, readOnly, samePhone, site } from './comandos.ts'
+import { anuncios, chatJidsOf, funil, periodOf, readOnly, samePhone, site } from './comandos.ts'
 
 /**
  * Relatórios internos: o resumo do dia ou da semana (site, anúncios, funil) vai só
@@ -62,7 +62,7 @@ export async function runReports(db: Db, teamIds: string[], deliver: Deliver) {
     if (claimError || !claimed) continue
     const send = async (phone: string, text: string) => {
       // Só para uma conversa que a pessoa já abriu: o relatório nunca inicia contato com número novo
-      const { data: chats } = await db.from('crm_whatsapp_chats').select('jid').eq('team_id', teamId).like('jid', `%${phone.slice(-8)}@s.whatsapp.net`).limit(1)
+      const { data: chats } = await db.from('crm_whatsapp_chats').select('jid').eq('team_id', teamId).in('jid', chatJidsOf(phone)).limit(1)
       const target = chats?.[0]?.jid as string | undefined
       if (!target) {
         console.error(`[${teamId.slice(0, 8)}] relatório: …${phone.slice(-4)} ainda não escreveu para o número da equipe; peça um "oi" uma vez.`)
@@ -104,7 +104,7 @@ async function runContactReports(db: Db, teamIds: string[], deliver: Deliver) {
     const phone = c.phone as string
     const { data: commanders } = await db.from('crm_whatsapp_commanders').select('phone').eq('team_id', teamId)
     if (commanders?.some((m) => samePhone(m.phone as string, phone))) continue
-    const { data: chats } = await db.from('crm_whatsapp_chats').select('jid').eq('team_id', teamId).like('jid', `%${phone.slice(-8)}@s.whatsapp.net`).limit(1)
+    const { data: chats } = await db.from('crm_whatsapp_chats').select('jid').eq('team_id', teamId).in('jid', chatJidsOf(phone)).limit(1)
     const target = chats?.[0]?.jid as string | undefined
     if (!target) continue
     // Reserva antes de montar: uma nova tentativa ou outra cópia do serviço não repete

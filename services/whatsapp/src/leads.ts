@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { chatJidsOf } from './comandos.ts'
 
 /**
  * Avisos de lead novo: a função `lead-webhook` grava o cartão do contato em `crm_lead_alerts`; aqui ele sai
@@ -43,7 +44,7 @@ export async function runLeadAlerts(db: Db, openTeams: string[], deliver: Delive
     for (const person of recipients) {
       const phone = String(person.phone)
       const teamId = person.team_id as string
-      const { data: chats } = await db.from('crm_whatsapp_chats').select('jid').eq('team_id', teamId).like('jid', `%${phone.slice(-8)}@s.whatsapp.net`).limit(1)
+      const { data: chats } = await db.from('crm_whatsapp_chats').select('jid').eq('team_id', teamId).in('jid', chatJidsOf(phone)).limit(1)
       const jid = chats?.[0]?.jid as string | undefined
       if (!jid) {
         console.error(`[${teamId.slice(0, 8)}] aviso de lead: …${phone.slice(-4)} ainda não escreveu para o número da equipe; peça um "oi" uma vez.`)

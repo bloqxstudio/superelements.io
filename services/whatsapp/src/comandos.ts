@@ -10,11 +10,29 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export const norm = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 const digits = (text: string) => text.replace(/\D/g, '')
 
-/** Compara pelos 8 últimos dígitos: o WhatsApp ora tem o 9 do celular, ora não */
+/**
+ * A chave de um número: no Brasil, DDD + 8 últimos dígitos (o WhatsApp ora tem o 9 do celular, ora não); fora do
+ * Brasil, o número todo. Sem DDD não há chave. Antes comparava só os 8 últimos dígitos, e um número de outro DDD
+ * com o mesmo final passava por comandante ou cliente de outra conta (revisão de 2026-11-13).
+ */
+export const phoneKey = (text: string) => {
+  let d = digits(text)
+  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2)
+  if (d.length === 10 || d.length === 11) return d.slice(0, 2) + d.slice(-8)
+  return d.length >= 12 ? d : ''
+}
+
 export const samePhone = (a: string, b: string) => {
-  const x = digits(a)
-  const y = digits(b)
-  return x.length >= 8 && y.length >= 8 && x.slice(-8) === y.slice(-8)
+  const x = phoneKey(a)
+  return !!x && x === phoneKey(b)
+}
+
+/** As conversas possíveis de um número (com e sem o 9 do celular), para achar a que a pessoa já abriu. */
+export const chatJidsOf = (phone: string) => {
+  const k = phoneKey(phone)
+  if (!k) return []
+  const numbers = k.length === 10 ? [`55${k}`, `55${k.slice(0, 2)}9${k.slice(2)}`] : [k]
+  return numbers.map((n) => `${n}@s.whatsapp.net`)
 }
 
 const int = (n: number) => Math.round(n).toLocaleString('pt-BR')
