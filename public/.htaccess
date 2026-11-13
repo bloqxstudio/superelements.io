@@ -6,6 +6,9 @@
   RewriteCond %{HTTPS} off
   RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
+  # A marca SuperElements virou Sinfy (2026-11-13): arquivos do endereço antigo, que páginas publicadas podem usar
+  RewriteRule ^brands/superelements/(.*)$ /brands/sinfy-construtor/$1 [L,R=301]
+
   # Handle React Router - redirect all requests to index.html
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d

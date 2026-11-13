@@ -4,9 +4,9 @@ Este arquivo guarda só as regras que valem em todo trabalho. O detalhe de cada 
 como funciona, arquivos, migrações, o que foi testado) fica em `docs/agentes/`: leia o arquivo da área
 antes de mexer nela e acrescente ali o que mudar, não aqui (limpeza de 2026-11-07, a pedido do usuário).
 
-## Operação local do SuperElements (Mac dedicado, 2026-10-28)
+## Operação local da Sinfy (Mac dedicado, 2026-10-28)
 
-O usuário pediu que este computador opere exclusivamente o SuperElements e que o agente
+O usuário pediu que este computador opere exclusivamente a Sinfy e que o agente
 faça o trabalho de GitHub, SQL, migrações e Edge Functions pelo terminal, sem depender
 do painel web a cada mudança. Use o checkout `/Users/igorpinheiro/ShipStudio/superelements-io`,
 o GitHub `bloqxstudio/superelements.io` e o Supabase `nfmfcpcwyavutntnrxqq`.
@@ -21,7 +21,7 @@ real de cada uma. Não reaplique migrações antigas sem comparar o histórico r
 ## Segundo cérebro (2026-11-06)
 
 Contexto de negócio das iniciativas em `cerebro/` (comece por `cerebro/README.md` e `cerebro/AGORA.md`):
-uma pasta por iniciativa em `cerebro/iniciativas/` (`sinfy`, `superelements`, `plataforma`) e uma por cliente em
+uma pasta por iniciativa em `cerebro/iniciativas/` (`sinfy`, `sinfy-construtor`, `plataforma`) e uma por cliente em
 `cerebro/clientes/` (`avence-studio`, `vizor-peliculas`; modelo `_modelos/cliente.md`, com a linha
 `**Conta:** <id da conta>`), cada uma com `README.md` (estado e próximos passos), `decisoes.md` (só acrescentar),
 `log/` e `midia/`; o que atravessa tudo vai em `cerebro/geral/`. Ao terminar um trabalho que muda o estado de uma
@@ -41,7 +41,7 @@ Sem segredos e sem contatos de prospects ou clientes finais. O Cérebro **do app
   settings nas páginas dela: confira `applyBrand` antes de editar o front matter de um DESIGN.md.
 - **Contas**: dados sempre separados por conta (RLS por `team_id`, módulos ligados por conta). Criativos de
   uma conta nunca usam a identidade da Avence nem de outra conta.
-- **Avence × Superelements**: a Avence Studio vende serviço (site e plano mensal); Superelements nunca aparece
+- **Avence × Sinfy**: a Avence Studio vende serviço (site e plano mensal); Sinfy nunca aparece
   ao cliente final, nem planos ou recursos do produto em ofertas e roteiros.
 - **Prospects**: nada sai da conta (link, mensagem, publicação, WordPress) sem o usuário. Nunca inventar
   empresas, contatos, números, avaliações ou credenciais. Cópias de varredura (`data/prospeccao/`) não vão ao Git.
@@ -65,6 +65,14 @@ Sem segredos e sem contatos de prospects ou clientes finais. O Cérebro **do app
   `artifacts/`, runtimes, perfis de navegador, `.env` e `.codex/` ficam locais. Não remover testes úteis, não
   apagar nem reaplicar o histórico SQL e o baseline, não reescrever o histórico Git sem decisão específica.
   `public/lovable-uploads/` fica por compatibilidade.
+- **Marca Sinfy** (2026-11-13, o usuário: "troca qualquer marca que tiver da superelements para sinfy"): o nome
+  SuperElements saiu do app, dos textos, do plugin (Sinfy Connector), dos docs e do Cérebro; o construtor é
+  `sinfy-construtor` (código, marca, iniciativa; rota `/construtor`, `/superelements` redireciona). Ficam com o nome
+  antigo, de propósito, os identificadores gravados: chaves do navegador e o IndexedDB (`superelements-*`,
+  `superelements-docs`), a API e o slug do plugin nos sites dos clientes (`superelements/v1`, `superelements-connector`,
+  `superelements_*`), os `sourceId` gravados no canvas, migrações antigas, o repositório `bloqxstudio/superelements.io`,
+  o token `superelements-terminal`, o app da Meta e o e-mail `contato@superelements.io` (não há e-mail da Sinfy).
+  As pastas da casa são `~/Sinfy` e `~/.sinfy` (`scripts/home.ts` usa as antigas se só elas existirem).
 - **Conector**: mudar o chat, a ponte, `space.mjs` ou scripts da Iara/Criativos exige `npm run conector`, e
   quem usa precisa baixar de novo.
 
@@ -74,7 +82,7 @@ Sem segredos e sem contatos de prospects ou clientes finais. O Cérebro **do app
 | --- | --- |
 | Produção × CRM, contas e módulos, Oportunidades, Social, Instagram da equipe, Anúncios, Stories programados, Site (visitas, mapa, Shopify), WhatsApp (serviço, inbox, fluxos, comandos, IA local, relatórios), leads por webhook | `crm.md` |
 | Instagram: link para o cliente conectar, análise de perfil, Meta em produção, DMs por webhook, inteligência de Instagram (ganchos, legenda, humanizador, virais, o que funcionou, skills `ig-*`) | `instagram.md` |
-| Produtos (Completo, Sinfy, SuperElements), conta Sinfy, criativos na marca da conta, MCP da Sinfy, piloto Vizor | `produtos-sinfy.md` |
+| Produtos (Completo, Sinfy, Sinfy), conta Sinfy, criativos na marca da conta, MCP da Sinfy, piloto Vizor | `produtos-sinfy.md` |
 | Motion nos Criativos (estúdio, publicar, keyframes, cena em código) | `criativos-motion.md` |
 | Iara, a assistente (chat único, ações, troca de bastão, equipe, imagens) | `iara.md` |
 | Cérebro da conta no app (`/cerebro`, padrões de design, criar imagem, visualizador) | `cerebro.md` |
@@ -87,7 +95,7 @@ Sem segredos e sem contatos de prospects ou clientes finais. O Cérebro **do app
 | Prospecção, funil, diagnóstico de site | `prospeccao.md` |
 | Dia específico nas métricas | `metricas-dia.md` |
 | Meu perfil | `perfil.md` |
-| Marcas e modelos: MSA, Superelements, Menuzito, UGLYCASH, Zelo, ProcessBase, Inpel, Caramelo Pet, Júnior Automáticos, Leo Scherer, Evermind, Skiper UI, Rodas, Baldez & Moreira, Fonseca & Lorenço, Macarthy Scherer, Cerveira Braggio, Emmanuel Reche Becker, DACM, Stemmer, Ferreira & Bordinhão, Katia Paixão, Avence Studio, Planta & Obra | `marcas/<nome>.md` |
+| Marcas e modelos: MSA, Sinfy, Menuzito, UGLYCASH, Zelo, ProcessBase, Inpel, Caramelo Pet, Júnior Automáticos, Leo Scherer, Evermind, Skiper UI, Rodas, Baldez & Moreira, Fonseca & Lorenço, Macarthy Scherer, Cerveira Braggio, Emmanuel Reche Becker, DACM, Stemmer, Ferreira & Bordinhão, Katia Paixão, Avence Studio, Planta & Obra | `marcas/<nome>.md` |
 
 Revisão completa de 2026-11-13 (bugs, segurança, decisões pendentes, lista de trabalho): `docs/agentes/revisao-2026-11-13.md`.
 Outros documentos: `docs/agentes/operacao-historico.md` (texto original do cérebro, higiene e egress), `OPERACAO.md` (terminal, banco, deploy), `META-PRODUCAO.md`, `docs/site-imports/`,

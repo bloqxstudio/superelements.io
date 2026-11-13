@@ -26,7 +26,7 @@ import { EDITS_PATH, editsFolder, phrases, r2, silent, speechSpans, srtOf, wavOf
  *   capa.jpg · post.txt    a capa do reels e a legenda do post
  *   manifesto.json         cenas com início e fim, palavras, trechos de fala (para abaixar a música) e batidas
  *
- * Com o conector (ou `npm run dev`) neste computador, grava em `~/SuperElements/Edits/<pasta>/`, que o MCP do
+ * Com o conector (ou `npm run dev`) neste computador, grava em `~/Sinfy/Edits/<pasta>/`, que o MCP do
  * Edits lê; sem ele, baixa o ZIP. O manifesto é o último arquivo gravado: quando ele aparece, o pacote está pronto.
  * A IA conectada pede pelo MCP da Sinfy (`sinfy_video_edits`); a tela aberta do vídeo gera sozinha.
  */
@@ -65,7 +65,7 @@ export async function buildEditsPack(scene: CodeScene, set: CreativeSet, opts: P
   const total = scene.duration
   const files: EditsFile[] = []
   const caption = (scene.caption ?? scene.explainer?.caption ?? '').trim()
-  const base = { versao: 1, origem: 'SuperElements', conjunto: { id: set.id, nome: set.name }, video: { id: scene.id, nome: scene.name }, formato: scene.format, largura: width, altura: height, fps: 30, duracao: r2(total) }
+  const base = { versao: 1, origem: 'Sinfy', conjunto: { id: set.id, nome: set.name }, video: { id: scene.id, nome: scene.name }, formato: scene.format, largura: width, altura: height, fps: 30, duracao: r2(total) }
 
   if (scene.explainer) {
     const data = scene.explainer

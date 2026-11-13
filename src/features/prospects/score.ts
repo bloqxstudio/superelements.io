@@ -31,7 +31,7 @@ export const older = (version: string | undefined, [major, minor]: number[]) => 
   return a < major || (a === major && b < minor)
 }
 
-/** Peso de cada plataforma: quanto mais perto do que o Superelements conecta hoje, mais. */
+/** Peso de cada plataforma: quanto mais perto do que a Sinfy conecta hoje, mais. */
 const PLATFORM_POINTS: Record<Platform, number> = {
   'wp-elementor': 50,
   wordpress: 35,

@@ -44,7 +44,7 @@ export const PublishDialog: React.FC<{ site: CodeSite; status: SiteStatus; onClo
   const publish = async () => {
     setBusy('publicar')
     try {
-      const done = await callSites<PublishResult>('publish', { siteId: site.id, mode, message: message.trim() || `Edição de ${status.changes.length} arquivo(s) pelo Superelements` })
+      const done = await callSites<PublishResult>('publish', { siteId: site.id, mode, message: message.trim() || `Edição de ${status.changes.length} arquivo(s) pela Sinfy` })
       setResult(done)
       onDone(await callSites<SiteStatus>('status', { siteId: site.id }))
       if (done.warning) toast.warning('A revisão subiu sem o PR')

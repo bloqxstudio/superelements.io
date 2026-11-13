@@ -155,7 +155,7 @@ async function saveConditions(site: Site, id: number, conditions: string[]) {
 /** Cria (sem id) ou atualiza o modelo: o conteúdo, o nome e, no Theme Builder, a condição. */
 async function savePart(site: Site, body: Body) {
   // O tipo do Global Widget fica num campo que a API do WordPress não grava: esse vai pelo plugin
-  if (body.kind === 'widget') throw new SiteError('O Global Widget pede o plugin Superelements Connector no site.', 400, 'needs_connector')
+  if (body.kind === 'widget') throw new SiteError('O Global Widget pede o plugin Sinfy Connector no site.', 400, 'needs_connector')
   const type = TYPES[body.kind ?? '']
   if (!type) throw new SiteError(`Tipo de componente desconhecido: ${body.kind}`)
   if (body.elements !== undefined) {
@@ -178,7 +178,7 @@ async function savePart(site: Site, body: Body) {
     const created = await call<{ id: number }>(site, 'wp/v2/elementor_library', {
       method: 'POST',
       params: { _fields: 'id' },
-      json: { title: body.title || 'Superelements', status: 'publish', meta: { _elementor_edit_mode: 'builder', _elementor_template_type: type, _elementor_data: body.elements } },
+      json: { title: body.title || 'Sinfy', status: 'publish', meta: { _elementor_edit_mode: 'builder', _elementor_template_type: type, _elementor_data: body.elements } },
     })
     id = created.id
   }

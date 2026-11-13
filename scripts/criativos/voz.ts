@@ -3,7 +3,7 @@ import { apiKey } from './imagem.ts'
 /**
  * Narração por IA do vídeo explicativo (2026-11-08, o usuário: "podemos conectar alguma voz para
  * fazer a narração?"; escolheu a OpenAI). Roda no conector, com a mesma chave da OpenAI que os
- * Criativos já usam para imagens (`~/.superelements/chaves.json`): o navegador manda o texto e o
+ * Criativos já usam para imagens (`~/.sinfy/chaves.json`): o navegador manda o texto e o
  * jeito de falar, recebe o MP3. A chave nunca sai deste computador.
  */
 

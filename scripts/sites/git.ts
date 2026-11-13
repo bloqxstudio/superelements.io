@@ -10,7 +10,7 @@ import { CLONES } from './registry.ts'
  */
 
 /** Pasta onde o editor guarda as imagens que a pessoa envia; só o que está aqui o "Descartar" apaga. */
-export const UPLOAD_DIR = 'public/superelements'
+export const UPLOAD_DIR = 'public/sinfy'
 
 const run = (bin: string, args: string[], cwd?: string, timeout = 120_000) =>
   new Promise<string>((resolve, reject) => {
@@ -103,10 +103,10 @@ export async function publish(dir: string, mode: PublishMode, message: string): 
   const status = await siteStatus(dir)
   if (!status.remote) throw new Error('O site não tem repositório remoto (origin).')
   if (!status.changes.length && !status.ahead) throw new Error('Não há mudança para publicar.')
-  const text = message.trim().slice(0, 200) || 'Edição pelo Superelements'
+  const text = message.trim().slice(0, 200) || 'Edição pela Sinfy'
   let branch = status.branch
   if (mode === 'revisao' && branch === status.defaultBranch) {
-    branch = `superelements/${stamp()}`
+    branch = `sinfy/${stamp()}`
     await git(dir, 'switch', '-c', branch)
   }
   if (mode === 'direto' && branch !== status.defaultBranch)
@@ -133,7 +133,7 @@ export async function publish(dir: string, mode: PublishMode, message: string): 
   // O PR desta revisão: cria na primeira vez, depois só recebe os commits novos
   let pr = (await run('gh', ['pr', 'view', branch, '--json', 'url', '--jq', '.url'], dir).catch(() => '')).trim()
   if (!pr) {
-    const body = 'Edição feita no editor visual do Superelements. Ao aprovar e juntar este PR, o site é publicado pela hospedagem a partir da branch principal.'
+    const body = 'Edição feita no editor visual da Sinfy. Ao aprovar e juntar este PR, o site é publicado pela hospedagem a partir da branch principal.'
     try {
       pr = (await run('gh', ['pr', 'create', '--base', status.defaultBranch, '--head', branch, '--title', text, '--body', body], dir)).trim().split('\n').pop() ?? ''
     } catch (error) {

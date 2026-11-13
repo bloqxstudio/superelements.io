@@ -151,7 +151,7 @@ const ConnectedView: React.FC<{
     try {
       if ((await openAdmin(connection)) === 'manual') {
         toast.info('Abri o painel comum: o WordPress vai pedir o login', {
-          description: 'Para entrar sem senha, instale o plugin Superelements Connector 0.4 no site.',
+          description: 'Para entrar sem senha, instale o plugin Sinfy Connector 0.4 no site.',
           action: { label: 'Baixar plugin', onClick: () => window.open(CONNECTOR_ZIP, '_blank', 'noopener') },
         })
       }
@@ -183,7 +183,7 @@ const ConnectedView: React.FC<{
       toast.success('WordPress desconectado', { description: `A senha foi revogada em ${host}.` })
     } else {
       toast.warning('Conexão apagada daqui, mas o site não confirmou a revogação', {
-        description: 'Apague a senha "Superelements" no perfil do usuário no WordPress.',
+        description: 'Apague a senha "Sinfy" no perfil do usuário no WordPress.',
         action: { label: 'Abrir perfil', onClick: () => window.open(profileUrl(site), '_blank', 'noopener') },
       })
     }

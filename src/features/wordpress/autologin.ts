@@ -3,7 +3,7 @@ import { wpRequest, WordPressError } from './rest'
 import type { WordPressConnection } from './types'
 
 /**
- * Entrar no painel do WordPress sem digitar a senha: o plugin Superelements Connector (0.4 ou mais novo)
+ * Entrar no painel do WordPress sem digitar a senha: o plugin Sinfy Connector (0.4 ou mais novo)
  * devolve um link de uso único, válido por 60 segundos, para o usuário da conexão. Sem o plugin (ou velho
  * demais) a rota não existe e a pessoa cai no painel comum, onde o WordPress pede o login.
  */
@@ -12,7 +12,7 @@ export const CONNECTOR_ZIP = '/wordpress/superelements-connector.zip'
 
 export class ConnectorMissing extends Error {
   constructor() {
-    super('O plugin Superelements Connector do site não tem o login automático (precisa do 0.4 ou mais novo).')
+    super('O plugin Sinfy Connector do site não tem o login automático (precisa do 0.4 ou mais novo).')
   }
 }
 

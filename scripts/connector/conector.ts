@@ -10,9 +10,10 @@ import { codeSites } from '../sites/vitePlugin'
 import { checkAgents, spaceChat } from '../space/chatPlugin'
 import { iara } from '../iara/iaraPlugin'
 import { spaceBridge } from '../space/vitePlugin'
+import { AGENTS_DIR } from '../home.ts'
 
 /**
- * Conector dos agentes: o Superelements aberto no navegador usa o Claude Code
+ * Conector dos agentes: a Sinfy aberto no navegador usa o Claude Code
  * e o Codex instalados no computador de quem está nele. Um arquivo só, sem
  * dependências (gerado por `scripts/connector/build.mjs` em
  * `public/conector/conector.mjs`); quem usa baixa pelo chat do canvas e roda
@@ -38,9 +39,9 @@ const LOCK_FOR = 10 * 60_000
 const MAX_BODY = 60 * 1024 * 1024
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
 
-const AGENTS_MD = `# Agentes do Superelements
+const AGENTS_MD = `# Agentes da Sinfy
 
-Pasta do conector do Superelements (ele reescreve este arquivo ao abrir). Aqui o Claude Code ou o Codex trabalham nas páginas de um projeto do Space, o canvas do Superelements, aberto no navegador de quem pediu pelo chat.
+Pasta do conector da Sinfy (ele reescreve este arquivo ao abrir). Aqui o Claude Code ou o Codex trabalham nas páginas de um projeto do Space, o canvas da Sinfy, aberto no navegador de quem pediu pelo chat.
 
 ## Como trabalhar
 
@@ -77,7 +78,7 @@ if (major < 18) {
 
 // ---------- pasta de trabalho ----------
 
-const folder = path.resolve(arg('pasta') ?? path.join(os.homedir(), 'superelements-agentes'))
+const folder = path.resolve(arg('pasta') ?? AGENTS_DIR)
 const write = (file: string, content: string) => {
   const full = path.join(folder, file)
   mkdirSync(path.dirname(full), { recursive: true })
@@ -271,11 +272,11 @@ async function ready(port: number) {
   console.log(
     [
       '',
-      '  Superelements · conector dos agentes',
+      '  Sinfy · conector dos agentes',
       '',
       `  Código:  ${pairing.slice(0, 3)}-${pairing.slice(3)}`,
       given
-        ? '  A aba do Superelements que baixou este arquivo liga sozinha em alguns segundos.'
+        ? '  A aba da Sinfy que baixou este arquivo liga sozinha em alguns segundos.'
         : '  Cole no chat do canvas, no navegador. Ele fica guardado: da próxima vez, é só abrir o conector.',
       '',
       '  Agentes nesta máquina:',

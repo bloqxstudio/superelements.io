@@ -38,7 +38,7 @@ Sem migração nova nesta rodada; `db:status` não indicou novas pendências. Te
 - `npx eslint` nos cinco arquivos de interface alterados: passou.
 - `npx --yes --package=deno -- deno check --node-modules-dir=none --no-lock supabase/functions/instagram/index.ts`: passou.
 - `npm run build`: passou (aviso preexistente de tamanho dos bundles).
-- `npx tsc -p tsconfig.app.json --noEmit`: falha em erros preexistentes fora dos arquivos desta mudança (`space/bridge/client.ts`, `leoschererTemplate.ts`, `superelements/modelo/elementor.ts`). Não declarar que o typecheck completo passou.
+- `npx tsc -p tsconfig.app.json --noEmit`: falha em erros preexistentes fora dos arquivos desta mudança (`space/bridge/client.ts`, `leoschererTemplate.ts`, `sinfy-construtor/modelo/elementor.ts`). Não declarar que o typecheck completo passou.
 
 ## Critério para liberar contas de clientes
 

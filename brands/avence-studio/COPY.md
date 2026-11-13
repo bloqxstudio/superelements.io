@@ -1,6 +1,6 @@
 # Avence Studio — COPY.md
 
-O nosso estúdio de sites. A Home nova do avencestudio.com foi montada no Space em Elementor nativo, para ser o site do studio depois da migração para WordPress. Em 2026-10-04 virou um portfólio: os cases no centro, posicionamento de estúdio com foco em velocidade e a identidade evoluída (página "Identidade" no Space). Fatos, interpretações e pendências ficam separados. **O Superelements nunca aparece aqui**: é só a ferramenta por trás (decisão do usuário, 2026-10-03).
+O nosso estúdio de sites. A Home nova do avencestudio.com foi montada no Space em Elementor nativo, para ser o site do studio depois da migração para WordPress. Em 2026-10-04 virou um portfólio: os cases no centro, posicionamento de estúdio com foco em velocidade e a identidade evoluída (página "Identidade" no Space). Fatos, interpretações e pendências ficam separados. **A Sinfy nunca aparece aqui**: é só a ferramenta por trás (decisão do usuário, 2026-10-03).
 
 ## 1. Fatos (com fonte)
 

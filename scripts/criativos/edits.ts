@@ -1,15 +1,16 @@
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { USER_DIR } from '../home.ts'
 
 /**
  * O pacote de um vídeo para o Edits (Instagram) gravado numa pasta deste computador (2026-11-13, o usuário:
  * "precisamos de uma forma de exportar os assets de um criativo e levar pra plataforma [Edits]"). A aba gera
  * as camadas (vídeo, voz, efeitos, legenda, capa, manifesto) e manda cada arquivo em pedaços; aqui só grava em
- * `~/SuperElements/Edits/<pasta>/`, onde o MCP do Edits lê. Nada sai deste computador.
+ * `~/Sinfy/Edits/<pasta>/`, onde o MCP do Edits lê. Nada sai deste computador.
  */
 
-export const EDITS_ROOT = path.join(os.homedir(), 'SuperElements', 'Edits')
+export const EDITS_ROOT = path.join(USER_DIR, 'Edits')
 
 export interface SaveFileRequest {
   /** O nome da pasta do vídeo (só letras, números, hífen). */

@@ -1,4 +1,4 @@
-# Operação do SuperElements neste Mac
+# Operação da Sinfy neste Mac
 
 Diretório principal: `/Users/igorpinheiro/ShipStudio/superelements-io`.
 GitHub: `bloqxstudio/superelements.io`.
@@ -33,7 +33,7 @@ Execute os comandos a partir do diretório do projeto:
 | Executar arquivo SQL | `npm run db:query -- --file caminho.sql` |
 | Publicar funções específicas | `npm run functions:deploy -- instagram meta-ads` |
 
-Os scripts fixam o destino SuperElements. A publicação usa `--use-api`, sem Docker.
+Os scripts fixam o destino Sinfy. A publicação usa `--use-api`, sem Docker.
 A configuração `verify_jwt` vem de `supabase/config.toml`; não aplique
 `--no-verify-jwt` globalmente. Informe os nomes das funções: o atalho não publica todas
 nem remove funções remotas que não estejam no checkout.

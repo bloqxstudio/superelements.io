@@ -1,7 +1,7 @@
 # Zelo → Elementor nativo
 
 Source: https://zelosistemas.com.br/
-Target: three Superelements landing templates in native Elementor containers/widgets, validated at `/zelo-elementor-preview`.
+Target: three Sinfy landing templates in native Elementor containers/widgets, validated at `/zelo-elementor-preview`.
 Style guide: `/zelo-style-guide`.
 
 The `../uglycash/MIGRATION.md` record belongs to the UGLYCASH model; this folder is the Zelo record.

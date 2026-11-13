@@ -14,7 +14,7 @@ type Mode = 'login' | 'signup';
 const Logo = ({ dark }: { dark?: boolean }) => (
   <div className={cn('flex items-center gap-2 text-lg font-bold tracking-tight', dark ? 'text-white' : 'text-gray-900')}>
     <span className="h-3 w-3 rounded-[3px] bg-[#D2F525]" aria-hidden />
-    Superelements
+    Sinfy
   </div>
 );
 
@@ -106,7 +106,7 @@ export default function Auth() {
             <video src="/sp3.mp4" autoPlay loop muted playsInline preload="auto" className="aspect-video w-full object-cover" />
           </div>
         </div>
-        <p className="relative text-xs text-white/40">© Superelements</p>
+        <p className="relative text-xs text-white/40">© Sinfy</p>
       </aside>
 
       <main className="flex items-center justify-center bg-white px-5 py-10 sm:px-10">
@@ -140,7 +140,7 @@ export default function Auth() {
             <div className="space-y-7">
               <div className="space-y-1.5">
                 <h1 className="text-2xl font-semibold text-gray-900">{signup ? 'Criar sua conta' : 'Bem-vindo de volta'}</h1>
-                <p className="text-sm text-gray-600">{signup ? 'Leva menos de um minuto.' : 'Entre para continuar no Superelements.'}</p>
+                <p className="text-sm text-gray-600">{signup ? 'Leva menos de um minuto.' : 'Entre para continuar na Sinfy.'}</p>
               </div>
 
               <Button type="button" variant="outline" onClick={google} disabled={loading} className="h-11 w-full gap-3 border-gray-300 font-medium">

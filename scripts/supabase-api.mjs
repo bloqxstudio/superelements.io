@@ -13,7 +13,7 @@ function token() {
 }
 
 export function api(path, body, method = 'POST') {
-  if (!path.startsWith('/database/')) throw new Error('Este cliente opera somente a API de banco do SuperElements.');
+  if (!path.startsWith('/database/')) throw new Error('Este cliente opera somente a API de banco da Sinfy.');
   const config = [
     `url = ${JSON.stringify(`https://api.supabase.com/v1/projects/${project}${path}`)}`,
     `request = ${JSON.stringify(method)}`,

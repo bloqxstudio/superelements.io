@@ -1,4 +1,4 @@
-# SuperElements — instruções para Claude Code
+# Sinfy — instruções para Claude Code
 
 @AGENTS.md
 @OPERACAO.md

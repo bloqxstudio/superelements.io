@@ -493,7 +493,7 @@ export const PublishPanel: React.FC = () => {
           <p className="flex gap-2 text-xs text-amber-700">
             <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
             {result.seoSupport.missing === 'connector'
-              ? 'O SEO ficou de fora: o Yoast só grava em páginas com o plugin Superelements Connector (baixe nos detalhes da página).'
+              ? 'O SEO ficou de fora: o Yoast só grava em páginas com o plugin Sinfy Connector (baixe nos detalhes da página).'
               : 'O SEO ficou de fora: o site não tem Yoast, All in One SEO nem SEOPress.'}
           </p>
         )}

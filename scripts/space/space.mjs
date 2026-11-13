@@ -285,7 +285,7 @@ const CLIENTS = [
   { match: /evermind/i, brand: 'public/brands/evermind', builder: 'src/features/evermind', scope: 'Evermind experiment (BYQ evermind-hero-2)' },
   { match: /skiper/i, brand: 'src/features/skiper', builder: 'src/features/skiper/elementor.ts', scope: 'Skiper UI experiment (effects lab)' },
   { match: /\brodas\b/i, brand: 'src/features/rodas', builder: 'src/features/rodas/elementor.ts', scope: 'Rodas experiment (carterogunsola.com)' },
-  { match: /super\s*elements/i, brand: 'brands/superelements', builder: 'src/features/superelements', scope: 'Superelements model (our own product page)' },
+  { match: /super\s*elements|sinfy\s*construtor/i, brand: 'brands/sinfy-construtor', builder: 'src/features/sinfy-construtor', scope: 'Sinfy model (our own product page)' },
   // Prospectos de São Leopoldo (RS), 2026-10-03: redesign para vender, ainda não são clientes
   { match: /baldez/i, brand: 'brands/baldez-moreira', builder: 'src/features/baldezmoreira/elementor.ts', scope: 'Baldez & Moreira model (prospect)' },
   { match: /fonseca/i, brand: 'brands/fonseca-lorenco', builder: 'src/features/fonsecalorenco/elementor.ts', scope: 'Fonseca & Lorenço model (prospect)' },

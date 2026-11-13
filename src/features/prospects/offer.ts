@@ -8,7 +8,7 @@ import type { Lead } from './types.ts'
  * monta a página reescreve com o que descobriu sobre a empresa.
  *
  * Vendemos serviço, como agência: o site novo, entregue pronto, e um plano
- * mensal opcional para cuidar dele. O produto Superelements não entra na
+ * mensal opcional para cuidar dele. O produto Sinfy não entra na
  * conversa com o cliente. Valores ficam na oferta, nunca no roteiro.
  */
 

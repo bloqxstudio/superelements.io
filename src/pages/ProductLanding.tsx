@@ -10,7 +10,7 @@ import { SinfyLoading } from '@/features/sinfy/SinfyLoading';
 import { LiveJourney } from '@/features/sinfy/LiveJourney';
 import { ProductTour } from '@/features/sinfy/ProductTour';
 import { AggregatorNetwork } from '@/features/sinfy/AggregatorNetwork';
-import { AGENCY_OFFER, monthlyBrl } from '@/features/superelements/agencyOffer';
+import { AGENCY_OFFER, monthlyBrl } from '@/features/sinfy-construtor/agencyOffer';
 import { SOLUTIONS as SOLUTION_DATA, PILLARS, BENEFITS, FAQ } from '@/features/sinfy/lpContent';
 import './ProductLanding.css';
 

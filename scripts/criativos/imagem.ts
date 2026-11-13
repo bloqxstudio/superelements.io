@@ -5,6 +5,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import os from 'node:os'
 import path from 'node:path'
 import { findBin, kill, launch } from '../space/chatPlugin.ts'
+import { CONFIG_DIR } from '../home.ts'
 
 /**
  * Geração de imagens para os posts (pessoas, cenas, objetos), no computador de
@@ -12,7 +13,7 @@ import { findBin, kill, launch } from '../space/chatPlugin.ts'
  * embutida (`image_gen`) que usa o login do ChatGPT, sem chave de API, e grava o
  * arquivo em `~/.codex/generated_images/`. Como alternativa, a API do OpenAI ou
  * a do Google (Gemini), com uma chave que fica só num arquivo da pasta da
- * pessoa (`~/.superelements`) ou numa variável de ambiente, nunca no navegador
+ * pessoa (`~/.sinfy`) ou numa variável de ambiente, nunca no navegador
  * nem na nuvem. Sem acesso às contas, nada daqui foi testado contra os serviços.
  */
 
@@ -21,7 +22,7 @@ export type ImageRatio = 'square' | 'portrait' | 'landscape'
 /** Serviços com chave neste computador: imagens (OpenAI, Gemini) e voz (OpenAI, ElevenLabs). */
 export type KeyProvider = 'openai' | 'gemini' | 'elevenlabs'
 
-const FILE = path.join(os.homedir(), '.superelements', 'chaves.json')
+const FILE = path.join(CONFIG_DIR, 'chaves.json')
 
 const readKeys = (): Partial<Record<KeyProvider, string>> => {
   try {
@@ -63,7 +64,7 @@ export const hasKey = (provider: KeyProvider) => !!keyOf(provider)
 /** O que a tela pode saber das chaves: só se existem. */
 export const keyStatus = () => ({ openai: hasKey('openai'), gemini: hasKey('gemini'), elevenlabs: hasKey('elevenlabs') })
 
-/** A chave de um serviço neste computador (variável de ambiente ou `~/.superelements/chaves.json`); só o conector a lê, nunca o navegador. */
+/** A chave de um serviço neste computador (variável de ambiente ou `~/.sinfy/chaves.json`); só o conector a lê, nunca o navegador. */
 export const apiKey = (provider: KeyProvider) => keyOf(provider)
 
 const OPENAI_MODEL = () => process.env.SE_OPENAI_IMAGE_MODEL || 'gpt-image-1'

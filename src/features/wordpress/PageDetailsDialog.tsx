@@ -87,7 +87,7 @@ const SeoNotice: React.FC<{ seo: SeoSupport | null | 'loading'; connected: boole
     return (
       <div className="grid gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
         <p>
-          O Yoast só deixa gravar o SEO de páginas com o plugin Superelements Connector. Instale no site em Plugins, Adicionar novo, Enviar plugin, e abra esta
+          O Yoast só deixa gravar o SEO de páginas com o plugin Sinfy Connector. Instale no site em Plugins, Adicionar novo, Enviar plugin, e abra esta
           tela de novo.
         </p>
         <a href={CONNECTOR_ZIP} download className="inline-flex w-fit items-center gap-1.5 font-medium underline underline-offset-2">

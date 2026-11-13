@@ -12,7 +12,7 @@ import { useSkills, watchSkills } from '@/features/skills/skillsStore'
 
 /**
  * Skills: o jeito de trabalhar que o agente segue no chat do canvas. As
- * padrão vêm com o Superelements; as da equipe valem para todas as contas
+ * padrão vêm com a Sinfy; as da equipe valem para todas as contas
  * (só admin cria e muda); as suas, só para você. Uma skill do Claude Code
  * entra importando o SKILL.md.
  */
@@ -218,7 +218,7 @@ export default function Skills() {
           </Section>
         )}
 
-        <Section title="Padrão" hint="Vêm com o Superelements e valem para todos. Duplique uma para fazer a sua versão.">
+        <Section title="Padrão" hint="Vêm com a Sinfy e valem para todos. Duplique uma para fazer a sua versão.">
           <Grid>
             {CHAT_SKILLS.map((skill) => (
               <SkillCard key={skill.id} skill={skill} onOpen={() => open(skill)} />

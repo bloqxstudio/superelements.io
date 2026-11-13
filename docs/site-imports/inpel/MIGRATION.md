@@ -1,7 +1,7 @@
 # Inpel → Elementor nativo
 
 Source: https://www.inpel.com.br/
-Target: 13 Superelements landing templates in native Elementor containers/widgets, validated at `/inpel-elementor-preview`.
+Target: 13 Sinfy landing templates in native Elementor containers/widgets, validated at `/inpel-elementor-preview`.
 Brand for the project: `brands/inpel/DESIGN.md` (listed in the Space brand examples).
 
 The `../uglycash/MIGRATION.md` record belongs to the UGLYCASH model; this folder is the Inpel record.

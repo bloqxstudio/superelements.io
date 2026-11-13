@@ -27,7 +27,7 @@ import type {
  */
 
 /** Os serviços do OpenStreetMap pedem um nome que identifique quem consulta. */
-const MAP_AGENT = 'superelements-prospeccao/1.0 (+https://superelements.io)'
+const MAP_AGENT = 'sinfy-prospeccao/1.0 (+https://app.avencestudio.com)'
 
 /** Servidores públicos do Overpass: ficam lotados (504/429) às vezes, então a busca tenta o seguinte. */
 const OVERPASS = [

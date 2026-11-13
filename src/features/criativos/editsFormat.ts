@@ -12,7 +12,7 @@ export function editsFolder(scene: { id: string; name: string }): string {
   return `${base || 'video'}-${id}`.slice(0, 80)
 }
 
-export const EDITS_PATH = '~/SuperElements/Edits'
+export const EDITS_PATH = '~/Sinfy/Edits'
 
 // ---------- arquivos ----------
 

@@ -1028,7 +1028,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_video_edits',
     title: 'Levar um vídeo ao Edits',
-    description: 'Exporta as camadas de um vídeo dos Criativos para o Edits (Instagram): vídeo sem a música de fundo, versão sem legenda, voz.wav, efeitos.wav, legenda.srt, capa.jpg, post.txt e manifesto.json (cenas, palavras e trechos de fala para abaixar a música). O navegador gera e o conector grava em ~/SuperElements/Edits/<pasta>/ no Mac. Sem "video", lista os vídeos do conjunto. Com a tela do vídeo aberta, começa sozinho; senão, abra o link. Pronto quando manifesto.json aparecer na pasta com gerado_em depois de pedido_em (1 a 4 min).',
+    description: 'Exporta as camadas de um vídeo dos Criativos para o Edits (Instagram): vídeo sem a música de fundo, versão sem legenda, voz.wav, efeitos.wav, legenda.srt, capa.jpg, post.txt e manifesto.json (cenas, palavras e trechos de fala para abaixar a música). O navegador gera e o conector grava em ~/Sinfy/Edits/<pasta>/ no Mac. Sem "video", lista os vídeos do conjunto. Com a tela do vídeo aberta, começa sozinho; senão, abra o link. Pronto quando manifesto.json aparecer na pasta com gerado_em depois de pedido_em (1 a 4 min).',
     inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string', description: 'O conjunto (sinfy_criativos).' }, video: { type: 'string', description: 'Id ou nome do vídeo do conjunto.' }, projeto_id: { type: 'string' } }, additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     run: async (caller, a) => {
@@ -1046,7 +1046,7 @@ const TOOLS: Tool[] = [
         if (asked) throw new ToolError(`Vídeo "${String(a.video)}" não encontrado. Vídeos do conjunto: ${list.map((v) => `${v.nome} (${v.id})`).join(', ')}.`)
         return { conjunto: found.id, escolha_um: list, como: 'Chame de novo com "video" (id ou nome).' }
       }
-      const pasta = `~/SuperElements/Edits/${editsFolder(scene)}`
+      const pasta = `~/Sinfy/Edits/${editsFolder(scene)}`
       const qs = new URLSearchParams({ id: scene.id, edits: '1', ...(found.projectId ? { projeto: found.projectId } : {}) })
       return {
         conjunto: found.id,

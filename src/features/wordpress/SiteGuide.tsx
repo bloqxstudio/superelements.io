@@ -111,7 +111,7 @@ export const SiteGuide: React.FC<SiteGuideProps> = ({ open, onOpenChange, projec
               <Globe className="h-4 w-4" aria-hidden /> Conectar o site
             </Button>
           </Step>
-          <Step n={2} title="Instalar o plugin Superelements Connector" done={pluginOk} active={step === 2}>
+          <Step n={2} title="Instalar o plugin Sinfy Connector" done={pluginOk} active={step === 2}>
             <p>No painel do WordPress: Plugins › Adicionar novo › Enviar plugin, escolha o arquivo e ative. É ele que liga as visitas, os leads e a publicação de cabeçalho e rodapé.</p>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" asChild className="gap-2">

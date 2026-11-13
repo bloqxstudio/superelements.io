@@ -158,7 +158,7 @@ Em `.space/fonseca-lorenco/referencia/` (fora do git): fotos do site atual, o ca
 
 ## 12. Diagnóstico técnico do site atual (argumentos para o redesign)
 
-Medido em 2026-10-03 (Edge headless, conexão do escritório do Superelements; números de carga variam com a rede).
+Medido em 2026-10-03 (Edge headless, conexão do escritório da Sinfy; números de carga variam com a rede).
 
 - **Versões antigas**: WordPress 5.8.17 (de 2021), PHP 7.3.33 (sem suporte desde 2021), Elementor 3.4.8 / Elementor Pro 3.4.0, WPBakery 4.11.1 (de 2016), Slider Revolution 5.4.8.1, Contact Form 7 5.1.1, tema Wiz 2.6.3 (tema de contabilidade da ThemeForest). Dois construtores de página ao mesmo tempo (WPBakery nas internas, Elementor na home).
 - **Peso**: a home baixa ~1,7 MB em 91 requisições, com 52 scripts e 45 folhas de estilo; Publicações ~3,4 MB; Serviços ~2,5 MB (imagens de 2592 px exibidas em ~280 px). *Interpretação*: em 4G a diferença aparece mais do que no teste.

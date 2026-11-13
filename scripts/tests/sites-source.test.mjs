@@ -62,11 +62,11 @@ test('páginas a partir de src/pages', () => {
   assert.deepEqual(listPages(s).map((p) => p.route), ['/', '/blog/[slug]', '/sobre'])
 })
 
-test('imagem enviada vai para public/superelements', () => {
+test('imagem enviada vai para public/sinfy', () => {
   const s = site({})
   const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
   const saved = saveImage(s, { name: 'Foto Ação.PNG', data: png })
-  assert.match(saved.src, /^\/superelements\/foto-acao-[a-z0-9]+\.png$/)
+  assert.match(saved.src, /^\/sinfy\/foto-acao-[a-z0-9]+\.png$/)
   assert.throws(() => saveImage(s, { name: 'x', data: 'data:text/html;base64,PGI+' }), /imagem/)
 })
 

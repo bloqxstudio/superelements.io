@@ -37,7 +37,7 @@
   "needsYou": [
     "Configure the Elementor form actions (recipient e-mail, anti-spam) in WordPress",
     "Create the WordPress pages with slugs /contato and /privacidade so internal links resolve",
-    "Allow SVG uploads (or keep the Superelements asset URLs public) before importing the SVG images"
+    "Allow SVG uploads (or keep the Sinfy asset URLs public) before importing the SVG images"
   ],
   "cannotComeAcross": [
     "Contact backend, Cloudflare Turnstile and the admin panel",

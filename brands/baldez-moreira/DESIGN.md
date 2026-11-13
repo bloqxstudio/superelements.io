@@ -37,7 +37,7 @@ logo:
 
 # Baldez & Moreira — DESIGN.md
 
-Escritório de advocacia na Galeria Basile, no Centro de São Leopoldo. **Prospecto**: este sistema serve à nova versão do site que o Superelements vai mostrar ao escritório. Fatos, fontes e pendências ficam no `COPY.md`.
+Escritório de advocacia na Galeria Basile, no Centro de São Leopoldo. **Prospecto**: este sistema serve à nova versão do site que a Sinfy vai mostrar ao escritório. Fatos, fontes e pendências ficam no `COPY.md`.
 
 O front matter guarda só o que o Space aplica sozinho em toda seção: cores, as duas famílias, o canto do botão e o logo. Não tem papel de rótulo, peso ou entrelinha de título, cartão, divisor, sombra nem movimento, de propósito: cada um desses reescreveria a página, que já traz tudo pronto. O resto está abaixo.
 

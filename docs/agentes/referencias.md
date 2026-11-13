@@ -41,7 +41,7 @@ criativos… as melhores refs pra aquela empresa, com os links de postagens, pod
 O usuário: "temos um grupo no Instagram, enviamos lá as referências. Poderia ter um grupo pra cada projeto e enviar
 nesse grupo e aí já criar tudo? Já deixar identificar, entender o que é cada criativo e tabular ele… pode usar a
 conta pessoal… pode usar o Mac conectado". Ciente dos riscos, escolheu esse caminho em vez do grupo de WhatsApp
-recomendado (`cerebro/iniciativas/superelements/decisoes.md`; exceção registrada no AGENTS.md).
+recomendado (`cerebro/iniciativas/sinfy-construtor/decisoes.md`; exceção registrada no AGENTS.md).
 
 - **Banco** (migração `20261109180000_crm_referencias_grupos.sql`, aplicada):
   - `crm_reference_sources`: os grupos de cada conta, com `thread_url` (`instagram.com/direct/t/<id>/`), a rotina

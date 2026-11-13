@@ -163,7 +163,7 @@ async function planWeek(settings: StorySettings, start: number, free: number[], 
 
 const REVIEW_RULES = [
   'Nunca promessa de resultado nem número, prazo, preço, depoimento ou cliente que não esteja no material.',
-  'Nada de WordPress, Elementor, PHP, plugin ou SEO para o dono do negócio; nunca citar o Superelements.',
+  'Nada de WordPress, Elementor, PHP, plugin ou SEO para o dono do negócio; nunca citar a Sinfy.',
   'Story pela API não tem figurinha: nada de "vote", "enquete", "caixa de perguntas", "toque no link" ou "link na bio". O convite é responder o story ou chamar no Direct.',
   'Cada tela se lê em 3 segundos: frase curta, uma ideia por tela; o gancho prende sem exagero nem urgência falsa.',
   'Português do Brasil, sem emoji e sem jargão de marketing.',

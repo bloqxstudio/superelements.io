@@ -136,7 +136,7 @@ export function iara(): Plugin {
 
         // Pasta vazia, fora do projeto: na raiz do repositório o Claude Code carregava o CLAUDE.md e o
         // AGENTS.md inteiros a cada mensagem (centenas de KB), o que fazia a Iara demorar para começar.
-        const work = path.join(os.tmpdir(), 'superelements-iara')
+        const work = path.join(os.tmpdir(), 'sinfy-iara')
         mkdirSync(work, { recursive: true })
         let child: ChildProcess
         try {

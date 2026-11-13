@@ -414,7 +414,7 @@ export function replaceText(site: CodeSite, input: { text: string; next: string;
 
 const IMAGE_TYPES: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'image/avif': 'avif' }
 
-/** Guarda a imagem enviada em `public/superelements/` e devolve o endereço dela no site. */
+/** Guarda a imagem enviada em `public/sinfy/` e devolve o endereço dela no site. */
 export function saveImage(site: CodeSite, input: { name?: string; data: string }) {
   const m = /^data:([\w/+.-]+);base64,(.+)$/.exec(input.data)
   if (!m || !IMAGE_TYPES[m[1]]) throw new Error('Envie uma imagem PNG, JPG, WebP, GIF, AVIF ou SVG.')

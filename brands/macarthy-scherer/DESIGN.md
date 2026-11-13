@@ -35,7 +35,7 @@ photos:
 
 # Macarthy Scherer — DESIGN.md
 
-Escritório de advocacia na Rua Bento Gonçalves, 673, sala 701, no Centro de São Leopoldo. Dois sócios: Gláucia Macarthy (família e sucessões) e Marcelo Scherer (criminal). **Prospecto**: este sistema serve à nova versão do site que o Superelements vai mostrar ao escritório. Fatos, fontes e pendências ficam no `COPY.md`.
+Escritório de advocacia na Rua Bento Gonçalves, 673, sala 701, no Centro de São Leopoldo. Dois sócios: Gláucia Macarthy (família e sucessões) e Marcelo Scherer (criminal). **Prospecto**: este sistema serve à nova versão do site que a Sinfy vai mostrar ao escritório. Fatos, fontes e pendências ficam no `COPY.md`.
 
 O front matter guarda só o que o Space aplica sozinho em toda seção: cores, as duas famílias, o canto do botão, o logo e os retratos. Não tem papel de rótulo, peso ou entrelinha de título, cartão, divisor nem efeitos, de propósito: cada um desses reescreveria a página, que já traz tudo pronto. O resto está abaixo e nos builders (`src/features/macarthyscherer/`).
 

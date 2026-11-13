@@ -49,7 +49,7 @@ type TaskId = 'account' | 'connect' | 'plugin' | 'import'
 const TASKS: { id: TaskId; label: string }[] = [
   { id: 'account', label: 'Criar a conta e o projeto' },
   { id: 'connect', label: 'Conectar o WordPress' },
-  { id: 'plugin', label: 'Instalar o plugin Superelements Connector' },
+  { id: 'plugin', label: 'Instalar o plugin Sinfy Connector' },
   { id: 'import', label: 'Importar o site' },
 ]
 

@@ -135,7 +135,7 @@ export const SkillEditor: React.FC<SkillEditorProps> = ({ open, onOpenChange, sk
               <DialogTitle className="truncate">{title}</DialogTitle>
               <DialogDescription className="mt-0.5">
                 {skill && !editable
-                  ? `${SOURCE_LABEL[skill.source]}: ${skill.source === 'builtin' ? 'vem com o Superelements.' : 'só admin muda.'} Duplique para fazer a sua versão.`
+                  ? `${SOURCE_LABEL[skill.source]}: ${skill.source === 'builtin' ? 'vem com a Sinfy.' : 'só admin muda.'} Duplique para fazer a sua versão.`
                   : 'O agente recebe as instruções junto com o pedido, no chat do canvas.'}
               </DialogDescription>
             </div>

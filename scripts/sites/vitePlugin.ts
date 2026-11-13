@@ -27,7 +27,7 @@ function picked(v: unknown): PickedElement {
 }
 
 export const codeSites = (): Plugin => ({
-  name: 'superelements-sites',
+  name: 'sinfy-sites',
   apply: 'serve',
   configureServer(server) {
     let github: SitesState['github'] | undefined

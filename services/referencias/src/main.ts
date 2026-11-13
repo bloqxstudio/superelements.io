@@ -6,7 +6,7 @@
  * abrindo um navegador, abrindo Instagram e salvando os dados, com comandos de ver novos, rotinas… pode usar
  * a conta pessoal… pode usar o Mac conectado". Ciente dos riscos (termos da Meta, bloqueio da conta pessoal,
  * a regra de não raspar), escolheu este caminho: "não temos hoje a API oficial e as referências estão no
- * Instagram mesmo". Decisão em AGENTS.md e cerebro/iniciativas/superelements/decisoes.md.
+ * Instagram mesmo". Decisão em AGENTS.md e cerebro/iniciativas/sinfy-construtor/decisoes.md.
  *
  * O que faz, e nada além disso:
  *   - abre um Chrome próprio (perfil em ~/Library/Application Support/avence-referencias, fora do git),

@@ -35,19 +35,19 @@ export const EVERMIND_CONTENT: EvContent = {
 }
 
 /**
- * Os textos do Superelements (brands/superelements/COPY.md), no desenho da
+ * Os textos da Sinfy (brands/sinfy-construtor/COPY.md), no desenho da
  * Evermind (pedido do usuário em 2026-10-03: "era só pra mudar conteúdo").
  * Sem números de resultado, clientes ou depoimentos: os widgets mostram o
  * produto (o agente, as etapas reais de publicar, uma publicação em curso).
  */
-export const SUPERELEMENTS_CONTENT: EvContent = {
+export const SINFY_CONTENT: EvContent = {
   pill: { icon: 'se-simbolo.png', text: 'Feito para WordPress + Elementor', url: '#' },
   title: 'Crie aqui.<br>Publique no WordPress.',
   lede: 'O site continua WordPress. Crie, organize e publique sites Elementor num espaço visual, cada cliente no seu projeto.',
   primary: { text: 'Criar meu primeiro projeto', url: '/auth' },
   // uma pessoa de verdade no botão, como no original (pedido do usuário): convite para conversar
   secondary: { text: 'Fale com a gente', url: '/contato', image: 'author.webp' },
-  story: { label: 'Agente no canvas', quote: 'Peça a página. Veja ela ficar pronta, seção por seção.', name: 'Claude ou Codex', role: 'No painel do Space', avatar: 'se-simbolo.png', avatarAlt: 'Superelements' },
+  story: { label: 'Agente no canvas', quote: 'Peça a página. Veja ela ficar pronta, seção por seção.', name: 'Claude ou Codex', role: 'No painel do Space', avatar: 'se-simbolo.png', avatarAlt: 'Sinfy' },
   // etapas reais do envio de uma página (src/features/wordpress/publish.ts)
   bars: { title: 'Publicar no WordPress', items: [['01', 'Preparar'], ['02', 'Imagens'], ['03', 'Página'], ['04', 'Cache CSS']] },
   card: { label: 'Para agências', title: 'Muitos clientes, uma operação: sua agência troca de projeto, não de ferramenta.', number: '1', caption: 'conta, um projeto por cliente.', link: 'Ver o plano Agência', url: '#' },

@@ -17,7 +17,7 @@ export async function searchFreeImages(q: string, signal?: AbortSignal): Promise
   const query = q.trim().slice(0, 120)
   if (!query) return []
   const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&license_type=commercial&page_size=20&mature=false`
-  const res = await fetch(url, { signal, headers: { 'user-agent': 'Superelements (criativos)' } })
+  const res = await fetch(url, { signal, headers: { 'user-agent': 'Sinfy (criativos)' } })
   if (!res.ok) throw new Error(`A busca de fotos livres falhou (${res.status}).`)
   const j = (await res.json()) as { results?: { id: string; url: string; thumbnail?: string; title?: string; creator?: string; license: string; license_version?: string; license_url?: string; foreign_landing_url?: string; width?: number; height?: number; source?: string }[] }
   return (j.results ?? [])
@@ -31,7 +31,7 @@ export async function downloadMedia(rawUrl: string, signal?: AbortSignal): Promi
   let url = new URL(rawUrl)
   for (let hop = 0; hop <= 4; hop++) {
     await assertPublic(url)
-    const res = await fetch(url, { redirect: 'manual', signal, headers: { 'user-agent': 'Superelements (criativos)' } })
+    const res = await fetch(url, { redirect: 'manual', signal, headers: { 'user-agent': 'Sinfy (criativos)' } })
     if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
       url = new URL(res.headers.get('location')!, url)
       continue

@@ -9,7 +9,7 @@ import type { WordPressConnection } from './types'
  * - SEOPress: campos `_seopress_titles_*` expostos na API de páginas.
  * - All in One SEO: rota própria `aioseo/v1/post`.
  * - Yoast: só expõe os campos na API para posts; em páginas, o plugin
- *   Superelements Connector (`public/wordpress/superelements-connector.zip`)
+ *   Sinfy Connector (`public/wordpress/superelements-connector.zip`)
  *   libera os mesmos campos.
  */
 

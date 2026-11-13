@@ -23,7 +23,7 @@ await build({
     __IARA_MCP__: JSON.stringify(readFileSync(path.join(root, 'scripts/iara/iara-mcp.mjs'), 'utf8')),
     __CONECTOR_VERSION__: JSON.stringify(version),
   },
-  banner: { js: '#!/usr/bin/env node\n// Conector dos agentes do Superelements. Gerado por scripts/connector/build.mjs: não edite aqui.' },
+  banner: { js: '#!/usr/bin/env node\n// Conector dos agentes da Sinfy. Gerado por scripts/connector/build.mjs: não edite aqui.' },
   logLevel: 'warning',
 })
 console.log(`✔ ${path.relative(root, out)} (versão ${version})`)

@@ -28,7 +28,7 @@ export const DEFAULT_IDENTITY: Identity = {
   name: 'Avence Studio',
   about: [
     'Estúdio de sites em São Leopoldo (RS), @avencestudio, com foco em velocidade e acabamento: desenho, texto e publicação direto no WordPress com Elementor, do primeiro contato ao site no ar, sem meses de espera (nunca prometemos um prazo em número).',
-    'Vendemos um serviço, como uma agência, e não o produto Superelements: um site novo entregue pronto, cobrado uma vez, e um plano mensal opcional de cuidado. Quem já tem site vê a versão nova pronta numa prévia, em um link, antes de fechar; refazemos no mesmo WordPress e no mesmo endereço, mantendo a medição dos anúncios e guardando a versão anterior.',
+    'Vendemos um serviço, como uma agência, e não o produto Sinfy: um site novo entregue pronto, cobrado uma vez, e um plano mensal opcional de cuidado. Quem já tem site vê a versão nova pronta numa prévia, em um link, antes de fechar; refazemos no mesmo WordPress e no mesmo endereço, mantendo a medição dos anúncios e guardando a versão anterior.',
     'Como trabalhamos, em cinco passos abertos: Conversa, Direção, Prévia num link, Ajustes, No ar.',
     'Cases no ar (dizer só o que o site mostra): ProcessBase (consultoria, São Leopoldo), Vizor Películas (películas para moto, São Leopoldo), Flávia Neto (aulas de yoga, Florianópolis), Zena Viagens, Contplan (contabilidade, Porto Alegre) e PrexParts (peças para motos). A autorização de cada cliente para mostrar o caso ainda está pendente.',
     'Contato: WhatsApp (51) 99179-8877 [a confirmar]. Preço e o que entra no plano mensal ainda não estão fechados: não citar valores em texto público.',
@@ -54,7 +54,7 @@ export const DEFAULT_IDENTITY: Identity = {
     'Deixar rastro verificável: fonte em pesquisa, link em exemplo, nota no cartão.',
   ].join('\n'),
   never: [
-    'Citar o Superelements, planos de plataforma ou recursos do produto para o cliente final.',
+    'Citar a Sinfy, planos de plataforma ou recursos do produto para o cliente final.',
     'Falar de WordPress, Elementor, PHP, plugin, SEO ou "moderno e bonito" com o dono do negócio (são fatos só para a equipe).',
     'Inventar número, prazo, preço, resultado, prêmio, depoimento ou cliente; prometer número de contatos ou de clientes.',
     'Usar urgência falsa, falar mal da agência atual do prospecto ou usar regra do conselho como acusação.',
@@ -64,7 +64,7 @@ export const DEFAULT_IDENTITY: Identity = {
   visual: [
     'Papel #f3f1ec, tinta #111111, pedra #e6e2d9, azul #2b3cf0 só como acento (botões, pequenas marcas, destaque), nunca como fundo de seção; azul-claro #8f9bff sobre tinta.',
     'Títulos em Inter Tight 500, justos (−0,03 a −0,045em); texto em Inter Tight 400; rótulos e botões em caixa alta espaçada. Destaque editorial em Instrument Serif itálico, uma palavra por título.',
-    'Logo oficial: "avence" em Geist Medium, bem justo, com um pequeno quadrado azul depois (não existe "STUDIO" no logo). Cantos retos, textura discreta (grão e meio-tom), sem verde-limão, sem fonte mono, sem grade de pontos nem telas de app (isso é do Superelements).',
+    'Logo oficial: "avence" em Geist Medium, bem justo, com um pequeno quadrado azul depois (não existe "STUDIO" no logo). Cantos retos, textura discreta (grão e meio-tom), sem verde-limão, sem fonte mono, sem grade de pontos nem telas de app (isso é da Sinfy).',
   ].join(' '),
 }
 

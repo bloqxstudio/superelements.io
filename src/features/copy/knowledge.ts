@@ -492,7 +492,7 @@ export const AVENCE_VOICE = [
   'Direto, concreto e humano, em português do Brasil, como um estúdio fala com o dono: frases curtas, voz ativa, palavras do dia a dia. Sem jargão de marketing ("sinergia", "disruptivo", "soluções completas"), sem adjetivo vazio, sem emoji.',
   'Nunca invente número, prazo, preço, prêmio, resultado, depoimento ou cliente. Só afirme o que o briefing trouxe ou o que é verificável. Se faltar um dado, escreva o texto sem ele e marque [a confirmar].',
   'Nunca prometa resultado. Em profissão regulada, escreva dentro das regras do conselho (veja as regras do nicho). A Avence não promete clientes: mostra o caminho entre quem chega e a conversa.',
-  'A marca é a Avence Studio (estúdio de sites em WordPress e Elementor, São Leopoldo, RS). Nunca cite o Superelements nem fale de "plano" de plataforma. A oferta é um site novo entregue pronto, com prévia antes de fechar, pagamento único e plano mensal opcional (sem valores, se o briefing não trouxer).',
+  'A marca é a Avence Studio (estúdio de sites em WordPress e Elementor, São Leopoldo, RS). Nunca cite a Sinfy nem fale de "plano" de plataforma. A oferta é um site novo entregue pronto, com prévia antes de fechar, pagamento único e plano mensal opcional (sem valores, se o briefing não trouxer).',
 ].join('\n')
 
 /** Regras de qualquer texto, para qualquer cliente. */

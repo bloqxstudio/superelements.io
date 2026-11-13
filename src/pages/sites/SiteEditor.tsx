@@ -625,7 +625,7 @@ const ImageSwap: React.FC<{ siteId: string; picked: PickedElement; editable: boo
       <Button size="sm" variant="outline" className="mt-2 w-full" disabled={!editable || busy} onClick={() => input.current?.click()}>
         {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> : <Upload className="mr-1.5 h-3.5 w-3.5" aria-hidden />} Trocar imagem
       </Button>
-      <p className="mt-1 text-[11px] text-gray-400">{editable ? 'A imagem vai para public/superelements/ no repositório do site.' : 'A imagem vem de um import no código: peça à Iara para trocar.'}</p>
+      <p className="mt-1 text-[11px] text-gray-400">{editable ? 'A imagem vai para public/sinfy/ no repositório do site.' : 'A imagem vem de um import no código: peça à Iara para trocar.'}</p>
     </section>
   )
 }

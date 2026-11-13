@@ -16,7 +16,7 @@ Comece por **[AGORA.md](AGORA.md)**: o painel de uma página com o estado de cad
 | [AGORA.md](AGORA.md) | O que está em andamento e o próximo passo de cada iniciativa. Sempre atual. |
 | [geral/](geral/README.md) | O que atravessa tudo: a empresa, as marcas, quem é quem, decisões gerais. |
 | [iniciativas/sinfy](iniciativas/sinfy/README.md) | Sinfy, o produto de resultados (anúncios, site, leads, conteúdo). |
-| [iniciativas/superelements](iniciativas/superelements/README.md) | SuperElements, o construtor (Space, Elementor, Criativos, Motion, Sites em código). |
+| [iniciativas/sinfy-construtor](iniciativas/sinfy-construtor/README.md) | Sinfy, o construtor (Space, Elementor, Criativos, Motion, Sites em código). |
 | [iniciativas/plataforma](iniciativas/plataforma/README.md) | A base comum: contas, CRM, WhatsApp, Instagram, Iara, Supabase, Meta. |
 | [clientes/](clientes) | Uma pasta por cliente. Cada conta só enxerga a sua. |
 | [_modelos/](_modelos) | Modelos de nota: iniciativa, cliente, log e decisão. |

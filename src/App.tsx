@@ -76,7 +76,7 @@ const ConnectInstagramReturn = lazyNamed(() => import("@/pages/ConnectInstagram"
 const AdsCallback = lazyPage(() => import("@/pages/AdsCallback"));
 const ConnectAds = lazyNamed(() => import("@/pages/ConnectAds"), "ConnectAds");
 const ConnectAdsReturn = lazyNamed(() => import("@/pages/ConnectAds"), "ConnectAdsReturn");
-const SuperElementsLanding = lazyPage(() => import("@/pages/SuperElementsLanding"));
+const SinfyConstrutorLanding = lazyPage(() => import("@/pages/SinfyConstrutorLanding"));
 const ProductLanding = lazyPage(() => import("@/pages/ProductLanding"));
 const DesignSystem = lazyPage(() => import("@/pages/DesignSystem"));
 
@@ -153,7 +153,9 @@ function App() {
               <Route path="/leoscherer-redesign-proposta" element={<LeoSchererRedesign proposal />} />
               <Route path="/msa-style-guide" element={<MsaStyleGuide />} />
               <Route path="/msa-elementor-preview" element={<MsaElementorPreview />} />
-              <Route path="/superelements" element={<SuperElementsLanding />} />
+              <Route path="/construtor" element={<SinfyConstrutorLanding />} />
+              {/* Endereço antigo (a marca SuperElements virou Sinfy em 2026-11-13) */}
+              <Route path="/superelements" element={<Navigate to="/construtor" replace />} />
               <Route path="/lp" element={<ProductLanding />} />
               <Route path="/design-system" element={<DesignSystem />} />
 

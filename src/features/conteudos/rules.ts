@@ -1,5 +1,5 @@
 /**
- * Regras do Plano e dos Conteúdos (Superelements v2, migração 20261031041728).
+ * Regras do Plano e dos Conteúdos (Sinfy v2, migração 20261031041728).
  * Sem imports: o Node (scripts/tests) lê este arquivo e as telas também. O servidor é quem decide
  * (funções `crm_context_save`, `crm_content_*`); aqui ficam o espelho das transições, o briefing
  * montado a partir do contexto, a conferência do material ligado e os pendentes do Início.

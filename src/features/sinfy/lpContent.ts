@@ -1,4 +1,4 @@
-import { AGENCY_OFFER, monthlyBrl } from '@/features/superelements/agencyOffer';
+import { AGENCY_OFFER, monthlyBrl } from '@/features/sinfy-construtor/agencyOffer';
 
 /**
  * Os textos da landing da Sinfy (/lp). A página React e a LP remontada no Space

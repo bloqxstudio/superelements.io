@@ -19,7 +19,7 @@ import { useWordPressSession } from './useWordPressConnection'
  * administrador logado, e a consulta prévia do navegador (CORS) nunca leva
  * login. Por isso ler e gravar o modelo vai pelo servidor (a função
  * `space-wordpress-library`, com a conexão do projeto: o modelo vem puro, sem
- * plugin) ou, sem ela, pelo plugin Superelements Connector (0.2 ou mais novo).
+ * plugin) ou, sem ela, pelo plugin Sinfy Connector (0.2 ou mais novo).
  * Sem nenhum dos dois, o cabeçalho, o rodapé e os componentes vão dentro de
  * cada página, como antes.
  */
@@ -53,7 +53,7 @@ export interface PartsSupport {
   reason?: 'no-pro' | 'no-permission' | 'no-connector' | 'old-connector'
   /** O site tem o Theme Builder: a lista do cabeçalho e do rodapé vem mesmo sem o plugin. */
   themeBuilder: boolean
-  /** Versão do Superelements Connector no site, se tiver. */
+  /** Versão do Sinfy Connector no site, se tiver. */
   connector: string | null
   /** A função do servidor responde: lê e grava os modelos sem plugin. */
   server: boolean
@@ -156,7 +156,7 @@ const MIN_WIDGET_CONNECTOR = [0, 3, 0]
 export const canSaveWidgets = (support: PartsSupport) => support.mode === 'theme' && !!support.connector && atLeast(support.connector, MIN_WIDGET_CONNECTOR)
 
 export const WIDGET_REASON =
-  'o Global Widget guarda o tipo do widget num campo que a API do WordPress não grava, então pede o plugin Superelements Connector (0.3 ou mais novo) no site'
+  'o Global Widget guarda o tipo do widget num campo que a API do WordPress não grava, então pede o plugin Sinfy Connector (0.3 ou mais novo) no site'
 
 /** Falta (ou está velho) o plugin: dá para resolver baixando o Connector. */
 export const needsConnector = (support: PartsSupport) => support.reason === 'no-connector' || support.reason === 'old-connector'
@@ -165,8 +165,8 @@ export const needsConnector = (support: PartsSupport) => support.reason === 'no-
 export function inlineReason(support: PartsSupport) {
   if (support.reason === 'no-permission') return 'o usuário do WordPress conectado não pode mexer no Theme Builder (conecte com um administrador)'
   if (support.reason === 'no-connector')
-    return 'o Elementor bloqueia, por segurança, a leitura dos modelos de fora do WordPress, e a função do servidor do Space (space-wordpress-library) ainda não está publicada; até lá, só com o plugin Superelements Connector no site'
-  if (support.reason === 'old-connector') return `o plugin Superelements Connector do site é o ${support.connector}, e os modelos pedem o 0.2 ou mais novo`
+    return 'o Elementor bloqueia, por segurança, a leitura dos modelos de fora do WordPress, e a função do servidor do Space (space-wordpress-library) ainda não está publicada; até lá, só com o plugin Sinfy Connector no site'
+  if (support.reason === 'old-connector') return `o plugin Sinfy Connector do site é o ${support.connector}, e os modelos pedem o 0.2 ou mais novo`
   return 'o site não tem o Elementor Pro (nem o PRO Elements), que tem o Theme Builder e o widget Modelo'
 }
 
@@ -198,7 +198,7 @@ export async function fetchSitePart(connection: WordPressConnection, id: number)
       throw new WordPressError('O modelo não existe mais no site (foi apagado ou está na lixeira). Desligue o componente do WordPress para criar outro.', 'gone', 404)
     }
     if (error instanceof WordPressError && error.code === 'rest_no_route') {
-      throw new WordPressError(`Falta o plugin Superelements Connector no site para ler o modelo: ${inlineReason({ mode: 'inline', reason: 'no-connector', themeBuilder: true, connector: null, server: false })}.`, 'no-connector', 404)
+      throw new WordPressError(`Falta o plugin Sinfy Connector no site para ler o modelo: ${inlineReason({ mode: 'inline', reason: 'no-connector', themeBuilder: true, connector: null, server: false })}.`, 'no-connector', 404)
     }
     throw error
   }

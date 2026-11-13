@@ -93,7 +93,7 @@ const editInput = (body: Partial<EditRequest>): EditRequest => ({
 })
 
 export const criativos = (): Plugin => ({
-  name: 'superelements-criativos',
+  name: 'sinfy-criativos',
   apply: 'serve',
   configureServer(server) {
     const runs = new Map<string, AbortController>()
@@ -178,7 +178,7 @@ export const criativos = (): Plugin => ({
               const url = String((call.request as { url?: string })?.url ?? '')
               send({ id, ok: true, data: await downloadReel(url, controller.signal, (detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step: 'reading', detail } satisfies CreativeProgress)) })
             } else if (call.kind === 'save-file') {
-              // Pacote para o Edits: cada pedaço de arquivo gravado em ~/SuperElements/Edits/<pasta>/
+              // Pacote para o Edits: cada pedaço de arquivo gravado em ~/Sinfy/Edits/<pasta>/
               send({ id, ok: true, data: saveEditsFile(call.request as SaveFileRequest) })
             } else if (call.kind === 'download') {
               send({ id, ok: true, data: await downloadImage(String((call.request as { url?: string })?.url ?? ''), controller.signal) })

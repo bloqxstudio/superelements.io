@@ -66,7 +66,7 @@ const sameOrigin = (req: IncomingMessage) => {
 export const prospecting = (): Plugin => {
   let googleKey: string | undefined
   return {
-    name: 'superelements-prospeccao',
+    name: 'sinfy-prospeccao',
     apply: 'serve',
     configResolved(config) {
       googleKey = loadEnv(config.mode, config.root, 'GOOGLE_PLACES_').GOOGLE_PLACES_API_KEY || undefined

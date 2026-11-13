@@ -30,7 +30,7 @@ export async function downloadImage(rawUrl: string, signal?: AbortSignal): Promi
   let url = new URL(rawUrl)
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     await assertPublic(url)
-    const res = await fetch(url, { redirect: 'manual', signal, headers: { accept: 'image/*', 'user-agent': 'Mozilla/5.0 (Superelements criativos)' } })
+    const res = await fetch(url, { redirect: 'manual', signal, headers: { accept: 'image/*', 'user-agent': 'Mozilla/5.0 (Sinfy criativos)' } })
     if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
       url = new URL(res.headers.get('location')!, url)
       continue

@@ -346,7 +346,7 @@ export interface Script {
 
 /**
  * O texto de cada toque. A mensagem é assinada por quem envia, sempre "da
- * Avence Studio"; nunca fala do Superelements nem de preço. Com a página nova
+ * Avence Studio"; nunca fala da Sinfy nem de preço. Com a página nova
  * pronta, oferece a prévia (o gancho mais forte); sem ela, pergunta.
  */
 export function scriptFor(task: Task, sender: string): Script {

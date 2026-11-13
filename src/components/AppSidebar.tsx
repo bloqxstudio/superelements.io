@@ -33,7 +33,7 @@ import { moduleHomePath, useMenuModules } from '@/features/navigation/moduleHome
  * escondem itens; não mudam a ordem nem os nomes. Telas irmãs viram abas no topo da área
  * (`AreaTabs`). Dentro de um projeto o Space ocupa a tela e o menu some. Desde 2026-11-12 cada módulo com mais de uma
  * tela começa pela Visão geral (`/modulo/:id`, `pages/ModuleHome.tsx`), que é onde se cai ao escolher o módulo.
- * Plano: cerebro/iniciativas/superelements/jornada-de-criacao.md.
+ * Plano: cerebro/iniciativas/sinfy-construtor/jornada-de-criacao.md.
  */
 
 const NavigationQuery = createContext('')

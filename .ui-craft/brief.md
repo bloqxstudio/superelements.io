@@ -1,6 +1,6 @@
-# Superelements — interface do produto
+# Sinfy — interface do produto
 
-Pedido de 31/10/2026: modernizar todo o produto para operação por usuário final, com linguagem mais simples e inspiração no macOS, vidro e blur. O nome Superelements permanece.
+Pedido de 31/10/2026: modernizar todo o produto para operação por usuário final, com linguagem mais simples e inspiração no macOS, vidro e blur. O nome Sinfy permanece.
 
 Direção: ambiente claro, superfícies neutras, barra lateral translúcida, camadas discretas, cantos suaves e tipografia de sistema. Vidro em navegação, menus e painéis; conteúdo permanece sólido e legível. Preservar o símbolo lima da marca; ações principais em grafite. Sem controles decorativos que imitem botões de janela.
 

@@ -1,4 +1,4 @@
-# Publicação do SuperElements na Hostinger
+# Publicação da Sinfy na Hostinger
 
 O ambiente `app.avencestudio.com` é um Web App ligado ao GitHub `bloqxstudio/superelements.io`, branch `main`. Esse fluxo foi confirmado no painel em 28/10/2026.
 

@@ -31,7 +31,7 @@ export interface Team {
   modules: Record<string, boolean>
   /** A conta da própria Avence: dos projetos antigos e de quem ainda não tem conta. */
   isHome: boolean
-  /** O produto da conta (`completo`, `resultados` = Sinfy, `builder` = SuperElements): decide o menu. */
+  /** O produto da conta (`completo`, `resultados` = Sinfy, `builder` = Sinfy): decide o menu. */
   product: ProductId
   profile: AccountProfile
 }

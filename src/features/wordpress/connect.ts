@@ -73,7 +73,7 @@ interface AuthorizationRequest {
 export function authorizationUrl({ projectId, projectName, site, mode, returnHere }: AuthorizationRequest): string {
   if (!site.authorizeUrl) throw new WordPressError('Este site não aceita senhas de aplicação.')
   const url = new URL(site.authorizeUrl)
-  url.searchParams.set('app_name', `Superelements · ${projectName}`)
+  url.searchParams.set('app_name', `Sinfy · ${projectName}`)
   url.searchParams.set('app_id', APP_ID)
 
   if (returnHere) {

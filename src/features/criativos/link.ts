@@ -282,5 +282,5 @@ export const downloadReelViaLink = (url: string, signal?: AbortSignal) => callAi
 /** Fotografa uma página (HTML completo) com o navegador deste computador: a página inteira, em PNG (data URL). */
 export const capturePageViaLink = (html: string, width: number, signal?: AbortSignal) => callAi<{ data: string; width: number; height: number }>('capture', { html, width }, signal)
 
-/** Grava um pedaço de arquivo em ~/SuperElements/Edits/<pasta>/ neste computador (o pacote do Edits, `edits.ts`). */
+/** Grava um pedaço de arquivo em ~/Sinfy/Edits/<pasta>/ neste computador (o pacote do Edits, `edits.ts`). */
 export const saveFileViaLink = (req: { pasta: string; nome: string; data: string; parte: number }, signal?: AbortSignal) => callAiQuiet<{ path: string; pasta: string }>('save-file', req, signal)

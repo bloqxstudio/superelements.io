@@ -87,7 +87,7 @@ export type OpportunityPatch = Partial<Pick<Opportunity, 'stage' | 'projectName'
 
 /**
  * O que vendemos é serviço, como agência: o site novo, cobrado uma vez, e um
- * plano mensal opcional para cuidar dele. Os planos do produto Superelements
+ * plano mensal opcional para cuidar dele. Os planos do produto Sinfy
  * não entram na oferta (decisão do usuário, 2026-10-03).
  */
 export interface Offer {

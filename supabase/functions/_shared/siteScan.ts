@@ -13,7 +13,7 @@
  * (`src/features/prospects/types.ts` os repassa).
  */
 
-/** O que o site da empresa é, do melhor encaixe para o Superelements ao pior. */
+/** O que o site da empresa é, do melhor encaixe para a Sinfy ao pior. */
 export type Platform =
   | 'wp-elementor'
   | 'wordpress'

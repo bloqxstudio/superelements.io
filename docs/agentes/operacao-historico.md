@@ -5,7 +5,7 @@
 O usuário: "uma base de conhecimento da empresa, como um segundo cérebro… as pastas da iniciativa… todo
 contexto do que estamos construindo, como estamos e o que vamos fazer no próximo passo… salvar logs de tudo
 que está acontecendo na iniciativa, imagens, criativos". Fica em `cerebro/` (comece por `cerebro/README.md`
-e `cerebro/AGORA.md`): uma pasta por iniciativa em `cerebro/iniciativas/` (`sinfy`, `superelements`, `plataforma`) e uma por cliente em
+e `cerebro/AGORA.md`): uma pasta por iniciativa em `cerebro/iniciativas/` (`sinfy`, `sinfy-construtor`, `plataforma`) e uma por cliente em
 `cerebro/clientes/` (`avence-studio`, `vizor-peliculas`; modelo `_modelos/cliente.md`, com a linha `**Conta:** <id da conta>`), com `README.md` (estado atual e próximos passos), `decisoes.md` (só acrescentar), `log/` e
 `midia/`; o que atravessa tudo vai em `cerebro/geral/`. Ao terminar um trabalho que muda o estado de uma
 iniciativa (entrega, decisão do usuário, publicação, criativos aprovados), crie um log com

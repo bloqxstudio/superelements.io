@@ -31,7 +31,7 @@ Manter o sÃ­mbolo R geomÃ©trico e a assinatura READY originais. Logo colorid
 
 ## Cores
 
-Azul principal #2E3092; azul profundo #1F2168; secundÃ¡rio #4B4EC0. Dourado #D2AC67 somente em detalhes, linhas, pequenos destaques e CTAs. Fundos #FAFAF8, #FFFFFF, #F4F4F4 e bege #F0EFE9; escuro #14152E. TÃ­tulos #171845; texto #1E1F33; apoio #6A6C80. Nunca usar a identidade da Avence ou do SuperElements.
+Azul principal #2E3092; azul profundo #1F2168; secundÃ¡rio #4B4EC0. Dourado #D2AC67 somente em detalhes, linhas, pequenos destaques e CTAs. Fundos #FAFAF8, #FFFFFF, #F4F4F4 e bege #F0EFE9; escuro #14152E. TÃ­tulos #171845; texto #1E1F33; apoio #6A6C80. Nunca usar a identidade da Avence ou da Sinfy.
 
 ## Tipografia
 

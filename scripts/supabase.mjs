@@ -7,7 +7,7 @@ import { query, project } from './supabase-api.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const [command, ...args] = process.argv.slice(2);
 const config = readFileSync(new URL('../supabase/config.toml', import.meta.url), 'utf8');
-if (!config.match(/^project_id\s*=\s*"nfmfcpcwyavutntnrxqq"/m)) throw new Error('Destino diferente do SuperElements.');
+if (!config.match(/^project_id\s*=\s*"nfmfcpcwyavutntnrxqq"/m)) throw new Error('Destino diferente da Sinfy.');
 const quote = (s) => "'" + s.replaceAll("'", "''") + "'";
 function cli(options) {
   const result = spawnSync('supabase', [...options, '--project-ref', project, '--workdir', root], { stdio: 'inherit' });

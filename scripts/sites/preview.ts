@@ -27,7 +27,7 @@ const server = await astro.dev({
   root,
   server: { port: Number(port), host: '127.0.0.1', open: false },
   devToolbar: { enabled: true },
-  integrations: [{ name: 'superelements-editor', hooks: { 'astro:config:setup': ({ injectScript }) => injectScript('head-inline', overlay) } }],
+  integrations: [{ name: 'sinfy-editor', hooks: { 'astro:config:setup': ({ injectScript }) => injectScript('head-inline', overlay) } }],
 })
 console.log('SE_READY ' + JSON.stringify(server.address))
 const close = async () => {

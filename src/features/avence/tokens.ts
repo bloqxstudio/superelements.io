@@ -2,10 +2,10 @@
  * Tokens do Avence Studio (`brands/avence-studio/DESIGN.md`), identidade de
  * 2026-10-04. O fio com a marca antiga: a tinta `#111111`, o nome em minúsculas
  * e as duas setas que se encontram (agora abertas, com o ponto azul no meio).
- * O que mudou: a Space Grotesk saiu (é a fonte do Superelements) e entraram a
+ * O que mudou: a Space Grotesk saiu (é a fonte da Sinfy) e entraram a
  * Inter Tight no site, a Instrument Serif nos destaques e a Geist apenas no
  * wordmark oficial trazido de `Rodas (cópia)` em 2026-10-11; o verde-limão saiu
- * (também é do Superelements) e entrou o azul do ponto, sobre papel claro. O
+ * (também é da Sinfy) e entrou o azul do ponto, sobre papel claro. O
  * logo é a palavra `avence` em Geist Medium com tracking justo e o ponto azul.
  *
  * Toda cor usada nos settings das seções está aqui e no front matter da marca

@@ -153,7 +153,7 @@ const CodeSites: React.FC = () => {
                     </p>
                   ) : repos === null ? (
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm text-gray-600">Conectado como <strong>{state.github.user}</strong>. Os repositórios clonam em <code className="rounded bg-gray-100 px-1">~/SuperElements/sites</code>.</p>
+                      <p className="text-sm text-gray-600">Conectado como <strong>{state.github.user}</strong>. Os repositórios clonam em <code className="rounded bg-gray-100 px-1">~/Sinfy/sites</code>.</p>
                       <Button size="sm" variant="outline" onClick={() => void loadRepos()} disabled={loadingRepos}>
                         {loadingRepos && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />} Ver repositórios
                       </Button>

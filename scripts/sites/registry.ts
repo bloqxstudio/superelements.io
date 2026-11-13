@@ -3,16 +3,17 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import os from 'node:os'
 import path from 'node:path'
 import type { CodeSite } from '../../src/features/sites/protocol.ts'
+import { CONFIG_DIR, USER_DIR } from '../home.ts'
 
 /**
  * Os sites em código ligados a esta máquina. Ficam fora do repositório do produto
- * (`~/.superelements/sites.json`), iguais para o `npm run dev` e o conector, e os
- * clones vão para `~/SuperElements/sites/<nome>`: fora desta pasta, para o agente
- * que trabalha no site não carregar as regras do Superelements.
+ * (`~/.sinfy/sites.json`), iguais para o `npm run dev` e o conector, e os
+ * clones vão para `~/Sinfy/sites/<nome>`: fora desta pasta, para o agente
+ * que trabalha no site não carregar as regras da Sinfy.
  */
 
-export const HOME = path.join(os.homedir(), '.superelements')
-export const CLONES = process.env.SUPERELEMENTS_SITES_DIR || path.join(os.homedir(), 'SuperElements', 'sites')
+export const HOME = CONFIG_DIR
+export const CLONES = process.env.SINFY_SITES_DIR || process.env.SUPERELEMENTS_SITES_DIR || path.join(USER_DIR, 'sites')
 const FILE = path.join(HOME, 'sites.json')
 
 export function readSites(): CodeSite[] {

@@ -1,7 +1,7 @@
 /**
  * Prospecção: empresas de uma região e de um nicho, com o que o site delas
  * usa (WordPress, Elementor, outro construtor ou nada) e a nota de
- * oportunidade para o Superelements. Estes tipos valem para o motor
+ * oportunidade para a Sinfy. Estes tipos valem para o motor
  * (`scripts/prospects/engine.ts`, Node) e para a tela (`/prospeccao`).
  */
 

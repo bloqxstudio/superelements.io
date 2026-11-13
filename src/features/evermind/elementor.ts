@@ -10,7 +10,7 @@ import { EVERMIND_CONTENT, type EvContent } from './content'
  * imagem (PNG: o WordPress recusa SVG).
  *
  * O desenho é sempre o do original; os textos e as imagens de conteúdo vêm de
- * um `EvContent` (content.ts): o do template ou o do Superelements.
+ * um `EvContent` (content.ts): o do template ou o da Sinfy.
  *
  * Todo container declara padding e gap, porque o Elementor põe 10px e 20px
  * quando o JSON não diz nada.

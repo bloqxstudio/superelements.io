@@ -1,11 +1,11 @@
 <?php
 /**
- * Plugin Name: Superelements Connector
- * Description: Deixa a plataforma Superelements gravar o SEO do Yoast em páginas e publicar o cabeçalho, o rodapé e os componentes do site como modelos do Elementor, pela API do WordPress.
- * Version: 0.5.0
+ * Plugin Name: Sinfy Connector
+ * Description: Deixa a plataforma Sinfy gravar o SEO do Yoast em páginas e publicar o cabeçalho, o rodapé e os componentes do site como modelos do Elementor, pela API do WordPress.
+ * Version: 0.5.1
  * Requires at least: 6.0
  * Requires PHP: 7.4
- * Author: Superelements
+ * Author: Sinfy
  * License: GPLv2 or later
  *
  * O Yoast só expõe os campos de SEO na API para posts. Aqui eles ficam
@@ -33,7 +33,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const SUPERELEMENTS_CONNECTOR_VERSION = '0.5.0';
+const SINFY_CONNECTOR_VERSION = '0.5.1';
 
 add_action(
 	'init',
@@ -200,7 +200,7 @@ function superelements_save_part( WP_REST_Request $request ) {
 		$document = $documents->create(
 			$type,
 			array(
-				'post_title'  => $title ? $title : 'Superelements',
+				'post_title'  => $title ? $title : 'Sinfy',
 				'post_status' => 'publish',
 			)
 		);
@@ -258,7 +258,7 @@ add_action(
 				},
 				'callback'            => function () {
 					return array(
-						'version'       => SUPERELEMENTS_CONNECTOR_VERSION,
+						'version'       => SINFY_CONNECTOR_VERSION,
 						'yoast'         => defined( 'WPSEO_VERSION' ) ? WPSEO_VERSION : null,
 						'elementor'     => defined( 'ELEMENTOR_VERSION' ) ? ELEMENTOR_VERSION : null,
 						'elementor_pro' => defined( 'ELEMENTOR_PRO_VERSION' ) ? ELEMENTOR_PRO_VERSION : null,
@@ -448,7 +448,7 @@ add_action(
 				'methods'             => 'GET',
 				'permission_callback' => '__return_true',
 				'callback'            => function () {
-					return array( 'plugin' => 'superelements-connector', 'version' => SUPERELEMENTS_CONNECTOR_VERSION );
+					return array( 'plugin' => 'superelements-connector', 'version' => SINFY_CONNECTOR_VERSION );
 				},
 			)
 		);
@@ -465,7 +465,7 @@ add_action(
 					'callback'            => function () {
 						$config = superelements_config();
 						return array(
-							'version' => SUPERELEMENTS_CONNECTOR_VERSION,
+							'version' => SINFY_CONNECTOR_VERSION,
 							'tracker' => isset( $config['tracker'] ) ? $config['tracker'] : null,
 							'leads'   => isset( $config['leads'] ) ? $config['leads'] : null,
 							'script'  => file_exists( plugin_dir_path( __FILE__ ) . 'assets/visitas.js' ),
@@ -510,7 +510,7 @@ add_action(
 						}
 						update_option( 'superelements_config', $config, false );
 						return array(
-							'version' => SUPERELEMENTS_CONNECTOR_VERSION,
+							'version' => SINFY_CONNECTOR_VERSION,
 							'tracker' => isset( $config['tracker'] ) ? $config['tracker'] : null,
 							'leads'   => isset( $config['leads'] ) ? $config['leads'] : null,
 						);

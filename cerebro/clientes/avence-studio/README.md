@@ -13,7 +13,7 @@
 - São Leopoldo (RS), @avencestudio, avencestudio.com.
 - Vende o projeto cobrado uma vez e um plano mensal opcional. Processo acompanhado num link: conversa, direção, prévia, ajustes e publicação.
 - Público prioritário: donos de empresas de serviços que já anunciam ou vão anunciar (arquitetura, advocacia, contabilidade, clínicas). Lojas virtuais ficam fora deste ciclo.
-- O SuperElements é bastidor: nunca aparece na comunicação da Avence.
+- A Sinfy é bastidor: nunca aparece na comunicação da Avence.
 
 ## Estado agora (2026-11-06)
 

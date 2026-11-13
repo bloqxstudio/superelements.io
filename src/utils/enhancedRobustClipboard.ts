@@ -22,7 +22,7 @@ interface ClipboardResult {
  */
 export const copyToClipboardEnhanced = async (text: string): Promise<ClipboardResult> => {
   const startTime = Date.now();
-  const isVercel = window.location.hostname.includes('vercel.app') || window.location.hostname.includes('superelements.io');
+  const isVercel = window.location.hostname.includes('vercel.app');
   
   const debugInfo = {
     isSecureContext: window.isSecureContext,

@@ -1,4 +1,4 @@
-# SuperElements
+# Sinfy
 
 Aplicação da Avence Studio para projetos de sites, criação de conteúdo e CRM por conta de empresa. O app usa React, TypeScript e Vite, com autenticação, banco e funções no Supabase. O serviço local de WhatsApp fica separado da interface.
 

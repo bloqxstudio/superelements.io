@@ -95,7 +95,7 @@ const SavedSearches: React.FC<{
 
 /**
  * Prospecção: empresas de uma cidade e de um nicho, com o que o site delas
- * usa e a nota de oportunidade para o Superelements. O motor roda no
+ * usa e a nota de oportunidade para a Sinfy. O motor roda no
  * servidor de dev (`scripts/prospects`), que abre os sites. As buscas ficam na
  * pasta da equipe do CRM, e o funil são as Oportunidades do CRM (`/crm`).
  */
@@ -340,7 +340,7 @@ const Prospects: React.FC = () => {
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10">
         <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Prospecção</h1>
         <p className="mt-1 max-w-2xl text-sm text-gray-500">
-          Encontre empresas por cidade e nicho, veja quem já tem WordPress com Elementor e quem é oportunidade para o Superelements.
+          Encontre empresas por cidade e nicho, veja quem já tem WordPress com Elementor e quem é oportunidade para a Sinfy.
         </p>
 
         {config === undefined ? (

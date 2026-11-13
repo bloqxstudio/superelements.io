@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
  * Nova jornada de criação, Fase 0 (2026-11-09, o usuário: "Sites e projetos é a mesma coisa", "Pauta,
  * conteúdo e texto é meio que a mesma coisa", "cérebro deve vir primeiro"). O menu mostra um item por
  * área e as telas que eram itens separados viram abas no topo da área. As rotas continuam as mesmas.
- * Plano: cerebro/iniciativas/superelements/jornada-de-criacao.md.
+ * Plano: cerebro/iniciativas/sinfy-construtor/jornada-de-criacao.md.
  */
 export type AreaId = 'cerebro' | 'pauta' | 'sites' | 'criativos'
 
