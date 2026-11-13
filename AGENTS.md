@@ -89,5 +89,6 @@ Sem segredos e sem contatos de prospects ou clientes finais. O Cérebro **do app
 | Meu perfil | `perfil.md` |
 | Marcas e modelos: MSA, Superelements, Menuzito, UGLYCASH, Zelo, ProcessBase, Inpel, Caramelo Pet, Júnior Automáticos, Leo Scherer, Evermind, Skiper UI, Rodas, Baldez & Moreira, Fonseca & Lorenço, Macarthy Scherer, Cerveira Braggio, Emmanuel Reche Becker, DACM, Stemmer, Ferreira & Bordinhão, Katia Paixão, Avence Studio, Planta & Obra | `marcas/<nome>.md` |
 
+Revisão completa de 2026-11-13 (bugs, segurança, decisões pendentes, lista de trabalho): `docs/agentes/revisao-2026-11-13.md`.
 Outros documentos: `docs/agentes/operacao-historico.md` (texto original do cérebro, higiene e egress), `OPERACAO.md` (terminal, banco, deploy), `META-PRODUCAO.md`, `docs/site-imports/`,
 `brands/<marca>/` (DESIGN.md e COPY.md de cada marca).
