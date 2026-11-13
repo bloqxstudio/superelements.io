@@ -14,7 +14,7 @@ import { block, EMPTY_BRIEF, uid, type CopyDoc, type CopySummary, type FormatId 
 import { useAiAvailable } from '@/features/criativos/link'
 import { listSets } from '@/features/criativos/storage'
 import type { SetSummary } from '@/features/criativos/types'
-import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { useProjectList, useAccountProjects } from '@/features/projects/projectStore'
 import type { CopyAgentId } from '@/features/copy/agents'
 import type { Area } from './jobs'
 
@@ -48,7 +48,7 @@ export const AgentRequest: React.FC<{ who: Who; compact?: boolean }> = ({ who, c
   const [opts, setOpts] = useState(false)
   const available = useAiAvailable()
   useProjectList()
-  const projects = useProjectStore((s) => s.projects)
+  const projects = useAccountProjects()
   const projectIds = projects.map((p) => p.id).join(',')
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)

@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { ArrowLeft, FileText, FolderOpen, MessageSquare, Redo2, Send, Sparkles, Undo2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { useProjectList, useAccountProjects } from '@/features/projects/projectStore'
 import { AgentPanel, type Pending } from './AgentPanel'
 import { CommentsPanel, type Composer } from './Comments'
 import { elapsed, useSeconds } from '@/features/operations/JobFeed'
@@ -54,7 +54,7 @@ export const CopyEditorPage: React.FC = () => {
   const people = useCopyLive((s) => s.people)
   const live = useCopyLive((s) => s.live)
   useProjectList()
-  const projects = useProjectStore((s) => s.projects)
+  const projects = useAccountProjects()
 
   const [tab, setTab] = useState<Tab>('agente')
   const [composer, setComposer] = useState<Composer | null>(null)

@@ -210,3 +210,26 @@ export function useProjectList({ refresh = false } = {}): ListStatus {
 
   return status
 }
+
+const NO_PROJECTS: Project[] = []
+
+/**
+ * Os projetos da conta aberta. Logo depois de trocar de conta a lista guardada ainda é da anterior: aqui ela
+ * volta vazia até a nova chegar, para nenhuma tela misturar criativos, documentos ou projetos de duas contas
+ * (o usuário, 2026-11-13: "ainda está misturando criativos ao trocar de conta").
+ */
+export function useAccountProjects(): Project[] {
+  const userId = useAuth().user?.id
+  const teamId = useCrm((s) => (s.status === 'ready' ? s.team?.id : undefined))
+  return useProjectStore((s) => (s.userId === userId && s.accountId === teamId ? s.projects : NO_PROJECTS))
+}
+
+/**
+ * Carrega a lista e devolve os ids dos projetos da conta aberta, juntos num texto (bom para dependência de
+ * efeito), ou `null` enquanto a lista ainda não é desta conta: quem lista conjuntos e documentos espera.
+ */
+export function useAccountProjectIds(): string | null {
+  const status = useProjectList()
+  const projects = useAccountProjects()
+  return status === 'loading' ? null : projects.map((p) => p.id).join(',')
+}

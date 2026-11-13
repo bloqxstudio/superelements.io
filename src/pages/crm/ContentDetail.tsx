@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { useCrm } from '@/features/crm/crmStore'
 import { nameOf, useTeamPeople } from '@/features/crm/people'
 import { FIELD, Page, whenLabel } from '@/features/crm/ui'
-import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { useProjectList, useAccountProjects } from '@/features/projects/projectStore'
 import {
   ContentError, ContentTablesError, deleteContent, linkContent, listLinks, listSnapshots, loadContent, loadContext, saveContent, transitionContent, unlinkContent,
   type ApprovalSnapshot,
@@ -72,7 +72,7 @@ const ContentDetail: React.FC = () => {
   const role = team?.role
   const people = useTeamPeople(team?.id)
   useProjectList()
-  const projects = useProjectStore((s) => s.projects)
+  const projects = useAccountProjects()
 
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'error' | 'sem-banco'>('loading')
   const [content, setContent] = useState<Content>()

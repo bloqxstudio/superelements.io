@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AudioLines, Clapperboard, Loader2, Plus, Search, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AreaTabs } from '@/features/navigation/AreaTabs'
-import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { useAccountProjectIds } from '@/features/projects/projectStore'
 import { coverUrls, listSets, loadSet, videosInfoOf } from '@/features/criativos/storage'
 import type { SetSummary, VideoInfo } from '@/features/criativos/types'
 import { setLink } from './Creatives'
@@ -65,11 +65,12 @@ const Motion: React.FC = () => {
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState<'todos' | 'animacao' | 'roteiro'>('todos')
   const [target, setTarget] = useState('')
-  useProjectList()
-  const projectIds = useProjectStore((s) => s.projects).map((p) => p.id).join(',')
+  // null enquanto a lista de projetos ainda não é da conta aberta (troca de conta): não lista nada misturado
+  const projectIds = useAccountProjectIds()
 
   useEffect(() => {
     let alive = true
+    if (projectIds === null) return
     ;(async () => {
       const list = await listSets(projectIds ? projectIds.split(',') : [])
       if (!alive) return

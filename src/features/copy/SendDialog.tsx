@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { cn } from '@/lib/utils'
 import { listSets } from '@/features/criativos/storage'
 import type { SetSummary } from '@/features/criativos/types'
-import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { useProjectList, useAccountProjects } from '@/features/projects/projectStore'
 import { folderDocs } from './folder'
 import { formatById } from './knowledge'
 import { loadDoc } from './storage'
@@ -28,7 +28,7 @@ const download = (text: string, name: string) => {
 export const SendDialog: React.FC<{ open: boolean; onClose: () => void; initial?: 'pasta' }> = ({ open, onClose, initial }) => {
   const doc = useCopy((s) => s.doc)
   useProjectList()
-  const projects = useProjectStore((s) => s.projects)
+  const projects = useAccountProjects()
   const [dest, setDest] = useState<'criativos' | 'projetos' | 'pasta'>('criativos')
   const [count, setCount] = useState(3)
   const [items, setItems] = useState<(CopySummary & { on: boolean; state?: 'run' | 'ok' | 'err'; note?: string })[]>([])

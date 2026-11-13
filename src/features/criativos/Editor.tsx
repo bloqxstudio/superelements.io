@@ -31,7 +31,7 @@ import { Board } from './Board'
 import { joinSetLive, useLive } from './live'
 import { useMcpCreativeLive } from './mcpLive'
 import { shareSet } from './storage'
-import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { useProjectList, useAccountProjects } from '@/features/projects/projectStore'
 import { alpha } from './color'
 import { gridOf, marginOf, type PostGrid } from './grid'
 import { useRefs } from './refStore'
@@ -472,7 +472,7 @@ export const CreativeEditor: React.FC = () => {
   const [sharing, setSharing] = useState<{ projectId: string; busy: boolean } | null>(null)
   const navigate = useNavigate()
   useProjectList()
-  const projects = useProjectStore((s) => s.projects)
+  const projects = useAccountProjects()
   const people = useLive((s) => s.people)
   const live = useLive((s) => s.live)
   const sharedId = set?.shared ? set.id : undefined

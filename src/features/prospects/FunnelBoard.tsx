@@ -13,7 +13,7 @@ import { OpportunityComments } from '@/features/crm/OpportunityComments'
 import { nameOf, useTeamPeople } from '@/features/crm/people'
 import type { TeamPerson, TeamRole } from '@/features/crm/types'
 import { Avatar } from '@/features/crm/ui'
-import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { useProjectList, useAccountProjects } from '@/features/projects/projectStore'
 import { ConnectorPrompt } from '@/features/space/chat/ConnectorPrompt'
 import { useChat } from '@/features/space/chat/chatStore'
 import { CHAT_AGENTS } from '@/features/space/chat/protocol'
@@ -54,7 +54,7 @@ type SetItems = React.Dispatch<React.SetStateAction<Opportunity[]>>
 /** Projeto do Space pelo nome (o funil guarda o nome; o link precisa do id). */
 const useProjectIds = () => {
   useProjectList()
-  const projects = useProjectStore((s) => s.projects)
+  const projects = useAccountProjects()
   return useMemo(() => new Map(projects.map((p) => [p.name.trim().toLowerCase(), p.id])), [projects])
 }
 

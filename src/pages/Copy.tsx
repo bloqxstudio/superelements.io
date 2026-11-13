@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { AreaTabs } from '@/features/navigation/AreaTabs'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -6,7 +6,7 @@ import { ArrowLeft, FileText, FolderOpen, Microscope, Plus, Search, Trash2 } fro
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { useProjectList, useAccountProjects, useAccountProjectIds } from '@/features/projects/projectStore'
 import { FORMATS, NICHES, formatById, nicheById, type FormatGroup, type FormatSpec } from '@/features/copy/knowledge'
 import { escapeHtml } from '@/features/copy/html'
 import { FolderAgentBox } from '@/features/copy/FolderAgentBox'
@@ -29,7 +29,7 @@ export const setLink = (d: Pick<CopySummary, 'id' | 'projectId' | 'shared'>) => 
 const NewDoc: React.FC<{ open: boolean; research: boolean; folders: { id: string; name: string }[]; defaultFolder?: string; onClose: () => void }> = ({ open, research, folders, defaultFolder, onClose }) => {
   const navigate = useNavigate()
   useProjectList()
-  const projects = useProjectStore((s) => s.projects)
+  const projects = useAccountProjects()
   const [format, setFormat] = useState<FormatId>('post-instagram')
   const [niche, setNiche] = useState('')
   const [title, setTitle] = useState('')
@@ -181,19 +181,26 @@ const Copy: React.FC = () => {
   const runningCount = jobs.filter((j) => j.status === 'running').length
   const [params, setParams] = useSearchParams()
   const folderParam = params.get('pasta') ?? undefined
-  useProjectList()
-  const projectIds = useProjectStore((s) => s.projects).map((p) => p.id).join(',')
+  // null enquanto a lista de projetos ainda não é da conta aberta (troca de conta): não lista nada misturado
+  const projectIds = useAccountProjectIds()
 
-  const load = () =>
-    listDocs(projectIds ? projectIds.split(',') : [])
+  // Só a leitura mais recente entra: uma resposta atrasada de antes da troca de conta não volta à tela
+  const seq = useRef(0)
+  const load = () => {
+    const n = ++seq.current
+    if (projectIds === null) return setDocs(null)
+    return listDocs(projectIds ? projectIds.split(',') : [])
       .then((d) => {
+        if (n !== seq.current) return
         setDocs(d)
         setError(false)
       })
       .catch((err) => {
+        if (n !== seq.current) return
         console.error(err)
         setError(true)
       })
+  }
 
   useEffect(() => void load(), [projectIds, runningCount]) // eslint-disable-line react-hooks/exhaustive-deps
 

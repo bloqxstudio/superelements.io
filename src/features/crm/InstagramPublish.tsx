@@ -8,7 +8,7 @@ import { listSets, loadSet } from '@/features/criativos/storage'
 import { sizeOf, type CreativeSet, type SetSummary } from '@/features/criativos/types'
 import { matchesSearch, useCovers } from '@/features/criativos/covers'
 import { CoverStrip, PostCover } from '@/features/criativos/SetCovers'
-import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { useAccountProjectIds } from '@/features/projects/projectStore'
 import { Chip } from '@/features/prospects/ui'
 import { cn } from '@/lib/utils'
 import { FIELD, plural } from './ui'
@@ -64,8 +64,8 @@ const STEPS: { id: PublishStep; label: string }[] = [
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 const CreativePicker: React.FC<{ onPick: (set: CreativeSet, postId: string) => void; busy: boolean }> = ({ onPick, busy }) => {
-  useProjectList()
-  const projectIds = useProjectStore((s) => s.projects).map((p) => p.id).join(',')
+  // null enquanto a lista de projetos ainda não é da conta aberta (troca de conta): não lista nada misturado
+  const projectIds = useAccountProjectIds()
   const [sets, setSets] = useState<SetSummary[] | null>(null)
   const [setKey, setSetKey] = useState('')
   const [opened, setOpened] = useState<CreativeSet | null>(null)
@@ -76,12 +76,18 @@ const CreativePicker: React.FC<{ onPick: (set: CreativeSet, postId: string) => v
   const visible = covered.sets?.filter((s) => matchesSearch(s, query)) ?? []
 
   useEffect(() => {
+    if (projectIds === null) return
+    let alive = true
     listSets(projectIds ? projectIds.split(',') : [])
       .then((list) => {
+        if (!alive) return
         setSets(list)
         setSetKey((cur) => cur || (list[0] ? `${list[0].projectId ?? ''}/${list[0].id}` : ''))
       })
-      .catch(() => setSets([]))
+      .catch(() => alive && setSets([]))
+    return () => {
+      alive = false
+    }
   }, [projectIds])
 
   const summary = covered.sets?.find((s) => keyOf(s) === setKey)

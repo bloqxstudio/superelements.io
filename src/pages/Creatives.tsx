@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useCrm } from '@/features/crm/crmStore'
 import { accountBrand } from '@/features/conteudos/carousel'
 import { AreaTabs } from '@/features/navigation/AreaTabs'
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { parseDesignMd } from '@/features/space/brand/designMd'
-import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { useProjectList, useAccountProjects, useAccountProjectIds } from '@/features/projects/projectStore'
 import { loadProjectDoc } from '@/features/projects/storage'
 import { setBrandFrom } from '@/features/criativos/brand'
 import { deleteSet, listSets, saveSet } from '@/features/criativos/storage'
@@ -36,7 +36,7 @@ const when = (at: number) => new Date(at).toLocaleDateString('pt-BR', { day: '2-
 const NewSet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
   const navigate = useNavigate()
   useProjectList()
-  const projects = useProjectStore((s) => s.projects)
+  const projects = useAccountProjects()
   // Conta de cliente: só modelos neutros e nenhum case, exemplo ou voz da Avence (2026-11-10)
   const client = useCrm((s) => !!s.team && !s.team.isHome)
   const postModels = client ? CLIENT_POST_MODELS : POST_MODELS
@@ -173,19 +173,26 @@ const Creatives: React.FC = () => {
   const navigate = useNavigate()
   const covered = useCovers(sets)
   const visible = covered.sets?.filter((s) => matchesSearch(s, query)) ?? null
-  useProjectList()
-  const projectIds = useProjectStore((s) => s.projects).map((p) => p.id).join(',')
+  // null enquanto a lista de projetos ainda não é da conta aberta (troca de conta): não lista nada misturado
+  const projectIds = useAccountProjectIds()
 
-  const load = () =>
-    listSets(projectIds ? projectIds.split(',') : [])
+  // Só a leitura mais recente entra: uma resposta atrasada de antes da troca de conta não volta à tela
+  const seq = useRef(0)
+  const load = () => {
+    const n = ++seq.current
+    if (projectIds === null) return setSets(null)
+    return listSets(projectIds ? projectIds.split(',') : [])
       .then((s) => {
+        if (n !== seq.current) return
         setSets(s)
         setError(false)
       })
       .catch((err) => {
+        if (n !== seq.current) return
         console.error(err)
         setError(true)
       })
+  }
 
   useEffect(() => void load(), [projectIds]) // eslint-disable-line react-hooks/exhaustive-deps
 

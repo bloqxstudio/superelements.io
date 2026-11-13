@@ -8,7 +8,7 @@ import { listDocs } from '@/features/copy/storage'
 import type { CopySummary } from '@/features/copy/types'
 import { listSets } from '@/features/criativos/storage'
 import type { SetSummary } from '@/features/criativos/types'
-import { useProjectList, useProjectStore } from '@/features/projects/projectStore'
+import { useProjectList, useAccountProjects } from '@/features/projects/projectStore'
 import { agentStatus, useAgents } from '@/features/space/bridge/agentsStore'
 import { cn } from '@/lib/utils'
 import { elapsed, useSeconds } from './JobFeed'
@@ -45,7 +45,7 @@ const Worker: React.FC<{ job: Job; now: number }> = ({ job, now }) => {
 
 export const Operations: React.FC = () => {
   useProjectList()
-  const projects = useProjectStore((s) => s.projects)
+  const projects = useAccountProjects()
   const projectIds = projects.map((p) => p.id).join(',')
   const jobs = useJobs((s) => s.jobs)
   const spaceRuns = useAgents((s) => s.agents)
