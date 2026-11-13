@@ -183,6 +183,13 @@ async function writeJson(path: string, value: unknown, upsert = true) {
 
 interface Project { id: string; name: string; owner_id: string; updated_at: string }
 
+/** Um projeto da conta pelo id, mesmo fora dos 10 mais recentes que `teamProjects` lista. */
+async function projectById(caller: Caller, id: string): Promise<Project | undefined> {
+  if (!moduleOn(caller.team, 'projetos')) return undefined
+  const { data } = await admin.from('space_projects').select('id, name, owner_id, updated_at').eq('team_id', caller.team.id).eq('id', id).is('archived_at', null).maybeSingle()
+  return (data ?? undefined) as Project | undefined
+}
+
 async function teamProjects(caller: Caller): Promise<Project[]> {
   if (!moduleOn(caller.team, 'projetos')) return []
   const { data } = await admin.from('space_projects').select('id, name, owner_id, updated_at').eq('team_id', caller.team.id).is('archived_at', null).order('updated_at', { ascending: false }).limit(10)
@@ -196,6 +203,21 @@ async function listSets(caller: Caller) {
   const places = [{ folder: `${personalFolder(caller)}/criativos`, project: undefined as Project | undefined }, ...projects.map((p) => ({ folder: `${p.owner_id}/${p.id}/criativos`, project: p }))]
   const lists = await Promise.all(places.map(async (pl) => ((await readJson<Summary[]>(`${pl.folder}/index.json`)) ?? []).map((s) => ({ ...s, folder: pl.folder, projectId: pl.project?.id, projectName: pl.project?.name, shared: !!pl.project }))))
   return lists.flat().sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+/**
+ * O conjunto pedido por uma ferramenta (`id` e, se vier, `projeto_id`). Com o projeto, lê direto a pasta dele,
+ * mesmo fora dos 10 projetos mais recentes que `listSets` percorre.
+ */
+async function findSet(caller: Caller, a: Args) {
+  if (typeof a.projeto_id === 'string' && a.projeto_id) {
+    const project = await projectById(caller, a.projeto_id)
+    if (!project) return undefined
+    const folder = `${project.owner_id}/${project.id}/criativos`
+    const hit = ((await readJson<Summary[]>(`${folder}/index.json`)) ?? []).find((s) => s.id === a.id)
+    return hit ? { ...hit, folder, projectId: project.id, projectName: project.name, shared: true } : undefined
+  }
+  return (await listSets(caller)).find((s) => s.id === a.id)
 }
 
 /** A pasta do vídeo no Mac para o Edits: o mesmo cálculo de `editsFolder` em `src/features/criativos/edits.ts`. */
@@ -213,9 +235,14 @@ const setUrl = (id: string, projectId?: string, contentId?: string) => {
   return `${APP_URL}/criativos/${id}${qs ? `?${qs}` : ''}`
 }
 
-/** A marca do conjunto mais recente da conta com cores ou logo (o que a IA precisa saber para escrever na identidade). */
-async function latestBrand(caller: Caller) {
-  for (const s of (await listSets(caller)).slice(0, 8)) {
+/**
+ * A marca do conjunto mais recente com cores ou logo. Com `folder`, só os conjuntos daquela pasta (o projeto, que é um
+ * cliente): na conta da casa, olhar a conta inteira dava a um cliente a identidade de outro (revisão de 2026-11-13).
+ * Sem `folder`, a conta toda (o resumo de `sinfy_conta`).
+ */
+async function latestBrand(caller: Caller, folder?: string) {
+  const sets = folder ? ((await readJson<Summary[]>(`${folder}/index.json`)) ?? []).map((s) => ({ ...s, folder })).sort((a, b) => b.updatedAt - a.updatedAt) : await listSets(caller)
+  for (const s of sets.slice(0, 8)) {
     if (!s.colors?.length) continue
     const set = await readJson<{ brand?: Record<string, unknown> }>(`${s.folder}/${s.id}/set.json`)
     if (set?.brand) return set.brand
@@ -878,8 +905,7 @@ const TOOLS: Tool[] = [
         if (!data) throw new ToolError('Conteúdo não encontrado nesta conta.')
         content = data
       }
-      const projects = await teamProjects(caller)
-      const project = typeof a.projeto_id === 'string' && a.projeto_id ? projects.find((p) => p.id === a.projeto_id) : caller.team.is_home ? undefined : projects[0]
+      const project = typeof a.projeto_id === 'string' && a.projeto_id ? await projectById(caller, a.projeto_id) : caller.team.is_home ? undefined : (await teamProjects(caller))[0]
       if (typeof a.projeto_id === 'string' && a.projeto_id && !project) throw new ToolError('Projeto não encontrado nesta conta.')
 
       const folder = project ? `${project.owner_id}/${project.id}/criativos` : `${personalFolder(caller)}/criativos`
@@ -888,10 +914,10 @@ const TOOLS: Tool[] = [
       const ctx = await loadContext(caller.team.id)
       const name = str(a.nome, 80) ?? (content?.title as string | undefined) ?? posts[0].name
 
-      // A marca da conta (conjunto mais recente com cores ou logo). Com ela e as fontes carregadas, os
-      // posts saem montados daqui, iguais ao que o editor monta; sem ela, o Criativos monta ao abrir
-      // (DESIGN.md do projeto) e a prévia vai na marca neutra.
-      const brand = (await latestBrand(caller)) as Brand | undefined
+      // A marca do lugar do conjunto (o projeto, ou a pasta pessoal): o conjunto mais recente dali com cores ou
+      // logo. Com ela e as fontes carregadas, os posts saem montados daqui, iguais ao que o editor monta; sem ela,
+      // o Criativos monta ao abrir (DESIGN.md do projeto) e a prévia vai na marca neutra.
+      const brand = (await latestBrand(caller, folder)) as Brand | undefined
       const useBrand = brand ?? neutralBrand(project?.name ?? caller.team.name)
       let built: BuiltPost[] = []
       let ready = false
@@ -987,7 +1013,7 @@ const TOOLS: Tool[] = [
     annotations: { readOnlyHint: true },
     run: async (caller, a) => {
       need(caller, 'criativos', 'Criativos')
-      const found = (await listSets(caller)).find((s) => s.id === a.id && (!a.projeto_id || s.projectId === a.projeto_id))
+      const found = await findSet(caller, a)
       if (!found) throw new ToolError('Conjunto não encontrado nesta conta.')
       const set = await readJson<{ name: string; posts: { name: string; format: string; caption?: string; slides: { layers: { type: string; text?: string; hidden?: boolean }[] }[] }[]; pending?: unknown[] }>(`${found.folder}/${found.id}/set.json`)
       if (!set) throw new ToolError('Não consegui abrir o conjunto.')
@@ -1007,7 +1033,7 @@ const TOOLS: Tool[] = [
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     run: async (caller, a) => {
       need(caller, 'criativos', 'Criativos')
-      const found = (await listSets(caller)).find((s) => s.id === a.id && (!a.projeto_id || s.projectId === a.projeto_id))
+      const found = await findSet(caller, a)
       if (!found) throw new ToolError('Conjunto não encontrado nesta conta.')
       const set = await readJson<{ name: string; scenes?: { id: string; name: string; duration: number; explainer?: unknown; caption?: string }[] }>(`${found.folder}/${found.id}/set.json`)
       if (!set) throw new ToolError('Não consegui abrir o conjunto.')
@@ -1052,7 +1078,7 @@ const TOOLS: Tool[] = [
     annotations: { readOnlyHint: true },
     run: async (caller, a) => {
       need(caller, 'criativos', 'Criativos')
-      const found = (await listSets(caller)).find((s) => s.id === a.id && (!a.projeto_id || s.projectId === a.projeto_id))
+      const found = await findSet(caller, a)
       if (!found) throw new ToolError('Conjunto não encontrado nesta conta.')
       const set = await readJson<{ name: string; brand?: Brand; posts: BuiltPost[]; pending?: { name: string; format: string; caption?: string; slides: unknown[] }[]; assets?: { id: string; path: string }[] }>(`${found.folder}/${found.id}/set.json`)
       if (!set) throw new ToolError('Não consegui abrir o conjunto.')
@@ -1085,7 +1111,7 @@ const TOOLS: Tool[] = [
     annotations: { readOnlyHint: false, idempotentHint: true },
     run: async (caller, a) => {
       need(caller, 'criativos', 'Criativos')
-      const found = (await listSets(caller)).find((s) => s.id === a.id && (!a.projeto_id || s.projectId === a.projeto_id))
+      const found = await findSet(caller, a)
       if (!found) throw new ToolError('Conjunto não encontrado nesta conta.')
       const set = await readJson<{ posts?: BuiltPost[] }>(`${found.folder}/${found.id}/set.json`)
       if (!set) throw new ToolError('Não consegui abrir o conjunto.')
@@ -1122,7 +1148,7 @@ const TOOLS: Tool[] = [
     },
     run: async (caller, a) => {
       need(caller, 'criativos', 'Criativos')
-      const found = (await listSets(caller)).find((s) => s.id === a.id && (!a.projeto_id || s.projectId === a.projeto_id))
+      const found = await findSet(caller, a)
       if (!found) throw new ToolError('Conjunto não encontrado nesta conta.')
       const path = `${found.folder}/${found.id}/set.json`
       const set = await readJson<Record<string, unknown> & { name: string; brand?: Brand; posts: BuiltPost[]; pending?: { name: string; format: string; caption?: string; slides: unknown[] }[]; pendingBrand?: boolean; assets?: { id: string; name: string; path: string; width: number; height: number }[] }>(path)
@@ -1213,7 +1239,7 @@ const TOOLS: Tool[] = [
     },
     run: async (caller, a) => {
       need(caller, 'criativos', 'Criativos')
-      const found = (await listSets(caller)).find((s) => s.id === a.id && (!a.projeto_id || s.projectId === a.projeto_id))
+      const found = await findSet(caller, a)
       if (!found) throw new ToolError('Conjunto não encontrado nesta conta (veja os ids em sinfy_criativos).')
       const path = `${found.folder}/${found.id}/set.json`
       type TextL = Layer & { text?: string; name?: string }
@@ -1368,7 +1394,7 @@ const TOOLS: Tool[] = [
       const [acc] = await asUser(caller, (tx) => tx`select id, username, sync_error from crm_instagram_accounts where team_id = ${caller.team.id} order by connected_at limit 1`)
       if (!acc) throw new ToolError('A conta não tem Instagram conectado. Conecte em CRM › Instagram.')
       if (acc.sync_error === 'token') throw new ToolError(`A conexão do @${acc.username} caiu: reconecte em CRM › Instagram antes de publicar.`)
-      const found = (await listSets(caller)).find((s) => s.id === a.id && (!a.projeto_id || s.projectId === a.projeto_id))
+      const found = await findSet(caller, a)
       if (!found) throw new ToolError('Conjunto não encontrado nesta conta.')
       const set = await readJson<{ name: string; brand?: Brand; posts: BuiltPost[]; pending?: unknown[]; pendingBrand?: boolean; assets?: { id: string; path: string }[] }>(`${found.folder}/${found.id}/set.json`)
       if (!set) throw new ToolError('Não consegui abrir o conjunto.')
