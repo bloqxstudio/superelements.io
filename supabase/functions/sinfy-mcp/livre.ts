@@ -8,7 +8,7 @@
  *   {"tipo":"texto","texto","x","y","w","h"?,"fonte"?,"peso"?,"tamanho"?,"cor"?,"alinhamento"?,"altura_linha"?,"espaco_letras"?,"maiusculas"?,"italico"?,"destaque_cor"?,"opacidade"?,"rotacao"?}
  *     (*palavra* no texto = destaque, na `destaque_cor`, mesma fonte)
  *   {"tipo":"forma","x","y","w","h","cor","cor2"?,"angulo"?,"raio"?,"borda"?,"borda_largura"?,"opacidade"?,"rotacao"?}
- *   {"tipo":"imagem","x","y","w","h","arquivo"? (Cérebro) |"url"?|"prompt"? (gerar no editor),"ajuste"?:"cover"|"contain","raio"?}
+ *   {"tipo":"imagem","x","y","w","h","arquivo"? (Cérebro) |"url"?|"prompt"? (a foto é gerada),"ajuste"?:"cover"|"contain","raio"?}
  *   {"tipo":"grade","tamanho"?:60,"cor"?,"espessura"?:2,"opacidade"?}   fundo quadriculado (linhas finas)
  *   {"tipo":"pontos","tamanho"?:40,"ponto"?:3,"cor"?,"opacidade"?}
  */

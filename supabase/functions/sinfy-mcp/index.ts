@@ -385,6 +385,76 @@ function whenOf(v: unknown): Date {
 const brt = (d: Date) => d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 
+/**
+ * Fotos geradas no servidor (2026-11-13, o usuário, num PC sem o app local: "não estou conseguindo gerar posts de
+ * qualidade… o MCP precisa atender como se estivesse com o app local"). As camadas de imagem com `prompt` e sem
+ * foto ficavam com "Foto a gerar no editor" para sempre, porque quem gerava era o conector do Mac (chave de imagem
+ * guardada lá). Agora a função gera pela OpenAI com o segredo `OPENAI_API_KEY` do projeto (o mesmo das outras
+ * funções) e anexa ao conjunto. Até 6 por chamada, em paralelo; o que falhar continua com o pedido, para o editor
+ * tentar de novo.
+ */
+const IMAGE_MODEL = Deno.env.get('OPENAI_IMAGE_MODEL') || 'gpt-image-1'
+/** Desligado por padrão (a pessoa prefere a IA do chat gerando as fotos, sem custo de API): liga com o segredo SINFY_FOTOS_SERVIDOR=1. */
+const SERVER_PHOTOS = Deno.env.get('SINFY_FOTOS_SERVIDOR') === '1'
+const MAX_PHOTOS = 6
+
+function imageSize(w: number, h: number) {
+  const r = w / Math.max(1, h)
+  return r > 1.2 ? '1536x1024' : r < 0.83 ? '1024x1536' : '1024x1024'
+}
+
+async function generatePhoto(prompt: string, size: string, team: string): Promise<Uint8Array> {
+  const key = Deno.env.get('OPENAI_API_KEY')
+  if (!key) throw new ToolError('A geração de fotos no servidor está sem a chave da OpenAI (segredo OPENAI_API_KEY da função).')
+  const full = `${prompt}\n\nFoto realista e bem iluminada para um post de Instagram de ${team}, com cara de foto profissional. Sem texto, letras, números, marcas d'água ou logotipos na imagem.`
+  const res = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ model: IMAGE_MODEL, prompt: full.slice(0, 4000), size, n: 1, quality: 'medium', output_format: 'jpeg' }),
+    signal: AbortSignal.timeout(140_000),
+  })
+  if (!res.ok) {
+    const detail = ((await res.json().catch(() => ({}))) as { error?: { message?: string } }).error?.message ?? ''
+    throw new ToolError(`A OpenAI não gerou a foto (${res.status}${detail ? `: ${detail.slice(0, 160)}` : ''}).`)
+  }
+  const b64 = ((await res.json()) as { data?: { b64_json?: string }[] }).data?.[0]?.b64_json
+  if (!b64) throw new ToolError('A OpenAI respondeu sem a imagem.')
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+}
+
+type Asset = { id: string; path: string; name?: string; width?: number; height?: number }
+
+/** Gera as fotos que faltam (camadas com `prompt` e sem `src`) e anexa ao conjunto. */
+async function generateMissingPhotos(caller: Caller, setDir: string, posts: BuiltPost[], assets: Asset[]): Promise<{ assets: Asset[]; geradas: number; faltam: number; erro?: string }> {
+  const wanted = posts.flatMap((p) => p.slides.flatMap((sl) => (sl.layers as (Layer & { prompt?: string; genFailed?: boolean; w?: number; h?: number })[]).filter((l) => l.type === 'image' && !l.hidden && !l.src && l.prompt)))
+  if (!wanted.length) return { assets, geradas: 0, faltam: 0 }
+  if (!SERVER_PHOTOS) return { assets, geradas: 0, faltam: wanted.length }
+  const now = wanted.slice(0, MAX_PHOTOS)
+  const out = [...assets]
+  let erro: string | undefined
+  const results = await Promise.all(now.map(async (l) => {
+    try {
+      const bytes = await generatePhoto(l.prompt!, imageSize(l.w ?? 1080, l.h ?? 1080), caller.team.name)
+      const info = sniff(bytes)
+      const ext = info?.mime === 'image/png' ? 'png' : 'jpg'
+      const assetId = crypto.randomUUID().slice(0, 8)
+      const assetPath = `${setDir}/${assetId}.${ext}`
+      const { error } = await admin.storage.from(BUCKET).upload(assetPath, bytes, { contentType: info?.mime ?? 'image/jpeg', upsert: false })
+      if (error) throw new ToolError(`Não consegui guardar a foto gerada (${error.message}).`)
+      out.push({ id: assetId, name: `gerada-${assetId}.${ext}`, path: assetPath, width: info?.width, height: info?.height })
+      l.src = `asset:${assetId}`
+      delete l.genFailed
+      return true
+    } catch (err) {
+      erro ??= err instanceof ToolError ? err.message : 'Falha ao gerar a foto.'
+      if (!(err instanceof ToolError)) console.error('[sinfy-mcp] foto', err)
+      return false
+    }
+  }))
+  const geradas = results.filter(Boolean).length
+  return { assets: out, geradas, faltam: wanted.length - geradas, erro }
+}
+
 /** Imagens do Cérebro pedidas num slide livre (`_arquivo`): copia para o conjunto como anexo e aponta a camada. */
 async function attachBrainImages(caller: Caller, setDir: string, posts: BuiltPost[], assets: { id: string; path: string; name?: string; width?: number; height?: number }[]) {
   const out = [...assets]
@@ -409,6 +479,12 @@ async function attachBrainImages(caller: Caller, setDir: string, posts: BuiltPos
       }
   return out
 }
+
+/** O que dizer à IA sobre as fotos geradas no servidor. */
+const photoNote = (p: { geradas: number; faltam: number; erro?: string }) =>
+  p.geradas || p.faltam
+    ? { fotos: p.geradas ? `${p.geradas} foto(s) gerada(s) no servidor${p.faltam ? `; ${p.faltam} ainda sem foto${p.erro ? ` (${p.erro})` : ''}` : ''}.` : `${p.faltam} slide(s) esperam foto: gere cada foto no chat (sem texto) e mande com sinfy_criativo_foto ("base64", post e slide).` }
+    : {}
 
 /** Resposta de ferramenta com imagens: o texto vai primeiro, as prévias depois. */
 class WithImages {
@@ -843,6 +919,8 @@ const TOOLS: Tool[] = [
         updatedAt: now,
       }
       set.assets = await attachBrainImages(caller, `${folder}/${id}`, set.posts as BuiltPost[], [])
+      const photos = await generateMissingPhotos(caller, `${folder}/${id}`, set.posts as BuiltPost[], set.assets)
+      set.assets = photos.assets
       await writeJson(`${folder}/${id}/set.json`, set, false)
       const index = (await readJson<Summary[]>(`${folder}/index.json`)) ?? []
       const summary: Summary = { id, name, projectId: project?.id, projectName: project?.name, shared: !!project, posts: posts.length, colors: useBrand.colors.slice(0, 5).map((c) => c.hex), updatedAt: now }
@@ -876,9 +954,10 @@ const TOOLS: Tool[] = [
           conteudo: ligado,
           marca: brand ? `marca da conta (${useBrand.name})` : 'sem marca salva na conta: prévia neutra; ao abrir, a Sinfy aplica a marca do projeto',
           ...(brandFixes.length ? { ajustado_para_a_marca: [...new Set(brandFixes)].slice(0, 12), regra_da_marca: 'Fontes e cores fora da marca foram trocadas pelas da marca. Use só as cores e fontes de sinfy_conta.' } : {}),
+          ...photoNote(photos),
           posts: posts.map((p) => ({ nome: p.name, formato: p.format, slides: p.slides.length, legenda: p.caption })),
           previa: previewError ?? (images.length ? `Uma imagem por post com os ${total} slides lado a lado, na ordem. Mostre à pessoa.${built.length > images.length ? ' Para os outros posts, use sinfy_criativo_ver com o número do post.' : ''}` : undefined),
-          proximo_passo: 'Mostre a prévia à pessoa e pergunte o que ajustar. Para ajustar, use sinfy_criativo_editar neste conjunto (nunca crie outro). Fotos: sinfy_criativo_foto ou gere no editor pelo link. Para publicar ou agendar: sinfy_publicar.',
+          proximo_passo: 'Mostre a prévia à pessoa e pergunte o que ajustar. Para ajustar, use sinfy_criativo_editar neste conjunto (nunca crie outro). Fotos: sinfy_criativo_foto (arquivo do Cérebro, url ou prompt). Para publicar ou agendar: sinfy_publicar.',
         },
         images
       )
@@ -996,7 +1075,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_criativo_foto',
     title: 'Pôr uma foto no criativo',
-    description: 'Põe uma foto num slide de um conjunto (no lugar da foto pedida ou trocando a imagem): "arquivo" do Cérebro ou "url" pública. A foto anexada no chat não chega aqui: use sinfy_link_envio (nunca base64). Slide só de texto: a foto vira fundo, com véu para ler ("como": "fundo" força isso). A foto também fica guardada no Cérebro.',
+    description: 'Põe uma foto num slide de um conjunto (no lugar da foto pedida ou trocando a imagem): "arquivo" do Cérebro, "url" pública ou "base64" (a imagem gerada no chat). Foto do computador da pessoa: sinfy_link_envio. Slide só de texto: a foto vira fundo, com véu para ler ("como": "fundo" força isso). A foto também fica guardada no Cérebro.',
     inputSchema: {
       type: 'object',
       required: ['id'],
@@ -1008,6 +1087,7 @@ const TOOLS: Tool[] = [
         como: { type: 'string', enum: ['auto', 'trocar', 'fundo'], description: 'auto (padrão): troca a foto do slide; sem lugar de foto, vira fundo. fundo: a foto cobre o slide atrás dos textos, com véu para ler.' },
         arquivo: { type: 'string', description: 'Caminho de uma imagem do Cérebro (sinfy_cerebro_arquivos), ex.: fotos/enviadas/x.jpg.' },
         url: { type: 'string', description: 'Endereço https da foto.' },
+        base64: { type: 'string', description: 'Ou a foto em base64 (data URL), por exemplo a que você gerou no chat.' },
         nome_arquivo: { type: 'string' },
       },
       additionalProperties: false,
@@ -1040,7 +1120,11 @@ const TOOLS: Tool[] = [
       // A foto vem do Cérebro (o que a pessoa mandou pelo link de envio) ou de um endereço/base64, que também fica guardado no Cérebro
       let file: { bytes: Uint8Array; mime: string; name: string }
       let noCerebro: string | undefined
-      if (typeof a.arquivo === 'string' && a.arquivo.trim()) {
+      if (SERVER_PHOTOS && typeof a.prompt === 'string' && a.prompt.trim()) {
+        // Foto gerada aqui (sem o app local), no formato do lugar dela
+        const box = (asBackground ? (Criativos.sizeOf as (f: string) => { width: number; height: number })(post.format) : { width: (slot as { w?: number }).w ?? 1080, height: (slot as { h?: number }).h ?? 1080 })
+        file = { bytes: await generatePhoto(a.prompt.trim().slice(0, 1500), imageSize(box.width, box.height), caller.team.name), mime: 'image/jpeg', name: 'foto-gerada.jpg' }
+      } else if (typeof a.arquivo === 'string' && a.arquivo.trim()) {
         const rel = a.arquivo.trim().replace(/^\/+/, '').replace(/^cerebro\//, '')
         if (rel.includes('..')) throw new ToolError('Caminho inválido.')
         const { data } = await admin.storage.from(BRAIN_BUCKET).download(`${brainRoot(caller.team.id)}/${rel}`)
@@ -1048,8 +1132,7 @@ const TOOLS: Tool[] = [
         file = { bytes: new Uint8Array(await data.arrayBuffer()), mime: data.type, name: rel.split('/').pop() ?? 'foto' }
         noCerebro = rel
       } else {
-        if (a.base64) throw new ToolError('Não aceito mais base64 (gasta a conversa). Foto do chat ou do computador: gere um link com sinfy_link_envio; depois use "arquivo".')
-        if (!a.url) throw new ToolError('Mande "arquivo" (do Cérebro) ou "url". Foto anexada no chat não chega aqui: gere um link com sinfy_link_envio.')
+        if (!a.url && !a.base64) throw new ToolError('Mande "arquivo" (do Cérebro), "url" ou "base64". Foto do computador da pessoa: gere um link com sinfy_link_envio.')
         file = await fetchFile({ admin, appUrl: APP_URL, fail: (m) => { throw new ToolError(m) } }, a, 15 * 1024 * 1024)
       }
       const info = sniff(file.bytes)
@@ -1203,6 +1286,8 @@ const TOOLS: Tool[] = [
         changed.add(post.id)
       }
       set.assets = await attachBrainImages(caller, `${found.folder}/${found.id}`, set.posts, set.assets ?? [])
+      const photos = await generateMissingPhotos(caller, `${found.folder}/${found.id}`, set.posts.filter((p) => changed.has(p.id)), set.assets)
+      set.assets = photos.assets
       set.updatedAt = Date.now()
       await writeJson(path, set)
       const index = (await readJson<Summary[]>(`${found.folder}/index.json`)) ?? []
@@ -1219,6 +1304,7 @@ const TOOLS: Tool[] = [
           ok: true,
           conjunto: found.id,
           feito: done,
+          ...photoNote(photos),
           ...(brandFixes.length ? { ajustado_para_a_marca: [...new Set(brandFixes)].slice(0, 12), regra_da_marca: 'Fontes e cores fora da marca foram trocadas pelas da marca. Use só as cores e fontes de sinfy_conta.' } : {}),
           posts: set.posts.map((p, i) => ({ post: i + 1, nome: p.name, slides: p.slides.length, legenda: p.caption })),
           previa: images.length ? 'Uma imagem por post mudado, com os slides lado a lado. Mostre à pessoa.' : undefined,
@@ -1408,7 +1494,7 @@ const PROMPTS = [
 
 const LIVRE_HELP = [
   'SLIDE LIVRE (para copiar uma referência com fidelidade, ou qualquer layout que os modelos não fazem): {"template":"livre","fundo":"#hex","camadas":[...]} em pixels do formato (4x5 = 1080×1350, 1x1 = 1080×1080, 9x16 = 1080×1920), de trás para a frente.',
-  'Camadas: {"tipo":"texto","texto","x","y","w","h"?,"fonte" (Google Fonts, ex. Inter, Archivo Black, Anton, Playfair Display),"peso" (100-900),"tamanho" (px),"cor","alinhamento" (left|center|right),"altura_linha" (1.0),"espaco_letras" (em, ex. -0.02),"maiusculas","italico","destaque_cor" (cor das *palavras* entre asteriscos)} · {"tipo":"forma","x","y","w","h","cor","cor2"? (degradê),"angulo"?,"raio"?,"borda"?,"borda_largura"?,"opacidade"?} · {"tipo":"imagem","x","y","w","h","arquivo" (Cérebro) | "url" | "prompt" (gerar no editor),"ajuste":"cover"|"contain","raio"?} · {"tipo":"grade","tamanho" (px entre linhas),"cor","espessura","opacidade"} (fundo quadriculado) · {"tipo":"pontos","tamanho","ponto","cor","opacidade"}. Também "opacidade" e "rotacao" em qualquer camada.',
+  'Camadas: {"tipo":"texto","texto","x","y","w","h"?,"fonte" (só as fontes da marca, de sinfy_conta; outra vira a da marca),"peso" (100-900),"tamanho" (px),"cor","alinhamento" (left|center|right),"altura_linha" (1.0),"espaco_letras" (em, ex. -0.02),"maiusculas","italico","destaque_cor" (cor das *palavras* entre asteriscos)} · {"tipo":"forma","x","y","w","h","cor","cor2"? (degradê),"angulo"?,"raio"?,"borda"?,"borda_largura"?,"opacidade"?} · {"tipo":"imagem","x","y","w","h","arquivo" (Cérebro) | "url" | "prompt" (descreva a foto: ela é gerada),"ajuste":"cover"|"contain","raio"?} · {"tipo":"grade","tamanho" (px entre linhas),"cor","espessura","opacidade"} (fundo quadriculado) · {"tipo":"pontos","tamanho","ponto","cor","opacidade"}. Também "opacidade" e "rotacao" em qualquer camada.',
   'Para copiar uma referência: abra com sinfy_referencia_ver, meça proporções (margens, tamanho da manchete em relação à largura, quebras de linha), monte o slide livre, veja o resultado com sinfy_criativo_ver e ajuste com sinfy_criativo_editar (refazer o slide) até ficar igual. Troque marca, logo e textos da outra empresa pelos da conta, se a pessoa não pedir o contrário.',
 ].join('\n')
 
@@ -1515,7 +1601,7 @@ async function handle(msg: Rpc, caller: Caller) {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } },
         serverInfo: SERVER,
-        instructions: `Você está conectado à conta "${caller.team.name}" na Sinfy e age como a pessoa da chave (só faz o que ela pode na tela). Se a pessoa falar de outra empresa ou cliente, veja sinfy_contas e passe "conta" (nome ou id) nas ferramentas; nunca misture dados ou marca de contas diferentes. Comece por sinfy_conta (empresa, Plano, marca). CRIATIVOS SÓ NA SINFY: todo post, carrossel, story, arte ou vídeo é criado e ajustado com sinfy_criativo_criar e sinfy_criativo_editar; nunca gere imagem, arte, mockup, HTML, SVG ou layout no chat (nem com o gerador de imagens do chat), nem como \"rascunho\" ou \"ideia visual\". Se a ferramenta falhar, diga o erro e tente de novo ou mande o link; não desenhe no lugar. Foto nova para o criativo: \"prompt\" na camada de imagem (gera no editor) ou sinfy_link_envio. MARCA SEMPRE: use só as cores e fontes da marca (sinfy_conta) e o logo dela; prefira os modelos prontos, que já saem na identidade; o slide livre é para copiar uma referência e também só aceita a marca (o que estiver fora vira a cor e a fonte mais próximas da marca). Texto curto por slide, nunca parede de texto. ECONOMIA: uma conversa por tarefa; não peça sinfy_criativo_ver depois de criar ou editar (a prévia já vem); nunca escreva arquivos em base64. Quadros, oportunidades (CRM), WhatsApp, formulários, dados, site, anúncios e as ferramentas de Instagram ficam em sinfy_mais. Em dúvida sobre como fazer algo, leia sinfy_ajuda (tópicos: post, pauta, crm, quadros, cerebro, instagram, dados). Regras: escreva no tom do Plano, sem inventar números, preços, depoimentos ou resultados. Para ajustar algo que já existe, edite (sinfy_criativo_editar, sinfy_conteudo_atualizar, sinfy_oportunidade_salvar, sinfy_quadro_editar); não crie outro. Publicar (sinfy_publicar), aprovar, mandar mensagem a cliente, fechar ou perder oportunidade e apagar pedem o "pode" explícito da pessoa: mostre antes e só então chame com confirmar. Sempre mostre à pessoa as imagens que as ferramentas devolvem e passe os links.`,
+        instructions: `Você está conectado à conta "${caller.team.name}" na Sinfy e age como a pessoa da chave (só faz o que ela pode na tela). Se a pessoa falar de outra empresa ou cliente, veja sinfy_contas e passe "conta" (nome ou id) nas ferramentas; nunca misture dados ou marca de contas diferentes. Comece por sinfy_conta (empresa, Plano, marca). CRIATIVOS SÓ NA SINFY: todo post, carrossel, story, arte ou vídeo é criado e ajustado com sinfy_criativo_criar e sinfy_criativo_editar; nunca monte a arte do post no chat (imagem do post pronto com texto, mockup, HTML, SVG ou layout), nem como \"rascunho\" ou \"ideia visual\". FOTOS são a exceção: gere a foto (sem texto) com o gerador de imagens do chat e mande à Sinfy com sinfy_criativo_foto (\"base64\"), no slide que espera foto. Se a ferramenta falhar, diga o erro e tente de novo ou mande o link; não desenhe no lugar. Fotos da pessoa: sinfy_link_envio. MARCA SEMPRE: use só as cores e fontes da marca (sinfy_conta) e o logo dela; prefira os modelos prontos, que já saem na identidade; o slide livre é para copiar uma referência e também só aceita a marca (o que estiver fora vira a cor e a fonte mais próximas da marca). Texto curto por slide, nunca parede de texto. ECONOMIA: uma conversa por tarefa; não peça sinfy_criativo_ver depois de criar ou editar (a prévia já vem). Quadros, oportunidades (CRM), WhatsApp, formulários, dados, site, anúncios e as ferramentas de Instagram ficam em sinfy_mais. Em dúvida sobre como fazer algo, leia sinfy_ajuda (tópicos: post, pauta, crm, quadros, cerebro, instagram, dados). Regras: escreva no tom do Plano, sem inventar números, preços, depoimentos ou resultados. Para ajustar algo que já existe, edite (sinfy_criativo_editar, sinfy_conteudo_atualizar, sinfy_oportunidade_salvar, sinfy_quadro_editar); não crie outro. Publicar (sinfy_publicar), aprovar, mandar mensagem a cliente, fechar ou perder oportunidade e apagar pedem o "pode" explícito da pessoa: mostre antes e só então chame com confirmar. Sempre mostre à pessoa as imagens que as ferramentas devolvem e passe os links.`,
       })
     }
     case 'ping':
