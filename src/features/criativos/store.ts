@@ -61,6 +61,17 @@ interface EditorState {
 
 let timer: ReturnType<typeof setTimeout> | undefined
 let coverTimer: ReturnType<typeof setTimeout> | undefined
+/**
+ * O salvamento em andamento. Um de cada vez: antes, uma edição durante o save abria um segundo save em paralelo e o
+ * `set.json` antigo podia chegar por último; e abrir o conjunto (Editor ↔ Motion) lia antes do save terminar,
+ * perdendo as últimas edições (revisão de 2026-11-13).
+ */
+let inflight: Promise<void> | undefined
+const settle = async () => {
+  while (inflight) await inflight
+}
+/** A abertura mais recente: a resposta de uma abertura anterior (A→B rápido) não entra. */
+let openSeq = 0
 
 export const useEditor = create<EditorState>()((set, get) => {
   /** As imagens do conjunto que ainda não estão carregadas (uma foto nova, um logo trocado). Só as que faltam: não redesenha à toa. */
@@ -96,18 +107,25 @@ export const useEditor = create<EditorState>()((set, get) => {
     saving: 'saved',
 
     open: async (id, projectId) => {
+      const ticket = ++openSeq
+      // O que estava aberto e não foi salvo sai antes (pega o conjunto agora, antes de limpar a tela)
+      const pending = get().flush()
       set({ status: 'loading', set: undefined, past: [], future: [], images: new Map(), saving: 'saved' })
       try {
+        await pending
+        await settle()
         let loaded = await loadSet(id, projectId)
+        if (ticket !== openSeq) return
         if (!loaded) return set({ status: 'missing' })
         // Posts pedidos pela IA de fora (MCP): monta na marca antes de abrir
         if (hasPending(loaded)) loaded = await materializePending(loaded)
+        if (ticket !== openSeq) return
         const post = loaded.posts[0]
         set({ set: loaded, status: 'ready', postId: post?.id, slideId: post?.slides[0]?.id, layerId: undefined, layerIds: [] })
         void get().ensureAssets()
       } catch (err) {
         console.error('[criativos]', err)
-        set({ status: 'error' })
+        if (ticket === openSeq) set({ status: 'error' })
       }
     },
     close: () => {
@@ -221,12 +239,27 @@ export const useEditor = create<EditorState>()((set, get) => {
 
     flush: async () => {
       clearTimeout(timer)
-      const { set: current, saving } = get()
-      if (!current || saving === 'saved' || saving === 'saving') return
-      set({ saving: 'saving' })
+      // Pega o conjunto já, sem esperar nada: quem fecha a tela limpa o estado logo depois desta chamada
+      const first = get()
+      let current = first.set
+      let needed = first.saving === 'dirty' || first.saving === 'error'
+      if (inflight) {
+        // Um save em andamento: espera e decide de novo com o estado de agora (se ainda é o mesmo conjunto)
+        await settle()
+        const now = get()
+        if (now.set && now.set.id === current?.id) {
+          current = now.set
+          needed = now.saving === 'dirty' || now.saving === 'error'
+        }
+      }
+      if (!current || !needed) return
+      set((s) => (s.set?.id === current!.id ? { saving: 'saving' } : {}))
+      let done!: () => void
+      inflight = new Promise<void>((resolve) => (done = resolve))
       try {
         await saveSet(current)
-        set((s) => ({ saving: s.set?.updatedAt === current.updatedAt ? 'saved' : 'dirty' }))
+        // Só o conjunto que continua aberto muda de estado (o que foi fechado não marca o próximo como sujo)
+        set((s) => (s.set?.id !== current!.id ? {} : { saving: s.set.updatedAt === current!.updatedAt ? 'saved' : 'dirty' }))
         // As capas das listas acompanham, sem pressa: uma vez quando a edição para
         clearTimeout(coverTimer)
         coverTimer = setTimeout(() => {
@@ -236,8 +269,17 @@ export const useEditor = create<EditorState>()((set, get) => {
       } catch (err) {
         console.error('[criativos] salvar', err)
         toast.error('Não consegui salvar o conjunto. Vou tentar de novo.')
-        set({ saving: 'error' })
-        timer = setTimeout(() => void get().flush(), 5000)
+        if (get().set?.id === current.id) {
+          set({ saving: 'error' })
+          timer = setTimeout(() => void get().flush(), 5000)
+        } else {
+          // A tela já fechou: tenta mais uma vez a última versão dele
+          const closed = current
+          setTimeout(() => void saveSet(closed).catch((e) => console.error('[criativos] salvar (fechado)', e)), 5000)
+        }
+      } finally {
+        inflight = undefined
+        done()
       }
     },
   }
