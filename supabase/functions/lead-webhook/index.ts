@@ -27,7 +27,12 @@ Deno.serve(async (request) => {
   const key = url.searchParams.get('key') ?? request.headers.get('x-lead-key') ?? ''
   if (!/^[0-9a-f]{64}$/.test(key)) return json({ error: 'Chave inválida.' }, 401)
 
-  const { data: hook } = await admin.from('crm_lead_hooks').select('team_id, enabled').eq('token', key).maybeSingle()
+  const { data: hook, error: hookError } = await admin.from('crm_lead_hooks').select('team_id, enabled').eq('token', key).maybeSingle()
+  // Banco fora do ar não é chave errada: 503 faz o site tentar de novo, em vez de perder o lead
+  if (hookError) {
+    console.error('crm_lead_hooks:', hookError.message)
+    return json({ error: 'Tente de novo em instantes.' }, 503)
+  }
   if (!hook || !hook.enabled) return json({ error: 'Chave inválida.' }, 401)
   const teamId = hook.team_id as string
 

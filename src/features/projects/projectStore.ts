@@ -197,13 +197,16 @@ export const useProject = (id: string | undefined) =>
  */
 export function useProjectList({ refresh = false } = {}): ListStatus {
   const userId = useAuth().user?.id
-  const status = useProjectStore((s) => (s.userId === userId ? s.status : 'loading'))
+  // A conta aberta também decide a lista: ao trocar de conta, a lista da anterior não pode ficar na tela
+  // (mesma regra do `load`: só conta a conta já carregada)
+  const teamId = useCrm((s) => (s.status === 'ready' ? s.team?.id : undefined))
+  const status = useProjectStore((s) => (s.userId === userId && s.accountId === teamId ? s.status : 'loading'))
 
   useEffect(() => {
     if (!userId) return
     const state = useProjectStore.getState()
-    if (refresh || state.userId !== userId || state.status === 'error') state.load(userId)
-  }, [userId, refresh])
+    if (refresh || state.userId !== userId || state.accountId !== teamId || state.status === 'error') state.load(userId)
+  }, [userId, teamId, refresh])
 
   return status
 }
