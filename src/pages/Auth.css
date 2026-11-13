@@ -1,0 +1,93 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;550;650&display=swap');
+
+/* Entrar / criar conta, na identidade da Sinfy (brands/sinfy/DESIGN.md e a /lp). Só vale dentro de .sa. */
+.sa {
+  --ink: #1c241f; --canvas: #f1f2ed; --surface: #fff; --line: #d9ddd4; --muted: #61695f;
+  --accent: #d2f525; --accent-hover: #bddb2e; --accent-ink: #526b28;
+  --dark: #171b19; --dark-raised: #242a26; --inverse: #f4f5ef; --on-dark-muted: #b8bfb5; --title-soft-dark: #98a590;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  display: grid; min-height: 100vh; background: var(--canvas); color: var(--ink);
+  font: 400 15px/1.55 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased; font-feature-settings: 'cv11', 'ss01';
+}
+@media (min-width: 1024px) { .sa { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); } }
+.sa ::selection { background: var(--accent); color: var(--ink); }
+.sa svg { stroke-width: 1.6; }
+
+/* Logo: símbolo + "sinfy." em Inter 650, ponto lima no escuro e verde-tinta no claro */
+.sa-wordmark { display: inline-flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 650; letter-spacing: -.055em; line-height: 1; color: var(--ink); }
+.sa-wordmark > svg { width: 30px; height: 30px; flex: none; }
+.sa-wordmark b { font-weight: inherit; color: var(--accent-ink); }
+.sa-wordmark--dark { color: var(--inverse); }
+.sa-wordmark--dark b { color: var(--accent); }
+
+/* Lateral escura: a oferta */
+.sa-aside { position: relative; display: none; flex-direction: column; justify-content: space-between; gap: 48px; overflow: hidden; padding: 48px 56px; background: var(--dark); color: var(--inverse); }
+@media (min-width: 1024px) { .sa-aside { display: flex; } }
+.sa-aside::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(rgb(244 245 239 / .07) 1px, transparent 1px); background-size: 24px 24px; mask-image: linear-gradient(to bottom, #000 40%, transparent); pointer-events: none; }
+.sa-aside > * { position: relative; }
+.sa-offer { display: grid; gap: 40px; max-width: 480px; }
+.sa-eyebrow { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 12px; font-weight: 500; color: var(--on-dark-muted); }
+.sa-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+.sa-title { margin: 20px 0 0; font-size: clamp(40px, 3.7vw, 56px); font-weight: 550; line-height: 1.04; letter-spacing: -.055em; text-wrap: balance; }
+.sa-title span { display: block; color: var(--title-soft-dark); }
+.sa-lead { margin: 20px 0 0; max-width: 420px; font-size: 17px; line-height: 1.55; color: var(--on-dark-muted); text-wrap: pretty; }
+
+/* Os três resultados: uma moldura grafite, filetes separando as linhas */
+.sa-outcomes { margin: 0; padding: 8px 20px; list-style: none; border-radius: 20px; background: var(--dark-raised); box-shadow: inset 0 0 0 1px rgb(244 245 239 / .08); }
+.sa-outcomes li { display: grid; grid-template-columns: 36px 1fr; gap: 14px; padding: 16px 0; }
+.sa-outcomes li + li { border-top: 1px solid rgb(244 245 239 / .08); }
+.sa-outcome-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: rgb(244 245 239 / .06); color: var(--inverse); }
+.sa-outcome-icon svg { width: 18px; height: 18px; }
+.sa-outcomes strong { display: block; font-size: 14px; font-weight: 550; letter-spacing: -.01em; color: var(--inverse); }
+.sa-outcomes p { margin: 2px 0 0; font-size: 14px; line-height: 1.5; color: var(--on-dark-muted); }
+.sa-foot { margin: 0; font-size: 12px; color: #737c70; }
+
+/* Formulário */
+.sa-main { display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+@media (min-width: 640px) { .sa-main { padding: 48px 40px; } }
+.sa-form-wrap { width: 100%; max-width: 380px; }
+.sa-mobile-head { display: grid; gap: 14px; margin-bottom: 40px; }
+@media (min-width: 1024px) { .sa-mobile-head { display: none; } }
+.sa-mobile-head p { margin: 0; font-size: 14px; color: var(--muted); }
+.sa-heading h1 { margin: 0; font-size: 32px; font-weight: 550; line-height: 1.1; letter-spacing: -.045em; }
+.sa-heading p { margin: 8px 0 0; font-size: 15px; color: var(--muted); text-wrap: pretty; }
+.sa-stack { display: grid; gap: 28px; }
+.sa-fields { display: grid; gap: 16px; }
+.sa-field-group { display: grid; gap: 6px; }
+.sa .sa-label { font-size: 13px; font-weight: 500; color: var(--ink); }
+
+/* Campos (por cima do Input do shadcn): canto de 14px, filete do papel, foco grafite com halo lima */
+.sa .sa-field { height: 52px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); padding-inline: 16px; font-size: 15px; color: var(--ink); box-shadow: none; transition-property: border-color, box-shadow; transition-duration: 150ms; transition-timing-function: var(--ease); }
+.sa .sa-field::placeholder { color: #9aa197; }
+.sa .sa-field:hover:not(:disabled) { border-color: #c4cabd; }
+.sa .sa-field:focus-visible { outline: none; border-color: var(--ink); box-shadow: 0 0 0 4px rgb(210 245 37 / .45); }
+.sa-password { position: relative; }
+.sa-password .sa-field { padding-right: 52px; }
+.sa-eye { position: absolute; top: 50%; right: 6px; translate: 0 -50%; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 10px; background: transparent; color: #8a9287; cursor: pointer; transition-property: color, background-color; transition-duration: 150ms; }
+.sa-eye:hover { color: var(--ink); background: #f1f2ed; }
+.sa-eye svg { width: 18px; height: 18px; }
+
+/* Botões em pílula, como na /lp; a lima só no botão da ação */
+.sa-button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; width: 100%; height: 52px; padding: 0 22px; border: 0; border-radius: 999px; font: inherit; font-size: 15px; font-weight: 550; letter-spacing: -.015em; cursor: pointer; transition-property: background-color, box-shadow, scale, opacity; transition-duration: 150ms; transition-timing-function: var(--ease); }
+.sa-button:active:not(:disabled) { scale: .96; }
+.sa-button:disabled { opacity: .6; cursor: default; }
+.sa-button:focus-visible, .sa-link:focus-visible { outline: 2px solid #567123; outline-offset: 3px; }
+.sa-button svg { width: 18px; height: 18px; }
+.sa-button--primary { justify-content: space-between; background: var(--accent); color: var(--ink); }
+.sa-button--primary:hover:not(:disabled) { background: var(--accent-hover); }
+.sa-button--google { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgb(24 37 27 / .04); }
+.sa-button--google:hover:not(:disabled) { box-shadow: 0 0 0 1px #c4cabd, 0 2px 6px rgb(24 37 27 / .06); }
+.sa-button--google svg { width: 20px; height: 20px; }
+
+.sa-divider { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); }
+.sa-divider::before, .sa-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.sa-error { margin: 0; padding: 10px 14px; border-radius: 14px; background: #fbeee9; color: #8d2c1c; font-size: 14px; }
+.sa-switch { margin: 0; text-align: center; font-size: 14px; color: var(--muted); }
+.sa-link { border: 0; background: none; padding: 0; font: inherit; font-weight: 550; color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 4px; cursor: pointer; transition: text-decoration-color 150ms; }
+.sa-link:hover { text-decoration-color: currentColor; }
+.sa-done-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: #e4e8dc; color: var(--accent-ink); }
+.sa-done-icon svg { width: 22px; height: 22px; }
+.sa-heading strong { color: var(--ink); font-weight: 550; }
+
+@media (prefers-reduced-motion: reduce) { .sa-button:active:not(:disabled) { scale: 1; } }

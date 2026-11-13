@@ -1,21 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import '@/styles/product.css';
+import './Auth.css';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { BellRing, CheckCircle, Eye, EyeOff, Loader2, MapPin, TrendingUp } from 'lucide-react';
+import { ArrowRight, BellRing, CheckCircle, Eye, EyeOff, Loader2, MapPin, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PhoneInput } from '@/components/ui/phone-input';
-import { cn } from '@/lib/utils';
+import { SinfyMark } from '@/features/sinfy/SinfyBrand';
 
 type Mode = 'login' | 'signup';
 
-const Logo = ({ dark }: { dark?: boolean }) => (
-  <div className={cn('flex items-center gap-2 text-lg font-bold tracking-tight', dark ? 'text-white' : 'text-gray-900')}>
-    <span className="h-3 w-3 rounded-[3px] bg-[#D2F525]" aria-hidden />
-    Sinfy
-  </div>
+/** O logo da Sinfy: símbolo + "sinfy." (ponto lima no escuro, verde-tinta no claro), como em brands/sinfy/DESIGN.md. */
+const Wordmark = ({ dark }: { dark?: boolean }) => (
+  <span className={dark ? 'sa-wordmark sa-wordmark--dark' : 'sa-wordmark'} aria-label="Sinfy">
+    <SinfyMark />
+    <span aria-hidden>
+      sinfy<b>.</b>
+    </span>
+  </span>
 );
 
 /** O que a Sinfy entrega (a mesma oferta da /lp): só o que o produto faz hoje. */
@@ -96,101 +98,92 @@ export default function Auth() {
   };
 
   return (
-    <div className="se-product se-auth grid min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-      <aside className="relative hidden flex-col justify-between overflow-hidden bg-[#09090B] p-12 text-white lg:flex">
-        <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '24px 24px' }} aria-hidden />
-        <div className="relative">
-          <Logo dark />
-        </div>
-        <div className="relative space-y-10">
-          <div className="space-y-5">
-            <p className="flex items-center gap-2 text-sm text-white/60">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#D2F525]" aria-hidden />
-              Instagram, anúncios, site, WhatsApp e CRM
-            </p>
-            <h2 className="max-w-md text-[2.75rem] font-semibold leading-[1.05] tracking-tight">
-              Do anúncio à venda, <span className="text-[#D2F525]">num lugar só.</span>
+    <div className="sa">
+      <aside className="sa-aside">
+        <Wordmark dark />
+        <div className="sa-offer">
+          <div>
+            <p className="sa-eyebrow">Instagram, anúncios, site, WhatsApp e CRM</p>
+            <h2 className="sa-title">
+              Do anúncio à venda,
+              <span>num lugar só.</span>
             </h2>
-            <p className="max-w-md text-base leading-relaxed text-white/60">
-              Veja qual campanha vira conversa, responda cada lead a tempo e mostre ao cliente o que virou negócio.
-            </p>
+            <p className="sa-lead">Veja qual campanha vira conversa, responda cada lead a tempo e mostre ao cliente o que virou negócio.</p>
           </div>
-          <ul className="max-w-md space-y-5">
+          <ul className="sa-outcomes">
             {OUTCOMES.map(({ icon: Icon, title, text }) => (
-              <li key={title} className="flex gap-4">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-[#D2F525]">
-                  <Icon className="h-4 w-4" aria-hidden />
+              <li key={title}>
+                <span className="sa-outcome-icon">
+                  <Icon aria-hidden />
                 </span>
-                <div className="space-y-0.5">
-                  <p className="text-sm font-medium text-white">{title}</p>
-                  <p className="text-sm leading-relaxed text-white/50">{text}</p>
+                <div>
+                  <strong>{title}</strong>
+                  <p>{text}</p>
                 </div>
               </li>
             ))}
           </ul>
         </div>
-        <p className="relative text-xs text-white/40">© Sinfy · Sites em Elementor, posts e vídeos na marca de cada cliente também moram aqui.</p>
+        <p className="sa-foot">© Sinfy · Sites em Elementor, posts e vídeos na marca de cada cliente também moram aqui.</p>
       </aside>
 
-      <main className="flex items-center justify-center bg-white px-5 py-10 sm:px-10">
-        <div className="w-full max-w-sm">
-          <div className="mb-10 space-y-3 lg:hidden">
-            <Logo />
-            <p className="text-sm text-gray-600">Do anúncio à venda, num lugar só: Instagram, anúncios, site, WhatsApp e CRM.</p>
+      <main className="sa-main">
+        <div className="sa-form-wrap">
+          <div className="sa-mobile-head">
+            <Wordmark />
+            <p>Do anúncio à venda, num lugar só: Instagram, anúncios, site, WhatsApp e CRM.</p>
           </div>
 
           {sent ? (
-            <div className="space-y-6">
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                <CheckCircle className="h-6 w-6" aria-hidden />
+            <div className="sa-stack">
+              <span className="sa-done-icon">
+                <CheckCircle aria-hidden />
               </span>
-              <div className="space-y-2">
-                <h1 className="text-2xl font-semibold text-gray-900">Confira seu email</h1>
-                <p className="text-sm text-gray-600">
-                  Enviamos um link de confirmação para <strong className="text-gray-900">{email}</strong>. Clique nele para ativar a conta e depois entre.
+              <div className="sa-heading">
+                <h1>Confira seu email</h1>
+                <p>
+                  Enviamos um link de confirmação para <strong>{email}</strong>. Clique nele para ativar a conta e depois entre.
                 </p>
               </div>
-              <Button
-                className="h-11 w-full"
+              <button
+                type="button"
+                className="sa-button sa-button--primary"
                 onClick={() => {
                   setSent(false);
                   switchMode('login');
                 }}
               >
                 Ir para o login
-              </Button>
+                <ArrowRight aria-hidden />
+              </button>
             </div>
           ) : (
-            <div className="space-y-7">
-              <div className="space-y-1.5">
-                <h1 className="text-2xl font-semibold text-gray-900">{signup ? 'Criar sua conta' : 'Bem-vindo de volta'}</h1>
-                <p className="text-sm text-gray-600">{signup ? 'Leva menos de um minuto. Depois você conecta Instagram, anúncios e site.' : 'Entre para ver seus leads, campanhas e conteúdos.'}</p>
+            <div className="sa-stack">
+              <div className="sa-heading">
+                <h1>{signup ? 'Criar sua conta' : 'Bem-vindo de volta'}</h1>
+                <p>{signup ? 'Leva menos de um minuto. Depois você conecta Instagram, anúncios e site.' : 'Entre para ver seus leads, campanhas e conteúdos.'}</p>
               </div>
 
-              <Button type="button" variant="outline" onClick={google} disabled={loading} className="h-11 w-full gap-3 border-gray-300 font-medium">
+              <button type="button" onClick={google} disabled={loading} className="sa-button sa-button--google">
                 <GoogleIcon />
                 Continuar com Google
-              </Button>
+              </button>
 
-              <div className="flex items-center gap-3 text-xs text-gray-400">
-                <span className="h-px flex-1 bg-gray-200" />
-                ou com email
-                <span className="h-px flex-1 bg-gray-200" />
-              </div>
+              <div className="sa-divider">ou com email</div>
 
-              <form onSubmit={submit} className="space-y-4" noValidate={false}>
-                <div className="space-y-1.5">
-                  <Label htmlFor="email" className="text-sm text-gray-700">
+              <form onSubmit={submit} className="sa-fields">
+                <div className="sa-field-group">
+                  <Label htmlFor="email" className="sa-label">
                     Email
                   </Label>
-                  <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} disabled={loading} placeholder="voce@empresa.com" className="h-11 border-gray-300" />
+                  <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} disabled={loading} placeholder="voce@empresa.com" className="sa-field" />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="password" className="text-sm text-gray-700">
+                <div className="sa-field-group">
+                  <Label htmlFor="password" className="sa-label">
                     Senha
                   </Label>
-                  <div className="relative">
+                  <div className="sa-password">
                     <Input
                       id="password"
                       type={show ? 'text' : 'password'}
@@ -201,38 +194,38 @@ export default function Auth() {
                       onChange={(e) => setPassword(e.target.value)}
                       disabled={loading}
                       placeholder={signup ? 'Pelo menos 6 caracteres' : 'Sua senha'}
-                      className="h-11 border-gray-300 pr-11"
+                      className="sa-field"
                     />
-                    <button type="button" onClick={() => setShow((v) => !v)} aria-label={show ? 'Esconder a senha' : 'Mostrar a senha'} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
-                      {show ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+                    <button type="button" onClick={() => setShow((v) => !v)} aria-label={show ? 'Esconder a senha' : 'Mostrar a senha'} className="sa-eye">
+                      {show ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
                     </button>
                   </div>
                 </div>
 
                 {signup && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="phone" className="text-sm text-gray-700">
+                  <div className="sa-field-group">
+                    <Label htmlFor="phone" className="sa-label">
                       Telefone
                     </Label>
-                    <PhoneInput value={phone} onChange={setPhone} disabled={loading} className="h-11 border-gray-300" />
+                    <PhoneInput id="phone" value={phone} onChange={setPhone} disabled={loading} className="sa-field" />
                   </div>
                 )}
 
                 {error && (
-                  <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                  <p role="alert" className="sa-error">
                     {error}
                   </p>
                 )}
 
-                <Button type="submit" disabled={loading} className="h-11 w-full font-medium">
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+                <button type="submit" disabled={loading} className="sa-button sa-button--primary" style={{ marginTop: 4 }}>
                   {signup ? 'Criar conta' : 'Entrar'}
-                </Button>
+                  {loading ? <Loader2 className="animate-spin" aria-hidden /> : <ArrowRight aria-hidden />}
+                </button>
               </form>
 
-              <p className="text-center text-sm text-gray-600">
+              <p className="sa-switch">
                 {signup ? 'Já tem conta?' : 'Ainda não tem conta?'}{' '}
-                <button type="button" onClick={() => switchMode(signup ? 'login' : 'signup')} className="font-semibold text-gray-900 underline-offset-4 hover:underline">
+                <button type="button" onClick={() => switchMode(signup ? 'login' : 'signup')} className="sa-link">
                   {signup ? 'Entrar' : 'Criar conta'}
                 </button>
               </p>
