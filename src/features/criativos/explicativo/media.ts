@@ -174,11 +174,12 @@ export const maskFor = (data: ExplainerData, frame: ImageBitmap | undefined) => 
 /** Um quadro do vídeo da pessoa, no máximo 1080 de largura (o que o motor desenha). */
 export const grab = (v: HTMLVideoElement) => (v.videoWidth > 1080 ? createImageBitmap(v, { resizeWidth: 1080, resizeHeight: Math.round((v.videoHeight * 1080) / v.videoWidth), resizeQuality: 'medium' }) : createImageBitmap(v))
 
-export async function explainerToMp4(scene: CodeScene, set: CreativeSet, images: ImageMap, opts: { onProgress?: (p: number) => void; signal?: AbortSignal } = {}): Promise<Blob> {
+/** `mixed`: outro áudio no lugar da mixagem completa (o pacote do Edits sai sem a trilha de fundo, `edits.ts`). */
+export async function explainerToMp4(scene: CodeScene, set: CreativeSet, images: ImageMap, opts: { onProgress?: (p: number) => void; signal?: AbortSignal; mixed?: AudioBuffer } = {}): Promise<Blob> {
   const data = scene.explainer!
   const voice = await loadVoice(set, data)
   const { width, height } = sizeOf(scene.format)
-  const mixed = await mixExplainer(usesVoice(data) ? voice?.data : undefined, data, scene.duration, await mixOptions(set, data))
+  const mixed = opts.mixed ?? (await mixExplainer(usesVoice(data) ? voice?.data : undefined, data, scene.duration, await mixOptions(set, data)))
   const segs = segments(data)
   const runner = runnerFor(scene, set, await sceneImages(scene, set, images))
   const video = voice && usesVideo(data) ? await openVideo(voice.url) : undefined

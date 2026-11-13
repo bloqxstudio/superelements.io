@@ -15,7 +15,7 @@ export const CREATIVE_EVENTS = {
 
 export interface CreativeCall {
   id: string
-  kind: 'edit' | 'plan' | 'image' | 'download' | 'capture' | 'copy' | 'copy-slides' | 'copy-plan' | 'agent' | 'story-plan' | 'reel' | 'voice' | 'voices' | 'transcribe' | 'media-search' | 'media-download' | 'clip' | 'voices-br' | 'voice-add' | 'video-agent'
+  kind: 'edit' | 'plan' | 'image' | 'download' | 'capture' | 'copy' | 'copy-slides' | 'copy-plan' | 'agent' | 'story-plan' | 'reel' | 'voice' | 'voices' | 'transcribe' | 'media-search' | 'media-download' | 'clip' | 'voices-br' | 'voice-add' | 'video-agent' | 'save-file'
   request: unknown
 }
 

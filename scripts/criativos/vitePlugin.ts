@@ -13,6 +13,7 @@ import { runVideoAgent, type VideoAgentRequest } from './videoAgent.ts'
 import { planFolder, type FolderPlanRequest } from '../copy/plan.ts'
 import { copyToSlides, type SlidesRequest } from '../copy/slides.ts'
 import { downloadImage } from './baixar.ts'
+import { saveEditsFile, type SaveFileRequest } from './edits.ts'
 import { downloadReel } from './reel.ts'
 import { elevenAddShared, elevenBrazilVoices, elevenVoices, speak, transcribeWords, type SpeakRequest } from './voz.ts'
 import { downloadMedia, generateClip, searchFreeImages } from './midia.ts'
@@ -176,6 +177,9 @@ export const criativos = (): Plugin => ({
               // Referência do vídeo explicativo: um link de reel por vez, baixado aqui pelo yt-dlp
               const url = String((call.request as { url?: string })?.url ?? '')
               send({ id, ok: true, data: await downloadReel(url, controller.signal, (detail) => server.ws.send(CREATIVE_EVENTS.progress, { id, step: 'reading', detail } satisfies CreativeProgress)) })
+            } else if (call.kind === 'save-file') {
+              // Pacote para o Edits: cada pedaço de arquivo gravado em ~/SuperElements/Edits/<pasta>/
+              send({ id, ok: true, data: saveEditsFile(call.request as SaveFileRequest) })
             } else if (call.kind === 'download') {
               send({ id, ok: true, data: await downloadImage(String((call.request as { url?: string })?.url ?? ''), controller.signal) })
             } else if (call.kind === 'capture') {

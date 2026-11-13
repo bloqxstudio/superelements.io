@@ -15,6 +15,7 @@ import { useAiAvailable } from './link'
 import { SceneEditPanel } from './SceneEditor'
 import { useVideoIara } from './videoIara'
 import { ScenePublish } from './ScenePublish'
+import { EditsButton } from './EditsButton'
 import { useIara } from '@/features/iara/store'
 import { sceneDataOf } from './sceneEdit'
 import { detectBeats, gridBeats } from './beats'
@@ -229,6 +230,7 @@ export const SceneStudio: React.FC = () => {
               <Download className="h-4 w-4" /> {progress !== null ? `Gerando… ${Math.round(progress * 100)}%` : 'Baixar MP4'}
             </Button>
           )}
+          {scene && <EditsButton set={set} scene={scene} sceneInput={sceneInput} disabled={!!error || progress !== null} />}
           {scene && (
             <Button size="sm" className="h-8 gap-1.5 bg-violet-600 hover:bg-violet-700" disabled={!!error} onClick={() => { setPlaying(false); setPublishing(true) }}>
               <Send className="h-4 w-4" /> Publicar reels

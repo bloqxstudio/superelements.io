@@ -186,6 +186,13 @@ async function listSets(caller: Caller) {
   return lists.flat().sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
+/** A pasta do vídeo no Mac para o Edits: o mesmo cálculo de `editsFolder` em `src/features/criativos/edits.ts`. */
+const editsFolder = (scene: { id: string; name: string }) => {
+  const base = scene.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50).replace(/-+$/, '')
+  const id = scene.id.toLowerCase().replace(/[^a-z0-9]/g, '')
+  return `${base || 'video'}-${id}`.slice(0, 80)
+}
+
 const setUrl = (id: string, projectId?: string, contentId?: string) => {
   const q = new URLSearchParams()
   if (projectId) q.set('projeto', projectId)
@@ -846,6 +853,40 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: 'sinfy_video_edits',
+    title: 'Levar um vídeo ao Edits',
+    description: 'Exporta as camadas de um vídeo dos Criativos para o Edits (Instagram): vídeo sem a música de fundo, versão sem legenda, voz.wav, efeitos.wav, legenda.srt, capa.jpg, post.txt e manifesto.json (cenas, palavras e trechos de fala para abaixar a música). O navegador gera e o conector grava em ~/SuperElements/Edits/<pasta>/ no Mac. Sem "video", lista os vídeos do conjunto. Com a tela do vídeo aberta, começa sozinho; senão, abra o link. Pronto quando manifesto.json aparecer na pasta com gerado_em depois de pedido_em (1 a 4 min).',
+    inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string', description: 'O conjunto (sinfy_criativos).' }, video: { type: 'string', description: 'Id ou nome do vídeo do conjunto.' }, projeto_id: { type: 'string' } }, additionalProperties: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    run: async (caller, a) => {
+      need(caller, 'criativos', 'Criativos')
+      const found = (await listSets(caller)).find((s) => s.id === a.id && (!a.projeto_id || s.projectId === a.projeto_id))
+      if (!found) throw new ToolError('Conjunto não encontrado nesta conta.')
+      const set = await readJson<{ name: string; scenes?: { id: string; name: string; duration: number; explainer?: unknown; caption?: string }[] }>(`${found.folder}/${found.id}/set.json`)
+      if (!set) throw new ToolError('Não consegui abrir o conjunto.')
+      const scenes = set.scenes ?? []
+      if (!scenes.length) throw new ToolError('Este conjunto não tem vídeos. Crie um no estúdio de vídeo (/motion).')
+      const list = scenes.map((s) => ({ id: s.id, nome: s.name, duracao: Math.round(s.duration * 10) / 10, tipo: s.explainer ? 'roteiro' : 'animacao' }))
+      const asked = typeof a.video === 'string' ? a.video.trim().toLowerCase() : ''
+      const scene = asked ? scenes.find((s) => s.id.toLowerCase() === asked || s.name.trim().toLowerCase() === asked) : scenes.length === 1 ? scenes[0] : undefined
+      if (!scene) {
+        if (asked) throw new ToolError(`Vídeo "${String(a.video)}" não encontrado. Vídeos do conjunto: ${list.map((v) => `${v.nome} (${v.id})`).join(', ')}.`)
+        return { conjunto: found.id, escolha_um: list, como: 'Chame de novo com "video" (id ou nome).' }
+      }
+      const pasta = `~/SuperElements/Edits/${editsFolder(scene)}`
+      const qs = new URLSearchParams({ id: scene.id, edits: '1', ...(found.projectId ? { projeto: found.projectId } : {}) })
+      return {
+        conjunto: found.id,
+        video: { id: scene.id, nome: scene.name, duracao: Math.round(scene.duration * 10) / 10, tipo: scene.explainer ? 'roteiro' : 'animacao' },
+        pasta,
+        pedido_em: new Date().toISOString(),
+        link: `${APP_URL}/motion/${found.id}/video?${qs}`,
+        arquivos: ['video.mp4', 'video-sem-legenda.mp4 (se tiver legenda)', 'voz.wav', 'efeitos.wav', 'legenda.srt', 'capa.jpg', 'post.txt', 'manifesto.json (por último)'],
+        como: `Se a tela deste vídeo estiver aberta no app, o pacote começa sozinho. Senão, peça à pessoa para abrir o link (com o conector ligado neste Mac grava na pasta; sem ele baixa um ZIP). Espere ${pasta}/manifesto.json com gerado_em depois de pedido_em e então leve os arquivos ao Edits. A música entra no Edits: abaixe-a nos trechos de "fala" do manifesto.`,
+      }
+    },
+  },
+  {
     name: 'sinfy_criativo_ver',
     title: 'Ver o criativo',
     description: 'Mostra as imagens de um post de um conjunto (padrão: o primeiro).',
@@ -1343,7 +1384,7 @@ PROMPTS.push(...skillPrompts())
 // ---------- ao vivo nas telas ----------
 
 /** Os campos que dizem ONDE a ferramenta mexe (nunca o conteúdo). */
-const WHERE_KEYS = ['id', 'conjunto', 'projeto_id', 'post', 'slide', 'quadro', 'tabela', 'nota', 'pasta', 'conteudo_id', 'como', 'quando']
+const WHERE_KEYS = ['id', 'conjunto', 'projeto_id', 'post', 'slide', 'quadro', 'tabela', 'nota', 'pasta', 'conteudo_id', 'como', 'quando', 'video']
 
 /**
  * Aviso no canal privado `mcp:<conta>` (migração 20261112160000), por `realtime.send` no banco: a tela aberta mostra o cursor da IA indo até

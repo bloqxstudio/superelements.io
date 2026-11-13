@@ -11,6 +11,7 @@ import { videoSupported } from '../video'
 import type { CodeScene, CreativeSet } from '../types'
 import { brandOfExplainer, clipFrame, clipVideos, explainerToMp4, grab, iconOfBeat, maskFor, loadVoice, mixOptions, openVideo, runnerFor, sceneImages, seek, usesVideo, usesVoice, type Voice } from './media'
 import { NewExplainer } from './NewExplainer'
+import { EditsButton } from '../EditsButton'
 import { PublishPanel, ScriptPanel, SpeechPanel, StylePanel } from './panels'
 import { mixExplainer } from './sfx'
 import { outBeats, outWords, segments, toSrc } from './timeline'
@@ -155,7 +156,8 @@ const Editor: React.FC<{ set: CreativeSet; scene: CodeScene }> = ({ set, scene }
             {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-px" />}
           </Button>
           <span className="text-xs tabular-nums text-gray-600">{fmt(time)} / {fmt(scene.duration)}</span>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1.5">
+            <EditsButton set={set} scene={scene} disabled={progress !== null} />
             <Button size="sm" className="h-8 gap-1.5" disabled={!videoSupported() || progress !== null} onClick={() => void download()} title={videoSupported() ? undefined : 'Use o Chrome ou o Edge atualizados'}>
               <Download className="h-4 w-4" /> {progress !== null ? `Gerando… ${Math.round(progress * 100)}%` : 'Baixar MP4'}
             </Button>

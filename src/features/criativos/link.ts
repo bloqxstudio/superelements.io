@@ -188,7 +188,7 @@ function callAiNow<T>(kind: CreativeCall['kind'], rawRequest: unknown, signal?: 
     // Sem nenhum passo vindo do outro lado, o conector provavelmente não conhece este pedido
     // Imagem não manda passos (leva até 1 minuto): só vale o limite total
     // Imagem, download e captura não mandam passos; a pesquisa lê a web por minutos entre um sinal e outro
-    const watch = kind !== 'image' && kind !== 'download' && kind !== 'capture' && kind !== 'reel' && kind !== 'voice' && kind !== 'voices' && kind !== 'transcribe' && kind !== 'media-search' && kind !== 'media-download' && kind !== 'voices-br' && kind !== 'voice-add'
+    const watch = kind !== 'image' && kind !== 'download' && kind !== 'capture' && kind !== 'reel' && kind !== 'voice' && kind !== 'voices' && kind !== 'transcribe' && kind !== 'media-search' && kind !== 'media-download' && kind !== 'voices-br' && kind !== 'voice-add' && kind !== 'save-file'
     let silence = watch ? setTimeout(() => fail(STALE_MESSAGE), SILENCE) : undefined
     const fail = (message: string) => {
       if (!pending.delete(id)) return
@@ -281,3 +281,6 @@ export const downloadReelViaLink = (url: string, signal?: AbortSignal) => callAi
 
 /** Fotografa uma página (HTML completo) com o navegador deste computador: a página inteira, em PNG (data URL). */
 export const capturePageViaLink = (html: string, width: number, signal?: AbortSignal) => callAi<{ data: string; width: number; height: number }>('capture', { html, width }, signal)
+
+/** Grava um pedaço de arquivo em ~/SuperElements/Edits/<pasta>/ neste computador (o pacote do Edits, `edits.ts`). */
+export const saveFileViaLink = (req: { pasta: string; nome: string; data: string; parte: number }, signal?: AbortSignal) => callAiQuiet<{ path: string; pasta: string }>('save-file', req, signal)

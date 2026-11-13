@@ -28,7 +28,7 @@ export async function audioOfSrc(src: string | undefined, assets: SetAsset[]): P
 }
 
 /** A trilha já cortada, no volume e com as entradas e saídas suaves, do tamanho exato do vídeo. */
-async function mixAudio(data: ArrayBuffer, audio: MotionAudio, total: number): Promise<AudioBuffer> {
+export async function mixAudio(data: ArrayBuffer, audio: MotionAudio, total: number): Promise<AudioBuffer> {
   const length = Math.max(1, Math.ceil(total * RATE))
   const ctx = new OfflineAudioContext(2, length, RATE)
   const buffer = await ctx.decodeAudioData(data.slice(0))
