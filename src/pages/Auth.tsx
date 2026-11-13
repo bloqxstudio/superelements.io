@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import '@/styles/product.css';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { BellRing, CheckCircle, Eye, EyeOff, Loader2, MapPin, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,13 @@ const Logo = ({ dark }: { dark?: boolean }) => (
     Sinfy
   </div>
 );
+
+/** O que a Sinfy entrega (a mesma oferta da /lp): só o que o produto faz hoje. */
+const OUTCOMES = [
+  { icon: MapPin, title: 'Cada contato com origem', text: 'Anúncio, post ou página do site: você sabe de onde veio antes de responder.' },
+  { icon: BellRing, title: 'O lead chega, o aviso também', text: 'Contato novo vai na hora para o WhatsApp da equipe, com nome e telefone.' },
+  { icon: TrendingUp, title: 'Resultado que o cliente entende', text: 'Quais campanhas viraram conversa e venda, num relatório só.' },
+];
 
 const GoogleIcon = () => (
   <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" aria-hidden>
@@ -95,24 +102,41 @@ export default function Auth() {
         <div className="relative">
           <Logo dark />
         </div>
-        <div className="relative space-y-8">
-          <div className="space-y-4">
-            <h2 className="max-w-md text-4xl font-semibold leading-[1.1] tracking-tight">
-              Seus sites em Elementor, <span className="text-[#D2F525]">num lugar só.</span>
+        <div className="relative space-y-10">
+          <div className="space-y-5">
+            <p className="flex items-center gap-2 text-sm text-white/60">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#D2F525]" aria-hidden />
+              Instagram, anúncios, site, WhatsApp e CRM
+            </p>
+            <h2 className="max-w-md text-[2.75rem] font-semibold leading-[1.05] tracking-tight">
+              Do anúncio à venda, <span className="text-[#D2F525]">num lugar só.</span>
             </h2>
-            <p className="max-w-md text-base text-white/60">Crie, edite e publique páginas de todos os seus clientes, com ou sem agente, sem abrir o painel de cada WordPress.</p>
+            <p className="max-w-md text-base leading-relaxed text-white/60">
+              Veja qual campanha vira conversa, responda cada lead a tempo e mostre ao cliente o que virou negócio.
+            </p>
           </div>
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl">
-            <video src="/sp3.mp4" autoPlay loop muted playsInline preload="auto" className="aspect-video w-full object-cover" />
-          </div>
+          <ul className="max-w-md space-y-5">
+            {OUTCOMES.map(({ icon: Icon, title, text }) => (
+              <li key={title} className="flex gap-4">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-[#D2F525]">
+                  <Icon className="h-4 w-4" aria-hidden />
+                </span>
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-white">{title}</p>
+                  <p className="text-sm leading-relaxed text-white/50">{text}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
-        <p className="relative text-xs text-white/40">© Sinfy</p>
+        <p className="relative text-xs text-white/40">© Sinfy · Sites em Elementor, posts e vídeos na marca de cada cliente também moram aqui.</p>
       </aside>
 
       <main className="flex items-center justify-center bg-white px-5 py-10 sm:px-10">
         <div className="w-full max-w-sm">
-          <div className="mb-10 lg:hidden">
+          <div className="mb-10 space-y-3 lg:hidden">
             <Logo />
+            <p className="text-sm text-gray-600">Do anúncio à venda, num lugar só: Instagram, anúncios, site, WhatsApp e CRM.</p>
           </div>
 
           {sent ? (
@@ -140,7 +164,7 @@ export default function Auth() {
             <div className="space-y-7">
               <div className="space-y-1.5">
                 <h1 className="text-2xl font-semibold text-gray-900">{signup ? 'Criar sua conta' : 'Bem-vindo de volta'}</h1>
-                <p className="text-sm text-gray-600">{signup ? 'Leva menos de um minuto.' : 'Entre para continuar na Sinfy.'}</p>
+                <p className="text-sm text-gray-600">{signup ? 'Leva menos de um minuto. Depois você conecta Instagram, anúncios e site.' : 'Entre para ver seus leads, campanhas e conteúdos.'}</p>
               </div>
 
               <Button type="button" variant="outline" onClick={google} disabled={loading} className="h-11 w-full gap-3 border-gray-300 font-medium">
