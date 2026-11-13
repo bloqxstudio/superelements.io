@@ -5,7 +5,8 @@ import { useCrm } from '@/features/crm/crmStore';
 import { workspaceTitle } from '@/features/navigation/workspace';
 import '@/styles/product.css';
 import { AppSidebar } from '@/components/AppSidebar';
-import { Logo } from '@/components/Logo';
+import { SinfyLogo } from '@/components/Logo';
+import { useSinfyTheme } from '@/lib/sinfyTheme';
 import { hasNews, useMenuBadges } from '@/features/crm/menuBadges';
 import { useRoutineScheduler } from '@/features/ia/rotinas';
 import { PreviewDrawer } from '@/features/operations/Preview';
@@ -92,6 +93,7 @@ const Layout: React.FC = () => {
 
   // Trocou de tela pelo menu do celular: ele fecha
   useEffect(() => setOpen(false), [pathname]);
+  useSinfyTheme();
   // A Iara saiu das telas (2026-11-12): a IA da pessoa entra pelo MCP. `?iara=1` religa neste navegador
   const [iara] = useState(iaraEnabled);
   const gutters = usePageGutters(mainRef, barRef, [pathname, collapsed, inProject, embedded, editorRoute]);
@@ -123,7 +125,7 @@ const Layout: React.FC = () => {
             {news && <span aria-hidden className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-violet-600 ring-2 ring-white" />}
           </button>
           <Link to="/" aria-label="Projetos" className="transition-opacity hover:opacity-80">
-            <Logo />
+            <SinfyLogo />
           </Link>
         </header>
 

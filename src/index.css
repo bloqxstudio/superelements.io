@@ -1,8 +1,48 @@
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Cores do Tailwind por variável (2026-11-13, a identidade da Sinfy no app): por padrão, os valores de sempre
+ * (formulários públicos, aprovações e prévias de clientes não mudam); com o app aberto (`html.se-sinfy`, ligado pelo
+ * Layout), os cinzas viram os neutros esverdeados da Sinfy e o violeta dos destaques vira o verde-tinta da marca.
+ */
+@layer base {
+  :root {
+    --c-gray-50: 249 250 251; --c-gray-100: 243 244 246; --c-gray-200: 229 231 235; --c-gray-300: 209 213 219; --c-gray-400: 156 163 175; --c-gray-500: 107 114 128; --c-gray-600: 75 85 99; --c-gray-700: 55 65 81; --c-gray-800: 31 41 55; --c-gray-900: 17 24 39; --c-gray-950: 3 7 18;
+    --c-zinc-50: 250 250 250; --c-zinc-100: 244 244 245; --c-zinc-200: 228 228 231; --c-zinc-300: 212 212 216; --c-zinc-400: 161 161 170; --c-zinc-500: 113 113 122; --c-zinc-600: 82 82 91; --c-zinc-700: 63 63 70; --c-zinc-800: 39 39 42; --c-zinc-900: 24 24 27; --c-zinc-950: 9 9 11;
+    --c-violet-50: 245 243 255; --c-violet-100: 237 233 254; --c-violet-200: 221 214 254; --c-violet-300: 196 181 253; --c-violet-400: 167 139 250; --c-violet-500: 139 92 246; --c-violet-600: 124 58 237; --c-violet-700: 109 40 217; --c-violet-800: 91 33 182; --c-violet-900: 76 29 149; --c-violet-950: 46 16 101;
+  }
+  html.se-sinfy {
+    --c-gray-50: 247 248 244; --c-gray-100: 238 240 233; --c-gray-200: 223 227 217; --c-gray-300: 203 209 196; --c-gray-400: 154 161 151; --c-gray-500: 115 124 112; --c-gray-600: 90 99 88; --c-gray-700: 67 75 66; --c-gray-800: 43 50 45; --c-gray-900: 28 36 31; --c-gray-950: 23 27 25;
+    --c-zinc-50: 247 248 244; --c-zinc-100: 238 240 233; --c-zinc-200: 223 227 217; --c-zinc-300: 203 209 196; --c-zinc-400: 154 161 151; --c-zinc-500: 115 124 112; --c-zinc-600: 90 99 88; --c-zinc-700: 67 75 66; --c-zinc-800: 43 50 45; --c-zinc-900: 28 36 31; --c-zinc-950: 23 27 25;
+    --c-violet-50: 246 249 232; --c-violet-100: 236 243 207; --c-violet-200: 221 235 166; --c-violet-300: 198 221 108; --c-violet-400: 163 191 63; --c-violet-500: 126 154 47; --c-violet-600: 94 122 37; --c-violet-700: 78 102 34; --c-violet-800: 62 81 29; --c-violet-900: 47 61 23; --c-violet-950: 27 36 13;
+  }
+  html.se-sinfy {
+    --background: 72 12% 93%;
+    --foreground: 140 12% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 140 12% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 140 12% 13%;
+    --secondary: 80 14% 92%;
+    --secondary-foreground: 140 12% 13%;
+    --muted: 80 14% 92%;
+    --muted-foreground: 105 5% 39%;
+    --accent: 80 14% 92%;
+    --accent-foreground: 140 12% 13%;
+    --border: 90 10% 86%;
+    --input: 90 10% 86%;
+    --ring: 83 46% 29%;
+  }
+  /* Os pesos da Inter na marca: títulos em 550, ênfase em 650 */
+  html.se-sinfy .font-semibold { font-weight: 550; }
+  html.se-sinfy .font-bold { font-weight: 650; }
+  html.se-sinfy ::selection { background: #d2f525; color: #1c241f; }
+}
+
 
 @layer base {
   :root {

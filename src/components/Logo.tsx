@@ -14,3 +14,16 @@ export const Logo: React.FC<LogoProps> = ({ className = "h-11" }) => {
 
   );
 };
+
+/**
+ * O logo inteiro da Sinfy: símbolo + "sinfy." em Inter 650, minúsculo e apertado, com o ponto verde-tinta
+ * (no claro a lima some). Ver brands/sinfy/DESIGN.md.
+ */
+export const SinfyLogo: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <span className={`inline-flex items-center gap-2 text-[19px] font-[650] leading-none tracking-[-0.055em] text-[#1c241f] ${className}`} aria-label="Sinfy">
+    <Logo />
+    <span aria-hidden>
+      sinfy<span className="text-[#526b28]">.</span>
+    </span>
+  </span>
+);

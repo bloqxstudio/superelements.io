@@ -6,7 +6,7 @@ import { navigationMatches } from '@/features/navigation/workspace'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { areaPaths, type AreaId } from '@/features/navigation/AreaTabs'
 import { Activity, Bookmark, Bot, Brain, Building2, CalendarRange, Filter, House, Building, Globe, ListChecks, Images, Instagram, Megaphone, Palette, PenLine, Presentation, KanbanSquare, LayoutTemplate, LogOut, MessageCircle, Radar, ScanSearch, Send, Sparkles, Users, Wand2, X } from 'lucide-react'
-import { Logo } from '@/components/Logo'
+import { Logo, SinfyLogo } from '@/components/Logo'
 import { PersonAvatar } from '@/features/profile/PersonAvatar'
 import { useAuth } from '@/contexts/AuthContext'
 import { AccountSwitcher } from '@/features/crm/AccountSwitcher'
@@ -396,7 +396,7 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
           </button>
         ) : <>
         <Link to={crm ? '/inicio' : '/'} aria-label={crm ? 'Início' : 'Sites'} className="transition-opacity hover:opacity-80">
-          <Logo />
+          <SinfyLogo />
         </Link>
         {onToggleCollapsed && (
           <button type="button" onClick={onToggleCollapsed} aria-label="Recolher menu" title="Recolher menu" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900">
