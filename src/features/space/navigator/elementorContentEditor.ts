@@ -15,9 +15,6 @@ export type ContentPatch =
 
 const isRecord = (value: unknown): value is JsonRecord => !!value && typeof value === 'object' && !Array.isArray(value)
 
-export const isEditableWidget = (element: SectionElement | null | undefined): element is EditableWidget =>
-  !!element && ['heading', 'text-editor', 'button', 'image', 'html'].includes(element.widgetType ?? '')
-
 export function findElement(elements: SectionElement[] | null, elementId: string): SectionElement | null {
   for (const element of elements ?? []) {
     if (element.id === elementId) return element
@@ -76,15 +73,4 @@ export function updateElementContent(json: string, elementId: string, patch: Con
   } catch {
     return null
   }
-}
-
-export const stringSetting = (element: SectionElement, key: string) => {
-  const settings = isRecord(element.settings) ? element.settings : {}
-  return typeof settings[key] === 'string' ? settings[key] : ''
-}
-
-export const nestedStringSetting = (element: SectionElement, key: string, nestedKey: string) => {
-  const settings = isRecord(element.settings) ? element.settings : {}
-  const nested = isRecord(settings[key]) ? settings[key] : {}
-  return typeof nested[nestedKey] === 'string' ? nested[nestedKey] : ''
 }

@@ -61,9 +61,6 @@ export function sectionBrand(brand: Brand | null, motion: SectionMotion | undefi
   return { ...brand, layers: { ...brand.layers, motion: spec } }
 }
 
-export const sameMotion = (a: SectionMotion | undefined, b: SectionMotion | undefined) =>
-  JSON.stringify(a ?? { source: 'brand' }) === JSON.stringify(b ?? { source: 'brand' })
-
 // ---------------------------------------------------------------------------
 // Movimento de cada peça
 
@@ -118,19 +115,6 @@ const HOVER_LABELS: Record<string, string> = { lift: 'sobe', grow: 'cresce', shr
 export const entranceLabel = (name: string) => ENTRANCE_LABELS[name] ?? name
 export const hoverLabel = (name: string) => HOVER_LABELS[name] ?? name
 
-/** "fade subindo · 700ms · +90ms · hover sobe" */
-export function motionText(m: MotionState | null): string {
-  if (!m) return 'sem movimento'
-  return [
-    m.entrance && entranceLabel(m.entrance),
-    m.entrance && `${m.duration}ms`,
-    m.entrance && m.delay > 0 && `+${m.delay}ms`,
-    m.hover && `hover ${hoverLabel(m.hover)}`,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-}
-
 /** Rótulo curto para o marcador no canvas. */
 export function motionTag(m: MotionState): string {
   if (!m.entrance) return `hover ${hoverLabel(m.hover!)}`
@@ -168,40 +152,6 @@ export function motionMarks(elements: LevelElement[]): { id: string; label: stri
     if (m && el.id) marks.push({ id: String(el.id), label: motionTag(m) })
   })
   return marks
-}
-
-// ---------------------------------------------------------------------------
-// Textos do painel
-
-export const ENTRANCE_OPTIONS: { value: NonNullable<MotionSpec['entrance']>; label: string }[] = [
-  { value: 'fade-up', label: 'Fade subindo' },
-  { value: 'fade', label: 'Fade' },
-  { value: 'fade-down', label: 'Fade descendo' },
-  { value: 'slide-up', label: 'Deslizar para cima' },
-  { value: 'zoom', label: 'Zoom' },
-  { value: 'none', label: 'Sem entrada' },
-]
-
-export const EASING_OPTIONS: { value: string; label: string }[] = [
-  { value: EASE_OUT, label: 'Suave (desacelera no fim)' },
-  { value: 'ease-out', label: 'ease-out' },
-  { value: 'ease-in-out', label: 'ease-in-out' },
-  { value: 'linear', label: 'linear' },
-]
-
-const SPEC_ENTRANCE: Record<string, string> = { none: 'sem entrada', fade: 'fade', 'fade-up': 'fade subindo', 'fade-down': 'fade descendo', 'slide-up': 'deslizar para cima', zoom: 'zoom' }
-
-/** "fade subindo · 700ms · 90ms entre peças · hover sobe" */
-export function motionSpecText(spec: MotionSpec): string {
-  const moves = spec.entrance && spec.entrance !== 'none'
-  return [
-    spec.entrance && SPEC_ENTRANCE[spec.entrance],
-    moves && spec.duration && `${spec.duration}ms`,
-    moves && spec.stagger && `${spec.stagger}ms entre peças`,
-    spec.hover && spec.hover !== 'none' && `hover ${hoverLabel(spec.hover)}`,
-  ]
-    .filter(Boolean)
-    .join(' · ')
 }
 
 /** Selo do nó no canvas quando a seção não segue o movimento da marca. */

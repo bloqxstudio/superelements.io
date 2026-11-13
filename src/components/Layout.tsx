@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Link, Outlet, useLocation, useMatch } from 'react-router-dom';
+import React, { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Link, useLocation, useMatch } from 'react-router-dom';
 import { ChevronRight, Menu } from 'lucide-react';
 import { useCrm } from '@/features/crm/crmStore';
 import { workspaceTitle } from '@/features/navigation/workspace';
@@ -10,9 +10,12 @@ import { hasNews, useMenuBadges } from '@/features/crm/menuBadges';
 import { useRoutineScheduler } from '@/features/ia/rotinas';
 import { PreviewDrawer } from '@/features/operations/Preview';
 import { GuardedOutlet } from '@/features/crm/GuardedOutlet';
-import { IaraPanel } from '@/features/iara/IaraPanel';
+import { lazyNamed } from '@/lib/lazyPage';
 import { iaraEnabled } from '@/features/mcp/connect';
 import { McpHost } from '@/features/mcp/McpHost';
+
+// A Iara só abre com `?iara=1` (2026-11-12): o código dela não vem na primeira tela
+const IaraPanel = lazyNamed(() => import('@/features/iara/IaraPanel'), 'IaraPanel');
 
 /**
  * Telas da conta: menu lateral com Produção e CRM (no celular, uma barra com
@@ -98,7 +101,7 @@ const Layout: React.FC = () => {
     return (
       <div className="se-product se-project" style={embedded ? undefined : { paddingRight: 'var(--iara-dock, 0px)' }}>
         <GuardedOutlet />
-        {!embedded && iara && <IaraPanel />}
+        {!embedded && iara && <Suspense fallback={null}><IaraPanel /></Suspense>}
         {!embedded && <McpHost />}
       </div>
     );
@@ -138,7 +141,7 @@ const Layout: React.FC = () => {
           <GuardedOutlet />
         </main>
         <PreviewDrawer />
-        {iara && <IaraPanel />}
+        {iara && <Suspense fallback={null}><IaraPanel /></Suspense>}
         <McpHost />
       </div>
     </div>

@@ -34,9 +34,6 @@ function segmenter(): Promise<ImageSegmenter | undefined> {
   return loading
 }
 
-/** Já começa a baixar o modelo (ao abrir um vídeo com o estilo de recorte). */
-export const warmMask = () => void segmenter()
-
 /**
  * A máscara da pessoa no quadro: um ImageBitmap do mesmo formato do quadro (MASK_W de largura), branco
  * com o alfa = chance de ser a pessoa. Sem MediaPipe, devolve undefined e o motor desenha sem recorte.

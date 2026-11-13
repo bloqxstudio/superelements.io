@@ -65,5 +65,6 @@ export async function zipFiles(files: { name: string; blob: Blob }[]): Promise<B
   end.setUint16(10, files.length, true)
   end.setUint32(12, size, true)
   end.setUint32(16, offset, true)
-  return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' })
+  // Os bytes são sempre de ArrayBuffer comum (nunca SharedArrayBuffer); o TS 5.7 só não consegue provar isso
+  return new Blob([...parts, ...central, end.buffer] as BlobPart[], { type: 'application/zip' })
 }

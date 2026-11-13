@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client'
 import type { Json } from '@/integrations/supabase/types'
 import { DEFAULT_SETTINGS, type FunnelSettings, type Opportunity, type Stage } from '@/features/prospects/funnel'
 import { loadPipeline, useCrm } from './crmStore'
-import { clientFromLead } from './opportunities'
+import { clientFromLead, newOpportunity } from './opportunities'
 import type { ClientSource } from './types'
 
 /**
@@ -98,7 +98,7 @@ async function importFunnel(teamId: string, pipelineId: string, result: ImportRe
   const projects = await visibleProjects([...new Set(funnel.flatMap((o) => (o.build?.projectId ? [o.build.projectId] : [])))])
   const missing = funnel.filter((o) => !already.has(keyOf(o)))
   for (const part of chunks(missing)) {
-    const { error } = await supabase.from('crm_opportunities').insert(
+    const { error } = await supabase.from('crm_opportunities').insert(newOpportunity(
       part.map((o) => ({
         pipeline_id: pipelineId,
         client_id: clients.get(keyOf(o))!,
@@ -119,7 +119,7 @@ async function importFunnel(teamId: string, pipelineId: string, result: ImportRe
         created_at: o.createdAt,
         updated_at: o.updatedAt,
       }))
-    )
+    ))
     if (error) throw error
     result.opportunities += part.length
   }
@@ -190,7 +190,7 @@ async function importOldLeads(teamId: string, pipelineId: string, result: Import
   const already = await opportunityKeys(pipelineId, leads.map((l) => keyOf(l.id)))
   const missing = leads.filter((l) => !already.has(keyOf(l.id)))
   if (missing.length) {
-    const { error: oppError } = await supabase.from('crm_opportunities').insert(
+    const { error: oppError } = await supabase.from('crm_opportunities').insert(newOpportunity(
       missing.map((l) => ({
         pipeline_id: pipelineId,
         client_id: clients.get(keyOf(l.id))!,
@@ -202,7 +202,7 @@ async function importOldLeads(teamId: string, pipelineId: string, result: Import
         created_at: l.created_at,
         updated_at: l.updated_at,
       }))
-    )
+    ))
     if (oppError) throw oppError
     result.opportunities += missing.length
   }

@@ -10,7 +10,7 @@
  * As 5 checagens são heurísticas locais, inspiradas no que detectores públicos olham. Não são
  * GPTZero nem nenhum outro, não chamam serviço nenhum e não prometem o veredito deles.
  */
-import { clamp, fold, mean, NUMBER, PROPER, pstdev, round1, rx } from './texto.ts'
+import { clamp, mean, NUMBER, PROPER, pstdev, round1, rx } from './texto.ts'
 
 interface Entry {
   find: string
@@ -294,9 +294,3 @@ export function humanizeReport(text: string) {
   const depois = detect(h.texto)
   return { ...h, antes, depois }
 }
-
-/** Só a família, para o resumo. */
-export const lexiconFamilies = () => [...new Set(LEXICON.map((e) => e.family))]
-export const lexiconSize = () => LEXICON.length
-/** Palavra a conferir no léxico (para testes e para a tela). */
-export const inLexicon = (word: string) => LEXICON.some((e) => fold(e.find) === fold(word))

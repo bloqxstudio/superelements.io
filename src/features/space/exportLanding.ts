@@ -5,7 +5,7 @@ import { formatElementorClipboard } from '@/utils/directElementorExtractor'
 import { copyToClipboardEnhanced } from '@/utils/enhancedRobustClipboard'
 import { useSpaceStore } from '@/store/spaceStore'
 import { buildLandingPage } from './landingPage'
-import { applyMediaReplacements, collectImageUrls, dropCustomImageSizes, type MediaReplacement } from './pageImages'
+import { applyMediaReplacements, dropCustomImageSizes, type MediaReplacement } from './pageImages'
 import { getSiteKit } from '@/features/wordpress/siteKitStore'
 import { isFromSite, renderKit } from './renderKit'
 import { getActiveBrand } from './brand/brandStore'
@@ -23,9 +23,6 @@ const emptyPageError = (name: string) => toast.error(`A página ${name} não tem
 
 const skippedNote = (skipped: number) =>
   skipped ? ` ${skipped} seção(ões) sem JSON válido ficaram de fora.` : ''
-
-/** Imagens da página (sem id, a ativa), sem repetição. */
-export const landingImageUrls = (pageId?: string) => collectImageUrls(buildPage(pageId).elements)
 
 interface CopyOptions {
   /** Página a copiar; sem ela vai a ativa. */

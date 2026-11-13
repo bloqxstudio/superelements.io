@@ -19,8 +19,6 @@ export const ToolbarIsland: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ 
   />
 )
 
-export const ToolDivider: React.FC = () => <div aria-hidden className="mx-1 h-5 w-px shrink-0 bg-gray-200" />
-
 interface ToolButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: LucideIcon
   /** Nome do botão; vira o texto ao lado do ícone e o nome acessível quando ele fica só com o ícone. */

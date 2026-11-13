@@ -1,5 +1,4 @@
-import React from 'react';
-import { Toaster } from "@/components/ui/toaster";
+import { Suspense } from 'react';
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -8,98 +7,111 @@ import Layout from "@/components/Layout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import Auth from "@/pages/Auth";
-import NotFound from "@/pages/NotFound";
-import Projects from "@/pages/Projects";
-import Home from "@/pages/Home";
-import ProjectSpace from "@/pages/ProjectSpace";
-import { AccountWizard } from "@/features/onboarding/AccountWizard";
-import Agents from "@/pages/Agents";
-import AgentSetup from "@/pages/AgentSetup";
-import AgentWorker from "@/pages/AgentWorker";
-import Prospects from "@/pages/Prospects";
-import Skills from "@/pages/Skills";
-import Creatives from "@/pages/Creatives";
-import Motion from "@/pages/Motion";
-import CodeSites from "@/pages/sites/CodeSites";
-import SiteEditor from "@/pages/sites/SiteEditor";
-import Copy from "@/pages/Copy";
-import Boards from "@/pages/Boards";
-import ModuleHome from "@/pages/ModuleHome";
-import References from "@/pages/References";
-import { BoardRoute } from "@/features/quadros/BoardRoute";
-import { CreativeEditor } from "@/features/criativos/Editor";
-import { MotionStudio } from "@/features/criativos/MotionStudio";
-import { VideoStudio } from "@/features/criativos/VideoStudio";
-import { ToVideoStudio } from "@/features/criativos/ToVideoStudio";
-import { CopyEditorPage } from "@/features/copy/CopyEditorPage";
-import WordPressCallback from "@/pages/WordPressCallback";
-import PageApproval from "@/pages/PageApproval";
-import ProjectInvite from "@/pages/ProjectInvite";
-import TeamInvite from "@/pages/TeamInvite";
-import PublicForm from "@/pages/PublicForm";
-import EnviarFotos from "@/pages/EnviarFotos";
-import CrmOpportunities from "@/pages/crm/Opportunities";
-import CrmClients from "@/pages/crm/Clients";
-import CrmClientDetail from "@/pages/crm/ClientDetail";
-import CrmTeam from "@/pages/crm/Team";
-import Profile from "@/pages/Profile";
-import CrmAccounts from "@/pages/crm/Accounts";
-import CrmSocial from "@/pages/crm/Social";
-import CrmDiagnosis from "@/pages/crm/Diagnosis";
-import CrmInstagram from "@/pages/crm/Instagram";
-import CrmAnuncios from "@/pages/crm/Anuncios";
-import CrmOperacao from "@/pages/crm/Operacao";
-import CrmSite from "@/pages/crm/Site";
-import CrmWhatsApp from "@/pages/crm/WhatsApp";
-import CrmFlows from "@/pages/crm/Flows";
-import CrmForms from "@/pages/crm/Forms";
-import CrmFormEditor from "@/pages/crm/FormEditor";
-import CrmPlan from "@/pages/crm/Plan";
-import CrmContents from "@/pages/crm/Contents";
-import CrmContentDetail from "@/pages/crm/ContentDetail";
-import CrmPauta from "@/pages/crm/Pauta";
-import PautaApproval from "@/pages/PautaApproval";
-import ProductSuggestions from "@/pages/ProductSuggestions";
-import Cerebro from "@/pages/Cerebro";
-import CrmFunnels from "@/pages/crm/Funnels";
-import CrmFunnelDetail from "@/pages/crm/FunnelDetail";
-import InstagramCallback from "@/pages/InstagramCallback";
-import { ConnectInstagram, ConnectInstagramReturn, comesFromLink } from "@/pages/ConnectInstagram";
-import AdsCallback from "@/pages/AdsCallback";
-import { ConnectAds, ConnectAdsReturn } from "@/pages/ConnectAds";
-import { comesFromAdsLink } from "@/features/crm/ads";
 import { CrmGate } from "@/features/crm/CrmGate";
-import MenuzitoModel from "@/pages/MenuzitoModel";
-import MenuzitoStyleGuide from "@/pages/MenuzitoStyleGuide";
-import UglyCashModel from "@/pages/UglyCashModel";
-import UglyCashStyleGuide from "@/pages/UglyCashStyleGuide";
-import UglyCashElementorPreview from "@/pages/UglyCashElementorPreview";
-import ZeloStyleGuide from "@/pages/ZeloStyleGuide";
-import ZeloElementorPreview from "@/pages/ZeloElementorPreview";
-import ProcessBaseElementorPreview from "@/pages/ProcessBaseElementorPreview";
-import ProcessBaseTemplatePreview from "@/pages/ProcessBaseTemplatePreview";
-import { createProcessBaseBragaProposalTemplate } from "@/features/space/processbaseBragaProposalTemplate";
-import { createProcessBaseLinksTemplate } from "@/features/space/processbaseLinksTemplate";
-import InpelElementorPreview from "@/pages/InpelElementorPreview";
-import JuniorElementorPreview from "@/pages/JuniorElementorPreview";
-import LeoSchererElementorPreview from "@/pages/LeoSchererElementorPreview";
-import LeoSchererStyleGuide from "@/pages/LeoSchererStyleGuide";
-import LeoSchererRedesign from "@/pages/LeoSchererRedesign";
-import MsaStyleGuide from "@/pages/MsaStyleGuide";
-import { createMsaTemplate } from "@/features/space/msaTemplate";
-import SuperElementsLanding from "@/pages/SuperElementsLanding";
-import ProductLanding from "@/pages/ProductLanding";
-import DesignSystem from "@/pages/DesignSystem";
+import { comesFromAdsLink, comesFromLink } from "@/features/crm/connectLinks";
+import { lazyNamed, lazyPage } from "@/lib/lazyPage";
+import type { LandingTemplate } from "@/features/space/landingTemplates";
+
+// Cada tela é um arquivo JS próprio, baixado quando a rota abre (antes o app inteiro, 5,5 MB, vinha na
+// primeira tela, inclusive nos links públicos de formulário e aprovação). Ver `src/lib/lazyPage.ts`.
+const Auth = lazyPage(() => import("@/pages/Auth"));
+const NotFound = lazyPage(() => import("@/pages/NotFound"));
+const Projects = lazyPage(() => import("@/pages/Projects"));
+const Home = lazyPage(() => import("@/pages/Home"));
+const ProjectSpace = lazyPage(() => import("@/pages/ProjectSpace"));
+const AccountWizard = lazyNamed(() => import("@/features/onboarding/AccountWizard"), "AccountWizard");
+const Agents = lazyPage(() => import("@/pages/Agents"));
+const AgentSetup = lazyPage(() => import("@/pages/AgentSetup"));
+const AgentWorker = lazyPage(() => import("@/pages/AgentWorker"));
+const Prospects = lazyPage(() => import("@/pages/Prospects"));
+const Skills = lazyPage(() => import("@/pages/Skills"));
+const Creatives = lazyPage(() => import("@/pages/Creatives"));
+const Motion = lazyPage(() => import("@/pages/Motion"));
+const CodeSites = lazyPage(() => import("@/pages/sites/CodeSites"));
+const SiteEditor = lazyPage(() => import("@/pages/sites/SiteEditor"));
+const Copy = lazyPage(() => import("@/pages/Copy"));
+const Boards = lazyPage(() => import("@/pages/Boards"));
+const ModuleHome = lazyPage(() => import("@/pages/ModuleHome"));
+const References = lazyPage(() => import("@/pages/References"));
+const BoardRoute = lazyNamed(() => import("@/features/quadros/BoardRoute"), "BoardRoute");
+const CreativeEditor = lazyNamed(() => import("@/features/criativos/Editor"), "CreativeEditor");
+const MotionStudio = lazyNamed(() => import("@/features/criativos/MotionStudio"), "MotionStudio");
+const VideoStudio = lazyNamed(() => import("@/features/criativos/VideoStudio"), "VideoStudio");
+const ToVideoStudio = lazyNamed(() => import("@/features/criativos/ToVideoStudio"), "ToVideoStudio");
+const CopyEditorPage = lazyNamed(() => import("@/features/copy/CopyEditorPage"), "CopyEditorPage");
+const WordPressCallback = lazyPage(() => import("@/pages/WordPressCallback"));
+const PageApproval = lazyPage(() => import("@/pages/PageApproval"));
+const ProjectInvite = lazyPage(() => import("@/pages/ProjectInvite"));
+const TeamInvite = lazyPage(() => import("@/pages/TeamInvite"));
+const PublicForm = lazyPage(() => import("@/pages/PublicForm"));
+const EnviarFotos = lazyPage(() => import("@/pages/EnviarFotos"));
+const CrmOpportunities = lazyPage(() => import("@/pages/crm/Opportunities"));
+const CrmClients = lazyPage(() => import("@/pages/crm/Clients"));
+const CrmClientDetail = lazyPage(() => import("@/pages/crm/ClientDetail"));
+const CrmTeam = lazyPage(() => import("@/pages/crm/Team"));
+const Profile = lazyPage(() => import("@/pages/Profile"));
+const CrmAccounts = lazyPage(() => import("@/pages/crm/Accounts"));
+const CrmSocial = lazyPage(() => import("@/pages/crm/Social"));
+const CrmDiagnosis = lazyPage(() => import("@/pages/crm/Diagnosis"));
+const CrmInstagram = lazyPage(() => import("@/pages/crm/Instagram"));
+const CrmAnuncios = lazyPage(() => import("@/pages/crm/Anuncios"));
+const CrmOperacao = lazyPage(() => import("@/pages/crm/Operacao"));
+const CrmSite = lazyPage(() => import("@/pages/crm/Site"));
+const CrmWhatsApp = lazyPage(() => import("@/pages/crm/WhatsApp"));
+const CrmFlows = lazyPage(() => import("@/pages/crm/Flows"));
+const CrmForms = lazyPage(() => import("@/pages/crm/Forms"));
+const CrmFormEditor = lazyPage(() => import("@/pages/crm/FormEditor"));
+const CrmPlan = lazyPage(() => import("@/pages/crm/Plan"));
+const CrmContents = lazyPage(() => import("@/pages/crm/Contents"));
+const CrmContentDetail = lazyPage(() => import("@/pages/crm/ContentDetail"));
+const CrmPauta = lazyPage(() => import("@/pages/crm/Pauta"));
+const PautaApproval = lazyPage(() => import("@/pages/PautaApproval"));
+const ProductSuggestions = lazyPage(() => import("@/pages/ProductSuggestions"));
+const Cerebro = lazyPage(() => import("@/pages/Cerebro"));
+const CrmFunnels = lazyPage(() => import("@/pages/crm/Funnels"));
+const CrmFunnelDetail = lazyPage(() => import("@/pages/crm/FunnelDetail"));
+const InstagramCallback = lazyPage(() => import("@/pages/InstagramCallback"));
+const ConnectInstagram = lazyNamed(() => import("@/pages/ConnectInstagram"), "ConnectInstagram");
+const ConnectInstagramReturn = lazyNamed(() => import("@/pages/ConnectInstagram"), "ConnectInstagramReturn");
+const AdsCallback = lazyPage(() => import("@/pages/AdsCallback"));
+const ConnectAds = lazyNamed(() => import("@/pages/ConnectAds"), "ConnectAds");
+const ConnectAdsReturn = lazyNamed(() => import("@/pages/ConnectAds"), "ConnectAdsReturn");
+const SuperElementsLanding = lazyPage(() => import("@/pages/SuperElementsLanding"));
+const ProductLanding = lazyPage(() => import("@/pages/ProductLanding"));
+const DesignSystem = lazyPage(() => import("@/pages/DesignSystem"));
+
+// Vitrines dos modelos de clientes (guias de estilo e prévias do Elementor): fora do app, cada uma no seu arquivo
+const MenuzitoModel = lazyPage(() => import("@/pages/MenuzitoModel"));
+const MenuzitoStyleGuide = lazyPage(() => import("@/pages/MenuzitoStyleGuide"));
+const UglyCashModel = lazyPage(() => import("@/pages/UglyCashModel"));
+const UglyCashStyleGuide = lazyPage(() => import("@/pages/UglyCashStyleGuide"));
+const UglyCashElementorPreview = lazyPage(() => import("@/pages/UglyCashElementorPreview"));
+const ZeloStyleGuide = lazyPage(() => import("@/pages/ZeloStyleGuide"));
+const ZeloElementorPreview = lazyPage(() => import("@/pages/ZeloElementorPreview"));
+const ProcessBaseElementorPreview = lazyPage(() => import("@/pages/ProcessBaseElementorPreview"));
+const InpelElementorPreview = lazyPage(() => import("@/pages/InpelElementorPreview"));
+const JuniorElementorPreview = lazyPage(() => import("@/pages/JuniorElementorPreview"));
+const LeoSchererElementorPreview = lazyPage(() => import("@/pages/LeoSchererElementorPreview"));
+const LeoSchererStyleGuide = lazyPage(() => import("@/pages/LeoSchererStyleGuide"));
+const LeoSchererRedesign = lazyPage(() => import("@/pages/LeoSchererRedesign"));
+const MsaStyleGuide = lazyPage(() => import("@/pages/MsaStyleGuide"));
+const templatePreview = (load: () => Promise<() => LandingTemplate>, label: string, defaultWidth?: number) =>
+  lazyPage(async () => {
+    const [{ default: Preview }, create] = await Promise.all([import("@/pages/ProcessBaseTemplatePreview"), load()]);
+    return { default: () => <Preview create={create} label={label} defaultWidth={defaultWidth} /> };
+  });
+const ProcessBaseBragaPreview = templatePreview(() => import("@/features/space/processbaseBragaProposalTemplate").then((m) => m.createProcessBaseBragaProposalTemplate), "ProcessBase · Proposta Braga · Elementor nativo");
+const ProcessBaseLinksPreview = templatePreview(() => import("@/features/space/processbaseLinksTemplate").then((m) => m.createProcessBaseLinksTemplate), "ProcessBase · Cartão de links · Elementor nativo", 390);
+const MsaElementorPreview = templatePreview(() => import("@/features/space/msaTemplate").then((m) => m.createMsaTemplate), "MSA · Homepage V4 · Elementor nativo");
 
 function App() {
   return (
     <TooltipProvider>
-      <Toaster />
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
           <ErrorBoundary>
+            <Suspense fallback={null}>
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/login" element={<Auth />} />
@@ -131,8 +143,8 @@ function App() {
               <Route path="/zelo-style-guide" element={<ZeloStyleGuide />} />
               <Route path="/zelo-elementor-preview" element={<ZeloElementorPreview />} />
               <Route path="/processbase-elementor-preview" element={<ProcessBaseElementorPreview />} />
-              <Route path="/processbase-proposta-braga" element={<ProcessBaseTemplatePreview create={createProcessBaseBragaProposalTemplate} label="ProcessBase · Proposta Braga · Elementor nativo" />} />
-              <Route path="/processbase-links" element={<ProcessBaseTemplatePreview create={createProcessBaseLinksTemplate} label="ProcessBase · Cartão de links · Elementor nativo" defaultWidth={390} />} />
+              <Route path="/processbase-proposta-braga" element={<ProcessBaseBragaPreview />} />
+              <Route path="/processbase-links" element={<ProcessBaseLinksPreview />} />
               <Route path="/inpel-elementor-preview" element={<InpelElementorPreview />} />
               <Route path="/junior-elementor-preview" element={<JuniorElementorPreview />} />
               <Route path="/leoscherer-style-guide" element={<LeoSchererStyleGuide />} />
@@ -140,7 +152,7 @@ function App() {
               <Route path="/leoscherer-redesign" element={<LeoSchererRedesign />} />
               <Route path="/leoscherer-redesign-proposta" element={<LeoSchererRedesign proposal />} />
               <Route path="/msa-style-guide" element={<MsaStyleGuide />} />
-              <Route path="/msa-elementor-preview" element={<ProcessBaseTemplatePreview create={createMsaTemplate} label="MSA · Homepage V4 · Elementor nativo" />} />
+              <Route path="/msa-elementor-preview" element={<MsaElementorPreview />} />
               <Route path="/superelements" element={<SuperElementsLanding />} />
               <Route path="/lp" element={<ProductLanding />} />
               <Route path="/design-system" element={<DesignSystem />} />
@@ -223,6 +235,7 @@ function App() {
 
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </Suspense>
             <MediaViewer />
           </ErrorBoundary>
         </AuthProvider>

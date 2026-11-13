@@ -62,8 +62,6 @@ export interface BeatSheet {
   notas: string[]
   loop: boolean
 }
-
-export const timecode = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0').replace('.', ',')}`
 const sec = (s: number) => `${s.toFixed(1).replace('.', ',')} s`
 
 export function beatSheet(raw: string, opts: { ppm?: number; alvo?: number } = {}): BeatSheet | null {

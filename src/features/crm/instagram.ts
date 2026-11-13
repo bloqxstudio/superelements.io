@@ -1,3 +1,4 @@
+import { LINK_KEY } from './connectLinks'
 import { supabase } from '@/integrations/supabase/client'
 import { publicAppUrl } from '@/features/approval/shares'
 import { EMPHASIS_FONT, loadFont, loadImage, loadVideo, slideToBlob, type ImageMap } from '@/features/criativos/render'
@@ -278,7 +279,7 @@ export const finishConnect = (code: string, state: string) => call<Connected>('c
 // ---------- link para o cliente conectar ----------
 
 /** Onde a página pública do link guarda o segredo enquanto a pessoa está no Instagram. */
-export const LINK_KEY = 'ig-link-conexao'
+export { LINK_KEY } from './connectLinks'
 export const LINK_PATH = '/conectar/instagram'
 
 export interface ConnectLink {

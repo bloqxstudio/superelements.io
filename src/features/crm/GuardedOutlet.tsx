@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { Suspense, useEffect } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCrm } from './crmStore'
@@ -28,7 +28,10 @@ export const GuardedOutlet: React.FC = () => {
   const keepAcrossAccounts = pathname === '/contas/nova'
   const screen = (
     <React.Fragment key={keepAcrossAccounts ? 'assistente' : (teamId ?? 'sem-conta')}>
-      <Outlet />
+      {/* A tela chega sob demanda (rotas em lazy); o menu e a moldura ficam enquanto ela baixa */}
+      <Suspense fallback={<div className="se-route-loading" aria-busy="true" />}>
+        <Outlet />
+      </Suspense>
     </React.Fragment>
   )
   return module ? <ModuleGate module={module}>{screen}</ModuleGate> : screen

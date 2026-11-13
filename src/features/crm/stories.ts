@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
-import type { Json } from '@/integrations/supabase/types'
+import type { Json, TablesUpdate } from '@/integrations/supabase/types'
 import type { PostPlan } from '@/features/criativos/plan'
 import type { StoryIdea, StoryPillar } from './storyPlan'
 
@@ -322,19 +322,19 @@ export interface StoryPatch {
 }
 
 export async function updateStory(id: string, patch: StoryPatch): Promise<Story> {
-  const row: Record<string, unknown> = {}
+  const row: TablesUpdate<'crm_stories'> = {}
   if (patch.status !== undefined) row.status = patch.status
   if (patch.publishAt !== undefined) row.publish_at = new Date(patch.publishAt).toISOString()
   if (patch.accountId !== undefined) row.account_id = patch.accountId
   if (patch.pillar !== undefined) row.pillar = patch.pillar.slice(0, 40)
   if (patch.title !== undefined) row.title = patch.title.slice(0, 200)
-  if (patch.idea !== undefined) row.idea = patch.idea
-  if (patch.plan !== undefined) row.plan = patch.plan
-  if (patch.review !== undefined) row.review = patch.review
+  if (patch.idea !== undefined) row.idea = patch.idea as unknown as Json
+  if (patch.plan !== undefined) row.plan = patch.plan as unknown as Json
+  if (patch.review !== undefined) row.review = patch.review as unknown as Json
   if (patch.setId !== undefined) row.set_id = patch.setId
   if (patch.setProjectId !== undefined) row.set_project_id = patch.setProjectId
   if (patch.postId !== undefined) row.post_id = patch.postId
-  if (patch.frames !== undefined) row.frames = patch.frames
+  if (patch.frames !== undefined) row.frames = patch.frames as unknown as Json
   if (patch.attempts !== undefined) row.attempts = patch.attempts
   if (patch.nextTryAt !== undefined) row.next_try_at = patch.nextTryAt === null ? null : new Date(patch.nextTryAt).toISOString()
   if (patch.error !== undefined) row.error = patch.error

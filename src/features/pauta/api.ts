@@ -152,8 +152,6 @@ export async function setContentTags(id: string, tagIds: string[]): Promise<Cont
   return toContent(Array.isArray(row) ? row[0] : row)
 }
 
-export const contentFromRow = (row: unknown) => toContent(row as ContentRow)
-
 export async function scheduleContent(c: Content, date: string | null, time: string | null, channel: string | null): Promise<Content> {
   const row = await rpc<ContentRow | ContentRow[]>('crm_content_schedule', { p_id: c.id, p_expected: c.version, p_date: date, p_time: date && time ? time : null, p_channel: channel || null })
   return toContent(Array.isArray(row) ? row[0] : row)

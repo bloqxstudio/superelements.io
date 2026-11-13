@@ -236,7 +236,4 @@ export const createBuilder = (prefix: string) => {
 
 export const NAV: Array<[string, string]> = [['#operacao', 'Operação ao vivo'], ['#solucoes', 'Plataforma'], ['#por-que', 'Para agências'], ['#planos', 'Planos']]
 
-/** Endereço do app: o "Entrar" e as chamadas levam ao login. */
-export const APP_AUTH = 'https://app.avencestudio.com/auth'
-
 export const TELA = (name: string) => `.space/sinfy/build/telas/${name}.webp`

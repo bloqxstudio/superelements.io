@@ -10,10 +10,7 @@ export type DayPeriod = `dia:${string}`
 /** `2026-10-30` ou `2026-10-25~2026-10-31` */
 export type DaySpan = string
 
-const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
 const SPAN_RE = /^(\d{4}-\d{2}-\d{2})(?:~(\d{4}-\d{2}-\d{2}))?$/
-
-export const isDayKey = (value: unknown): value is string => typeof value === 'string' && DAY_RE.test(value)
 export const isDaySpan = (value: unknown): value is DaySpan => {
   if (typeof value !== 'string') return false
   const m = SPAN_RE.exec(value)
@@ -37,18 +34,6 @@ export function spanBounds(span: DaySpan): { from: string; to: string } {
 export const isSingleDay = (span: DaySpan) => !span.includes('~')
 /** Último dia do trecho */
 export const spanEnd = (span: DaySpan) => spanBounds(span).to
-/** Quantos dias o trecho tem */
-export function spanLength(span: DaySpan) {
-  const { from, to } = spanBounds(span)
-  return Math.round((dayStart(to).getTime() - dayStart(from).getTime()) / 86_400_000) + 1
-}
-/** Os dias do trecho, em ordem */
-export function spanDays(span: DaySpan) {
-  const { from, to } = spanBounds(span)
-  const out: string[] = []
-  for (let key = from; key <= to && out.length < 1200; key = addDays(key, 1)) out.push(key)
-  return out
-}
 /** Da meia-noite do primeiro dia à meia-noite depois do último (local) */
 export function spanRange(span: DaySpan) {
   const { from, to } = spanBounds(span)

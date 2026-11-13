@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client'
-import type { Json } from '@/integrations/supabase/types'
+import type { Json, TablesUpdate } from '@/integrations/supabase/types'
 import type { Lead } from '@/features/prospects/types'
 import { crmContext } from './crmStore'
 import type { Activity, ActivityKind, Client, ClientPatch, ClientSource, ClientStatus, Contact, ContactDraft } from './types'
@@ -72,7 +72,7 @@ export const domainOf = (website: string | undefined) => {
 }
 
 const columnsOf = (patch: ClientPatch) => {
-  const row: Record<string, unknown> = {}
+  const row: TablesUpdate<'crm_clients'> = {}
   for (const [key, column] of [
     ['name', 'name'],
     ['document', 'document'],
@@ -167,7 +167,7 @@ const toContact = (row: ContactRow): Contact => ({
 })
 
 const contactColumns = (draft: Partial<ContactDraft>) => {
-  const row: Record<string, unknown> = {}
+  const row: TablesUpdate<'crm_contacts'> = {}
   if ('name' in draft) row.name = draft.name?.trim()
   for (const key of ['role', 'phone', 'whatsapp', 'email', 'notes'] as const) if (key in draft) row[key] = clean(draft[key])
   if ('primary' in draft) row.is_primary = Boolean(draft.primary)

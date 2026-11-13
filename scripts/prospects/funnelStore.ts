@@ -2,6 +2,7 @@ import type { Stage } from '../../src/features/prospects/funnel.ts'
 import { draftOffer } from '../../src/features/prospects/offer.ts'
 import type { Lead } from '../../src/features/prospects/types.ts'
 import { cloudClient, crmTarget } from './cloud.ts'
+import type { Json, TablesInsert } from '../../src/integrations/supabase/types.ts'
 
 /**
  * O funil da equipe pelo terminal (`--site`, `--fila`): as oportunidades do
@@ -74,7 +75,7 @@ export const addToFunnel = async (leads: Lead[], meta: { region: string; searchI
     let clientId = (found as { id: string } | null)?.id
     if (clientId) {
       // Quem já é cliente fica com o cadastro como está; só a leitura do site se atualiza
-      const { error } = await db.from('crm_clients').update({ lead }).eq('id', clientId)
+      const { error } = await db.from('crm_clients').update({ lead: lead as unknown as Json }).eq('id', clientId)
       if (error) throw error
     } else {
       const { data, error } = await db
@@ -94,7 +95,7 @@ export const addToFunnel = async (leads: Lead[], meta: { region: string; searchI
           source: 'prospeccao',
           status: 'lead',
           prospect_key: lead.id,
-          lead,
+          lead: lead as unknown as Json,
         })
         .select('id')
         .single()
@@ -117,7 +118,8 @@ export const addToFunnel = async (leads: Lead[], meta: { region: string; searchI
     const { offer, brief } = draftOffer(lead)
     const { data, error } = await db
       .from('crm_opportunities')
-      .insert({ pipeline_id: pipelineId, client_id: clientId, key: lead.id, stage: meta.stage ?? 'mapeado', offer, brief, search_id: meta.searchId ?? null, region: meta.region })
+      // team_id vem do funil pelo gatilho crm_opportunity_rules (o tipo gerado pede a coluna NOT NULL)
+      .insert({ pipeline_id: pipelineId, client_id: clientId, key: lead.id, stage: meta.stage ?? 'mapeado', offer: offer as unknown as Json, brief: brief as unknown as Json, search_id: meta.searchId ?? null, region: meta.region } as TablesInsert<'crm_opportunities'>)
       .select('id')
       .single()
     if (error) throw error

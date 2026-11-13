@@ -120,11 +120,3 @@ export const ConnectInstagramReturn: React.FC = () => {
   return <Done username={result.username} team={result.team} />
 }
 
-/** Quem volta pelo link não tem sessionStorage de login: decide qual retorno mostrar. */
-export const comesFromLink = () => {
-  try {
-    return !!sessionStorage.getItem(LINK_KEY)
-  } catch {
-    return false
-  }
-}

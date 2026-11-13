@@ -165,5 +165,3 @@ export function pasteClip(text: string | undefined, force = false): Clip['kind']
 
 /** Há algo copiado deste conjunto para colar. */
 export const hasClip = () => !!clip && clip.setId === useEditor.getState().set?.id
-
-export const clipLabel = (kind: Clip['kind']) => LABEL[kind]

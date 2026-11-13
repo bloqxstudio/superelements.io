@@ -100,7 +100,6 @@ const DEALBREAKERS: Array<[RegExp, string]> = [
 
 export const HOOK_CHECKS = ['TAMANHO', 'CONCRETO', 'TENSAO', 'FRENTE', 'PUBLICO'] as const
 export type HookCheck = (typeof HOOK_CHECKS)[number]
-export const HOOK_CHECK_LABEL: Record<HookCheck, string> = { TAMANHO: 'Tamanho', CONCRETO: 'Concreto', TENSAO: 'Tensão', FRENTE: 'O forte na frente', PUBLICO: 'Fala com alguém' }
 
 const PER_SECOND = 2.7 // ~160 palavras por minuto, falado
 

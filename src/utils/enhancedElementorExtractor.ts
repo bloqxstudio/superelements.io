@@ -392,17 +392,11 @@ const analyzeAvailableData = (responseData: any): void => {
   });
 };
 
-/**
- * Generate unique Elementor element ID
- */
-const generateElementorId = (): string => {
-  return Math.random().toString(36).substr(2, 7);
-};
 
 /**
  * Format extracted elements for Elementor clipboard
  */
-export const formatForElementorClipboard = (
+const formatForElementorClipboard = (
   elements: ElementorElement[],
   siteUrl: string
 ): string => {
@@ -538,25 +532,4 @@ export const extractLocalElementorData =(component: any): ElementorElement[] | n
   }
   
   return null;
-};
-
-/**
- * Enhanced error message generator
- */
-export const getEnhancedErrorMessage = (error: Error | null, debugInfo: any): string => {
-  if (!error) return 'Unknown error occurred';
-  
-  const message = error.message.toLowerCase();
-  
-  if (message.includes('401') || message.includes('authentication')) {
-    return 'WordPress authentication failed. Please check your username and application password in connection settings.';
-  } else if (message.includes('404')) {
-    return 'Component not found. The post may have been deleted or moved.';
-  } else if (message.includes('403') || message.includes('access denied')) {
-    return 'Access denied. Your WordPress user account may not have permission to access this content.';
-  } else if (message.includes('network') || message.includes('fetch')) {
-    return 'Network connection failed. Please check your internet connection and try again.';
-  }
-  
-  return `Failed to extract component: ${error.message}`;
 };

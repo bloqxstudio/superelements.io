@@ -1,4 +1,3 @@
-import { parseColor } from '../brand/color'
 import { readDims } from '../brand/apply/elementor'
 import { elementLabel, pairElements, settingsOf, type LevelElement } from './elements'
 
@@ -20,12 +19,6 @@ export interface ElementDiff {
   id: string
   label: string
   changes: PropChange[]
-}
-
-export interface ColorSwap {
-  from: string | null
-  to: string
-  count: number
 }
 
 /**
@@ -111,31 +104,3 @@ export function diffTag(diff: ElementDiff): string {
   return `${first.prop} ${first.after}${more}`
 }
 
-const normalize = (value: string) => value.trim().toLowerCase()
-
-function collectSwaps(before: unknown, after: unknown, key: string, out: Map<string, ColorSwap>) {
-  if (isObj(after)) {
-    const b = isObj(before) ? before : {}
-    for (const k of Object.keys(after)) if (k !== '__globals__') collectSwaps(b[k], after[k], k, out)
-    return
-  }
-  if (typeof after !== 'string' || !/color/i.test(key) || !parseColor(after)) return
-  const from = typeof before === 'string' && parseColor(before) ? normalize(before) : null
-  const to = normalize(after)
-  if (from === to) return
-  const id = `${from}>${to}`
-  const swap = out.get(id)
-  if (swap) swap.count++
-  else out.set(id, { from, to, count: 1 })
-}
-
-/** Trocas de cor da seção, agrupadas: "#ffffff → #f3f0e9 (12×)". */
-export function colorSwaps(before: LevelElement[], after: LevelElement[]): ColorSwap[] {
-  const out = new Map<string, ColorSwap>()
-  pairElements(before, after, (b, a) => {
-    const sb = settingsOf(b) ?? {}
-    const sa = settingsOf(a) ?? {}
-    for (const key of Object.keys(sa)) if (!RESPONSIVE.test(key)) collectSwaps(sb[key], sa[key], key, out)
-  })
-  return [...out.values()].sort((x, y) => y.count - x.count)
-}

@@ -1,3 +1,4 @@
+import { ADS_LINK_KEY } from './connectLinks'
 import { supabase } from '@/integrations/supabase/client'
 import { publicAppUrl } from '@/features/approval/shares'
 import { dayKey, isDayPeriod, spanOfPeriod, spanShort, type DayPeriod } from '@/lib/day'
@@ -683,7 +684,7 @@ export function boostMetaLabel(status: string | undefined): { label: string; ton
 // ---------- link para o cliente ----------
 
 /** Onde a página pública do link guarda o segredo enquanto o cliente está no Facebook. */
-export const ADS_LINK_KEY = 'ads-link-conexao'
+export { ADS_LINK_KEY } from './connectLinks'
 export const ADS_LINK_PATH = '/conectar/anuncios'
 
 export interface AdsConnectLink {
@@ -732,11 +733,4 @@ export const finishAdsLinkConnect = (token: string, code: string, state: string)
 
 export const chooseAdsLinkAccounts = (token: string, pendingId: string, accountIds: string[]) => call<{ team: string; accounts: string[] }>('link_choose', { token, pendingId, accountIds })
 
-/** Quem volta do Facebook pelo link não tem login aqui: decide qual retorno mostrar. */
-export const comesFromAdsLink = () => {
-  try {
-    return !!sessionStorage.getItem(ADS_LINK_KEY)
-  } catch {
-    return false
-  }
-}
+

@@ -21,9 +21,6 @@ export interface ProjectSummary {
  */
 export type ProjectRole = 'owner' | 'editor' | 'admin'
 
-/** Só o dono convida e exclui (sem papel: projeto antigo, criado pela própria conta). */
-export const isProjectOwner = (project: { role?: ProjectRole } | undefined) => !!project && project.role !== 'editor' && project.role !== 'admin'
-
 /** Um projeto por cliente: nome, contexto e o resumo do que está no canvas. */
 export interface Project {
   id: string

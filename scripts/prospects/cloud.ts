@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '../../src/integrations/supabase/types.ts'
 import { loadEnv } from 'vite'
 
 /**
@@ -11,13 +12,13 @@ import { loadEnv } from 'vite'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const env = { ...loadEnv('', root, ''), ...loadEnv('development', root, '') }
 
-let client: ReturnType<typeof createClient> | undefined
+let client: SupabaseClient<Database> | undefined
 export const cloudClient = () => {
   if (client) return client
   const url = env.VITE_SUPABASE_URL
   const key = env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) throw new Error('O funil fica no CRM: falta SUPABASE_SERVICE_ROLE_KEY no .env.local (Supabase > Project Settings > API Keys)')
-  client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+  client = createClient<Database>(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
   return client
 }
 

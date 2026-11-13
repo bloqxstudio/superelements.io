@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client'
-import type { Json } from '@/integrations/supabase/types'
+import type { Json, TablesInsert, TablesUpdate } from '@/integrations/supabase/types'
 import { DEFAULT_SETTINGS, type FunnelSettings, type Opportunity, type OpportunityPatch, type Stage } from '@/features/prospects/funnel'
 import { draftOffer } from '@/features/prospects/offer'
 import type { Lead } from '@/features/prospects/types'
@@ -170,9 +170,20 @@ export async function findOpportunity(idOrKey: string): Promise<Opportunity | un
 
 const text = (value: string | undefined) => (typeof value === 'string' ? value.trim() || null : value ?? null)
 
+/**
+ * Oportunidade nova sem `team_id`: o gatilho `crm_opportunity_rules` preenche a conta pelo funil e recusa
+ * cliente de outra conta. O tipo gerado do banco pede a coluna (NOT NULL), então a tela declara isso aqui.
+ */
+type NewOpportunity = Omit<TablesInsert<'crm_opportunities'>, 'team_id'>
+export function newOpportunity(row: NewOpportunity): TablesInsert<'crm_opportunities'>
+export function newOpportunity(row: NewOpportunity[]): TablesInsert<'crm_opportunities'>[]
+export function newOpportunity(row: NewOpportunity | NewOpportunity[]) {
+  return row as TablesInsert<'crm_opportunities'> | TablesInsert<'crm_opportunities'>[]
+}
+
 /** As colunas que um pedaço de mudança da tela toca (e só elas). */
 const columnsOf = (patch: OpportunityPatch) => {
-  const row: Record<string, unknown> = {}
+  const row: TablesUpdate<'crm_opportunities'> = {}
   if ('stage' in patch && patch.stage) row.stage = patch.stage
   if ('projectName' in patch) row.project_name = text(patch.projectName)
   if ('projectId' in patch) row.project_id = patch.projectId ?? null
@@ -180,9 +191,9 @@ const columnsOf = (patch: OpportunityPatch) => {
   if ('notes' in patch) row.notes = text(patch.notes)
   if ('nextStep' in patch) row.next_step = text(patch.nextStep)
   if ('nextDate' in patch) row.next_date = text(patch.nextDate)
-  if ('offer' in patch) row.offer = patch.offer ?? null
-  if ('brief' in patch) row.brief = patch.brief ?? null
-  if ('build' in patch) row.build = patch.build ?? null
+  if ('offer' in patch) row.offer = (patch.offer ?? null) as unknown as Json
+  if ('brief' in patch) row.brief = (patch.brief ?? null) as unknown as Json
+  if ('build' in patch) row.build = (patch.build ?? null) as unknown as Json
   if ('ownerId' in patch) row.owner_id = patch.ownerId ?? null
   return row
 }
@@ -207,14 +218,14 @@ export async function createOpportunity(clientId: string, fields: { stage?: Stag
   const { offer, brief } = draftOffer(fields.lead)
   const { data, error } = await supabase
     .from('crm_opportunities')
-    .insert({
+    .insert(newOpportunity({
       pipeline_id: pipeline,
       client_id: clientId,
       stage: fields.stage ?? 'mapeado',
       offer: offer as unknown as Json,
       brief: brief as unknown as Json,
       region: fields.region ?? fields.lead.city ?? '',
-    })
+    }))
     .select(OPPORTUNITY_SELECT)
     .single()
   if (error) throw error
@@ -288,7 +299,7 @@ export async function addLeads(leads: Lead[], meta: { region: string; searchId?:
   }
   const created = unique.filter((lead) => !current.has(lead.id))
   for (const part of chunks(created)) {
-    const { error } = await supabase.from('crm_opportunities').insert(
+    const { error } = await supabase.from('crm_opportunities').insert(newOpportunity(
       part.map((lead) => {
         const { offer, brief } = draftOffer(lead)
         return {
@@ -302,7 +313,7 @@ export async function addLeads(leads: Lead[], meta: { region: string; searchId?:
           region: meta.region,
         }
       })
-    )
+    ))
     if (error) throw error
   }
   return listOpportunities(pipeline.id)

@@ -33,7 +33,7 @@ interface WordPressConfig {
 /**
  * Fetch component's _elementor_data directly from WordPress API
  */
-export const fetchElementorDataDirect = async (
+const fetchElementorDataDirect = async (
   componentId: number,
   config: WordPressConfig
 ): Promise<ElementorElement[]> => {

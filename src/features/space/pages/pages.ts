@@ -127,12 +127,6 @@ export function canvasSections(pages: SpacePage[], nodes: SpaceNode[]): SpaceNod
   return [...inPages, ...loose]
 }
 
-/** "Home · 2" para uma seção de página, "Solta" para as demais. */
-export function sectionPlace(pages: SpacePage[], sectionId: string) {
-  const page = pageOf(pages, sectionId)
-  return page ? `${page.name} · ${page.sectionIds.indexOf(sectionId) + 1}` : 'Solta'
-}
-
 export const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 /** Nome do arquivo baixado: "Sobre nós" vira "sobre-nos". */

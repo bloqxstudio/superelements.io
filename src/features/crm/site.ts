@@ -556,17 +556,6 @@ export function useSiteFeed(siteId: string | undefined, onSession: (session: Sit
   }, [siteId])
 }
 
-/** Quantas pessoas estão no site agora. */
-export async function countLive(siteId: string) {
-  const { count, error } = await supabase
-    .from('site_sessions')
-    .select('id', { count: 'exact', head: true })
-    .eq('site_id', siteId)
-    .gte('last_at', new Date(Date.now() - LIVE_MS).toISOString())
-  if (error) fail(error)
-  return count ?? 0
-}
-
 export async function loadSessionEvents(sessionId: string): Promise<SiteEvent[]> {
   const { data, error } = await supabase.from('site_events').select('*').eq('session_id', sessionId).order('at').order('id').limit(500)
   if (error) fail(error)
@@ -677,4 +666,3 @@ export function placeLabel(s: Pick<SiteSession, 'city' | 'region' | 'regionName'
 export const tzLabel = (tz: string | null | undefined) => (tz ? tz.split('/').pop()!.replace(/_/g, ' ') : 'Não identificado')
 
 export const shareOf = (part: number, whole: number) => (whole > 0 ? part / whole : 0)
-export const percentText = (value: number) => `${(value * 100).toLocaleString('pt-BR', { maximumFractionDigits: value < 0.1 ? 1 : 0 })}%`
