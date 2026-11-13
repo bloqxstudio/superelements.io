@@ -24,7 +24,7 @@ test('MCP: aprovar e publicar só com confirmação da pessoa', () => {
   // A função antiga (crm_mcp_call) segue sem aprovar; o caminho novo exige confirmar
   assert.match(fn, /if \(a\.status === 'aprovado'\) \{\n\s+if \(a\.confirmar !== true\) throw new ToolError/)
   // Publicar: sem confirmar só mostra a prévia; com confirmar entra na fila como a pessoa (aprovação dela)
-  assert.match(fn, /if \(a\.confirmar !== true\) \{\n\s+const images = await renderSlides/)
+  assert.match(fn, /if \(a\.confirmar !== true\) \{\n\s+const images = await render(?:Slides|Sheets)/)
   assert.match(fn, /status = 'agendado', frames = /)
   // Conta de cliente não usa os modelos com cases e ilustrações da Avence
   assert.match(fn, /caller\.team\.is_home \? \[\.\.\.TEMPLATES, \.\.\.AVENCE_TEMPLATES\] : TEMPLATES/)

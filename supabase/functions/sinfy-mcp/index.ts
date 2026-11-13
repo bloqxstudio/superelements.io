@@ -6,7 +6,8 @@ import * as Criativos from './_gerado/criativos.js'
 import { loadFamilies, measureContext, rasterize, rasterizeRgb, sniff, toBase64, type FontLib, type ResvgLike } from './previa.ts'
 import jpeg from 'npm:jpeg-js@0.4.4'
 import { asUser, fetchFile, liveSend, platformTools } from './plataforma.ts'
-import { buildMixed, cleanFree } from './livre.ts'
+import { brandGuardOf, buildMixed, cleanFree } from './livre.ts'
+import { ICON_PNG, ICON_SVG } from './icone.ts'
 import { areaTools, BRAIN_BUCKET, brainRoot, cleanFolder, GUIDE, IMAGE_EXT, saveBrainImage, skillPrompts, sniffMime } from './areas.ts'
 
 /**
@@ -27,8 +28,19 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE
 const APP_URL = (Deno.env.get('APP_URL') ?? 'https://app.avencestudio.com').replace(/\/+$/, '')
 const BUCKET = 'space-projects'
 const MAX_BODY = 512 * 1024
-const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
-const SERVER = { name: 'sinfy', title: 'Sinfy', version: '1.0.0' }
+const PROTOCOLS = ['2025-06-18', '2025-11-25', '2025-03-26', '2024-11-05']
+const FUNCTION_URL = `${(Deno.env.get('SUPABASE_URL') ?? 'https://nfmfcpcwyavutntnrxqq.supabase.co').replace(/\/+$/, '')}/functions/v1/sinfy-mcp`
+/** `icons` e `websiteUrl` (MCP 2025-11-25): o logo da Sinfy no conector dos clientes que leem esse campo. */
+const SERVER = {
+  name: 'sinfy',
+  title: 'Sinfy',
+  version: '1.1.0',
+  websiteUrl: 'https://app.avencestudio.com',
+  icons: [
+    { src: `${FUNCTION_URL}/icone.png`, mimeType: 'image/png', sizes: ['256x256'] },
+    { src: `${FUNCTION_URL}/icone.svg`, mimeType: 'image/svg+xml', sizes: ['any'] },
+  ],
+}
 
 const cors = {
   'access-control-allow-origin': '*',
@@ -294,6 +306,52 @@ async function renderSlides(posts: BuiltPost[], assets: { id: string; path: stri
 }
 
 
+/**
+ * Uma imagem por post com todos os slides lado a lado (2026-11-13: o ChatGPT chegava rápido no limite da
+ * conversa; 10 imagens de 540 px por chamada ficavam no histórico). A folha tem 1080 px de largura e até
+ * 5 slides por linha, cerca de 1/6 dos pixels das imagens separadas. Os ids de cada slide ganham prefixo
+ * para não colidirem dentro do mesmo SVG.
+ */
+async function renderSheets(posts: BuiltPost[], assets: { id: string; path: string }[], maxPosts = 3): Promise<Picture[]> {
+  const list = posts.slice(0, maxPosts).filter((p) => p.slides.length)
+  if (!list.length) return []
+  const families = new Set<string>()
+  const srcs: string[] = []
+  for (const p of list)
+    for (const s of p.slides)
+      for (const l of s.layers) {
+        if (l.font) families.add(l.font)
+        if (l.emphasisFont) families.add(l.emphasisFont)
+        if (l.type === 'image' && l.src && !l.hidden) srcs.push(l.src)
+      }
+  const [fonts, images] = await Promise.all([fontsFor([...families]), imagesFor(srcs, assets), ensureWasm()])
+  const W = 1080, GAP = 12
+  return list.map((post) => {
+    Criativos.setMeasureContext(fonts.ctx)
+    const n = post.slides.length
+    const cols = Math.min(n, n <= 3 ? n : n === 4 ? 2 : n <= 6 ? 3 : n <= 8 ? 4 : 5)
+    const rows = Math.ceil(n / cols)
+    const size = { '4x5': [1080, 1350], '1x1': [1080, 1080], '9x16': [1080, 1920] }[post.format] ?? [1080, 1350]
+    const cw = (W - GAP * (cols + 1)) / cols
+    const ch = (cw * size[1]) / size[0]
+    const H = Math.round(rows * ch + GAP * (rows + 1))
+    const cells = post.slides.map((slide, i) => {
+      const svg = (Criativos.slideToSvg as (slide: unknown, format: string, image: (src: string) => unknown) => string)(slide, post.format, (src: string) => images.get(src))
+      const pre = `s${i}-`
+      const inner = svg
+        .replace(/\bid="([^"]+)"/g, `id="${pre}$1"`)
+        .replace(/url\(#([^)]+)\)/g, `url(#${pre}$1)`)
+        .replace(/((?:xlink:)?href)="#([^"]+)"/g, `$1="#${pre}$2"`)
+      const x = GAP + (i % cols) * (cw + GAP)
+      const y = GAP + Math.floor(i / cols) * (ch + GAP)
+      // Troca só o tamanho da tag de abertura: o viewBox mantém o desenho do slide inteiro
+      return inner.replace(/^<svg([^>]*?) width="[^"]*" height="[^"]*"/, `<svg$1 x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}"`)
+    })
+    const doc = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#e5e7eb"/>${cells.join('')}</svg>`
+    return { data: toBase64(rasterize(Resvg as unknown as ResvgLike, doc, fonts.bytes, W)), mimeType: 'image/png' as const }
+  })
+}
+
 /** Cada slide do post em JPEG na largura pedida (o formato que o Instagram aceita). */
 async function renderJpegs(post: BuiltPost, assets: { id: string; path: string }[], width: number): Promise<Uint8Array[]> {
   const families = new Set<string>()
@@ -389,6 +447,8 @@ function cleanPost(raw: unknown, caller: Caller, index: number) {
     const template = String(o.template ?? 'manifesto')
     if (template === 'livre') return cleanFree(o, `Slide ${i + 1} do post ${index + 1}`, (m) => { throw new ToolError(m) })
     if (!allowed.includes(template)) throw new ToolError(`Slide ${i + 1} do post ${index + 1}: o modelo "${template}" não existe. Use: ${allowed.join(', ')} ou livre.`)
+    // O modelo mostra "73%" de exemplo sem número: num post real, isso é dado inventado (2026-11-13)
+    if (template === 'viral-dado' && !str(o.number, 12)) throw new ToolError(`Slide ${i + 1} do post ${index + 1}: viral-dado precisa de "number" (um número verdadeiro do Plano ou da pessoa). Sem número, use viral-frase ou manifesto.`)
     const out: Record<string, unknown> = { template }
     for (const key of SLIDE_FIELDS) {
       if (key === 'template' || o[key] === undefined || o[key] === null) continue
@@ -678,7 +738,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_criativo_criar',
     title: 'Criar criativos na marca',
-    description: 'Cria um conjunto NOVO de posts (feed, carrossel ou story) na marca da conta e devolve a prévia. Antes, leia sinfy_ajuda("modelos"): modelos prontos e o slide "livre" (camada por camada, para copiar uma referência fielmente). Para ajustar um que existe, use sinfy_criativo_editar.',
+    description: 'O ÚNICO jeito de fazer criativo: cria um conjunto NOVO de posts (feed, carrossel ou story) na marca da conta e devolve a prévia. Nunca desenhe ou gere a arte no chat. Antes, leia sinfy_ajuda("modelos"): prefira os modelos prontos (saem na identidade); o slide "livre" serve para copiar uma referência e só aceita cores e fontes da marca. Para ajustar um que existe, use sinfy_criativo_editar.',
     inputSchema: {
       type: 'object',
       required: ['posts'],
@@ -755,10 +815,12 @@ const TOOLS: Tool[] = [
       const useBrand = brand ?? neutralBrand(project?.name ?? caller.team.name)
       let built: BuiltPost[] = []
       let ready = false
+      // O que o guardrail de marca trocou no slide livre (fonte e cor fora da identidade)
+      const brandFixes: string[] = []
       try {
         const fonts = await fontsFor([useBrand.headingFont, useBrand.bodyFont, useBrand.emphasisFont ?? ''])
         Criativos.setMeasureContext(fonts.ctx)
-        built = posts.map((p) => buildMixed(p as never, (x) => Criativos.buildPost(x, useBrand) as never) as unknown as BuiltPost)
+        built = posts.map((p) => buildMixed(p as never, (x) => Criativos.buildPost(x, useBrand) as never, brandGuardOf(brand), brandFixes) as unknown as BuiltPost)
         // Slide livre: já sai montado daqui (o navegador não sabe montar um pedido livre)
         ready = (!!brand && fonts.ok) || posts.some((p) => p.slides.some((sl) => sl.template === 'livre'))
       } catch (err) {
@@ -799,7 +861,7 @@ const TOOLS: Tool[] = [
       let images: Picture[] = []
       let previewError: string | undefined
       try {
-        images = await renderSlides(built, set.assets as { id: string; path: string }[], 540, 10)
+        images = await renderSheets(built, set.assets as { id: string; path: string }[], 3)
       } catch (err) {
         console.error('[sinfy-mcp] prévia', err)
         previewError = 'Não consegui desenhar a prévia agora; o conjunto foi salvo e abre pelo link.'
@@ -813,8 +875,9 @@ const TOOLS: Tool[] = [
           onde: project ? `projeto ${project.name} (a equipe dele abre)` : 'pasta pessoal da pessoa da chave',
           conteudo: ligado,
           marca: brand ? `marca da conta (${useBrand.name})` : 'sem marca salva na conta: prévia neutra; ao abrir, a Sinfy aplica a marca do projeto',
+          ...(brandFixes.length ? { ajustado_para_a_marca: [...new Set(brandFixes)].slice(0, 12), regra_da_marca: 'Fontes e cores fora da marca foram trocadas pelas da marca. Use só as cores e fontes de sinfy_conta.' } : {}),
           posts: posts.map((p) => ({ nome: p.name, formato: p.format, slides: p.slides.length, legenda: p.caption })),
-          previa: previewError ?? (images.length ? `${images.length} de ${total} slides abaixo, na ordem. Mostre as imagens à pessoa.${total > images.length ? ' Para ver os outros, use sinfy_criativo_ver com o número do post.' : ''}` : undefined),
+          previa: previewError ?? (images.length ? `Uma imagem por post com os ${total} slides lado a lado, na ordem. Mostre à pessoa.${built.length > images.length ? ' Para os outros posts, use sinfy_criativo_ver com o número do post.' : ''}` : undefined),
           proximo_passo: 'Mostre a prévia à pessoa e pergunte o que ajustar. Para ajustar, use sinfy_criativo_editar neste conjunto (nunca crie outro). Fotos: sinfy_criativo_foto ou gere no editor pelo link. Para publicar ou agendar: sinfy_publicar.',
         },
         images
@@ -889,7 +952,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_criativo_ver',
     title: 'Ver o criativo',
-    description: 'Mostra as imagens de um post de um conjunto (padrão: o primeiro).',
+    description: 'Mostra um post do conjunto (padrão: o primeiro) numa imagem só, com os slides lado a lado. "slide" mostra um slide grande.',
     inputSchema: {
       type: 'object',
       required: ['id'],
@@ -897,7 +960,8 @@ const TOOLS: Tool[] = [
         id: { type: 'string', description: 'Id do conjunto (sinfy_criativos ou o retorno de sinfy_criativo_criar).' },
         projeto_id: { type: 'string' },
         post: { type: 'integer', minimum: 1, description: 'Qual post do conjunto (1 = o primeiro). Padrão 1.' },
-        largura: { type: 'integer', minimum: 320, maximum: 1080, description: 'Largura da imagem em px (padrão 540).' },
+        slide: { type: 'integer', minimum: 1, description: 'Só este slide, grande (para conferir detalhe).' },
+        largura: { type: 'integer', minimum: 320, maximum: 1080, description: 'Largura do slide sozinho (padrão 720).' },
       },
       additionalProperties: false,
     },
@@ -919,10 +983,12 @@ const TOOLS: Tool[] = [
       if (!posts.length) throw new ToolError('Este conjunto não tem posts.')
       const index = Math.min(posts.length, Math.max(1, Number(a.post) || 1)) - 1
       const post = posts[index]
-      const width = Math.min(1080, Math.max(320, Number(a.largura) || 540))
-      const images = await renderSlides([post], set.assets ?? [], width, 10)
+      // Padrão: uma folha com todos os slides; "slide" mostra um só, grande, para conferir detalhe
+      const one = Number(a.slide) > 0 ? Math.min(post.slides.length, Number(a.slide)) - 1 : -1
+      const width = Math.min(1080, Math.max(320, Number(a.largura) || 720))
+      const images = one >= 0 ? await renderSlides([{ ...post, slides: [post.slides[one]] }], set.assets ?? [], width, 1) : await renderSheets([post], set.assets ?? [], 1)
       return new WithImages(
-        { conjunto: set.name, post: `${index + 1} de ${posts.length}`, nome: post.name, formato: post.format, slides: post.slides.length, legenda: post.caption, link: setUrl(found.id, found.projectId), nota: 'Mostre as imagens à pessoa, na ordem.' },
+        { conjunto: set.name, post: `${index + 1} de ${posts.length}`, nome: post.name, formato: post.format, slides: post.slides.length, legenda: post.caption, link: setUrl(found.id, found.projectId), nota: one >= 0 ? `Slide ${one + 1} em tamanho grande. Mostre à pessoa.` : 'Todos os slides numa imagem, na ordem. Para ver um em detalhe, passe "slide". Mostre à pessoa.' },
         images
       )
     },
@@ -930,7 +996,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_criativo_foto',
     title: 'Pôr uma foto no criativo',
-    description: 'Põe uma foto num slide de um conjunto (no lugar da foto pedida ou trocando a imagem): "arquivo" do Cérebro, "url" pública ou "base64". A foto anexada no chat não chega aqui: use sinfy_link_envio. Slide só de texto: a foto vira fundo, com véu para ler ("como": "fundo" força isso). A foto também fica guardada no Cérebro.',
+    description: 'Põe uma foto num slide de um conjunto (no lugar da foto pedida ou trocando a imagem): "arquivo" do Cérebro ou "url" pública. A foto anexada no chat não chega aqui: use sinfy_link_envio (nunca base64). Slide só de texto: a foto vira fundo, com véu para ler ("como": "fundo" força isso). A foto também fica guardada no Cérebro.',
     inputSchema: {
       type: 'object',
       required: ['id'],
@@ -942,7 +1008,6 @@ const TOOLS: Tool[] = [
         como: { type: 'string', enum: ['auto', 'trocar', 'fundo'], description: 'auto (padrão): troca a foto do slide; sem lugar de foto, vira fundo. fundo: a foto cobre o slide atrás dos textos, com véu para ler.' },
         arquivo: { type: 'string', description: 'Caminho de uma imagem do Cérebro (sinfy_cerebro_arquivos), ex.: fotos/enviadas/x.jpg.' },
         url: { type: 'string', description: 'Endereço https da foto.' },
-        base64: { type: 'string', description: 'Ou a foto em base64 (data URL).' },
         nome_arquivo: { type: 'string' },
       },
       additionalProperties: false,
@@ -983,7 +1048,8 @@ const TOOLS: Tool[] = [
         file = { bytes: new Uint8Array(await data.arrayBuffer()), mime: data.type, name: rel.split('/').pop() ?? 'foto' }
         noCerebro = rel
       } else {
-        if (!a.url && !a.base64) throw new ToolError('Mande "arquivo" (do Cérebro), "url" ou "base64". Foto anexada no chat não chega aqui: gere um link com sinfy_link_envio.')
+        if (a.base64) throw new ToolError('Não aceito mais base64 (gasta a conversa). Foto do chat ou do computador: gere um link com sinfy_link_envio; depois use "arquivo".')
+        if (!a.url) throw new ToolError('Mande "arquivo" (do Cérebro) ou "url". Foto anexada no chat não chega aqui: gere um link com sinfy_link_envio.')
         file = await fetchFile({ admin, appUrl: APP_URL, fail: (m) => { throw new ToolError(m) } }, a, 15 * 1024 * 1024)
       }
       const info = sniff(file.bytes)
@@ -1050,7 +1116,8 @@ const TOOLS: Tool[] = [
         set.posts = [...(set.posts ?? []), ...set.pending.map((p) => Criativos.buildPost(p, brand) as BuiltPost)]
         delete set.pending
       }
-      const build = (raw: unknown, i: number) => buildMixed(cleanPost(raw, caller, i) as never, (x) => Criativos.buildPost(x, brand) as never) as unknown as BuiltPost
+      const brandFixes: string[] = []
+      const build = (raw: unknown, i: number) => buildMixed(cleanPost(raw, caller, i) as never, (x) => Criativos.buildPost(x, brand) as never, brandGuardOf(set.brand), brandFixes) as unknown as BuiltPost
       const postAt = (n: unknown) => {
         const post = set.posts[Math.max(1, Number(n) || 1) - 1]
         if (!post) throw new ToolError(`O post ${String(n ?? 1)} não existe (o conjunto tem ${set.posts.length}).`)
@@ -1143,7 +1210,7 @@ const TOOLS: Tool[] = [
       const posts = set.posts.filter((p) => changed.has(p.id))
       let images: Picture[] = []
       try {
-        images = await renderSlides(posts, set.assets ?? [], 540, 10)
+        images = await renderSheets(posts, set.assets ?? [], 3)
       } catch (err) {
         console.error('[sinfy-mcp] prévia da edição', err)
       }
@@ -1152,8 +1219,9 @@ const TOOLS: Tool[] = [
           ok: true,
           conjunto: found.id,
           feito: done,
+          ...(brandFixes.length ? { ajustado_para_a_marca: [...new Set(brandFixes)].slice(0, 12), regra_da_marca: 'Fontes e cores fora da marca foram trocadas pelas da marca. Use só as cores e fontes de sinfy_conta.' } : {}),
           posts: set.posts.map((p, i) => ({ post: i + 1, nome: p.name, slides: p.slides.length, legenda: p.caption })),
-          previa: images.length ? `${images.length} slide(s) dos posts mudados abaixo. Mostre à pessoa.` : undefined,
+          previa: images.length ? 'Uma imagem por post mudado, com os slides lado a lado. Mostre à pessoa.' : undefined,
           link: setUrl(found.id, found.projectId),
           aviso: 'Se o conjunto estiver aberto no editor agora, recarregue a página antes de mexer lá, para não gravar por cima.',
         },
@@ -1215,7 +1283,7 @@ const TOOLS: Tool[] = [
         legenda: kind === 'feed' ? caption || '(sem legenda)' : undefined,
       }
       if (a.confirmar !== true) {
-        const images = await renderSlides([post], set.assets ?? [], 540, 10)
+        const images = await renderSheets([post], set.assets ?? [], 1)
         return new WithImages({ ...summary, pronto: true, proximo_passo: 'Mostre as imagens e o resumo à pessoa e pergunte se pode publicar. Só com o "pode" dela, chame de novo com "confirmar": true.' }, images)
       }
       const storyId = crypto.randomUUID()
@@ -1397,6 +1465,40 @@ function liveEvent(caller: Caller, tool: Tool, phase: 'start' | 'done', args: Ar
   return liveSend(`mcp:${caller.team.id}`, 'ia', payload)
 }
 
+// ---------- lista enxuta ----------
+
+/**
+ * As ferramentas do dia a dia vão na lista; as outras ficam atrás de `sinfy_mais` (2026-11-13: com 55 ferramentas,
+ * a lista sozinha custava ~10 mil tokens em toda conversa do ChatGPT, que chegava rápido no limite). Nada some:
+ * `sinfy_mais` sem "ferramenta" mostra as outras com os campos, e com "ferramenta" executa. Chamar o nome direto
+ * também funciona (clientes que já conhecem a ferramenta).
+ */
+const CORE = new Set([
+  'sinfy_contas', 'sinfy_conta', 'sinfy_ajuda', 'sinfy_plano_salvar',
+  'sinfy_conteudos', 'sinfy_conteudo_criar', 'sinfy_conteudo_atualizar',
+  'sinfy_criativos', 'sinfy_criativo', 'sinfy_criativo_criar', 'sinfy_criativo_editar', 'sinfy_criativo_ver', 'sinfy_criativo_foto', 'sinfy_video_edits',
+  'sinfy_publicar', 'sinfy_publicacoes',
+  'sinfy_cerebro_arquivos', 'sinfy_cerebro_ler', 'sinfy_cerebro_imagem_salvar', 'sinfy_link_envio',
+  'sinfy_referencias', 'sinfy_referencia_ver',
+])
+
+const MORE_TOOL = {
+  name: 'sinfy_mais',
+  title: 'Mais ferramentas',
+  description: 'As outras ferramentas da Sinfy (quadros, oportunidades/CRM, WhatsApp, formulários, dados, site, anúncios, Instagram: perfil, ganchos, legenda, virais, comentários; Cérebro: escrever e buscar). Sem "ferramenta": lista nomes, para que servem e os campos. Com "ferramenta" e "argumentos": executa.',
+  inputSchema: { type: 'object', properties: { ferramenta: { type: 'string', description: 'Nome, ex.: sinfy_quadros.' }, argumentos: { type: 'object', description: 'Os campos da ferramenta.' } }, additionalProperties: false },
+  annotations: { readOnlyHint: false },
+  // Nunca roda: tools/call troca pelo nome pedido antes de procurar a ferramenta
+  run: () => Promise.resolve(undefined),
+} as unknown as Tool
+
+/** Os campos de uma ferramenta em uma linha: "id*, post, como (auto|trocar|fundo)". */
+function fieldsOf(schema: Record<string, unknown>): string {
+  const props = (schema.properties ?? {}) as Record<string, { type?: string; enum?: unknown[] }>
+  const req = new Set((schema.required as string[] | undefined) ?? [])
+  return Object.entries(props).map(([k, v]) => `${k}${req.has(k) ? '*' : ''}${v.enum ? ` (${v.enum.join('|')})` : v.type && v.type !== 'string' ? ` (${v.type})` : ''}`).join(', ')
+}
+
 // ---------- JSON-RPC ----------
 
 interface Rpc { jsonrpc: '2.0'; id?: string | number | null; method: string; params?: Record<string, unknown> }
@@ -1413,14 +1515,14 @@ async function handle(msg: Rpc, caller: Caller) {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } },
         serverInfo: SERVER,
-        instructions: `Você está conectado à conta "${caller.team.name}" na Sinfy e age como a pessoa da chave (só faz o que ela pode na tela). Se a pessoa falar de outra empresa ou cliente, veja sinfy_contas e passe "conta" (nome ou id) nas ferramentas; nunca misture dados ou marca de contas diferentes. Comece por sinfy_conta (empresa, Plano, marca). Em dúvida sobre como fazer algo, leia sinfy_ajuda (tópicos: post, pauta, crm, quadros, cerebro, instagram, dados). Regras: escreva no tom do Plano, sem inventar números, preços, depoimentos ou resultados. Para ajustar algo que já existe, edite (sinfy_criativo_editar, sinfy_conteudo_atualizar, sinfy_oportunidade_salvar, sinfy_quadro_editar); não crie outro. Publicar (sinfy_publicar), aprovar, mandar mensagem a cliente, fechar ou perder oportunidade e apagar pedem o "pode" explícito da pessoa: mostre antes e só então chame com confirmar. Sempre mostre à pessoa as imagens que as ferramentas devolvem e passe os links.`,
+        instructions: `Você está conectado à conta "${caller.team.name}" na Sinfy e age como a pessoa da chave (só faz o que ela pode na tela). Se a pessoa falar de outra empresa ou cliente, veja sinfy_contas e passe "conta" (nome ou id) nas ferramentas; nunca misture dados ou marca de contas diferentes. Comece por sinfy_conta (empresa, Plano, marca). CRIATIVOS SÓ NA SINFY: todo post, carrossel, story, arte ou vídeo é criado e ajustado com sinfy_criativo_criar e sinfy_criativo_editar; nunca gere imagem, arte, mockup, HTML, SVG ou layout no chat (nem com o gerador de imagens do chat), nem como \"rascunho\" ou \"ideia visual\". Se a ferramenta falhar, diga o erro e tente de novo ou mande o link; não desenhe no lugar. Foto nova para o criativo: \"prompt\" na camada de imagem (gera no editor) ou sinfy_link_envio. MARCA SEMPRE: use só as cores e fontes da marca (sinfy_conta) e o logo dela; prefira os modelos prontos, que já saem na identidade; o slide livre é para copiar uma referência e também só aceita a marca (o que estiver fora vira a cor e a fonte mais próximas da marca). Texto curto por slide, nunca parede de texto. ECONOMIA: uma conversa por tarefa; não peça sinfy_criativo_ver depois de criar ou editar (a prévia já vem); nunca escreva arquivos em base64. Quadros, oportunidades (CRM), WhatsApp, formulários, dados, site, anúncios e as ferramentas de Instagram ficam em sinfy_mais. Em dúvida sobre como fazer algo, leia sinfy_ajuda (tópicos: post, pauta, crm, quadros, cerebro, instagram, dados). Regras: escreva no tom do Plano, sem inventar números, preços, depoimentos ou resultados. Para ajustar algo que já existe, edite (sinfy_criativo_editar, sinfy_conteudo_atualizar, sinfy_oportunidade_salvar, sinfy_quadro_editar); não crie outro. Publicar (sinfy_publicar), aprovar, mandar mensagem a cliente, fechar ou perder oportunidade e apagar pedem o "pode" explícito da pessoa: mostre antes e só então chame com confirmar. Sempre mostre à pessoa as imagens que as ferramentas devolvem e passe os links.`,
       })
     }
     case 'ping':
       return result(msg.id, {})
     case 'tools/list':
       return result(msg.id, {
-        tools: TOOLS.map(({ run: _run, ...t }) =>
+        tools: [...TOOLS.filter((t) => CORE.has(t.name)), MORE_TOOL].map(({ run: _run, ...t }) =>
           t.name === 'sinfy_contas' ? t : { ...t, inputSchema: { ...t.inputSchema, properties: { ...((t.inputSchema.properties ?? {}) as Record<string, unknown>), conta: CONTA_ARG } } }),
       })
     case 'prompts/list':
@@ -1433,6 +1535,18 @@ async function handle(msg: Rpc, caller: Caller) {
     case 'resources/list':
       return result(msg.id, { resources: [] })
     case 'tools/call': {
+      // A gaveta: sem "ferramenta" lista as outras; com ela, executa como se a IA tivesse chamado direto
+      if (p.name === 'sinfy_mais') {
+        const raw = (p.arguments ?? {}) as Args
+        const name = typeof raw.ferramenta === 'string' ? raw.ferramenta.trim() : ''
+        if (!name) {
+          const extra = TOOLS.filter((t) => !CORE.has(t.name)).map((t) => `${t.name}: ${t.description} Campos: ${fieldsOf(t.inputSchema as Record<string, unknown>) || 'nenhum'}`)
+          return result(msg.id, { content: [{ type: 'text', text: `Chame sinfy_mais com {"ferramenta": "<nome>", "argumentos": {...}} (* = obrigatório).\n${extra.join('\n')}` }] })
+        }
+        const inner = raw.argumentos && typeof raw.argumentos === 'object' ? (raw.argumentos as Args) : {}
+        p.name = name
+        p.arguments = { ...inner, ...(raw.conta !== undefined && inner.conta === undefined ? { conta: raw.conta } : {}) }
+      }
       const tool = TOOLS.find((t) => t.name === p.name)
       if (!tool) return failure(msg.id, -32602, `Ferramenta desconhecida: ${String(p.name)}`)
       let ok = true
@@ -1532,6 +1646,11 @@ const tokenOf = (request: Request, url: URL) => {
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
   const url = new URL(request.url)
+  // O logo da Sinfy (o conector do cliente MCP mostra), público e em cache
+  if (request.method === 'GET' && /\/(icone|icon)\.(png|svg)$/.test(url.pathname)) {
+    const png = url.pathname.endsWith('.png')
+    return new Response(png ? ICON_PNG : ICON_SVG, { headers: { 'content-type': png ? 'image/png' : 'image/svg+xml', 'cache-control': 'public, max-age=86400', ...cors } })
+  }
   // Link de envio (/sinfy-mcp/enviar/<token>): a página /enviar do app manda as fotos para o Cérebro
   const sent = /\/enviar\/(env_[0-9a-f]{48})\/?$/.exec(url.pathname)
   if (sent) return handleUpload(request, sent[1])

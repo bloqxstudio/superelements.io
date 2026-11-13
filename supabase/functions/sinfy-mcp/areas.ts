@@ -362,12 +362,14 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
     {
       name: 'sinfy_cerebro_imagem_salvar',
       title: 'Guardar imagem no Cérebro',
-      description: 'Guarda uma imagem (url https pública ou base64) no Cérebro da conta, na pasta pedida (padrão fotos). Para fotos que a pessoa anexou no chat, use sinfy_link_envio.',
-      inputSchema: { type: 'object', properties: { url: { type: 'string' }, base64: { type: 'string' }, nome_arquivo: { type: 'string' }, pasta: { type: 'string' } }, additionalProperties: false },
+      description: 'Guarda uma imagem (url https pública) no Cérebro da conta, na pasta pedida (padrão fotos). Foto anexada no chat ou do computador: use sinfy_link_envio (nunca escreva a imagem em base64, gasta a conversa inteira).',
+      inputSchema: { type: 'object', required: ['url'], properties: { url: { type: 'string' }, nome_arquivo: { type: 'string' }, pasta: { type: 'string' } }, additionalProperties: false },
       run: async (c, a) => {
         const folder = cleanFolder(a.pasta, 'fotos')
         if (!folder) fail('Pasta inválida.')
-        const file = await fetchFile(deps, a, 15 * 1024 * 1024)
+        // Sem base64 (2026-11-13): a IA escrevendo a imagem como texto esgotava a conversa do ChatGPT
+        if (a.base64 || typeof a.url !== 'string' || !/^https:\/\//.test(a.url)) fail('Mande uma url https. Foto do chat ou do computador: gere um link com sinfy_link_envio e peça para a pessoa enviar por ele.')
+        const file = await fetchFile(deps, { url: a.url, nome_arquivo: a.nome_arquivo }, 15 * 1024 * 1024)
         const mime = sniffMime(file.bytes)
         if (!mime) fail('Não é uma imagem JPEG, PNG, WebP ou GIF.')
         const path = await saveBrainImage(deps.admin, c.team.id, folder!, file.name, file.bytes, mime!).catch((e) => fail(`Não guardei: ${e.message}`))
