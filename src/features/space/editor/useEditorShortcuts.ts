@@ -103,7 +103,9 @@ export function useEditorShortcuts() {
           handled()
           // Seções inteiras: o Ctrl+Z traz de volta, e o aviso lembra disso
           const ids = [...store.selectedIds]
-          ids.forEach((id) => useSpaceStore.getState().removeNode(id))
+          // Um passo só do desfazer para a seleção inteira
+          const step = `remover-${Date.now()}`
+          ids.forEach((id) => useSpaceStore.getState().removeNode(id, step))
           toast.success(plural(ids.length, 'seção removida', 'seções removidas'), { description: `${MOD_KEY}Z desfaz.` })
         }
         return

@@ -222,7 +222,8 @@ interface SpaceActions {
   openPlayer: (pageId: string) => void
   closePlayer: () => void
   setViewport: (width: number, height: number) => void
-  removeNode: (id: string) => void
+  /** Com `merge`, várias remoções seguidas (apagar a seleção) viram um passo só do desfazer. */
+  removeNode: (id: string, merge?: string) => void
   updateNodePosition: (id: string, x: number, y: number) => void
   /**
    * Troca dados do nó. Mudanças seguidas no mesmo nó e campos viram um passo só
@@ -366,10 +367,21 @@ function withCurrentSizes(nodes: SpaceNode[], current: SpaceNode[]) {
   })
 }
 
-/** Canvas de um passo do desfazer, com o tamanho atual das seções. */
-function restoreSnapshot(snapshot: CanvasSnapshot, current: SpaceNode[]) {
-  const nodes = withCurrentSizes(snapshot.nodes, current)
-  return { nodes: layoutPages(snapshot.pages, nodes, snapshot.connections), pages: snapshot.pages, connections: snapshot.connections, components: snapshot.components, siteSeo: snapshot.siteSeo }
+/**
+ * O vínculo com o WordPress (`wordpress` da página e do componente) é do site, não do canvas: publicar não grava
+ * passo no desfazer, então o desfazer não pode devolvê-lo ao estado de antes. Sem isso, Ctrl+Z depois de publicar
+ * apagava o vínculo e a publicação seguinte criava uma página nova no site (revisão de 2026-11-13).
+ */
+function keepWordPress<T extends { id: string; wordpress?: unknown }>(restored: T[], current: T[]): T[] {
+  const links = new Map(current.map((x) => [x.id, x.wordpress]))
+  return restored.map((x) => (links.has(x.id) && links.get(x.id) !== x.wordpress ? { ...x, wordpress: links.get(x.id) } : x))
+}
+
+/** Canvas de um passo do desfazer, com o tamanho atual das seções e o vínculo atual com o WordPress. */
+function restoreSnapshot(snapshot: CanvasSnapshot, current: { nodes: SpaceNode[]; pages: SpacePage[]; components: SpaceComponent[] }) {
+  const nodes = withCurrentSizes(snapshot.nodes, current.nodes)
+  const pages = keepWordPress(snapshot.pages, current.pages)
+  return { nodes: layoutPages(pages, nodes, snapshot.connections), pages, connections: snapshot.connections, components: keepWordPress(snapshot.components, current.components), siteSeo: snapshot.siteSeo }
 }
 
 /**
@@ -1309,7 +1321,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         )
       },
 
-      removeNode: (id) => {
+      removeNode: (id, merge) => {
         const { pages, nodes, connections, selectedIds } = get()
         const page = pageOf(pages, id)
         const nextPages = page ? pages.map((p) => (p.id === page.id ? { ...p, sectionIds: p.sectionIds.filter((s) => s !== id) } : p)) : pages
@@ -1320,7 +1332,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         if (shrunk) nextNodes = layoutPage(shrunk, nextNodes, nextConnections)
         const removedNode = nodes.find((n) => n.id === id)
         if (removedNode?.type === 'section') emitRemoval({ kind: 'section', node: removedNode, pageId: page?.id, pageName: page?.name, index: page ? page.sectionIds.indexOf(id) : -1 })
-        track()
+        track(merge)
         set(
           {
             pages: nextPages,
@@ -1603,7 +1615,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           return false
         }
         lastTrack = { key: '', at: 0 }
-        const restored = restoreSnapshot(past[i], nodes)
+        const restored = restoreSnapshot(past[i], current)
         set({ ...restored, ...validSelection(restored.nodes), past: past.slice(0, i), future: [...future, current] }, false, 'undo')
         return true
       },
@@ -1613,7 +1625,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const next = future[future.length - 1]
         if (!next) return false
         lastTrack = { key: '', at: 0 }
-        const restored = restoreSnapshot(next, nodes)
+        const restored = restoreSnapshot(next, { nodes, pages, components })
         set({ ...restored, ...validSelection(restored.nodes), past: [...past, { nodes, pages, connections, components, siteSeo }], future: future.slice(0, -1) }, false, 'redo')
         return true
       },
