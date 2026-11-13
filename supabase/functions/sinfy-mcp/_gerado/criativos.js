@@ -92,6 +92,31 @@ function alpha(color, a) {
   return `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${Math.round(a * 1e3) / 1e3})`;
 }
 
+// src/features/criativos/types.ts
+var FORMATS = {
+  "4x5": { id: "4x5", label: "Feed 4:5", use: "Feed e an\xFAncio", width: 1080, height: 1350 },
+  "1x1": { id: "1x1", label: "Quadrado 1:1", use: "Feed e carrossel", width: 1080, height: 1080 },
+  "9x16": { id: "9x16", label: "Story 9:16", use: "Stories e Reels", width: 1080, height: 1920 },
+  "16x9": { id: "16x9", label: "Paisagem 16:9", use: "Capa, YouTube e apresenta\xE7\xE3o", width: 1920, height: 1080 },
+  link: { id: "link", label: "Link 1.91:1", use: "An\xFAncio de link e LinkedIn", width: 1200, height: 628 },
+  "2x3": { id: "2x3", label: "Vertical 2:3", use: "Pinterest", width: 1e3, height: 1500 }
+};
+var CUSTOM = /^(\d{3,4})x(\d{3,4})px$/;
+function sizeOf(id) {
+  const known = FORMATS[id];
+  if (known) return known;
+  const m = CUSTOM.exec(id);
+  return m ? { id, label: `${m[1]}\xD7${m[2]}`, use: "Tamanho livre", width: Number(m[1]), height: Number(m[2]) } : FORMATS["4x5"];
+}
+var FORMAT_LIST = Object.values(FORMATS);
+var uid = () => Math.random().toString(36).slice(2, 10);
+
+// src/features/criativos/grid.ts
+var marginOf = (format) => {
+  const { width, height } = sizeOf(format);
+  return Math.round(Math.min(width, height) * 0.0778);
+};
+
 // src/features/avence/cases.ts
 var shots = (slug, pageH = 4e3) => ({
   cover: { path: `/brands/avence-studio/cases/${slug}-capa.webp`, w: 960, h: 600 },
@@ -194,25 +219,6 @@ var LIBRARY = [
   ...ILLUSTRATIONS
 ];
 var caseBySlug = (slug) => AV_CASES.find((c) => c.slug === slug);
-
-// src/features/criativos/types.ts
-var FORMATS = {
-  "4x5": { id: "4x5", label: "Feed 4:5", use: "Feed e an\xFAncio", width: 1080, height: 1350 },
-  "1x1": { id: "1x1", label: "Quadrado 1:1", use: "Feed e carrossel", width: 1080, height: 1080 },
-  "9x16": { id: "9x16", label: "Story 9:16", use: "Stories e Reels", width: 1080, height: 1920 },
-  "16x9": { id: "16x9", label: "Paisagem 16:9", use: "Capa, YouTube e apresenta\xE7\xE3o", width: 1920, height: 1080 },
-  link: { id: "link", label: "Link 1.91:1", use: "An\xFAncio de link e LinkedIn", width: 1200, height: 628 },
-  "2x3": { id: "2x3", label: "Vertical 2:3", use: "Pinterest", width: 1e3, height: 1500 }
-};
-var CUSTOM = /^(\d{3,4})x(\d{3,4})px$/;
-function sizeOf(id) {
-  const known = FORMATS[id];
-  if (known) return known;
-  const m = CUSTOM.exec(id);
-  return m ? { id, label: `${m[1]}\xD7${m[2]}`, use: "Tamanho livre", width: Number(m[1]), height: Number(m[2]) } : FORMATS["4x5"];
-}
-var FORMAT_LIST = Object.values(FORMATS);
-var uid = () => Math.random().toString(36).slice(2, 10);
 
 // src/features/criativos/render.ts
 var fontCss = (layer) => `${layer.italic ? "italic " : ""}${layer.weight} ${layer.size}px "${layer.font}", system-ui, sans-serif`;
@@ -382,15 +388,16 @@ var edOf = (brand, format, dark, at, tone = "paper") => {
   const p = paletteOf(brand);
   const { width: w, height: h } = sizeOf(format);
   const story = h / w > 1.7;
-  const meta = story ? SAFE.top : 56;
-  const foot = story ? h - SAFE.bottom - 26 : h - 80;
+  const m = marginOf(format);
+  const meta = story ? SAFE.top : m;
+  const foot = story ? h - SAFE.bottom - 26 : h - m - 26;
   const bg2 = dark ? p.ink : tone === "white" ? "#ffffff" : tone === "stone" ? stoneOf(brand, p) : p.paper;
   return {
     brand,
     p,
     w,
     h,
-    m: 64,
+    m,
     story,
     dark,
     bg: bg2,

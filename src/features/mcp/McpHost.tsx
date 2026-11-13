@@ -5,6 +5,7 @@ import { iaraEnabled, useMcpConnect } from './connect'
 import { useMcpChannel } from './live'
 import { McpLiveBadge } from './McpLiveBadge'
 import { CopyForAi } from './CopyForAi'
+import { useMcpPhotoWorker } from '@/features/criativos/mcpPhotos'
 
 /**
  * O "Conectar sua IA" de qualquer tela (menu lateral, botões que antes chamavam a Iara). Com a Iara
@@ -15,6 +16,8 @@ export const McpHost: React.FC = () => {
   const { open, request, show, close } = useMcpConnect()
   // A IA conectada ao vivo: o canal da conta e o aviso flutuante
   useMcpChannel(team?.id)
+  // As fotos dos criativos da IA conectada, geradas pelo conector deste computador
+  useMcpPhotoWorker()
 
   useEffect(() => {
     if (iaraEnabled()) return

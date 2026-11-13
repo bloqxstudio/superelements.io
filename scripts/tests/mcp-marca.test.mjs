@@ -31,3 +31,30 @@ test('sem paleta na conta, o slide livre fica como a IA pediu', () => {
   assert.equal(slide.layers[0].font, 'Arial')
   assert.equal(slide.layers[0].color, '#ff00aa')
 })
+
+test('slide livre no grid: texto dentro da margem, encaixe nas colunas, fundo que sangra livre', async () => {
+  const { gridLines } = await import('../../supabase/functions/sinfy-mcp/livre.ts')
+  const G = gridLines('4x5')
+  assert.equal(G.m, 84)
+  const notes = []
+  const slide = buildFree({ fundo: '#ffffff', camadas: [
+    { tipo: 'texto', texto: 'colado na borda', x: 20, y: 30, w: 1060, tamanho: 60 },
+    { tipo: 'forma', x: 0, y: 0, w: 1080, h: 1350, cor: '#000000' },
+    { tipo: 'forma', x: 95, y: 600, w: 440, h: 300, cor: '#000000' },
+    { tipo: 'texto', texto: 'no fim', x: 84, y: 1330, w: 600, tamanho: 40 },
+  ] }, '4x5', undefined, notes)
+  const [t1, bg, card, t2] = slide.layers
+  assert.ok(t1.x >= 84 && t1.x + t1.w <= 1080 - 84 && t1.y >= 84)
+  assert.deepEqual([bg.x, bg.y, bg.w, bg.h], [0, 0, 1080, 1350])
+  assert.equal(card.x, 84)
+  assert.ok(G.v.includes(card.x + card.w), `borda direita ${card.x + card.w} numa linha do grid`)
+  assert.ok(t2.y + t2.h <= 1350 - 84)
+  assert.ok(notes.some((n) => /grid/.test(n)))
+})
+
+test('story: texto fora das faixas que o Instagram cobre', () => {
+  const slide = buildFree({ fundo: '#ffffff', camadas: [{ tipo: 'texto', texto: 'topo', x: 84, y: 40, w: 900, tamanho: 60 }, { tipo: 'texto', texto: 'base', x: 84, y: 1800, w: 900, tamanho: 60 }] }, '9x16')
+  const [a, b] = slide.layers
+  assert.ok(a.y >= Math.round(1920 * 0.13))
+  assert.ok(b.y + b.h <= 1920 - Math.round(1920 * 0.18))
+})

@@ -480,10 +480,14 @@ async function attachBrainImages(caller: Caller, setDir: string, posts: BuiltPos
   return out
 }
 
+/** Camadas de foto ainda sem imagem (pedido em `prompt`), nos posts dados. */
+const pendingPhotos = (posts: BuiltPost[]) =>
+  posts.reduce((n, p) => n + p.slides.reduce((m, sl) => m + (sl.layers as (Layer & { prompt?: string })[]).filter((l) => l.type === 'image' && !l.hidden && !l.src && l.prompt).length, 0), 0)
+
 /** O que dizer à IA sobre as fotos geradas no servidor. */
 const photoNote = (p: { geradas: number; faltam: number; erro?: string }) =>
   p.geradas || p.faltam
-    ? { fotos: p.geradas ? `${p.geradas} foto(s) gerada(s) no servidor${p.faltam ? `; ${p.faltam} ainda sem foto${p.erro ? ` (${p.erro})` : ''}` : ''}.` : `${p.faltam} slide(s) esperam foto: gere cada foto no chat (sem texto) e mande com sinfy_criativo_foto ("base64", post e slide).` }
+    ? { fotos: p.geradas ? `${p.geradas} foto(s) gerada(s) no servidor${p.faltam ? `; ${p.faltam} ainda sem foto${p.erro ? ` (${p.erro})` : ''}` : ''}.` : `${p.faltam} foto(s) pendente(s). Com o app da Sinfy aberto e o conector ligado num computador da pessoa, elas são geradas sozinhas em 1 a 3 minutos (confira com sinfy_criativo_ver, campo fotos_pendentes; para pedir de novo, sinfy_criativo_fotos). Sem o conector: gere cada foto no chat (sem texto) e mande com sinfy_criativo_foto ("base64", post e slide).` }
     : {}
 
 /** Resposta de ferramenta com imagens: o texto vai primeiro, as prévias depois. */
@@ -949,11 +953,12 @@ const TOOLS: Tool[] = [
         {
           ok: true,
           conjunto: id,
+          ...(project?.id ? { projeto_id: project.id } : {}),
           link: setUrl(id, project?.id, content?.id as string | undefined),
           onde: project ? `projeto ${project.name} (a equipe dele abre)` : 'pasta pessoal da pessoa da chave',
           conteudo: ligado,
           marca: brand ? `marca da conta (${useBrand.name})` : 'sem marca salva na conta: prévia neutra; ao abrir, a Sinfy aplica a marca do projeto',
-          ...(brandFixes.length ? { ajustado_para_a_marca: [...new Set(brandFixes)].slice(0, 12), regra_da_marca: 'Fontes e cores fora da marca foram trocadas pelas da marca. Use só as cores e fontes de sinfy_conta.' } : {}),
+          ...(brandFixes.length ? { ajustado_para_a_marca: [...new Set(brandFixes)].slice(0, 12), regra_da_marca: 'Fontes e cores fora da marca viram as da marca, e as camadas encaixam no grid do editor (margem de 84 px, 4 colunas; nos stories, fora do topo e da base que o Instagram cobre). Use só as cores e fontes de sinfy_conta e posicione dentro da margem.' } : {}),
           ...photoNote(photos),
           posts: posts.map((p) => ({ nome: p.name, formato: p.format, slides: p.slides.length, legenda: p.caption })),
           previa: previewError ?? (images.length ? `Uma imagem por post com os ${total} slides lado a lado, na ordem. Mostre à pessoa.${built.length > images.length ? ' Para os outros posts, use sinfy_criativo_ver com o número do post.' : ''}` : undefined),
@@ -1067,9 +1072,32 @@ const TOOLS: Tool[] = [
       const width = Math.min(1080, Math.max(320, Number(a.largura) || 720))
       const images = one >= 0 ? await renderSlides([{ ...post, slides: [post.slides[one]] }], set.assets ?? [], width, 1) : await renderSheets([post], set.assets ?? [], 1)
       return new WithImages(
-        { conjunto: set.name, post: `${index + 1} de ${posts.length}`, nome: post.name, formato: post.format, slides: post.slides.length, legenda: post.caption, link: setUrl(found.id, found.projectId), nota: one >= 0 ? `Slide ${one + 1} em tamanho grande. Mostre à pessoa.` : 'Todos os slides numa imagem, na ordem. Para ver um em detalhe, passe "slide". Mostre à pessoa.' },
+        { conjunto: set.name, post: `${index + 1} de ${posts.length}`, fotos_pendentes: pendingPhotos(posts), nome: post.name, formato: post.format, slides: post.slides.length, legenda: post.caption, link: setUrl(found.id, found.projectId), nota: one >= 0 ? `Slide ${one + 1} em tamanho grande. Mostre à pessoa.` : 'Todos os slides numa imagem, na ordem. Para ver um em detalhe, passe "slide". Mostre à pessoa.' },
         images
       )
+    },
+  },
+  {
+    name: 'sinfy_criativo_fotos',
+    title: 'Gerar as fotos pendentes',
+    description: 'Pede as fotos que faltam num conjunto (slides com foto descrita e ainda sem imagem). Quem gera é o app da Sinfy aberto com o conector ligado, num computador da pessoa, pelo plano de IA dela (sem custo por imagem); leva 1 a 3 minutos. Criar e editar já pedem sozinhos; use para pedir de novo (por exemplo depois que a pessoa abriu o app). Acompanhe com sinfy_criativo_ver (fotos_pendentes).',
+    inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string', description: 'Id do conjunto.' }, projeto_id: { type: 'string' } }, additionalProperties: false },
+    annotations: { readOnlyHint: false, idempotentHint: true },
+    run: async (caller, a) => {
+      need(caller, 'criativos', 'Criativos')
+      const found = (await listSets(caller)).find((s) => s.id === a.id && (!a.projeto_id || s.projectId === a.projeto_id))
+      if (!found) throw new ToolError('Conjunto não encontrado nesta conta.')
+      const set = await readJson<{ posts?: BuiltPost[] }>(`${found.folder}/${found.id}/set.json`)
+      if (!set) throw new ToolError('Não consegui abrir o conjunto.')
+      const n = pendingPhotos(set.posts ?? [])
+      return {
+        conjunto: found.id,
+        ...(found.projectId ? { projeto_id: found.projectId } : {}),
+        fotos_pendentes: n,
+        como: n
+          ? 'Pedido enviado ao app da Sinfy aberto com o conector. Confira com sinfy_criativo_ver em 1 a 3 minutos. Se continuar pendente, o app ou o conector não está ligado: gere cada foto no chat (sem texto) e mande com sinfy_criativo_foto ("base64", post e slide).'
+          : 'Nenhuma foto pendente neste conjunto.',
+      }
     },
   },
   {
@@ -1303,9 +1331,10 @@ const TOOLS: Tool[] = [
         {
           ok: true,
           conjunto: found.id,
+          ...(found.projectId ? { projeto_id: found.projectId } : {}),
           feito: done,
           ...photoNote(photos),
-          ...(brandFixes.length ? { ajustado_para_a_marca: [...new Set(brandFixes)].slice(0, 12), regra_da_marca: 'Fontes e cores fora da marca foram trocadas pelas da marca. Use só as cores e fontes de sinfy_conta.' } : {}),
+          ...(brandFixes.length ? { ajustado_para_a_marca: [...new Set(brandFixes)].slice(0, 12), regra_da_marca: 'Fontes e cores fora da marca viram as da marca, e as camadas encaixam no grid do editor (margem de 84 px, 4 colunas; nos stories, fora do topo e da base que o Instagram cobre). Use só as cores e fontes de sinfy_conta e posicione dentro da margem.' } : {}),
           posts: set.posts.map((p, i) => ({ post: i + 1, nome: p.name, slides: p.slides.length, legenda: p.caption })),
           previa: images.length ? 'Uma imagem por post mudado, com os slides lado a lado. Mostre à pessoa.' : undefined,
           link: setUrl(found.id, found.projectId),
@@ -1493,7 +1522,7 @@ const PROMPTS = [
 ]
 
 const LIVRE_HELP = [
-  'SLIDE LIVRE (para copiar uma referência com fidelidade, ou qualquer layout que os modelos não fazem): {"template":"livre","fundo":"#hex","camadas":[...]} em pixels do formato (4x5 = 1080×1350, 1x1 = 1080×1080, 9x16 = 1080×1920), de trás para a frente.',
+  'SLIDE LIVRE (para copiar uma referência com fidelidade, ou qualquer layout que os modelos não fazem): {"template":"livre","fundo":"#hex","camadas":[...]} em pixels do formato (4x5 = 1080×1350, 1x1 = 1080×1080, 9x16 = 1080×1920), de trás para a frente. GRID: margem de 84 px em todos os lados e 4 colunas (bordas das colunas em x = 84, 291, 319, 526, 554, 761, 789, 996; centro 540); nos stories, texto entre y = 250 e y = 1574. O que sair do grid é encaixado nele; só fundos e fotos podem ir até a borda.',
   'Camadas: {"tipo":"texto","texto","x","y","w","h"?,"fonte" (só as fontes da marca, de sinfy_conta; outra vira a da marca),"peso" (100-900),"tamanho" (px),"cor","alinhamento" (left|center|right),"altura_linha" (1.0),"espaco_letras" (em, ex. -0.02),"maiusculas","italico","destaque_cor" (cor das *palavras* entre asteriscos)} · {"tipo":"forma","x","y","w","h","cor","cor2"? (degradê),"angulo"?,"raio"?,"borda"?,"borda_largura"?,"opacidade"?} · {"tipo":"imagem","x","y","w","h","arquivo" (Cérebro) | "url" | "prompt" (descreva a foto: ela é gerada),"ajuste":"cover"|"contain","raio"?} · {"tipo":"grade","tamanho" (px entre linhas),"cor","espessura","opacidade"} (fundo quadriculado) · {"tipo":"pontos","tamanho","ponto","cor","opacidade"}. Também "opacidade" e "rotacao" em qualquer camada.',
   'Para copiar uma referência: abra com sinfy_referencia_ver, meça proporções (margens, tamanho da manchete em relação à largura, quebras de linha), monte o slide livre, veja o resultado com sinfy_criativo_ver e ajuste com sinfy_criativo_editar (refazer o slide) até ficar igual. Troque marca, logo e textos da outra empresa pelos da conta, se a pessoa não pedir o contrário.',
 ].join('\n')
@@ -1562,7 +1591,7 @@ function liveEvent(caller: Caller, tool: Tool, phase: 'start' | 'done', args: Ar
 const CORE = new Set([
   'sinfy_contas', 'sinfy_conta', 'sinfy_ajuda', 'sinfy_plano_salvar',
   'sinfy_conteudos', 'sinfy_conteudo_criar', 'sinfy_conteudo_atualizar',
-  'sinfy_criativos', 'sinfy_criativo', 'sinfy_criativo_criar', 'sinfy_criativo_editar', 'sinfy_criativo_ver', 'sinfy_criativo_foto', 'sinfy_video_edits',
+  'sinfy_criativos', 'sinfy_criativo', 'sinfy_criativo_criar', 'sinfy_criativo_editar', 'sinfy_criativo_ver', 'sinfy_criativo_foto', 'sinfy_criativo_fotos', 'sinfy_video_edits',
   'sinfy_publicar', 'sinfy_publicacoes',
   'sinfy_cerebro_arquivos', 'sinfy_cerebro_ler', 'sinfy_cerebro_imagem_salvar', 'sinfy_link_envio',
   'sinfy_referencias', 'sinfy_referencia_ver',
@@ -1655,7 +1684,7 @@ async function handle(msg: Rpc, caller: Caller) {
         if (value && typeof value === 'object' && !Array.isArray(value)) {
           const v = (value instanceof WithImages ? value.value : value) as Record<string, unknown>
           // O que a ferramenta criou (para a tela abrir e o cursor achar)
-          for (const k of ['conjunto', 'quadro', 'publicacao', 'referencia', 'nota', 'arquivo']) if (typeof v[k] === 'string') made[k] = v[k]
+          for (const k of ['conjunto', 'projeto_id', 'quadro', 'publicacao', 'referencia', 'nota', 'arquivo']) if (typeof v[k] === 'string') made[k] = v[k]
           if (v.conteudo && typeof v.conteudo === 'object') made.conteudo = (v.conteudo as { id?: string }).id
         }
         if (value instanceof WithImages) payload = { content: [{ type: 'text', text: JSON.stringify(value.value) }, ...value.images.map((img) => ({ type: 'image' as const, data: img.data, mimeType: img.mimeType }))] }

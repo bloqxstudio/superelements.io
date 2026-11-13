@@ -92,3 +92,6 @@ __pycache__/
 
 # Cópia local do vídeo servido por public/sp3.mp4
 /sp3.mp4
+
+# Gerado ao rodar deno na raiz (as funções resolvem dependências no deploy)
+/deno.lock

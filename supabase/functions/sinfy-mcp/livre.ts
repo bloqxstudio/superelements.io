@@ -72,6 +72,69 @@ export function guardFont(g: BrandGuard | undefined, value: string, big: boolean
   return to
 }
 
+/**
+ * O grid do editor (`src/features/criativos/grid.ts`) no slide livre (2026-11-13, o usuário: "os criativos não
+ * estão respeitando o grid proposto pela ferramenta"): margem de segurança de 7,78% do menor lado (84 px), 4
+ * colunas com espaço de 1/3 da margem e, nos stories, as faixas que o Instagram cobre (13% no topo, 18% na base).
+ * Texto fica sempre dentro; forma e imagem que não sangram entram na margem; tudo que fica perto de uma linha
+ * (margem, coluna, centro) encaixa nela, como o ímã do editor. O que vai até a borda de propósito não muda.
+ */
+const SNAP = 24
+
+export function gridLines(format: string) {
+  const { w: W, h: H } = SIZES[format] ?? SIZES['4x5']
+  const m = Math.round(Math.min(W, H) * 0.0778)
+  const g = Math.round(m / 3)
+  const col = (W - m * 2 - g * 3) / 4
+  const v = [m, W - m, W / 2]
+  for (let i = 0; i < 4; i++) v.push(Math.round(m + i * (col + g)), Math.round(m + i * (col + g) + col))
+  const story = H / W > 1.6
+  const top = story ? Math.round(H * 0.13) : m
+  const bottom = story ? H - Math.round(H * 0.18) : H - m
+  return { W, H, m, v, h: [m, H - m, H / 2, top, bottom], top, bottom }
+}
+
+const nearest = (value: number, lines: number[]) => {
+  let best = value, d = SNAP + 1
+  for (const l of lines) if (Math.abs(l - value) < d) { d = Math.abs(l - value); best = l }
+  return best
+}
+
+/** Põe uma camada no grid (muda x, y, w, h no lugar). Devolve se mexeu. */
+export function fitToGrid(layer: Obj, format: string): boolean {
+  const G = gridLines(format)
+  let { x, y, w, h } = layer as { x: number; y: number; w: number; h: number }
+  const before = `${x},${y},${w},${h}`
+  const isText = layer.type === 'text'
+  const bleedX = !isText && (x <= 0 || x + w >= G.W)
+  const bleedY = !isText && (y <= 0 || y + h >= G.H)
+  if (!bleedX) {
+    // Encaixa as bordas nas linhas próximas, depois garante a margem
+    let left = nearest(x, G.v), right = nearest(x + w, G.v)
+    if (right - left < 40) { left = x; right = x + w }
+    left = Math.max(G.m, left)
+    right = Math.min(G.W - G.m, right)
+    if (right - left < Math.min(w, 160)) {
+      // Estreito demais depois de cortar: desliza para dentro, sem encolher
+      left = Math.max(G.m, Math.min(x, G.W - G.m - w))
+      right = Math.min(G.W - G.m, left + w)
+    }
+    x = left
+    w = right - left
+  }
+  if (!bleedY) {
+    const top = isText ? G.top : G.m
+    const bottom = isText ? G.bottom : G.H - G.m
+    let t = nearest(y, G.h)
+    if (Math.abs(t - y) > SNAP) t = y
+    t = Math.max(top, t)
+    if (t + h > bottom) t = Math.max(top, bottom - h)
+    y = t
+  }
+  Object.assign(layer, { x: Math.round(x), y: Math.round(y), w: Math.max(1, Math.round(w)), h: Math.round(h) })
+  return before !== `${layer.x},${layer.y},${layer.w},${layer.h}`
+}
+
 export const SIZES: Record<string, { w: number; h: number }> = { '4x5': { w: 1080, h: 1350 }, '1x1': { w: 1080, h: 1080 }, '9x16': { w: 1080, h: 1920 } }
 
 /** Confere o pedido do slide livre (antes de gravar): até 60 camadas, tipos conhecidos. */
@@ -122,6 +185,10 @@ export function buildFree(spec: Obj, format: string, guard?: BrandGuard, notes?:
       for (let y = gap; y < size.h; y += gap) layers.push({ id: uid(), type: 'rect', name: 'Grade', group, x: 0, y: Math.round(y - line / 2), w: size.w, h: line, fill, radius: 0, opacity, locked: true })
     }
   }
+  // Grid do editor: só as camadas pedidas pela IA (a grade e os pontos ocupam o slide inteiro)
+  let moved = 0
+  for (const l of layers) if (l.type === 'text' || ((l.type === 'rect' || l.type === 'image') && l.name !== 'Grade')) if (fitToGrid(l, format)) moved++
+  if (moved) notes?.push(`${moved} camada(s) encaixada(s) no grid (margem de ${gridLines(format).m} px e colunas)`)
   return { id: uid(), background: col(spec.fundo, '#ffffff'), layers }
 }
 

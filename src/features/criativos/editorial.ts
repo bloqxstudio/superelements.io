@@ -1,3 +1,4 @@
+import { marginOf } from './grid'
 import { mix } from '@/features/space/brand/color'
 import { buttonRadiusOf, capsButton, paletteOf, type Palette } from './brand'
 import { alpha } from './color'
@@ -69,11 +70,14 @@ const edOf = (brand: SetBrand, format: FormatId, dark: boolean, at?: SlideAt, to
   const p = paletteOf(brand)
   const { width: w, height: h } = sizeOf(format)
   const story = h / w > 1.7
-  const meta = story ? SAFE.top : 56
-  const foot = story ? h - SAFE.bottom - 26 : h - 80
+  // Dentro do grid do editor (2026-11-13, o usuário: "os criativos não estão respeitando o grid proposto pela
+  // ferramenta"): margem de segurança (`marginOf`, 84 px) nos quatro lados; antes eram 64 nas laterais, 56 no topo e 54 na base
+  const m = marginOf(format)
+  const meta = story ? SAFE.top : m
+  const foot = story ? h - SAFE.bottom - 26 : h - m - 26
   const bg = dark ? p.ink : tone === 'white' ? '#ffffff' : tone === 'stone' ? stoneOf(brand, p) : p.paper
   return {
-    brand, p, w, h, m: 64, story, dark, bg, meta, foot, at,
+    brand, p, w, h, m, story, dark, bg, meta, foot, at,
     y0: meta + (story ? 130 : 134),
     y1: foot - (story ? 70 : 60),
     fg: dark ? '#ffffff' : p.ink,
