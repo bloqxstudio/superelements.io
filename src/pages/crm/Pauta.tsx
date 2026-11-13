@@ -17,6 +17,8 @@ import { CHANNELS, STAGES, STAGE_LABEL, STAGE_TONE, addDays, byTime, isoOf, mont
 import { PautaPanel } from '@/features/pauta/PautaPanel'
 import { SendDialog } from '@/features/pauta/SendDialog'
 import { ratioOf, timeLabel } from '@/features/pauta/ui'
+import { TagChip, tagTone, tagsOf } from '@/features/pauta/tags'
+import type { ContentTag } from '@/features/pauta/api'
 
 /**
  * Pauta (/pauta): o calendário editorial da conta, no estilo da Pautta. Cada conteúdo é um card no
@@ -28,8 +30,9 @@ import { ratioOf, timeLabel } from '@/features/pauta/ui'
 const WEEK = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom']
 const today = () => isoOf(new Date())
 
-const PautaCard: React.FC<{ c: Content; cover?: CoverInfo; open: number; compact?: boolean; selected: boolean; onOpen: () => void }> = ({ c, cover, open, compact, selected, onOpen }) => {
+const PautaCard: React.FC<{ c: Content; tags: ContentTag[]; cover?: CoverInfo; open: number; compact?: boolean; selected: boolean; onOpen: () => void }> = ({ c, tags, cover, open, compact, selected, onOpen }) => {
   const stage = stageOf(c)
+  const mine = tagsOf(c.tagIds, tags)
   const first = cover?.posts.find((p) => p.cover && cover.urls[p.cover])
   const img = first ? cover!.urls[first.cover!] : undefined
   return (
@@ -41,7 +44,7 @@ const PautaCard: React.FC<{ c: Content; cover?: CoverInfo; open: number; compact
         e.dataTransfer.effectAllowed = 'move'
       }}
       onClick={onOpen}
-      aria-label={`${c.title}, ${STAGE_LABEL[stage]}${c.scheduledTime ? `, às ${c.scheduledTime}` : ''}`}
+      aria-label={`${c.title}, ${STAGE_LABEL[stage]}${mine.length ? `, ${mine.map((t) => t.name).join(', ')}` : ''}${c.scheduledTime ? `, às ${c.scheduledTime}` : ''}`}
       className={cn(
         'group relative flex w-full items-stretch gap-2 overflow-hidden rounded-md border bg-white text-left transition-[border-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         selected ? 'border-gray-900 shadow-sm' : 'border-gray-200 hover:border-gray-300',
@@ -66,6 +69,14 @@ const PautaCard: React.FC<{ c: Content; cover?: CoverInfo; open: number; compact
           )}
         </span>
         <span className={cn('block text-xs font-medium leading-snug text-gray-900', compact ? 'truncate' : 'line-clamp-2')}>{c.title}</span>
+        {mine.length > 0 && (
+          <span className="mt-0.5 flex min-w-0 flex-wrap gap-0.5" aria-hidden>
+            {mine.slice(0, compact ? 2 : 5).map((t) => (
+              <TagChip key={t.id} tag={t} size="xs" className="max-w-[88px]" />
+            ))}
+            {compact && mine.length > 2 && <span className="text-[9px] font-medium leading-4 text-gray-500">+{mine.length - 2}</span>}
+          </span>
+        )}
         {!compact && <span className="mt-0.5 block truncate text-[11px] text-gray-500">{STAGE_LABEL[stage]}</span>}
       </span>
     </button>
@@ -169,6 +180,7 @@ const Pauta: React.FC = () => {
   const openId = params.get('peca') ?? undefined
   const stageFilter = (params.get('etapa') ?? '') as Stage | ''
   const channelFilter = params.get('canal') ?? ''
+  const tagFilter = params.get('tipo') ?? ''
 
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string>()
@@ -232,6 +244,7 @@ const Pauta: React.FC = () => {
       .channel(`pauta-${team.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_contents', filter }, later)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_approval_items', filter }, later)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_content_tags', filter }, later)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_content_comments', filter }, later)
       .subscribe()
     return () => {
@@ -257,8 +270,8 @@ const Pauta: React.FC = () => {
 
   const visible = useMemo(() => {
     const list = data?.contents ?? []
-    return list.filter((c) => (!stageFilter || stageOf(c) === stageFilter) && (!channelFilter || c.channel === channelFilter))
-  }, [data, stageFilter, channelFilter])
+    return list.filter((c) => (!stageFilter || stageOf(c) === stageFilter) && (!channelFilter || c.channel === channelFilter) && (!tagFilter || (tagFilter === 'sem' ? !c.tagIds?.length : c.tagIds?.includes(tagFilter))))
+  }, [data, stageFilter, channelFilter, tagFilter])
 
   const byDay = useMemo(() => {
     const map = new Map<string, Content[]>()
@@ -346,6 +359,8 @@ const Pauta: React.FC = () => {
               `Visão: ${view === 'mes' ? 'mês' : 'semana'} de ${range.from} a ${range.to}.`,
               stageFilter ? `Filtro de etapa: ${STAGE_LABEL[stageFilter]}.` : '',
               channelFilter ? `Filtro de canal: ${channelFilter}.` : '',
+              data.tags.length ? `Tipos de conteúdo da conta: ${data.tags.map((t) => `${t.name} (id ${t.id})`).join(', ')}.` : 'A conta ainda não tem tipos de conteúdo.',
+              tagFilter ? `Filtro de tipo: ${tagFilter === 'sem' ? 'sem tipo' : (data.tags.find((t) => t.id === tagFilter)?.name ?? tagFilter)}.` : '',
               openId ? `Peça aberta no painel (é "esta peça", "isto"): id ${openId}${data.contents.find((c) => c.id === openId) ? `, "${data.contents.find((c) => c.id === openId)!.title}", etapa ${STAGE_LABEL[stageOf(data.contents.find((c) => c.id === openId)!)]}` : ''}. Para mudar o texto, a data ou a etapa dela use o id.` : '',
               `Ideias esperando aprovação: ${ideas.length}. Sem data: ${unscheduled.length}.`,
             ]
@@ -362,13 +377,14 @@ const Pauta: React.FC = () => {
             },
             {
               name: 'mostrar',
-              doc: '{"dia"?:"AAAA-MM-DD","visao"?:"mes"|"semana","etapa"?:ETAPA|"","canal"?:CANAL|""} — muda o que a Pauta mostra (mês, semana, filtros). ETAPA = ideia|producao|gestor|pronto|cliente|ajuste|aprovado.',
+              doc: '{"dia"?:"AAAA-MM-DD","visao"?:"mes"|"semana","etapa"?:ETAPA|"","canal"?:CANAL|"","tipo"?:ID_DO_TIPO|"sem"|""} — muda o que a Pauta mostra (mês, semana, filtros). ETAPA = ideia|producao|gestor|pronto|cliente|ajuste|aprovado.',
               run: async (a) => {
                 const patch: Record<string, string | undefined> = {}
                 if (typeof a.dia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(a.dia)) patch.dia = a.dia
                 if (a.visao === 'semana' || a.visao === 'mes') patch.visao = a.visao === 'semana' ? 'semana' : undefined
                 if (typeof a.etapa === 'string') patch.etapa = (STAGES as string[]).includes(a.etapa) ? a.etapa : undefined
                 if (typeof a.canal === 'string') patch.canal = a.canal || undefined
+                if (typeof a.tipo === 'string') patch.tipo = a.tipo || undefined
                 setParam(patch)
                 return { label: 'Mudei a visão da Pauta.', ok: true }
               },
@@ -485,6 +501,17 @@ const Pauta: React.FC = () => {
                   </option>
                 ))}
               </select>
+              {data.tags.length > 0 && (
+                <select aria-label="Tipo de conteúdo" value={tagFilter} onChange={(e) => setParam({ tipo: e.target.value || undefined })} className={cn(FIELD, 'h-8 w-auto py-0 text-xs')}>
+                  <option value="">Todos os tipos</option>
+                  {data.tags.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                  <option value="sem">Sem tipo</option>
+                </select>
+              )}
               <div role="radiogroup" aria-label="Visão" className="inline-flex rounded-lg bg-gray-100 p-0.5">
                 {([['mes', 'Mês'], ['semana', 'Semana']] as const).map(([id, label]) => (
                   <button key={id} type="button" role="radio" aria-checked={view === id} onClick={() => setParam({ visao: id === 'mes' ? undefined : id })} className={cn('h-7 rounded-md px-3 text-xs font-medium', view === id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600')}>
@@ -522,7 +549,7 @@ const Pauta: React.FC = () => {
                           <span className={cn('mb-0.5 inline-flex h-5 w-5 items-center justify-center self-start rounded-full text-[11px] tabular-nums', day === todayIso ? 'bg-violet-600 font-semibold text-white' : out ? 'text-gray-400' : 'text-gray-600')}>{Number(day.slice(8))}</span>
                         )}
                         {items.slice(0, max).map((c) => (
-                          <PautaCard key={c.id} c={c} cover={covers[c.id]} open={data.open[c.id] ?? 0} compact={view === 'mes'} selected={openId === c.id} onOpen={() => setParam({ peca: c.id })} />
+                          <PautaCard key={c.id} c={c} tags={data.tags} cover={covers[c.id]} open={data.open[c.id] ?? 0} compact={view === 'mes'} selected={openId === c.id} onOpen={() => setParam({ peca: c.id })} />
                         ))}
                         {items.length > max && (
                           <button type="button" onClick={() => setParam({ visao: 'semana', dia: day })} className="self-start px-1 text-[11px] font-medium text-gray-600 hover:text-gray-900">
@@ -579,7 +606,7 @@ const Pauta: React.FC = () => {
               <p className="mt-1 px-0.5 text-[11px] text-gray-500">Arraste para um dia do calendário.</p>
               <div className="mt-2 grid max-h-[560px] gap-1.5 overflow-y-auto">
                 {unscheduled.map((c) => (
-                  <PautaCard key={c.id} c={c} cover={covers[c.id]} open={data.open[c.id] ?? 0} selected={openId === c.id} onOpen={() => setParam({ peca: c.id })} />
+                  <PautaCard key={c.id} c={c} tags={data.tags} cover={covers[c.id]} open={data.open[c.id] ?? 0} selected={openId === c.id} onOpen={() => setParam({ peca: c.id })} />
                 ))}
                 {unscheduled.length === 0 && <p className="px-0.5 py-2 text-[11px] text-gray-400">Tudo com data.</p>}
               </div>
@@ -591,6 +618,13 @@ const Pauta: React.FC = () => {
             {STAGES.map((s) => (
               <li key={s} className="flex items-center gap-1.5">
                 <span className={cn('h-2.5 w-[3px] rounded-full', STAGE_TONE[s].bar)} aria-hidden /> {STAGE_LABEL[s]}
+              </li>
+            ))}
+            {data.tags.map((t) => (
+              <li key={t.id}>
+                <button type="button" onClick={() => setParam({ tipo: tagFilter === t.id ? undefined : t.id })} aria-pressed={tagFilter === t.id} className={cn('flex items-center gap-1.5 rounded-full px-1 hover:text-gray-900', tagFilter === t.id && 'font-semibold text-gray-900')}>
+                  <span className={cn('h-2 w-2 rounded-full', tagTone(t.color).dot)} aria-hidden /> {t.name}
+                </button>
               </li>
             ))}
           </ul>
@@ -618,6 +652,8 @@ const Pauta: React.FC = () => {
             setParam({ peca: undefined })
           }}
           onSend={(id) => setSending({ ids: [id], title: opened.title })}
+          tags={data.tags}
+          onTagsChanged={(tags) => setData((d) => (d ? { ...d, tags } : d))}
         />
       )}
 

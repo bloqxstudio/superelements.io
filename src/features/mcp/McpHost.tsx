@@ -4,6 +4,7 @@ import { McpDialog } from '@/features/crm/McpDialog'
 import { iaraEnabled, useMcpConnect } from './connect'
 import { useMcpChannel } from './live'
 import { McpLiveBadge } from './McpLiveBadge'
+import { CopyForAi } from './CopyForAi'
 
 /**
  * O "Conectar sua IA" de qualquer tela (menu lateral, botões que antes chamavam a Iara). Com a Iara
@@ -29,6 +30,7 @@ export const McpHost: React.FC = () => {
   return (
     <>
       <McpLiveBadge />
+      <CopyForAi />
       <McpDialog open={open} onOpenChange={(v) => (v ? show() : close())} teamId={team.id} teamName={team.name} request={request} />
     </>
   )

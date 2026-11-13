@@ -10,7 +10,8 @@ import { deleteContent, saveContent, transitionContent } from '@/features/conteu
 import { useIara } from '@/features/iara/store'
 import { setHash, setPath } from '@/features/conteudos/forward'
 import { loadSet } from '@/features/criativos/storage'
-import { addComment, deleteComment, listComments, mediaUrl, resolveComment, scheduleContent, type Comment, type CoverInfo, type SentItem } from './api'
+import { addComment, deleteComment, listComments, mediaUrl, resolveComment, scheduleContent, setContentTags, type Comment, type ContentTag, type CoverInfo, type SentItem } from './api'
+import { TagPicker } from './tags'
 import { CHANNELS, channelOfFormat, stageOf } from './rules'
 import { SlideViewer, StageChip, ratioOf, timeLabel } from './ui'
 
@@ -32,7 +33,10 @@ export const PautaPanel: React.FC<{
   onChanged: (c: Content) => void
   onDeleted: (id: string) => void
   onSend: (id: string) => void
-}> = ({ content, creative, cover, sent, me, manager, onClose, onChanged, onDeleted, onSend }) => {
+  /** Tipos de conteúdo da conta. */
+  tags: ContentTag[]
+  onTagsChanged: (tags: ContentTag[]) => void
+}> = ({ content, creative, cover, sent, me, manager, onClose, onChanged, onDeleted, onSend, tags, onTagsChanged }) => {
   const [script, setScript] = useState(content.script)
   const [idea, setIdea] = useState(content.idea)
   const [acting, setActing] = useState<string>()
@@ -314,6 +318,23 @@ export const PautaPanel: React.FC<{
               Salvar texto
             </Button>
           )}
+        </section>
+
+        <section aria-label="Tipo de conteúdo" className="mt-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Tipo de conteúdo</h3>
+          <TagPicker
+            teamId={content.teamId}
+            tags={tags}
+            value={content.tagIds ?? []}
+            onTagsChanged={onTagsChanged}
+            onChange={async (ids) => {
+              try {
+                onChanged(await setContentTags(content.id, ids))
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : 'Não consegui salvar o tipo.')
+              }
+            }}
+          />
         </section>
 
         <section aria-label="Agenda" className="mt-5">

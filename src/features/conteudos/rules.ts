@@ -83,6 +83,8 @@ export interface Content {
   /** O que o cliente respondeu ao último envio deste texto. */
   clientStatus?: 'enviado' | 'aprovado' | 'ajuste'
   clientAt?: number
+  /** Tipos de conteúdo (`crm_contents.tag_ids`, migração 20261112120000), na ordem do catálogo. */
+  tagIds?: string[]
   status: ContentStatus
   version: number
   contentHash: string

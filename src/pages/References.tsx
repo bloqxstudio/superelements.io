@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Bookmark, Check, Download, ExternalLink, Heart, MessageCircle, Play, ImagePlus, Lightbulb, Loader2, MessagesSquare, Pencil, Plus, RefreshCw, Search, Sparkles, Star, Trash2, X } from 'lucide-react'
+import { Bookmark, Check, Copy, Download, ExternalLink, Heart, MessageCircle, Play, ImagePlus, Lightbulb, Loader2, MessagesSquare, Pencil, Plus, RefreshCw, Search, Sparkles, Star, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useCrm } from '@/features/crm/crmStore'
 import { FIELD, Page, PageHeader } from '@/features/crm/ui'
@@ -12,6 +12,8 @@ import { useReferencesIara } from '@/features/referencias/referenciasIara'
 import { byRecent, createReference, createSource, deleteReference, deleteSource, listReferences, listSources, referenceShotUrl, updateReference, updateSource, uploadReferenceShot, type Reference, type ReferenceSource } from '@/features/referencias/api'
 import { KIND_LABEL, PLATFORM_LABEL, contentFormatOf, parseRefUrl, parseTags, threadUrlOf, type RefKind } from '@/features/referencias/rules'
 import { cn } from '@/lib/utils'
+import { iaraEnabled } from '@/features/mcp/connect'
+import { useAiSelection } from '@/features/mcp/aiContext'
 
 /**
  * /referencias — as melhores referências visuais da conta (2026-11-09; o usuário: "uma aba pra referências,
@@ -34,6 +36,19 @@ const Shot: React.FC<{ teamId: string; path: string; className?: string }> = ({ 
   useEffect(() => { void referenceShotUrl(teamId, path).then(setUrl, () => undefined) }, [teamId, path])
   return url ? <img src={url} alt="" loading="lazy" className={cn('h-full w-full object-cover', className)} /> : <div className="h-full w-full animate-pulse bg-gray-100" />
 }
+
+/**
+ * O que vai para a IA conectada (MCP): o id e o título, com a ferramenta que abre a referência inteira
+ * (capa, quadros, notas, números). A pessoa cola no chat do ChatGPT, do Claude ou do Cursor (2026-11-12).
+ */
+const referenceForAi = (r: Reference) =>
+  `Use a referência da Sinfy ref_${r.id}${r.title ? ` ("${r.title}")` : ''}${r.author ? ` de @${r.author}` : ''}: abra com sinfy_referencia_ver (id ref_${r.id}) para ver a capa, os quadros e as notas.`
+
+const copyForAi = (r: Reference) =>
+  navigator.clipboard.writeText(referenceForAi(r)).then(
+    () => toast.success('Referência copiada', { description: 'Cole no chat da sua IA conectada (ChatGPT, Claude ou Cursor).' }),
+    () => toast.error('Não consegui copiar'),
+  )
 
 const Card: React.FC<{ r: Reference; teamId: string; onEdit: () => void; onChange: (r: Reference) => void; onDelete: () => void; selected?: boolean; onSelect?: () => void }> = ({ r, teamId, onEdit, onChange, onDelete, selected, onSelect }) => {
   const navigate = useNavigate()
@@ -92,7 +107,7 @@ const Card: React.FC<{ r: Reference; teamId: string; onEdit: () => void; onChang
           <Star className="h-3.5 w-3.5" fill={r.starred ? 'currentColor' : 'none'} />
         </button>
         {!embed && onSelect && (
-          <button type="button" onClick={onSelect} aria-pressed={!!selected} title={selected ? 'Tirar a seleção' : 'Selecionar para a Iara (recriar ou criar um vídeo pelo chat)'} className={cn('absolute right-2 top-2 flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-semibold shadow', selected ? 'bg-violet-600 text-white' : 'bg-white/90 text-gray-600 hover:text-violet-700')}>
+          <button type="button" onClick={() => { if (!selected && !iaraEnabled()) void copyForAi(r); onSelect() }} aria-pressed={!!selected} title={selected ? 'Tirar a seleção' : iaraEnabled() ? 'Selecionar para a Iara (recriar ou criar um vídeo pelo chat)' : 'Selecionar e copiar para a sua IA conectada'} className={cn('absolute right-2 top-2 flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-semibold shadow', selected ? 'bg-violet-600 text-white' : 'bg-white/90 text-gray-600 hover:text-violet-700')}>
             <Check className="h-3.5 w-3.5" /> {selected ? 'Selecionada' : 'Selecionar'}
           </button>
         )}
@@ -120,6 +135,9 @@ const Card: React.FC<{ r: Reference; teamId: string; onEdit: () => void; onChang
           </Button>
           <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" onClick={() => setRecreating(true)} title="Recriar como post ou vídeo, com um conteúdo novo ou como está, na marca da conta">
             <Sparkles className="h-3.5 w-3.5 text-violet-600" /> Recriar
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" onClick={() => void copyForAi(r)} title="Copia o id desta referência para colar no chat da sua IA conectada (MCP)">
+            <Copy className="h-3.5 w-3.5" /> Para a IA
           </Button>
           <a href={r.url} target="_blank" rel="noreferrer" className="inline-flex h-7 items-center rounded-md px-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" title="Abrir o link"><ExternalLink className="h-3.5 w-3.5" /></a>
           {r.auto && !r.reviewed && (
@@ -305,6 +323,8 @@ const References: React.FC = () => {
 
   const selected = items?.find((r) => r.id === selectedId)
   useReferencesIara(items, selected, setSelectedId)
+  // O "Para a IA" global (Alt+I) leva a referência escolhida
+  useAiSelection('referencia', selected ? referenceForAi(selected) : undefined)
 
   if (teamStatus === 'ready' && !team) {
     return <Page><PageHeader title="Referências" text="As referências são de uma conta de empresa. Peça um convite em Equipe." /></Page>

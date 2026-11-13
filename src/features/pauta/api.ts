@@ -25,6 +25,8 @@ const ERRORS: [string, string][] = [
   ['limite_respostas', 'Este link recebeu respostas demais. Fale com a equipe.'],
   ['modulo_desligado', 'O módulo de conteúdos está desligado nesta conta.'],
   ['sem_acesso', 'Você não tem acesso a esta conta.'],
+  ['tag_repetida', 'Já existe um tipo com esse nome.'],
+  ['limite_tags', 'Limite de tipos atingido (5 por conteúdo, 40 por conta).'],
   ['campo_invalido', 'Algum campo está vazio ou longo demais.'],
 ]
 
@@ -91,14 +93,20 @@ export interface PautaData {
   sent: Record<string, SentItem>
   /** Comentários do cliente ainda não resolvidos, por conteúdo. */
   open: Record<string, number>
+  /** Tipos de conteúdo da conta (migração 20261112120000), na ordem do catálogo. */
+  tags: ContentTag[]
 }
 
 export async function loadPauta(teamId: string): Promise<PautaData> {
-  const [contents, links, items, comments] = await Promise.all([
+  const [contents, links, items, comments, tags] = await Promise.all([
     listContents(teamId),
     db.from('crm_content_links').select('*').eq('team_id', teamId).eq('kind', 'criativos'),
     db.from('crm_approval_items').select('id, link_id, content_id, decision, decided_name, decided_at, content_hash, set_hash, media, created_at').eq('team_id', teamId).order('created_at', { ascending: false }).limit(1000),
     db.from('crm_content_comments').select('content_id').eq('team_id', teamId).eq('from_client', true).is('resolved_at', null).limit(2000),
+    listTags(teamId).catch((e) => {
+      console.error('[pauta] tipos de conteúdo', e)
+      return [] as ContentTag[]
+    }),
   ])
   if (links.error) fail(links.error)
   if (items.error) fail(items.error)
@@ -109,7 +117,39 @@ export async function loadPauta(teamId: string): Promise<PautaData> {
   for (const r of (items.data ?? []) as ItemRow[]) if (!sent[r.content_id]) sent[r.content_id] = toItem(r)
   const open: Record<string, number> = {}
   for (const r of (comments.data ?? []) as { content_id: string }[]) open[r.content_id] = (open[r.content_id] ?? 0) + 1
-  return { contents, creatives, sent, open }
+  return { contents, creatives, sent, open, tags }
+}
+
+// ---------- tipos de conteúdo (tags) ----------
+
+export type TagColor = 'violet' | 'sky' | 'emerald' | 'amber' | 'rose' | 'orange' | 'teal' | 'slate'
+
+export interface ContentTag {
+  id: string
+  name: string
+  color: TagColor
+  position: number
+}
+
+type TagRow = { id: string; name: string; color: TagColor; position: number }
+const toTag = (r: TagRow): ContentTag => ({ id: r.id, name: r.name, color: r.color, position: r.position })
+
+export async function listTags(teamId: string): Promise<ContentTag[]> {
+  const { data, error } = await db.from('crm_content_tags').select('id, name, color, position').eq('team_id', teamId).order('position').order('created_at')
+  if (error) fail(error)
+  return ((data ?? []) as TagRow[]).map(toTag)
+}
+
+export async function saveTag(teamId: string, id: string | null, name: string, color: TagColor): Promise<ContentTag> {
+  const row = await rpc<TagRow | TagRow[]>('crm_content_tag_save', { p_team: teamId, p_id: id, p_name: name, p_color: color })
+  return toTag(Array.isArray(row) ? row[0] : row)
+}
+
+export const deleteTag = (id: string) => rpc<void>('crm_content_tag_delete', { p_id: id })
+
+export async function setContentTags(id: string, tagIds: string[]): Promise<Content> {
+  const row = await rpc<ContentRow | ContentRow[]>('crm_content_set_tags', { p_id: id, p_tags: tagIds })
+  return toContent(Array.isArray(row) ? row[0] : row)
 }
 
 export const contentFromRow = (row: unknown) => toContent(row as ContentRow)

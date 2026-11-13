@@ -64,3 +64,25 @@ visualizar como vai ficar no Instagram dele simuladamente e aprovar por esse lin
 - **Não feito:**
   - Aviso quando o cliente responde: a resposta aparece no editor e na Pauta (Realtime da Pauta).
   - A foto real do perfil: a simulação mostra a inicial do @.
+
+## Tipos de conteúdo (tags) na Pauta (2026-11-12)
+
+O usuário: "na pauta, quero colocar tags de tipos de conteúdo, como educativo, família, produto novo, evento…
+tudo isso deve aparecer visível no quadro do calendário".
+
+- **Banco** (migração `20261112120000_crm_content_tags.sql`, aplicada):
+  - `crm_content_tags` é o catálogo da conta (nome único sem diferenciar maiúsculas, cor de uma paleta fixa,
+    até 40 por conta), com leitura pela RLS de membro e módulo copy, e Realtime.
+  - `crm_contents.tag_ids uuid[]` guarda até 5 tipos, na ordem do catálogo.
+  - As funções `crm_content_tag_save`, `crm_content_tag_delete` (também tira o tipo dos conteúdos) e
+    `crm_content_set_tags` podem ser usadas por qualquer pessoa da equipe.
+  - Mudar os tipos não mexe na versão, no hash nem nas aprovações.
+  - Testado numa transação desfeita: ordem, nome repetido, tag de outra conta, apagar e leitura.
+- **Tela:**
+  - Cada card do calendário mostra os tipos como etiquetas coloridas: no mês, 2 e "+N"; na semana e em
+    "Sem data", todos.
+  - Há o filtro "Todos os tipos" / "Sem tipo" (`?tipo=`), e a legenda clicável também filtra.
+  - O painel da peça tem a seção "Tipo de conteúdo" (`src/features/pauta/tags.tsx`, `TagPicker`): marcar,
+    criar com cor e apagar tipo. Sugestões em um clique: Educativo, Família, Produto novo, Evento.
+  - A Iara vê os tipos e pode filtrar por eles (`mostrar` com `tipo`).
+- **Não feito:** tipos na Lista (`/conteudos`), no link de aprovação do cliente e nas ideias geradas pela Iara.

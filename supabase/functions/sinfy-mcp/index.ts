@@ -6,6 +6,7 @@ import * as Criativos from './_gerado/criativos.js'
 import { loadFamilies, measureContext, rasterize, rasterizeRgb, sniff, toBase64, type FontLib, type ResvgLike } from './previa.ts'
 import jpeg from 'npm:jpeg-js@0.4.4'
 import { asUser, fetchFile, liveSend, platformTools } from './plataforma.ts'
+import { buildMixed, cleanFree } from './livre.ts'
 import { areaTools, BRAIN_BUCKET, brainRoot, cleanFolder, GUIDE, IMAGE_EXT, saveBrainImage, skillPrompts, sniffMime } from './areas.ts'
 
 /**
@@ -84,6 +85,39 @@ async function resolveCaller(token: string): Promise<Caller | null> {
 }
 
 class ToolError extends Error {}
+
+const TEAM_FIELDS = 'id, name, segment, website, contact_name, notes, status, modules, is_home, product, archived_at'
+
+/** As contas em que a pessoa da chave está (ativas), para trocar de conta numa chamada com `conta`. */
+async function memberTeams(userId: string) {
+  const { data } = await admin.from('crm_team_members').select(`role, crm_teams!inner(${TEAM_FIELDS})`).eq('user_id', userId)
+  return ((data ?? []) as unknown as { role: string; crm_teams: Team & { archived_at: string | null } }[])
+    .filter((m) => m.crm_teams.status !== 'pausada' && !m.crm_teams.archived_at)
+    .map((m) => ({ role: m.role, team: m.crm_teams }))
+}
+
+const fold = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+
+/**
+ * Troca a conta desta chamada (2026-11-12, o Claude ligado à Avence não achava um conjunto da FL Trade):
+ * `conta` aceita o id ou o nome. Só vale para contas em que a pessoa da chave é membro, com o papel dela ali;
+ * RLS e módulos seguem os da conta escolhida.
+ */
+async function switchTeam(caller: Caller, conta: string): Promise<Caller> {
+  const want = fold(conta)
+  if (!want || want === caller.team.id || fold(caller.team.name) === want) return caller
+  const teams = await memberTeams(caller.userId)
+  const hit = teams.find((m) => m.team.id === conta.trim()) ?? teams.find((m) => fold(m.team.name) === want)
+    ?? (() => {
+      const partial = teams.filter((m) => fold(m.team.name).includes(want))
+      return partial.length === 1 ? partial[0] : undefined
+    })()
+  if (!hit) throw new ToolError(`A pessoa da chave não está numa conta ativa chamada "${conta}". Veja as contas com sinfy_contas.`)
+  const { archived_at: _a, ...team } = hit.team as Team & { archived_at?: string | null }
+  return { ...caller, role: hit.role, team: team as Team }
+}
+
+const CONTA_ARG = { type: 'string', description: 'Outra conta da pessoa (nome ou id, veja sinfy_contas). Sem isso, a conta da chave.' }
 
 const ERRORS: Record<string, string> = {
   so_gestor: 'Só dono ou gestor da conta pode fazer isso (mudar o Plano, aprovar). Peça para um gestor, ou use a chave de um gestor.',
@@ -285,6 +319,32 @@ function whenOf(v: unknown): Date {
 }
 const brt = (d: Date) => d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
+
+/** Imagens do Cérebro pedidas num slide livre (`_arquivo`): copia para o conjunto como anexo e aponta a camada. */
+async function attachBrainImages(caller: Caller, setDir: string, posts: BuiltPost[], assets: { id: string; path: string; name?: string; width?: number; height?: number }[]) {
+  const out = [...assets]
+  for (const p of posts)
+    for (const sl of p.slides)
+      for (const l of sl.layers as (Layer & { _arquivo?: string })[]) {
+        if (!l._arquivo) continue
+        const rel = l._arquivo
+        delete l._arquivo
+        if (rel.includes('..')) continue
+        const { data } = await admin.storage.from(BRAIN_BUCKET).download(`${brainRoot(caller.team.id)}/${rel}`)
+        if (!data) throw new ToolError(`Não achei "${rel}" no Cérebro (veja com sinfy_cerebro_arquivos).`)
+        const bytes = new Uint8Array(await data.arrayBuffer())
+        const info = sniff(bytes)
+        if (!info || !info.mime.startsWith('image/')) throw new ToolError(`"${rel}" não é uma imagem.`)
+        const assetId = crypto.randomUUID().slice(0, 8)
+        const assetPath = `${setDir}/${assetId}.${info.mime.split('/')[1].replace('jpeg', 'jpg').replace('svg+xml', 'svg')}`
+        const { error } = await admin.storage.from(BUCKET).upload(assetPath, bytes, { contentType: info.mime, upsert: false })
+        if (error) throw new ToolError(`Não consegui anexar "${rel}" (${error.message}).`)
+        out.push({ id: assetId, name: rel.split('/').pop() ?? 'imagem', path: assetPath, width: info.width, height: info.height })
+        l.src = `asset:${assetId}`
+      }
+  return out
+}
+
 /** Resposta de ferramenta com imagens: o texto vai primeiro, as prévias depois. */
 class WithImages {
   constructor(public value: unknown, public images: Picture[]) {}
@@ -320,7 +380,8 @@ function cleanPost(raw: unknown, caller: Caller, index: number) {
   const slides = slidesRaw.map((s, i) => {
     const o = (s ?? {}) as Record<string, unknown>
     const template = String(o.template ?? 'manifesto')
-    if (!allowed.includes(template)) throw new ToolError(`Slide ${i + 1} do post ${index + 1}: o modelo "${template}" não existe. Use: ${allowed.join(', ')}.`)
+    if (template === 'livre') return cleanFree(o, `Slide ${i + 1} do post ${index + 1}`, (m) => { throw new ToolError(m) })
+    if (!allowed.includes(template)) throw new ToolError(`Slide ${i + 1} do post ${index + 1}: o modelo "${template}" não existe. Use: ${allowed.join(', ')} ou livre.`)
     const out: Record<string, unknown> = { template }
     for (const key of SLIDE_FIELDS) {
       if (key === 'template' || o[key] === undefined || o[key] === null) continue
@@ -391,6 +452,20 @@ async function loadBrain(teamId: string) {
 }
 
 const TOOLS: Tool[] = [
+  {
+    name: 'sinfy_contas',
+    title: 'Contas da pessoa',
+    description: 'As contas em que a pessoa da chave está. Para agir em outra, passe "conta" (nome ou id) em qualquer ferramenta.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true },
+    run: async (caller) => {
+      const teams = await memberTeams(caller.userId)
+      return {
+        conta_da_chave: caller.team.name,
+        contas: teams.map((m) => ({ id: m.team.id, nome: m.team.name, papel: m.role, produto: m.team.product, desta_chave: m.team.id === caller.team.id })),
+      }
+    },
+  },
   {
     name: 'sinfy_conta',
     title: 'Quem somos',
@@ -596,7 +671,7 @@ const TOOLS: Tool[] = [
   {
     name: 'sinfy_criativo_criar',
     title: 'Criar criativos na marca',
-    description: 'Cria um conjunto NOVO de posts (feed, carrossel ou story) na marca da conta e devolve a prévia. Antes, leia sinfy_ajuda("modelos") para os modelos de slide e as regras de texto. Para ajustar um que existe, use sinfy_criativo_editar.',
+    description: 'Cria um conjunto NOVO de posts (feed, carrossel ou story) na marca da conta e devolve a prévia. Antes, leia sinfy_ajuda("modelos"): modelos prontos e o slide "livre" (camada por camada, para copiar uma referência fielmente). Para ajustar um que existe, use sinfy_criativo_editar.',
     inputSchema: {
       type: 'object',
       required: ['posts'],
@@ -623,7 +698,9 @@ const TOOLS: Tool[] = [
                   type: 'object',
                   required: ['template'],
                   properties: {
-                    template: { type: 'string', enum: [...TEMPLATES] },
+                    template: { type: 'string', enum: [...TEMPLATES, 'livre'] },
+                    fundo: { type: 'string' },
+                    camadas: { type: 'array', items: { type: 'object' } },
                     label: { type: 'string' },
                     title: { type: 'string' },
                     body: { type: 'string' },
@@ -674,8 +751,9 @@ const TOOLS: Tool[] = [
       try {
         const fonts = await fontsFor([useBrand.headingFont, useBrand.bodyFont, useBrand.emphasisFont ?? ''])
         Criativos.setMeasureContext(fonts.ctx)
-        built = posts.map((p) => Criativos.buildPost(p, useBrand) as BuiltPost)
-        ready = !!brand && fonts.ok
+        built = posts.map((p) => buildMixed(p as never, (x) => Criativos.buildPost(x, useBrand) as never) as unknown as BuiltPost)
+        // Slide livre: já sai montado daqui (o navegador não sabe montar um pedido livre)
+        ready = (!!brand && fonts.ok) || posts.some((p) => p.slides.some((sl) => sl.template === 'livre'))
       } catch (err) {
         console.error('[sinfy-mcp] montar', err)
       }
@@ -691,10 +769,11 @@ const TOOLS: Tool[] = [
         source: content ? { contentId: content.id, contextVersion: ctx?.version } : undefined,
         brief: ctx ? [ctx.offer && `Oferta: ${ctx.offer}`, ctx.audience && `Público: ${ctx.audience}`, ctx.tone && `Tom: ${ctx.tone}`, ctx.restrictions && `Restrições: ${ctx.restrictions}`].filter(Boolean).join('\n') : undefined,
         posts: ready ? built : [],
-        assets: [],
+        assets: [] as { id: string; path: string; name?: string; width?: number; height?: number }[],
         createdAt: now,
         updatedAt: now,
       }
+      set.assets = await attachBrainImages(caller, `${folder}/${id}`, set.posts as BuiltPost[], [])
       await writeJson(`${folder}/${id}/set.json`, set, false)
       const index = (await readJson<Summary[]>(`${folder}/index.json`)) ?? []
       const summary: Summary = { id, name, projectId: project?.id, projectName: project?.name, shared: !!project, posts: posts.length, colors: useBrand.colors.slice(0, 5).map((c) => c.hex), updatedAt: now }
@@ -713,7 +792,7 @@ const TOOLS: Tool[] = [
       let images: Picture[] = []
       let previewError: string | undefined
       try {
-        images = await renderSlides(built, [], 540, 10)
+        images = await renderSlides(built, set.assets as { id: string; path: string }[], 540, 10)
       } catch (err) {
         console.error('[sinfy-mcp] prévia', err)
         previewError = 'Não consegui desenhar a prévia agora; o conjunto foi salvo e abre pelo link.'
@@ -930,7 +1009,7 @@ const TOOLS: Tool[] = [
         set.posts = [...(set.posts ?? []), ...set.pending.map((p) => Criativos.buildPost(p, brand) as BuiltPost)]
         delete set.pending
       }
-      const build = (raw: unknown, i: number) => Criativos.buildPost(cleanPost(raw, caller, i), brand) as BuiltPost
+      const build = (raw: unknown, i: number) => buildMixed(cleanPost(raw, caller, i) as never, (x) => Criativos.buildPost(x, brand) as never) as unknown as BuiltPost
       const postAt = (n: unknown) => {
         const post = set.posts[Math.max(1, Number(n) || 1) - 1]
         if (!post) throw new ToolError(`O post ${String(n ?? 1)} não existe (o conjunto tem ${set.posts.length}).`)
@@ -1015,6 +1094,7 @@ const TOOLS: Tool[] = [
         }
         changed.add(post.id)
       }
+      set.assets = await attachBrainImages(caller, `${found.folder}/${found.id}`, set.posts, set.assets ?? [])
       set.updatedAt = Date.now()
       await writeJson(path, set)
       const index = (await readJson<Summary[]>(`${found.folder}/index.json`)) ?? []
@@ -1217,8 +1297,14 @@ const PROMPTS = [
   },
 ]
 
+const LIVRE_HELP = [
+  'SLIDE LIVRE (para copiar uma referência com fidelidade, ou qualquer layout que os modelos não fazem): {"template":"livre","fundo":"#hex","camadas":[...]} em pixels do formato (4x5 = 1080×1350, 1x1 = 1080×1080, 9x16 = 1080×1920), de trás para a frente.',
+  'Camadas: {"tipo":"texto","texto","x","y","w","h"?,"fonte" (Google Fonts, ex. Inter, Archivo Black, Anton, Playfair Display),"peso" (100-900),"tamanho" (px),"cor","alinhamento" (left|center|right),"altura_linha" (1.0),"espaco_letras" (em, ex. -0.02),"maiusculas","italico","destaque_cor" (cor das *palavras* entre asteriscos)} · {"tipo":"forma","x","y","w","h","cor","cor2"? (degradê),"angulo"?,"raio"?,"borda"?,"borda_largura"?,"opacidade"?} · {"tipo":"imagem","x","y","w","h","arquivo" (Cérebro) | "url" | "prompt" (gerar no editor),"ajuste":"cover"|"contain","raio"?} · {"tipo":"grade","tamanho" (px entre linhas),"cor","espessura","opacidade"} (fundo quadriculado) · {"tipo":"pontos","tamanho","ponto","cor","opacidade"}. Também "opacidade" e "rotacao" em qualquer camada.',
+  'Para copiar uma referência: abra com sinfy_referencia_ver, meça proporções (margens, tamanho da manchete em relação à largura, quebras de linha), monte o slide livre, veja o resultado com sinfy_criativo_ver e ajuste com sinfy_criativo_editar (refazer o slide) até ficar igual. Troque marca, logo e textos da outra empresa pelos da conta, se a pessoa não pedir o contrário.',
+].join('\n')
+
 // As regras longas saíram das descrições (custo fixo de tokens em toda conversa) e ficam no guia
-GUIDE.modelos = [
+GUIDE.modelos = LIVRE_HELP + '\n\n' + [
       'Cria posts de Instagram (feed, carrossel ou story) na marca da empresa, dentro dos Criativos da Sinfy. Você escreve o roteiro de cada slide (o modelo e os textos); a Sinfy monta na identidade da conta (cores, fontes, logo) e devolve a IMAGEM de cada slide para você mostrar à pessoa no chat, mais o link para editar, gerar as fotos e publicar.',
       'Antes: leia sinfy_conta (Plano e marca). Se houver um conteúdo do Plano, passe o id em conteudo_id e siga o roteiro dele.',
       'Modelos de slide (campos entre parênteses):',
@@ -1286,13 +1372,16 @@ async function handle(msg: Rpc, caller: Caller) {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } },
         serverInfo: SERVER,
-        instructions: `Você está conectado à conta "${caller.team.name}" na Sinfy e age como a pessoa da chave (só faz o que ela pode na tela). Comece por sinfy_conta (empresa, Plano, marca). Em dúvida sobre como fazer algo, leia sinfy_ajuda (tópicos: post, pauta, crm, quadros, cerebro, instagram, dados). Regras: escreva no tom do Plano, sem inventar números, preços, depoimentos ou resultados. Para ajustar algo que já existe, edite (sinfy_criativo_editar, sinfy_conteudo_atualizar, sinfy_oportunidade_salvar, sinfy_quadro_editar); não crie outro. Publicar (sinfy_publicar), aprovar, mandar mensagem a cliente, fechar ou perder oportunidade e apagar pedem o "pode" explícito da pessoa: mostre antes e só então chame com confirmar. Sempre mostre à pessoa as imagens que as ferramentas devolvem e passe os links.`,
+        instructions: `Você está conectado à conta "${caller.team.name}" na Sinfy e age como a pessoa da chave (só faz o que ela pode na tela). Se a pessoa falar de outra empresa ou cliente, veja sinfy_contas e passe "conta" (nome ou id) nas ferramentas; nunca misture dados ou marca de contas diferentes. Comece por sinfy_conta (empresa, Plano, marca). Em dúvida sobre como fazer algo, leia sinfy_ajuda (tópicos: post, pauta, crm, quadros, cerebro, instagram, dados). Regras: escreva no tom do Plano, sem inventar números, preços, depoimentos ou resultados. Para ajustar algo que já existe, edite (sinfy_criativo_editar, sinfy_conteudo_atualizar, sinfy_oportunidade_salvar, sinfy_quadro_editar); não crie outro. Publicar (sinfy_publicar), aprovar, mandar mensagem a cliente, fechar ou perder oportunidade e apagar pedem o "pode" explícito da pessoa: mostre antes e só então chame com confirmar. Sempre mostre à pessoa as imagens que as ferramentas devolvem e passe os links.`,
       })
     }
     case 'ping':
       return result(msg.id, {})
     case 'tools/list':
-      return result(msg.id, { tools: TOOLS.map(({ run: _run, ...t }) => t) })
+      return result(msg.id, {
+        tools: TOOLS.map(({ run: _run, ...t }) =>
+          t.name === 'sinfy_contas' ? t : { ...t, inputSchema: { ...t.inputSchema, properties: { ...((t.inputSchema.properties ?? {}) as Record<string, unknown>), conta: CONTA_ARG } } }),
+      })
     case 'prompts/list':
       return result(msg.id, { prompts: PROMPTS.map(({ text: _t, ...rest }) => rest) })
     case 'prompts/get': {
@@ -1308,7 +1397,16 @@ async function handle(msg: Rpc, caller: Caller) {
       let ok = true
       let errorText: string | undefined
       let payload: { content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; structuredContent?: unknown; isError?: boolean }
-      const args = (p.arguments ?? {}) as Args
+      const { conta, ...args } = (p.arguments ?? {}) as Args
+      if (typeof conta === 'string' && conta.trim()) {
+        try {
+          caller = await switchTeam(caller, conta)
+        } catch (err) {
+          const text = err instanceof ToolError ? err.message : 'Não consegui trocar de conta.'
+          await admin.from('crm_mcp_log').insert({ key_id: caller.keyId, team_id: caller.team.id, tool: tool.name, ok: false, error: text.slice(0, 500) })
+          return result(msg.id, { content: [{ type: 'text', text }], isError: true })
+        }
+      }
       const started = liveEvent(caller, tool, 'start', args)
       const made: Record<string, unknown> = {}
       try {

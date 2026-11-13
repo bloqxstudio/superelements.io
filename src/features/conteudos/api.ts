@@ -57,6 +57,7 @@ export type ContentRow = {
   channel?: string | null
   client_status?: 'enviado' | 'aprovado' | 'ajuste' | null
   client_at?: string | null
+  tag_ids?: string[] | null
   status: ContentStatus
   version: number
   content_hash: string
@@ -82,6 +83,7 @@ export const toContent = (r: ContentRow): Content => ({
   channel: r.channel ?? undefined,
   clientStatus: r.client_status ?? undefined,
   clientAt: r.client_at ? Date.parse(r.client_at) : undefined,
+  tagIds: r.tag_ids ?? [],
   status: r.status,
   version: r.version,
   contentHash: r.content_hash,

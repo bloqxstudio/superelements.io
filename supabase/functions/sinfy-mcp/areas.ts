@@ -572,7 +572,32 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
             and (${tag}::text is null or ${tag} = any(tags))
             and (${star}::boolean is null or starred = ${star})
           order by starred desc, created_at desc limit ${limit}`)
-        return { referencias: rows, link: `${appUrl}/referencias` }
+        return { referencias: rows.map((r) => ({ ...r, id: `ref_${r.id}` })), link: `${appUrl}/referencias`, ver: 'sinfy_referencia_ver com o id mostra a capa e os quadros.' }
+      },
+    },
+    {
+      name: 'sinfy_referencia_ver',
+      title: 'Ver uma referência',
+      description: 'Abre uma referência visual da conta pelo id (o que a pessoa copia em Referências › "Para a IA", ex.: ref_…): título, notas, autor, legenda, números e as imagens (capa e até 4 quadros do vídeo). Use para recriar o estilo dela num criativo da conta, sem copiar logo, foto nem texto da outra empresa.',
+      inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, imagens: { type: 'boolean', description: 'Padrão true. false = só o texto (gasta menos).' } }, additionalProperties: false },
+      annotations: { readOnlyHint: true },
+      run: async (c, a) => {
+        const id = str(a.id, 80).replace(/^ref_/, '')
+        if (!/^[0-9a-f-]{36}$/i.test(id)) fail('Mande o id da referência (ref_… ou o uuid), como a tela Referências copia.')
+        const [r] = await asUser(c, (tx) => tx`select id, url, platform, kind, title, notes, tags, starred, author, caption, likes, comments, views, media_path, frames, created_at from crm_references where id = ${id}::uuid and team_id = ${c.team.id}`)
+        if (!r) fail('Referência não encontrada nesta conta.')
+        const info = { referencia: `ref_${r.id}`, link: r.url, plataforma: r.platform, tipo: r.kind, titulo: r.title || undefined, notas: r.notes || undefined, etiquetas: r.tags?.length ? r.tags : undefined, melhor: r.starred || undefined, autor: r.author ? `@${r.author}` : undefined, legenda: r.caption ? String(r.caption).slice(0, 1200) : undefined, numeros: r.likes != null ? { curtidas: r.likes, comentarios: r.comments, views: r.views } : undefined }
+        if (a.imagens === false) return info
+        const paths = [r.media_path, ...((Array.isArray(r.frames) ? r.frames : []) as string[]).slice(0, 4)].filter((x): x is string => typeof x === 'string' && !!x && !x.includes('..'))
+        const pics: { data: string; mimeType: string }[] = []
+        for (const path of [...new Set(paths)].slice(0, 5)) {
+          const { data } = await deps.admin.storage.from(BRAIN_BUCKET).download(`${brainRoot(c.team.id)}/${path.replace(/^\/+/, '')}`)
+          if (!data || !(data.type || '').startsWith('image/')) continue
+          const bytes = new Uint8Array(await data.arrayBuffer())
+          if (bytes.length > 3 * 1024 * 1024) continue
+          pics.push({ data: btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join('')), mimeType: data.type })
+        }
+        return { ...info, imagens: pics.length ? `${pics.length} imagem(ns) abaixo: capa e quadros, na ordem.` : 'Sem captura guardada: abra o link para ver.', __imagens: pics }
       },
     },
     {
@@ -599,7 +624,7 @@ export function areaTools(deps: PlatformDeps): PlatformTool[] {
         const kind = typeof a.tipo === 'string' ? a.tipo : null
         const star = typeof a.estrela === 'boolean' ? a.estrela : null
         if (a.id) {
-          const id = str(a.id, 60)
+          const id = str(a.id, 60).replace(/^ref_/, '')
           const rows = await asUser(c, (tx) => tx`update crm_references set
               title = coalesce(${title}, title), notes = coalesce(${notes}, notes), tags = coalesce(${tags}::text[], tags),
               kind = coalesce(${kind}, kind), starred = coalesce(${star}, starred)
