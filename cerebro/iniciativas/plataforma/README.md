@@ -21,6 +21,8 @@
 
 ## Bloqueios e riscos
 
+- Deploy do app no Hostinger parado por cota de disco (13/11); limpeza e correções de 13/11 estão no GitHub, não no ar. Lista de trabalho: `docs/agentes/revisao-2026-11-13.md`.
+
 - App da Meta não publicado. Egress do Supabase acima da cota.
 
 ## Links
