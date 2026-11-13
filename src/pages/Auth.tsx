@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import './Auth.css';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowRight, BellRing, CheckCircle, Eye, EyeOff, Loader2, MapPin, TrendingUp } from 'lucide-react';
+import { ArrowRight, BellRing, CheckCircle, Eye, EyeOff, Loader2, PenLine, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,9 +22,9 @@ const Wordmark = ({ dark }: { dark?: boolean }) => (
 
 /** O que a Sinfy entrega (a mesma oferta da /lp): só o que o produto faz hoje. */
 const OUTCOMES = [
-  { icon: MapPin, title: 'Cada contato com origem', text: 'Anúncio, post ou página do site: você sabe de onde veio antes de responder.' },
-  { icon: BellRing, title: 'O lead chega, o aviso também', text: 'Contato novo vai na hora para o WhatsApp da equipe, com nome e telefone.' },
-  { icon: TrendingUp, title: 'Resultado que o cliente entende', text: 'Quais campanhas viraram conversa e venda, num relatório só.' },
+  { icon: PenLine, title: 'Posts e vídeos na marca', text: 'Os agentes criam posts, carrosséis e vídeos com a identidade de cada cliente.' },
+  { icon: BellRing, title: 'O lead chega, o aviso também', text: 'Contato novo vai na hora para o WhatsApp da equipe, com a origem.' },
+  { icon: TrendingUp, title: 'Venda que o cliente vê', text: 'Quais posts e campanhas viraram conversa e venda, num relatório só.' },
 ];
 
 const GoogleIcon = () => (
@@ -103,12 +103,13 @@ export default function Auth() {
         <Wordmark dark />
         <div className="sa-offer">
           <div>
-            <p className="sa-eyebrow">Instagram, anúncios, site, WhatsApp e CRM</p>
+            <p className="sa-eyebrow">Feito com agentes de IA</p>
             <h2 className="sa-title">
-              Do anúncio à venda,
-              <span>num lugar só.</span>
+              <span className="sa-title-line">Do post no Instagram</span>
+              <span className="sa-title-line">à venda,</span>
+              <span className="sa-title-line sa-title-soft">num lugar só.</span>
             </h2>
-            <p className="sa-lead">Veja qual campanha vira conversa, responda cada lead a tempo e mostre ao cliente o que virou negócio.</p>
+            <p className="sa-lead">Instagram, anúncios, site, WhatsApp e CRM juntos. Os agentes fazem o trabalho repetido; você decide e fecha.</p>
           </div>
           <ul className="sa-outcomes">
             {OUTCOMES.map(({ icon: Icon, title, text }) => (
@@ -124,14 +125,14 @@ export default function Auth() {
             ))}
           </ul>
         </div>
-        <p className="sa-foot">© Sinfy · Sites em Elementor, posts e vídeos na marca de cada cliente também moram aqui.</p>
+        <p className="sa-foot">© Sinfy · Também faz sites em Elementor para cada cliente.</p>
       </aside>
 
       <main className="sa-main">
         <div className="sa-form-wrap">
           <div className="sa-mobile-head">
             <Wordmark />
-            <p>Do anúncio à venda, num lugar só: Instagram, anúncios, site, WhatsApp e CRM.</p>
+            <p>Do post no Instagram à venda, num lugar só. Feito com agentes de IA.</p>
           </div>
 
           {sent ? (
