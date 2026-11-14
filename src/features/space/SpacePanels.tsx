@@ -7,8 +7,8 @@ import { PagesList } from './pages/PagesList'
 import { useSpaceUi, type LeftTab } from './spaceUi'
 
 
-export const SIDEBAR_WIDTH = 264
-export const INSPECTOR_WIDTH = 320
+const SIDEBAR_WIDTH = 264
+const INSPECTOR_WIDTH = 320
 
 /** Abas no topo dos painéis, como as do Framer: a escolhida fica num fundo cinza. */
 function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs: { id: T; label: string }[]; value: T; onChange: (id: T) => void; label: string }) {

@@ -33,7 +33,7 @@ const toHexString = ({ r, g, b }: Pick<Rgba, 'r' | 'g' | 'b'>) => {
 }
 
 /** Hex de 6 dígitos em minúsculas, ou null se não for uma cor. */
-export function normalizeHex(value: unknown): string | null {
+function normalizeHex(value: unknown): string | null {
   const c = parseColor(value)
   if (!c || !String(value).trim().startsWith('#')) return null
   return toHexString(c)

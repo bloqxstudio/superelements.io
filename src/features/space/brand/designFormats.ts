@@ -43,7 +43,7 @@ type ColorRole = 'background' | 'surface' | 'text' | 'muted' | 'primary' | 'seco
 /** `minor`: fonte de apoio (texto legal, fallback) que não disputa título nem texto. */
 type FontRole = 'heading' | 'body' | 'label' | 'minor'
 
-export interface DraftColor {
+interface DraftColor {
   name: string
   hex: string
   /** Nome que o arquivo dava à cor, quando `name` virou o papel dela. */
@@ -51,7 +51,7 @@ export interface DraftColor {
   role?: ColorRole
 }
 
-export interface DraftFont {
+interface DraftFont {
   family: string
   weight?: number
   transform?: TextTransform
@@ -62,7 +62,7 @@ export interface DraftFont {
   original?: string
 }
 
-export interface DesignDraft {
+interface DesignDraft {
   name?: string
   description?: string
   colors: DraftColor[]
@@ -76,7 +76,7 @@ export interface DesignDraft {
   body: string
 }
 
-export interface DesignRead {
+interface DesignRead {
   draft: DesignDraft
   format: DesignFormat
   /** O que a conversão fez ou deixou de fora. */

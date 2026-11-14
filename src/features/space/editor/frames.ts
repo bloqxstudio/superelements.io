@@ -15,7 +15,7 @@ export function registerFrame(sectionId: string, frame: HTMLIFrameElement) {
   }
 }
 
-export const frameOf = (sectionId: string) => frames.get(sectionId) ?? null
+const frameOf = (sectionId: string) => frames.get(sectionId) ?? null
 
 /** Seção cujo preview está sob o ponto da janela. */
 export function sectionAt(clientX: number, clientY: number): string | null {
@@ -24,7 +24,7 @@ export function sectionAt(clientX: number, clientY: number): string | null {
 }
 
 /** Ponto da janela em px do documento do preview. */
-export function toFrame(frame: HTMLIFrameElement, clientX: number, clientY: number) {
+function toFrame(frame: HTMLIFrameElement, clientX: number, clientY: number) {
   const box = frame.getBoundingClientRect()
   const ratio = frame.offsetWidth ? box.width / frame.offsetWidth : 1
   return { x: (clientX - box.left) / ratio, y: (clientY - box.top) / ratio }

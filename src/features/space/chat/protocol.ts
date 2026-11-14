@@ -9,7 +9,7 @@
 
 export type ChatAgentId = 'claude' | 'codex'
 
-export interface ChatAgentInfo {
+interface ChatAgentInfo {
   id: ChatAgentId
   /** Nome no chat, no cursor e no diário da ponte (SPACE_AGENT). */
   name: string
@@ -148,7 +148,7 @@ const CLAUDE_MODELS = [
 /** Apelido do Claude Code → a versão que ele usa hoje (para o que já estava salvo com o apelido). */
 export const CLAUDE_ALIASES: Record<string, string> = { sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5', haiku: 'claude-haiku-5-5', fable: 'claude-fable-5-2' }
 
-export type ChatModelId = (typeof CLAUDE_MODELS)[number]['id']
+type ChatModelId = (typeof CLAUDE_MODELS)[number]['id']
 export const CHAT_MODELS = Object.fromEntries(CLAUDE_MODELS.map((m) => [m.id, m])) as Record<ChatModelId, (typeof CLAUDE_MODELS)[number]>
 export const CHAT_MODEL_IDS = CLAUDE_MODELS.map((m) => m.id) as ChatModelId[]
 export const DEFAULT_CHAT_MODEL: ChatModelId = 'claude-sonnet-5-5'

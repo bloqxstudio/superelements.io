@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { LibraryKind } from './library/LibraryPanel'
 
 export type LeftTab = 'pages' | 'layers' | 'library'
-export type RightTab = 'agent' | 'style'
+type RightTab = 'agent' | 'style'
 
 /** Abas abertas da última vez, neste navegador. */
 const remembered = <T extends string>(key: string, fallback: T, allowed: readonly T[]): T => {

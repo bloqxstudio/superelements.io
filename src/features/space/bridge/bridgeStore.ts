@@ -23,7 +23,7 @@ export interface ClaudeStep {
 export type TouchKind = 'created' | 'changed'
 
 /** Seção ou página em que o agente está trabalhando agora. */
-export interface WorkMark {
+interface WorkMark {
   agent: string
   text: string
   since: number

@@ -13,7 +13,8 @@ import { getActiveBrand, useBrandStore } from '@/features/space/brand/brandStore
 import { parseDesignMd } from '@/features/space/brand/designMd'
 import { buildLandingPage, parseSectionElements, type SectionElement } from '@/features/space/landingPage'
 import { findElement } from '@/features/space/navigator/elementorContentEditor'
-import { DEFAULT_PAGE_NAME, nextPagePosition, pageContent, pageOf, pageSections, SECTION_WIDTH } from '@/features/space/pages/pages'
+import { pageContent, pageOf, pageSections } from '@/features/space/pages/pages'
+import { createPage, insertSections, movePageSection, removePage, removeSections, type CanvasParts } from '@/features/space/pages/canvasOps'
 import { componentUses, elementComponent, siteFrameSections, textsOf, walk } from '@/features/space/components/components'
 import { insertComponent } from '@/features/space/editor/actions'
 import { isFromSite, renderKit } from '@/features/space/renderKit'
@@ -31,7 +32,7 @@ import { getActiveWordPress, useWordPressSession } from '@/features/wordpress/us
 import { setBackgroundRelease } from '@/features/projects/background'
 import { cursorFromCall } from '@/features/space/chat/cursorFromBridge'
 import type { AgentChannel } from '@/features/space/connector/channel'
-import { useSpaceStore } from '@/store/spaceStore'
+import { emitRemoval, useSpaceStore, type CanvasRemoval } from '@/store/spaceStore'
 import type { ComponentRole, ComponentTexts, PageDetails, SectionNodeData, SiteSeo, SpaceComponent, SpaceNode, SpacePage } from '@/types/space'
 import { useAgents, type AgentView, type ViewRequest } from './agentsStore'
 import { DEFAULT_AGENT, useClaudeBridge, type ClaudeStep, type ClaudeStepKind, type TouchKind } from './bridgeStore'
@@ -141,9 +142,24 @@ const info = () => {
   }
 }
 
-/** FNV-1a: muda quando o título ou o JSON da seção muda, para saber se alguém mexeu desde a leitura. */
+/**
+ * FNV-1a: muda quando qualquer dado da seção muda, para saber se alguém mexeu desde a leitura. Antes cobria só o
+ * título e o JSON, e um `update` com `data` (níveis, fixadas, nomes das camadas…) apagava ajustes feitos à mão
+ * depois da leitura sem aviso (revisão de 2026-11-13). Chaves em ordem fixa: o mesmo dado dá o mesmo hash.
+ */
+const stableJson = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object')
+    return `{${Object.keys(value)
+      .filter((k) => (value as Record<string, unknown>)[k] !== undefined)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableJson((value as Record<string, unknown>)[k])}`)
+      .join(',')}}`
+  return JSON.stringify(value) ?? 'null'
+}
 const hashOf = (data: SectionNodeData) => {
-  const text = `${data.title}\u0000${data.elementorJson}`
+  const { title, elementorJson, ...rest } = data
+  const text = `${title}\u0000${elementorJson}\u0000${stableJson(rest)}`
   let h = 0x811c9dc5
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193)
   return (h >>> 0).toString(16).padStart(8, '0')
@@ -198,13 +214,23 @@ const findNode = (nodes: SpaceNode[], id: string) => {
   return matches[0]
 }
 
+/**
+ * Página pelo id inteiro, pelo começo do id ou pelo nome. Como em `findNode`, um começo de id que serve para mais de
+ * uma página é ambíguo e para, em vez de mexer na primeira que aparecer (revisão de 2026-11-13).
+ */
 const findPage = (pages: SpacePage[], ref: string | undefined) => {
   const { activePageId } = useSpaceStore.getState()
   if (!ref) return pages.find((p) => p.id === activePageId) ?? pages[0]
+  const exact = pages.find((p) => p.id === ref)
+  if (exact) return exact
+  const byPrefix = pages.filter((p) => p.id.startsWith(ref))
+  if (byPrefix.length > 1) throw new Error(`Id de página ambíguo: ${ref}`)
+  if (byPrefix.length === 1) return byPrefix[0]
   const lower = ref.toLowerCase()
-  const page = pages.find((p) => p.id === ref) ?? pages.find((p) => p.id.startsWith(ref)) ?? pages.find((p) => p.name.toLowerCase() === lower)
-  if (!page) throw new Error(`Página não encontrada: ${ref}`)
-  return page
+  const byName = pages.filter((p) => p.name.toLowerCase() === lower)
+  if (byName.length > 1) throw new Error(`Nome de página ambíguo: ${ref} (use o id)`)
+  if (!byName.length) throw new Error(`Página não encontrada: ${ref}`)
+  return byName[0]
 }
 
 /** Os componentes do projeto e onde cada um é usado. */
@@ -321,7 +347,9 @@ const checkJson = (json: string, what: string) => {
 function apply(params: ApplyParams, ctx: CallContext) {
   requireProject()
   const state = useSpaceStore.getState()
-  let { nodes, pages, connections } = state
+  // As operações são as mesmas do canvas (`canvasOps.ts`), para a ponte não divergir dele (revisão de 2026-11-13)
+  let canvas: CanvasParts = { nodes: state.nodes, pages: state.pages, connections: state.connections }
+  const nodes = state.nodes
 
   if (!params.force) {
     // Seção conferida que não existe mais também barra: alguém a tirou do canvas depois da leitura
@@ -340,13 +368,15 @@ function apply(params: ApplyParams, ctx: CallContext) {
   const pageRefs = new Map<string, string>()
   const created: Record<string, string> = {}
   const touched: Record<string, TouchKind> = {}
-  const pageOfRef = (ref?: string) => findPage(pages, ref && pageRefs.has(ref) ? pageRefs.get(ref) : ref)
+  /** O que sai do canvas vai para a lixeira, como o que a pessoa apaga; só se todas as operações derem certo. */
+  const removals: CanvasRemoval[] = []
+  const pageOfRef = (ref?: string) => findPage(canvas.pages, ref && pageRefs.has(ref) ? pageRefs.get(ref) : ref)
 
   /** Posição na coluna: depois/antes de uma seção da página, um índice, ou o fim. */
   const slot = (page: SpacePage, op: { index?: number; after?: string; before?: string }) => {
     const ids = page.sectionIds
     const at = (ref: string) => {
-      const id = created[ref] ?? findNode(nodes, ref).id
+      const id = created[ref] ?? findNode(canvas.nodes, ref).id
       const i = ids.indexOf(id)
       if (i < 0) throw new Error(`A seção ${ref} não está na página ${page.name}`)
       return i
@@ -356,21 +386,15 @@ function apply(params: ApplyParams, ctx: CallContext) {
     return Math.max(0, Math.min(op.index ?? ids.length, ids.length))
   }
 
-  const putIn = (page: SpacePage, id: string, index: number) => {
-    const sectionIds = page.sectionIds.filter((s) => s !== id)
-    sectionIds.splice(Math.min(index, sectionIds.length), 0, id)
-    pages = pages.map((p) => (p.id === page.id ? { ...p, sectionIds } : p))
-  }
-
   for (const op of params.ops) {
     switch (op.op) {
       case 'update': {
-        const node = findNode(nodes, op.id)
+        const node = findNode(canvas.nodes, op.id)
         if (op.elementorJson !== undefined) checkJson(op.elementorJson, `Seção "${(node.data as SectionNodeData).title}"`)
         const patch: Partial<SectionNodeData> = { ...op.data }
         if (op.title !== undefined) patch.title = op.title
         if (op.elementorJson !== undefined) patch.elementorJson = op.elementorJson
-        nodes = nodes.map((n) => (n.id === node.id ? { ...n, data: { ...(n.data as SectionNodeData), ...patch } } : n))
+        canvas = { ...canvas, nodes: canvas.nodes.map((n) => (n.id === node.id ? { ...n, data: { ...(n.data as SectionNodeData), ...patch } } : n)) }
         // Esqueleto do plano que ganhou conteúdo: para quem olha, é uma seção nova
         touched[node.id] ??= useClaudeBridge.getState().pending[node.id] ? 'created' : 'changed'
         break
@@ -379,63 +403,56 @@ function apply(params: ApplyParams, ctx: CallContext) {
         if (!op.data?.title) throw new Error('Seção nova sem título')
         checkJson(op.data.elementorJson ?? '', `Seção nova "${op.data.title}"`)
         const page = pageOfRef(op.page)
-        const node: SpaceNode = { id: crypto.randomUUID(), type: 'section', x: page.x, y: page.y, width: SECTION_WIDTH, height: 200, data: op.data }
-        nodes = [...nodes, node]
-        putIn(page, node.id, slot(page, op))
-        if (op.ref) created[op.ref] = node.id
-        touched[node.id] = 'created'
+        const result = insertSections(canvas, page.id, [op.data], slot(page, op))
+        canvas = result.canvas
+        const id = result.ids[0]
+        if (op.ref) created[op.ref] = id
+        touched[id] = 'created'
         break
       }
       case 'remove': {
-        const node = findNode(nodes, op.id)
-        nodes = nodes.filter((n) => n.id !== node.id)
-        connections = connections.filter((c) => c.sourceId !== node.id && c.targetId !== node.id)
-        pages = pages.map((p) => ({ ...p, sectionIds: p.sectionIds.filter((s) => s !== node.id) }))
+        const node = findNode(canvas.nodes, op.id)
+        const result = removeSections(canvas, [node.id])
+        canvas = result.canvas
+        // Seção que o próprio pedido criou não vai para a lixeira: ela nunca esteve no canvas
+        for (const section of result.sections) if (!Object.values(created).includes(section.node.id)) removals.push({ kind: 'section', ...section })
         delete touched[node.id]
         break
       }
       case 'move': {
-        const node = findNode(nodes, op.id)
-        const from = pageOf(pages, node.id)
+        const node = findNode(canvas.nodes, op.id)
+        const from = pageOf(canvas.pages, node.id)
         const target = op.page ? pageOfRef(op.page) : from
         if (!target) throw new Error(`A seção ${op.id} está solta: diga para que página ela vai`)
-        if (from && from.id !== target.id) pages = pages.map((p) => (p.id === from.id ? { ...p, sectionIds: p.sectionIds.filter((s) => s !== node.id) } : p))
-        const current = pages.find((p) => p.id === target.id)!
         // A posição é contada sem a própria seção, como no arrasto
-        const without = { ...current, sectionIds: current.sectionIds.filter((s) => s !== node.id) }
-        putIn(without, node.id, slot(without, op))
+        const without = { ...target, sectionIds: target.sectionIds.filter((s) => s !== node.id) }
+        canvas = movePageSection(canvas, node.id, target.id, slot(without, op))
         touched[node.id] ??= 'changed'
         break
       }
       case 'addPage': {
-        const position = nextPagePosition(pages, nodes)
-        const page: SpacePage = { id: crypto.randomUUID(), name: op.name?.trim() || DEFAULT_PAGE_NAME, ...position, sectionIds: [] }
         // Como no canvas: a página nova já vem com o cabeçalho e o rodapé do site
-        const frame = siteFrameSections(state.components, nodes)
-        for (const data of [frame.header, frame.footer]) {
-          if (!data) continue
-          const node: SpaceNode = { id: crypto.randomUUID(), type: 'section', x: page.x, y: page.y, width: SECTION_WIDTH, height: 200, data }
-          nodes = [...nodes, node]
-          page.sectionIds.push(node.id)
-        }
-        pages = [...pages, page]
-        if (op.ref) pageRefs.set(op.ref, page.id)
+        const frame = siteFrameSections(state.components, canvas.nodes)
+        const result = createPage(canvas, { name: op.name, frame: [frame.header, frame.footer] })
+        canvas = result.canvas
+        if (op.ref) pageRefs.set(op.ref, result.page.id)
         break
       }
       case 'renamePage': {
-        const page = findPage(pages, op.page)
+        const page = findPage(canvas.pages, op.page)
         if (!op.name?.trim()) throw new Error('Nome de página vazio')
-        pages = pages.map((p) => (p.id === page.id ? { ...p, name: op.name.trim() } : p))
+        canvas = { ...canvas, pages: canvas.pages.map((p) => (p.id === page.id ? { ...p, name: op.name.trim() } : p)) }
         break
       }
       case 'removePage': {
-        const page = findPage(pages, op.page)
-        if (pages.length === 1) throw new Error('A última página do canvas não sai')
-        const gone = new Set(page.sectionIds)
-        nodes = nodes.filter((n) => !gone.has(n.id))
-        connections = connections.filter((c) => !gone.has(c.sourceId) && !gone.has(c.targetId))
-        pages = pages.filter((p) => p.id !== page.id)
-        for (const id of gone) delete touched[id]
+        const page = findPage(canvas.pages, op.page)
+        // Leva junto os textos e paletas ligados só às seções dela, como ao excluir no canvas
+        const result = removePage(canvas, page.id)
+        canvas = result.canvas
+        const fresh = new Set(Object.values(created))
+        const kept = result.sections.filter((n) => !fresh.has(n.id))
+        if (![...pageRefs.values()].includes(page.id)) removals.push({ kind: 'page', page, nodes: kept })
+        for (const id of result.removed) delete touched[id]
         break
       }
       default:
@@ -443,7 +460,10 @@ function apply(params: ApplyParams, ctx: CallContext) {
     }
   }
 
-  useSpaceStore.getState().commitCanvas({ nodes, pages, connections })
+  // Avisa a lixeira antes de mudar o canvas: o registro guarda a versão de antes, como no canvas
+  for (const removal of removals) emitRemoval(removal)
+  useSpaceStore.getState().commitCanvas(canvas)
+  const { pages } = canvas
   const ids = Object.keys(touched)
   const bridge = useClaudeBridge.getState()
   bridge.touch(touched, ctx.agent)
@@ -455,7 +475,7 @@ function apply(params: ApplyParams, ctx: CallContext) {
   note(ctx, 'change', params.label || 'Mudança no canvas', ids)
   if (params.focus !== false && ids[0]) focus({ id: ids[0] })
   // Hash novo de cada seção mexida: a próxima gravação do Claude confere a partir dele
-  const hashes = Object.fromEntries(nodes.filter((n) => touched[n.id]).map((n) => [n.id, hashOf(n.data as SectionNodeData)]))
+  const hashes = Object.fromEntries(canvas.nodes.filter((n) => touched[n.id]).map((n) => [n.id, hashOf(n.data as SectionNodeData)]))
   // Páginas mexidas, para a prévia da tela Agentes mostrar a certa
   const pageIds = [...new Set(ids.map((id) => pageOf(pages, id)?.id).filter((id): id is string => !!id))]
   return { created, touched, hashes, pages: Object.fromEntries(pageRefs), pageIds }
@@ -1684,7 +1704,18 @@ export function startSpaceBridge(hot: Hot) {
     hot.off('space-bridge:release', onRelease)
     hot.off('space-bridge:agents', onAgents)
     hot.off('space-bridge:view-reply', onViewReply)
-    if (!workerProject) setBackgroundRelease(null)
+    if (!workerProject) {
+      setBackgroundRelease(null)
+      // Prévias pedidas por esta ponte não vão mais ter resposta: falham agora, sem esperar o tempo esgotar, e a tela
+      // Agentes deixa de chamar o canal antigo (no HMR ou na troca de conector) até a ponte nova se registrar
+      // (revisão de 2026-11-13)
+      for (const request of views.values()) {
+        clearTimeout(request.timer)
+        request.reject(new Error('A ponte com os agentes foi reiniciada; peça a prévia de novo'))
+      }
+      views.clear()
+      useAgents.setState({ requestView: undefined, dismiss: undefined })
+    }
     window.removeEventListener('pointerdown', onActivity, true)
     window.removeEventListener('keydown', onActivity, true)
     window.removeEventListener('focus', send)

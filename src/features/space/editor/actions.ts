@@ -412,7 +412,7 @@ export function selectParentElement() {
   return true
 }
 
-export function selectFirstChild() {
+function selectFirstChild() {
   const sel = selectedElement()
   const child = sel?.location.element.elements?.[0]
   if (!sel || !child?.id) return false

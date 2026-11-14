@@ -6,7 +6,7 @@
  * ajustadas nos grupos de aparência ou no JSON.
  */
 
-export type ContentFieldKind = 'text' | 'longtext' | 'html' | 'link' | 'image' | 'gallery' | 'list'
+type ContentFieldKind = 'text' | 'longtext' | 'html' | 'link' | 'image' | 'gallery' | 'list'
 
 export interface ContentField {
   key: string

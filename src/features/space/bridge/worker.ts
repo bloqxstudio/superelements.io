@@ -10,7 +10,7 @@ export const WORKER_NAME_PREFIX = 'space-worker:'
 export const workerPath = (projectId: string) => `/agente/${projectId}`
 
 /** O que a página do segundo plano expõe para a ponte e para a aba que a hospeda. */
-export interface WorkerHandle {
+interface WorkerHandle {
   /** O projeto não abre: sai da conta, sem acesso, falha ao ler. */
   failed?: string
   /** Salva o que falta e fecha o projeto. */

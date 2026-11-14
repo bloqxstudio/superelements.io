@@ -84,7 +84,7 @@ export interface ChatComposerHandle {
   send: (text: string) => void
 }
 
-export interface ChatComposerProps {
+interface ChatComposerProps {
   skills: ChatSkill[]
   skillId: string | null
   onSkill: (id: string | null) => void

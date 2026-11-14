@@ -11,7 +11,7 @@ import { sectionSlots, writeSlots, type CopySlot, type SlotRole } from './slots'
  * os mesmos textos. Contato, números e nomes ficam como estão.
  */
 
-export interface CopyEntry {
+interface CopyEntry {
   role: SlotRole
   text: string
   size?: number
@@ -86,7 +86,7 @@ const titleClass = (size?: number) => (!size ? 1 : size >= 44 ? 2 : size >= 26 ?
 const CHOICES = 4
 
 /** Semente de uma seção do pack: o id do primeiro elemento, igual na miniatura e ao entrar na página. */
-export const copySeed = (elements: unknown[]) => String((elements[0] as { id?: unknown } | undefined)?.id ?? '')
+const copySeed = (elements: unknown[]) => String((elements[0] as { id?: unknown } | undefined)?.id ?? '')
 
 /**
  * Cópia de uma seção do pack com os textos trocados por textos do projeto.

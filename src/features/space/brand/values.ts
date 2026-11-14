@@ -7,7 +7,7 @@ import { parseColor, toHex } from './color'
  */
 
 export type TextTransform = 'none' | 'uppercase' | 'lowercase' | 'capitalize'
-export type StrokeStyle = 'solid' | 'dashed' | 'dotted' | 'double'
+type StrokeStyle = 'solid' | 'dashed' | 'dotted' | 'double'
 
 export interface Stroke {
   /** px */

@@ -1449,15 +1449,17 @@ function spaceChat({ guide = REPO_GUIDE } = {}) {
         item2.history = [kept, ...(item2.history ?? []).filter((a) => a.epoch !== item2.epoch)].slice(0, KEEP_HISTORY);
       };
       let saveTimer;
+      const writeHistory = () => {
+        saveTimer = void 0;
+        try {
+          mkdirSync3(path6.dirname(chatFile), { recursive: true });
+          writeFileSync3(chatFile, JSON.stringify([...conversations.values()], null, 2));
+        } catch {
+        }
+      };
       const save = () => {
         clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => {
-          try {
-            mkdirSync3(path6.dirname(chatFile), { recursive: true });
-            writeFileSync3(chatFile, JSON.stringify([...conversations.values()], null, 2));
-          } catch {
-          }
-        }, 800);
+        saveTimer = setTimeout(writeHistory, 800);
       };
       const broadcast = (item2) => {
         item2.updatedAt = Date.now();
@@ -1800,21 +1802,25 @@ ${text3}` : text3;
         });
         child.stdin?.end(prompt);
         let buffer = "";
+        const onLine = (raw) => {
+          const line = raw.trim();
+          if (!line.startsWith("{")) return;
+          try {
+            const event = JSON.parse(line);
+            if (payload.agent === "claude") onClaude(run2, event);
+            else onCodex(run2, event);
+            touch(conversation, answer);
+          } catch {
+          }
+        };
         child.stdout?.setEncoding("utf8");
         child.stdout?.on("data", (chunk) => {
           buffer += chunk;
           let nl;
           while ((nl = buffer.indexOf("\n")) >= 0) {
-            const line = buffer.slice(0, nl).trim();
+            const line = buffer.slice(0, nl);
             buffer = buffer.slice(nl + 1);
-            if (!line.startsWith("{")) continue;
-            try {
-              const event = JSON.parse(line);
-              if (payload.agent === "claude") onClaude(run2, event);
-              else onCodex(run2, event);
-              touch(conversation, answer);
-            } catch {
-            }
+            onLine(line);
           }
         });
         child.stderr?.setEncoding("utf8");
@@ -1823,6 +1829,8 @@ ${text3}` : text3;
         });
         const done = (code2, spawnError) => {
           if (runs.get(key) !== run2) return;
+          if (buffer.trim()) onLine(buffer);
+          buffer = "";
           runs.delete(key);
           clearTimeout(run2.timer);
           for (const step of run2.steps.values()) if (step.state === "running") step.state = run2.stopped || code2 ? "error" : "ok";
@@ -1988,6 +1996,10 @@ ${said}` : intro }];
       });
       server.httpServer?.on("close", () => {
         for (const run2 of runs.values()) kill(run2.child);
+        if (saveTimer) {
+          clearTimeout(saveTimer);
+          writeHistory();
+        }
       });
     }
   };
@@ -6212,7 +6224,7 @@ async function handle(req, res) {
   }
   const access = checkCode(url.searchParams.get("code"));
   if (access !== "ok") return json(req, res, access === "locked" ? 429 : 403, { error: access === "locked" ? "Muitas tentativas: espere uns minutos" : "C\xF3digo errado" });
-  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202611132257", agents: await checkAgents() });
+  if (req.method === "GET" && url.pathname === "/ping") return json(req, res, 200, { ok: true, version: "202611140037", agents: await checkAgents() });
   if (req.method === "GET" && url.pathname === "/link") {
     res.writeHead(200, { ...cors(req), "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
     const client = {
@@ -6229,7 +6241,7 @@ async function handle(req, res) {
     };
     clients.set(client.id, client);
     if (clients.size === 1) console.log("  \u2714 Navegador conectado. Pode usar o chat no canvas.");
-    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202611132257" })}
+    res.write(`data: ${JSON.stringify({ type: "connected", client: client.id, version: "202611140037" })}
 
 `);
     const keepAlive = setInterval(() => res.write(": ping\n\n"), 15e3);

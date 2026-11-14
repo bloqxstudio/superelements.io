@@ -8,7 +8,7 @@ import { settingsOf } from './tree'
  * que nome cada grupo de estilo tem em cada tipo de elemento.
  */
 
-export const RESPONSIVE_KEYS = new Set([
+const RESPONSIVE_KEYS = new Set([
   'padding',
   'margin',
   '_padding',
@@ -46,7 +46,7 @@ export const RESPONSIVE_KEYS = new Set([
   '_offset_y',
 ])
 
-export const isEmptyValue = (value: unknown) => value === undefined || value === null || value === ''
+const isEmptyValue = (value: unknown) => value === undefined || value === null || value === ''
 
 /** Nome da chave no tamanho de tela: no desktop, ou para chaves sem variante, é a própria. */
 export const deviceKey = (key: string, device: EditorDevice) => (device === 'desktop' || !RESPONSIVE_KEYS.has(key) ? key : `${key}_${device}`)
@@ -72,7 +72,7 @@ export function readSetting(element: SectionElement | null, key: string, device:
 export const hasOwnValue = (element: SectionElement | null, key: string, device: EditorDevice) =>
   device !== 'desktop' && RESPONSIVE_KEYS.has(key) && !isEmptyValue(settingsOf(element)[deviceKey(key, device)])
 
-export type ElementFamily = 'container' | 'column' | 'section' | 'widget'
+type ElementFamily = 'container' | 'column' | 'section' | 'widget'
 
 export const familyOf = (element: SectionElement): ElementFamily =>
   element.elType === 'container' ? 'container' : element.elType === 'column' ? 'column' : element.elType === 'section' ? 'section' : 'widget'

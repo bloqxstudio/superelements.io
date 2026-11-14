@@ -41,7 +41,7 @@ export interface BrandFont {
   lineHeight?: number
 }
 
-export interface BrandColor {
+interface BrandColor {
   name: string
   /** #rrggbb */
   hex: string
@@ -66,7 +66,7 @@ export interface Brand {
   guidelines: string
 }
 
-export interface ParsedDesignMd {
+interface ParsedDesignMd {
   brand: Brand | null
   errors: string[]
   warnings: string[]

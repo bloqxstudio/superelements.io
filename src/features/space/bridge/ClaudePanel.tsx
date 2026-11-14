@@ -9,7 +9,7 @@ import { useClaudeBridge } from './bridgeStore'
 import { focusSection } from './focus'
 
 /** Cor do agente no canvas (Claude ou Codex): o ponto do painel e a marca das seções que ele mexeu. */
-export const CLAUDE_COLOR = '#D97757'
+const CLAUDE_COLOR = '#D97757'
 
 const PANEL_WIDTH = 300
 /** Depois disso sem mensagem nova, o ponto para de pulsar. */

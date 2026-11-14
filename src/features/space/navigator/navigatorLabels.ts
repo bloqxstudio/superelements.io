@@ -10,7 +10,7 @@ export interface LayerContext {
   customLabels?: Record<string, string>
 }
 
-export interface LayerDescriptor {
+interface LayerDescriptor {
   id: string
   parentId: string | null
   type: string
@@ -218,7 +218,7 @@ export function applyNavigatorTitles(
   return elements
 }
 
-export function collectLayerDescriptors(
+function collectLayerDescriptors(
   elements: SectionElement[],
   sectionTitle: string,
   customLabels?: Record<string, string>,

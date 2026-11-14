@@ -9,12 +9,12 @@ import { parseColor, type Rgba } from '../color'
 export type Settings = Record<string, unknown>
 
 export const DEVICE_SUFFIXES = ['', '_tablet', '_mobile'] as const
-export type DeviceSuffix = (typeof DEVICE_SUFFIXES)[number]
+type DeviceSuffix = (typeof DEVICE_SUFFIXES)[number]
 
 const SIDES = ['top', 'right', 'bottom', 'left'] as const
 type Side = (typeof SIDES)[number]
 
-export interface Dims {
+interface Dims {
   unit: string
   top: number
   right: number
@@ -92,7 +92,7 @@ export function composite(top: Rgba, bottom: Rgba): Rgba {
   return { r: top.r * a + bottom.r * (1 - a), g: top.g * a + bottom.g * (1 - a), b: top.b * a + bottom.b * (1 - a), a: 1 }
 }
 
-export const toCss = (c: Rgba) => (c.a >= 1 ? `#${[c.r, c.g, c.b].map((n) => Math.round(n).toString(16).padStart(2, '0')).join('')}` : `rgba(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)}, ${+c.a.toFixed(3)})`)
+const toCss = (c: Rgba) => (c.a >= 1 ? `#${[c.r, c.g, c.b].map((n) => Math.round(n).toString(16).padStart(2, '0')).join('')}` : `rgba(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)}, ${+c.a.toFixed(3)})`)
 
 /** A mesma cor com outra transparência. */
 export function withAlpha(color: string, alpha: number): string {

@@ -921,15 +921,15 @@ const template = (id: string, name: string, description: string, sections: Secti
   id, name, description, audience: 'Consultoria de automação e IA', componentIds: sections.map((section) => section.sourceId!), sections,
 })
 
-export const createZeloHomeTemplate = () => template('zelo-home', 'Zelo · página inicial',
+const createZeloHomeTemplate = () => template('zelo-home', 'Zelo · página inicial',
   'Site escuro de consultoria de IA: hero, calculadora de horas, cinco operações, agente, processo, FAQ e formulário, em containers e widgets nativos.',
   [makeNav('home', 'zna'), makeHero(), makeMovimento(), makeProblema(), makeConta(), makeServicos(), makeAgente(), makeSite(), makeProcesso(), makeDuvidas(), makeContato(), makeFooter()])
 
-export const createZeloContatoTemplate = () => template('zelo-contato', 'Zelo · contato',
+const createZeloContatoTemplate = () => template('zelo-contato', 'Zelo · contato',
   'Página de agendamento com convite, compromissos e formulário nativo do Elementor.',
   [makeNav('contato', 'kna'), makeAgenda(), makeFooterShort('contato', 'kft')])
 
-export const createZeloPrivacidadeTemplate = () => template('zelo-privacidade', 'Zelo · privacidade',
+const createZeloPrivacidadeTemplate = () => template('zelo-privacidade', 'Zelo · privacidade',
   'Política de privacidade em uma coluna de leitura, com títulos e listas editáveis.',
   [makeNav('legal', 'pna'), makeLegal(), makeFooterShort('legal', 'pft')])
 

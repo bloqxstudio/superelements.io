@@ -25,9 +25,9 @@ import {
  * qualquer campo quer dizer "o guia não fala disso; a seção fica como está".
  */
 
-export type TextRole = 'heading' | 'body' | 'label'
+type TextRole = 'heading' | 'body' | 'label'
 
-export interface TextStyle {
+interface TextStyle {
   transform?: TextTransform
   /** em */
   letterSpacing?: number
@@ -57,7 +57,7 @@ export interface CardSpec {
   blur?: number
 }
 
-export interface InputSpec {
+interface InputSpec {
   background?: string
   border?: Stroke | 'none'
   /** Só a borda de baixo. */
@@ -66,7 +66,7 @@ export interface InputSpec {
 }
 
 /** Filtros que o Elementor tem para imagem (em %, exceto hue em graus e blur em px). */
-export interface ImageFilter {
+interface ImageFilter {
   brightness?: number
   contrast?: number
   saturate?: number
@@ -124,7 +124,7 @@ const compact = <T extends object>(o: T): T | undefined => {
 // ---------------------------------------------------------------------------
 // Filtros de imagem
 
-export function parseFilter(value: unknown): ImageFilter | undefined {
+function parseFilter(value: unknown): ImageFilter | undefined {
   if (isObj(value)) {
     const n = (x: unknown) => (typeof x === 'number' ? x : typeof x === 'string' ? parseFloat(x) : undefined)
     return compact({ brightness: n(value.brightness), contrast: n(value.contrast), saturate: n(value.saturate ?? value.saturation), hue: n(value.hue), blur: n(value.blur) })
@@ -181,7 +181,7 @@ const SHADOW_LITERAL = /(?:-?\d*\.?\d+px\s+){2,4}(?:rgba?\([^)]*\)|#[0-9a-f]{3,8
  * "36px border-radius, Bark Brown (#382416) background, Warm Cream (#ffedd7)
  * text, 14px 24px vertical/horizontal padding, weight 500, uppercase".
  */
-export function parseComponentSentence(text: string, colorOf: (text: string) => string | undefined): ComponentValues {
+function parseComponentSentence(text: string, colorOf: (text: string) => string | undefined): ComponentValues {
   const out: ComponentValues = {}
   let vertical: string | undefined
   let horizontal: string | undefined

@@ -345,7 +345,7 @@ function contextLines(context: ChatContext) {
  * as skills de Instagram do "/" (usam as ações `ig_*`): ficam adiadas pelo ToolSearch (ver `--tools`), então só entram
  * no contexto as que o agente buscar. `false` tira o servidor `iara`, as regras das ações e as linhas que falam delas.
  */
-export const IARA_MCP = true
+const IARA_MCP = true
 const iaraLine = (line: string) => (IARA_MCP ? [line] : [])
 
 /** Primeira mensagem de uma conversa: quem ele é, onde está e como trabalhar. */
@@ -354,19 +354,19 @@ const REPO_GUIDE =
   '- Siga a skill do cliente (`.claude/skills/cliente/SKILL.md`) e as regras do projeto no arquivo dele em `docs/agentes/marcas/` (procure pelo nome do projeto; o `AGENTS.md` tem o índice).'
 
 /** A conversa da conta, fora de um projeto (a Iara no resto do produto): `conta-<id da conta>`. */
-export const isAccountChat = (projectId: string) => projectId.startsWith('conta-')
+const isAccountChat = (projectId: string) => projectId.startsWith('conta-')
 /**
  * A conversa de um site em código (Astro, 2026-11-06): `site-<id do site>`. O agente roda na pasta do
  * repositório do site (registro em `scripts/sites/registry.ts`), sem a ponte do canvas.
  */
-export const isSiteChat = (projectId: string) => projectId.startsWith('site-')
+const isSiteChat = (projectId: string) => projectId.startsWith('site-')
 const codeSiteOf = (projectId: string) => readSites().find((s) => s.id === projectId.slice('site-'.length))
 /**
  * Uma faixa da equipe rápida (2026-11-05, o usuário: "um agente abre na tela e faz uma parte… ver os 3 trabalhando ao
  * mesmo tempo… pode servir pra fazer um site, um criativo, qualquer coisa"): `<projeto>#faixa-N` é outra conversa no
  * mesmo projeto, com a sua sessão da ponte (e o seu cursor no canvas). O projeto de verdade é o que vem antes do "#".
  */
-export const realProject = (projectId: string) => projectId.split('#')[0]
+const realProject = (projectId: string) => projectId.split('#')[0]
 const isLane = (projectId: string) => projectId.includes('#')
 
 function preamble(projectId: string, projectName: string | undefined, agent: ChatAgentId, guide: string) {
@@ -660,16 +660,18 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
       }
 
       let saveTimer: ReturnType<typeof setTimeout> | undefined
+      const writeHistory = () => {
+        saveTimer = undefined
+        try {
+          mkdirSync(path.dirname(chatFile), { recursive: true })
+          writeFileSync(chatFile, JSON.stringify([...conversations.values()], null, 2))
+        } catch {
+          // Perder uma gravação do histórico não atrapalha a conversa
+        }
+      }
       const save = () => {
         clearTimeout(saveTimer)
-        saveTimer = setTimeout(() => {
-          try {
-            mkdirSync(path.dirname(chatFile), { recursive: true })
-            writeFileSync(chatFile, JSON.stringify([...conversations.values()], null, 2))
-          } catch {
-            // Perder uma gravação do histórico não atrapalha a conversa
-          }
-        }, 800)
+        saveTimer = setTimeout(writeHistory, 800)
       }
 
       const broadcast = (item: Stored) => {
@@ -1033,22 +1035,26 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
         child.stdin?.end(prompt)
 
         let buffer = ''
+        const onLine = (raw: string) => {
+          const line = raw.trim()
+          if (!line.startsWith('{')) return
+          try {
+            const event = JSON.parse(line)
+            if (payload.agent === 'claude') onClaude(run, event)
+            else onCodex(run, event)
+            touch(conversation, answer)
+          } catch {
+            // Linha que não é evento
+          }
+        }
         child.stdout?.setEncoding('utf8')
         child.stdout?.on('data', (chunk: string) => {
           buffer += chunk
           let nl: number
           while ((nl = buffer.indexOf('\n')) >= 0) {
-            const line = buffer.slice(0, nl).trim()
+            const line = buffer.slice(0, nl)
             buffer = buffer.slice(nl + 1)
-            if (!line.startsWith('{')) continue
-            try {
-              const event = JSON.parse(line)
-              if (payload.agent === 'claude') onClaude(run, event)
-              else onCodex(run, event)
-              touch(conversation, answer)
-            } catch {
-              // Linha que não é evento
-            }
+            onLine(line)
           }
         })
         child.stderr?.setEncoding('utf8')
@@ -1058,6 +1064,10 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
 
         const done = (code: number | null, spawnError?: Error) => {
           if (runs.get(key) !== run) return
+          // A última linha sem \n no fim (o evento final, com o resultado e o uso) ficava no buffer e se perdia
+          // (revisão de 2026-11-13)
+          if (buffer.trim()) onLine(buffer)
+          buffer = ''
           runs.delete(key)
           clearTimeout(run.timer)
           for (const step of run.steps.values()) if (step.state === 'running') step.state = run.stopped || code ? 'error' : 'ok'
@@ -1247,6 +1257,12 @@ export function spaceChat({ guide = REPO_GUIDE }: { guide?: string } = {}): Plug
 
       server.httpServer?.on('close', () => {
         for (const run of runs.values()) kill(run.child)
+        // A gravação do histórico espera 800 ms; com o servidor fechando ela não chegava a rodar e a última
+        // mensagem se perdia (revisão de 2026-11-13)
+        if (saveTimer) {
+          clearTimeout(saveTimer)
+          writeHistory()
+        }
       })
     },
   }
