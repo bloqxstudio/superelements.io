@@ -1,6 +1,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { campaignSnapshot, leadOrigin, alertText, type AdReports } from './origin.ts'
-import { hasContact, nestForm, parseLead } from './parse.ts'
+import { hasLeadRecipients } from '../_shared/leadAlerts.ts'
+import { campaignSnapshot, leadOrigin, alertText, type AdReports } from '../_shared/leadOrigin.ts'
+import { hasContact, nestForm, parseLead } from '../_shared/leadParse.ts'
 
 /**
  * Webhook de leads: `POST /functions/v1/lead-webhook?key=<chave da conta>` (ou o cabeçalho `x-lead-key`).
@@ -57,11 +58,8 @@ Deno.serve(async (request) => {
   const hash = await sha([lead.email, lead.phone, lead.message, lead.page].join('|'))
   const origin = leadOrigin(lead, campaign, hash)
 
-  // Quem recebe aviso: ao menos um número marcado nesta conta (senão não enfileira)
-  const { count } = await admin.from('crm_whatsapp_client_contacts').select('phone', { count: 'exact', head: true }).eq('account_id', teamId).eq('leads', true).eq('enabled', true)
-  // Também vale um grupo de WhatsApp escolhido para receber os leads da conta (crm_whatsapp_groups)
-  const { count: groupCount } = await admin.from('crm_whatsapp_groups').select('jid', { count: 'exact', head: true }).eq('leads_account_id', teamId)
-  const alert = count || groupCount ? alertText(lead, campaign, `${APP_URL}/crm?oportunidade={id}`) : null
+  // Quem recebe aviso: um número marcado ou um grupo da conta (senão não enfileira)
+  const alert = (await hasLeadRecipients(admin, teamId)) ? alertText(lead, campaign, `${APP_URL}/crm?oportunidade={id}`) : null
 
   const { data, error } = await admin.rpc('crm_receive_lead', { p_team: teamId, p_lead: { name: lead.name, email: lead.email, phone: lead.phone, message: lead.message }, p_origin: origin, p_alert: alert })
   if (error) {

@@ -1,6 +1,9 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { alertText, campaignSnapshot, leadOrigin, type AdReports } from '../lead-webhook/origin.ts'
-import { hasContact, parseLead } from '../lead-webhook/parse.ts'
+import { hasLeadRecipients } from '../_shared/leadAlerts.ts'
+import { alertText, campaignSnapshot, leadOrigin, type AdReports } from '../_shared/leadOrigin.ts'
+import { hasContact, parseLead } from '../_shared/leadParse.ts'
+import { sameText } from '../_shared/metaAuth.ts'
+import { rateHit } from '../_shared/rateLimit.ts'
 import {
   WEEKDAYS,
   allFields,
@@ -55,6 +58,9 @@ const sha = async (text: string) => {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 24)
 }
 
+/** As colunas que o lado público lê do formulário (`updated_at`: a versão do rascunho, sem `live`) */
+const FORM_COLUMNS = 'id, team_id, name, status, definition, theme, settings, live, live_at, updated_at'
+
 const META_KEYS = ['page', 'referrer', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_id', 'gclid', 'gbraid', 'wbraid', 'fbclid', 'campaign_id', 'adset_id', 'ad_id', 'placement']
 
 const SECRET = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -101,6 +107,30 @@ async function refreshPublic(form: Record<string, unknown>) {
   if (error) console.warn('form-submit: arquivo público não regravado:', error.message)
 }
 
+const REFRESH_EVERY_S = 10 * 60
+
+/**
+ * Regrava o arquivo público só quando ele está mesmo para trás. Revisão de 2026-11-13: a rota é pública e
+ * regravava a cada `cv` diferente que chegasse (qualquer um forçava uploads repetidos). Agora: (1) o arquivo
+ * no Storage precisa ser mais velho que a versão no ar (`live_at`, ou `updated_at` sem `live`) ou não existir,
+ * coisa que quem chama não controla; (2) no máximo uma regravação por formulário a cada 10 minutos.
+ */
+async function refreshIfStale(form: Record<string, unknown>) {
+  const version = Date.parse(String(form.liveAt || form.updated_at || ''))
+  if (Number.isNaN(version)) return
+  const name = `${form.id}.json`
+  const { data: files, error } = await admin.storage.from('crm-forms').list(String(form.team_id), { search: name, limit: 5 })
+  if (error) return
+  const file = (files ?? []).find((f) => f.name === name)
+  const written = Date.parse(String(file?.updated_at ?? file?.created_at ?? ''))
+  if (file && !Number.isNaN(written) && written >= version) return
+  if (!(await rateHit(admin, `form-refresh:${form.id}`, 1, REFRESH_EVERY_S))) return
+  await refreshPublic(form)
+}
+
+/** O IP de quem envia (o primeiro do x-forwarded-for, como em `capi.ts`). */
+const clientIp = (request: Request) => request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('cf-connecting-ip') || request.headers.get('x-real-ip') || ''
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
   const url = new URL(request.url)
@@ -109,7 +139,7 @@ Deno.serve(async (request) => {
     const id = url.searchParams.get('id') ?? ''
     if (!id) return json({ ok: true, version: VERSION })
     if (!UUID.test(id)) return json({ error: 'Formulário não encontrado.' }, 404)
-    const form = onAir((await admin.from('crm_forms').select('id, team_id, name, status, definition, theme, settings, live, live_at').eq('id', id).maybeSingle()).data)
+    const form = onAir((await admin.from('crm_forms').select(FORM_COLUMNS).eq('id', id).maybeSingle()).data)
     if (!form || form.status !== 'published' || !(await formsOn(form.team_id as string))) return json({ error: 'Formulário não encontrado.' }, 404)
     if (url.searchParams.get('view') === '1') await admin.rpc('crm_form_view', { p_form: id })
     return json(
@@ -135,15 +165,15 @@ Deno.serve(async (request) => {
     // Primeira batida da visita: a página diz qual versão abriu (`cv`). Diferente da versão no ar, o arquivo
     // público ficou para trás (publicado por outro caminho, ou gravação que falhou): regrava agora.
     if (body.first && typeof body.cv === 'string') {
-      const form = onAir((await admin.from('crm_forms').select('id, team_id, name, status, definition, theme, settings, live, live_at').eq('id', id).maybeSingle()).data)
-      if (form && form.status === 'published' && form.liveAt && form.liveAt !== body.cv) await refreshPublic(form)
+      const form = onAir((await admin.from('crm_forms').select(FORM_COLUMNS).eq('id', id).maybeSingle()).data)
+      if (form && form.status === 'published' && form.liveAt && form.liveAt !== body.cv) await refreshIfStale(form)
     }
     return track(admin, id, body, request, json)
   }
   // Campo-isca que só robô preenche: finge sucesso e não grava
   if (typeof body.hp === 'string' && body.hp) return json({ ok: true })
 
-  const form = onAir((await admin.from('crm_forms').select('id, team_id, name, status, definition, theme, settings, live, live_at').eq('id', id).maybeSingle()).data)
+  const form = onAir((await admin.from('crm_forms').select(FORM_COLUMNS).eq('id', id).maybeSingle()).data)
   if (!form || form.status !== 'published' || !(await formsOn(form.team_id as string))) return json({ error: 'Formulário não encontrado.' }, 404)
   const teamId = form.team_id as string
   const definition = cleanDefinition(form.definition)
@@ -151,13 +181,22 @@ Deno.serve(async (request) => {
 
   const { count: recent } = await admin.from('crm_form_submissions').select('id', { count: 'exact', head: true }).eq('form_id', id).gte('created_at', new Date(Date.now() - 60_000).toISOString())
   if ((recent ?? 0) >= 40) return json({ error: 'Muitos envios agora. Tente de novo em instantes.' }, 429)
+  // Revisão de 2026-11-13: o limite acima é do formulário inteiro (um robô sozinho fechava o formulário para
+  // todo mundo). Agora também por visitante: o hash do IP com o formulário (o IP não fica guardado), ou a
+  // visita quando não há IP. 8 envios em 10 minutos cobre quem corrige e reenvia.
+  const ip = clientIp(request)
+  const visit = typeof body.visit === 'string' && UUID.test(body.visit) ? body.visit : ''
+  if (ip || visit) {
+    const who = await sha([id, ip || `visit:${visit}`, SECRET.slice(-16)].join('|'))
+    if (!(await rateHit(admin, `form-submit:${who}`, 8, 600))) return json({ error: 'Muitos envios seus agora. Espere alguns minutos e tente de novo.' }, 429)
+  }
 
   const { answers, errors } = checkAnswers(definition, body.answers)
   if (Object.keys(errors).length) {
     // Erro num campo que a pessoa nem recebeu: a página abriu o arquivo público antigo. Regrava o arquivo
     // com a versão do banco, para quem recarregar (o forms.js pede isso) já receber a certa.
     const sent = body.answers && typeof body.answers === 'object' ? Object.keys(body.answers as Record<string, unknown>) : []
-    if (Object.keys(errors).some((k) => !sent.includes(k))) await refreshPublic(form)
+    if (Object.keys(errors).some((k) => !sent.includes(k))) await refreshIfStale(form)
     return json({ error: 'Confira os campos.', errors }, 422)
   }
 
@@ -213,9 +252,7 @@ Deno.serve(async (request) => {
   const metaMatch = settings.pixel?.id ? { pixel: settings.pixel.id, fbp: cookies.fbp, fbc: cookies.fbc, url: cookies.url } : undefined
   const origin = { ...leadOrigin(lead, campaign, hash), form: form.name as string, formId: id, ...(metaMatch ? { meta: metaMatch } : {}), ...(score !== null ? { score, result: result?.title, qualified } : {}) }
 
-  const { count } = await admin.from('crm_whatsapp_client_contacts').select('phone', { count: 'exact', head: true }).eq('account_id', teamId).eq('leads', true).eq('enabled', true)
-  const { count: groupCount } = await admin.from('crm_whatsapp_groups').select('jid', { count: 'exact', head: true }).eq('leads_account_id', teamId)
-  const alert = count || groupCount ? alertText(lead, campaign, `${APP_URL}/crm?oportunidade={id}`) : null
+  const alert = (await hasLeadRecipients(admin, teamId)) ? alertText(lead, campaign, `${APP_URL}/crm?oportunidade={id}`) : null
 
   const { data: received, error } = await admin.rpc('crm_receive_lead', { p_team: teamId, p_lead: { name: lead.name, email: lead.email, phone: lead.phone, message: payload.message }, p_origin: origin, p_alert: alert })
   if (error) {
@@ -295,9 +332,10 @@ async function book(id: string, body: Record<string, unknown>, request: Request)
   const token = String(body.token ?? '')
   const start = String(body.start ?? '')
   if (!UUID.test(submission) || !token || Number.isNaN(Date.parse(start))) return json({ error: 'Pedido de agendamento inválido.' }, 400)
-  if (token !== (await bookingToken(submission))) return json({ error: 'Pedido de agendamento inválido.' }, 403)
+  // Revisão de 2026-11-13: comparação em tempo constante (o `!==` parava no primeiro caractere diferente)
+  if (!sameText(token, await bookingToken(submission))) return json({ error: 'Pedido de agendamento inválido.' }, 403)
 
-  const form = onAir((await admin.from('crm_forms').select('id, team_id, name, status, definition, theme, settings, live, live_at').eq('id', id).maybeSingle()).data)
+  const form = onAir((await admin.from('crm_forms').select(FORM_COLUMNS).eq('id', id).maybeSingle()).data)
   if (!form || form.status !== 'published' || !(await formsOn(form.team_id as string))) return json({ error: 'Formulário não encontrado.' }, 404)
   const definition = cleanDefinition(form.definition)
   const booking = cleanSettings(form.settings).booking
@@ -347,9 +385,7 @@ async function book(id: string, body: Record<string, unknown>, request: Request)
 
   // O aviso sai pela mesma fila dos leads novos (o grupo da conta no WhatsApp)
   const teamId = form.team_id as string
-  const { count: people } = await admin.from('crm_whatsapp_client_contacts').select('phone', { count: 'exact', head: true }).eq('account_id', teamId).eq('leads', true).eq('enabled', true)
-  const { count: groups } = await admin.from('crm_whatsapp_groups').select('jid', { count: 'exact', head: true }).eq('leads_account_id', teamId)
-  if (people || groups) {
+  if (await hasLeadRecipients(admin, teamId)) {
     const phone = typeof sub.phone === 'string' ? sub.phone.replace(/^55(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3') : ''
     const lines = ['*📅 Reunião agendada*', '', `*${sub.name ?? 'Sem nome'}*`]
     if (phone) lines.push(`📱 ${phone}`)

@@ -1,4 +1,21 @@
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
+import {
+  HttpError,
+  LINK_PROBLEM,
+  checkRedirect as checkRedirectWith,
+  dbErrorFor,
+  errorResponse,
+  linkOf as linkOfWith,
+  packState,
+  sameText,
+  sha256,
+  teamGuards,
+  toB64,
+  unpackState as unpackStateWith,
+  type Ctx,
+  type LinkBase,
+  type LoginStateBase,
+} from '../_shared/metaAuth.ts'
 
 /**
  * Os anúncios da equipe pela API de anúncios da Meta (Marketing API,
@@ -20,7 +37,8 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
  * conta e de cada campanha (por dia, plataforma, público e região), para a
  * tela filtrar campanhas sem nova leitura. `preview` devolve o quadro de
  * prévia nativo da Meta de um anúncio desta conta.
- * Conectar e ler é de quem é da equipe; desconectar, do gestor.
+ * Ler é de quem é da equipe; conectar (login, token colado, link para o cliente) e desconectar, do gestor
+ * (revisão de 2026-11-13: igual ao `instagram`, que já pedia gestor para conectar).
  *
  * Segredos (Supabase › Edge Functions › Secrets): `META_APP_ID` e
  * `META_APP_SECRET` (app da Meta › Configurações do app › Informação básica)
@@ -67,16 +85,6 @@ const corsHeaders = {
 }
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-
-class HttpError extends Error {
-  constructor(
-    message: string,
-    readonly status = 400,
-    readonly code = 'error'
-  ) {
-    super(message)
-  }
-}
 
 // ---------- Meta ----------
 
@@ -164,69 +172,17 @@ const adAccountId = (value: unknown) => {
   return text
 }
 
-// ---------- estado do login (assinado com o segredo do app) ----------
+// ---------- estado do login (assinado com o segredo do app, `_shared/metaAuth.ts`) ----------
 
-const encoder = new TextEncoder()
-const toB64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-const fromB64 = (text: string) => Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
-
-async function sign(text: string, secret: string) {
-  const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  return toB64(new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(text))))
-}
-
-const sameText = (a: string, b: string) => {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return diff === 0
-}
-
-interface LoginState {
-  /** equipe */
-  t: string
-  /** quem pediu */
-  u: string
-  /** endereço de volta */
-  r: string
-  /** expira (ms) */
-  e: number
-  n: string
+interface LoginState extends LoginStateBase {
   /** `boost`: o login pediu as permissões de turbinar */
   m?: 'boost'
 }
 
-async function packState(state: LoginState, secret: string) {
-  const body = toB64(encoder.encode(JSON.stringify(state)))
-  return `${body}.${await sign(body, secret)}`
-}
-
-async function unpackState(text: unknown, secret: string): Promise<LoginState> {
-  const [body = '', mac = ''] = typeof text === 'string' ? text.split('.') : []
-  if (!body || !mac || !sameText(mac, await sign(body, secret))) throw new HttpError('Este retorno do Facebook não veio desta plataforma. Conecte de novo pela aba Anúncios.', 400, 'state')
-  let state: LoginState
-  try {
-    state = JSON.parse(new TextDecoder().decode(fromB64(body))) as LoginState
-  } catch {
-    throw new HttpError('Retorno do Facebook ilegível. Conecte de novo.', 400, 'state')
-  }
-  if (state.e < Date.now()) throw new HttpError('O login no Facebook demorou demais. Conecte de novo.', 400, 'state')
-  return state
-}
+const unpackState = (text: unknown, secret: string) => unpackStateWith<LoginState>(text, secret, 'Facebook', 'pela aba Anúncios')
 
 /** Só a tela de retorno da própria plataforma: https, ou localhost no servidor de dev. */
-function checkRedirect(value: unknown) {
-  if (typeof value !== 'string') throw new HttpError('Falta o endereço de volta.')
-  let url: URL
-  try {
-    url = new URL(value)
-  } catch {
-    throw new HttpError('Endereço de volta inválido.')
-  }
-  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
-  if ((url.protocol !== 'https:' && !local) || url.pathname !== CALLBACK_PATH || url.search || url.hash) throw new HttpError('Endereço de volta inválido.')
-  return url.toString()
-}
+const checkRedirect = (value: unknown) => checkRedirectWith(value, { path: CALLBACK_PATH, local: true })
 
 // ---------- token ----------
 
@@ -285,12 +241,6 @@ async function lengthen(grant: Grant, app: App | null): Promise<Grant> {
 
 // ---------- banco ----------
 
-interface Ctx {
-  user: SupabaseClient
-  admin: SupabaseClient
-  userId: string
-}
-
 interface AccountRow {
   id: string
   team_id: string
@@ -299,10 +249,7 @@ interface AccountRow {
   currency: string
 }
 
-const dbError = (error: { code?: string; message?: string }) =>
-  error.code === '42P01' || error.code === 'PGRST205'
-    ? new HttpError('As tabelas de anúncios ainda não existem: aplique a migração 20261025120000_crm_meta_ads.sql.', 503, 'no_tables')
-    : new HttpError(error.message ?? 'Falha no banco.', 500, 'db')
+const dbError = dbErrorFor('As tabelas de anúncios ainda não existem: aplique a migração 20261025120000_crm_meta_ads.sql.')
 
 const uuid = (value: unknown, what: string) => {
   if (typeof value !== 'string' || !/^[0-9a-f-]{36}$/.test(value)) throw new HttpError(`${what} inválida.`)
@@ -310,26 +257,17 @@ const uuid = (value: unknown, what: string) => {
 }
 
 /** Anúncios fazem parte do módulo Instagram: precisa estar ligado na conta. */
-async function requireModule(ctx: Ctx, teamId: string) {
-  const { data, error } = await ctx.user.rpc('crm_module_on', { p_team: teamId, p_module: 'instagram' })
-  // Sem a migração das contas a função não existe: nada é restrito
-  if (error) {
-    if (error.code === '42883' || error.code === 'PGRST202') return
-    throw dbError(error)
-  }
-  if (data === false) throw new HttpError('O módulo Instagram e Anúncios está desligado para esta conta.', 403, 'module_off')
-}
+const { requireModule, requireRole } = teamGuards({
+  module: 'instagram',
+  moduleOff: 'O módulo Instagram e Anúncios está desligado para esta conta.',
+  managerOnly: 'Só quem gerencia a equipe conecta ou desconecta contas de anúncios e ativa anúncios.',
+  dbError,
+})
 
-async function requireRole(ctx: Ctx, teamId: unknown, manager: boolean) {
-  const team = uuid(teamId, 'Equipe')
-  const { data, error } = await ctx.user.rpc(manager ? 'is_crm_manager' : 'is_crm_member', { p_team: team })
-  if (error) throw dbError(error)
-  if (!data) throw new HttpError(manager ? 'Só quem gerencia a equipe desconecta uma conta de anúncios.' : 'Você não é desta equipe.', 403, 'forbidden')
-  await requireModule(ctx, team)
-  return team
-}
-
-/** A conta, lida com o acesso de quem chamou (as regras do banco dizem se é da equipe). */
+/**
+ * A conta, lida com o acesso de quem chamou: as regras do banco dizem se é da equipe (`is_crm_member`) e
+ * se o módulo está ligado (política restritiva "Módulo instagram ligado" em `crm_ad_accounts`).
+ */
 async function accountOf(ctx: Ctx, accountId: unknown): Promise<AccountRow> {
   const id = uuid(accountId, 'Conta')
   const { data, error } = await ctx.user.from('crm_ad_accounts').select('id, team_id, ad_account_id, name, currency').eq('id', id).maybeSingle()
@@ -418,7 +356,7 @@ async function choose(ctx: Ctx, body: Record<string, unknown>) {
   if (error) throw dbError(error)
   const pending = data as { team_id: string; access_token: string; token_kind: string | null; token_expires_at: string | null; connected_name: string | null; accounts: PendingAccount[]; scopes: string[] | null; valid_until: string } | null
   if (!pending || Date.parse(pending.valid_until) < Date.now()) throw new HttpError('Essa conexão expirou (30 minutos). Entre com o Facebook de novo.', 410, 'expired')
-  const teamId = await requireRole(ctx, pending.team_id, false)
+  const teamId = await requireRole(ctx, pending.team_id, true)
   const saved = await saveAccounts(ctx, teamId, pending, ids, ctx.userId)
   await ctx.admin.from('crm_ad_pending').delete().eq('id', pendingId)
   return { accounts: saved }
@@ -1232,39 +1170,15 @@ async function boostRefresh(ctx: Ctx, account: AccountRow, token: string) {
  * link; aqui fica o hash.
  */
 const LINK_DAYS = 7
-const sha256 = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(text))), (b) => b.toString(16).padStart(2, '0')).join('')
 
-interface LinkRow {
-  id: string
-  team_id: string
-  created_by: string | null
-  expires_at: string
-  used_at: string | null
-  revoked_at: string | null
+interface LinkRow extends LinkBase {
   pending_id: string | null
   account_ids: string[] | null
   connected_name: string | null
 }
 
-async function linkOf(admin: SupabaseClient, token: unknown): Promise<{ link: LinkRow; state: 'ok' | 'used' | 'expired' | 'revoked' }> {
-  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{32,80}$/.test(token)) throw new HttpError('Link inválido. Peça um novo a quem enviou.', 404, 'link')
-  const { data, error } = await admin
-    .from('crm_ad_connect_links')
-    .select('id, team_id, created_by, expires_at, used_at, revoked_at, pending_id, account_ids, connected_name')
-    .eq('token_hash', await sha256(token))
-    .maybeSingle()
-  if (error) throw dbError(error)
-  if (!data) throw new HttpError('Link inválido. Peça um novo a quem enviou.', 404, 'link')
-  const link = data as LinkRow
-  const state = link.revoked_at ? 'revoked' : link.used_at ? 'used' : Date.parse(link.expires_at) < Date.now() ? 'expired' : 'ok'
-  return { link, state }
-}
-
-const LINK_PROBLEM: Record<'used' | 'expired' | 'revoked', string> = {
-  used: 'Este link já foi usado. Peça um novo a quem enviou.',
-  expired: 'Este link venceu. Peça um novo a quem enviou.',
-  revoked: 'Este link foi cancelado. Peça um novo a quem enviou.',
-}
+const linkOf = (admin: SupabaseClient, token: unknown) =>
+  linkOfWith<LinkRow>(admin, 'crm_ad_connect_links', 'id, team_id, created_by, expires_at, used_at, revoked_at, pending_id, account_ids, connected_name', token, dbError)
 
 /** As ações sem login: quem abriu o link. Tudo é conferido pelo segredo do link. */
 async function publicLink(admin: SupabaseClient, body: Record<string, unknown>, app: App | null) {
@@ -1409,15 +1323,15 @@ Deno.serve(async (req) => {
   if (req.headers.has('x-cron-secret')) {
     const expected = Deno.env.get('STORIES_CRON_SECRET') ?? ''
     const given = req.headers.get('x-cron-secret') ?? ''
-    if (!expected || given.length !== expected.length || given !== expected) return json({ error: 'Segredo do cron inválido.', code: 'auth' }, 401)
+    // Revisão de 2026-11-13: comparação em tempo constante (`sameText`), como no `instagram`
+    if (!expected || !sameText(given, expected)) return json({ error: 'Segredo do cron inválido.', code: 'auth' }, 401)
     try {
       const body = ((await req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>
       if (body.action !== 'cron_report') return json({ error: 'Ação desconhecida.' }, 400)
       return json(await cronReport(body))
     } catch (error) {
-      console.error('[meta-ads] cron', error)
-      if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status)
-      return json({ error: error instanceof Error ? error.message : String(error), code: 'error' }, 500)
+      // Revisão de 2026-11-13: 500 sem a mensagem crua (só no log)
+      return errorResponse(error, '[meta-ads] cron', json, true)
     }
   }
 
@@ -1430,9 +1344,7 @@ Deno.serve(async (req) => {
       const secret = Deno.env.get('META_APP_SECRET') ?? ''
       return json(await publicLink(admin, peek, appId && secret ? { id: appId, secret } : null))
     } catch (error) {
-      if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status)
-      console.error('[meta-ads] link', error)
-      return json({ error: error instanceof Error ? error.message : String(error), code: 'error' }, 500)
+      return errorResponse(error, '[meta-ads] link', json)
     }
   }
 
@@ -1460,7 +1372,8 @@ Deno.serve(async (req) => {
 
       case 'auth_url': {
         const { id, secret: key } = needsApp()
-        const teamId = await requireRole(ctx, body.teamId, false)
+        // Conectar é do gestor (revisão de 2026-11-13, igual ao `instagram`)
+        const teamId = await requireRole(ctx, body.teamId, true)
         const redirectUri = checkRedirect(body.redirectUri)
         const boost = body.mode === 'boost'
         const state = await packState({ t: teamId, u: ctx.userId, r: redirectUri, e: Date.now() + 15 * 60_000, n: crypto.randomUUID(), ...(boost ? { m: 'boost' as const } : {}) }, key)
@@ -1485,7 +1398,7 @@ Deno.serve(async (req) => {
         const state = await unpackState(body.state, known.secret)
         if (state.u !== ctx.userId) throw new HttpError('O login no Facebook foi começado por outra pessoa. Conecte de novo.', 403, 'state')
         if (checkRedirect(body.redirectUri) !== state.r) throw new HttpError('Endereço de volta diferente do pedido.', 400, 'state')
-        const teamId = await requireRole(ctx, state.t, false)
+        const teamId = await requireRole(ctx, state.t, true)
         const code = typeof body.code === 'string' ? body.code.replace(/#_=_$/, '') : ''
         if (!code) throw new HttpError('O Facebook não devolveu o código do login.')
         const grant = await lengthen(await describe(await exchangeCode(code, state.r, known), known), known)
@@ -1493,7 +1406,7 @@ Deno.serve(async (req) => {
       }
 
       case 'connect_token': {
-        const teamId = await requireRole(ctx, body.teamId, false)
+        const teamId = await requireRole(ctx, body.teamId, true)
         const pasted = typeof body.token === 'string' ? body.token.trim() : ''
         if (pasted.length < 20 || /\s/.test(pasted)) throw new HttpError('Cole o token de acesso inteiro.')
         await graph<{ id: string }>('me', pasted, { fields: 'id' })
@@ -1534,8 +1447,8 @@ Deno.serve(async (req) => {
       case 'boost_activate':
       case 'boost_pause':
       case 'boost_refresh': {
+        // `accountOf` já confere equipe e módulo pelas regras do banco (revisão de 2026-11-13: sem o requireRole repetido)
         const account = await accountOf(ctx, body.accountId)
-        await requireRole(ctx, account.team_id, false)
         const token = await tokenOf(ctx, account)
         try {
           if (body.action === 'boost_setup') return json(await boostSetup(ctx, account, token))
@@ -1552,7 +1465,7 @@ Deno.serve(async (req) => {
 
       case 'link_create': {
         needsApp()
-        const teamId = await requireRole(ctx, body.teamId, false)
+        const teamId = await requireRole(ctx, body.teamId, true)
         const token = toB64(crypto.getRandomValues(new Uint8Array(32)))
         const expiresAt = new Date(Date.now() + LINK_DAYS * DAY).toISOString()
         const label = typeof body.label === 'string' ? body.label.slice(0, 120) : ''
@@ -1565,7 +1478,7 @@ Deno.serve(async (req) => {
         const linkId = uuid(body.linkId, 'Link')
         const { data: row } = await admin.from('crm_ad_connect_links').select('team_id').eq('id', linkId).maybeSingle()
         if (!row) throw new HttpError('Link não encontrado.', 404)
-        await requireRole(ctx, (row as { team_id: string }).team_id, false)
+        await requireRole(ctx, (row as { team_id: string }).team_id, true)
         const { error } = await admin.from('crm_ad_connect_links').update({ revoked_at: new Date().toISOString() }).eq('id', linkId).is('used_at', null)
         if (error) throw dbError(error)
         return json({ ok: true })
@@ -1583,8 +1496,7 @@ Deno.serve(async (req) => {
         return json({ error: 'Ação desconhecida.' }, 400)
     }
   } catch (error) {
-    if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status)
-    console.error('[meta-ads]', error)
-    return json({ error: error instanceof Error ? error.message : String(error), code: 'error' }, 500)
+    // Revisão de 2026-11-13: um 500 não devolve mais `error.message` cru; o detalhe fica no log
+    return errorResponse(error, '[meta-ads]', json)
   }
 })

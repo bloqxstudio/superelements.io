@@ -1,4 +1,4 @@
-import type { ParsedLead } from './parse.ts'
+import type { ParsedLead } from './leadParse.ts'
 
 /** A origem guardada na oportunidade (`crm_opportunities.origin`) e o texto do aviso no WhatsApp. */
 

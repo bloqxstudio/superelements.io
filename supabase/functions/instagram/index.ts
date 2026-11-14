@@ -1,5 +1,22 @@
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { readPages, type GraphPage } from './paging.ts'
+import {
+  HttpError,
+  LINK_PROBLEM,
+  checkRedirect as checkRedirectWith,
+  dbErrorFor,
+  errorResponse,
+  linkOf as linkOfWith,
+  packState,
+  sameText,
+  sha256,
+  teamGuards,
+  toB64,
+  unpackState as unpackStateWith,
+  type Ctx,
+  type LinkBase,
+  type LoginStateBase,
+} from '../_shared/metaAuth.ts'
 
 /**
  * O Instagram da equipe pela API oficial da Meta (Instagram API com login
@@ -36,16 +53,6 @@ const corsHeaders = {
 }
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-
-class HttpError extends Error {
-  constructor(
-    message: string,
-    readonly status = 400,
-    readonly code = 'error'
-  ) {
-    super(message)
-  }
-}
 
 // ---------- Meta ----------
 
@@ -103,67 +110,20 @@ const metaId = (value: unknown, what: string) => {
   return value
 }
 
-// ---------- estado do login (assinado com o segredo do app) ----------
+// ---------- estado do login (assinado com o segredo do app, `_shared/metaAuth.ts`) ----------
 
-const encoder = new TextEncoder()
-const toB64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-const fromB64 = (text: string) => Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
+type LoginState = LoginStateBase
 
-async function sign(text: string, secret: string) {
-  const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  return toB64(new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(text))))
-}
+const unpackState = (text: unknown, secret: string) => unpackStateWith<LoginState>(text, secret, 'Instagram', 'pela tela do Instagram')
 
-const sameText = (a: string, b: string) => {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return diff === 0
-}
-
-interface LoginState {
-  /** equipe */
-  t: string
-  /** quem pediu */
-  u: string
-  /** endereço de volta */
-  r: string
-  /** expira (ms) */
-  e: number
-  n: string
-}
-
-async function packState(state: LoginState, secret: string) {
-  const body = toB64(encoder.encode(JSON.stringify(state)))
-  return `${body}.${await sign(body, secret)}`
-}
-
-async function unpackState(text: unknown, secret: string): Promise<LoginState> {
-  const [body = '', mac = ''] = typeof text === 'string' ? text.split('.') : []
-  if (!body || !mac || !sameText(mac, await sign(body, secret))) throw new HttpError('Este retorno do Instagram não veio desta plataforma. Conecte de novo pela tela do Instagram.', 400, 'state')
-  let state: LoginState
-  try {
-    state = JSON.parse(new TextDecoder().decode(fromB64(body))) as LoginState
-  } catch {
-    throw new HttpError('Retorno do Instagram ilegível. Conecte de novo.', 400, 'state')
-  }
-  if (state.e < Date.now()) throw new HttpError('O login no Instagram demorou demais. Conecte de novo.', 400, 'state')
-  return state
-}
-
-/** Só a tela de retorno da própria plataforma: https, ou localhost no servidor de dev. */
-function checkRedirect(value: unknown) {
-  if (typeof value !== 'string') throw new HttpError('Falta o endereço de volta.')
-  let url: URL
-  try {
-    url = new URL(value)
-  } catch {
-    throw new HttpError('Endereço de volta inválido.')
-  }
-  const allowed = (Deno.env.get('INSTAGRAM_REDIRECT_URIS') || 'https://app.avencestudio.com/instagram/retorno').split(',').map((value) => value.trim())
-  if (url.protocol !== 'https:' || url.pathname !== '/instagram/retorno' || url.search || url.hash || !allowed.includes(url.toString())) throw new HttpError('Use o endereço publicado da plataforma para conectar o Instagram.', 400, 'redirect')
-  return url.toString()
-}
+/** Só a tela de retorno da própria plataforma, numa das URLs publicadas (`INSTAGRAM_REDIRECT_URIS`). */
+const checkRedirect = (value: unknown) =>
+  checkRedirectWith(value, {
+    path: '/instagram/retorno',
+    allowed: (Deno.env.get('INSTAGRAM_REDIRECT_URIS') || 'https://app.avencestudio.com/instagram/retorno').split(',').map((v) => v.trim()),
+    message: 'Use o endereço publicado da plataforma para conectar o Instagram.',
+    code: 'redirect',
+  })
 
 // ---------- token ----------
 
@@ -212,12 +172,6 @@ async function refreshed(token: string) {
 
 // ---------- banco ----------
 
-interface Ctx {
-  user: SupabaseClient
-  admin: SupabaseClient
-  userId: string
-}
-
 interface AccountRow {
   id: string
   team_id: string
@@ -225,30 +179,15 @@ interface AccountRow {
   username: string
 }
 
-const dbError = (error: { code?: string; message?: string }) =>
-  error.code === '42P01' || error.code === 'PGRST205'
-    ? new HttpError('As tabelas do Instagram ainda não existem: aplique a migração 20261024120000_crm_instagram.sql.', 503, 'no_tables')
-    : new HttpError(error.message ?? 'Falha no banco.', 500, 'db')
+const dbError = dbErrorFor('As tabelas do Instagram ainda não existem: aplique a migração 20261024120000_crm_instagram.sql.')
 
 /** O módulo do Instagram precisa estar ligado na conta (a Avence liga e desliga em Contas). */
-async function requireModule(ctx: Ctx, teamId: string) {
-  const { data, error } = await ctx.user.rpc('crm_module_on', { p_team: teamId, p_module: 'instagram' })
-  // Sem a migração das contas a função não existe: nada é restrito
-  if (error) {
-    if (error.code === '42883' || error.code === 'PGRST202') return
-    throw dbError(error)
-  }
-  if (data === false) throw new HttpError('O módulo Instagram está desligado para esta conta.', 403, 'module_off')
-}
-
-async function requireRole(ctx: Ctx, teamId: unknown, manager: boolean) {
-  if (typeof teamId !== 'string' || !/^[0-9a-f-]{36}$/.test(teamId)) throw new HttpError('Equipe inválida.')
-  const { data, error } = await ctx.user.rpc(manager ? 'is_crm_manager' : 'is_crm_member', { p_team: teamId })
-  if (error) throw dbError(error)
-  if (!data) throw new HttpError(manager ? 'Só quem gerencia a equipe conecta ou desconecta o Instagram.' : 'Você não é desta equipe.', 403, 'forbidden')
-  await requireModule(ctx, teamId)
-  return teamId
-}
+const { requireModule, requireRole } = teamGuards({
+  module: 'instagram',
+  moduleOff: 'O módulo Instagram está desligado para esta conta.',
+  managerOnly: 'Só quem gerencia a equipe conecta ou desconecta o Instagram.',
+  dbError,
+})
 
 /** A conta, lida com o acesso de quem chamou (as regras do banco dizem se é da equipe). */
 async function accountOf(ctx: Ctx, accountId: unknown): Promise<AccountRow> {
@@ -1268,34 +1207,13 @@ async function runScheduled(admin: SupabaseClient, dryRun: boolean) {
 /** Validade do link de conexão. */
 const LINK_DAYS = 7
 
-const sha256 = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(text))), (b) => b.toString(16).padStart(2, '0')).join('')
-
-interface LinkRow {
-  id: string
-  team_id: string
-  created_by: string | null
-  expires_at: string
-  used_at: string | null
-  revoked_at: string | null
+interface LinkRow extends LinkBase {
   account_id: string | null
 }
 
-/** O link pelo segredo que veio no endereço; `ok` falso diz por quê. */
-async function linkOf(admin: SupabaseClient, token: unknown): Promise<{ link: LinkRow; state: 'ok' | 'used' | 'expired' | 'revoked' }> {
-  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{32,80}$/.test(token)) throw new HttpError('Link inválido. Peça um novo a quem enviou.', 404, 'link')
-  const { data, error } = await admin.from('crm_instagram_connect_links').select('id, team_id, created_by, expires_at, used_at, revoked_at, account_id').eq('token_hash', await sha256(token)).maybeSingle()
-  if (error) throw dbError(error)
-  if (!data) throw new HttpError('Link inválido. Peça um novo a quem enviou.', 404, 'link')
-  const link = data as LinkRow
-  const state = link.revoked_at ? 'revoked' : link.used_at ? 'used' : Date.parse(link.expires_at) < Date.now() ? 'expired' : 'ok'
-  return { link, state }
-}
-
-const LINK_PROBLEM: Record<'used' | 'expired' | 'revoked', string> = {
-  used: 'Este link já foi usado. Peça um novo a quem enviou.',
-  expired: 'Este link venceu. Peça um novo a quem enviou.',
-  revoked: 'Este link foi cancelado. Peça um novo a quem enviou.',
-}
+/** O link pelo segredo que veio no endereço; `state` diz se ainda vale. */
+const linkOf = (admin: SupabaseClient, token: unknown) =>
+  linkOfWith<LinkRow>(admin, 'crm_instagram_connect_links', 'id, team_id, created_by, expires_at, used_at, revoked_at, account_id', token, dbError)
 
 /** As ações sem login: o cliente que abriu o link. Tudo é conferido pelo segredo do link. */
 async function publicLink(admin: SupabaseClient, body: Record<string, unknown>) {
@@ -1371,9 +1289,8 @@ Deno.serve(async (req) => {
       if (body.action !== 'run_scheduled') return json({ error: 'Ação desconhecida.' }, 400)
       return json(await runScheduled(admin, body.dryRun === true))
     } catch (error) {
-      console.error('[instagram] cron', error)
-      if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status)
-      return json({ error: error instanceof Error ? error.message : String(error), code: 'error' }, 500)
+      // Revisão de 2026-11-13: 500 sem a mensagem crua (só no log)
+      return errorResponse(error, '[instagram] cron', json, true)
     }
   }
 
@@ -1385,9 +1302,7 @@ Deno.serve(async (req) => {
         const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
         return json(await publicLink(admin, peek))
       } catch (error) {
-        if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status)
-        console.error('[instagram] link', error)
-        return json({ error: error instanceof Error ? error.message : String(error), code: 'error' }, 500)
+        return errorResponse(error, '[instagram] link', json)
       }
     }
   }
@@ -1579,8 +1494,7 @@ Deno.serve(async (req) => {
         return json({ error: 'Ação desconhecida.' }, 400)
     }
   } catch (error) {
-    if (error instanceof HttpError) return json({ error: error.message, code: error.code }, error.status)
-    console.error('[instagram]', error)
-    return json({ error: error instanceof Error ? error.message : String(error), code: 'error' }, 500)
+    // Revisão de 2026-11-13: um 500 não devolve mais `error.message` cru; o detalhe fica no log
+    return errorResponse(error, '[instagram]', json)
   }
 })
