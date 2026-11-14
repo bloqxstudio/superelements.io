@@ -198,7 +198,8 @@ export function renderSystemEmbed(element: NonDeleted<ExcalidrawEmbeddableElemen
 export const DASHBOARDS: { path: string; name: string; hint: string }[] = [
   { path: '/inicio', name: 'Início', hint: 'O resumo da conta' },
   { path: '/crm', name: 'Leads', hint: 'Oportunidades e pipeline' },
-  { path: '/crm/site', name: 'Visitas do site', hint: 'Visitas, mapa e origem' },
+  { path: '/crm/site', name: 'Visitas', hint: 'Site e formulários: origem, campanhas e gasto' },
+  { path: '/crm/ao-vivo', name: 'Ao vivo', hint: 'Quem está no site e nos formulários agora' },
   { path: '/crm/instagram', name: 'Instagram', hint: 'Seguidores, alcance e posts' },
   { path: '/crm/anuncios', name: 'Anúncios', hint: 'Campanhas e resultados' },
   { path: '/crm/social', name: 'Relacionamento nas redes', hint: 'Social da equipe' },

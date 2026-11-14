@@ -120,6 +120,8 @@ export interface Cut {
 
 export interface SiteSession {
   id: string
+  /** O site (tracker) da visita */
+  siteId?: string
   visitorId: string
   visitNumber: number
   startedAt: number
@@ -354,7 +356,13 @@ export async function loadReport(siteId: string, period: SitePeriod): Promise<Si
 export async function loadReportRange(siteId: string, from: Date, to: Date): Promise<SiteReport> {
   const { data, error } = await supabase.rpc('site_report', { p_site: siteId, p_from: from.toISOString(), p_to: to.toISOString(), p_tz: localTz() })
   if (error) fail(error)
-  const r = (data ?? {}) as Record<string, unknown>
+  return reportOf((data ?? {}) as Record<string, unknown>)
+}
+
+/** Um relatório vazio (conta sem site: a tela Visitas segue com os formulários) */
+export const emptyReport = (): SiteReport => reportOf({})
+
+function reportOf(r: Record<string, unknown>): SiteReport {
   return {
     totals: totalsOf(r.totals),
     previous: totalsOf(r.previous),
@@ -402,6 +410,7 @@ export function dailySeries(report: SiteReport, period: SitePeriod, pick: (day: 
 // ---------- visitas ----------
 
 type SessionRow = {
+  site_id?: string | null
   id: string
   visitor_id: string
   visit_number: number
@@ -445,6 +454,7 @@ type SessionRow = {
 
 const sessionOf = (r: SessionRow): SiteSession => ({
   id: r.id,
+  siteId: r.site_id ?? undefined,
   visitorId: r.visitor_id,
   visitNumber: r.visit_number,
   startedAt: Date.parse(r.started_at),
@@ -537,6 +547,38 @@ export async function loadSessions(siteId: string, filter: SessionFilter, page =
  * pela regra de leitura). Sem a migração do mapa (ou sem Realtime), não chega
  * nada e a tela segue lendo de tempos em tempos.
  */
+/** Uma visita do site pelo id (o formulário aberto dentro dela leva até ela) */
+export async function loadSession(id: string): Promise<SiteSession | null> {
+  const { data, error } = await supabase.from('site_sessions').select('*').eq('id', id).maybeSingle()
+  if (error) fail(error)
+  return data ? sessionOf(data as SessionRow) : null
+}
+
+/** Quem está em algum site da conta agora (a tela Ao vivo) */
+export async function loadLiveOfTeam(teamId: string): Promise<SiteSession[]> {
+  const { data, error } = await supabase.from('site_sessions').select('*').eq('team_id', teamId).gte('last_at', new Date(Date.now() - LIVE_MS).toISOString()).order('last_at', { ascending: false }).limit(300)
+  if (error) fail(error)
+  return ((data ?? []) as SessionRow[]).map(sessionOf)
+}
+
+/** As visitas de todos os sites da conta, ao vivo (a tela Ao vivo) */
+export function useTeamSiteFeed(teamId: string | undefined, onSession: (session: SiteSession) => void) {
+  const latest = useRef(onSession)
+  latest.current = onSession
+  useEffect(() => {
+    if (!teamId) return
+    const deliver = (row: unknown) => {
+      const r = row as SessionRow | null
+      if (r?.id && r.started_at) latest.current(sessionOf(r))
+    }
+    return subscribeTopic(`aovivo-site-${teamId}`, (channel) =>
+      channel
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'site_sessions', filter: `team_id=eq.${teamId}` }, (payload) => deliver(payload.new))
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'site_sessions', filter: `team_id=eq.${teamId}` }, (payload) => deliver(payload.new))
+    )
+  }, [teamId])
+}
+
 export function useSiteFeed(siteId: string | undefined, onSession: (session: SiteSession) => void) {
   const latest = useRef(onSession)
   latest.current = onSession

@@ -162,7 +162,7 @@ const OperacaoPage: React.FC = () => {
         letter: CHANNEL_LETTER[s.channel] ?? initial(s.city ?? s.channel),
         title: visitTitle(s),
         since: s.converted ? s.lastAt : s.startedAt,
-        href: '/crm/site?aba=visitas',
+        href: '/crm/ao-vivo',
       })
     }
     for (const o of opps ?? []) {
@@ -182,7 +182,7 @@ const OperacaoPage: React.FC = () => {
     if (opps && h.acts.status === 'ready') out.push(...activityEvents(h.acts.data, opps))
     for (const s of siteData?.contacts ?? []) {
       const what = [...new Set(s.conversions.map(contactLabel))].join(', ') || 'contato'
-      out.push({ id: `c:${s.id}`, at: s.lastAt, kind: 'contato', title: `Contato pelo site · ${what}`, detail: [s.campaign || s.channel, placeLabel(s)].filter(Boolean).join(' · '), href: '/crm/site?aba=visitas' })
+      out.push({ id: `c:${s.id}`, at: s.lastAt, kind: 'contato', title: `Contato pelo site · ${what}`, detail: [s.campaign || s.channel, placeLabel(s)].filter(Boolean).join(' · '), href: '/crm/site?aba=lista' })
     }
     return out.filter((e) => e.at >= w.from && e.at <= (day ? w.to : now + 60_000)).sort(byRecent).slice(0, 20)
   }, [opps, h.acts, siteData, w, now])

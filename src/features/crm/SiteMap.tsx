@@ -99,16 +99,31 @@ interface Tip {
   lines: string[]
 }
 
+/** As palavras do mapa: o site (padrão) ou os formulários (2026-11-14, "mapa de estados dentro do formulário também") */
+export interface MapWords {
+  kind: 'site' | 'forms'
+  layer: string
+  contact: [string, string]
+  contactTitle: string
+  liveNow: string
+  liveTip: string
+  arrived: string
+}
+const SITE_WORDS: MapWords = { kind: 'site', layer: 'Visitas do site', contact: ['contato', 'contatos'], contactTitle: 'Contatos', liveNow: 'no site agora', liveTip: 'No site agora', arrived: 'Chegaram ao site' }
+export const FORM_WORDS: MapWords = { kind: 'forms', layer: 'Visitas aos formulários', contact: ['envio', 'envios'], contactTitle: 'Enviaram', liveNow: 'no formulário agora', liveTip: 'No formulário agora', arrived: 'Chegaram ao formulário' }
+
 export const SiteMap: React.FC<{
   report: SiteReport
   live: SiteSession[]
   meta?: MetaView
   endpoint?: EndpointInfo
-  onVisits: (filter: Partial<SessionFilter>) => void
+  /** Sem `onVisits`, o mapa não oferece abrir a lista de visitas */
+  onVisits?: (filter: Partial<SessionFilter>) => void
   onOpenSession: (session: SiteSession) => void
   /** Outro título (a Operação mostra só quem está agora) */
   title?: string
-}> = ({ report, live, meta, endpoint, onVisits, onOpenSession, title = 'Mapa' }) => {
+  words?: MapWords
+}> = ({ report, live, meta, endpoint, onVisits, onOpenSession, title = 'Mapa', words = SITE_WORDS }) => {
   const [layer, setLayer] = useState<Layer>('site')
   const [metric, setMetric] = useState<MetaMetric>('linkClicks')
   const [selected, setSelected] = useState<string | null>(null)
@@ -173,12 +188,13 @@ export const SiteMap: React.FC<{
   const stateLines = (uf: string) => {
     const s = site.byUf.get(uf)
     const m = metaUf.get(uf)
-    const lines = [s ? `${plural(s.sessions, 'visita', 'visitas')} · ${plural(s.converted, 'contato', 'contatos')}` : 'Nenhuma visita com localização']
+    const lines = [s ? `${plural(s.sessions, 'visita', 'visitas')} · ${plural(s.converted, ...words.contact)}` : 'Nenhuma visita com localização']
     if (m) lines.push(`Meta: ${compact(m.linkClicks)} cliques no link · ${money(m.spend, currency, true)}`)
     return lines
   }
 
-  const sel = selected ? { site: site.byUf.get(selected), meta: metaUf.get(selected), cities: cities.filter((c) => ufOf(c.region) === selected) } : undefined
+  // A lista de cidades do estado não precisa de coordenadas (os formulários só guardam o nome da cidade)
+  const sel = selected ? { site: site.byUf.get(selected), meta: metaUf.get(selected), cities: report.cities.filter((c) => c.country === 'BR' && ufOf(c.region ?? undefined) === selected).sort((a, b) => b.sessions - a.sessions) } : undefined
   const ink = showMeta ? META_INK : SITE_INK
   const noGeo = report.totals.sessions > 0 && report.regions.length === 0
 
@@ -188,7 +204,7 @@ export const SiteMap: React.FC<{
       action={
         <span className="flex flex-wrap items-center gap-1.5">
           <Chip active={!showMeta} onClick={() => setLayer('site')} className="h-7 px-2.5 text-xs">
-            Visitas do site
+            {words.layer}
           </Chip>
           {hasMeta && (
             <Chip active={showMeta} onClick={() => setLayer('meta')} className="h-7 px-2.5 text-xs">
@@ -206,7 +222,7 @@ export const SiteMap: React.FC<{
             preserveAspectRatio="xMidYMid meet"
             className="h-[360px] w-full touch-manipulation select-none sm:h-[460px]"
             role="img"
-            aria-label={`Mapa do Brasil com ${showMeta ? `${META_METRIC[metric].toLowerCase()} da Meta` : 'as visitas do site'} por estado${liveDots.length ? `; ${liveDots.length} no site agora` : ''}`}
+            aria-label={`Mapa do Brasil com ${showMeta ? `${META_METRIC[metric].toLowerCase()} da Meta` : words.layer.toLowerCase()} por estado${liveDots.length ? `; ${liveDots.length} ${words.liveNow}` : ''}`}
             onPointerLeave={() => setTip(null)}
           >
             <g>
@@ -264,10 +280,10 @@ export const SiteMap: React.FC<{
                       strokeWidth={1.25}
                       vectorEffect="non-scaling-stroke"
                       onPointerMove={(e) =>
-                        setTip({ ...point(e), title: `${c.city}${c.region ? `, ${c.region}` : ''}`, lines: [`${plural(c.sessions, 'visita', 'visitas')} · ${plural(c.visitors, 'pessoa', 'pessoas')}`, plural(c.converted, 'contato', 'contatos')] })
+                        setTip({ ...point(e), title: `${c.city}${c.region ? `, ${c.region}` : ''}`, lines: [`${plural(c.sessions, 'visita', 'visitas')} · ${plural(c.visitors, 'pessoa', 'pessoas')}`, plural(c.converted, ...words.contact)] })
                       }
-                      onClick={() => onVisits({ region: ufOf(c.region) ?? c.region ?? undefined, city: c.city })}
-                      className="cursor-pointer"
+                      onClick={() => onVisits?.({ region: ufOf(c.region) ?? c.region ?? undefined, city: c.city })}
+                      className={onVisits ? 'cursor-pointer' : undefined}
                     />
                   )
                 })}
@@ -280,7 +296,7 @@ export const SiteMap: React.FC<{
                   className="cursor-pointer"
                   onClick={() => onOpenSession(s)}
                   onPointerMove={(e) =>
-                    setTip({ ...point(e), title: `No site agora · ${placeLabel(s)}`, lines: [`Em ${pathLabel(s.exit ?? s.landing)}`, [s.channel, s.device].filter(Boolean).join(' · ')] })
+                    setTip({ ...point(e), title: `${words.liveTip} · ${placeLabel(s)}`, lines: [words.kind === 'forms' ? s.landing ?? '' : `Em ${pathLabel(s.exit ?? s.landing)}`, [s.channel, s.device].filter(Boolean).join(' · ')] })
                   }
                 >
                   <circle cx={x} cy={y} r={7 * unit} fill="rgba(16, 185, 129, 0.35)" className="motion-safe:animate-ping" style={{ transformBox: 'fill-box', transformOrigin: 'center' }} />
@@ -318,12 +334,12 @@ export const SiteMap: React.FC<{
             {!showMeta && cities.length > 0 && (
               <span className="flex items-center gap-1">
                 <span className="h-2.5 w-2.5 rounded-full border border-zinc-900 bg-white" /> cidade
-                <span className="ml-1.5 h-2.5 w-2.5 rounded-full bg-emerald-600" /> com contato
+                <span className="ml-1.5 h-2.5 w-2.5 rounded-full bg-emerald-600" /> com {words.contact[0]}
               </span>
             )}
             {liveDots.length > 0 && (
               <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> {liveDots.length} no site agora
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> {liveDots.length} {words.liveNow}
               </span>
             )}
           </div>
@@ -349,7 +365,7 @@ export const SiteMap: React.FC<{
                   </button>
                   <h3 className="text-base font-semibold text-gray-900">{UF_NAME[selected]}</h3>
                 </div>
-                {sel.site && (
+                {sel.site && onVisits && (
                   <button type="button" onClick={() => onVisits({ region: selected })} className="shrink-0 rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800">
                     Ver as visitas
                   </button>
@@ -357,12 +373,12 @@ export const SiteMap: React.FC<{
               </div>
               <dl className="grid grid-cols-2 gap-3 rounded-lg bg-zinc-50 p-3 text-sm">
                 <Num label="Visitas" value={compact(sel.site?.sessions ?? 0)} sub={plural(sel.site?.visitors ?? 0, 'pessoa', 'pessoas')} />
-                <Num label="Contatos" value={compact(sel.site?.converted ?? 0)} sub={sel.site?.sessions ? `${percent((sel.site.converted ?? 0) / sel.site.sessions, 0)} das visitas` : undefined} />
+                <Num label={words.contactTitle} value={compact(sel.site?.converted ?? 0)} sub={sel.site?.sessions ? `${percent((sel.site.converted ?? 0) / sel.site.sessions, 0)} das visitas` : undefined} />
                 {sel.meta && (
                   <>
                     <Num label="Cliques no link (Meta)" value={compact(sel.meta.linkClicks)} sub={`${money(sel.meta.spend, currency, true)} usados`} />
                     <Num
-                      label="Chegaram ao site"
+                      label={words.arrived}
                       value={compact(sel.site?.meta ?? 0)}
                       sub={sel.meta.linkClicks ? arrivalText((sel.site?.meta ?? 0) / sel.meta.linkClicks) : undefined}
                     />
@@ -377,13 +393,14 @@ export const SiteMap: React.FC<{
                       <li key={c.city}>
                         <button
                           type="button"
-                          onClick={() => onVisits({ region: selected, city: c.city })}
+                          disabled={!onVisits}
+                          onClick={() => onVisits?.({ region: selected, city: c.city })}
                           className="-mx-2 flex w-[calc(100%+16px)] items-baseline justify-between gap-3 rounded-md px-2 py-1 text-left text-sm hover:bg-zinc-50"
                         >
                           <span className="min-w-0 truncate text-gray-800">{c.city}</span>
                           <span className="shrink-0 tabular-nums text-gray-900">
                             {compact(c.sessions)}
-                            {c.converted > 0 && <span className="ml-1.5 text-xs font-medium text-emerald-700">{plural(c.converted, 'contato', 'contatos')}</span>}
+                            {c.converted > 0 && <span className="ml-1.5 text-xs font-medium text-emerald-700">{plural(c.converted, ...words.contact)}</span>}
                           </span>
                         </button>
                       </li>
@@ -413,7 +430,7 @@ export const SiteMap: React.FC<{
                               <span className="min-w-0 truncate text-gray-700">
                                 {UF_NAME[r.uf]}
                                 <span className="ml-1.5 text-xs text-gray-400">
-                                  {showMeta ? (s?.meta ? `${compact(s.meta)} chegaram ao site` : '') : s?.converted ? plural(s.converted, 'contato', 'contatos') : ''}
+                                  {showMeta ? (s?.meta ? `${compact(s.meta)} ${words.arrived.toLowerCase()}` : '') : s?.converted ? plural(s.converted, ...words.contact) : ''}
                                 </span>
                               </span>
                               <span className="shrink-0 font-medium tabular-nums text-gray-900">{format(r.value)}</span>
@@ -437,11 +454,11 @@ export const SiteMap: React.FC<{
                   {site.unknown > 0 && <p>{plural(site.unknown, 'visita', 'visitas')} sem cidade ou estado.</p>}
                 </div>
               )}
-              {showMeta && <p className="border-t border-gray-100 pt-3 text-xs text-gray-500">A Meta conta por estado, sem cidade. "Chegaram ao site": visitas que vieram de anúncio da Meta, pela localização do IP.</p>}
+              {showMeta && <p className="border-t border-gray-100 pt-3 text-xs text-gray-500">A Meta conta por estado, sem cidade. "{words.arrived}": visitas que vieram de anúncio da Meta, pela localização do IP.</p>}
             </div>
           )}
 
-          {noGeo && <GeoHint endpoint={endpoint} mapReady={report.mapReady} />}
+          {noGeo && words.kind === 'site' && <GeoHint endpoint={endpoint} mapReady={report.mapReady} />}
         </div>
       </div>
     </Surface>

@@ -79,7 +79,7 @@ const Home: React.FC = () => {
     if (site.status === 'ready') {
       for (const s of site.data.contacts) {
         const what = [...new Set(s.conversions.map(contactLabel))].join(', ') || 'contato'
-        out.push({ id: `v:${s.id}`, at: s.lastAt, kind: 'contato', title: `Visita chegou a um contato: ${what}`, detail: [placeLabel(s), s.channel, pathLabel(s.landing)].filter(Boolean).join(' · '), href: '/crm/site?aba=visitas' })
+        out.push({ id: `v:${s.id}`, at: s.lastAt, kind: 'contato', title: `Visita chegou a um contato: ${what}`, detail: [placeLabel(s), s.channel, pathLabel(s.landing)].filter(Boolean).join(' · '), href: '/crm/site?aba=lista' })
       }
     }
     if (instagram.status === 'ready') {
@@ -636,8 +636,8 @@ const CampaignDetail: React.FC<{ id: string; r: CampaignRow; h: HomeData; w: Win
         <Link to="/crm/anuncios" className="inline-flex items-center gap-1 text-gray-900 underline underline-offset-2">
           Investigar em Anúncios <ArrowUpRight aria-hidden className="h-3 w-3" />
         </Link>
-        <Link to="/crm/site?aba=visitas" className="inline-flex items-center gap-1 text-gray-900 underline underline-offset-2">
-          Ver visitas no Site <ArrowUpRight aria-hidden className="h-3 w-3" />
+        <Link to="/crm/site" className="inline-flex items-center gap-1 text-gray-900 underline underline-offset-2">
+          Ver as Visitas <ArrowUpRight aria-hidden className="h-3 w-3" />
         </Link>
         <Link to="/crm" className="inline-flex items-center gap-1 text-gray-900 underline underline-offset-2">
           Ver no funil <ArrowUpRight aria-hidden className="h-3 w-3" />

@@ -59,8 +59,11 @@ const FormEditor: React.FC = () => {
   const [form, setForm] = useState<CrmForm | null | undefined>(undefined)
   const [draft, setDraft] = useState<Draft>()
   const [searchParams] = useSearchParams()
-  // `?aba=aovivo` abre direto no acompanhamento (link da lista "Ao vivo agora" das Visitas do site)
-  const [tab, setTabRaw] = useState<Tab>(() => (searchParams.get('aba') === 'aovivo' ? 'aovivo' : 'construir'))
+  // `?aba=aovivo` e `?aba=respostas` abrem direto no acompanhamento ou nas respostas (links das Visitas e do Ao vivo)
+  const [tab, setTabRaw] = useState<Tab>(() => {
+    const asked = searchParams.get('aba')
+    return asked === 'aovivo' || asked === 'respostas' ? asked : 'construir'
+  })
   const [saving, setSaving] = useState<'idle' | 'dirty' | 'saving' | 'saved'>('idle')
   const [dark, setDark] = useState(false)
   const [phone, setPhone] = useState(true)

@@ -12,8 +12,8 @@ export * from '@/features/crm/formFunnel'
  */
 
 const db = supabase as unknown as SupabaseClient
-const COLUMNS =
-  'id, form_id, visitor, started_at, last_at, left_at, active_ms, screen, step_id, step_index, steps_total, steps_seen, started, submitted, qualified, schedule_view, scheduled, submission_id, page, embed, channel, source, medium, campaign, content, referrer_host, device, browser, os, country, region, region_name, city'
+export const COLUMNS =
+  'id, form_id, visitor, started_at, last_at, left_at, active_ms, screen, step_id, step_index, steps_total, steps_seen, started, submitted, qualified, schedule_view, scheduled, submission_id, page, embed, channel, source, medium, campaign, content, term, click_id, referrer_host, device, browser, os, country, region, region_name, city'
 
 export class VisitsTableError extends Error {
   constructor() {

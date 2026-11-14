@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils'
 
 const db = supabase as unknown as SupabaseClient
 const COLUMNS =
-  'id, form_id, visitor, started_at, last_at, left_at, active_ms, screen, step_id, step_index, steps_total, steps_seen, started, submitted, qualified, schedule_view, scheduled, submission_id, page, embed, channel, source, medium, campaign, content, referrer_host, device, browser, os, country, region, region_name, city, site_session_id, site_tracked'
+  'id, form_id, visitor, started_at, last_at, left_at, active_ms, screen, step_id, step_index, steps_total, steps_seen, started, submitted, qualified, schedule_view, scheduled, submission_id, page, embed, channel, source, medium, campaign, content, term, click_id, referrer_host, device, browser, os, country, region, region_name, city, site_session_id, site_tracked'
 
 /** As visitas aos formulários da conta no período e no anterior (para comparar), ao vivo */
 export function useTeamFormVisits(teamId: string, period: SitePeriod) {
@@ -104,8 +104,10 @@ export const LiveNow: React.FC<{
   forms: FormVisit[]
   formsById: Map<string, CrmForm>
   onOpenSession: (s: SiteSession) => void
-  onSiteVisits: () => void
-}> = ({ site, forms, formsById, onOpenSession, onSiteVisits }) => {
+  onSiteVisits?: () => void
+  /** Abre a janela da visita ao formulário */
+  onOpenForm: (v: FormVisit) => void
+}> = ({ site, forms, formsById, onOpenSession, onSiteVisits, onOpenForm }) => {
   const now = useNow(5000)
   const items = useMemo<LiveItem[]>(
     () =>
@@ -156,7 +158,7 @@ export const LiveNow: React.FC<{
             const place = [v.city, v.region || v.regionName].filter(Boolean).join(', ')
             return (
               <li key={`f:${v.id}`}>
-                <Link to={`/crm/formularios/${v.formId}?aba=aovivo`} className="-mx-2 flex items-start gap-3 rounded-lg px-2 py-2.5 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <button type="button" onClick={() => onOpenForm(v)} className="-mx-2 flex w-[calc(100%+16px)] items-start gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <FileText className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" aria-hidden />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-gray-900">
@@ -173,7 +175,7 @@ export const LiveNow: React.FC<{
                     <span className="block">entrou {ago(v.startedAt, now)}</span>
                     <span className="block tabular-nums">{duration(v.activeMs)}</span>
                   </span>
-                </Link>
+                </button>
               </li>
             )
           })}
@@ -181,7 +183,7 @@ export const LiveNow: React.FC<{
       ) : (
         <p className="text-sm text-gray-500">Ninguém no site nem nos formulários agora.</p>
       )}
-      {site.length > 0 && (
+      {site.length > 0 && onSiteVisits && (
         <button type="button" onClick={onSiteVisits} className="mt-2 text-xs font-medium text-gray-600 hover:text-gray-900">
           Ver as visitas do site agora, com a jornada
         </button>

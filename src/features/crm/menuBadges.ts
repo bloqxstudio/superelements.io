@@ -38,7 +38,7 @@ const EMPTY: MenuBadges = { followers: 0, live: 0, liveForms: 0, liveFormsLink: 
 export const useMenuBadges = create<MenuBadges>(() => EMPTY)
 
 /** Há o que ver (o ponto no botão do menu, no celular). */
-export const hasNews = (b: MenuBadges) => b.followers > 0 || b.live > 0 || b.contacts > 0 || b.opportunities > 0 || b.whatsapp > 0
+export const hasNews = (b: MenuBadges) => b.followers > 0 || b.live > 0 || b.liveFormsLink > 0 || b.contacts > 0 || b.opportunities > 0 || b.whatsapp > 0
 
 type Area = 'instagram' | 'site' | 'oportunidades'
 

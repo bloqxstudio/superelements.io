@@ -57,6 +57,7 @@ const CrmInstagram = lazyPage(() => import("@/pages/crm/Instagram"));
 const CrmAnuncios = lazyPage(() => import("@/pages/crm/Anuncios"));
 const CrmOperacao = lazyPage(() => import("@/pages/crm/Operacao"));
 const CrmSite = lazyPage(() => import("@/pages/crm/Site"));
+const CrmAoVivo = lazyPage(() => import("@/pages/crm/AoVivo"));
 const CrmWhatsApp = lazyPage(() => import("@/pages/crm/WhatsApp"));
 const CrmFlows = lazyPage(() => import("@/pages/crm/Flows"));
 const CrmForms = lazyPage(() => import("@/pages/crm/Forms"));
@@ -226,6 +227,7 @@ function App() {
                 <Route path="crm/operacao" element={<CrmGate><CrmOperacao /></CrmGate>} />
                 {/* As visitas do site da equipe, contadas pelo script visitas.js colado no WordPress */}
                 <Route path="crm/site" element={<CrmGate><CrmSite /></CrmGate>} />
+                <Route path="crm/ao-vivo" element={<CrmGate><CrmAoVivo /></CrmGate>} />
                 {/* O número de WhatsApp da equipe conectado pelo QR code (serviço services/whatsapp) */}
                 <Route path="crm/whatsapp" element={<CrmGate><CrmWhatsApp /></CrmGate>} />
                 {/* Fluxos de atendimento e prospecção: a rotina comercial em mensagens de WhatsApp */}

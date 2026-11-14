@@ -3,6 +3,9 @@ import { CalendarCheck, CircleAlert, Eye, Loader2, Monitor, Radio, Send, Smartph
 import { Surface, plural, whenLabel } from '@/features/crm/ui'
 import { byOrigin, funnelOf, isLive, placeLabel, useFormVisits, useNow, worstDrop, type FormVisit, type FunnelRow } from '@/features/crm/formVisits'
 import type { CrmForm } from '@/features/crm/forms'
+import { FormsMap } from '@/features/crm/FormsMap'
+import { FormVisitPanel } from '@/features/crm/FormVisitPanel'
+import { useCrm } from '@/features/crm/crmStore'
 import { cn } from '@/lib/utils'
 
 /**
@@ -98,10 +101,11 @@ const Funnel: React.FC<{ rows: FunnelRow[] }> = ({ rows }) => {
   )
 }
 
-const VisitRow: React.FC<{ v: FormVisit; form: CrmForm; now: number; live?: boolean }> = ({ v, form, now, live }) => {
+const VisitRow: React.FC<{ v: FormVisit; form: CrmForm; now: number; live?: boolean; onOpen: (v: FormVisit) => void }> = ({ v, form, now, live, onOpen }) => {
   const place = placeOf(v)
   return (
-    <li className="flex items-start gap-3 py-2.5">
+    <li>
+      <button type="button" onClick={() => onOpen(v)} className="-mx-2 flex w-[calc(100%+16px)] items-start gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', live ? 'bg-emerald-500' : v.scheduled ? 'bg-emerald-300' : v.submitted ? 'bg-violet-400' : 'bg-zinc-300')} aria-hidden />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-gray-900">{placeLabel(form.definition, v)}</span>
@@ -116,6 +120,7 @@ const VisitRow: React.FC<{ v: FormVisit; form: CrmForm; now: number; live?: bool
         <span className="block">{live ? `entrou ${ago(v.startedAt, now)}` : ago(v.lastAt, now)}</span>
         <span className="block tabular-nums">{duration(v.activeMs)}</span>
       </span>
+      </button>
     </li>
   )
 }
@@ -126,6 +131,9 @@ export const FormLive: React.FC<{ form: CrmForm }> = ({ form }) => {
   const { visits, error } = useFormVisits(form.id, since)
   const now = useNow(5000)
   const [originKey, setOriginKey] = useState<'channel' | 'campaign'>('channel')
+  const [opened, setOpened] = useState<FormVisit | null>(null)
+  const { team } = useCrm()
+  const manager = team?.role === 'owner' || team?.role === 'admin'
 
   const data = useMemo(() => {
     const list = visits ?? []
@@ -179,7 +187,7 @@ export const FormLive: React.FC<{ form: CrmForm }> = ({ form }) => {
         <Surface title={live.length ? `${plural(live.length, 'pessoa', 'pessoas')} agora` : 'No formulário agora'}>
           {live.length ? (
             <ul className="divide-y divide-gray-100">
-              {live.map((v) => <VisitRow key={v.id} v={v} form={form} now={now} live />)}
+              {live.map((v) => <VisitRow key={v.id} v={v} form={form} now={now} live onOpen={setOpened} />)}
             </ul>
           ) : (
             <p className="py-6 text-center text-sm text-gray-500">Ninguém com o formulário aberto agora. Quem abrir aparece aqui na hora.</p>
@@ -249,10 +257,22 @@ export const FormLive: React.FC<{ form: CrmForm }> = ({ form }) => {
         </Surface>
       )}
 
+      {opened && (
+        <FormVisitPanel
+          visit={list.find((v) => v.id === opened.id) ?? opened}
+          form={form}
+          manager={manager}
+          onOpen={setOpened}
+          onClose={() => setOpened(null)}
+        />
+      )}
+
+      <FormsMap visits={list} live={live} formName={() => form.name} title="Mapa: de onde abrem este formulário" />
+
       {list.length > 0 && (
         <Surface title="Últimas visitas">
           <ul className="divide-y divide-gray-100">
-            {list.slice(0, 25).map((v) => <VisitRow key={v.id} v={v} form={form} now={now} live={isLive(v, now)} />)}
+            {list.slice(0, 25).map((v) => <VisitRow key={v.id} v={v} form={form} now={now} live={isLive(v, now)} onOpen={setOpened} />)}
           </ul>
         </Surface>
       )}

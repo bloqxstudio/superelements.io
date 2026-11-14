@@ -1,6 +1,6 @@
 import type React from 'react'
 import { create } from 'zustand'
-import { Activity, Bookmark, Bot, Brain, Building, Building2, CalendarDays, CalendarRange, Filter, Globe, Images, Instagram, KanbanSquare, LayoutTemplate, ListChecks, Megaphone, MessageCircle, PenLine, Presentation, Radar, ScanSearch, Send, Users, Wand2 } from 'lucide-react'
+import { Activity, Bookmark, Bot, Brain, Building, Building2, CalendarDays, CalendarRange, Filter, Globe, Images, Instagram, KanbanSquare, LayoutTemplate, ListChecks, Megaphone, MessageCircle, PenLine, Presentation, Radar, Radio, ScanSearch, Send, Users, Wand2 } from 'lucide-react'
 
 /**
  * A Visão geral de cada módulo (2026-11-12, o usuário: "ao entrar em Criação abre direto o Cérebro, o
@@ -44,7 +44,8 @@ export const SCREEN_INFO: Record<string, { icon: React.ElementType; desc: string
   '/crm/diagnostico': { icon: ScanSearch, desc: 'Analisar o site de uma empresa e apontar o que melhorar.' },
   '/crm/instagram': { icon: Instagram, desc: 'Perfil, posts, testes, caixa de mensagens e stories.' },
   '/crm/anuncios': { icon: Megaphone, desc: 'Campanhas da Meta: custo, contatos e os melhores anúncios.' },
-  '/crm/site': { icon: Globe, desc: 'Quem visitou o site, de onde veio e quem virou contato.' },
+  '/crm/ao-vivo': { icon: Radio, desc: 'Quem está agora no site e nos formulários, de onde veio e em que etapa.' },
+  '/crm/site': { icon: Globe, desc: 'Os ativos da empresa (site e formulários): origem, campanhas, gasto e agendamentos.' },
   '/crm/operacao': { icon: Activity, desc: 'A operação do dia: o que entrou, o que andou e o que travou.' },
   '/agentes': { icon: Bot, desc: 'Os agentes de IA desta máquina e o que cada um está fazendo.' },
   '/skills': { icon: Wand2, desc: 'As instruções que a IA segue em cada tipo de trabalho.' },

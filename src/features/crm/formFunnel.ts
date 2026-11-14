@@ -36,6 +36,8 @@ export interface FormVisit {
   medium?: string
   campaign?: string
   content?: string
+  term?: string
+  clickId?: string
   referrerHost?: string
   device?: string
   browser?: string
@@ -178,6 +180,8 @@ export function toVisit(r: Row): FormVisit {
     medium: str(r.medium),
     campaign: str(r.campaign),
     content: str(r.content),
+    term: str(r.term),
+    clickId: str(r.click_id),
     referrerHost: str(r.referrer_host),
     device: str(r.device),
     browser: str(r.browser),

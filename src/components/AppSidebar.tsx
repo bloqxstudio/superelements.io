@@ -5,7 +5,7 @@ import { ChevronsUpDown, LayoutDashboard, LayoutGrid, PanelLeftClose, PanelLeftO
 import { navigationMatches } from '@/features/navigation/workspace'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { areaPaths, type AreaId } from '@/features/navigation/AreaTabs'
-import { Activity, Bookmark, Bot, Brain, Building2, CalendarDays, CalendarRange, Filter, House, Building, Globe, ListChecks, Images, Instagram, Megaphone, Palette, PenLine, Presentation, KanbanSquare, LayoutTemplate, LogOut, MessageCircle, Radar, ScanSearch, Send, Sparkles, Users, Wand2, X } from 'lucide-react'
+import { Activity, Bookmark, Bot, Brain, Building2, CalendarDays, CalendarRange, Filter, House, Building, Globe, ListChecks, Images, Instagram, Megaphone, Palette, PenLine, Presentation, KanbanSquare, LayoutTemplate, LogOut, MessageCircle, Radar, Radio, ScanSearch, Send, Sparkles, Users, Wand2, X } from 'lucide-react'
 import { Logo, SinfyLogo } from '@/components/Logo'
 import { PersonAvatar } from '@/features/profile/PersonAvatar'
 import { useAuth } from '@/contexts/AuthContext'
@@ -219,13 +219,14 @@ const WhatsAppItem: React.FC<{ name?: string }> = ({ name = 'Conversas' }) => {
   )
 }
 
-/** Visitas do site: quem está no site agora (verde, pulsando) e os contatos novos. */
-const SiteItem: React.FC<{ label?: string }> = ({ label = 'Visitas do site' }) => {
-  const live = useMenuBadges((s) => s.live)
-  const contacts = useMenuBadges((s) => s.contacts)
-  const liveLabel = live === 1 ? '1 pessoa no site agora' : `${live} pessoas no site agora`
+/** Ao vivo: quantas pessoas estão agora no site e nos formulários (verde, pulsando). */
+const AoVivoItem: React.FC = () => {
+  const site = useMenuBadges((s) => s.live)
+  const formsLink = useMenuBadges((s) => s.liveFormsLink)
+  const live = site + formsLink
+  const liveLabel = live === 1 ? '1 pessoa ao vivo agora' : `${live} pessoas ao vivo agora`
   return (
-    <Item to="/crm/site" icon={Globe} label={label}>
+    <Item to="/crm/ao-vivo" icon={Radio} label="Ao vivo">
       {live > 0 && (
         <span className="flex items-center gap-1 rounded-full bg-emerald-500 px-1.5 text-[11px] font-semibold tabular-nums text-white" title={liveLabel}>
           <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-white motion-safe:animate-pulse" />
@@ -233,6 +234,15 @@ const SiteItem: React.FC<{ label?: string }> = ({ label = 'Visitas do site' }) =
           <span className="sr-only">, {liveLabel}</span>
         </span>
       )}
+    </Item>
+  )
+}
+
+/** Visitas (site e formulários): os contatos novos pelo site. */
+const SiteItem: React.FC<{ label?: string }> = ({ label = 'Visitas' }) => {
+  const contacts = useMenuBadges((s) => s.contacts)
+  return (
+    <Item to="/crm/site" icon={Globe} label={label}>
       <NewBadge count={contacts} label={plural(contacts, 'contato novo pelo site', 'contatos novos pelo site')} />
     </Item>
   )
@@ -287,9 +297,10 @@ const buildModules = (on: (id: ModuleId) => boolean, team: boolean, crm: boolean
       ] : []).filter(Boolean) as MenuModule['items'],
     },
     {
-      id: 'resultados', title: 'Resultados', hint: 'Visitas do site e operação', icon: Activity, color: 'linear-gradient(160deg,#60a5fa,#2563eb)', paths: ['/crm/site', '/crm/operacao'], news: (b) => b.live > 0 || b.contacts > 0,
+      id: 'resultados', title: 'Resultados', hint: 'Ao vivo, visitas (site e formulários) e operação', icon: Activity, color: 'linear-gradient(160deg,#60a5fa,#2563eb)', paths: ['/crm/ao-vivo', '/crm/site', '/crm/operacao'], news: (b) => b.live > 0 || b.liveFormsLink > 0 || b.contacts > 0,
       items: (crm ? [
-        on('site') && { to: '/crm/site', label: 'Visitas do site', node: <SiteItem /> },
+        (on('site') || on('formularios')) && { to: '/crm/ao-vivo', label: 'Ao vivo', node: <AoVivoItem /> },
+        on('site') && { to: '/crm/site', label: 'Visitas', node: <SiteItem /> },
         on('crm') && { to: '/crm/operacao', label: 'Operação', node: <Item to="/crm/operacao" icon={Activity} label="Operação" /> },
       ] : []).filter(Boolean) as MenuModule['items'],
     },
@@ -430,7 +441,7 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
       </Collapsed.Provider>
 
       <div className="se-sidebar-user shrink-0 space-y-2 px-3 py-3">
-        {user && team && (on('site') || on('formularios')) && <LiveNowItem collapsed={collapsed} to={on('site') ? '/crm/site?aba=geral#ao-vivo' : '/crm/formularios'} onNavigate={onClose} />}
+        {user && team && (on('site') || on('formularios')) && <LiveNowItem collapsed={collapsed} to="/crm/ao-vivo" onNavigate={onClose} />}
         {user && team && (
           <button
             type="button"
@@ -471,8 +482,8 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
 /**
  * Ao vivo (2026-11-14, o usuário: "um item acima do Conectar sua IA… vai dizer logo de cara e em qualquer tela
  * quantas pessoas estão no forms ou site ao vivo"). Soma o site (atividade nos últimos 5 min) e o formulário aberto
- * pelo link (sinal no último minuto); o formulário dentro do site já está na conta do site. Leva ao painel
- * "Ao vivo agora" das Visitas do site.
+ * pelo link (sinal no último minuto); o formulário dentro do site já está na conta do site. Leva à tela
+ * Ao vivo (`/crm/ao-vivo`).
  */
 const LiveNowItem: React.FC<{ collapsed: boolean; to: string; onNavigate?: () => void }> = ({ collapsed, to, onNavigate }) => {
   const site = useMenuBadges((s) => s.live)

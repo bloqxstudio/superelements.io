@@ -112,7 +112,7 @@ export const OperacaoAoVivo: React.FC<{
           {noSite ? (
             <Empty title="Onde está o público agora" text="Conecte o site em Site › Instalação para ver quem está navegando, no mapa." />
           ) : (
-            <SiteMap title="Onde está o público agora" report={report} live={live} onVisits={() => navigate('/crm/site?aba=visitas')} onOpenSession={() => navigate('/crm/site?aba=visitas')} />
+            <SiteMap title="Onde está o público agora" report={report} live={live} onVisits={() => navigate('/crm/ao-vivo')} onOpenSession={() => navigate('/crm/ao-vivo')} />
           )}
         </div>
         <Devices live={live} empty={noSite} />

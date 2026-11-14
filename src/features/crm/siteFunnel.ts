@@ -91,3 +91,75 @@ export function splitByPeriod<T extends Pick<FormVisit, 'startedAt'>>(visits: T[
     previous: visits.filter((v) => v.startedAt >= from - span && v.startedAt < from),
   }
 }
+
+export interface SpendCampaign {
+  id: string
+  name: string
+  spend: number
+  clicks?: number
+}
+
+export interface CampaignRow {
+  key: string
+  name: string
+  /** O que a Meta conta (quando a campanha foi achada nos anúncios da conta) */
+  spend?: number
+  clicks?: number
+  /** Visitas do site que vieram da campanha, e as que fizeram contato */
+  site: number
+  siteContacts: number
+  /** Visitas ao formulário (todas) e as que contam como visita nova (pelo link ou site sem o código) */
+  formOpened: number
+  formOnly: number
+  submitted: number
+  scheduled: number
+  /** Site + só formulário */
+  visits: number
+}
+
+/**
+ * Por campanha, site e formulário lado a lado com o gasto: a campanha do anúncio leva a pessoa a um ativo
+ * (site ou formulário) e dali ao agendamento. `resolve` acha a campanha da Meta pelo nome no link
+ * (`utm_campaign`); campanhas com gasto e sem nenhuma visita também aparecem (o dinheiro que não chegou).
+ */
+export function campaignRows(
+  site: { campaign: string; sessions: number; converted: number }[],
+  forms: Pick<FormVisit, 'campaign' | 'embed' | 'siteTracked' | 'siteSessionId' | 'submitted' | 'scheduled'>[],
+  resolve: (name: string) => SpendCampaign | undefined,
+  spending: SpendCampaign[] = []
+): CampaignRow[] {
+  const map = new Map<string, CampaignRow>()
+  const row = (name: string) => {
+    const meta = resolve(name)
+    const key = meta ? `meta:${meta.id}` : `utm:${name.trim().toLowerCase()}`
+    let r = map.get(key)
+    if (!r) map.set(key, (r = { key, name: meta?.name ?? name, spend: meta?.spend, clicks: meta?.clicks, site: 0, siteContacts: 0, formOpened: 0, formOnly: 0, submitted: 0, scheduled: 0, visits: 0 }))
+    return r
+  }
+  for (const c of site) {
+    if (!c.campaign) continue
+    const r = row(c.campaign)
+    r.site += c.sessions
+    r.siteContacts += c.converted
+    r.visits += c.sessions
+  }
+  for (const v of forms) {
+    if (!v.campaign) continue
+    const r = row(v.campaign)
+    r.formOpened++
+    if (countsAsVisit(v)) {
+      r.formOnly++
+      r.visits++
+    }
+    if (v.submitted) r.submitted++
+    if (v.scheduled) r.scheduled++
+  }
+  for (const m of spending) {
+    const key = `meta:${m.id}`
+    if (!map.has(key) && m.spend > 0) map.set(key, { key, name: m.name, spend: m.spend, clicks: m.clicks, site: 0, siteContacts: 0, formOpened: 0, formOnly: 0, submitted: 0, scheduled: 0, visits: 0 })
+  }
+  return [...map.values()].sort((a, b) => (b.spend ?? 0) - (a.spend ?? 0) || b.visits - a.visits || b.scheduled - a.scheduled)
+}
+
+/** Custo por unidade (gasto ÷ quantidade), sem gasto ou sem quantidade fica indefinido */
+export const costPer = (spend: number | undefined, count: number) => (spend !== undefined && spend > 0 && count > 0 ? spend / count : undefined)

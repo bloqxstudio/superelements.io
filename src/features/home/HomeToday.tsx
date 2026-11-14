@@ -32,7 +32,7 @@ const Inner: React.FC<{ trackers: SiteTracker[]; live: SiteSession[]; days: Days
   }, [report, days, day])
 
   if (!report) return null
-  const go = () => navigate('/crm/site?aba=visitas')
+  const go = () => navigate('/crm/site?aba=lista')
   return (
     <Block id="mapa" title="De onde vêm as visitas" hint={`Mapa do Brasil ${day ? `com as visitas ${spanIn(day)}` : days === 1 ? 'com as visitas de hoje' : `dos últimos ${days} dias`}, com quem está no site agora.`}>
       {hourly.length > 1 && (
@@ -42,7 +42,7 @@ const Inner: React.FC<{ trackers: SiteTracker[]; live: SiteSession[]; days: Days
           <Area values={hourly} labels={hourly.map((_, i) => `${i}h`)} color={PALETTE[0]} />
         </div>
       )}
-      <SiteMap report={report} live={live} onVisits={go} onOpenSession={go} />
+      <SiteMap report={report} live={live} onVisits={go} onOpenSession={() => navigate('/crm/ao-vivo')} />
     </Block>
   )
 }

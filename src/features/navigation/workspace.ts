@@ -3,7 +3,7 @@ const AREAS: [string, string][] = [
   ['/crm/agenda', 'Agenda'], ['/crm/formularios', 'Formulários'], ['/crm/clientes', 'Clientes'], ['/crm/whatsapp', 'Conversas'],
   ['/crm/fluxos', 'Automações'], ['/crm/funis', 'Funis de venda'], ['/crm/equipe', 'Equipe'],
   ['/crm/social', 'Relacionamento nas redes'], ['/crm/instagram', 'Instagram'], ['/crm/anuncios', 'Anúncios'],
-  ['/crm/site', 'Visitas do site'], ['/crm/diagnostico', 'Diagnóstico'], ['/crm', 'Leads'],
+  ['/crm/site', 'Visitas'], ['/crm/ao-vivo', 'Ao vivo'], ['/crm/diagnostico', 'Diagnóstico'], ['/crm', 'Leads'],
   ['/conteudos', 'Pauta'], ['/pauta', 'Pauta'], ['/plano', 'Cérebro · Plano da empresa'], ['/copy', 'Pauta · Textos'], ['/criativos', 'Criativos'], ['/motion', 'Criativos · Motion'], ['/sites', 'Sites'],
   ['/agentes', 'Agentes de IA'], ['/skills', 'Instruções de IA'], ['/prospeccao', 'Prospecção'],
   ['/contas', 'Contas e módulos'], ['/cerebro', 'Cérebro'], ['/quadros', 'Quadros'], ['/referencias', 'Referências'], ['/inicio', 'Início'], ['/modulo', 'Visão geral do módulo'],
@@ -16,7 +16,7 @@ const ALIASES: [string, string][] = [
   ['/pauta', 'calendario editorial'], ['/plano', 'plano da empresa negocio briefing marca'],
   ['/cerebro', 'contexto marca notas plano'], ['/sites', 'sites em codigo astro'],
   ['/criativos', 'posts carrossel stories'], ['/referencias', 'referencias inspiracao links posts reels'], ['/motion', 'motion video animacao explicativo'],
-  ['/skills', 'skills receitas'], ['/crm/whatsapp', 'whatsapp'], ['/crm/site', 'site visitas'],
+  ['/skills', 'skills receitas'], ['/crm/whatsapp', 'whatsapp'], ['/crm/site', 'site visitas formularios relatorios campanhas gasto'], ['/crm/ao-vivo', 'online agora tempo real site formulario'],
 ]
 export const navigationMatches = (query: string, label: string, path: string) => {
   const words = normalizeNavigation(query).split(/\s+/).filter(Boolean)

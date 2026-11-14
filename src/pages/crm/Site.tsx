@@ -1,7 +1,7 @@
 import { DayPicker } from '@/components/DayPicker'
 import { dayLong, dayPeriod, isDayPeriod, spanOfPeriod, todayKey } from '@/lib/day'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowDownRight, ArrowUpRight, ExternalLink, Globe, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -13,10 +13,11 @@ import { SiteMap } from '@/features/crm/SiteMap'
 import { SiteShop, hasShop } from '@/features/crm/SiteShop'
 import { ServerSteps, SiteSetup, SiteStart } from '@/features/crm/SiteSetup'
 import { VisitPanel, VisitsList } from '@/features/crm/SiteVisits'
-import { JourneyFunnel, LiveNow, useTeamFormVisits } from '@/features/crm/SiteForms'
+import { useTeamFormVisits } from '@/features/crm/SiteForms'
+import { AssetsSummary, FormsReport } from '@/features/crm/AssetReports'
 import { countsAsVisit } from '@/features/crm/siteFunnel'
 import { isLive as isFormLive, useNow, type FormVisit } from '@/features/crm/formVisits'
-import type { CrmForm } from '@/features/crm/forms'
+import { FormVisitPanel } from '@/features/crm/FormVisitPanel'
 import {
   CONTACT_EVENTS,
   NoSiteTablesError,
@@ -30,6 +31,7 @@ import {
   countryLabel,
   dailySeries,
   duration,
+  emptyReport,
   endpointInfo,
   eventLabel,
   isLiveSession,
@@ -66,7 +68,7 @@ import { cn } from '@/lib/utils'
  * passos. As visitas chegam ao vivo pela Realtime (e por leitura a cada 20 s).
  */
 
-type Tab = 'geral' | 'visitas' | 'instalacao'
+type Tab = 'resumo' | 'site' | 'formularios' | 'lista' | 'instalacao'
 type Metric = 'visitors' | 'sessions' | 'pageviews' | 'converted'
 
 const METRIC_LABEL: Record<Metric, { chip: string; unit: string; title: string; hint: string }> = {
@@ -220,14 +222,13 @@ const Overview: React.FC<{
   period: SitePeriod
   tracker: SiteTracker
   live: SiteSession[]
-  forms: { current: FormVisit[]; previous: FormVisit[]; all: FormVisit[]; byId: Map<string, CrmForm> }
   metaState: MetaState
   onMetaRefresh: () => void
   endpoint?: EndpointInfo
   onVisits: (filter: Partial<SessionFilter>) => void
   onOpenSession: (session: SiteSession) => void
   onSetup: () => void
-}> = ({ report, period, tracker, live, forms, metaState, onMetaRefresh, endpoint, onVisits, onOpenSession, onSetup }) => {
+}> = ({ report, period, tracker, live, metaState, onMetaRefresh, endpoint, onVisits, onOpenSession, onSetup }) => {
   const [metric, setMetric] = useState<Metric>('visitors')
   const t = report.totals
   const p = report.previous
@@ -249,32 +250,13 @@ const Overview: React.FC<{
   const shop = hasShop(report)
   const topClicks = report.clicks.filter((c) => c.name !== 'formulario_inicio').slice(0, 10)
 
-  // O formulário pelo link (ou num site sem o código) conta como visita; com o código, a visita é a do site
-  const formLink = forms.current.filter(countsAsVisit).length
-  const formLinkBefore = forms.previous.filter(countsAsVisit).length
-  const formCurrent = forms.current
-  const channels = useMemo(() => {
-    const map = new Map(report.channels.map((c) => [c.channel, { ...c, form: 0 }]))
-    for (const v of formCurrent) {
-      if (!countsAsVisit(v)) continue
-      const key = v.channel || 'Direto'
-      const row = map.get(key) ?? { channel: key, sessions: 0, visitors: 0, converted: 0, activeMs: 0, form: 0 }
-      row.sessions++
-      row.form++
-      if (v.submitted) row.converted++
-      map.set(key, row)
-    }
-    return [...map.values()].sort((a, b) => b.sessions - a.sessions)
-  }, [report.channels, formCurrent])
-  const siteLive = live.filter(isLiveSession)
-
   const pages = useMemo(() => {
     const entries = new Map(report.landings.map((l) => [l.path, l]))
     const converts = new Map(report.conversionPages.map((c) => [c.path, c]))
     return report.pages.map((page) => ({ ...page, entries: entries.get(page.path)?.sessions ?? 0, contacts: converts.get(page.path)?.sessions ?? 0 }))
   }, [report])
 
-  if (t.sessions === 0 && !p.sessions && !forms.current.length && !forms.previous.length && !siteLive.length)
+  if (t.sessions === 0 && !p.sessions)
     return (
       <Surface className="mx-auto max-w-2xl text-center">
         <p className="text-sm font-medium text-gray-900">{tracker.lastSeenAt ? `Nenhuma visita ${periodPhrase(period)}.` : 'Nenhuma visita ainda.'}</p>
@@ -307,17 +289,11 @@ const Overview: React.FC<{
         </Stat>
         <Stat
           label="Visitas"
-          value={compact(t.sessions + formLink)}
+          value={compact(t.sessions)}
           sub={
             <span className="flex flex-wrap items-center gap-x-2">
-              {formLink || formLinkBefore ? (
-                <span title="O formulário pelo link (ou num site sem o código de visitas) conta como visita; com o código, a visita é a do site">
-                  {compact(t.sessions)} no site · {compact(formLink)} no formulário
-                </span>
-              ) : (
-                <span>{t.sessions ? (t.pageviews / t.sessions).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : 0} páginas por visita</span>
-              )}
-              <Delta now={t.sessions + formLink} before={p.sessions + formLinkBefore} />
+              <span>{t.sessions ? (t.pageviews / t.sessions).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : 0} páginas por visita</span>
+              <Delta now={t.sessions} before={p.sessions} />
             </span>
           }
         />
@@ -385,29 +361,16 @@ const Overview: React.FC<{
         <Surface title="De onde vêm" action={<span className="text-xs text-gray-400">visitas</span>}>
           <RankList
             empty="Sem visitas neste período."
-            rows={channels.map((c) => ({
+            rows={report.channels.map((c) => ({
               key: c.channel,
               label: c.channel,
               value: c.sessions,
-              note: [c.form ? `${c.form} pelo formulário` : '', c.converted ? `${c.converted} ${c.converted === 1 ? 'contato' : 'contatos'}` : ''].filter(Boolean).join(' · ') || undefined,
+              note: c.converted ? `${c.converted} ${c.converted === 1 ? 'contato' : 'contatos'}` : undefined,
               onClick: () => onVisits({ channel: c.channel }),
             }))}
           />
         </Surface>
       </div>
-
-      <div id="ao-vivo" className="scroll-mt-4">
-        <LiveNow site={siteLive} forms={forms.all} formsById={forms.byId} onOpenSession={onOpenSession} onSiteVisits={() => onVisits({ live: true })} />
-      </div>
-
-      <JourneyFunnel
-        siteSessions={t.sessions}
-        previousSiteSessions={p.sessions}
-        siteChannels={report.channels}
-        current={forms.current}
-        previous={forms.previous}
-        onChannel={(channel) => onVisits({ channel })}
-      />
 
       {shop && <SiteShop report={report} period={period} onVisits={onVisits} />}
 
@@ -579,27 +542,42 @@ const Overview: React.FC<{
 
 // ---------- painel ----------
 
-const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manager: boolean; onSelect: (id: string) => void; onReload: () => Promise<void> }> = ({
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'resumo', label: 'Resumo' },
+  { id: 'site', label: 'Site' },
+  { id: 'formularios', label: 'Formulários' },
+  { id: 'lista', label: 'Visitas do site' },
+  { id: 'instalacao', label: 'Instalação' },
+]
+// Endereços antigos (?aba=geral, ?aba=visitas) continuam abrindo a aba certa
+const OLD_TAB: Record<string, Tab> = { geral: 'site', visitas: 'lista' }
+
+const Dashboard: React.FC<{ teamId: string; tracker?: SiteTracker; trackers: SiteTracker[]; manager: boolean; onSelect: (id: string) => void; onReload: () => Promise<void> }> = ({
+  teamId,
   tracker,
   trackers,
   manager,
   onSelect,
   onReload,
 }) => {
+  const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const tab = (['geral', 'visitas', 'instalacao'].includes(params.get('aba') ?? '') ? params.get('aba') : tracker.lastSeenAt ? 'geral' : 'instalacao') as Tab
+  const asked = params.get('aba') ?? ''
+  const tab: Tab = TABS.some((t) => t.id === asked) ? (asked as Tab) : OLD_TAB[asked] ?? (tracker && !tracker.lastSeenAt ? 'instalacao' : 'resumo')
   const [period, setPeriod] = useState<SitePeriod>(7)
   const [report, setReport] = useState<SiteReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [liveSessions, setLiveSessions] = useState<SiteSession[] | null>(null)
   const [incoming, setIncoming] = useState<SiteSession>()
   const [opened, setOpened] = useState<SiteSession | null>(null)
+  const [openedForm, setOpenedForm] = useState<FormVisit | null>(null)
   const [endpoint, setEndpoint] = useState<EndpointInfo>()
   const [visitsFilter, setVisitsFilter] = useState<Partial<SessionFilter>>({})
-  const { state: metaState, refresh: refreshMeta } = useMetaAds(tracker.teamId, period)
-  const formVisits = useTeamFormVisits(tracker.teamId, period)
+  const { state: metaState, refresh: refreshMeta } = useMetaAds(teamId, period)
+  const formVisits = useTeamFormVisits(teamId, period)
   const now = useNow(5000)
   const reloadTimer = useRef<number>()
+  const trackerId = tracker?.id
 
   const setTab = useCallback(
     (next: Tab) =>
@@ -616,16 +594,18 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
 
   const load = useCallback(
     async (quiet = false) => {
+      // Sem site: o relatório do site fica vazio e a tela segue com os formulários
+      if (!trackerId) return setReport(emptyReport())
       if (!quiet) setLoading(true)
       try {
-        setReport(await loadReport(tracker.id, period))
+        setReport(await loadReport(trackerId, period))
       } catch (e) {
         if (!quiet) toast.error(e instanceof Error ? e.message : String(e))
       } finally {
         setLoading(false)
       }
     },
-    [tracker.id, period]
+    [trackerId, period]
   )
 
   useEffect(() => {
@@ -640,11 +620,12 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
 
   // Quem está no site agora: lido a cada 20 s (tira quem saiu) e adiantado pela Realtime
   useEffect(() => {
+    if (!trackerId) return setLiveSessions([])
     let stop = false
     setLiveSessions(null)
     const poll = () => {
       if (!visible()) return
-      loadSessions(tracker.id, { live: true })
+      loadSessions(trackerId, { live: true })
         .then((r) => !stop && setLiveSessions(r.sessions))
         .catch(() => undefined)
     }
@@ -654,13 +635,13 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
       stop = true
       window.clearInterval(timer)
     }
-  }, [tracker.id])
+  }, [trackerId])
 
   useEffect(() => {
     void endpointInfo().then(setEndpoint)
   }, [])
 
-  useSiteFeed(tracker.id, (session) => {
+  useSiteFeed(trackerId, (session) => {
     setIncoming(session)
     setOpened((current) => (current?.id === session.id ? session : current))
     setLiveSessions((current) => {
@@ -675,33 +656,19 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
   })
   useEffect(() => () => window.clearTimeout(reloadTimer.current), [])
 
-  // Ao vivo: quem está no site e quem abriu um formulário pelo link (dentro do site já é a visita do site)
+  // Ao vivo: quem está no site e quem só está no formulário (dentro de um site com o código já conta no site)
+  const siteLiveCount = (liveSessions ?? []).filter(isLiveSession).length
   const formLive = formVisits.all.filter((v) => isFormLive(v, now))
   const formLiveLink = formLive.filter(countsAsVisit).length
-  const live = liveSessions ? liveSessions.filter(isLiveSession).length + formLiveLink : null
-  const liveTitle = liveSessions
-    ? `${liveSessions.filter(isLiveSession).length} no site (atividade nos últimos 5 min) · ${formLive.length} em formulários${formLive.length > formLiveLink ? ` (${formLive.length - formLiveLink} dentro do site)` : ''}`
-    : undefined
-
-  // `#ao-vivo` (o indicador do menu): rola até o painel quando a visão geral já está na tela
-  const { hash, key: locationKey } = useLocation()
-  const reportReady = !!report
-  useEffect(() => {
-    if (hash !== '#ao-vivo' || !reportReady) return
-    const t = window.setTimeout(() => document.getElementById('ao-vivo')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
-    return () => window.clearTimeout(t)
-  }, [hash, locationKey, reportReady])
-
-  const openLive = () => {
-    setTab('geral')
-    window.setTimeout(() => document.getElementById('ao-vivo')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
-  }
+  const live = liveSessions ? siteLiveCount + formLiveLink : null
 
   const openVisits = (filter: Partial<SessionFilter>) => {
     setVisitsFilter(filter)
-    setTab('visitas')
+    setTab(tracker ? 'lista' : 'site')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  const forms = { current: formVisits.current, previous: formVisits.previous, forms: formVisits.forms, ready: formVisits.ready }
 
   return (
     <div className="grid grid-cols-1 gap-6">
@@ -711,8 +678,8 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Visitas do site</h1>
-            {trackers.length > 1 && (
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Visitas</h1>
+            {tracker && trackers.length > 1 && (
               <select value={tracker.id} onChange={(e) => onSelect(e.target.value)} className={cn(FIELD, 'h-8 w-auto py-0 text-xs')} aria-label="Site">
                 {trackers.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -723,22 +690,28 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
             )}
           </div>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 truncate text-sm text-gray-500">
-            <a href={`https://${tracker.domain}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-gray-700 hover:underline">
-              {tracker.domain} <ExternalLink className="h-3 w-3" aria-hidden />
-            </a>
-            <span>· {tracker.lastSeenAt ? `último sinal ${whenLabel(tracker.lastSeenAt)}` : 'nenhum sinal do site ainda'}</span>
+            <span>Ativos da empresa:</span>
+            {tracker ? (
+              <a href={`https://${tracker.domain}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-gray-700 hover:underline">
+                site {tracker.domain} <ExternalLink className="h-3 w-3" aria-hidden />
+              </a>
+            ) : (
+              <span>sem site cadastrado</span>
+            )}
+            <span>e formulários</span>
+            {tracker && <span>· {tracker.lastSeenAt ? `último sinal do site ${whenLabel(tracker.lastSeenAt)}` : 'nenhum sinal do site ainda'}</span>}
           </p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           {live !== null && (
             <button
               type="button"
-              onClick={openLive}
+              onClick={() => navigate('/crm/ao-vivo')}
               className={cn(
                 'inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-sm font-medium ring-1 ring-inset transition-colors',
                 live > 0 ? 'bg-emerald-50 text-emerald-800 ring-emerald-600/20 hover:bg-emerald-100' : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'
               )}
-              title={liveTitle}
+              title={`${siteLiveCount} no site · ${formLive.length} no formulário. Abrir o Ao vivo`}
             >
               <span aria-hidden className={cn('h-2 w-2 rounded-full', live > 0 ? 'bg-emerald-500 motion-safe:animate-pulse' : 'bg-gray-300')} />
               {live === 0 ? 'Ninguém ao vivo agora' : `${live} ao vivo agora`}
@@ -751,21 +724,20 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Chip active={tab === 'geral'} onClick={() => setTab('geral')}>
-          Visão geral
-        </Chip>
-        <Chip
-          active={tab === 'visitas'}
-          onClick={() => {
-            setVisitsFilter({})
-            setTab('visitas')
-          }}
-        >
-          Visitas {report && <span className="tabular-nums opacity-60">{compact(report.totals.sessions)}</span>}
-        </Chip>
-        <Chip active={tab === 'instalacao'} onClick={() => setTab('instalacao')}>
-          Instalação
-        </Chip>
+        {TABS.filter((t) => tracker || t.id !== 'lista').map((t) => (
+          <Chip
+            key={t.id}
+            active={tab === t.id}
+            onClick={() => {
+              if (t.id === 'lista') setVisitsFilter({})
+              setTab(t.id)
+            }}
+          >
+            {t.label}
+            {t.id === 'lista' && report && <span className="tabular-nums opacity-60"> {compact(report.totals.sessions)}</span>}
+            {t.id === 'formularios' && formVisits.ready && <span className="tabular-nums opacity-60"> {compact(formVisits.current.length)}</span>}
+          </Chip>
+        ))}
         {tab !== 'instalacao' && (
           <div className="ml-auto flex items-center gap-1 rounded-full bg-white p-1 ring-1 ring-inset ring-gray-200" role="group" aria-label="Período">
             {SITE_PERIODS.map((p) => (
@@ -784,9 +756,11 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
         )}
       </div>
 
-      {tab === 'instalacao' ? (
+      {(tab === 'instalacao' || tab === 'site') && !tracker ? (
+        <SiteStart teamId={teamId} manager={manager} onDone={() => void onReload()} />
+      ) : tab === 'instalacao' && tracker ? (
         <SiteSetup tracker={tracker} manager={manager} onReload={onReload} />
-      ) : tab === 'visitas' ? (
+      ) : tab === 'lista' && tracker ? (
         <VisitsList
           siteId={tracker.id}
           period={period}
@@ -797,18 +771,23 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
           initial={visitsFilter}
           onFilterChange={setVisitsFilter}
         />
+      ) : tab === 'formularios' ? (
+        <FormsReport period={period} forms={forms} metaState={metaState} onOpenVisit={setOpenedForm} />
       ) : !report ? (
         <p className="flex items-center gap-2 text-sm text-gray-500">
           <Loader2 className="h-4 w-4 animate-spin" /> Lendo as visitas…
         </p>
-      ) : (
+      ) : tab === 'resumo' ? (
+        <div className={cn('transition-opacity', loading && 'opacity-70')}>
+          <AssetsSummary report={report} period={period} forms={forms} metaState={metaState} hasSite={!!tracker} onChannel={(channel) => (tracker ? openVisits({ channel }) : undefined)} />
+        </div>
+      ) : tracker ? (
         <div className={cn('transition-opacity', loading && 'opacity-70')}>
           <Overview
             report={report}
             period={period}
             tracker={tracker}
             live={liveSessions ?? []}
-            forms={{ current: formVisits.current, previous: formVisits.previous, all: formVisits.all, byId: formVisits.forms }}
             metaState={metaState}
             onMetaRefresh={() => void refreshMeta()}
             endpoint={endpoint}
@@ -817,9 +796,28 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
             onSetup={() => setTab('instalacao')}
           />
         </div>
+      ) : null}
+
+      {openedForm && (
+        <FormVisitPanel
+          visit={formVisits.all.find((v) => v.id === openedForm.id) ?? openedForm}
+          form={formVisits.forms.get(openedForm.formId)}
+          manager={manager}
+          meta={metaState.status === 'ready' ? metaState.meta : undefined}
+          onOpen={setOpenedForm}
+          onClose={() => setOpenedForm(null)}
+          onOpenSiteSession={
+            tracker
+              ? (session) => {
+                  setOpenedForm(null)
+                  setOpened(session)
+                }
+              : undefined
+          }
+        />
       )}
 
-      {opened && tab !== 'visitas' && (
+      {opened && tracker && tab !== 'lista' && (
         <VisitPanel
           siteId={tracker.id}
           session={opened}
@@ -830,23 +828,6 @@ const Dashboard: React.FC<{ tracker: SiteTracker; trackers: SiteTracker[]; manag
           onRemoved={() => setOpened(null)}
         />
       )}
-    </div>
-  )
-}
-
-// ---------- conta sem site ----------
-
-/** Conta sem site cadastrado: os formulários contam as visitas sozinhos (ao vivo e funil), e o site fica como opção */
-const FormsOnly: React.FC<{ teamId: string }> = ({ teamId }) => {
-  const forms = useTeamFormVisits(teamId, 30)
-  const now = useNow(5000)
-  if (!forms.ready || !forms.all.length) return null
-  const live = forms.all.filter((v) => isFormLive(v, now))
-  return (
-    <div className="mb-6 grid grid-cols-1 gap-4">
-      <LiveNow site={[]} forms={live} formsById={forms.forms} onOpenSession={() => undefined} onSiteVisits={() => undefined} />
-      <JourneyFunnel siteSessions={0} previousSiteSessions={0} siteChannels={[]} current={forms.current} previous={forms.previous} onChannel={() => undefined} />
-      <p className="text-xs text-gray-500">Últimos 30 dias, só com os formulários. Com o site cadastrado abaixo, as visitas do site entram aqui também, sem contar duas vezes quem preencher o formulário dentro dele.</p>
     </div>
   )
 }
@@ -882,7 +863,7 @@ const SitePage: React.FC = () => {
     <Page wide>
       {!team || trackers === null ? (
         <p className="flex items-center gap-2 text-sm text-gray-500">
-          <Loader2 className="h-4 w-4 animate-spin" /> Abrindo as visitas do site…
+          <Loader2 className="h-4 w-4 animate-spin" /> Abrindo as visitas…
         </p>
       ) : error === 'sem-tabelas' ? (
         <Surface className="mx-auto max-w-2xl">
@@ -895,17 +876,8 @@ const SitePage: React.FC = () => {
         <Surface className="mx-auto max-w-2xl">
           <p className="text-sm text-rose-700">{error}</p>
         </Surface>
-      ) : tracker ? (
-        <Dashboard tracker={tracker} trackers={trackers} manager={manager} onSelect={setSelected} onReload={reload} />
       ) : (
-        <>
-          <div className="mb-6">
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Visitas do site</h1>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">Quem visita o site e os formulários da equipe, de onde veio e o que fez.</p>
-          </div>
-          <FormsOnly teamId={team.id} />
-          <SiteStart teamId={team.id} manager={manager} onDone={() => void reload()} />
-        </>
+        <Dashboard key={team.id} teamId={team.id} tracker={tracker} trackers={trackers} manager={manager} onSelect={setSelected} onReload={reload} />
       )}
     </Page>
   )

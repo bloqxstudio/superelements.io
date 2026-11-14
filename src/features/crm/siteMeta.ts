@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchAdReport, loadAdAccounts, loadAdReport, NoAdTablesError, type AdAudienceRow, type AdCampaign, type AdCreative, type AdCut, type AdMetrics, type AdPreset, type AdReport } from './ads'
 import { sumMetrics } from './adsMetrics'
-import { isDayPeriod } from '@/lib/day'
-import type { SiteAdRow, SitePeriod, SiteSession } from './site'
+import { dayPeriod, isDayPeriod } from '@/lib/day'
+import { dayKeyOf, type SiteAdRow, type SitePeriod, type SiteSession } from './site'
 import { UF_NAME, ufOf } from './siteGeo'
 
 /**
@@ -19,8 +19,19 @@ import { UF_NAME, ufOf } from './siteGeo'
 
 const STALE = 30 * 60_000
 
-/** O período do site no relatório da Meta (hoje cai nos 7 dias: a Meta não tem "hoje"); um dia escolhido é o mesmo dia */
-export const presetOf = (period: SitePeriod): AdPreset => (isDayPeriod(period) ? period : period === 30 ? 'last_30d' : period === 90 ? 'last_90d' : 'last_7d')
+/**
+ * O período do site no relatório da Meta, exatamente o mesmo (2026-11-14, o usuário: "estou filtrando somente hoje,
+ * pq mostra o gasto de 7 dias? quero saber somente o range selecionado"). Hoje é `today`; 7, 30 e 90 dias viram o
+ * intervalo de datas da tela (de N−1 dias atrás até hoje, como o site conta; o `last_7d` da Meta deixava hoje de
+ * fora); um dia ou intervalo escolhido é o mesmo.
+ */
+export function presetOf(period: SitePeriod, now = new Date()): AdPreset {
+  if (isDayPeriod(period)) return period
+  if (period === 'hoje') return 'today'
+  const from = new Date(now)
+  from.setDate(from.getDate() - (period - 1))
+  return dayPeriod(`${dayKeyOf(from)}~${dayKeyOf(now)}`)
+}
 
 export interface MetaCampaign extends AdCampaign {
   accountId: string

@@ -42,3 +42,27 @@ test('período e anterior do mesmo tamanho; período aberto pega quem entrou dep
   assert.equal(splitByPeriod(list, from, to, true).current.length, 2)
   assert.equal(splitByPeriod(list, from, to).previous.length, 2)
 })
+
+test('campanhas: site, formulário e gasto lado a lado; gasto sem visita também aparece', async () => {
+  const { campaignRows, costPer } = await import('../../src/features/crm/siteFunnel.ts')
+  const meta = [
+    { id: '1', name: 'Leads Novembro', spend: 300, clicks: 120 },
+    { id: '2', name: 'Remarketing', spend: 50, clicks: 10 },
+  ]
+  const resolve = (name) => meta.find((m) => m.name.toLowerCase() === name.trim().toLowerCase())
+  const rows = campaignRows(
+    [{ campaign: 'leads novembro', sessions: 10, converted: 2 }, { campaign: 'orgânico-bio', sessions: 3, converted: 0 }],
+    [v({ campaign: 'Leads Novembro', submitted: true, scheduled: true }), v({ campaign: 'Leads Novembro', embed: 'site', siteTracked: true, submitted: true }), v({ campaign: undefined })],
+    resolve,
+    meta
+  )
+  const leads = rows.find((r) => r.key === 'meta:1')
+  assert.equal(leads.name, 'Leads Novembro')
+  assert.deepEqual([leads.site, leads.siteContacts, leads.formOpened, leads.formOnly, leads.visits, leads.submitted, leads.scheduled], [10, 2, 2, 1, 11, 2, 1])
+  assert.equal(rows.find((r) => r.key === 'meta:2').visits, 0)
+  assert.equal(rows.find((r) => r.key.startsWith('utm:')).site, 3)
+  assert.equal(rows[0].key, 'meta:1')
+  assert.equal(costPer(300, 1), 300)
+  assert.equal(costPer(300, 0), undefined)
+  assert.equal(costPer(undefined, 3), undefined)
+})
