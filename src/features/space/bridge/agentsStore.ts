@@ -10,7 +10,7 @@ import type { ClaudeStepKind } from './bridgeStore'
  * fica vazio.
  */
 
-export type AgentStepKind = ClaudeStepKind | 'error'
+type AgentStepKind = ClaudeStepKind | 'error'
 
 export interface AgentStep {
   id: string
@@ -78,7 +78,7 @@ interface AgentsState {
 export const useAgents = create<AgentsState>()(() => ({ connected: false, agents: [], skew: 0 }))
 
 /** Sem pedido nenhum por esse tempo, o agente que dizia estar trabalhando parou. */
-export const IDLE_AFTER = 5 * 60_000
+const IDLE_AFTER = 5 * 60_000
 /** A tela Agentes mostra quem passou por aqui nas últimas horas. */
 export const RECENT_FOR = 3 * 60 * 60_000
 

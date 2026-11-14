@@ -16,7 +16,7 @@ import { INSTAGRAM_SKILLS, type InstagramSkillId } from './instagramSkills.ts'
 export type ChatSkillId = 'designer' | 'copy' | 'seo' | 'conversao' | 'celular' | 'acessibilidade' | 'referencia' | 'pagina-copy' | InstagramSkillId
 
 /** Padrão (no código), global (da equipe, na conta) ou pessoal (de quem criou). */
-export type ChatSkillSource = 'builtin' | 'global' | 'personal'
+type ChatSkillSource = 'builtin' | 'global' | 'personal'
 
 export interface ChatSkill {
   /** O id da padrão (`designer`) ou o da linha na conta. */

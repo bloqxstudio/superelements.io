@@ -59,7 +59,7 @@ const JOB = /^(ceo|cto|cfo|founder|co-founder|designer|developer|engineer|archit
 /** Contato, número, rede social ou menu. */
 const isData = (text: string) => DATA.test(text) || text.length <= 3 || NAV.test(text)
 
-export function isFiller(text: string, role: SlotRole): boolean {
+function isFiller(text: string, role: SlotRole): boolean {
   const t = text.trim()
   if (!t || DATA.test(t)) return false
   const words = t.toLowerCase().split(/[^a-z]+/).filter(Boolean)

@@ -9,7 +9,7 @@ import { elementLabel, isWidget, pairElements, settingsOf, walk, type LevelEleme
  * mostrar o antes e depois e o canvas marcar as peças que animam.
  */
 
-export interface MotionPreset {
+interface MotionPreset {
   id: string
   label: string
   description: string
@@ -18,7 +18,7 @@ export interface MotionPreset {
 
 const EASE_OUT = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
-export const MOTION_PRESETS: MotionPreset[] = [
+const MOTION_PRESETS: MotionPreset[] = [
   {
     id: 'soft',
     label: 'Suave',
@@ -64,7 +64,7 @@ export function sectionBrand(brand: Brand | null, motion: SectionMotion | undefi
 // ---------------------------------------------------------------------------
 // Movimento de cada peça
 
-export interface MotionState {
+interface MotionState {
   /** Nome da animação do Elementor (fadeInUp), ou null sem entrada. */
   entrance: string | null
   /** ms */
@@ -112,7 +112,7 @@ const ENTRANCE_LABELS: Record<string, string> = {
 
 const HOVER_LABELS: Record<string, string> = { lift: 'sobe', grow: 'cresce', shrink: 'encolhe', float: 'flutua', pulse: 'pulsa' }
 
-export const entranceLabel = (name: string) => ENTRANCE_LABELS[name] ?? name
+const entranceLabel = (name: string) => ENTRANCE_LABELS[name] ?? name
 export const hoverLabel = (name: string) => HOVER_LABELS[name] ?? name
 
 /** Rótulo curto para o marcador no canvas. */
@@ -121,9 +121,9 @@ export function motionTag(m: MotionState): string {
   return `${entranceLabel(m.entrance)}${m.delay > 0 ? ` +${m.delay}` : ''}`
 }
 
-export type RowStatus = 'new' | 'removed' | 'changed' | 'same'
+type RowStatus = 'new' | 'removed' | 'changed' | 'same'
 
-export interface MotionRow {
+interface MotionRow {
   id: string
   label: string
   before: MotionState | null

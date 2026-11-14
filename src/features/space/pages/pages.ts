@@ -16,7 +16,7 @@ export const PAGE_WIDTH = SECTION_WIDTH + PAGE_PAD * 2
 /** Espaço entre seções soltas empilhadas; dentro de uma página elas se encostam. */
 export const SECTION_GAP = 24
 /** Entre as seções de uma página: nenhum, a página se lê de cima a baixo sem emendas. */
-export const PAGE_SECTION_GAP = 0
+const PAGE_SECTION_GAP = 0
 /** Altura da área vazia de uma página sem seções. */
 export const EMPTY_PAGE_BODY = 168
 /** Entre duas páginas cabe o texto ou a paleta ligados à esquerda de uma seção. */
@@ -47,7 +47,7 @@ export function pageSections(page: SpacePage, nodes: SpaceNode[]): SpaceNode[] {
 export const pageContent = (page: SpacePage, nodes: SpaceNode[]) => pageSections(page, nodes)
 
 /** Altura das seções de uma folha, coladas como na página. */
-export function sectionsHeight(page: SpacePage, nodes: SpaceNode[]) {
+function sectionsHeight(page: SpacePage, nodes: SpaceNode[]) {
   const sections = pageSections(page, nodes)
   return sections.length ? sections.reduce((sum, s) => sum + s.height, 0) + PAGE_SECTION_GAP * (sections.length - 1) : 0
 }

@@ -17,7 +17,7 @@ interface Box {
   h: number
 }
 
-export interface CanvasInsets {
+interface CanvasInsets {
   left: number
   right: number
 }

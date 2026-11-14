@@ -5,7 +5,7 @@
  * elementos (que ignora o transform das animações), para não mudar o layout.
  */
 
-export type MarkerTone = 'active' | 'removed'
+type MarkerTone = 'active' | 'removed'
 
 export interface Marker {
   id: string

@@ -2,14 +2,14 @@ import type { SectionElement } from '@/features/space/landingPage'
 
 type JsonRecord = Record<string, unknown>
 
-export type EditableWidgetType = 'heading' | 'text-editor' | 'button' | 'image' | 'html'
+type EditableWidgetType = 'heading' | 'text-editor' | 'button' | 'image' | 'html'
 
 export interface EditableWidget extends SectionElement {
   widgetType: EditableWidgetType
   settings: JsonRecord | unknown[]
 }
 
-export type ContentPatch =
+type ContentPatch =
   | { field: 'title' | 'editor' | 'text' | 'html'; value: string }
   | { field: 'linkUrl' | 'imageUrl' | 'imageAlt'; value: string }
 

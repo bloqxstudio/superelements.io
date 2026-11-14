@@ -24,7 +24,7 @@ export interface TemplateInput {
   bodyFont: string
 }
 
-export interface FeaturedTemplate {
+interface FeaturedTemplate {
   id: string
   name: string
   hint: string

@@ -11,7 +11,7 @@ const EDGE = 56
 const TOP_BAR = 0
 const MAX_PAN_SPEED = 16
 
-export interface SectionLift {
+interface SectionLift {
   /** Deslocamento da seção de página que está sendo levada, no mundo do canvas. */
   dx: number
   dy: number

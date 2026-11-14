@@ -7,15 +7,15 @@ import { elementLabel, pairElements, settingsOf, type LevelElement } from './ele
  * diferença é exatamente o que vai para o Elementor.
  */
 
-export type DiffLevel = 'colors' | 'typography' | 'shape'
+type DiffLevel = 'colors' | 'typography' | 'shape'
 
-export interface PropChange {
+interface PropChange {
   prop: string
   before: string
   after: string
 }
 
-export interface ElementDiff {
+interface ElementDiff {
   id: string
   label: string
   changes: PropChange[]

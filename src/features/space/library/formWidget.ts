@@ -21,7 +21,7 @@ type FormLike = Pick<CrmForm, 'id' | 'teamId' | 'name' | 'kind' | 'definition' |
  * carregamento"; no canvas (onde o script não roda) ele surge e fica. A cópia da configuração vai
  * junto para o formulário abrir direto, sem esperar a rede; o script confere com o servidor por trás.
  */
-export const formHtml = (form: FormLike) =>
+const formHtml = (form: FormLike) =>
   `<link rel="preconnect" href="${FORMS_ENDPOINT.replace(/\/functions\/v1\/.*$/, '')}" crossorigin>\n` +
   `<div data-avence-form="${form.id}" data-config="${configUrl(form.teamId, form.id)}" data-endpoint="${FORMS_ENDPOINT}">` +
   `<script type="application/json">${safeJson({ id: form.id, name: form.name, definition: form.definition, theme: form.theme, settings: form.settings })}</script>` +

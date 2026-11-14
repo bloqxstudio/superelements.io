@@ -10,7 +10,7 @@ import { connectorChannel, type ChannelStatus } from './channel'
  * próxima vez, basta abrir o conector e a aba liga sozinha (`resume`).
  */
 
-export const CONNECTOR_PORT = 47823
+const CONNECTOR_PORT = 47823
 /** O conector tenta portas seguintes se a primeira estiver ocupada. */
 const PORT_TRIES = 5
 /** Onde o app serve o conector para baixar. */

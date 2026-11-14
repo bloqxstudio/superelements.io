@@ -5,7 +5,7 @@ import { isDarkColor, loadImage } from './render'
  * Ícone do site (favicon): PNG quadrado de 512 px, o tamanho que o WordPress
  * pede. O WordPress tira dele as versões da aba do navegador e do celular.
  */
-export const ICON_SIZE = 512
+const ICON_SIZE = 512
 
 export type IconShape = 'square' | 'rounded' | 'circle'
 

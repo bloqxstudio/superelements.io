@@ -111,7 +111,7 @@ export function buttonKind(s: Settings, keys: ButtonKeys, parentBg: Rgba | null,
 // Containers
 
 /** Fundo próprio que o container pinta (cor sólida), ou null. */
-export function ownFill(s: Settings): Rgba | null {
+function ownFill(s: Settings): Rgba | null {
   if (s.background_background !== 'classic') return null
   return colorOf(s.background_color)
 }

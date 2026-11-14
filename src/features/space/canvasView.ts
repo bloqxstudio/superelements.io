@@ -10,7 +10,7 @@ const ZOOM_STEP = 1.25
 const FIT_PADDING = 40
 const FIT_TOP = 64
 
-export const clampZoom = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
+const clampZoom = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
 
 /** Troca o zoom mantendo parado o centro do canvas. */
 export function zoomTo(next: number) {

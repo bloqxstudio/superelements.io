@@ -52,7 +52,7 @@ interface OpenedSection {
 }
 
 /** Abre o JSON da seção guardando o envelope original para escrever de volta. */
-export function openSection(json: string): OpenedSection | null {
+function openSection(json: string): OpenedSection | null {
   if (!json.trim()) return null
   try {
     const document = JSON.parse(json) as unknown
@@ -85,7 +85,7 @@ export function editSection<T = true>(json: string, edit: (root: SectionElement[
 // ---------------------------------------------------------------------------
 // Leitura
 
-export interface Location {
+interface Location {
   element: SectionElement
   /** null: o elemento está na raiz da seção. */
   parent: SectionElement | null

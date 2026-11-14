@@ -17,7 +17,7 @@ import type { ComponentRole, ComponentTexts, SectionNodeData, SpaceComponent, Sp
  */
 
 /** Setting do Elementor que marca a camada como uso de um componente; o Elementor ignora settings que não conhece. */
-export const COMPONENT_KEY = '_se_component'
+const COMPONENT_KEY = '_se_component'
 
 /** Cor dos componentes no Space (ciano), diferente do violeta da seleção comum e do laranja do agente. */
 export const COMPONENT_COLOR = '#0891b2'
@@ -128,7 +128,7 @@ export function componentUses(nodes: SpaceNode[]): ComponentUse[] {
 
 export const textsOf = (component: Pick<SpaceComponent, 'texts'> | undefined) => component?.texts ?? 'own'
 
-export type ModeOf = (componentId: string) => ComponentTexts
+type ModeOf = (componentId: string) => ComponentTexts
 
 export const modeLookup = (components: SpaceComponent[]): ModeOf => {
   const modes = new Map(components.map((c) => [c.id, textsOf(c)]))

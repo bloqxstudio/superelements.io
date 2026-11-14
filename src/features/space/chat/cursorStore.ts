@@ -31,7 +31,7 @@ export interface AgentCursor {
   origin?: { x: number; y: number }
 }
 
-export interface CursorUpdate {
+interface CursorUpdate {
   agent: string
   target?: CursorTarget
   mode: CursorMode

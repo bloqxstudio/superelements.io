@@ -6,16 +6,15 @@ import {
   PAGE_PAD,
   PAGE_GAP,
   PAGE_WIDTH,
-  SECTION_GAP,
   SECTION_WIDTH,
   canvasSections,
-  sectionsHeight,
   nextPageName,
   nextPagePosition,
   pageFrame,
   pageOf,
-  pageSlots,
 } from '@/features/space/pages/pages'
+import { SECTION_HEIGHT, createPage, insertSections, layoutPage, layoutPages, movePageSection, moveSections, removePage as removePageOp, removeSections, withFeeders } from '@/features/space/pages/canvasOps'
+import { diffRemote, markRemote, rebaseSnapshot, sameEntities, type RemoteTouches } from '@/features/space/history/remoteHistory'
 import { instantiateSnapshot, snapshotSections, type SectionSnapshot } from '@/features/space/pages/clipboard'
 import { componentElements, componentSectionData, contentKey, elementComponent, elementsOfUse, freshCopy, keepOwnContent, modeLookup, refreshUses, remapIds, syncKey, textsOf, siteFrameSections, suggestName, syncComponents, tagElement, untagElement, walk } from '@/features/space/components/components'
 import { editSection, locate } from '@/features/space/editor/tree'
@@ -83,9 +82,9 @@ interface SpaceState {
   /** Tamanho da área do canvas na tela, para centralizar nós novos. */
   viewport: { width: number; height: number }
   /** Estados anteriores do canvas para o Ctrl+Z, do mais antigo ao mais recente. */
-  past: CanvasSnapshot[]
+  past: HistoryStep[]
   /** O que o Ctrl+Z desfez, para o Ctrl+Shift+Z refazer. */
-  future: CanvasSnapshot[]
+  future: HistoryStep[]
   /** Tela em que as seções aparecem no canvas; o painel de propriedades grava os ajustes nela. */
   previewDevice: EditorDevice
   /** Elementos copiados de dentro de uma seção (Ctrl+C numa camada), com as settings fixadas deles. */
@@ -95,7 +94,9 @@ interface SpaceState {
 }
 
 /** O que o desfazer guarda: só o que o usuário edita. */
-export type CanvasSnapshot = Pick<SpaceState, 'nodes' | 'pages' | 'connections' | 'components' | 'siteSeo'>
+type CanvasSnapshot = Pick<SpaceState, 'nodes' | 'pages' | 'connections' | 'components' | 'siteSeo'>
+/** Passo do desfazer com a época da sincronização em que foi tirado (ver `remoteHistory.ts`). */
+type HistoryStep = CanvasSnapshot & { epoch: number }
 
 /**
  * O que o projeto guarda do canvas; o resto (seleção, nível, rascunho) é da sessão.
@@ -122,7 +123,8 @@ interface SpaceActions {
   /**
    * Troca o conteúdo pelo que outra pessoa (ou aba) salvou, mantendo a sessão
    * daqui: zoom, página ativa, player e seleção que ainda existirem. O desfazer
-   * recomeça, para não desfazer o trabalho do outro.
+   * continua, mas não mexe no que a outra pessoa mudou depois de cada passo
+   * (`rebaseSnapshot`, revisão de 2026-11-13).
    */
   syncCanvas: (canvas: SpaceCanvas) => void
   /**
@@ -261,7 +263,7 @@ interface SpaceActions {
 
 const NODE_DIMENSIONS: Record<NodeType, { width: number; height: number }> = {
   // Largura suficiente para a miniatura desktop (1440px) da seção ficar legível
-  section: { width: SECTION_WIDTH, height: 200 },
+  section: { width: SECTION_WIDTH, height: SECTION_HEIGHT },
   text: { width: 240, height: 160 },
   'color-palette': { width: 240, height: 140 },
 }
@@ -283,43 +285,6 @@ const newPage = (name: string, position: { x: number; y: number }): SpacePage =>
   ...position,
   sectionIds: [],
 })
-
-/**
- * Move as seções para as posições dadas e leva junto os textos/paletas
- * conectados a cada uma, para as conexões não ficarem esticadas.
- */
-function moveSections(nodes: SpaceNode[], connections: SpaceConnection[], positions: Map<string, { x: number; y: number }>) {
-  const offsets = new Map<string, { dx: number; dy: number }>()
-  for (const node of nodes) {
-    const pos = positions.get(node.id)
-    if (pos && (pos.x !== node.x || pos.y !== node.y)) offsets.set(node.id, { dx: pos.x - node.x, dy: pos.y - node.y })
-  }
-  if (!offsets.size) return nodes
-  for (const conn of connections) {
-    const offset = offsets.get(conn.targetId)
-    if (offset && !positions.has(conn.sourceId) && !offsets.has(conn.sourceId)) offsets.set(conn.sourceId, offset)
-  }
-  return nodes.map((n) => {
-    const offset = offsets.get(n.id)
-    return offset ? { ...n, x: n.x + offset.dx, y: n.y + offset.dy } : n
-  })
-}
-
-/** Põe as seções da página nos lugares da coluna dela. */
-const layoutPage = (page: SpacePage, nodes: SpaceNode[], connections: SpaceConnection[]) =>
-  moveSections(nodes, connections, pageSlots(page, nodes))
-
-const layoutPages = (pages: SpacePage[], nodes: SpaceNode[], connections: SpaceConnection[]) =>
-  pages.reduce((acc, page) => layoutPage(page, acc, connections), nodes)
-
-/** As seções e os textos e paletas que só alimentavam elas, que saem junto. */
-function withFeeders(sectionIds: string[], nodes: SpaceNode[], connections: SpaceConnection[]) {
-  const removed = new Set(sectionIds)
-  const feeders = new Set(connections.filter((c) => removed.has(c.targetId)).map((c) => c.sourceId))
-  for (const c of connections) if (!removed.has(c.targetId)) feeders.delete(c.sourceId)
-  for (const n of nodes) if (feeders.has(n.id) && n.type !== 'section') removed.add(n.id)
-  return removed
-}
 
 type CanvasParts = Pick<SpaceState, 'nodes' | 'connections' | 'pages'>
 
@@ -377,7 +342,10 @@ function keepWordPress<T extends { id: string; wordpress?: unknown }>(restored: 
   return restored.map((x) => (links.has(x.id) && links.get(x.id) !== x.wordpress ? { ...x, wordpress: links.get(x.id) } : x))
 }
 
-/** Canvas de um passo do desfazer, com o tamanho atual das seções e o vínculo atual com o WordPress. */
+/**
+ * Canvas de um passo do desfazer, com o tamanho atual das seções e o vínculo atual com o WordPress. O passo já vem
+ * misturado com o que veio de fora depois dele (`rebaseSnapshot`).
+ */
 function restoreSnapshot(snapshot: CanvasSnapshot, current: { nodes: SpaceNode[]; pages: SpacePage[]; components: SpaceComponent[] }) {
   const nodes = withCurrentSizes(snapshot.nodes, current.nodes)
   const pages = keepWordPress(snapshot.pages, current.pages)
@@ -399,7 +367,11 @@ export const onCanvasRemoval = (listener: (removal: CanvasRemoval) => void) => {
   removalListeners.add(listener)
   return () => void removalListeners.delete(listener)
 }
-const emitRemoval = (removal: CanvasRemoval) => removalListeners.forEach((listener) => listener(removal))
+/**
+ * Exportado para a ponte dos agentes: o que o agente apaga também vai para a lixeira, como o que a pessoa apaga
+ * (revisão de 2026-11-13). Chamar antes de mudar o canvas: o registro guarda a versão de antes.
+ */
+export const emitRemoval = (removal: CanvasRemoval) => removalListeners.forEach((listener) => listener(removal))
 
 /**
  * A mudança em curso é só a altura de um nó medida na tela (o preview
@@ -407,9 +379,6 @@ const emitRemoval = (removal: CanvasRemoval) => removalListeners.forEach((listen
  */
 let measuring = false
 export const isMeasuring = () => measuring
-
-const sameCanvas = (a: CanvasSnapshot, b: CanvasSnapshot) =>
-  a.nodes === b.nodes && a.pages === b.pages && a.connections === b.connections && a.components === b.components && a.siteSeo === b.siteSeo
 
 /** Distância de uma cópia de seção solta até a original. */
 const LOOSE_COPY_OFFSET = 40
@@ -506,6 +475,20 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
     (set, get) => {
       let lastTrack = { key: '', at: 0 }
       /**
+       * Sobe a cada salvamento de fora que muda algo; `remoteTouches` guarda em que época cada peça foi mexida de
+       * fora. O desfazer usa os dois para não apagar o trabalho da outra pessoa (revisão de 2026-11-13).
+       */
+      let epoch = 0
+      let remoteTouches: RemoteTouches = new Map()
+      const step = (canvas: CanvasSnapshot): HistoryStep => ({
+        nodes: canvas.nodes,
+        pages: canvas.pages,
+        connections: canvas.connections,
+        components: canvas.components,
+        siteSeo: canvas.siteSeo,
+        epoch,
+      })
+      /**
        * Guarda o canvas antes de uma mudança do usuário, para o desfazer. Chamar
        * logo antes do set, depois das validações. Com `merge`, mudanças seguidas
        * com a mesma chave (digitar, arrastar) viram um passo só.
@@ -516,7 +499,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         lastTrack = { key: merge ?? '', at: now }
         if (merged) return
         const { nodes, pages, connections, components, siteSeo, past } = get()
-        set({ past: [...past.slice(-(HISTORY_LIMIT - 1)), { nodes, pages, connections, components, siteSeo }], future: [] }, false, 'history')
+        set({ past: [...past.slice(-(HISTORY_LIMIT - 1)), step({ nodes, pages, connections, components, siteSeo })], future: [] }, false, 'history')
       }
 
       /** Seleção que ainda existe no canvas depois de desfazer ou refazer. */
@@ -570,6 +553,8 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       loadCanvas: (canvas) => {
         const opened = openCanvas(canvas)
         lastTrack = { key: '', at: 0 }
+        epoch = 0
+        remoteTouches = new Map()
         set(
           {
             ...opened,
@@ -595,10 +580,17 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
 
       syncCanvas: (canvas) => {
         // As alturas medidas aqui valem mais que as de quem salvou: a seção que mudar mede de novo
-        const opened = openCanvas({ ...canvas, nodes: withCurrentSizes(canvas.nodes ?? [], get().nodes) })
-        const { activePageId, renamingPageId, playingPageId } = get()
+        const remote = openCanvas({ ...canvas, nodes: withCurrentSizes(canvas.nodes ?? [], get().nodes) })
+        const local = get()
+        // O desfazer continua: o que mudou de fora ganha uma época nova, e desfazer não mexe nele. O que não mudou
+        // fica com o objeto daqui, para os previews não refazerem nada (revisão de 2026-11-13).
+        const { changed, shared } = diffRemote(local, remote)
+        if (changed.size) markRemote(remoteTouches, changed, ++epoch)
+        const opened = { ...shared, nodes: layoutPages(shared.pages, shared.nodes, shared.connections) }
+        const { activePageId, renamingPageId, playingPageId } = local
         const pageIds = new Set(opened.pages.map((p) => p.id))
         const keep = (id: string | null) => (id && pageIds.has(id) ? id : null)
+        // Digitar depois de uma mudança de fora começa um passo novo, que não junta as duas versões
         lastTrack = { key: '', at: 0 }
         set(
           {
@@ -608,8 +600,6 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
             renamingPageId: keep(renamingPageId),
             playingPageId: keep(playingPageId),
             pendingConnection: null,
-            past: [],
-            future: [],
           },
           false,
           'syncCanvas'
@@ -645,14 +635,12 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
           pages = [...pages, page]
         }
 
-        const { width, height } = NODE_DIMENSIONS.section
-        const created: SpaceNode[] = sections.map((data) => ({ id: crypto.randomUUID(), type: 'section', x: page.x, y: page.y, width, height, data }))
-        const sectionIds = [...page.sectionIds]
-        sectionIds.splice(options.index ?? sectionIds.length, 0, ...created.map((n) => n.id))
-        const target = { ...page, sectionIds }
-        const nextPages = pages.map((p) => (p.id === target.id ? target : p))
-        const nextNodes = layoutPage(target, [...nodes, ...created], connections)
-        const first = created[0] && nextNodes.find((n) => n.id === created[0].id)
+        const { width } = NODE_DIMENSIONS.section
+        // A mesma operação da ponte dos agentes (revisão de 2026-11-13)
+        const inserted = insertSections({ nodes, pages, connections }, page.id, sections, options.index)
+        const { nodes: nextNodes, pages: nextPages } = inserted.canvas
+        const target = page
+        const first = inserted.ids[0] && nextNodes.find((n) => n.id === inserted.ids[0])
 
         track()
         set(
@@ -778,22 +766,19 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         if (!section) return
         const from = pageOf(pages, sectionId)
 
-        let nextPages = pages.map((p) => (p.id === from?.id ? { ...p, sectionIds: p.sectionIds.filter((s) => s !== sectionId) } : p))
-        if (pageId) {
-          nextPages = nextPages.map((p) => {
-            if (p.id !== pageId) return p
-            const ids = [...p.sectionIds]
-            ids.splice(index ?? ids.length, 0, sectionId)
-            return { ...p, sectionIds: ids }
-          })
+        if (pageId && pages.some((p) => p.id === pageId)) {
+          // Para uma página: a mesma operação da ponte dos agentes (revisão de 2026-11-13)
+          const moved = movePageSection({ nodes, pages, connections }, sectionId, pageId, index)
+          track()
+          set({ pages: moved.pages, nodes: moved.nodes, activePageId: pageId }, false, 'moveSectionToPage')
+          return
         }
 
+        const nextPages = pages.map((p) => (p.id === from?.id ? { ...p, sectionIds: p.sectionIds.filter((s) => s !== sectionId) } : p))
         let nextNodes = nodes
         const source = nextPages.find((p) => p.id === from?.id)
-        const target = nextPages.find((p) => p.id === pageId)
         if (source) nextNodes = layoutPage(source, nextNodes, connections)
-        if (target) nextNodes = layoutPage(target, nextNodes, connections)
-        else if (at) {
+        if (at) {
           // Solta onde o arrasto a deixou; textos e paletas ligados vão junto
           nextNodes = moveSections(nextNodes, connections, new Map([[sectionId, at]]))
         } else if (source) {
@@ -804,7 +789,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         }
 
         track()
-        set({ pages: nextPages, nodes: nextNodes, activePageId: target?.id ?? activePageId }, false, 'moveSectionToPage')
+        set({ pages: nextPages, nodes: nextNodes, activePageId }, false, 'moveSectionToPage')
       },
 
       copySectionToCanvas: (sectionId, x, y) => {
@@ -828,19 +813,14 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
 
       addPage: (name, options = {}) => {
         const { pages, nodes, connections, components } = get()
-        const page = newPage(name?.trim() || nextPageName(pages), nextPagePosition(pages, nodes))
-        // Como no site: a página nova já vem com o cabeçalho e o rodapé do site
+        // Como no site: a página nova já vem com o cabeçalho e o rodapé do site (a mesma operação da ponte)
         const frame = siteFrameSections(components, nodes)
-        const created = [frame.header, frame.footer]
-          .filter((data): data is SectionNodeData => !!data)
-          .map((data): SpaceNode => ({ id: crypto.randomUUID(), type: 'section', x: page.x, y: page.y, ...NODE_DIMENSIONS.section, data }))
-        const withFrame = created.length ? { ...page, sectionIds: created.map((n) => n.id) } : page
-        const nextPages = [...pages, withFrame]
+        const { canvas, page } = createPage({ nodes, pages, connections }, { name: name?.trim() || nextPageName(pages), frame: [frame.header, frame.footer] })
         track()
         set(
           {
-            pages: nextPages,
-            ...(created.length ? { nodes: layoutPages(nextPages, [...nodes, ...created], connections) } : {}),
+            pages: canvas.pages,
+            nodes: canvas.nodes,
             activePageId: page.id,
             renamingPageId: name ? null : page.id,
             canvasTransform: focusOn(page.x + PAGE_WIDTH / 2, page.y, options.leftInset),
@@ -867,15 +847,16 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const page = pages.find((p) => p.id === id)
         if (!page || pages.length <= 1) return
 
-        const removed = withFeeders(page.sectionIds, nodes, connections)
-        const rest = pages.filter((p) => p.id !== id)
-        emitRemoval({ kind: 'page', page, nodes: page.sectionIds.map((s) => nodes.find((n) => n.id === s)).filter((n): n is SpaceNode => !!n) })
+        // A mesma operação da ponte dos agentes: as seções e os textos/paletas só delas saem juntos
+        const { canvas, removed, sections } = removePageOp({ nodes, pages, connections }, id)
+        const rest = canvas.pages
+        emitRemoval({ kind: 'page', page, nodes: sections })
         track()
         set(
           {
             pages: rest,
-            nodes: nodes.filter((n) => !removed.has(n.id)),
-            connections: connections.filter((c) => !removed.has(c.sourceId) && !removed.has(c.targetId)),
+            nodes: canvas.nodes,
+            connections: canvas.connections,
             selectedIds: selectedIds.filter((s) => !removed.has(s)),
             navigatorSelection: navigatorSelection && removed.has(navigatorSelection.sectionId) ? null : navigatorSelection,
             activePageId: activePageId === id ? rest[0].id : activePageId,
@@ -889,8 +870,7 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       duplicatePage: (id) => {
         const { pages, nodes, connections } = get()
         const page = pages.find((p) => p.id === id)
-        // O site tem um cabeçalho e um rodapé só
-        if (!page || page.part) return
+        if (!page) return
 
         // Seções com os textos e paletas ligados a elas, numa página nova à direita
         const copy = newPage(`${page.name} (cópia)`, nextPagePosition(pages, nodes))
@@ -1323,21 +1303,20 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
 
       removeNode: (id, merge) => {
         const { pages, nodes, connections, selectedIds } = get()
-        const page = pageOf(pages, id)
-        const nextPages = page ? pages.map((p) => (p.id === page.id ? { ...p, sectionIds: p.sectionIds.filter((s) => s !== id) } : p)) : pages
-        const nextConnections = connections.filter((c) => c.sourceId !== id && c.targetId !== id)
-        let nextNodes = nodes.filter((n) => n.id !== id)
-        // A página fecha o buraco que a seção deixou
-        const shrunk = page && nextPages.find((p) => p.id === page.id)
-        if (shrunk) nextNodes = layoutPage(shrunk, nextNodes, nextConnections)
         const removedNode = nodes.find((n) => n.id === id)
-        if (removedNode?.type === 'section') emitRemoval({ kind: 'section', node: removedNode, pageId: page?.id, pageName: page?.name, index: page ? page.sectionIds.indexOf(id) : -1 })
+        let next = { pages, nodes: nodes.filter((n) => n.id !== id), connections: connections.filter((c) => c.sourceId !== id && c.targetId !== id) }
+        if (removedNode?.type === 'section') {
+          // A mesma operação da ponte dos agentes; a página fecha o buraco que a seção deixou
+          const result = removeSections({ nodes, pages, connections }, [id])
+          next = result.canvas
+          for (const section of result.sections) emitRemoval({ kind: 'section', ...section })
+        }
         track(merge)
         set(
           {
-            pages: nextPages,
-            nodes: nextNodes,
-            connections: nextConnections,
+            pages: next.pages,
+            nodes: next.nodes,
+            connections: next.connections,
             selectedIds: selectedIds.filter((s) => s !== id),
             navigatorSelection: get().navigatorSelection?.sectionId === id ? null : get().navigatorSelection,
           },
@@ -1607,16 +1586,24 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
       undo: () => {
         const { past, future, nodes, pages, connections, components, siteSeo } = get()
         const current = { nodes, pages, connections, components, siteSeo }
-        // Passos que não mudaram nada (um campo que recebeu o mesmo valor) são pulados
+        // Passos que não mudam nada são pulados: um campo que recebeu o mesmo valor, ou um passo que só mexia no
+        // que a outra pessoa mudou depois (o passo é aplicado sem desfazer o trabalho dela, ver `remoteHistory.ts`)
         let i = past.length - 1
-        while (i >= 0 && sameCanvas(past[i], current)) i--
-        if (i < 0) {
+        let target: CanvasSnapshot | null = null
+        for (; i >= 0; i--) {
+          const rebased = rebaseSnapshot(past[i], past[i].epoch, current, remoteTouches)
+          if (!sameEntities(rebased, current)) {
+            target = rebased
+            break
+          }
+        }
+        if (!target) {
           if (past.length) set({ past: [] }, false, 'undo')
           return false
         }
         lastTrack = { key: '', at: 0 }
-        const restored = restoreSnapshot(past[i], current)
-        set({ ...restored, ...validSelection(restored.nodes), past: past.slice(0, i), future: [...future, current] }, false, 'undo')
+        const restored = restoreSnapshot(target, current)
+        set({ ...restored, ...validSelection(restored.nodes), past: past.slice(0, i), future: [...future, step(current)] }, false, 'undo')
         return true
       },
 
@@ -1625,8 +1612,9 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
         const next = future[future.length - 1]
         if (!next) return false
         lastTrack = { key: '', at: 0 }
-        const restored = restoreSnapshot(next, { nodes, pages, components })
-        set({ ...restored, ...validSelection(restored.nodes), past: [...past, { nodes, pages, connections, components, siteSeo }], future: future.slice(0, -1) }, false, 'redo')
+        const current = { nodes, pages, connections, components, siteSeo }
+        const restored = restoreSnapshot(rebaseSnapshot(next, next.epoch, current, remoteTouches), current)
+        set({ ...restored, ...validSelection(restored.nodes), past: [...past, step(current)], future: future.slice(0, -1) }, false, 'redo')
         return true
       },
 
@@ -1655,8 +1643,13 @@ export const useSpaceStore = create<SpaceState & SpaceActions>()(
  * da mudança e não grava passo próprio: o Ctrl+Z desfaz os usos juntos.
  */
 let syncingComponents = false
+/** Os nós mudaram só de posição ou tamanho: os mesmos `data`, na mesma ordem. */
+const sameNodeData = (a: SpaceNode[], b: SpaceNode[]) => a.length === b.length && a.every((n, i) => n.data === b[i].data)
 useSpaceStore.subscribe((state, prev) => {
   if (syncingComponents || state.nodes === prev.nodes || !state.components.length) return
+  // Cada medida do preview (updateNodeSize) passava por aqui comparando todos os nós; medir e mover não mudam o
+  // conteúdo de nenhum uso (revisão de 2026-11-13)
+  if (measuring || sameNodeData(state.nodes, prev.nodes)) return
   const result = syncComponents(prev.nodes, state.nodes, state.components)
   if (!result) return
   syncingComponents = true

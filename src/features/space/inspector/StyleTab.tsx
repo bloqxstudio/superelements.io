@@ -62,7 +62,7 @@ const ActionButton: React.FC<{ icon: LucideIcon; label: string; onClick: () => v
 )
 
 /** A tela em que o canvas mostra as seções, e a que as propriedades ajustam. */
-export const DeviceSwitch: React.FC<{ compact?: boolean }> = ({ compact }) => {
+const DeviceSwitch: React.FC<{ compact?: boolean }> = ({ compact }) => {
   const device = useSpaceStore((s) => s.previewDevice)
   const setPreviewDevice = useSpaceStore((s) => s.setPreviewDevice)
   return (

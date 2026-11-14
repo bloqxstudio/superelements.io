@@ -75,7 +75,7 @@ export async function listEvents(projectId: string): Promise<ActivityEvent[] | n
 }
 
 /** A cópia de uma exclusão, como vai para o registro. */
-export function removalEvent(removal: CanvasRemoval): { action: string; target: string; details: Record<string, unknown> } {
+function removalEvent(removal: CanvasRemoval): { action: string; target: string; details: Record<string, unknown> } {
   if (removal.kind === 'page') {
     const page: TrashedPage = { id: removal.page.id, name: removal.page.name, details: removal.page.details, sections: sectionData(removal.nodes) }
     return { action: 'page.deleted', target: removal.page.name, details: { page } }

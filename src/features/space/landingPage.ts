@@ -57,7 +57,7 @@ export function withFreshIds(elements: SectionElement[]): SectionElement[] {
 }
 
 /** Troca background_color pelas cores da paleta, em ciclo; títulos e textos seguem a cor atual. */
-export function applyColors(elements: SectionElement[], colors: string[]): SectionElement[] {
+function applyColors(elements: SectionElement[], colors: string[]): SectionElement[] {
   if (!colors.length) return elements
   const result: SectionElement[] = JSON.parse(JSON.stringify(elements))
   let colorIndex = 0
@@ -81,7 +81,7 @@ export function applyColors(elements: SectionElement[], colors: string[]): Secti
 }
 
 /** Distribui os parágrafos do texto (separados por linha em branco) pelos headings e text-editors. */
-export function applyCopy(elements: SectionElement[], copy: string): SectionElement[] {
+function applyCopy(elements: SectionElement[], copy: string): SectionElement[] {
   if (!copy.trim()) return elements
   const result: SectionElement[] = JSON.parse(JSON.stringify(elements))
   const chunks = copy
@@ -149,7 +149,7 @@ export function sectionWithTransforms(
 export const orderedSections = (nodes: SpaceNode[]) =>
   nodes.filter((n) => n.type === 'section').sort((a, b) => a.y - b.y)
 
-export interface LandingPage {
+interface LandingPage {
   elements: SectionElement[]
   sectionCount: number
   /** Seções sem JSON válido, que ficam de fora. */
