@@ -54,8 +54,12 @@ import {
   loadAdReport,
   money,
   resultCost,
+  resultChoices,
   resultLabel,
+  setCampaignResultType,
+  setConversionNames,
   startAdsConnect,
+  withResultTypes,
   takeBoostReturn,
   type AdAccount,
   type AdCampaign,
@@ -377,6 +381,52 @@ const ResultCell: React.FC<{ result?: AdResult }> = ({ result }) =>
     <span className="text-gray-400">—</span>
   )
 
+/**
+ * Resultado da campanha com a escolha de qual ação conta como resultado, só na Sinfy: numa campanha otimizada
+ * para compra que traz leads, a equipe vê os leads ou "Agendou reunião" sem mudar a campanha na Meta.
+ */
+const ResultPicker: React.FC<{ campaign: AdCampaign; onChoose: (type: string | null) => Promise<void> }> = ({ campaign: c, onChoose }) => {
+  const [saving, setSaving] = useState(false)
+  const choices = resultChoices(c)
+  const meta = c.chosenResult ? c.metaResult : c.result
+  const choose = (type: string | null) => {
+    setSaving(true)
+    void onChoose(type).finally(() => setSaving(false))
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="-mr-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-right hover:bg-gray-100"
+          title={c.chosenResult ? 'Resultado escolhido na Sinfy (a campanha na Meta não muda). Clique para trocar.' : 'Escolher o que conta como resultado'}
+        >
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" /> : <ResultCell result={c.result} />}
+          {c.chosenResult && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" aria-label="escolhido na Sinfy" />}
+          <ChevronDown className="h-3 w-3 shrink-0 text-gray-400" aria-hidden />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="max-h-80 w-72 overflow-y-auto">
+        <DropdownMenuLabel className="text-xs font-normal text-gray-500">O que conta como resultado aqui na Sinfy. A campanha na Meta não muda.</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuRadioGroup value={c.chosenResult ? (c.result?.type ?? '') : ''} onValueChange={(v) => choose(v || null)}>
+          <DropdownMenuRadioItem value="" className="text-[13px]">
+            <span className="min-w-0 flex-1">Como no Gerenciador</span>
+            <span className="ml-2 text-xs tabular-nums text-gray-500">{meta ? `${compact(meta.value)} ${resultLabel(meta.type, meta.value)}` : '—'}</span>
+          </DropdownMenuRadioItem>
+          {choices.map((o) => (
+            <DropdownMenuRadioItem key={o.type} value={o.type} className="text-[13px]">
+              <span className="min-w-0 flex-1 truncate first-letter:uppercase">{resultLabel(o.type, 2)}</span>
+              <span className="ml-2 text-xs tabular-nums text-gray-500">{compact(o.value)}</span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        {!choices.length && <p className="px-2 py-1.5 text-xs text-gray-500">Nenhuma conversão neste período.</p>}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 const budgetLabel = (c: AdCampaign, currency: string) =>
   c.dailyBudget !== undefined ? `${money(c.dailyBudget, currency)}/dia` : c.lifetimeBudget !== undefined ? `${money(c.lifetimeBudget, currency)} no total` : undefined
 
@@ -597,7 +647,14 @@ const CampaignFilter: React.FC<{ campaigns: AdCampaign[]; selected: string[] | n
 
 type CampaignListFilter = 'gasto' | 'ativas' | 'todas'
 
-const Campaigns: React.FC<{ view: AdView; account: AdAccount; currency: string; filtered: boolean; onOnly: (id: string) => void }> = ({ view, account, currency, filtered, onOnly }) => {
+const Campaigns: React.FC<{
+  view: AdView
+  account: AdAccount
+  currency: string
+  filtered: boolean
+  onOnly: (id: string) => void
+  onResultType: (campaignId: string, type: string | null) => Promise<void>
+}> = ({ view, account, currency, filtered, onOnly, onResultType }) => {
   const [filter, setFilter] = useState<CampaignListFilter>('gasto')
   const counts = {
     gasto: view.campaigns.filter((c) => c.metrics.spend > 0).length,
@@ -661,7 +718,7 @@ const Campaigns: React.FC<{ view: AdView; account: AdAccount; currency: string; 
                     </td>
                     <td className="px-3 py-2.5 text-right text-sm tabular-nums text-gray-900">{money(c.metrics.spend, currency)}</td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums">
-                      <ResultCell result={c.result} />
+                      <ResultPicker campaign={c} onChoose={(type) => onResultType(c.id, type)} />
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-gray-700">{resultCost(c.result, currency)}</td>
                     <td className="hidden px-3 py-2.5 text-right text-sm tabular-nums text-gray-700 md:table-cell">{compact(c.metrics.linkClicks)}</td>
@@ -939,7 +996,13 @@ const RanDays: React.FC<{ view: AdView }> = ({ view }) => {
   )
 }
 
-const Overview: React.FC<{ report: AdReport; account: AdAccount; selected: string[] | null; onSelect: (ids: string[] | null) => void }> = ({ report, account, selected, onSelect }) => {
+const Overview: React.FC<{
+  report: AdReport
+  account: AdAccount
+  selected: string[] | null
+  onSelect: (ids: string[] | null) => void
+  onResultType: (campaignId: string, type: string | null) => Promise<void>
+}> = ({ report, account, selected, onSelect, onResultType }) => {
   const cur = report.currency
   const view = useMemo(() => viewOf(report, selected), [report, selected])
   const ctx: SubContext = { currency: cur, ranDays: view.ranDays.length, periodDays: view.periodDays, approximateReach: view.approximateReach }
@@ -974,7 +1037,7 @@ const Overview: React.FC<{ report: AdReport; account: AdAccount; selected: strin
         </Surface>
       </div>
 
-      <Campaigns view={view} account={account} currency={cur} filtered={!!selected} onOnly={(id) => onSelect([id])} />
+      <Campaigns view={view} account={account} currency={cur} filtered={!!selected} onOnly={(id) => onSelect([id])} onResultType={onResultType} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Ads view={view} account={account} currency={cur} />
@@ -1018,22 +1081,47 @@ const AccountArea: React.FC<{
   account: AdAccount
   accounts: AdAccount[]
   manager: boolean
+  /** Campanha que já abre filtrada (link do cartão do lead, `?campanha=`) */
+  initialCampaign?: string
   onSelect: (id: string) => void
   onReload: () => Promise<void>
-}> = ({ account, accounts, manager, onSelect, onReload }) => {
+}> = ({ account, accounts, manager, initialCampaign, onSelect, onReload }) => {
   const people = useTeamPeople(account.teamId)
   const [preset, setPreset] = useState<AdPreset>('last_30d')
   const [report, setReport] = useState<AdReport | null | undefined>(undefined)
   const [refreshing, setRefreshing] = useState(false)
   const [adding, setAdding] = useState(false)
   const [confirmOff, setConfirmOff] = useState(false)
-  const [selected, setSelected] = useState<string[] | null>(null)
+  const [selected, setSelected] = useState<string[] | null>(initialCampaign ? [initialCampaign] : null)
   const [failure, setFailure] = useState<string | null>(null)
   const [boosting, setBoosting] = useState(() => takeBoostReturn())
   const [boostVersion, setBoostVersion] = useState(0)
   const autoRefreshed = useRef(new Set<string>())
 
-  useEffect(() => setSelected(null), [account.id])
+  // Ação escolhida como resultado de cada campanha (só na Sinfy); aplicada na hora sobre o relatório guardado
+  const [resultTypes, setResultTypes] = useState(account.resultTypes)
+  useEffect(() => setResultTypes(account.resultTypes), [account.id, account.resultTypes])
+  const shown = useMemo(() => {
+    if (!report) return report
+    setConversionNames(report.conversionNames)
+    return withResultTypes(report, resultTypes)
+  }, [report, resultTypes])
+  const chooseResult = useCallback(
+    async (campaignId: string, type: string | null) => {
+      try {
+        setResultTypes(await setCampaignResultType(account.id, campaignId, type))
+        toast.success(type ? `Resultado: ${resultLabel(type, 2)}. A campanha na Meta não mudou.` : 'Resultado como no Gerenciador.')
+      } catch (e) {
+        toast.error(errorText(e))
+      }
+    },
+    [account.id]
+  )
+
+  const firstAccount = useRef(account.id)
+  useEffect(() => {
+    if (account.id !== firstAccount.current) setSelected(null)
+  }, [account.id])
   useEffect(() => setFailure(null), [account.id, preset])
 
   const refresh = useCallback(
@@ -1207,7 +1295,7 @@ const AccountArea: React.FC<{
       ) : (
         <div className={cn('transition-opacity', refreshing && 'opacity-70')}>
           <AdsGuard key={`${report.fetchedAt}:${preset}`} onRetry={() => void refresh()}>
-            <Overview report={report} account={account} selected={selected} onSelect={setSelected} />
+            <Overview report={shown ?? report} account={account} selected={selected} onSelect={setSelected} onResultType={chooseResult} />
           </AdsGuard>
         </div>
       )}
@@ -1254,7 +1342,7 @@ const AccountArea: React.FC<{
 }
 
 /** A aba inteira: carrega as contas ligadas à equipe e mostra a escolhida (ou o convite para ligar). */
-export const AdsArea: React.FC<{ teamId: string; manager: boolean; initialAccount?: string }> = ({ teamId, manager, initialAccount }) => {
+export const AdsArea: React.FC<{ teamId: string; manager: boolean; initialAccount?: string; initialCampaign?: string }> = ({ teamId, manager, initialAccount, initialCampaign }) => {
   const [accounts, setAccounts] = useState<AdAccount[] | null>(null)
   const [error, setError] = useState<'sem-tabelas' | string | null>(null)
   const [selected, setSelected] = useState<string | undefined>(initialAccount)
@@ -1298,7 +1386,7 @@ export const AdsArea: React.FC<{ teamId: string; manager: boolean; initialAccoun
         <p className="text-sm text-rose-700">{error}</p>
       </Surface>
     )
-  if (account) return <AccountArea account={account} accounts={accounts} manager={manager} onSelect={setSelected} onReload={reload} />
+  if (account) return <AccountArea account={account} accounts={accounts} manager={manager} initialCampaign={initialCampaign} onSelect={setSelected} onReload={reload} />
   return (
     <>
       <div className="mb-6">

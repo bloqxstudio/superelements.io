@@ -511,7 +511,26 @@ function metricsOf(row: InsightRow | undefined): Metrics {
 }
 
 /** Só as ações que a tela usa, para os números por dia e os cortes não pesarem. */
-const lean = (m: Metrics): Metrics => ({ ...m, actions: Object.fromEntries(Object.entries(m.actions).filter(([type]) => KEPT.has(type))) })
+// As conversões do pixel e as personalizadas também: a equipe pode escolher uma delas como resultado da campanha
+const kept = (type: string) => KEPT.has(type) || type.startsWith('offsite_conversion.custom.') || type.startsWith('offsite_conversion.fb_pixel_')
+const lean = (m: Metrics): Metrics => ({ ...m, actions: Object.fromEntries(Object.entries(m.actions).filter(([type]) => kept(type))) })
+
+/** O resultado pela ação que a equipe escolheu para a campanha (só na Sinfy; a campanha na Meta não muda). */
+const chosenResult = (metrics: Metrics, type: string): Result => {
+  const value = metrics.actions[type] ?? 0
+  return { type, value, cost: value ? metrics.spend / value : undefined }
+}
+
+/** `{ campanha: ação }` escolhido na tela (`crm_ad_accounts.result_types`); vazio se a coluna ainda não existe. */
+async function resultTypesOf(ctx: Ctx, accountId: string): Promise<Record<string, string>> {
+  const { data, error } = await ctx.admin.from('crm_ad_accounts').select('result_types').eq('id', accountId).maybeSingle()
+  if (error) {
+    console.warn('[meta-ads] result_types', error.message)
+    return {}
+  }
+  const raw = (data as { result_types?: unknown } | null)?.result_types
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, string>) : {}
+}
 
 interface Result {
   /** Tipo da ação da Meta (`lead`, `link_click`…) ou `reach` */
@@ -640,13 +659,17 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
   const base: Params = range ? { time_range: JSON.stringify(range) } : { date_preset: preset }
 
   // A conta inteira (o alcance não soma entre campanhas) e cada campanha, no total e por dia
-  const [totalsRows, dayRows, campaignRows, campaignList, campaignDayRows] = await Promise.all([
+  const [totalsRows, dayRows, campaignRows, campaignList, campaignDayRows, chosen, customConversions] = await Promise.all([
     insights(token, act, { ...base, level: 'account' }, missing),
     insights(token, act, { ...base, level: 'account', time_increment: 1 }, missing),
     insights(token, act, { ...base, level: 'campaign', fields: `campaign_id,campaign_name,objective,${BASE_FIELDS}` }, missing, true),
     optional('campanhas', () => all<CampaignRow>(`act_${act}/campaigns`, token, { fields: 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,start_time,stop_time', limit: 200 }, 500), [] as CampaignRow[]),
     optional('dias por campanha', () => insights(token, act, { ...base, level: 'campaign', time_increment: 1, fields: `campaign_id,${BASE_FIELDS}` }, missing, true), [] as InsightRow[]),
+    resultTypesOf(ctx, account.id),
+    // Nomes das conversões personalizadas (`offsite_conversion.custom.<id>`), como no Gerenciador
+    optional('conversões personalizadas', () => all<{ id: string; name?: string }>(`act_${act}/customconversions`, token, { fields: 'id,name', limit: 200 }, 500), [] as { id: string; name?: string }[]),
   ])
+  const conversionNames = Object.fromEntries(customConversions.filter((c) => c.id && c.name).map((c) => [`offsite_conversion.custom.${c.id}`, c.name!]))
 
   // Os cortes vêm por campanha, para o filtro de campanhas da tela somar só as escolhidas
   const [platformRows, ageRows, regionRows, adRows] = await Promise.all([
@@ -675,6 +698,8 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
       seen.add(r.campaign_id!)
       const meta = listed.get(r.campaign_id!)
       const metrics = metricsOf(r)
+      const own = resultOf(r, metrics, r.objective || meta?.objective)
+      const type = chosen[r.campaign_id!]
       return {
         id: r.campaign_id!,
         name: r.campaign_name || meta?.name || r.campaign_id!,
@@ -685,7 +710,9 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
         start: meta?.start_time,
         stop: meta?.stop_time,
         metrics,
-        result: resultOf(r, metrics, r.objective || meta?.objective),
+        result: type ? chosenResult(metrics, type) : own,
+        /** O resultado da Meta, quando a equipe escolheu outro */
+        ...(type ? { metaResult: own, chosenResult: true } : {}),
       }
     })
   for (const c of campaignList) {
@@ -712,6 +739,7 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
       const metrics = metricsOf(r)
       // O resultado do dia sai do mesmo `results` da campanha (os dias somam o total); sem ele, pelas ações
       const type = resultType.get(r.campaign_id!)
+      if (chosen[r.campaign_id!]) return { campaignId: r.campaign_id!, day: r.date_start!, metrics: lean(metrics), result: metrics.actions[chosen[r.campaign_id!]] ?? 0 }
       const stat = r.results?.[0]
       const own = stat?.indicator && stat.indicator.replace(/^actions:/, '') === type ? num(stat.values?.[0]?.value) : undefined
       return { campaignId: r.campaign_id!, day: r.date_start!, metrics: lean(metrics), result: own ?? resultIn(metrics, type) }
@@ -742,7 +770,7 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
       permalink: found?.creative?.instagram_permalink_url,
       previewLink: found?.preview_shareable_link,
       metrics: lean(metrics),
-      result: resultOf(r, metrics, r.objective),
+      result: r.campaign_id && chosen[r.campaign_id] ? chosenResult(metrics, chosen[r.campaign_id]) : resultOf(r, metrics, r.objective),
     }
   })
 
@@ -762,6 +790,7 @@ async function report(ctx: Ctx, account: AccountRow, token: string, preset: Pres
     audience,
     regions,
     ads,
+    conversionNames,
     missing: [...missing],
   }
 

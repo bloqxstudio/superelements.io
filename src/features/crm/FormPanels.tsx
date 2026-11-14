@@ -116,19 +116,19 @@ export const Submissions: React.FC<{ form: CrmForm; manager: boolean }> = ({ for
                       {r.summary.map((row, i) => (
                         <div key={i}>
                           <dt className="text-xs text-gray-500">{row.label}</dt>
-                          <dd className="text-gray-900">{row.value}</dd>
+                          <dd className="whitespace-pre-wrap break-words text-gray-900">{row.value}</dd>
                         </div>
                       ))}
                       {quiz && r.result && (
                         <div>
                           <dt className="text-xs text-gray-500">Resultado</dt>
-                          <dd className="text-gray-900">{r.result}</dd>
+                          <dd className="break-words text-gray-900">{r.result}</dd>
                         </div>
                       )}
                     </dl>
                     <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-200 pt-3 text-xs text-gray-500">
                       {r.origin?.campaign?.name && <span>Campanha: {r.origin.campaign.name}</span>}
-                      {r.origin?.page && <span className="truncate">Página: {r.origin.page}</span>}
+                      {r.origin?.page && <span className="min-w-0 max-w-full truncate">Página: {r.origin.page}</span>}
                       {r.opportunityId && (
                         <Link to={`/crm?oportunidade=${r.opportunityId}`} className="inline-flex items-center gap-1 font-medium text-violet-700 hover:underline">
                           Abrir no funil <ExternalLink className="h-3 w-3" />

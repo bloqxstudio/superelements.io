@@ -430,6 +430,7 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
       </Collapsed.Provider>
 
       <div className="se-sidebar-user shrink-0 space-y-2 px-3 py-3">
+        {user && team && (on('site') || on('formularios')) && <LiveNowItem collapsed={collapsed} to={on('site') ? '/crm/site?aba=geral#ao-vivo' : '/crm/formularios'} onNavigate={onClose} />}
         {user && team && (
           <button
             type="button"
@@ -464,6 +465,49 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
         )}
       </div>
     </>
+  )
+}
+
+/**
+ * Ao vivo (2026-11-14, o usuário: "um item acima do Conectar sua IA… vai dizer logo de cara e em qualquer tela
+ * quantas pessoas estão no forms ou site ao vivo"). Soma o site (atividade nos últimos 5 min) e o formulário aberto
+ * pelo link (sinal no último minuto); o formulário dentro do site já está na conta do site. Leva ao painel
+ * "Ao vivo agora" das Visitas do site.
+ */
+const LiveNowItem: React.FC<{ collapsed: boolean; to: string; onNavigate?: () => void }> = ({ collapsed, to, onNavigate }) => {
+  const site = useMenuBadges((s) => s.live)
+  const forms = useMenuBadges((s) => s.liveForms)
+  const formsLink = useMenuBadges((s) => s.liveFormsLink)
+  const total = site + formsLink
+  const detail = `${site} no site · ${forms} no formulário${forms > formsLink ? ` (${forms - formsLink} dentro do site)` : ''}`
+  const label = total === 0 ? 'Ninguém ao vivo agora' : `${plural(total, 'pessoa', 'pessoas')} ao vivo agora: ${detail}`
+  return (
+    <Link
+      to={to}
+      onClick={onNavigate}
+      title={label}
+      aria-label={label}
+      className={cn(
+        'flex w-full items-center gap-2.5 rounded-lg transition-colors',
+        collapsed ? 'h-8 justify-center' : 'min-h-[40px] px-2.5 py-1.5',
+        total > 0 ? 'bg-emerald-50 text-emerald-900 ring-1 ring-inset ring-emerald-600/15 hover:bg-emerald-100' : 'text-gray-500 hover:bg-black/[.045] hover:text-gray-900'
+      )}
+    >
+      <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden>
+        {total > 0 && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 motion-safe:animate-ping" />}
+        <span className={cn('relative inline-flex h-2.5 w-2.5 rounded-full', total > 0 ? 'bg-emerald-500' : 'bg-gray-300')} />
+      </span>
+      {collapsed ? (
+        total > 0 && <span aria-hidden className="text-[11px] font-semibold tabular-nums">{total}</span>
+      ) : (
+        <span aria-hidden className="min-w-0 flex-1 leading-tight">
+          <span className="block text-[13px] font-medium">{total === 0 ? 'Ninguém ao vivo' : `${total} ao vivo agora`}</span>
+          <span className={cn('block truncate text-[11px]', total > 0 ? 'text-emerald-700' : 'text-gray-400')}>
+            {site} no site · {forms} no formulário
+          </span>
+        </span>
+      )}
+    </Link>
   )
 }
 

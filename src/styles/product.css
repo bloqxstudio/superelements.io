@@ -120,8 +120,11 @@ body:has(.se-product) .toaster [data-sonner-toast] { border-radius: 16px; backgr
   /* Revisão de celular (2026-11-13): os portais (diálogos, menus, popovers e o menu lateral do celular)
      ficam fora do `.se-product`; abaixo de 16 px o iOS dá zoom ao focar o campo. */
   body:has(.se-product) :is(.se-dialog-content, .se-sidebar-mobile, .se-menu-glass, [data-radix-popper-content-wrapper]) :is(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']), textarea, select) { font-size: 16px; }
-  /* Nada da tela empurra a página para o lado; a barra do Safari não corta o fim (dvh) */
-  .se-app .se-content { overflow-x: clip; }
+  /* Grade sem coluna no celular (só `sm:`/`lg:grid-cols-…`) vira uma coluna que encolhe: a faixa `auto`
+     crescia até o conteúdo (moldura de 390 px, tabela de 480 px) e a tela passava da largura. Especificidade
+     zero: qualquer classe `grid-cols-*` que valer na largura ganha. O `overflow-x: clip` de 13/11 saiu
+     (2026-11-14): escondia o que passava da tela sem deixar rolar até lá. A barra do Safari não corta o fim (dvh). */
+  :where(.se-product .grid:not([class^='grid-cols-'], [class*=' grid-cols-'], [class*='grid-flow-col'])) { grid-template-columns: minmax(0, 1fr); }
   .se-product.se-app, .se-app .se-workspace { min-height: 100dvh; }
   /* O menu recolhido é só do desktop */
   .se-app.se-menu-collapsed .se-skip-link { left: 16px; }

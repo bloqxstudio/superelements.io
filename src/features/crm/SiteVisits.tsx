@@ -23,6 +23,7 @@ import {
   type SitePeriod,
   type SiteSession,
 } from '@/features/crm/site'
+import { FormsInVisit } from '@/features/crm/SiteForms'
 import { SessionAd } from '@/features/crm/SiteAds'
 import type { MetaView } from '@/features/crm/siteMeta'
 import { FIELD, plural, whenLabel } from '@/features/crm/ui'
@@ -575,6 +576,8 @@ export const VisitPanel: React.FC<{
         <SessionAd session={s} meta={meta} />
 
         {visits && all.length > 1 && <PersonSummary visits={all} />}
+
+        <FormsInVisit sessionId={s.id} lastAt={s.lastAt} />
 
         <div>
           <h3 className="mb-2 text-sm font-semibold text-gray-900">O que fez</h3>

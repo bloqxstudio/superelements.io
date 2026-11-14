@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { ADS_LINK_KEY } from './connectLinks'
 import { supabase } from '@/integrations/supabase/client'
 import { publicAppUrl } from '@/features/approval/shares'
@@ -62,6 +63,9 @@ export interface AdCampaign {
   stop?: string
   metrics: AdMetrics
   result?: AdResult
+  /** O resultado da Meta, quando a equipe escolheu outra ação como resultado (`crm_ad_accounts.result_types`) */
+  metaResult?: AdResult
+  chosenResult?: boolean
 }
 
 /** Um dia da conta inteira (o alcance do dia é exato só aqui). */
@@ -126,6 +130,8 @@ export interface AdReport {
   audience: AdAudienceRow[]
   regions: AdCut[]
   ads: AdCreative[]
+  /** Nomes das conversões personalizadas: `offsite_conversion.custom.<id>` → "Agendou reunião" */
+  conversionNames?: Record<string, string>
   /** Partes que a Meta não devolveu nesta leitura */
   missing: string[]
   fetchedAt: number
@@ -151,6 +157,8 @@ export interface AdAccount {
   syncError?: string
   /** Permissões que o login aceitou (`null`: conectada antes de 2026-11-11) */
   scopes?: string[]
+  /** Ação que conta como resultado de cada campanha, escolhida na tela: `{ campanha: ação }` */
+  resultTypes: Record<string, string>
 }
 
 export class NoAdTablesError extends Error {}
@@ -166,6 +174,8 @@ export class AdsError extends Error {
 }
 
 const time = (value: string | null | undefined) => (value ? Date.parse(value) : undefined)
+
+const typesOf = (raw: unknown): Record<string, string> => (raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, string>) : {})
 
 export async function loadAdAccounts(teamId: string): Promise<AdAccount[]> {
   const { data, error } = await supabase.from('crm_ad_accounts').select('*').eq('team_id', teamId).order('name')
@@ -190,7 +200,68 @@ export async function loadAdAccounts(teamId: string): Promise<AdAccount[]> {
     syncedAt: time(r.synced_at),
     syncError: r.sync_error ?? undefined,
     scopes: Array.isArray(r.scopes) ? r.scopes : undefined,
+    resultTypes: typesOf((r as { result_types?: unknown }).result_types),
   }))
+}
+
+/**
+ * Escolhe qual ação conta como resultado da campanha, só na Sinfy (a campanha na Meta não muda);
+ * `null` volta ao resultado da Meta. Devolve o mapa novo da conta.
+ */
+export async function setCampaignResultType(accountId: string, campaignId: string, type: string | null): Promise<Record<string, string>> {
+  const { data, error } = await (supabase as unknown as SupabaseClient).rpc('crm_ad_result_type', { p_account: accountId, p_campaign: campaignId, p_type: type })
+  if (error) throw new Error(error.code === 'PGRST202' ? 'Falta aplicar a migração 20261114130000_crm_ad_result_types.sql.' : error.message)
+  return (data ?? {}) as Record<string, string>
+}
+
+const chosenOf = (metrics: AdMetrics, type: string): AdResult => {
+  const value = type === 'reach' ? (metrics.reach ?? 0) : (metrics.actions?.[type] ?? 0)
+  return { type, value, cost: value ? metrics.spend / value : undefined }
+}
+
+/**
+ * O relatório com a ação escolhida como resultado de cada campanha. A função `meta-ads` já grava assim; aqui a
+ * troca aparece na hora e um relatório guardado antes da escolha também segue a escolha.
+ */
+export function withResultTypes(report: AdReport, types: Record<string, string>): AdReport {
+  if (!Object.keys(types).length && !report.campaigns.some((c) => c.chosenResult)) return report
+  // O tipo em vigor de cada campanha (escolhido ou o da Meta), para os dias e os anúncios
+  const typeOf = new Map<string, string | undefined>()
+  const campaigns = report.campaigns.map((c) => {
+    const meta = c.chosenResult ? c.metaResult : c.result
+    const type = types[c.id]
+    if (type) {
+      typeOf.set(c.id, type)
+      return { ...c, result: chosenOf(c.metrics, type), metaResult: meta, chosenResult: true }
+    }
+    if (!c.chosenResult) return c
+    typeOf.set(c.id, meta?.type)
+    return { ...c, result: meta, metaResult: undefined, chosenResult: false }
+  })
+  if (!typeOf.size) return { ...report, campaigns }
+  const dayResult = (m: AdMetrics, type: string | undefined) => (!type ? undefined : type === 'reach' ? m.reach : (m.actions?.[type] ?? 0))
+  return {
+    ...report,
+    campaigns,
+    campaignDays: report.campaignDays.map((d) => (typeOf.has(d.campaignId) ? { ...d, result: dayResult(d.metrics, typeOf.get(d.campaignId)) } : d)),
+    ads: report.ads.map((a) => {
+      if (!a.campaignId || !typeOf.has(a.campaignId)) return a
+      const type = typeOf.get(a.campaignId)
+      return { ...a, result: type ? chosenOf(a.metrics, type) : undefined }
+    }),
+  }
+}
+
+/** Ações que dá para escolher como resultado de uma campanha: conversões e contatos que ela teve no período. */
+export function resultChoices(c: AdCampaign): { type: string; value: number }[] {
+  const actions = c.metrics.actions ?? {}
+  const fit = (type: string) =>
+    type !== 'offsite_conversion.fb_pixel_custom' &&
+    (type in ACTION_LABEL || type.startsWith('offsite_conversion.custom.') || type.startsWith('offsite_conversion.fb_pixel_') || type === 'onsite_web_lead')
+  return Object.entries(actions)
+    .filter(([type, value]) => value > 0 && fit(type) && !['post_engagement', 'page_engagement', 'post_reaction', 'like', 'video_view', 'reach'].includes(type))
+    .map(([type, value]) => ({ type, value }))
+    .sort((a, b) => b.value - a.value)
 }
 
 const metricsOf = (m: Partial<AdMetrics> | undefined): AdMetrics => ({
@@ -388,7 +459,17 @@ const ACTION_LABEL: Record<string, [string, string]> = {
   reach: ['pessoa alcançada', 'pessoas alcançadas'],
 }
 
+// Nomes das conversões personalizadas da conta aberta (do relatório), para `resultLabel` mostrar "Agendou reunião"
+let conversionNames: Record<string, string> = {}
+export const setConversionNames = (names: Record<string, string> | undefined) => {
+  conversionNames = names ?? {}
+}
+
 export function resultLabel(type: string, value = 2) {
+  const custom = conversionNames[type]
+  if (custom) return custom
+  if (type.startsWith('offsite_conversion.custom.')) return value === 1 ? 'conversão personalizada' : 'conversões personalizadas'
+  if (type === 'onsite_web_lead') return value === 1 ? 'lead no site' : 'leads no site'
   const known = ACTION_LABEL[type]
   if (known) return value === 1 ? known[0] : known[1]
   const plain = type

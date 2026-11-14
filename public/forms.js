@@ -523,6 +523,18 @@
       return localStorage.getItem('visitas_off') === '1' || !!navigator.webdriver
     } catch (e) { return !!navigator.webdriver }
   }
+  // Dentro de um site com o visitas.js (o código de visitas da Sinfy): a visita é a do site e o formulário é um
+  // trecho dela. `visitas_s` é a visita aberta pelo visitas.js neste domínio (vale 30 min parada).
+  function siteSession() {
+    try {
+      var s = JSON.parse(localStorage.getItem('visitas_s') || 'null')
+      if (s && s.id && Date.now() - (s.last || 0) < 30 * 60000) return String(s.id)
+    } catch (e) {}
+    return undefined
+  }
+  function siteTracked() {
+    return !!(window.visitas || document.querySelector('script[src*="/visitas.js"]'))
+  }
   function tracker(formId, endpoint, origin, version) {
     if (!endpoint || trackOff()) return null
     var visit = rid(), first = true, last = '', pos = {}, timer = null, gone = false
@@ -533,11 +545,12 @@
     function send(kind, beacon) {
       var body = { action: 'track', id: formId, visit: visit, kind: kind, ms: active() }
       for (var k in pos) body[k] = pos[k]
+      if (embed === 'site') { var ss = siteSession(); if (ss) body.ss = ss }
       if (first) {
         first = false
         var tz
         try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone } catch (e) {}
-        body.first = { visitor: visitorId(), origin: origin, embed: embed, touch: navigator.maxTouchPoints || 0, tz: tz }
+        body.first = { visitor: visitorId(), origin: origin, embed: embed, touch: navigator.maxTouchPoints || 0, tz: tz, tracked: embed === 'site' ? siteTracked() : undefined }
         // A versão do formulário que esta página abriu: a função confere com a que está no ar
         body.cv = version || ''
       }

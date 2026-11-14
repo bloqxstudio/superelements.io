@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ArrowLeft, Check, Loader2, Monitor, Moon, Smartphone, Sun, Undo2, UploadCloud } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -58,7 +58,9 @@ const FormEditor: React.FC = () => {
   const manager = team?.role === 'owner' || team?.role === 'admin'
   const [form, setForm] = useState<CrmForm | null | undefined>(undefined)
   const [draft, setDraft] = useState<Draft>()
-  const [tab, setTabRaw] = useState<Tab>('construir')
+  const [searchParams] = useSearchParams()
+  // `?aba=aovivo` abre direto no acompanhamento (link da lista "Ao vivo agora" das Visitas do site)
+  const [tab, setTabRaw] = useState<Tab>(() => (searchParams.get('aba') === 'aovivo' ? 'aovivo' : 'construir'))
   const [saving, setSaving] = useState<'idle' | 'dirty' | 'saving' | 'saved'>('idle')
   const [dark, setDark] = useState(false)
   const [phone, setPhone] = useState(true)
@@ -349,7 +351,7 @@ const FormEditor: React.FC = () => {
 
       <div className="mt-6">
         {PREVIEW_OF[tab] && (
-          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)]">
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)]">
             <div className="grid gap-4">
               {tab === 'inicio' && (
                 <>

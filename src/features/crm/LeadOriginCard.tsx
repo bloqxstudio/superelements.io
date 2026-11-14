@@ -1,5 +1,6 @@
 import React from 'react'
-import { ExternalLink, Megaphone } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowRight, ExternalLink, Megaphone } from 'lucide-react'
 import { CAMPAIGN_STATUS, PRESET_LABEL, type LeadOrigin } from '@/features/crm/leadOrigin'
 
 const money = (value: number, currency = 'BRL') => {
@@ -24,6 +25,9 @@ export const LeadOriginCard: React.FC<{ origin: LeadOrigin }> = ({ origin }) => 
   const c = origin.campaign
   const utm = Object.entries(origin.utm ?? {})
   const fields = Object.entries(origin.fields ?? {})
+  // Id da campanha na Meta: o do relatório, senão o que veio no link (campaign_id ou utm_id numérico)
+  const campaignId = c?.id ?? [origin.ids?.campaignId, origin.utm?.id, origin.utm?.campaign].find((v) => v && /^\d{6,}$/.test(v))
+  const campaignHref = campaignId ? `/crm/anuncios?campanha=${encodeURIComponent(campaignId)}` : null
   return (
     <section aria-label="Origem do lead">
       <p className="text-xs font-medium text-gray-700">Origem do lead</p>
@@ -46,11 +50,24 @@ export const LeadOriginCard: React.FC<{ origin: LeadOrigin }> = ({ origin }) => 
 
       {c && (
         <div className="mt-3 rounded-lg border border-gray-200 px-3 py-2.5">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
-            <Megaphone className="h-3.5 w-3.5" aria-hidden /> Campanha
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
+              <Megaphone className="h-3.5 w-3.5" aria-hidden /> Campanha
+            </p>
+            {campaignHref && (
+              <Link to={campaignHref} className="inline-flex items-center gap-1 text-xs font-medium text-gray-700 underline-offset-2 hover:text-gray-900 hover:underline">
+                Ver campanha <ArrowRight className="h-3 w-3" aria-hidden />
+              </Link>
+            )}
+          </div>
           <p className="mt-1 text-sm font-medium text-gray-900">
-            {c.name}
+            {campaignHref ? (
+              <Link to={campaignHref} className="underline-offset-2 hover:underline" title="Abrir a campanha em Anúncios">
+                {c.name}
+              </Link>
+            ) : (
+              c.name
+            )}
             {c.status && <span className="ml-2 text-xs font-normal text-gray-500">{CAMPAIGN_STATUS[c.status] ?? c.status}</span>}
           </p>
           {(c.adset || c.ad) && (

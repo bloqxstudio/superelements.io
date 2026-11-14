@@ -13,7 +13,7 @@ const AnunciosPage: React.FC = () => {
   return (
     <Page wide>
       {team ? (
-        <AdsArea teamId={team.id} manager={manager} initialAccount={params.get('conta') ?? undefined} />
+        <AdsArea teamId={team.id} manager={manager} initialAccount={params.get('conta') ?? undefined} initialCampaign={params.get('campanha') ?? undefined} />
       ) : (
         <p className="flex items-center gap-2 text-sm text-gray-500">
           <Loader2 className="h-4 w-4 animate-spin" /> Abrindo os anúncios da equipe…

@@ -92,7 +92,9 @@ export async function track(admin: SupabaseClient, id: string, body: Raw, req: R
   if (isBot(ua)) return json({ ok: true })
 
   const screen = typeof body.screen === 'string' && SCREENS.has(body.screen) ? body.screen : undefined
-  const hit = { kind, screen, step: text(body.step, 60), index: int(body.index, 500), total: int(body.total, 500), ms: int(body.ms, 86_400_000) }
+  // `ss`: a visita do site (visitas.js) em que o formulário está; a função confere se é da mesma conta
+  const ss = typeof body.ss === 'string' && /^[\w-]{8,40}$/.test(body.ss) ? body.ss : undefined
+  const hit = { kind, screen, step: text(body.step, 60), index: int(body.index, 500), total: int(body.total, 500), ms: int(body.ms, 86_400_000), ss }
 
   let first: Raw = {}
   const f = body.first && typeof body.first === 'object' ? (body.first as Raw) : undefined
@@ -105,6 +107,8 @@ export async function track(admin: SupabaseClient, id: string, body: Raw, req: R
       visitor: text(f.visitor, 40),
       page,
       embed: f.embed === 'app' ? 'app' : 'site',
+      // Dentro de um site: a página tem o código de visitas? (pelo link do formulário não se aplica)
+      ...(f.embed !== 'app' && typeof f.tracked === 'boolean' ? { tracked: f.tracked } : {}),
       ...originFields(meta, page, ua),
       device: deviceOf(ua, touch),
       browser: browserOf(ua),

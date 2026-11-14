@@ -175,7 +175,7 @@ export const FormLive: React.FC<{ form: CrmForm }> = ({ form }) => {
         {booking && <Tile icon={CalendarCheck} label="Agendaram" value={fmt(scheduled)} sub={`${pct(scheduled, submitted)} de quem enviou`} />}
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Surface title={live.length ? `${plural(live.length, 'pessoa', 'pessoas')} agora` : 'No formulário agora'}>
           {live.length ? (
             <ul className="divide-y divide-gray-100">

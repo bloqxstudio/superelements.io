@@ -1970,6 +1970,8 @@ export type Database = {
           schedule_view: boolean
           scheduled: boolean
           screen: string
+          site_session_id: string | null
+          site_tracked: boolean | null
           source: string | null
           started: boolean
           started_at: string
@@ -2009,6 +2011,8 @@ export type Database = {
           schedule_view?: boolean
           scheduled?: boolean
           screen?: string
+          site_session_id?: string | null
+          site_tracked?: boolean | null
           source?: string | null
           started?: boolean
           started_at?: string
@@ -2048,6 +2052,8 @@ export type Database = {
           schedule_view?: boolean
           scheduled?: boolean
           screen?: string
+          site_session_id?: string | null
+          site_tracked?: boolean | null
           source?: string | null
           started?: boolean
           started_at?: string

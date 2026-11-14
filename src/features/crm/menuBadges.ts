@@ -6,6 +6,7 @@ import { subscribeTopic } from '@/lib/realtimeTopic'
 import { useCrm } from './crmStore'
 import { refreshProfile } from './instagram'
 import { CONTACT_EVENTS, LIVE_MS } from './site'
+import { LIVE_MS as FORM_LIVE_MS } from './formFunnel'
 
 /**
  * Os avisos ao lado dos nomes no menu do CRM: o que chegou desde a última vez
@@ -21,6 +22,9 @@ export interface MenuBadges {
   followers: number
   /** Pessoas no site agora */
   live: number
+  /** Pessoas num formulário da conta agora (sinal no último minuto), e quantas abriram pelo link (fora do site) */
+  liveForms: number
+  liveFormsLink: number
   /** Visitas que entraram em contato desde a última visita ao Site */
   contacts: number
   /** Cartões novos e comentários de outras pessoas desde a última visita às Oportunidades */
@@ -29,7 +33,7 @@ export interface MenuBadges {
   whatsapp: number
 }
 
-const EMPTY: MenuBadges = { followers: 0, live: 0, contacts: 0, opportunities: 0, whatsapp: 0 }
+const EMPTY: MenuBadges = { followers: 0, live: 0, liveForms: 0, liveFormsLink: 0, contacts: 0, opportunities: 0, whatsapp: 0 }
 
 export const useMenuBadges = create<MenuBadges>(() => EMPTY)
 
@@ -184,6 +188,27 @@ export function useMenuFeed() {
       useMenuBadges.setState({ live: live.count ?? 0, contacts: here('site') ? 0 : people })
     }
 
+    // ---------- Formulários: quem está num formulário agora (2026-11-14, o indicador "ao vivo" do menu) ----------
+    let formsOff = false
+    const refreshForms = async () => {
+      if (formsOff) return
+      const { data, error } = await supabase
+        .from('crm_form_visits')
+        .select('id, embed, site_tracked, site_session_id')
+        .eq('team_id', teamId)
+        .is('left_at', null)
+        .gte('last_at', new Date(Date.now() - FORM_LIVE_MS).toISOString())
+        .limit(500)
+      if (error) {
+        formsOff = missingTable(error)
+        return
+      }
+      if (!alive) return
+      const rows = (data ?? []) as { embed: string | null; site_tracked: boolean | null; site_session_id: string | null }[]
+      // Num site com o código de visitas a pessoa já conta no site; pelo link (ou site sem o código) soma gente nova
+      useMenuBadges.setState({ liveForms: rows.length, liveFormsLink: rows.filter((r) => !r.site_session_id && (r.embed !== 'site' || r.site_tracked === false)).length })
+    }
+
     // ---------- Oportunidades: cartões novos e comentários dos outros ----------
     const refreshCrm = async () => {
       if (here('oportunidades')) markSeen('oportunidades')
@@ -216,6 +241,7 @@ export function useMenuFeed() {
     void refreshWhatsapp()
     void refreshInstagram()
     void refreshSite()
+    void refreshForms()
     void refreshCrm()
 
     // A Realtime avisa na hora; várias mudanças juntas viram uma leitura só
@@ -230,12 +256,14 @@ export function useMenuFeed() {
       return Object.assign(fire, { cancel: () => timer && clearTimeout(timer) })
     }
     const siteSoon = debounce(refreshSite, 2000)
+    const formsSoon = debounce(refreshForms, 2000)
     const crmSoon = debounce(refreshCrm, 800)
     const waSoon = debounce(refreshWhatsapp, 500)
     // Um canal por tabela: sem a migração de uma, o canal dela falha sozinho. Tópicos fixos: o helper espera
     // o canal antigo com o mesmo tópico sair antes de entrar (revisão de 2026-11-13)
     const channels = [
       subscribeTopic(`menu-site-${teamId}`, (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'site_sessions', filter: `team_id=eq.${teamId}` }, siteSoon)),
+      subscribeTopic(`menu-forms-${teamId}`, (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'crm_form_visits', filter: `team_id=eq.${teamId}` }, formsSoon)),
       subscribeTopic(`menu-crm-${teamId}`, (ch) => ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_activities', filter: `team_id=eq.${teamId}` }, crmSoon)),
       subscribeTopic(`menu-whatsapp-${teamId}`, (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'crm_whatsapp_chats', filter: `team_id=eq.${teamId}` }, waSoon)),
     ]
@@ -246,11 +274,12 @@ export function useMenuFeed() {
       setInterval(() => {
         if (visible()) void run()
       }, ms)
-    const timers = [every(refreshWhatsapp, 10_000), every(refreshSite, SITE_EVERY), every(refreshCrm, CRM_EVERY), every(refreshInstagram, IG_EVERY)]
+    const timers = [every(refreshWhatsapp, 10_000), every(refreshSite, SITE_EVERY), every(refreshForms, 20_000), every(refreshCrm, CRM_EVERY), every(refreshInstagram, IG_EVERY)]
     const onVisible = () => {
       if (!visible()) return
       void refreshWhatsapp()
       void refreshSite()
+      void refreshForms()
       void refreshCrm()
       void refreshInstagram()
     }
@@ -270,6 +299,7 @@ export function useMenuFeed() {
       alive = false
       mark.current = null
       siteSoon.cancel()
+      formsSoon.cancel()
       crmSoon.cancel()
       waSoon.cancel()
       timers.forEach(clearInterval)

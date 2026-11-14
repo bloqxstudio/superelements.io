@@ -27,6 +27,10 @@ export interface FormVisit {
   submissionId?: string
   page?: string
   embed?: 'app' | 'site'
+  /** A visita do site (visitas.js) em que o formulário foi aberto */
+  siteSessionId?: string
+  /** Dentro de um site: a página tem o código de visitas (nulo nas visitas antigas) */
+  siteTracked?: boolean
   channel?: string
   source?: string
   medium?: string
@@ -167,6 +171,8 @@ export function toVisit(r: Row): FormVisit {
     submissionId: str(r.submission_id),
     page: str(r.page),
     embed: r.embed === 'app' || r.embed === 'site' ? r.embed : undefined,
+    siteSessionId: str(r.site_session_id),
+    siteTracked: typeof r.site_tracked === 'boolean' ? r.site_tracked : undefined,
     channel: str(r.channel),
     source: str(r.source),
     medium: str(r.medium),
