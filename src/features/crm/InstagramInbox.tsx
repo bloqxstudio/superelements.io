@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, CircleAlert, ExternalLink, EyeOff, Loader2, MessageCircle, RefreshCw, Reply, Send, Undo2 } from 'lucide-react'
+import { ArrowLeft, Check, CircleAlert, ExternalLink, EyeOff, Loader2, MessageCircle, RefreshCw, Reply, Send, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { NoTablesError, hideComment, loadMedia, replyComment, type IgAccount, type IgMedia } from '@/features/crm/instagram'
@@ -84,7 +84,7 @@ const CommentCard: React.FC<{
 
   return (
     <li className={cn('rounded-xl bg-white p-4 ring-1 ring-inset ring-gray-200', !open && 'opacity-70')}>
-      <div className="flex items-start gap-3">
+      <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
         {post?.thumbnail && <img src={post.thumbnail} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" loading="lazy" />}
         <div className="min-w-0 flex-1">
           <p className="text-sm leading-relaxed text-gray-800">
@@ -94,7 +94,7 @@ const CommentCard: React.FC<{
           <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500">
             <span>{whenLabel(comment.at)}</span>
             {comment.likes > 0 && <span>· {plural(comment.likes, 'curtida', 'curtidas')}</span>}
-            {post?.caption && <span className="max-w-[18rem] truncate">· em “{post.caption.split('\n')[0]}”</span>}
+            {post?.caption && <span className="min-w-0 max-w-[18rem] truncate">· em “{post.caption.split('\n')[0]}”</span>}
             {comment.hidden && <span>· oculto</span>}
             {comment.replied && <span className="font-medium text-emerald-700">· respondido</span>}
             {comment.handled && <span className="font-medium text-gray-600">· resolvido</span>}
@@ -105,7 +105,7 @@ const CommentCard: React.FC<{
             )}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="-ml-2 flex w-full shrink-0 flex-wrap items-center gap-1 sm:ml-0 sm:w-auto sm:flex-nowrap">
           <button type="button" onClick={() => setMode(mode === 'reply' ? null : 'reply')} className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-gray-700 hover:bg-gray-100" title="Responder no post">
             <Reply className="h-3.5 w-3.5" /> Responder
           </button>
@@ -213,7 +213,7 @@ const CommentsBox: React.FC<{ account: IgAccount; comments: InboxComment[]; medi
 
 // ---------- mensagens ----------
 
-const Conversation: React.FC<{ account: IgAccount; thread: InboxThread; onSent: () => void }> = ({ account, thread, onSent }) => {
+const Conversation: React.FC<{ account: IgAccount; thread: InboxThread; onSent: () => void; onBack?: () => void }> = ({ account, thread, onSent, onBack }) => {
   const [messages, setMessages] = useState<InboxDm[] | null>(null)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -252,9 +252,14 @@ const Conversation: React.FC<{ account: IgAccount; thread: InboxThread; onSent: 
   }
 
   return (
-    <div className="flex h-full min-h-[28rem] flex-col">
+    <div className="flex h-[calc(100dvh-7rem)] min-h-[24rem] flex-col md:h-full md:min-h-[28rem]">
       <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-3">
-        <p className="min-w-0 truncate text-sm font-semibold text-gray-900">
+        {onBack && (
+          <button type="button" onClick={onBack} className="-ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 md:hidden" aria-label="Voltar às conversas">
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+          </button>
+        )}
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
           {handleOf(thread)}
           {thread.name && thread.username ? <span className="ml-1.5 font-normal text-gray-500">{thread.name}</span> : null}
         </p>
@@ -289,7 +294,7 @@ const Conversation: React.FC<{ account: IgAccount; thread: InboxThread; onSent: 
       )}
       <form onSubmit={(e) => void submit(e)} className="flex items-end gap-2">
         <textarea
-          className={cn(FIELD, 'min-h-[2.5rem] flex-1 resize-none py-2')}
+          className={cn(FIELD, 'min-h-[2.5rem] min-w-0 flex-1 resize-none py-2 text-base md:text-sm')}
           rows={2}
           maxLength={1000}
           value={text}
@@ -329,7 +334,7 @@ const MessagesBox: React.FC<{ account: IgAccount; threads: InboxThread[]; onChan
 
   return (
     <div className="grid gap-3 md:grid-cols-[20rem_1fr]">
-      <ul className="max-h-[36rem] overflow-y-auto rounded-xl bg-white ring-1 ring-inset ring-gray-200">
+      <ul className={cn('max-h-[36rem] overflow-y-auto rounded-xl bg-white ring-1 ring-inset ring-gray-200', thread && 'hidden md:block')}>
         {threads.map((t) => (
           <li key={t.participantId}>
             <button
@@ -352,8 +357,8 @@ const MessagesBox: React.FC<{ account: IgAccount; threads: InboxThread[]; onChan
           </li>
         ))}
       </ul>
-      <div className="rounded-xl bg-white p-4 ring-1 ring-inset ring-gray-200">
-        {thread ? <Conversation key={`${account.id}:${thread.participantId}`} account={account} thread={thread} onSent={onChanged} /> : <p className="text-sm text-gray-500">Escolha uma conversa.</p>}
+      <div className={cn('min-w-0 rounded-xl bg-white p-4 ring-1 ring-inset ring-gray-200', !thread && 'hidden md:block')}>
+        {thread ? <Conversation key={`${account.id}:${thread.participantId}`} account={account} thread={thread} onSent={onChanged} onBack={() => setSelected(undefined)} /> : <p className="text-sm text-gray-500">Escolha uma conversa.</p>}
       </div>
     </div>
   )

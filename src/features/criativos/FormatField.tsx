@@ -25,7 +25,8 @@ export const FormatField: React.FC<{ value: FormatId; onChange: (format: FormatI
   }
 
   return (
-    <div className="relative">
+    // No celular o formato fica numa barra que rola de lado: o painel do tamanho livre se prende à barra, não ao campo
+    <div className="md:relative">
       <select
         aria-label="Formato"
         value={open ? CUSTOM : value}
@@ -48,7 +49,7 @@ export const FormatField: React.FC<{ value: FormatId; onChange: (format: FormatI
         <option value={CUSTOM}>Tamanho livre…</option>
       </select>
       {open && (
-        <div className="absolute right-0 top-10 z-40 w-60 space-y-2 rounded-xl border bg-white p-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute right-3 top-full z-40 mt-1 w-60 space-y-2 md:right-0 md:top-10 md:mt-0 rounded-xl border bg-white p-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-end gap-1.5">
             <label className="block flex-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">
               Largura

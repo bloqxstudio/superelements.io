@@ -123,7 +123,7 @@ export default function Skills() {
               <Wand2 className="-mt-0.5 inline h-3.5 w-3.5" aria-label="da varinha" /> ou digitando <code className="rounded bg-gray-100 px-1 font-mono text-[12px] text-gray-700">/</code>.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" className="gap-1.5 bg-white" onClick={() => importRef.current?.click()} disabled={!tableReady}>
               <FileUp className="h-4 w-4" />
               Importar SKILL.md
@@ -177,7 +177,7 @@ export default function Skills() {
               <p className="mt-1 max-w-md text-sm text-gray-500">
                 Escreva o seu jeito de montar um tipo de site, ou importe o SKILL.md de uma skill do Claude Code. Também dá para duplicar uma padrão e ajustar.
               </p>
-              <div className="mt-5 flex gap-2">
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
                 <Button variant="outline" className="gap-1.5 bg-white" onClick={() => importRef.current?.click()} disabled={!tableReady}>
                   <FileUp className="h-4 w-4" />
                   Importar SKILL.md

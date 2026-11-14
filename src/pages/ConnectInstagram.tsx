@@ -10,7 +10,7 @@ import { CALLBACK_PATH, LINK_KEY, connectLinkInfo, finishLinkConnect, startLinkC
  */
 
 const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <main className="se-product se-app flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-10">
+  <main className="se-product se-app flex min-h-[100dvh] items-center justify-center bg-zinc-50 px-4 py-10">
     <div className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-sm sm:p-8">{children}</div>
   </main>
 )

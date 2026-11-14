@@ -331,7 +331,7 @@ export const DocEditor: React.FC<Props> = ({ onComment, onAsk }) => {
   }
 
   return (
-    <div className="relative mx-auto w-full max-w-[760px] px-10 pb-40 pt-6" onClick={(e) => e.target === e.currentTarget && useCopy.getState().select([])}>
+    <div className="relative mx-auto w-full max-w-[760px] px-7 pb-40 pt-6 sm:px-10" onClick={(e) => e.target === e.currentTarget && useCopy.getState().select([])}>
       {doc.blocks.map((b) => (
         <BlockView
           key={b.id}
@@ -396,7 +396,7 @@ export const DocEditor: React.FC<Props> = ({ onComment, onAsk }) => {
               }}
               onMouseDown={(e) => e.stopPropagation()}
             >
-              <input autoFocus value={link.url} onChange={(e) => setLink({ ...link, url: e.target.value })} placeholder="https://…" className="h-7 w-56 rounded-md border border-gray-200 px-2 text-sm" onMouseDown={(e) => e.stopPropagation()} />
+              <input autoFocus value={link.url} onChange={(e) => setLink({ ...link, url: e.target.value })} placeholder="https://…" className="h-7 w-44 rounded-md border border-gray-200 px-2 text-sm sm:w-56" onMouseDown={(e) => e.stopPropagation()} />
               <Button type="submit" size="sm" className="h-7">OK</Button>
             </form>
           ) : (

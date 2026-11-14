@@ -126,10 +126,10 @@ const ProductSuggestions: React.FC = () => {
       </PageHeader>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        <label className="relative">
+        <label className="relative w-full sm:w-auto">
           <span className="sr-only">Buscar</span>
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" aria-hidden />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar" className={cn(FIELD, 'h-8 w-56 pl-8 text-sm')} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar" className={cn(FIELD, 'h-8 w-full pl-8 text-sm sm:w-56')} />
         </label>
         <select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as SuggestionStatus | '')} className={cn(FIELD, 'h-8 w-auto py-0 text-xs')}>
           <option value="">Todos os status</option>

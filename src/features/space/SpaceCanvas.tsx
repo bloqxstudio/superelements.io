@@ -239,6 +239,51 @@ export const SpaceCanvas: React.FC = () => {
     }
   }, [setCanvasTransform])
 
+  // Toque (celular/tablet): um dedo no fundo (ou com a Mão) arrasta o canvas; dois dedos dão zoom
+  // em pinça e arrastam. O mouse segue pelos handlers acima; o toque leve no fundo continua
+  // desfazendo a seleção pelo mousedown/mouseup de compatibilidade que o navegador manda.
+  const touches = useRef(new Map<number, { x: number; y: number }>())
+  const onTouchDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'touch') return
+    const target = e.target as HTMLElement
+    const background = target === e.currentTarget || target.classList.contains('canvas-background')
+    const hand = spaceHeld.current || useCanvasTool.getState().tool === 'hand'
+    // Um dedo em cima de uma seção ou de um botão é dele; o segundo dedo sempre entra na pinça
+    if (!background && !hand && touches.current.size === 0) return
+    touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      // ponteiro já solto
+    }
+  }, [])
+  const onTouchMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const map = touches.current
+      if (e.pointerType !== 'touch' || !map.has(e.pointerId)) return
+      const before = [...map.values()].slice(0, 2)
+      map.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      const after = [...map.values()].slice(0, 2)
+      if (after.length === 1) return panCanvas(after[0].x - before[0].x, after[0].y - before[0].y)
+      const rect = e.currentTarget.getBoundingClientRect()
+      const [a, b] = before
+      const [c, d] = after
+      const from = { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top }
+      const to = { x: (c.x + d.x) / 2 - rect.left, y: (c.y + d.y) / 2 - rect.top }
+      const t = useSpaceStore.getState().canvasTransform
+      const ratio = (Math.hypot(c.x - d.x, c.y - d.y) || 1) / (Math.hypot(a.x - b.x, a.y - b.y) || 1)
+      const zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, t.zoom * ratio))
+      // O ponto do mundo que estava entre os dedos continua entre eles
+      const wx = (from.x - t.x) / t.zoom
+      const wy = (from.y - t.y) / t.zoom
+      setCanvasTransform({ zoom, x: to.x - wx * zoom, y: to.y - wy * zoom })
+    },
+    [panCanvas, setCanvasTransform]
+  )
+  const onTouchUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch') touches.current.delete(e.pointerId)
+  }, [])
+
   return (
     <div
       ref={viewportRef}
@@ -247,10 +292,16 @@ export const SpaceCanvas: React.FC = () => {
       style={{
         cursor: 'grab',
         backgroundColor: '#f4f4f5',
+        // O navegador não rola nem dá zoom na página: o canvas cuida do toque (ver onTouchDown)
+        touchAction: 'none',
       }}
       onMouseDownCapture={handleMouseDownCapture}
       onMouseDown={handleMouseDown}
+      onPointerDownCapture={onTouchDown}
+      onPointerUp={onTouchUp}
+      onPointerCancel={onTouchUp}
       onPointerMove={(e) => {
+        onTouchMove(e)
         broadcastCursor.move(e)
         // Fora de qualquer seção (fundo, barra da página), nenhuma fica acesa
         if (!(e.target as Element).closest?.('[data-section-id]')) useSectionHover.getState().set(null)

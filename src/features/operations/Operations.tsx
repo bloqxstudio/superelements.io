@@ -141,7 +141,7 @@ export const Operations: React.FC = () => {
                 <div className="min-w-0 flex-1"><h3 className="text-sm font-semibold text-gray-900">{AREAS[area].label}</h3><p className="text-[11px] text-gray-500">{AREAS[area].hint}</p></div>
                 <Link to={OPEN[area]} className="text-xs font-medium text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline">Abrir</Link>
               </header>
-              <div className="mt-3 flex gap-6">{metrics}</div>
+              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">{metrics}</div>
               <div className="mt-3 border-t border-gray-100 pt-2">
                 {live.length === 0 && !extra ? (
                   <p className="px-1 py-1 text-xs text-gray-400">Ninguém trabalhando aqui agora.</p>

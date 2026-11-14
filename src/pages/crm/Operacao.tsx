@@ -216,9 +216,9 @@ const OperacaoPage: React.FC = () => {
 
   return (
     <Page wide>
-      <div ref={board} className={cn('flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm', full && 'h-screen rounded-none border-0')}>
+      <div ref={board} className={cn('flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm', full && 'h-dvh rounded-none border-0')}>
         {/* topo */}
-        <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gray-200 px-5 py-3">
+        <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gray-200 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: LIME }}>
               <TrendingUp className="h-4 w-4 text-gray-900" aria-hidden />
@@ -236,7 +236,7 @@ const OperacaoPage: React.FC = () => {
             ))}
             <DayPicker value={day ?? null} onChange={setDay} variant="segment" className="[&>button]:h-7 [&>button]:text-xs" />
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-0.5" role="group" aria-label="Vista">
               {([['quadro', 'Quadro'], ['ao-vivo', 'Ao vivo']] as const).map(([id, label]) => (
                 <button key={id} type="button" onClick={() => setView(id)} aria-pressed={view === id} className={cn('h-7 rounded-md px-3 text-xs font-medium transition-colors', view === id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900')}>

@@ -166,7 +166,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onArc
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="absolute bottom-3 right-2 flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96]"
+          className="absolute bottom-2 right-1.5 flex h-10 w-10 items-center md:bottom-3 md:right-2 md:h-8 md:w-8 justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96]"
           aria-label={`Ações de ${project.name}`}
         >
           <MoreHorizontal className="h-4 w-4" />

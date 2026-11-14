@@ -467,7 +467,7 @@ const Panel: React.FC<{
       <header className="border-b border-gray-100 px-5 pt-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-gray-900">{lead.name}</h2>
+            <h2 className="break-words text-base font-semibold text-gray-900">{lead.name}</h2>
             <p className="mt-0.5 text-xs text-gray-500">{[lead.niche, lead.address ?? item.region].filter(Boolean).join(' · ')}</p>
             <Link to={`/crm/clientes/${item.clientId}`} className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-gray-700 underline-offset-2 hover:underline">
               Ficha do cliente <ArrowRight className="h-3.5 w-3.5" aria-hidden />
@@ -878,7 +878,7 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Procurar por nome, site, projeto ou nota" aria-label="Procurar no funil" className={cn(FIELD, 'h-9 w-72')} />
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Procurar por nome, site, projeto ou nota" aria-label="Procurar no funil" className={cn(FIELD, 'h-9 w-full sm:w-72')} />
           {regions.length > 1 && (
             <select value={region} onChange={(e) => setRegion(e.target.value)} aria-label="Região" className={cn(FIELD, 'h-9 w-auto')}>
               <option value="todas">Todas as regiões</option>
@@ -912,7 +912,7 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
             </select>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => setCleaning(true)}>
             <Trash2 className="h-3.5 w-3.5" /> Limpar parados
           </Button>
@@ -922,7 +922,7 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
       <CleanupDialog open={cleaning} onClose={() => setCleaning(false)} items={items} onRemoved={(ids) => { onChange((prev) => prev.filter((o) => !ids.includes(o.id))); if (openId && ids.includes(openId)) setOpenId(null) }} />
 
       {/* O quadro tem a altura da tela: a barra horizontal fica à vista e cada coluna rola por dentro */}
-      <div className="-mx-4 mt-4 h-[calc(100dvh-17.5rem)] min-h-[26rem] overflow-x-auto overscroll-x-contain px-4 pb-2 md:-mx-6 md:px-6">
+      <div className="-mx-4 mt-4 h-[calc(100dvh-17.5rem)] min-h-[26rem] snap-x snap-mandatory scroll-px-4 overflow-x-auto overscroll-x-contain px-4 pb-2 md:-mx-6 md:snap-none md:px-6">
         <div className="flex h-full gap-3">
           {STAGES.map((stage) => {
             const cards = visible.filter((o) => o.stage === stage.id)
@@ -950,7 +950,7 @@ export const Funnel: React.FC<{ items: Opportunity[]; onChange: SetItems; initia
                     void move(id, stage.id)
                   }
                 }}
-                className={cn(SURFACE, 'flex h-full w-64 shrink-0 flex-col p-2.5 transition-colors', target ? 'bg-violet-50 ring-2 ring-violet-400' : 'bg-gray-50/80')}
+                className={cn(SURFACE, 'flex h-full w-64 shrink-0 snap-start flex-col p-2.5 transition-colors', target ? 'bg-violet-50 ring-2 ring-violet-400' : 'bg-gray-50/80')}
               >
                 <header className="shrink-0 px-1 pb-2" title={stage.hint}>
                   <div className="flex items-baseline justify-between gap-2">

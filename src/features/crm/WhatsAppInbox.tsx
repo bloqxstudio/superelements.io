@@ -106,7 +106,7 @@ export const WhatsAppInbox: React.FC<{ teamId: string; call?: CallTarget; onCall
   const shown = tagFilter ? chats.filter((c) => c.tags.includes(tagFilter)) : chats
 
   return (
-    <div className="grid h-[640px] overflow-hidden rounded-xl border border-gray-200 bg-white md:grid-cols-[320px_1fr]">
+    <div className="grid h-[calc(100dvh-5rem)] min-h-[420px] grid-rows-[minmax(0,1fr)] overflow-hidden rounded-xl border border-gray-200 bg-white md:h-[640px] md:grid-cols-[320px_1fr]">
       <div className={cn('flex min-h-0 flex-col border-gray-200 md:border-r', (chat || composing) && 'hidden md:flex')}>
       <div className="border-b border-gray-200 p-3">
         <Button size="sm" variant="outline" className="w-full" disabled={offline} onClick={() => { setComposing(true); setOpenJid(undefined) }}>
@@ -529,7 +529,7 @@ const Conversation: React.FC<{ teamId: string; chat: WaChat; offline?: boolean; 
           }}
           rows={1}
           placeholder="Escreva uma mensagem"
-          className={cn('max-h-32 min-h-9 flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none', recording && 'hidden')}
+          className={cn('max-h-32 min-h-9 min-w-0 flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-emerald-500 focus:outline-none md:text-sm', recording && 'hidden')}
         />
         {/* Sem texto nem anexo, o botão ao lado do campo grava voz; com texto, envia */}
         {!text.trim() && !pending && <VoiceRecorder disabled={sending} onActive={setRecording} onVoice={(file) => void attach(file, true)} />}

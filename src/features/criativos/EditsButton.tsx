@@ -30,12 +30,12 @@ export const EditsButton: React.FC<{ set: CreativeSet; scene: CodeScene; sceneIn
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="sm" variant="outline" className="h-8 max-w-[16rem] gap-1.5 bg-white" disabled={disabled || running || !videoSupported()} title={videoSupported() ? 'Exportar as camadas do vídeo para editar e publicar no Edits' : 'Use o Chrome ou o Edge atualizados'}>
+        <Button size="sm" variant="outline" className="h-8 min-w-0 max-w-[16rem] gap-1.5 bg-white" disabled={disabled || running || !videoSupported()} title={videoSupported() ? 'Exportar as camadas do vídeo para editar e publicar no Edits' : 'Use o Chrome ou o Edge atualizados'}>
           {running ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <Clapperboard className="h-4 w-4 shrink-0" />}
           <span className="truncate">{label}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
+      <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-16px)]">
         <DropdownMenuLabel className="text-xs font-normal text-gray-600">
           Vídeo sem a música de fundo, a versão sem legenda, voz e efeitos em WAV, legenda em SRT, capa, texto do post e o manifesto com as cenas. A música você põe no Edits.
         </DropdownMenuLabel>

@@ -60,22 +60,22 @@ export const ExplainerStudio: React.FC = () => {
     )
 
   return (
-    <div className="flex h-[calc(100vh-56px)] min-h-[640px] flex-col bg-gray-50 md:h-screen">
+    <div className="flex h-[calc(100dvh-56px)] min-h-[520px] flex-col bg-gray-50 md:h-dvh md:min-h-[640px]">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-white px-3">
-        <Link to="/motion" aria-label="Voltar ao Motion" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
-        <AudioLines className="h-4 w-4 text-violet-700" />
+        <Link to="/motion" aria-label="Voltar ao Motion" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
+        <AudioLines className="h-4 w-4 shrink-0 text-violet-700" />
         <span className="hidden max-w-[10rem] truncate text-sm font-semibold text-gray-900 sm:inline">{set.name}</span>
         {allScenes.length > 0 && (
-          <select aria-label="Vídeo" value={fresh ? '' : scene?.id} onChange={(e) => go({ id: e.target.value, novo: null })} className="h-8 max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 text-sm">
+          <select aria-label="Vídeo" value={fresh ? '' : scene?.id} onChange={(e) => go({ id: e.target.value, novo: null })} className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-sm sm:max-w-[14rem] sm:flex-none">
             {fresh && <option value="">Novo vídeo</option>}
             {allScenes.map((s) => (<option key={s.id} value={s.id}>{s.explainer ? 'Roteiro · ' : 'Animação · '}{s.name}</option>))}
           </select>
         )}
         {scene?.explainer && <span className="hidden rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-800 md:inline">{isBriefing(scene.explainer) ? 'Briefing · roteiro da IA' : 'Narração'}</span>}
-        <span className="text-xs text-gray-500">{({ saved: 'Salvo', dirty: 'Alterações…', saving: 'Salvando…', error: 'Erro ao salvar' } as const)[saving]}</span>
-        <div className="ml-auto flex items-center gap-1.5">
+        <span className="hidden shrink-0 text-xs text-gray-500 min-[400px]:inline">{({ saved: 'Salvo', dirty: 'Alterações…', saving: 'Salvando…', error: 'Erro ao salvar' } as const)[saving]}</span>
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <IaSwitch task="video" label="Vídeos" compact />
-          {!fresh && <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-white" onClick={() => go({ novo: 'escolher', id: null })}><Plus className="h-4 w-4" /> Novo vídeo</Button>}
+          {!fresh && <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-white" aria-label="Novo vídeo" onClick={() => go({ novo: 'escolher', id: null })}><Plus className="h-4 w-4" /> <span className="hidden sm:inline">Novo vídeo</span></Button>}
         </div>
       </header>
       {!scene ? <NewExplainer set={set} onCreated={(id) => go({ id, novo: null })} onCancel={list.length ? () => go({ novo: null }) : undefined} /> : <Editor key={scene.id} set={set} scene={scene} />}
@@ -146,25 +146,26 @@ const Editor: React.FC<{ set: CreativeSet; scene: CodeScene }> = ({ set, scene }
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+    // No celular a prévia e o painel ficam um embaixo do outro, e a tela rola
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-visible">
       <main className="flex min-h-[420px] min-w-0 flex-1 flex-col">
         <Preview set={set} scene={scene} voice={voice} time={time} playing={playing} onTime={setTime} onEnd={() => setPlaying(false)} />
         <Timeline scene={scene} time={time} current={current} onSeek={seekTo} />
-        <div className="flex h-12 shrink-0 items-center gap-3 border-t bg-white px-4">
-          <Button variant="ghost" size="icon" className="h-8 w-8" title="Voltar ao começo" onClick={() => seekTo(0)}><SkipBack className="h-4 w-4" /></Button>
+        <div className="flex h-12 shrink-0 items-center gap-2 border-t bg-white px-2 sm:gap-3 sm:px-4">
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Voltar ao começo" onClick={() => seekTo(0)}><SkipBack className="h-4 w-4" /></Button>
           <Button size="icon" className="h-9 w-9 rounded-full" aria-label={playing ? 'Pausar' : 'Tocar'} title="Tocar ou pausar (Espaço)" onClick={() => setPlaying((p) => !p)}>
             {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-px" />}
           </Button>
-          <span className="text-xs tabular-nums text-gray-600">{fmt(time)} / {fmt(scene.duration)}</span>
-          <div className="ml-auto flex items-center gap-1.5">
+          <span className="shrink-0 text-xs tabular-nums text-gray-600">{fmt(time)} / {fmt(scene.duration)}</span>
+          <div className="ml-auto flex min-w-0 items-center gap-1.5">
             <EditsButton set={set} scene={scene} disabled={progress !== null} />
             <Button size="sm" className="h-8 gap-1.5" disabled={!videoSupported() || progress !== null} onClick={() => void download()} title={videoSupported() ? undefined : 'Use o Chrome ou o Edge atualizados'}>
-              <Download className="h-4 w-4" /> {progress !== null ? `Gerando… ${Math.round(progress * 100)}%` : 'Baixar MP4'}
+              <Download className="h-4 w-4" /> {progress !== null ? <><span className="hidden sm:inline">Gerando… </span>{Math.round(progress * 100)}%</> : <><span className="hidden sm:inline">Baixar MP4</span><span className="sm:hidden">MP4</span></>}
             </Button>
           </div>
         </div>
       </main>
-      <aside className="flex max-h-[60vh] w-full shrink-0 flex-col border-l bg-white lg:max-h-none lg:w-[400px]">
+      <aside className="flex max-h-[75dvh] w-full shrink-0 flex-col border-t bg-white lg:max-h-none lg:w-[400px] lg:border-l lg:border-t-0">
         <div className="flex shrink-0 gap-1 border-b px-3 pt-2" role="tablist">
           {(Object.keys(TABS) as (keyof typeof TABS)[]).map((t) => (
             <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn('rounded-t-md px-3 py-1.5 text-sm', tab === t ? '-mb-px border border-b-white bg-white font-semibold text-gray-900' : 'text-gray-500 hover:text-gray-800')}>{t === 'fala' && isBriefing(data) ? 'Briefing' : TABS[t]}</button>
@@ -387,7 +388,7 @@ const Timeline: React.FC<{ scene: CodeScene; time: number; current: number; onSe
   }
   return (
     <div className="shrink-0 border-t bg-white px-4 py-2">
-      <div ref={bar} className="relative h-12 cursor-pointer select-none" onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture(e.pointerId); at(e) }} onPointerMove={(e) => e.buttons && at(e)}>
+      <div ref={bar} className="relative h-12 cursor-pointer touch-none select-none" onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture(e.pointerId); at(e) }} onPointerMove={(e) => e.buttons && at(e)}>
         <div className="absolute inset-x-0 top-0 flex h-7 gap-px overflow-hidden rounded-md">
           {beats.map((b, i) => (
             <div key={b.id} title={`${b.headline.replace(/\*/g, '')}${iconOfBeat(b) ? ` · ${iconOfBeat(b)}` : ''}`} className={cn('flex min-w-0 items-center px-1.5 text-[10px] font-semibold text-white', PATTERN_COLOR[b.pattern], i === current ? 'opacity-100' : 'opacity-60')} style={{ width: `${((b.end - b.start) / scene.duration) * 100}%` }}>

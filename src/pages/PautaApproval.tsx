@@ -25,7 +25,7 @@ const readName = () => {
   }
 }
 
-const field = 'w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900/10'
+const field = 'w-full rounded-lg border border-gray-300 bg-white px-3 text-base text-gray-900 placeholder:text-gray-400 sm:text-sm focus:border-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900/10'
 
 const ItemCard: React.FC<{ linkId: string; item: PublicItem; name: string; needName: () => boolean; onDone: () => void; index: number; total: number; ig?: string }> = ({ linkId, item, name, needName, onDone, index, total, ig }) => {
   const posts = item.media.filter((m) => m.slides.length)
@@ -72,7 +72,7 @@ const ItemCard: React.FC<{ linkId: string; item: PublicItem; name: string; needN
             {when && <span className="capitalize"> · {when}</span>}
             {item.channel && ` · ${channelLabel(item.channel)}`} · {item.kind === 'criativo' ? VIEW_NAME[view] : formatLabel(item.format)}
           </p>
-          <h2 id={`t-${item.id}`} className="mt-1 text-lg font-semibold leading-snug tracking-tight text-gray-900">
+          <h2 id={`t-${item.id}`} className="mt-1 break-words text-lg font-semibold leading-snug tracking-tight text-gray-900">
             {item.title}
           </h2>
         </div>
@@ -108,10 +108,10 @@ const ItemCard: React.FC<{ linkId: string; item: PublicItem; name: string; needN
         )}
         {item.script && (
           <div className="mt-4">
-            <button type="button" aria-expanded={scriptOpen} onClick={() => setScriptOpen((v) => !v)} className="text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-gray-800">
+            <button type="button" aria-expanded={scriptOpen} onClick={() => setScriptOpen((v) => !v)} className="-my-1.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-gray-800">
               Roteiro {scriptOpen ? '−' : '+'}
             </button>
-            {scriptOpen && <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-gray-800">{item.script}</p>}
+            {scriptOpen && <p className="mt-1 whitespace-pre-line break-words text-sm leading-relaxed text-gray-800">{item.script}</p>}
           </div>
         )}
       </div>
@@ -128,7 +128,7 @@ const ItemCard: React.FC<{ linkId: string; item: PublicItem; name: string; needN
                 </span>
                 <span className="text-gray-500">{timeLabel(c.createdAt)}</span>
               </p>
-              <p className="mt-1 whitespace-pre-line text-gray-800">{c.body}</p>
+              <p className="mt-1 whitespace-pre-line break-words text-gray-800">{c.body}</p>
               {c.resolved && <p className="mt-1 text-[11px] font-medium text-emerald-700">Resolvido pela equipe</p>}
             </li>
           ))}
@@ -163,7 +163,7 @@ const ItemCard: React.FC<{ linkId: string; item: PublicItem; name: string; needN
             </label>
             <textarea id={`n-${item.id}`} autoFocus rows={3} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} className={cn(field, 'mt-1.5 py-2')} placeholder={mode === 'ajuste' ? 'Ex.: trocar a foto do slide 2 e encurtar o título.' : undefined} />
             {current && (
-              <label className="mt-2 flex items-center gap-2 text-xs text-gray-600">
+              <label className="mt-2 flex min-h-8 items-center gap-2 text-xs text-gray-600">
                 <input type="checkbox" checked={onSlide} onChange={(e) => setOnSlide(e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
                 {urls.length > 1 ? `Sobre o slide ${slide + 1}` : 'Sobre esta peça'}
                 {posts.length > 1 ? ` do ${current.name || `post ${post + 1}`}` : ''}
@@ -234,7 +234,7 @@ const PautaApproval: React.FC = () => {
 
   if (failed) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f6f6f4] p-6 text-center text-sm text-gray-600">
+      <main className="flex min-h-[100dvh] items-center justify-center bg-[#f6f6f4] p-6 text-center text-sm text-gray-600">
         <div>
           <p>Não consegui abrir agora.</p>
           <button type="button" onClick={() => void load()} className="mt-3 h-9 rounded-lg border border-gray-300 bg-white px-4 font-medium text-gray-800">
@@ -246,7 +246,7 @@ const PautaApproval: React.FC = () => {
   }
   if (!data) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f6f6f4]" role="status">
+      <main className="flex min-h-[100dvh] items-center justify-center bg-[#f6f6f4]" role="status">
         <Loader2 className="h-5 w-5 animate-spin text-gray-400" aria-label="Abrindo" />
       </main>
     )
@@ -254,7 +254,7 @@ const PautaApproval: React.FC = () => {
   if (data.state !== 'ativo') {
     const text = data.state === 'revogado' ? 'Este link foi encerrado pela equipe.' : data.state === 'expirado' ? 'Este link expirou.' : 'Link não encontrado.'
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f6f6f4] p-6 text-center">
+      <main className="flex min-h-[100dvh] items-center justify-center bg-[#f6f6f4] p-6 text-center">
         <div>
           {data.teamName && <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{data.teamName}</p>}
           <p className="mt-2 text-base font-semibold text-gray-900">{text}</p>
@@ -281,12 +281,12 @@ const PautaApproval: React.FC = () => {
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f6f4] pb-24">
+    <main className="min-h-[100dvh] bg-[#f6f6f4] pb-24">
       <div className="mx-auto max-w-2xl px-4 pt-10 sm:px-6">
         <header>
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{data.teamName} · para aprovar</p>
-          <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-gray-900">{data.title}</h1>
-          {data.message && <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-gray-700">{data.message}</p>}
+          <h1 className="mt-1.5 break-words text-2xl font-semibold tracking-tight text-gray-900">{data.title}</h1>
+          {data.message && <p className="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-gray-700">{data.message}</p>}
           <p className="mt-3 text-sm text-gray-600">Veja cada peça como vai aparecer no Instagram, aprove ou peça ajuste. Você pode comentar sobre um slide específico.</p>
 
           <div className="mt-5 rounded-xl bg-white p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.06)]">

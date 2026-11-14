@@ -271,7 +271,7 @@ export const FunnelMap: React.FC<FunnelMapProps> = ({ funnelId, steps, readings,
     <div className="relative overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.06)]">
       <div
         ref={box}
-        className={cn('relative h-[min(68vh,560px)] min-h-[380px] touch-none select-none bg-[radial-gradient(circle,rgb(0_0_0/0.09)_1px,transparent_1px)] [background-size:22px_22px]', panStart.current ? 'cursor-grabbing' : 'cursor-grab')}
+        className={cn('relative h-[min(60dvh,520px)] min-h-[320px] touch-none md:h-[min(68vh,560px)] md:min-h-[380px] select-none bg-[radial-gradient(circle,rgb(0_0_0/0.09)_1px,transparent_1px)] [background-size:22px_22px]', panStart.current ? 'cursor-grabbing' : 'cursor-grab')}
         style={{ backgroundPosition: `${view.x}px ${view.y}px`, backgroundSize: `${22 * view.k}px ${22 * view.k}px` }}
         onPointerDown={onBgDown}
         onPointerMove={onBgMove}
@@ -421,7 +421,7 @@ export const FunnelMap: React.FC<FunnelMapProps> = ({ funnelId, steps, readings,
             <RotateCcw className="h-4 w-4" />
           </button>
         </div>
-        <p className="pointer-events-none absolute bottom-3 left-3 rounded bg-white/80 px-2 py-1 text-[11px] text-gray-500">Arraste os cartões e o fundo · Ctrl/⌘ + roda dá zoom{onReorder ? ' · ‹ › troca a ordem' : ''}</p>
+        <p className="pointer-events-none absolute bottom-3 left-3 hidden rounded bg-white/80 px-2 py-1 text-[11px] text-gray-500 md:block">Arraste os cartões e o fundo · Ctrl/⌘ + roda dá zoom{onReorder ? ' · ‹ › troca a ordem' : ''}</p>
       </div>
     </div>
   )

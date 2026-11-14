@@ -85,7 +85,7 @@ export const PhoneCollectionModal: React.FC<PhoneCollectionModalProps> = ({
               Email confirmado
             </Label>
             <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-              <p className="text-green-800 text-sm font-medium">{userEmail}</p>
+              <p className="break-all text-green-800 text-sm font-medium">{userEmail}</p>
             </div>
           </div>
 

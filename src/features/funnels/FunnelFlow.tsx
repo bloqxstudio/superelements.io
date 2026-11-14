@@ -90,7 +90,7 @@ export const FunnelFlow: React.FC<{ cohort: OppLite[] }> = ({ cohort }) => {
 
   return (
     <div className="grid gap-4">
-      <div className="rounded-xl bg-white p-3 shadow-[0_0_0_1px_rgb(0_0_0/0.06)]">
+      <div className="overflow-x-auto rounded-xl bg-white p-3 shadow-[0_0_0_1px_rgb(0_0_0/0.06)]">
         <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Jornada das oportunidades entre os estados do CRM. A lista abaixo traz os mesmos números em texto." className="block h-auto w-full" style={{ minWidth: Math.min(width, 640) }}>
           {stages.map((s, i) => (
             <line key={s} x1={8 + i * COL_W + NODE_W / 2} x2={8 + i * COL_W + NODE_W / 2} y1={TOP} y2={TOP + AREA} stroke="#e5e7eb" strokeDasharray="3 5" />

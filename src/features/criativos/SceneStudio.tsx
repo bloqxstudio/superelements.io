@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { IaSwitch } from '@/features/ia/IaSwitch'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, Code2, Download, Film, ImagePlus, Music, Pause, Play, Plus, Send, SkipBack, Sparkles, Trash2, Wand2 } from 'lucide-react'
+import { ArrowLeft, Code2, Download, Film, ImagePlus, Music, Pause, Play, Plus, Send, SkipBack, SlidersHorizontal, Sparkles, Trash2, Wand2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useEditor } from './store'
@@ -88,6 +88,8 @@ export const SceneStudio: React.FC = () => {
   const [error, setError] = useState<SceneError | null>(null)
   const [progress, setProgress] = useState<number | null>(null)
   const [publishing, setPublishing] = useState(false)
+  /** Abaixo de lg o painel (pedido à IA, ajustes, código) é uma gaveta sobre o palco. */
+  const [sheet, setSheet] = useState(false)
   // A Iara sabe o vídeo aberto e age nele (ações de vídeo em videoIara.ts)
   useVideoIara(status === 'ready' ? set : null, scene, error?.message)
 
@@ -210,20 +212,21 @@ export const SceneStudio: React.FC = () => {
   const back = '/motion'
 
   return (
-    <div className="flex h-[calc(100vh-56px)] min-h-[600px] flex-col bg-gray-50 md:h-screen">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-white px-3">
-        <Link to={back} aria-label="Voltar ao estúdio de motion" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
-        <Code2 className="h-4 w-4 text-violet-700" />
-        <span className="max-w-[12rem] truncate text-sm font-semibold text-gray-900">{set.name}</span>
+    <div className="flex h-[calc(100dvh-56px)] min-h-[520px] flex-col bg-gray-50 md:h-dvh md:min-h-[600px]">
+      {/* No celular: nome e vídeo em cima; as ações rolam de lado embaixo */}
+      <header className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-white px-3 py-1.5 md:h-12 md:flex-nowrap md:py-0">
+        <Link to={back} aria-label="Voltar ao estúdio de motion" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
+        <Code2 className="hidden h-4 w-4 shrink-0 text-violet-700 sm:block" />
+        <span className="min-w-0 max-w-[12rem] truncate text-sm font-semibold text-gray-900">{set.name}</span>
         {allScenes.length > 0 && (
-          <select aria-label="Vídeo" value={scene?.id} onChange={(e) => { select(e.target.value); setTime(0) }} className="h-8 max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 text-sm">
+          <select aria-label="Vídeo" value={scene?.id} onChange={(e) => { select(e.target.value); setTime(0) }} className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-sm sm:max-w-[14rem] sm:flex-none">
             {allScenes.map((s) => (<option key={s.id} value={s.id}>{s.explainer ? 'Roteiro · ' : 'Animação · '}{s.name}</option>))}
           </select>
         )}
-        <span className="text-xs text-gray-500">{({ saved: 'Salvo', dirty: 'Alterações…', saving: 'Salvando…', error: 'Erro ao salvar' } as const)[saving]}</span>
-        <div className="ml-auto flex items-center gap-1.5">
+        <span className="shrink-0 text-xs text-gray-500">{({ saved: 'Salvo', dirty: 'Alterações…', saving: 'Salvando…', error: 'Erro ao salvar' } as const)[saving]}</span>
+        <div className="flex w-full min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] md:ml-auto md:w-auto md:overflow-visible [&>*]:shrink-0">
           <IaSwitch task="video" label="Vídeos" compact />
-          <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-white" onClick={() => setQuery((q) => { const n = new URLSearchParams(q); n.set('novo', 'escolher'); n.delete('id'); return n }, { replace: true })}><Plus className="h-4 w-4" /> Novo vídeo</Button>
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-white" onClick={() => setQuery((q) => { const n = new URLSearchParams(q); n.set('novo', 'escolher'); n.delete('id'); return n }, { replace: true })}><Plus className="h-4 w-4" /> <span className="hidden sm:inline">Novo vídeo</span><span className="sm:hidden">Novo</span></Button>
           <NewSceneMenu onCreate={create} />
           {scene && (
             <Button size="sm" className="h-8 gap-1.5" disabled={!videoSupported() || progress !== null || !!error} onClick={() => void exportVideo()} title={videoSupported() ? undefined : 'Use o Chrome ou o Edge atualizados'}>
@@ -247,10 +250,10 @@ export const SceneStudio: React.FC = () => {
             if (request !== null) setAutoAsk({ id, request, reference })
           }} />
         ) : (
-          <Empty onCreate={create} />
+          <div className="min-h-0 flex-1 overflow-y-auto"><Empty onCreate={create} /></div>
         )
       ) : (
-        <div className="flex min-h-0 flex-1">
+        <div className="relative flex min-h-0 flex-1">
           <main className="flex min-w-0 flex-1 flex-col">
             <Stage key={scene.id} scene={scene} set={set} post={sourcePost} images={images} time={time} onError={setError} />
             {error && (
@@ -266,10 +269,16 @@ export const SceneStudio: React.FC = () => {
                 {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-px" />}
               </Button>
               <input type="range" aria-label="Tempo" className="min-w-0 flex-1 accent-violet-600" min={0} max={scene.duration} step={1 / 30} value={time} onChange={(e) => { setPlaying(false); setTime(Number(e.target.value)) }} />
-              <span className="w-24 text-right text-xs tabular-nums text-gray-600">{fmt(time)} / {fmt(scene.duration)}</span>
+              <span className="w-24 shrink-0 text-right text-xs tabular-nums text-gray-600">{fmt(time)} / {fmt(scene.duration)}</span>
+              <Button variant="outline" size="icon" className={cn('h-8 w-8 shrink-0 bg-white lg:hidden', sheet && 'bg-violet-50 text-violet-800')} aria-label="Pedir à IA e ajustar" aria-expanded={sheet} onClick={() => setSheet((o) => !o)}><SlidersHorizontal className="h-4 w-4" /></Button>
             </div>
           </main>
-          <aside className="hidden w-96 shrink-0 overflow-y-auto border-l bg-white p-4 lg:block">
+          {/* Abaixo de lg: gaveta sobre o palco (de baixo no celular, à direita no tablet); no computador, a coluna de sempre */}
+          <aside className={cn('absolute inset-x-0 bottom-0 z-30 h-[80%] overflow-y-auto rounded-t-2xl border-t bg-white p-4 shadow-[0_-12px_32px_-12px_rgb(0_0_0/0.25)] md:inset-x-auto md:inset-y-0 md:right-0 md:h-auto md:w-96 md:rounded-none md:border-l md:border-t-0 lg:static lg:block lg:shrink-0 lg:shadow-none', sheet ? 'block' : 'hidden')}>
+            <div className="-mx-4 -mt-4 mb-3 flex h-10 items-center justify-between border-b px-4 lg:hidden">
+              <span className="text-sm font-semibold text-gray-900">Pedir à IA e ajustar</span>
+              <button type="button" aria-label="Fechar o painel" onClick={() => setSheet(false)} className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"><X className="h-4 w-4" /></button>
+            </div>
             <ScenePanel key={scene.id} set={set} scene={scene} post={sourcePost} images={images} error={error} autoAsk={autoAsk?.id === scene.id ? autoAsk : null} onAutoAsked={() => setAutoAsk(null)} onNewFromCreative={postParam || scene.source ? () => { if (!postParam && scene.source) setQuery((q) => { const n = new URLSearchParams(q); n.set('post', scene.source!.postId); return n }); setFresh(true) } : undefined} />
           </aside>
         </div>
@@ -296,7 +305,7 @@ const Stage: React.FC<{ scene: CodeScene; set: CreativeSet; post?: Post; images:
     const el = box.current
     if (!el) return
     const ro = new ResizeObserver(() => {
-      const k = Math.min((el.clientWidth - 48) / width, (el.clientHeight - 32) / height)
+      const k = Math.min((el.clientWidth - (el.clientWidth < 640 ? 16 : 48)) / width, (el.clientHeight - 32) / height)
       setFit({ w: Math.max(0, Math.floor(width * k)), h: Math.max(0, Math.floor(height * k)) })
     })
     ro.observe(el)

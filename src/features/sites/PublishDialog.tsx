@@ -134,7 +134,7 @@ export const PublishDialog: React.FC<{ site: CodeSite; status: SiteStatus; onClo
             {status.changes.length > 0 && (
               <ul className="flex flex-wrap gap-1.5">
                 {status.changes.map((c) => (
-                  <li key={c.file} className="rounded-md bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-700">
+                  <li key={c.file} className="max-w-full break-all rounded-md bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-700">
                     {c.file} <span className="text-gray-400">· {c.status}</span>
                   </li>
                 ))}
@@ -156,7 +156,7 @@ export const PublishDialog: React.FC<{ site: CodeSite; status: SiteStatus; onClo
 
             <label className="block">
               <span className="text-sm font-medium text-gray-900">O que mudou</span>
-              <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ex.: novo título na primeira dobra" maxLength={200} className="mt-1 h-9 w-full rounded-md border border-gray-200 px-3 text-sm" />
+              <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ex.: novo título na primeira dobra" maxLength={200} className="mt-1 h-9 w-full rounded-md border border-gray-200 px-3 text-base md:text-sm" />
             </label>
 
             <fieldset className="grid gap-2 sm:grid-cols-2">
@@ -183,7 +183,7 @@ export const PublishDialog: React.FC<{ site: CodeSite; status: SiteStatus; onClo
             {mode === 'direto' && !nothing && <p className="text-xs text-amber-700">Isto muda o site no ar.</p>}
 
             <DialogFooter className="gap-2 sm:justify-between">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {status.changes.length > 0 && (
                   <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" disabled={busy !== null} onClick={() => void discard()}>
                     {busy === 'descartar' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />} Descartar edições

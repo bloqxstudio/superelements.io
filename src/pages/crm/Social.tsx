@@ -269,9 +269,9 @@ const TaskCard: React.FC<{
 
 /** Linha de um toque fora do foco (na fila, para os próximos dias, esperando a página). */
 const TaskRow: React.FC<{ task: Task; meta?: React.ReactNode; action?: React.ReactNode; onClick?: () => void }> = ({ task, meta, action, onClick }) => (
-  <li className="flex items-center gap-3 px-4 py-3">
+  <li className="flex flex-wrap items-center gap-3 px-4 py-3 sm:flex-nowrap">
     <NetworkIcon network={task.network} className="text-gray-500" />
-    <div className="min-w-0 flex-1">
+    <div className="min-w-0 flex-1 basis-40">
       {onClick ? (
         <button type="button" onClick={onClick} className="block max-w-full truncate text-left text-sm font-medium text-gray-900 hover:underline">
           {task.opportunity.lead.name}
@@ -652,8 +652,8 @@ const Social: React.FC = () => {
                     const last = plan.touches.at(-1)
                     const task: Task = { opportunity: plan.opportunity, network: last?.network ?? plan.primary ?? 'instagram', profile: '', step: 'retomar', due: 0 }
                     return (
-                      <li key={plan.opportunity.id} className="flex items-center gap-3 px-4 py-3">
-                        <div className="min-w-0 flex-1">
+                      <li key={plan.opportunity.id} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:flex-nowrap">
+                        <div className="min-w-0 flex-1 basis-40">
                           <Link to={`/crm/clientes/${plan.opportunity.clientId}`} className="block truncate text-sm font-medium text-gray-900 hover:underline">
                             {plan.opportunity.lead.name}
                           </Link>

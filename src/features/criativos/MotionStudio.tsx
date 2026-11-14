@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, Clapperboard, Code2, Diamond, Download, Film, Instagram, Music, Trash2, Pause, PenLine, Play, Redo2, SkipBack, Undo2, Wand2, Zap } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Code2, Diamond, Download, Film, Instagram, Music, Trash2, Pause, PenLine, Play, Redo2, SkipBack, SlidersHorizontal, Undo2, Wand2, X, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { currentLayer, currentPost, currentSlide, useEditor } from './store'
@@ -77,6 +77,8 @@ export const MotionStudio: React.FC = () => {
   const [playing, setPlaying] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
   const [publishing, setPublishing] = useState(false)
+  /** Abaixo de lg o painel de animação é uma gaveta sobre o palco, aberta pelo botão Animação. */
+  const [sheet, setSheet] = useState(false)
   const timeRef = useRef(0)
   timeRef.current = time
   const autoDone = useRef(new Set<string>())
@@ -223,39 +225,46 @@ export const MotionStudio: React.FC = () => {
   const editorLink = `/criativos/${set.id}?${new URLSearchParams({ ...(set.shared && set.projectId ? { projeto: set.projectId } : {}), post: post.id }).toString()}`
 
   return (
-    <div className="flex h-[calc(100vh-56px)] min-h-[600px] flex-col bg-gray-50 md:h-screen">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-white px-3">
-        <Link to="/motion" aria-label="Voltar ao Motion" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
-        <Clapperboard className="h-4 w-4 text-violet-700" />
-        <span className="max-w-[14rem] truncate text-sm font-semibold text-gray-900">{set.name}</span>
-        <select aria-label="Post" value={post.id} onChange={(e) => { useEditor.getState().selectPost(e.target.value); seek(0) }} className="h-8 max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 text-sm">
+    <div className="flex h-[calc(100dvh-56px)] min-h-[520px] flex-col bg-gray-50 md:h-dvh md:min-h-[600px]">
+      {/* No celular: nome e post em cima; as ações rolam de lado embaixo */}
+      <header className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-white px-3 py-1.5 md:h-12 md:flex-nowrap md:py-0">
+        <Link to="/motion" aria-label="Voltar ao Motion" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
+        <Clapperboard className="hidden h-4 w-4 shrink-0 text-violet-700 sm:block" />
+        <span className="hidden max-w-[14rem] truncate text-sm font-semibold text-gray-900 sm:inline">{set.name}</span>
+        <select aria-label="Post" value={post.id} onChange={(e) => { useEditor.getState().selectPost(e.target.value); seek(0) }} className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 text-sm sm:max-w-[14rem] sm:flex-none">
           {set.posts.map((p) => (<option key={p.id} value={p.id}>{p.name} · {sizeOf(p.format).label}</option>))}
         </select>
-        <span className="text-xs text-gray-500">{({ saved: 'Salvo', dirty: 'Alterações…', saving: 'Salvando…', error: 'Erro ao salvar' } as const)[saving]}</span>
-        <div className="ml-auto flex items-center gap-1.5">
+        <span className="shrink-0 text-xs text-gray-500">{({ saved: 'Salvo', dirty: 'Alterações…', saving: 'Salvando…', error: 'Erro ao salvar' } as const)[saving]}</span>
+        <div className="flex w-full min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] md:ml-auto md:w-auto md:overflow-visible [&>*]:shrink-0">
           <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!canUndo} title="Desfazer (Ctrl+Z)" onClick={() => useEditor.getState().undo()}><Undo2 className="h-4 w-4" /></Button>
           <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!canRedo} title="Refazer (Ctrl+Shift+Z)" onClick={() => useEditor.getState().redo()}><Redo2 className="h-4 w-4" /></Button>
-          <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 bg-white"><Link to={editorLink}><PenLine className="h-4 w-4" /> Editar o criativo</Link></Button>
-          <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 bg-white" title="Para ir além: a IA escreve a animação inteira em código a partir deste post"><Link to={advancedMotionLink(set, post.id)}><Code2 className="h-4 w-4" /> Cena em código (beta)</Link></Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" disabled={!videoSupported() || progress !== null} onClick={() => { setPlaying(false); setPublishing(true) }}><Instagram className="h-4 w-4" /> Publicar no Instagram</Button>
+          <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 bg-white"><Link to={editorLink} aria-label="Editar o criativo"><PenLine className="h-4 w-4" /> <span className="hidden sm:inline">Editar o criativo</span><span className="sm:hidden">Editar</span></Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 bg-white" title="Para ir além: a IA escreve a animação inteira em código a partir deste post"><Link to={advancedMotionLink(set, post.id)} aria-label="Cena em código (beta)"><Code2 className="h-4 w-4" /> <span className="hidden sm:inline">Cena em código (beta)</span><span className="sm:hidden">Código</span></Link></Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" disabled={!videoSupported() || progress !== null} onClick={() => { setPlaying(false); setPublishing(true) }} aria-label="Publicar no Instagram"><Instagram className="h-4 w-4" /> <span className="hidden sm:inline">Publicar no Instagram</span><span className="sm:hidden">Publicar</span></Button>
           <Button size="sm" className="h-8 gap-1.5" disabled={!videoSupported() || progress !== null} onClick={() => void exportVideo()} title={videoSupported() ? undefined : 'Use o Chrome ou o Edge atualizados'}>
             <Download className="h-4 w-4" /> {progress !== null ? `Gerando… ${Math.round(progress * 100)}%` : postOutput(post) === 'carousel' ? 'Baixar o carrossel' : 'Baixar MP4'}
           </Button>
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <main className="flex min-w-0 flex-1 flex-col">
           <StagePreview post={post} images={images} time={time} playing={playing} />
-          <div className="flex h-11 shrink-0 items-center justify-center gap-2 border-t bg-white">
+          <div className="relative flex h-11 shrink-0 items-center justify-center gap-2 border-t bg-white">
             <Button variant="ghost" size="icon" className="h-8 w-8" title="Voltar ao começo (Home)" onClick={() => seek(0)}><SkipBack className="h-4 w-4" /></Button>
             <Button size="icon" className="h-9 w-9 rounded-full" aria-label={playing ? 'Pausar' : 'Tocar'} title="Tocar ou pausar (Espaço)" onClick={() => setPlaying((p) => !p)}>
               {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-px" />}
             </Button>
             <span className="w-28 text-center text-xs tabular-nums text-gray-600">{fmt(time)} / {fmt(total)}</span>
+            <Button variant="outline" size="sm" className={cn('absolute right-2 h-8 gap-1.5 bg-white lg:hidden', sheet && 'bg-violet-50 text-violet-800')} aria-expanded={sheet} onClick={() => setSheet((o) => !o)}><SlidersHorizontal className="h-4 w-4" /> <span className="hidden min-[400px]:inline">Animação</span></Button>
           </div>
         </main>
-        <aside className="hidden w-80 shrink-0 overflow-y-auto border-l bg-white p-4 lg:block">
+        {/* Abaixo de lg: gaveta sobre o palco (de baixo no celular, à direita no tablet); no computador, a coluna de sempre */}
+        <aside className={cn('absolute inset-x-0 bottom-0 z-30 h-[75%] overflow-y-auto rounded-t-2xl border-t bg-white p-4 shadow-[0_-12px_32px_-12px_rgb(0_0_0/0.25)] md:inset-x-auto md:inset-y-0 md:right-0 md:h-auto md:w-80 md:rounded-none md:border-l md:border-t-0 lg:static lg:block lg:shrink-0 lg:shadow-none', sheet ? 'block' : 'hidden')}>
+          <div className="-mx-4 -mt-4 mb-3 flex h-10 items-center justify-between border-b px-4 lg:hidden">
+            <span className="text-sm font-semibold text-gray-900">Animação{layer ? ` · ${layer.name}` : ''}</span>
+            <button type="button" aria-label="Fechar o painel" onClick={() => setSheet(false)} className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"><X className="h-4 w-4" /></button>
+          </div>
           <SidePanel post={post} slideId={slide.id} layer={layer} slideDur={seg.dur} local={Math.max(0, Math.min(seg.dur, time - seg.start))} onSeek={seek} />
         </aside>
       </div>
@@ -279,7 +288,8 @@ const StagePreview: React.FC<{ post: Post; images: Map<string, CanvasImageSource
     const el = box.current
     if (!el) return
     const ro = new ResizeObserver(() => {
-      const k = Math.min((el.clientWidth - 48) / width, (el.clientHeight - 48) / height)
+      const pad = el.clientWidth < 640 ? 16 : 48
+      const k = Math.min((el.clientWidth - pad) / width, (el.clientHeight - pad) / height)
       setFit({ w: Math.max(0, Math.floor(width * k)), h: Math.max(0, Math.floor(height * k)) })
     })
     ro.observe(el)
@@ -637,6 +647,19 @@ const AdTemplate: React.FC<{ post: Post }> = () => {
 type Drag = { layerId: string; mode: 'move' | 'start' | 'end'; x: number; width: number; scale: number; from: LayerMotion; before: CreativeSet }
 
 const NAME_W = 168
+/** No celular a coluna dos nomes das camadas fica mais estreita, para sobrar faixa de tempo. */
+const NAME_W_NARROW = 96
+const useNameWidth = () => {
+  const query = '(max-width: 639px)'
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const on = () => setNarrow(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return narrow ? NAME_W_NARROW : NAME_W
+}
 
 const Timeline: React.FC<{ post: Post; slideId: string; layerId?: string; time: number; onSeek: (t: number) => void; onPause: () => void }> = ({ post, slideId, layerId, time, onSeek, onPause }) => {
   const { segments, total } = timeline(post)
@@ -650,6 +673,7 @@ const Timeline: React.FC<{ post: Post; slideId: string; layerId?: string; time: 
   const inSlide = local >= 0 && local < seg.dur
   const lane = useRef<HTMLDivElement>(null)
   const tracks = [...slide.layers].reverse().filter((l) => !l.hidden)
+  const nameW = useNameWidth()
 
   const startDrag = (e: React.PointerEvent, l: Layer, mode: Drag['mode']) => {
     if (!l.motion || !lane.current) return
@@ -697,10 +721,10 @@ const Timeline: React.FC<{ post: Post; slideId: string; layerId?: string; time: 
   for (let t = 0; t <= viewDur + 1e-6; t += step) ticks.push(Math.round(t * 10) / 10)
 
   return (
-    <section className="flex h-64 shrink-0 flex-col border-t bg-white" aria-label="Linha do tempo">
+    <section className="flex h-52 shrink-0 flex-col border-t bg-white md:h-64" aria-label="Linha do tempo">
       {/* Os slides do post, no tempo do vídeo */}
       <div className="flex h-9 shrink-0 items-center gap-2 overflow-y-hidden border-b px-3" style={{ scrollbarGutter: 'stable' }}>
-        <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500" style={{ width: NAME_W - 12 }}>Post · {total.toFixed(1)} s</span>
+        <span className="shrink-0 truncate text-[11px] font-medium uppercase tracking-wide text-gray-500" style={{ width: nameW - 12 }}>Post · {total.toFixed(1)} s</span>
         <div className="relative flex h-6 min-w-0 flex-1 gap-0.5">
           {segments.map((s, i) => (
             <button key={s.slide.id} type="button" onClick={() => { useEditor.getState().selectSlide(s.slide.id); onSeek(s.start) }} style={{ width: `${(s.dur / total) * 100}%` }} className={cn('truncate rounded px-1.5 text-left text-[11px] font-medium', s.slide.id === slideId ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}>
@@ -713,8 +737,8 @@ const Timeline: React.FC<{ post: Post; slideId: string; layerId?: string; time: 
 
       {/* Régua do slide */}
       <div className="flex h-7 shrink-0 overflow-hidden border-b" style={{ scrollbarGutter: 'stable' }}>
-        <div className="shrink-0 border-r px-3 text-[11px] leading-7 text-gray-500" style={{ width: NAME_W }}>Camadas</div>
-        <div className="relative min-w-0 flex-1 cursor-col-resize select-none" onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture(e.pointerId); seekFromLane(e.clientX) }} onPointerMove={(e) => e.buttons === 1 && seekFromLane(e.clientX)}>
+        <div className="shrink-0 border-r px-3 text-[11px] leading-7 text-gray-500" style={{ width: nameW }}>Camadas</div>
+        <div className="relative min-w-0 flex-1 cursor-col-resize touch-none select-none" onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture(e.pointerId); seekFromLane(e.clientX) }} onPointerMove={(e) => e.buttons === 1 && seekFromLane(e.clientX)}>
           {ticks.map((t) => (
             <span key={t} className="absolute top-0 h-full border-l border-gray-200 pl-1 text-[10px] leading-7 text-gray-400" style={{ left: `${(t / viewDur) * 100}%` }}>{Number.isInteger(t) ? `${t}s` : ''}</span>
           ))}
@@ -732,7 +756,7 @@ const Timeline: React.FC<{ post: Post; slideId: string; layerId?: string; time: 
           const end = m ? (m.fx === 'ken' ? Math.max(m.start + m.dur, viewDur) : m.start + m.dur) : 0
           return (
             <div key={l.id} className={cn('flex h-8 border-b border-gray-100', selected && 'bg-violet-50/60')}>
-              <button type="button" onClick={() => useEditor.getState().selectLayer(l.id)} className={cn('shrink-0 truncate border-r px-3 text-left text-xs', selected ? 'font-semibold text-violet-800' : 'text-gray-700 hover:bg-gray-50')} style={{ width: NAME_W }}>
+              <button type="button" onClick={() => useEditor.getState().selectLayer(l.id)} className={cn('shrink-0 truncate border-r px-3 text-left text-xs', selected ? 'font-semibold text-violet-800' : 'text-gray-700 hover:bg-gray-50')} style={{ width: nameW }}>
                 {l.name}
               </button>
               <div
@@ -754,13 +778,13 @@ const Timeline: React.FC<{ post: Post; slideId: string; layerId?: string; time: 
                     aria-valuenow={m.start}
                     tabIndex={0}
                     onPointerDown={(e) => startDrag(e, l, 'move')}
-                    className={cn('absolute inset-y-1 flex cursor-grab items-center overflow-hidden rounded text-[10px] font-semibold text-white shadow-sm active:cursor-grabbing', FX_COLOR[m.fx] ?? 'bg-violet-600', selected && 'ring-2 ring-violet-900/40')}
+                    className={cn('absolute inset-y-1 flex cursor-grab touch-none items-center overflow-hidden rounded text-[10px] font-semibold text-white shadow-sm active:cursor-grabbing', FX_COLOR[m.fx] ?? 'bg-violet-600', selected && 'ring-2 ring-violet-900/40')}
                     style={{ left: `${(m.start / viewDur) * 100}%`, width: `${Math.max(1.5, ((end - m.start) / viewDur) * 100)}%` }}
                   >
-                    <span onPointerDown={(e) => startDrag(e, l, 'start')} className="absolute inset-y-0 left-0 w-2 cursor-ew-resize bg-black/15" />
+                    <span onPointerDown={(e) => startDrag(e, l, 'start')} className="absolute inset-y-0 left-0 w-2 cursor-ew-resize bg-black/15 [@media(pointer:coarse)]:w-4" />
                     <span className="truncate px-2.5">{fxLabel(m.fx)}{m.count ? ' · conta' : ''}{m.loop ? ' · loop' : ''}</span>
                     {m.fx === 'keys' && (m.keys ?? []).map((k, i) => (<span key={i} className="pointer-events-none absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-white ring-1 ring-black/30" style={{ left: `${((k.t - m.start) / Math.max(0.01, end - m.start)) * 100}%` }} />))}
-                    {m.fx !== 'ken' && <span onPointerDown={(e) => startDrag(e, l, 'end')} className="absolute inset-y-0 right-0 w-2 cursor-ew-resize bg-black/15" />}
+                    {m.fx !== 'ken' && <span onPointerDown={(e) => startDrag(e, l, 'end')} className="absolute inset-y-0 right-0 w-2 cursor-ew-resize bg-black/15 [@media(pointer:coarse)]:w-4" />}
                   </div>
                 ) : null}
                 {m?.exit ? (

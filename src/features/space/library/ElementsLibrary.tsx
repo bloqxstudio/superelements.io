@@ -250,7 +250,7 @@ const ComponentRow: React.FC<{ component: SpaceComponent; uses: number }> = ({ c
             setName(component.name)
             setEditing(true)
           }}
-          className="hidden rounded-md p-1 text-gray-400 transition-colors hover:text-gray-700 focus-visible:block group-hover:block"
+          className="block rounded-md p-1 text-gray-400 transition-colors hover:text-gray-700 focus-visible:block group-hover:block [@media(hover:hover)]:hidden"
           aria-label={`Renomear ${component.name}`}
           title="Renomear"
         >
@@ -331,7 +331,7 @@ const BlockRow: React.FC<{ block: SavedBlock }> = ({ block }) => {
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="rounded-md p-1 text-gray-300 opacity-0 transition-[color,opacity] hover:text-gray-600 focus-visible:opacity-100 group-hover:opacity-100"
+        className="rounded-md p-1 text-gray-300 transition-[color,opacity] hover:text-gray-600 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0"
         aria-label={`Renomear ${block.name}`}
       >
         <Pencil className="h-3 w-3" />
@@ -339,7 +339,7 @@ const BlockRow: React.FC<{ block: SavedBlock }> = ({ block }) => {
       <button
         type="button"
         onClick={() => remove(block.id)}
-        className="rounded-md p-1 text-gray-300 opacity-0 transition-[color,opacity] hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100"
+        className="rounded-md p-1 text-gray-300 transition-[color,opacity] hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0"
         aria-label={`Apagar ${block.name}`}
       >
         <Trash2 className="h-3 w-3" />

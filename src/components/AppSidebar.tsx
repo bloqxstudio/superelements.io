@@ -104,17 +104,17 @@ const ModulesWindow: React.FC<{ modules: MenuModule[]; current?: MenuModule; ope
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-gray-900/20 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0" />
-        <DialogPrimitive.Content className="fixed inset-x-0 top-[12vh] z-[61] mx-auto w-[min(640px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-black/5 bg-white/95 shadow-2xl outline-none backdrop-blur-xl duration-200 ease-out data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-left-12 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-left-12">
+        <DialogPrimitive.Content onOpenAutoFocus={(e) => { if (window.matchMedia?.('(pointer: coarse)').matches) { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus() } }} className="fixed inset-x-0 top-[12vh] z-[61] mx-auto w-[min(640px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-black/5 bg-white/95 shadow-2xl outline-none backdrop-blur-xl duration-200 ease-out data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-left-12 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-left-12">
           <DialogPrimitive.Description className="sr-only">Escolha um módulo; o menu passa a mostrar as telas dele.</DialogPrimitive.Description>
           <div className="flex items-center gap-2.5 border-b border-gray-100 px-4">
             <Search className="h-4 w-4 shrink-0 text-gray-400" aria-hidden />
             <DialogPrimitive.Title className="sr-only">Módulos</DialogPrimitive.Title>
-            <input autoFocus type="search" aria-label="Buscar módulo" placeholder="Módulos" value={query} onChange={(e) => setQuery(e.target.value)} className="h-14 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-tight text-gray-900 outline-none placeholder:text-gray-400" />
-            <DialogPrimitive.Close aria-label="Fechar" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-900">
+            <input type="search" aria-label="Buscar módulo" placeholder="Módulos" value={query} onChange={(e) => setQuery(e.target.value)} className="h-14 min-w-0 flex-1 bg-transparent text-lg font-medium tracking-tight text-gray-900 outline-none placeholder:text-gray-400" />
+            <DialogPrimitive.Close aria-label="Fechar" className="flex h-10 w-10 items-center md:h-8 md:w-8 justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-900">
               <X className="h-4 w-4" />
             </DialogPrimitive.Close>
           </div>
-          <div className="grid max-h-[60vh] grid-cols-2 gap-1 overflow-y-auto p-3 sm:grid-cols-3">
+          <div className="grid max-h-[60dvh] grid-cols-2 gap-1 overflow-y-auto p-3 sm:grid-cols-3">
             {shown.map((m) => (
               <button key={m.id} type="button" onClick={() => onPick(m)} aria-current={m.id === current?.id ? 'true' : undefined} className={cn('relative flex flex-col items-center gap-2 rounded-xl px-2 pb-3 pt-4 text-center transition-colors hover:bg-gray-100 focus-visible:bg-gray-100 focus-visible:outline-none', m.id === current?.id && 'bg-gray-100/80')}>
                 <ModuleTile module={m} size="lg" />
@@ -405,7 +405,7 @@ const SidebarContent: React.FC<{ onClose?: () => void; collapsed?: boolean; onTo
         )}
         </>}
         {onClose && (
-          <button type="button" onClick={onClose} aria-label="Fechar menu" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+          <button type="button" onClick={onClose} aria-label="Fechar menu" className="-mr-1 flex h-10 w-10 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900">
             <X className="h-4 w-4" />
           </button>
         )}

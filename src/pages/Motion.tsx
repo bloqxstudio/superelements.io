@@ -102,7 +102,7 @@ const Motion: React.FC = () => {
   const chosen = sets?.find((s) => s.id === target)
 
   return (
-    <div className="se-page min-h-[calc(100vh-57px)]">
+    <div className="se-page min-h-[calc(100dvh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <AreaTabs area="criativos" />
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -110,13 +110,13 @@ const Motion: React.FC = () => {
             <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-gray-900"><Clapperboard className="h-6 w-6" /> Vídeos</h1>
             <p className="mt-1 max-w-2xl text-sm text-gray-500">Todos os vídeos da conta, num estúdio só: animações a partir de referências, vídeos com roteiro e voz, e comerciais em código. Cada um com capa, prévia e MP4.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             {sets && sets.length > 1 && (
-              <select aria-label="Conjunto do vídeo novo" value={target} onChange={(e) => setTarget(e.target.value)} className="h-9 max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 text-sm">
+              <select aria-label="Conjunto do vídeo novo" value={target} onChange={(e) => setTarget(e.target.value)} className="h-9 min-w-0 flex-1 rounded-md sm:max-w-[14rem] sm:flex-none border border-gray-200 bg-white px-2 text-sm">
                 {sets.map((s) => <option key={s.id + (s.projectId ?? '')} value={s.id}>{s.name}</option>)}
               </select>
             )}
-            <Button className="gap-1.5" disabled={!chosen} onClick={() => chosen && navigate(videoLink(chosen, undefined, 'novo=escolher'))}><Plus className="h-4 w-4" /> Novo vídeo</Button>
+            <Button className="shrink-0 gap-1.5" disabled={!chosen} onClick={() => chosen && navigate(videoLink(chosen, undefined, 'novo=escolher'))}><Plus className="h-4 w-4" /> Novo vídeo</Button>
           </div>
         </div>
 

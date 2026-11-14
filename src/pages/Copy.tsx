@@ -247,7 +247,7 @@ const Copy: React.FC = () => {
   }
 
   return (
-    <div className="se-page min-h-[calc(100vh-57px)]">
+    <div className="se-page min-h-[calc(100dvh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         {!folderParam && <AreaTabs area="pauta" />}
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -265,16 +265,16 @@ const Copy: React.FC = () => {
               </>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="gap-1.5 bg-white" onClick={() => setCreating('research')}><Microscope className="h-4 w-4" /> Nova pesquisa</Button>
             <Button className="gap-1.5" onClick={() => setCreating('doc')}><Plus className="h-4 w-4" /> Novo documento</Button>
           </div>
         </div>
 
         <div className="mt-6 flex flex-wrap items-center gap-2">
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar" className="h-9 w-56 rounded-md border border-gray-200 bg-white pl-8 pr-2 text-sm" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar" className="h-9 w-full rounded-md sm:w-56 border border-gray-200 bg-white pl-8 pr-2 text-sm" />
           </div>
           {(['Todos', ...GROUPS] as const).map((g) => (
             <button key={g} type="button" onClick={() => setGroup(g)} className={cn('rounded-full px-3 py-1 text-xs font-medium', group === g ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50')}>{g}</button>
@@ -305,7 +305,7 @@ const Copy: React.FC = () => {
                   {jobs.find((j) => j.docId === d.id && j.status === 'running') && <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-violet-700"><span className="h-1.5 w-1.5 rounded-full bg-violet-600 motion-safe:animate-pulse" />{jobs.find((j) => j.docId === d.id && j.status === 'running')!.agent} · {jobs.find((j) => j.docId === d.id && j.status === 'running')!.step}</p>}
                   <p className="mt-0.5 text-xs text-gray-500">{[nicheById(d.niche)?.label, d.projectName && `${d.projectName}${d.shared ? ' (equipe)' : ''}`, `${d.words} palavras`, when(d.updatedAt)].filter(Boolean).join(' · ')}</p>
                 </Link>
-                <button type="button" aria-label={`Excluir ${d.title}`} onClick={() => void remove(d)} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md text-gray-400 opacity-0 hover:bg-gray-100 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"><Trash2 className="h-4 w-4" /></button>
+                <button type="button" aria-label={`Excluir ${d.title}`} onClick={() => void remove(d)} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md text-gray-400 opacity-0 hover:bg-gray-100 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"><Trash2 className="h-4 w-4" /></button>
               </div>
             )
           })}
@@ -316,7 +316,7 @@ const Copy: React.FC = () => {
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-gray-500 shadow-[0_0_0_1px_rgb(0_0_0/0.06)]"><FileText className="h-5 w-5" /></span>
             <h3 className="mt-4 text-sm font-semibold text-gray-900">Nenhum documento ainda</h3>
             <p className="mt-1 max-w-md text-sm text-gray-500">Comece por uma pesquisa de um assunto ou por um formato (post, landing page, campanha…) e deixe o agente escrever a primeira versão.</p>
-            <div className="mt-5 flex gap-2">
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
               <Button variant="outline" className="gap-1.5 bg-white" onClick={() => setCreating('research')}><Microscope className="h-4 w-4" /> Nova pesquisa</Button>
               <Button className="gap-1.5" onClick={() => setCreating('doc')}><Plus className="h-4 w-4" /> Novo documento</Button>
             </div>

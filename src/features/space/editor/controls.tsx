@@ -68,16 +68,19 @@ export const Row: React.FC<RowProps> = ({ label, children, own, onReset, hint, o
     const up = () => {
       target.removeEventListener('pointermove', move)
       target.removeEventListener('pointerup', up)
+      target.removeEventListener('pointercancel', up)
       document.body.style.cursor = ''
     }
     document.body.style.cursor = 'ew-resize'
     target.addEventListener('pointermove', move)
     target.addEventListener('pointerup', up)
+    // No toque, o navegador pode tomar o gesto para rolar o painel
+    target.addEventListener('pointercancel', up)
   }
   return (
     <div className="flex items-center gap-2">
       <span
-        className={cn('flex w-[76px] shrink-0 select-none items-center gap-1 text-[11px] text-gray-500', onScrub && 'cursor-ew-resize')}
+        className={cn('flex w-[76px] shrink-0 select-none items-center gap-1 text-[11px] text-gray-500', onScrub && 'cursor-ew-resize touch-pan-y')}
         onPointerDown={scrub}
         title={hint}
       >

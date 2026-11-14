@@ -222,7 +222,7 @@ const Creatives: React.FC = () => {
   }
 
   return (
-    <div className="se-page min-h-[calc(100vh-57px)]">
+    <div className="se-page min-h-[calc(100dvh-57px)]">
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <AreaTabs area="criativos" />
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -230,7 +230,7 @@ const Creatives: React.FC = () => {
             <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Criativos</h1>
             <p className="mt-1 max-w-2xl text-sm text-gray-500">Crie posts e stories com a marca do projeto. Edite as peças e baixe quando estiverem prontas.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="gap-1.5 bg-white" disabled={importing} onClick={() => void bringReady()}><Images className="h-4 w-4" /> {importing ? 'Trazendo…' : 'Trazer criativos prontos'}</Button>
             <Button className="gap-1.5" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Novo conjunto</Button>
           </div>
@@ -254,7 +254,7 @@ const Creatives: React.FC = () => {
                 <p className="mt-3 truncate text-sm font-semibold text-gray-900">{s.name}</p>
                 <p className="mt-0.5 text-xs text-gray-500">{s.projectName ? `${s.projectName}${s.shared ? ' (equipe)' : ''} · ` : ''}{s.posts} {s.posts === 1 ? 'post' : 'posts'} · {when(s.updatedAt)}</p>
               </Link>
-              <button type="button" aria-label={`Excluir ${s.name}`} onClick={() => void remove(s)} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md text-gray-400 opacity-0 hover:bg-gray-100 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100">
+              <button type="button" aria-label={`Excluir ${s.name}`} onClick={() => void remove(s)} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md text-gray-400 opacity-0 hover:bg-gray-100 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>

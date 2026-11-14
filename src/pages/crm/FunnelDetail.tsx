@@ -75,7 +75,7 @@ const Follow: React.FC<{ teamId: string; funnel: Funnel; manager: boolean; onReo
           ))}
           <DayPicker value={isDayPeriod(period) ? spanOfPeriod(period) : null} onChange={(span) => setPeriod(dayPeriod(span))} variant="segment" className="[&>button]:h-auto [&>button]:py-1.5 [&>button[aria-pressed=true]]:bg-gray-900 [&>button[aria-pressed=true]]:text-white" />
         </div>
-        <div className="flex items-center gap-3 text-xs text-gray-500">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
           <div role="radiogroup" aria-label="Visão" className="inline-flex rounded-lg bg-white p-0.5 shadow-[0_0_0_1px_rgb(0_0_0/0.08)]">
             {([['mapa', 'Mapa', Network], ['jornada', 'Jornada', GitBranch], ['lista', 'Lista', LayoutList]] as const).map(([m, label, Icon]) => (
               <button

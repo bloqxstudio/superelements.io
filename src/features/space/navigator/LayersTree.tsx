@@ -185,10 +185,11 @@ const ElementRow: React.FC<ElementRowProps> = ({ element, sectionId, sectionTitl
           <span className="min-w-0 flex-1 truncate font-medium" style={componentId ? { color: COMPONENT_COLOR_STRONG } : undefined}>
             {name}
           </span>
-          <span className="max-w-20 truncate text-[10px] font-normal text-gray-400 group-hover:hidden">{componentId ? 'componente' : layerKind(element)}</span>
+          <span className={`max-w-20 truncate text-[10px] font-normal text-gray-400 group-hover:hidden ${selected ? '[@media(hover:none)]:hidden' : ''}`}>{componentId ? 'componente' : layerKind(element)}</span>
         </button>
+        {/* Sem mouse (toque), duplicar e apagar aparecem na camada escolhida */}
         {element.id && (
-          <span className="hidden shrink-0 items-center group-hover:flex">
+          <span className={`shrink-0 items-center group-hover:flex ${selected ? 'flex [@media(hover:hover)]:hidden' : 'hidden'}`}>
             <button type="button" onClick={act(duplicateSelectedElement)} className="rounded p-1 text-gray-400 hover:bg-white hover:text-gray-700" aria-label={`Duplicar ${name}`} title={`Duplicar (${MOD_KEY}D)`}>
               <Copy className="h-3 w-3" />
             </button>

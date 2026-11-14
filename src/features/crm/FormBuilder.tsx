@@ -379,7 +379,7 @@ export const StepsEditor: React.FC<{ definition: FormDefinition; onChange: (defi
                         <GripVertical className="h-4 w-4 shrink-0 text-gray-300" aria-hidden />
                         <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">{field.label || <span className="text-gray-400">Sem pergunta</span>}{field.required && <span className="ml-1 text-violet-600">*</span>}</span>
                         {problem && <span className="shrink-0 rounded bg-rose-50 px-1.5 py-0.5 text-xs font-medium text-rose-700">{problem}</span>}
-                        <span className="shrink-0 text-xs text-gray-500">{typeLabel(field.type)}</span>
+                        <span className="hidden shrink-0 text-xs text-gray-500 sm:inline">{typeLabel(field.type)}</span>
                         {field.showIf && <CircleHelp className="h-3.5 w-3.5 shrink-0 text-violet-500" aria-label="Tem lógica" />}
                       </button>
                       <button type="button" disabled={fi === 0} onClick={() => setStep(step.id, { fields: move(step.fields, fi, fi - 1) })} className="rounded p-1.5 text-gray-400 hover:bg-zinc-100 hover:text-gray-700 disabled:opacity-30" aria-label="Subir o campo">

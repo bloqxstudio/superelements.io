@@ -4,7 +4,7 @@ import { useCrm } from '@/features/crm/crmStore'
 import { accountBrand } from '@/features/conteudos/carousel'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, Wand2, LayoutGrid, SquareDashed, SlidersHorizontal, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, FolderOpen, ImagePlus, Instagram, Plus, Redo2, Square, Trash2, Type, Undo2, SendHorizontal } from 'lucide-react'
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, Wand2, LayoutGrid, SquareDashed, SlidersHorizontal, X, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, FolderOpen, ImagePlus, Instagram, Plus, Redo2, Square, Trash2, Type, Undo2, SendHorizontal } from 'lucide-react'
 import { LayersPanel } from './LayersPanel'
 import { MotionPanel, downloadMp4 } from './MotionPanel'
 import { videoSupported } from './video'
@@ -478,6 +478,8 @@ export const CreativeEditor: React.FC = () => {
   const sharedId = set?.shared ? set.id : undefined
   const sharedProject = set?.projectId
   const [panel, setPanel] = useState<'props' | 'layers' | 'motion'>('props')
+  /** Abaixo de lg o painel (Camadas, Ajustes, Motion) é uma gaveta sobre o canvas, aberta por botão. */
+  const [sheet, setSheet] = useState(false)
   const [gridOpen, setGridOpen] = useState(false)
   const refFocus = useRefs((r) => r.focus)
   const layerIds = useEditor((s) => s.layerIds)
@@ -734,19 +736,20 @@ export const CreativeEditor: React.FC = () => {
   pasteImage.current = (file) => void sendLayerImage(file.name === 'image.png' ? new File([file], 'imagem colada.png', { type: file.type }) : file)
 
   return (
-    <div className="flex h-[calc(100vh-56px)] min-h-[560px] flex-col md:h-screen" onClick={() => menu && setMenu(null)}>
-      <header className="se-editor-bar flex h-12 shrink-0 items-center gap-2 border-b bg-white px-3">
-        <Link to="/criativos" aria-label="Voltar aos criativos" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
-        <input aria-label="Nome do conjunto" value={set.name} onChange={(e) => useEditor.getState().edit((s) => ({ ...s, name: e.target.value }))} className="h-8 w-56 rounded-md border border-transparent px-2 text-sm font-semibold text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none" />
-        <span className="text-xs text-gray-500">{savingLabel}</span>
+    <div className="flex h-[calc(100dvh-56px)] min-h-[480px] flex-col md:h-dvh md:min-h-[560px]" onClick={() => menu && setMenu(null)}>
+      {/* No celular a barra tem duas linhas: nome e compartilhar em cima; as ferramentas rolam de lado embaixo, com Baixar sempre à vista */}
+      <header className="se-editor-bar relative flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-white px-3 py-1.5 md:h-12 md:flex-nowrap md:py-0">
+        <Link to="/criativos" aria-label="Voltar aos criativos" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
+        <input aria-label="Nome do conjunto" value={set.name} onChange={(e) => useEditor.getState().edit((s) => ({ ...s, name: e.target.value }))} className="h-8 w-36 min-w-0 rounded-md border border-transparent px-2 text-sm font-semibold text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none sm:w-56" />
+        <span className="shrink-0 text-xs text-gray-500">{savingLabel}</span>
         {set.source?.contentId && (
-          <Link to={`/conteudos/${set.source.contentId}`} className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100">
-            <ArrowLeft className="h-3 w-3" aria-hidden /> Voltar ao conteúdo
+          <Link to={`/conteudos/${set.source.contentId}`} aria-label="Voltar ao conteúdo" className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100">
+            <ArrowLeft className="h-3 w-3" aria-hidden /> <span className="hidden sm:inline">Voltar ao conteúdo</span><span className="sm:hidden">Conteúdo</span>
           </Link>
         )}
         {set.shared ? (
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <span className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700" title={live ? 'Ao vivo com a equipe do projeto' : 'Conectando ao canal ao vivo…'}>
+            <span className="flex max-w-[9rem] items-center gap-1.5 truncate rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700 sm:max-w-none" title={live ? 'Ao vivo com a equipe do projeto' : 'Conectando ao canal ao vivo…'}>
               <span className={cn('h-1.5 w-1.5 rounded-full', live ? 'bg-emerald-500' : 'bg-amber-400')} /> {set.projectName ?? 'Equipe'}
             </span>
             <div className="flex -space-x-1.5">
@@ -758,12 +761,12 @@ export const CreativeEditor: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="relative" onClick={(e) => e.stopPropagation()}>
-            <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" onClick={() => setSharing(sharing ? null : { projectId: set.projectId ?? projects[0]?.id ?? '', busy: false })} disabled={!projects.length}>
-              <Users className="h-4 w-4" /> Compartilhar
+          <div className="md:relative" onClick={(e) => e.stopPropagation()}>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" aria-label="Compartilhar" onClick={() => setSharing(sharing ? null : { projectId: set.projectId ?? projects[0]?.id ?? '', busy: false })} disabled={!projects.length}>
+              <Users className="h-4 w-4" /> <span className="hidden sm:inline">Compartilhar</span>
             </Button>
             {sharing && (
-              <div className="absolute left-0 top-10 z-40 w-72 space-y-2 rounded-xl border bg-white p-3 shadow-xl">
+              <div className="absolute inset-x-3 top-11 z-40 space-y-2 md:inset-x-auto md:left-0 md:top-10 md:w-72 rounded-xl border bg-white p-3 shadow-xl">
                 <p className="text-xs text-gray-600">A equipe do projeto abre e edita este conjunto junto, ao vivo: cada um vê o mouse, a seleção e o agente do outro. Quem ainda não está no projeto entra pelo convite dele.</p>
                 <select value={sharing.projectId} onChange={(e) => setSharing({ ...sharing, projectId: e.target.value })} className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-sm">
                   {projects.map((p) => (
@@ -778,7 +781,8 @@ export const CreativeEditor: React.FC = () => {
             )}
           </div>
         )}
-        <div className="ml-auto flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex w-full min-w-0 items-center gap-1.5 md:ml-auto md:w-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] md:flex-none md:overflow-visible [&>*]:shrink-0">
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Desfazer (Ctrl+Z)" disabled={!canUndo} onClick={() => useEditor.getState().undo()}><Undo2 className="h-4 w-4" /></Button>
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Refazer (Ctrl+Shift+Z)" disabled={!canRedo} onClick={() => useEditor.getState().redo()}><Redo2 className="h-4 w-4" /></Button>
           <div className="mr-1 flex rounded-lg border border-gray-200 bg-white p-0.5" role="group" aria-label="Modo de edição">
@@ -788,21 +792,22 @@ export const CreativeEditor: React.FC = () => {
               </button>
             ))}
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5 bg-white" onClick={() => setAiOpen(true)} disabled={ai === false} title={ai === false ? 'A IA roda no app local (servidor de desenvolvimento com o Claude Code).' : 'Gerar posts com IA'}>
+          <Button variant="outline" size="sm" className="gap-1.5 bg-white" aria-label="IA" onClick={() => setAiOpen(true)} disabled={ai === false} title={ai === false ? 'A IA roda no app local (servidor de desenvolvimento com o Claude Code).' : 'Gerar posts com IA'}>
             <Sparkles className="h-4 w-4 text-violet-600" /> IA
           </Button>
           <FormatField value={format} onChange={(f) => editPost((p) => reformat(p, f))} />
           {post && <StaticToggle post={post} onChange={editPost} />}
-          <Button variant="outline" size="sm" className="gap-1.5 bg-white" disabled={!post} title="Mandar um link para o cliente ver como fica no Instagram e aprovar ou pedir ajuste" onClick={() => post && setApproving(post.id)}>
-            <SendHorizontal className="h-4 w-4 text-emerald-600" /> Aprovação
+          <Button variant="outline" size="sm" className="gap-1.5 bg-white" disabled={!post} title="Mandar um link para o cliente ver como fica no Instagram e aprovar ou pedir ajuste" aria-label="Aprovação" onClick={() => post && setApproving(post.id)}>
+            <SendHorizontal className="h-4 w-4 text-emerald-600" /> <span className="hidden sm:inline">Aprovação</span>
           </Button>
-          <Button variant="outline" size="sm" className="gap-1.5 bg-white" disabled={!post} title="Publicar o post escolhido no Instagram da conta" onClick={() => post && setPublishing(post.id)}>
-            <Instagram className="h-4 w-4 text-fuchsia-600" /> Publicar
+          <Button variant="outline" size="sm" className="gap-1.5 bg-white" disabled={!post} title="Publicar o post escolhido no Instagram da conta" aria-label="Publicar" onClick={() => post && setPublishing(post.id)}>
+            <Instagram className="h-4 w-4 text-fuchsia-600" /> <span className="hidden sm:inline">Publicar</span>
           </Button>
-          <div className="relative">
+          </div>
+          <div className="relative shrink-0">
             <Button size="sm" className="gap-1.5" onClick={() => setMenu(menu === 'export' ? null : 'export')}><Download className="h-4 w-4" /> Baixar</Button>
             {menu === 'export' && (
-              <div className="absolute right-0 top-10 z-30 w-64 space-y-2 rounded-xl border bg-white p-3 shadow-xl">
+              <div className="absolute right-0 top-10 z-30 w-64 max-w-[calc(100vw-24px)] space-y-2 rounded-xl border bg-white p-3 shadow-xl">
                 <div className="flex gap-1">
                   {(['png', 'jpg'] as const).map((t) => (
                     <button key={t} type="button" onClick={() => setExportType(t)} className={cn('h-8 flex-1 rounded-md border text-xs font-semibold uppercase', exportType === t ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-gray-200 text-gray-600')}>{t}</button>
@@ -820,7 +825,7 @@ export const CreativeEditor: React.FC = () => {
       </header>
 
       <AiDialog open={aiOpen} onClose={() => setAiOpen(false)} />
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <aside className={cn('w-56 shrink-0 flex-col border-r bg-white', view === 'slide' ? 'hidden md:flex' : 'hidden')} onClick={(e) => e.stopPropagation()}>
           <div className="border-b p-2">
             <select aria-label="Post" value={post?.id} onChange={(e) => useEditor.getState().selectPost(e.target.value)} className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-sm font-medium">
@@ -850,13 +855,15 @@ export const CreativeEditor: React.FC = () => {
         </aside>
 
         <main className="relative flex min-w-0 flex-1 flex-col">
-          <div className="relative flex h-10 shrink-0 items-center gap-1.5 border-b bg-white px-3" onClick={(e) => e.stopPropagation()}>
-            {post && <input aria-label="Nome do post" value={post.name} onChange={(e) => editPost((p) => ({ ...p, name: e.target.value }))} className="h-8 w-40 rounded-md border border-transparent px-2 text-sm font-medium text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none" />}
+          {/* A barra rola de lado no celular; os painéis dela se prendem a esta caixa (fora da rolagem) */}
+          <div className="relative shrink-0 border-b bg-white" onClick={(e) => e.stopPropagation()}>
+          <div className="flex h-10 items-center gap-1.5 overflow-x-auto px-3 [scrollbar-width:none] md:overflow-visible [&>*]:shrink-0">
+            {post && <input aria-label="Nome do post" value={post.name} onChange={(e) => editPost((p) => ({ ...p, name: e.target.value }))} className="h-8 w-32 rounded-md sm:w-40 border border-transparent px-2 text-sm font-medium text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none" />}
             <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" onClick={() => setNewPost(newPost ? null : { name: '', format: '4x5' })}><Plus className="h-4 w-4" /> Novo post</Button>
             <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-red-600" title="Excluir este post" onClick={deletePost}><Trash2 className="h-4 w-4" /></Button>
             <span className="mx-1 h-5 w-px bg-gray-200" />
             {newPost && (
-              <div className="absolute left-3 top-11 z-40 w-72 space-y-2 rounded-xl border bg-white p-3 shadow-xl">
+              <div className="absolute left-3 top-11 z-40 w-72 max-w-[calc(100%-24px)] space-y-2 rounded-xl border bg-white p-3 shadow-xl">
                 <label className="block text-[11px] font-medium uppercase tracking-wide text-gray-500">
                   Nome
                   <input autoFocus value={newPost.name} onChange={(e) => setNewPost({ ...newPost, name: e.target.value })} placeholder={`Post ${set.posts.length + 1}`} className="mt-1 h-8 w-full rounded-md border border-gray-200 px-2 text-sm normal-case text-gray-900" />
@@ -874,10 +881,10 @@ export const CreativeEditor: React.FC = () => {
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'text', name: 'Texto', text: 'Novo texto', x: 84, y: 200, w: 600, h: 0, font: set.brand.bodyFont, weight: 500, size: 56, color: '#111111', align: 'left', lineHeight: 1.15, letterSpacing: 0 })}><Type className="h-4 w-4" /> Texto</Button>
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'rect', name: 'Forma', x: 84, y: 200, w: 300, h: 300, fill: set.brand.colors[0]?.hex ?? '#2b3cf0', radius: 0 })}><Square className="h-4 w-4" /> Forma</Button>
             <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'rect', name: 'Degradê', x: 0, y: Math.round(sizeOf(format).height * 0.5), w: sizeOf(format).width, h: Math.round(sizeOf(format).height * 0.5), fill: alpha(set.brand.colors[0]?.hex ?? '#111111', 0), fill2: alpha(set.brand.colors[0]?.hex ?? '#111111', 0.9), angle: 180, radius: 0 })}><Blend className="h-4 w-4" /> Degradê</Button>
-            <div className="relative">
+            <div className="md:relative">
               <Button variant="ghost" size="sm" className={cn('h-8 gap-1.5', grid.show && 'bg-violet-50 text-violet-800')} onClick={() => setGridOpen((o) => !o)} title="Grade de boas práticas deste post (Ctrl+')"><Grid3x3 className="h-4 w-4" /> Grade</Button>
               {gridOpen && post && (
-                <div className="absolute left-0 top-10 z-40 w-72 space-y-2 rounded-xl border bg-white p-3 text-sm shadow-xl">
+                <div className="absolute inset-x-3 top-11 z-40 max-h-[60dvh] space-y-2 overflow-y-auto rounded-xl border bg-white p-3 text-sm shadow-xl md:inset-x-auto md:left-0 md:top-10 md:max-h-none md:w-72 md:overflow-visible">
                   <label className="flex items-center justify-between gap-2 font-medium text-gray-900">Mostrar as guias <input type="checkbox" checked={grid.show} onChange={(e) => setGrid({ show: e.target.checked })} /></label>
                   <p className="text-xs text-gray-500">Guias só deste post, para a edição: não saem na imagem. Margem de {marginOf(post.format)} px.</p>
                   <div className="space-y-1.5 border-t border-gray-100 pt-2 text-gray-700">
@@ -906,10 +913,42 @@ export const CreativeEditor: React.FC = () => {
               {slide && <input type="color" aria-label="Cor do fundo" value={/^#[0-9a-f]{6}$/i.test(slide.background) ? slide.background : '#ffffff'} onChange={(e) => editSlide((sl) => ({ ...sl, background: e.target.value }))} className="h-6 w-8 cursor-pointer rounded border border-gray-200 bg-white p-0.5" />}
             </label>
           </div>
+          </div>
+          {/* Celular, modo Slide: a lista de slides (que no computador é a coluna da esquerda) vira uma faixa */}
+          {view === 'slide' && post && (
+            <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b bg-white px-2 py-1.5 [scrollbar-width:none] md:hidden" onClick={(e) => e.stopPropagation()}>
+              <select aria-label="Post" value={post.id} onChange={(e) => useEditor.getState().selectPost(e.target.value)} className="h-8 max-w-[8rem] shrink-0 rounded-md border border-gray-200 bg-white px-2 text-xs font-medium">
+                {set.posts.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              {post.slides.map((sl, i) => (
+                <div key={sl.id} className="w-11 shrink-0">
+                  <Thumb slide={sl} format={format} index={i} active={sl.id === slide?.id} onClick={() => useEditor.getState().selectSlide(sl.id)} />
+                </div>
+              ))}
+              <Button variant="outline" size="sm" className="h-8 shrink-0 gap-1 bg-white px-2" aria-label="Novo slide" onClick={() => setMenu(menu === 'slide' ? null : 'slide')}><Plus className="h-4 w-4" /></Button>
+            </div>
+          )}
+          {view === 'slide' && menu === 'slide' && (
+            <div className="absolute inset-x-2 bottom-2 z-30 max-h-[60%] overflow-y-auto rounded-xl border bg-white p-1.5 shadow-xl md:hidden" onClick={(e) => e.stopPropagation()}>
+              {TEMPLATES.map((t) => (
+                <button key={t.id} type="button" onClick={() => addSlide(t.id)} className="block w-full rounded-lg px-2.5 py-2 text-left hover:bg-gray-50">
+                  <span className="block text-sm font-medium text-gray-900">{t.name}</span>
+                  <span className="block text-xs text-gray-500">{t.hint}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {onlyPost && set?.posts.some((p) => p.id === onlyPost) && view === 'canvas' && (
             <div className="pointer-events-none absolute left-1/2 top-14 z-20 -translate-x-1/2">
               <button type="button" onClick={() => { const next = new URLSearchParams(query); next.delete('post'); setQuery(next, { replace: true }) }} className="pointer-events-auto rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white shadow-lg hover:bg-gray-700">Mostrando só este post · Ver todos</button>
             </div>
+          )}
+          {!sheet && panel !== 'motion' && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); setPanel(layer || layerIds.length ? 'props' : panel); setSheet(true) }} className="absolute bottom-16 right-3 z-20 flex h-10 items-center gap-1.5 rounded-full bg-gray-900 px-4 text-sm font-medium text-white shadow-lg active:scale-[0.97] lg:hidden">
+              <SlidersHorizontal className="h-4 w-4" /> {layer || layerIds.length ? 'Editar camada' : 'Camadas e ajustes'}
+            </button>
           )}
           {view === 'canvas' ? <Board onlyPostId={onlyPost && set?.posts.some((p) => p.id === onlyPost) ? onlyPost : undefined} onAddSlide={addSlideTo} onDownloadSlide={() => void exportFiles('slide', exportType)} onDuplicateSlide={duplicateSlide} onDeleteSlide={deleteSlide} /> : <Stage />}
           {(() => {
@@ -922,13 +961,15 @@ export const CreativeEditor: React.FC = () => {
           })()}
         </main>
 
-        <aside className={cn('w-80 shrink-0 flex-col border-l bg-white lg:flex', panel === 'motion' ? 'flex' : 'hidden')} onClick={(e) => e.stopPropagation()}>
+        {/* Abaixo de lg: gaveta por cima do canvas (de baixo no celular, à direita no tablet); no computador, a coluna de sempre */}
+        <aside className={cn('absolute inset-x-0 bottom-0 z-30 h-[58%] flex-col rounded-t-2xl border-t bg-white shadow-[0_-12px_32px_-12px_rgb(0_0_0/0.25)] md:inset-x-auto md:inset-y-0 md:right-0 md:h-auto md:w-80 md:rounded-none md:border-l md:border-t-0 lg:static lg:flex lg:shrink-0 lg:shadow-none', sheet || panel === 'motion' ? 'flex' : 'hidden')} onClick={(e) => e.stopPropagation()}>
           <div className="flex h-10 shrink-0 border-b" role="tablist">
             {([['layers', 'Camadas', LayersIcon], ['props', 'Ajustes', SlidersHorizontal], ['motion', 'Motion', Clapperboard]] as const).map(([id, label, Icon]) => (
               <button key={id} type="button" role="tab" aria-selected={panel === id} onClick={() => setPanel(id)} className={cn('flex flex-1 items-center justify-center gap-1.5 border-b-2 text-xs font-semibold', panel === id ? 'border-violet-600 text-violet-800' : 'border-transparent text-gray-500 hover:text-gray-800')}>
                 <Icon className="h-3.5 w-3.5" /> {label}
               </button>
             ))}
+            <button type="button" aria-label="Fechar o painel" onClick={() => { setSheet(false); if (panel === 'motion') setPanel('props') }} className="flex w-10 shrink-0 items-center justify-center text-gray-500 hover:text-gray-900 lg:hidden"><X className="h-4 w-4" /></button>
           </div>
           {panel === 'motion' ? <div className="min-h-0 flex-1 overflow-y-auto p-3" data-scroll><MotionPanel /></div> : panel === 'layers' ? <div className="min-h-0 flex-1"><LayersPanel /></div> : <div className="min-h-0 flex-1 overflow-y-auto p-3" data-scroll>
           {layerIds.length > 1 ? (

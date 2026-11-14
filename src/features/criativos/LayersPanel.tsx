@@ -80,8 +80,8 @@ export const LayersPanel: React.FC = () => {
                 </button>
                 <Folder className="h-3.5 w-3.5 shrink-0 text-gray-500" />
                 <span className="min-w-0 flex-1 truncate font-medium">Grupo · {row.members.length}</span>
-                <button type="button" title={allHidden ? 'Mostrar o grupo' : 'Esconder o grupo'} className={cn('h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-white', allHidden ? 'flex' : 'hidden group-hover:flex')} onClick={(e) => { e.stopPropagation(); patchLayerFields(ids, { hidden: !allHidden } as Partial<Layer>) }}>{allHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}</button>
-                <button type="button" title={allLocked ? 'Destravar o grupo' : 'Travar o grupo'} className={cn('h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-white', allLocked ? 'flex' : 'hidden group-hover:flex')} onClick={(e) => { e.stopPropagation(); patchLayerFields(ids, { locked: !allLocked } as Partial<Layer>) }}>{allLocked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}</button>
+                <button type="button" title={allHidden ? 'Mostrar o grupo' : 'Esconder o grupo'} className={cn('h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-white', allHidden ? 'flex' : 'hidden group-hover:flex [@media(hover:none)]:flex')} onClick={(e) => { e.stopPropagation(); patchLayerFields(ids, { hidden: !allHidden } as Partial<Layer>) }}>{allHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}</button>
+                <button type="button" title={allLocked ? 'Destravar o grupo' : 'Travar o grupo'} className={cn('h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-white', allLocked ? 'flex' : 'hidden group-hover:flex [@media(hover:none)]:flex')} onClick={(e) => { e.stopPropagation(); patchLayerFields(ids, { locked: !allLocked } as Partial<Layer>) }}>{allLocked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}</button>
               </div>
             )
           }
@@ -136,8 +136,8 @@ export const LayersPanel: React.FC = () => {
                   {layer.type === 'text' ? layer.text.replace(/\*/g, '').slice(0, 40) || layer.name : layer.name}
                 </span>
               )}
-              <button type="button" title={layer.hidden ? 'Mostrar' : 'Esconder'} className={cn('h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-white', layer.hidden ? 'flex' : 'hidden group-hover:flex')} onClick={(e) => { e.stopPropagation(); patchLayerFields([layer.id], { hidden: !layer.hidden } as Partial<Layer>) }}>{layer.hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}</button>
-              <button type="button" title={layer.locked ? 'Destravar' : 'Travar: não se escolhe nem se arrasta no canvas'} className={cn('h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-white', layer.locked ? 'flex' : 'hidden group-hover:flex')} onClick={(e) => { e.stopPropagation(); patchLayerFields([layer.id], { locked: !layer.locked } as Partial<Layer>) }}>{layer.locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}</button>
+              <button type="button" title={layer.hidden ? 'Mostrar' : 'Esconder'} className={cn('h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-white', layer.hidden ? 'flex' : 'hidden group-hover:flex [@media(hover:none)]:flex')} onClick={(e) => { e.stopPropagation(); patchLayerFields([layer.id], { hidden: !layer.hidden } as Partial<Layer>) }}>{layer.hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}</button>
+              <button type="button" title={layer.locked ? 'Destravar' : 'Travar: não se escolhe nem se arrasta no canvas'} className={cn('h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-white', layer.locked ? 'flex' : 'hidden group-hover:flex [@media(hover:none)]:flex')} onClick={(e) => { e.stopPropagation(); patchLayerFields([layer.id], { locked: !layer.locked } as Partial<Layer>) }}>{layer.locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}</button>
             </div>
           )
         })}

@@ -86,7 +86,7 @@ const NewVideo: React.FC<{ onPick: (c: Choice) => void; onCancel?: () => void }>
     { id: 'codigo', icon: Code2, title: 'Animação do zero', text: 'Descreva o comercial e a IA escreve a animação no motor; ajuste por pedido ou pelo código.' },
   ]
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-10">
+    <div className="mx-auto min-h-0 w-full max-w-3xl flex-1 overflow-y-auto px-4 py-6 sm:py-10">
       <h1 className="text-xl font-semibold tracking-tight text-gray-900">Novo vídeo</h1>
       <p className="mt-1 text-sm text-gray-500">Tudo sai no mesmo motor: prévia, narração, capa e MP4.</p>
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -141,24 +141,24 @@ export const VideoStudio: React.FC = () => {
 
   const header = (title: string) => (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-white px-3">
-      <Link to="/motion" aria-label="Voltar aos vídeos" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
-      <Clapperboard className="h-4 w-4 text-violet-700" />
-      <span className="truncate text-sm font-semibold text-gray-900">{set.name}</span>
-      <span className="text-sm text-gray-400">· {title}</span>
-      <div className="ml-auto flex items-center gap-2"><span className="hidden text-xs text-gray-500 sm:inline">IA do vídeo</span><IaSwitch task="video" label="Vídeos" compact /></div>
+      <Link to="/motion" aria-label="Voltar aos vídeos" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
+      <Clapperboard className="h-4 w-4 shrink-0 text-violet-700" />
+      <span className="min-w-0 truncate text-sm font-semibold text-gray-900">{set.name}</span>
+      <span className="hidden shrink-0 text-sm text-gray-400 sm:inline">· {title}</span>
+      <div className="ml-auto flex shrink-0 items-center gap-2"><span className="hidden text-xs text-gray-500 sm:inline">IA do vídeo</span><IaSwitch task="video" label="Vídeos" compact /></div>
     </header>
   )
 
   if (novo === 'referencia')
     return (
-      <div className="flex h-[calc(100vh-56px)] flex-col bg-gray-50 md:h-screen">
+      <div className="flex h-[calc(100dvh-56px)] flex-col bg-gray-50 md:h-dvh">
         {header('novo vídeo')}
         <VideoCreator set={set} refId={query.get('ref') ?? undefined} how={(query.get('modo') as 'igual' | 'novo' | null) ?? undefined} topic={query.get('tema') ?? undefined} onCreated={(id) => go({ id, novo: null, ref: null, modo: null, tema: null })} onCancel={() => go({ novo: scenes.length ? null : 'escolher', ref: null })} />
       </div>
     )
   if (novo === 'escolher' || (!scene && !novo))
     return (
-      <div className="flex h-[calc(100vh-56px)] flex-col bg-gray-50 md:h-screen">
+      <div className="flex h-[calc(100dvh-56px)] flex-col bg-gray-50 md:h-dvh">
         {header('novo vídeo')}
         <NewVideo onPick={(c) => go({ novo: c, id: null })} onCancel={scenes.length ? () => go({ novo: null }) : undefined} />
       </div>

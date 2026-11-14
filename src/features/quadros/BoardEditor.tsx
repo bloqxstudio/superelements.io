@@ -25,6 +25,7 @@ import { isAppLink, renderSystemEmbed } from './embed'
 
 const SystemPicker = React.lazy(() => import('./SystemPicker').then((m) => ({ default: m.SystemPicker })))
 import './quadros.css'
+import { useMedia } from '@/features/space/useNarrow'
 
 /**
  * O quadro aberto: canvas livre do Excalidraw (zoom infinito, notas, formas, setas que grudam, caneta,
@@ -58,6 +59,8 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
   const [peers, setPeers] = useState<Peer[]>([])
   const [palette, setPalette] = useState(false)
   const [picker, setPicker] = useState(false)
+  // Mesmo corte do Excalidraw para o modo celular (730 px em pé, 1000 px deitado e baixo)
+  const excalidrawMobile = useMedia('(max-width: 730px), (max-height: 500px) and (max-width: 1000px)')
   const [host, setHost] = useState<HTMLElement | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const me = useMemo<Person | null>(() => (user ? { id: user.id, name: profile?.name ?? user.email ?? 'Alguém', avatar: profile?.avatarUrl ?? undefined, color: colorOf(user.id) } : null), [user, profile?.name, profile?.avatarUrl])
@@ -449,6 +452,26 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
     try { await renameBoard(board.id, t); board.title = t } catch (e) { toast.error((e as Error).message) }
   }
 
+  // "Do sistema" e "Nota": no canto do canvas no computador, na barra de cima no celular
+  const stickyTools = (
+    <div className="qd-sticky">
+      <button type="button" className="qd-system-btn" aria-label="Do sistema" onClick={() => { setPalette(false); setPicker(true) }} title="Pôr no quadro um criativo, arquivo, página, site, formulário, funil ou dashboard">
+        <Plus className="h-4 w-4" /> <span>Do sistema</span>
+      </button>
+      <button type="button" className="qd-sticky-btn" onClick={() => setPalette((v) => !v)} aria-expanded={palette} aria-label="Nota adesiva" title="Nota adesiva">
+        <StickyNote className="h-4 w-4" /> <span>Nota</span>
+      </button>
+      {palette && (
+        <div className="qd-sticky-menu" role="menu" aria-label="Cor da nota">
+          {STICKY_COLORS.map((c) => (
+            <button key={c.color} type="button" role="menuitem" title={c.name} aria-label={`Nota ${c.name.toLowerCase()}`} onClick={() => addSticky(c.color)} style={{ background: c.color }} />
+          ))}
+          <p>Dois cliques (ou toques) na nota para escrever</p>
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <div className="qd-shell">
       <header className="qd-bar">
@@ -465,6 +488,7 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
           {status === 'erro' && <><CloudOff className="h-3.5 w-3.5" /> Não salvou, tentando de novo</>}
         </span>
         <div className="ml-auto flex items-center gap-1.5">
+          {excalidrawMobile && stickyTools}
           {peers.length > 0 && (
             <div className="qd-people" aria-label={`${peers.length} ${peers.length === 1 ? 'pessoa' : 'pessoas'} neste quadro`}>
               {peers.slice(0, 5).map((p) => (
@@ -490,24 +514,8 @@ const BoardCanvas: React.FC<{ board: Board }> = ({ board }) => {
           renderEmbeddable={(el) => renderSystemEmbed(el)}
           name={title}
           UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false, toggleTheme: false, export: false } }}
-          renderTopRightUI={() => (
-            <div className="qd-sticky">
-              <button type="button" className="qd-system-btn" onClick={() => { setPalette(false); setPicker(true) }} title="Pôr no quadro um criativo, arquivo, página, site, formulário, funil ou dashboard">
-                <Plus className="h-4 w-4" /> <span>Do sistema</span>
-              </button>
-              <button type="button" className="qd-sticky-btn" onClick={() => setPalette((v) => !v)} aria-expanded={palette} title="Nota adesiva">
-                <StickyNote className="h-4 w-4" /> <span>Nota</span>
-              </button>
-              {palette && (
-                <div className="qd-sticky-menu" role="menu" aria-label="Cor da nota">
-                  {STICKY_COLORS.map((c) => (
-                    <button key={c.color} type="button" role="menuitem" title={c.name} aria-label={`Nota ${c.name.toLowerCase()}`} onClick={() => addSticky(c.color)} style={{ background: c.color }} />
-                  ))}
-                  <p>Dois cliques na nota para escrever</p>
-                </div>
-              )}
-            </div>
-          )}
+          // No celular a barra de formas do Excalidraw ocupa a largura toda: os botões vão para a barra de cima
+          renderTopRightUI={(isMobile) => (isMobile ? null : stickyTools)}
         >
           <MainMenu>
             <MainMenu.Item onSelect={() => navigate('/quadros')} icon={<ArrowLeft className="h-4 w-4" />}>Voltar aos quadros</MainMenu.Item>
@@ -554,13 +562,13 @@ const BoardEditor: React.FC<{ boardId: string }> = ({ boardId }) => {
   }, [boardId])
   if (error || board === null) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3 text-sm text-gray-600">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 px-4 text-center text-sm text-gray-600">
         <p>{error ?? 'Este quadro não existe ou é de outra conta.'}</p>
         <Link to="/quadros" className="font-medium text-gray-900 underline">Voltar aos quadros</Link>
       </div>
     )
   }
-  if (!board) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+  if (!board) return <div className="flex h-[100dvh] items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
   return <BoardCanvas key={board.id} board={board} />
 }
 

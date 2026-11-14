@@ -210,7 +210,7 @@ const Groups: React.FC<{ teamId: string; onRun: () => void; onReview: () => void
           <h2 id="grupos-ig" className="flex items-center gap-2 text-sm font-semibold text-gray-900"><MessagesSquare className="h-4 w-4 text-fuchsia-600" /> Grupos do Instagram</h2>
           <p className="mt-0.5 text-xs text-gray-500">Mande os posts no grupo do cliente: o Mac da equipe abre cada um, guarda a capa e os quadros, a IA classifica e a referência aparece aqui como Nova.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {!adding && <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> Grupo</Button>}
           {!!list?.some((s) => s.enabled) && <Button size="sm" className="gap-1.5" onClick={() => setImporting({})}><Download className="h-4 w-4" /> Importar do grupo</Button>}
         </div>

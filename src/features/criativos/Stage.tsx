@@ -24,7 +24,11 @@ export const Stage: React.FC = () => {
   useLayoutEffect(() => {
     const el = wrap.current
     if (!el) return
-    const fit = () => setScale(Math.min((el.clientWidth - 48) / width, (el.clientHeight - 48) / height, 1))
+    const fit = () => {
+      // No celular a margem em volta do slide é menor, para a arte ocupar a largura
+      const pad = el.clientWidth < 640 ? 16 : 48
+      setScale(Math.max(0.05, Math.min((el.clientWidth - pad) / width, (el.clientHeight - pad) / height, 1)))
+    }
     fit()
     const ro = new ResizeObserver(fit)
     ro.observe(el)
@@ -115,6 +119,7 @@ export const Stage: React.FC = () => {
           onPointerDown={down}
           onPointerMove={move}
           onPointerUp={up}
+          onPointerCancel={up}
           aria-label="Área de edição do slide"
         />
         {box && (

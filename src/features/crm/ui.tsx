@@ -38,7 +38,7 @@ export const instagramUrl = (handle: string | undefined) => {
 export const PageHeader: React.FC<{ title: string; text?: React.ReactNode; children?: React.ReactNode }> = ({ title, text, children }) => (
   <div className="se-page-header flex flex-wrap items-end justify-between gap-4">
     <div className="min-w-0">
-      <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{title}</h1>
+      <h1 className="break-words text-2xl font-semibold tracking-tight text-gray-900">{title}</h1>
       {text && <p className="mt-1 max-w-2xl text-sm text-gray-500">{text}</p>}
     </div>
     {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
@@ -90,8 +90,8 @@ export const AutoField: React.FC<{
 export const Surface: React.FC<{ title?: string; action?: React.ReactNode; className?: string; children: React.ReactNode }> = ({ title, action, className, children }) => (
   <section className={cn('se-surface rounded-xl bg-white p-4 shadow-[0_0_0_1px_rgb(0_0_0/0.06),0_1px_2px_-1px_rgb(0_0_0/0.08)] md:p-5', className)}>
     {(title || action) && (
-      <div className="mb-3 flex items-center justify-between gap-3">
-        {title && <h2 className="text-sm font-semibold text-gray-900">{title}</h2>}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        {title && <h2 className="min-w-0 text-sm font-semibold text-gray-900">{title}</h2>}
         {action}
       </div>
     )}

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, FileText, FolderOpen, MessageSquare, Redo2, Send, Sparkles, Undo2, Users } from 'lucide-react'
+import { ArrowLeft, FileText, FolderOpen, MessageSquare, PanelRight, Redo2, Send, Sparkles, Undo2, Users, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useProjectList, useAccountProjects } from '@/features/projects/projectStore'
@@ -60,6 +60,8 @@ export const CopyEditorPage: React.FC = () => {
   const [composer, setComposer] = useState<Composer | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
   const [send, setSend] = useState(false)
+  /** Abaixo de lg o painel (pasta, agente, comentários, briefing) é uma gaveta sobre o documento. */
+  const [sheet, setSheet] = useState(false)
   const [sharing, setSharing] = useState<{ projectId: string; busy: boolean } | null>(null)
   const ran = useRef(false)
 
@@ -149,12 +151,13 @@ export const CopyEditorPage: React.FC = () => {
   ]
 
   return (
-    <div className="flex h-[calc(100vh-56px)] min-h-[560px] flex-col md:h-screen">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-white px-3">
-        <Link to="/copy" aria-label="Voltar à Copy" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
-        <input aria-label="Título do documento" value={doc.title} onChange={(e) => useCopy.getState().edit((d) => ({ ...d, title: e.target.value }))} placeholder="Documento sem título" className="h-8 w-64 rounded-md border border-transparent px-2 text-sm font-semibold text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none" />
+    <div className="flex h-[calc(100dvh-56px)] min-h-[480px] flex-col md:h-dvh md:min-h-[560px]">
+      {/* No celular a barra quebra em duas linhas: título e compartilhar em cima, desfazer e enviar embaixo */}
+      <header className="relative flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-white px-3 py-1.5 md:h-12 md:flex-nowrap md:py-0">
+        <Link to="/copy" aria-label="Voltar à Copy" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
+        <input aria-label="Título do documento" value={doc.title} onChange={(e) => useCopy.getState().edit((d) => ({ ...d, title: e.target.value }))} placeholder="Documento sem título" className="h-8 min-w-[8rem] flex-1 rounded-md sm:w-64 sm:flex-none border border-transparent px-2 text-sm font-semibold text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none" />
         <span className="hidden rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 sm:inline">{format.label}</span>
-        <span className="text-xs text-gray-500">{savingLabel}</span>
+        <span className="shrink-0 text-xs text-gray-500">{savingLabel}</span>
         {doc.source?.contentId && (
           <Link to={`/conteudos/${doc.source.contentId}`} className="hidden items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100 sm:inline-flex">
             <ArrowLeft className="h-3 w-3" aria-hidden /> Voltar ao conteúdo
@@ -162,7 +165,7 @@ export const CopyEditorPage: React.FC = () => {
         )}
         {doc.shared ? (
           <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700" title={live ? 'Ao vivo com a equipe do projeto' : 'Conectando ao canal ao vivo…'}>
+            <span className="flex max-w-[9rem] items-center gap-1.5 truncate rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700 sm:max-w-none" title={live ? 'Ao vivo com a equipe do projeto' : 'Conectando ao canal ao vivo…'}>
               <span className={cn('h-1.5 w-1.5 rounded-full', live ? 'bg-emerald-500' : 'bg-amber-400')} /> {doc.projectName ?? 'Equipe'}
             </span>
             <div className="flex -space-x-1.5">
@@ -172,10 +175,10 @@ export const CopyEditorPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="relative">
-            <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" onClick={() => setSharing(sharing ? null : { projectId: doc.projectId ?? projects[0]?.id ?? '', busy: false })} disabled={!projects.length}><Users className="h-4 w-4" /> Compartilhar</Button>
+          <div className="md:relative">
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" aria-label="Compartilhar" onClick={() => setSharing(sharing ? null : { projectId: doc.projectId ?? projects[0]?.id ?? '', busy: false })} disabled={!projects.length}><Users className="h-4 w-4" /> <span className="hidden sm:inline">Compartilhar</span></Button>
             {sharing && (
-              <div className="absolute left-0 top-10 z-40 w-72 space-y-2 rounded-xl border bg-white p-3 shadow-xl">
+              <div className="absolute inset-x-3 top-11 z-40 space-y-2 md:inset-x-auto md:left-0 md:top-10 md:w-72 rounded-xl border bg-white p-3 shadow-xl">
                 <p className="text-xs text-gray-600">A equipe do projeto abre e edita este documento junto, ao vivo: cada um vê onde o outro está escrevendo, os comentários e os agentes trabalhando.</p>
                 <select value={sharing.projectId} onChange={(e) => setSharing({ ...sharing, projectId: e.target.value })} className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-sm">
                   {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
@@ -188,36 +191,45 @@ export const CopyEditorPage: React.FC = () => {
             )}
           </div>
         )}
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Desfazer (Ctrl+Z)" disabled={!canUndo} onClick={() => useCopy.getState().undo()}><Undo2 className="h-4 w-4" /></Button>
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Refazer (Ctrl+Shift+Z)" disabled={!canRedo} onClick={() => useCopy.getState().redo()}><Redo2 className="h-4 w-4" /></Button>
           <Button size="sm" className="h-8 gap-1.5" onClick={() => setSend(true)}><Send className="h-4 w-4" /> Enviar para…</Button>
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <main className="min-w-0 flex-1 overflow-y-auto bg-white" data-scroll>
           <RunBanner docId={doc.id} />
           <DocEditor
             onComment={(blockId, quote) => {
               setComposer({ blockId, quote })
               setTab('comentarios')
+              setSheet(true)
             }}
             onAsk={(message, blockIds) => {
               setTab('agente')
+              setSheet(true)
               setPending({ message, blockIds, nonce: Date.now() })
             }}
           />
         </main>
 
-        <aside className="hidden w-[380px] shrink-0 flex-col border-l bg-white lg:flex">
-          <div className="flex h-10 shrink-0 border-b" role="tablist">
+        {!sheet && (
+          <button type="button" onClick={() => setSheet(true)} className="absolute bottom-4 right-4 z-20 flex h-10 items-center gap-1.5 rounded-full bg-gray-900 px-4 text-sm font-medium text-white shadow-lg active:scale-[0.97] lg:hidden">
+            <PanelRight className="h-4 w-4" /> Agente e comentários{openComments ? ` · ${openComments}` : ''}
+          </button>
+        )}
+        {/* Abaixo de lg: gaveta sobre o documento (de baixo no celular, à direita no tablet); no computador, a coluna de sempre */}
+        <aside className={cn('absolute inset-x-0 bottom-0 z-30 h-[80%] flex-col rounded-t-2xl border-t bg-white shadow-[0_-12px_32px_-12px_rgb(0_0_0/0.25)] md:inset-x-auto md:inset-y-0 md:right-0 md:h-auto md:w-[380px] md:rounded-none md:border-l md:border-t-0 lg:static lg:flex lg:shrink-0 lg:shadow-none', sheet ? 'flex' : 'hidden')}>
+          <div className="flex h-10 shrink-0 overflow-x-auto border-b [scrollbar-width:none] lg:overflow-visible" role="tablist">
             {tabs.map(([id, label, Icon, count]) => (
-              <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn('flex flex-1 items-center justify-center gap-1.5 border-b-2 text-xs font-semibold', tab === id ? 'border-violet-600 text-violet-800' : 'border-transparent text-gray-500 hover:text-gray-800')}>
+              <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn('flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-2 text-xs font-semibold lg:px-0', tab === id ? 'border-violet-600 text-violet-800' : 'border-transparent text-gray-500 hover:text-gray-800')}>
                 <Icon className="h-3.5 w-3.5" /> {label}
                 {!!count && <span className="rounded-full bg-amber-100 px-1.5 text-[10px] text-amber-800">{count}</span>}
               </button>
             ))}
+            <button type="button" aria-label="Fechar o painel" onClick={() => setSheet(false)} className="flex w-10 shrink-0 items-center justify-center text-gray-500 hover:text-gray-900 lg:hidden"><X className="h-4 w-4" /></button>
           </div>
           <div className="min-h-0 flex-1">
             {tab === 'pasta' && <FolderPanel />}

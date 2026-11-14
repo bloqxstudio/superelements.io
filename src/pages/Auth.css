@@ -6,7 +6,7 @@
   --accent: #d2f525; --accent-hover: #bddb2e; --accent-ink: #526b28;
   --dark: #171b19; --dark-raised: #242a26; --inverse: #f4f5ef; --on-dark-muted: #b8bfb5; --title-soft-dark: #98a590;
   --ease: cubic-bezier(0.2, 0, 0, 1);
-  display: grid; min-height: 100vh; background: var(--canvas); color: var(--ink);
+  display: grid; min-height: 100vh; min-height: 100dvh; background: var(--canvas); color: var(--ink);
   font: 400 15px/1.55 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased; font-feature-settings: 'cv11', 'ss01';
 }
@@ -46,7 +46,7 @@
 @media (max-height: 780px) { .sa-foot { display: none; } }
 
 /* Formulário */
-.sa-main { display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+.sa-main { display: flex; align-items: center; justify-content: center; padding: max(40px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(40px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); }
 @media (min-width: 1024px) { .sa-main { padding: clamp(40px, 5vh, 56px) clamp(48px, 5vw, 80px); } }
 @media (min-width: 640px) { .sa-main { padding: 48px 40px; } }
 .sa-form-wrap { width: 100%; max-width: 380px; }
@@ -62,6 +62,8 @@
 
 /* Campos (por cima do Input do shadcn): canto de 14px, filete do papel, foco grafite com halo lima */
 .sa .sa-field { height: 52px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); padding-inline: 16px; font-size: 15px; color: var(--ink); box-shadow: none; transition-property: border-color, box-shadow; transition-duration: 150ms; transition-timing-function: var(--ease); }
+/* Celular: 16px evita o zoom automático do iOS ao focar o campo */
+@media (max-width: 639px) { .sa .sa-field { font-size: 16px; } }
 .sa .sa-field::placeholder { color: #9aa197; }
 .sa .sa-field:hover:not(:disabled) { border-color: #c4cabd; }
 .sa .sa-field:focus-visible { outline: none; border-color: var(--ink); box-shadow: 0 0 0 4px rgb(210 245 37 / .45); }
@@ -91,6 +93,6 @@
 .sa-link:hover { text-decoration-color: currentColor; }
 .sa-done-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: #e4e8dc; color: var(--accent-ink); }
 .sa-done-icon svg { width: 22px; height: 22px; }
-.sa-heading strong { color: var(--ink); font-weight: 550; }
+.sa-heading strong { color: var(--ink); font-weight: 550; overflow-wrap: anywhere; }
 
 @media (prefers-reduced-motion: reduce) { .sa-button:active:not(:disabled) { scale: 1; } }

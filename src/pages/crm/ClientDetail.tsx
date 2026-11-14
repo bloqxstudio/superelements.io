@@ -133,7 +133,7 @@ const Contacts: React.FC<{ clientId: string }> = ({ clientId }) => {
                   <Star className="h-3.5 w-3.5" fill={c.primary ? 'currentColor' : 'none'} />
                 </button>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="break-words text-sm font-medium text-gray-900">
                     {c.name}
                     {c.role && <span className="font-normal text-gray-500"> · {c.role}</span>}
                   </p>
@@ -144,13 +144,13 @@ const Contacts: React.FC<{ clientId: string }> = ({ clientId }) => {
                       </a>
                     )}
                     {c.email && (
-                      <a href={`mailto:${c.email}`} className="truncate hover:underline">
+                      <a href={`mailto:${c.email}`} className="min-w-0 max-w-full truncate hover:underline">
                         {c.email}
                       </a>
                     )}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                <div className="flex shrink-0 gap-0.5 transition-opacity md:focus-within:opacity-100 md:opacity-0 md:group-hover:opacity-100">
                   <button type="button" onClick={() => setEditing(c.id)} aria-label={`Editar ${c.name}`} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-900">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -386,7 +386,7 @@ const Timeline: React.FC<{ clientId: string; version: number; people?: TeamPerso
                     type="button"
                     onClick={() => void remove(a)}
                     aria-label="Apagar o registro"
-                    className="h-6 w-6 shrink-0 rounded text-gray-300 opacity-0 transition-opacity hover:bg-rose-50 hover:text-rose-700 focus-visible:opacity-100 group-hover:opacity-100"
+                    className="h-6 w-6 shrink-0 rounded text-gray-300 transition-opacity hover:bg-rose-50 hover:text-rose-700 md:focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                   >
                     <X className="mx-auto h-3.5 w-3.5" />
                   </button>
@@ -499,7 +499,7 @@ const ClientDetail: React.FC = () => {
       <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{client.name}</h1>
+            <h1 className="min-w-0 break-words text-2xl font-semibold tracking-tight text-gray-900">{client.name}</h1>
             <StatusBadge status={client.status} label={STATUS_LABEL[client.status]} />
           </div>
           <p className="mt-1 text-sm text-gray-500">{[client.segment, client.city].filter(Boolean).join(' · ') || 'Sem segmento e cidade'}</p>

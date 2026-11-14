@@ -237,7 +237,7 @@ export const NewExplainer: React.FC<{ set: CreativeSet; onCreated: (id: string) 
   if (screen !== 'pick')
     return (
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl px-6 py-8">
+        <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
           <h1 className="mb-5 text-xl font-semibold text-gray-900">{screen === 'rec-video' ? 'Gravar vídeo' : 'Gravar áudio'}</h1>
           <Recorder kind={screen === 'rec-video' ? 'video' : 'audio'} brand={set.brand.name} onDone={take} onCancel={() => setScreen('pick')} />
         </div>
@@ -252,7 +252,7 @@ export const NewExplainer: React.FC<{ set: CreativeSet; onCreated: (id: string) 
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-6 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
         <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-violet-700"><Wand2 className="h-4 w-4" /> Vídeo explicativo</p>
         <h1 className="mt-1 text-xl font-semibold text-gray-900">Um vídeo animado no design system da marca{set.brand.name ? ` ${set.brand.name}` : ''}</h1>
 

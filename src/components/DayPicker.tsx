@@ -113,7 +113,7 @@ export const DayPicker: React.FC<{
         {value ? spanShort(value) : 'Datas'}
       </button>
       {open && (
-        <div role="dialog" aria-label="Escolher um dia ou um intervalo" className="absolute right-0 top-full z-50 mt-2 w-[264px] rounded-xl bg-white p-3 text-gray-900 shadow-lg ring-1 ring-gray-200">
+        <div role="dialog" aria-label="Escolher um dia ou um intervalo" className="absolute right-0 top-full z-50 mt-2 w-[264px] max-w-[calc(100vw-2rem)] rounded-xl bg-white p-3 text-gray-900 shadow-lg ring-1 ring-gray-200">
           <div className="mb-2 flex items-center justify-between">
             <button type="button" onClick={() => shift(-1)} disabled={!canBack} aria-label="Mês anterior" className="flex h-7 w-7 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 disabled:opacity-30">
               <ChevronLeft className="h-4 w-4" />

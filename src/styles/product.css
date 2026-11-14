@@ -117,6 +117,19 @@ body:has(.se-product) .toaster [data-sonner-toast] { border-radius: 16px; backgr
   .se-product input, .se-product textarea, .se-product select { font-size: 16px; }
   .se-page-header h1 { font-size: 27px; }
   .se-product [data-se-ui='button'] { min-height: 40px; }
+  /* Revisão de celular (2026-11-13): os portais (diálogos, menus, popovers e o menu lateral do celular)
+     ficam fora do `.se-product`; abaixo de 16 px o iOS dá zoom ao focar o campo. */
+  body:has(.se-product) :is(.se-dialog-content, .se-sidebar-mobile, .se-menu-glass, [data-radix-popper-content-wrapper]) :is(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']), textarea, select) { font-size: 16px; }
+  /* Nada da tela empurra a página para o lado; a barra do Safari não corta o fim (dvh) */
+  .se-app .se-content { overflow-x: clip; }
+  .se-product.se-app, .se-app .se-workspace { min-height: 100dvh; }
+  /* O menu recolhido é só do desktop */
+  .se-app.se-menu-collapsed .se-skip-link { left: 16px; }
+  /* Menu lateral do celular: alvos de toque de 40 px */
+  .se-sidebar-mobile .se-nav-item { height: 40px; font-size: 14px; }
+  .se-sidebar-mobile .se-nav-search input { height: 40px; }
+  .se-sidebar-mobile .se-sidebar-user button, .se-sidebar-mobile .se-sidebar-user a { min-height: 40px; }
+  .se-sidebar-mobile .se-sidebar-user button[aria-label='Sair da conta'] { width: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .se-product *, body:has(.se-product) .se-dialog-content, body:has(.se-product) .se-dialog-overlay { scroll-behavior: auto; animation-duration: .01ms; animation-iteration-count: 1; transition-duration: .01ms; }
@@ -173,7 +186,9 @@ body:has(.se-product) .se-dialog-content[data-state='closed'] { animation-durati
 body:has(.se-product) .se-dialog-content h2 { font-size: 17px; font-weight: 650; letter-spacing: -.022em; line-height: 1.3; }
 body:has(.se-product) .se-dialog-content h2 + p { font-size: 13px; line-height: 1.5; }
 @media (max-width: 639px) {
-  body:has(.se-product) .se-dialog-content { border-radius: 20px; padding: 20px; }
+  body:has(.se-product) .se-dialog-content { border-radius: 20px; }
+  /* Só no padding padrão (p-6): diálogos com `p-0` e cabeçalho/rodapé próprios não ganham borda extra */
+  body:has(.se-product) .se-dialog-content[class~='p-6'] { padding: 20px; }
   body:has(.se-product) .se-dialog-content [data-se-ui='button'] { min-height: 44px; }
 }
 

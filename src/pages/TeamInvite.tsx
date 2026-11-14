@@ -168,7 +168,7 @@ const TeamInvite: React.FC = () => {
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 text-gray-600" aria-hidden>
           <Users className="h-5 w-5" />
         </span>
-        <h1 className="mt-4 text-xl font-semibold tracking-tight text-gray-900">
+        <h1 className="mt-4 break-words text-xl font-semibold tracking-tight text-gray-900">
           {inviter} convidou você para a equipe {invite.teamName}
         </h1>
         <p className="mt-2 text-sm text-gray-600">
@@ -189,11 +189,11 @@ const TeamInvite: React.FC = () => {
               {joining ? 'Entrando…' : 'Entrar na equipe'}
             </Button>
             <p className="text-center text-xs text-gray-500">
-              Você vai entrar como <span className="font-medium text-gray-700">{user.email}</span>.{' '}
+              Você vai entrar como <span className="break-all font-medium text-gray-700">{user.email}</span>.{' '}
               <button
                 type="button"
                 onClick={() => void switchAccount()}
-                className="rounded underline underline-offset-2 transition-colors hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="-my-1 inline-block rounded py-1 underline underline-offset-2 transition-colors hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Usar outra conta
               </button>

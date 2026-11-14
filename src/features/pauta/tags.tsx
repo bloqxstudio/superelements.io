@@ -122,7 +122,7 @@ export const TagPicker: React.FC<{
                       </span>
                       <TagChip tag={t} />
                     </button>
-                    <button type="button" aria-label={`Apagar o tipo ${t.name} da conta`} disabled={!!busy} onClick={() => void remove(t)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 opacity-0 hover:bg-gray-100 hover:text-red-700 focus-visible:opacity-100 group-hover:opacity-100">
+                    <button type="button" aria-label={`Apagar o tipo ${t.name} da conta`} disabled={!!busy} onClick={() => void remove(t)} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-red-700 md:focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100">
                       <Trash2 className="h-3.5 w-3.5" aria-hidden />
                     </button>
                   </li>

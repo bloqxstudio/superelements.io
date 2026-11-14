@@ -477,7 +477,7 @@ const Diagnosis: React.FC = () => {
                 }}
                 className="inline-flex h-8 items-center gap-2 rounded-full bg-white px-3 text-sm text-gray-700 ring-1 ring-inset ring-gray-200 transition-colors hover:bg-gray-50 hover:text-gray-900 active:scale-[0.96]"
               >
-                <span className="max-w-[16rem] truncate">{r.name}</span>
+                <span className="max-w-[11rem] truncate sm:max-w-[16rem]">{r.name}</span>
                 <PlatformBadge platform={r.platform} />
               </button>
             ))}
@@ -518,14 +518,14 @@ const Diagnosis: React.FC = () => {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold tracking-tight text-gray-900">{lead.name}</h2>
+                <h2 className="min-w-0 break-words text-lg font-semibold tracking-tight text-gray-900">{lead.name}</h2>
                 <PlatformBadge platform={result.diagnosis.scan.platform} />
               </div>
               <a
                 href={result.diagnosis.scan.url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-0.5 inline-flex items-center gap-1 text-sm text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
+                className="mt-0.5 inline-flex max-w-full items-center gap-1 break-all text-sm text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
               >
                 {hostOf(result.diagnosis.scan.url) || result.diagnosis.scan.url}
                 <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />

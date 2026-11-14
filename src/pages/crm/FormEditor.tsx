@@ -380,9 +380,9 @@ const FormEditor: React.FC = () => {
               )}
             </div>
             <div className="lg:sticky lg:top-4">
-              <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Prévia ao vivo</span>
-                <span className="flex items-center gap-1">
+                <span className="flex flex-wrap items-center gap-1">
                   <label className="mr-1 flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-gray-600 hover:bg-zinc-100" title="Avança as etapas sem preencher os campos (só nesta prévia)">
                     <Switch checked={test} onCheckedChange={setTest} className="scale-75" aria-label="Modo teste" /> Modo teste
                   </label>

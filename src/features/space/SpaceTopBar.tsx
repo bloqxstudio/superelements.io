@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Bot, Check, ChevronDown, Cloud, CloudDownload, CloudOff, CloudUpload, Copy, Globe, History, LayoutGrid, NotebookText, Play, Plus, Redo2, Trash2, TriangleAlert, Undo2, Users, AlignHorizontalSpaceAround } from 'lucide-react'
+import { Bot, Check, ChevronDown, Cloud, CloudDownload, CloudOff, CloudUpload, Copy, Globe, History, LayoutGrid, NotebookText, Play, Plus, Redo2, Trash2, TriangleAlert, Undo2, Users, AlignHorizontalSpaceAround, PanelLeft, SlidersHorizontal } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +31,7 @@ import { useProjectPresence } from './presence/presence'
 import { Hint } from './ToolbarIsland'
 import { HistoryDialog } from './history/HistoryDialog'
 import { useSpaceUi } from './spaceUi'
+import { useNarrow } from './useNarrow'
 
 const SYNC: Record<SyncStatus, { icon: typeof Cloud; label: string; className: string }> = {
   saved: { icon: Cloud, label: 'Salvo na conta', className: 'text-gray-400' },
@@ -178,7 +179,7 @@ const ProjectTitle: React.FC<{ projectId: string }> = ({ projectId }) => {
   const time = sync.status === 'saved' && sync.savedAt ? ` às ${new Date(sync.savedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''
   const Icon = status?.icon
   return (
-    <div className="flex min-w-0 items-center justify-center gap-2 text-[13px]">
+    <div className="hidden min-w-0 items-center justify-center gap-2 text-[13px] sm:flex">
       <span className="truncate font-semibold text-gray-900" aria-current="page">
         {project?.name}
       </span>
@@ -231,7 +232,7 @@ const PublishButton: React.FC = () => {
           className="inline-flex h-8 items-center gap-1.5 rounded-l-lg bg-primary pl-3 pr-2.5 text-[13px] font-semibold text-primary-foreground transition-[background-color,transform] hover:bg-primary/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
         >
           <MainIcon className="h-3.5 w-3.5" />
-          {main.label}
+          <span className="sr-only sm:not-sr-only">{main.label}</span>
         </button>
       </Hint>
       <DropdownMenu modal={false}>
@@ -280,14 +281,36 @@ export const SpaceTopBar: React.FC<SpaceTopBarProps> = ({ projectId }) => {
   const project = useProject(projectId)
   const [sharing, setSharing] = useState(false)
   const { undo, redo, openPlayer } = useSpaceStore.getState()
+  // Celular: os painéis são gavetas, abertas pelos botões desta barra
+  const narrow = useNarrow()
+  const drawer = useSpaceUi((s) => s.drawer)
+  const libraryOpen = useSpaceUi((s) => s.left === 'library')
+  const insertPressed = narrow ? drawer === 'left' && libraryOpen : insertOpen
+  const insert = () => {
+    if (!narrow) return useSpaceUi.getState().toggleInsert()
+    if (drawer === 'left' && libraryOpen) useSpaceUi.getState().setDrawer(null)
+    else useSpaceUi.getState().openLibrary()
+  }
+  const openLayers = () => {
+    const ui = useSpaceUi.getState()
+    if (drawer === 'left' && !libraryOpen) return ui.setDrawer(null)
+    if (libraryOpen) ui.setLeft(ui.beforeLibrary)
+    ui.setDrawer('left')
+  }
+  const toggleDrawer = (side: 'left' | 'right') => useSpaceUi.getState().setDrawer(drawer === side ? null : side)
 
   return (
-    <header className="se-editor-bar relative z-50 grid h-12 shrink-0 select-none grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-gray-200 bg-white px-2">
+    <header className="se-editor-bar relative z-50 grid h-12 shrink-0 select-none grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 border-b border-gray-200 bg-white px-1.5 sm:grid-cols-[1fr_auto_1fr] sm:gap-3 sm:px-2">
       <div className="flex min-w-0 items-center gap-0.5">
         <ProjectMenu projectId={projectId} />
-        <div aria-hidden className="mx-1 h-5 w-px bg-gray-200" />
+        <div aria-hidden className="mx-1 hidden h-5 w-px bg-gray-200 sm:block" />
+        {narrow && (
+          <BarButton label="Páginas e camadas" pressed={drawer === 'left' && !libraryOpen} onClick={openLayers}>
+            <PanelLeft className="h-4 w-4" />
+          </BarButton>
+        )}
         <Hint label="Inserir" hint="Seções, modelos e elementos da Biblioteca">
-          <BarButton label="Inserir" pressed={insertOpen} onClick={useSpaceUi.getState().toggleInsert}>
+          <BarButton label="Inserir" pressed={insertPressed} onClick={insert}>
             <Plus className="h-4 w-4" />
           </BarButton>
         </Hint>
@@ -297,7 +320,7 @@ export const SpaceTopBar: React.FC<SpaceTopBarProps> = ({ projectId }) => {
           </BarButton>
         </Hint>
         <Hint label="Refazer" hint={`${MOD_KEY}Shift+Z`}>
-          <BarButton label="Refazer" onClick={() => redo()} disabled={!canRedo}>
+          <BarButton label="Refazer" onClick={() => redo()} disabled={!canRedo} className="hidden sm:inline-flex">
             <Redo2 className="h-4 w-4" />
           </BarButton>
         </Hint>
@@ -305,8 +328,11 @@ export const SpaceTopBar: React.FC<SpaceTopBarProps> = ({ projectId }) => {
 
       <ProjectTitle projectId={projectId} />
 
-      <div className="flex min-w-0 items-center justify-end gap-1.5">
-        <PresenceStack presence={presence} max={4} size={26} className="mr-1" />
+      {/* Sem o nome no meio (celular), a coluna do meio só empurra o resto para os lados */}
+      <span aria-hidden className="sm:hidden" />
+
+      <div className="flex min-w-0 items-center justify-end gap-0.5 sm:gap-1.5">
+        <PresenceStack presence={presence} max={4} size={26} className="mr-1 hidden sm:flex" />
         <Hint label={`Player da página ${activePage?.name ?? ''}`.trim()} hint="Só esta página, com a marca e as animações, rolando como no site">
           <BarButton label="Player" onClick={() => activePage && openPlayer(activePage.id)} disabled={!activePage?.sectionIds.length}>
             <Play className="h-4 w-4 fill-current" />
@@ -318,8 +344,13 @@ export const SpaceTopBar: React.FC<SpaceTopBarProps> = ({ projectId }) => {
             <span className="hidden lg:inline">{project.role !== 'editor' ? 'Compartilhar' : 'Pessoas'}</span>
           </BarButton>
         )}
+        {narrow && (
+          <BarButton label="Estilo" pressed={drawer === 'right'} onClick={() => toggleDrawer('right')}>
+            <SlidersHorizontal className="h-4 w-4" />
+          </BarButton>
+        )}
         <PublishButton />
-        <div className="ml-1">
+        <div className="ml-1 hidden sm:block">
           <UserAvatar />
         </div>
       </div>

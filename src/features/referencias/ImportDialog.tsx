@@ -107,7 +107,7 @@ export const ImportDialog: React.FC<{
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !sending && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
+      <DialogContent className="max-h-[90dvh] max-w-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Importar do grupo</DialogTitle>
           <DialogDescription>

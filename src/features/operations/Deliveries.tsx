@@ -32,7 +32,7 @@ export const Deliveries: React.FC = () => {
         <h2 className="text-sm font-semibold text-gray-900">Últimas entregas</h2>
         <div className="ml-auto flex flex-wrap gap-1" role="group" aria-label="Filtrar por área">
           {(['todas', ...(Object.keys(AREAS) as Area[])] as const).map((a) => (
-            <button key={a} type="button" aria-pressed={area === a} onClick={() => setArea(a)} className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-medium', area === a ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50')}>{a === 'todas' ? 'Todas' : AREAS[a].label}</button>
+            <button key={a} type="button" aria-pressed={area === a} onClick={() => setArea(a)} className={cn('rounded-full px-2.5 py-1.5 text-[11px] font-medium sm:py-0.5', area === a ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50')}>{a === 'todas' ? 'Todas' : AREAS[a].label}</button>
           ))}
         </div>
       </div>

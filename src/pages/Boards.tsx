@@ -94,7 +94,7 @@ const Boards: React.FC = () => {
           {(boards?.length ?? 0) > 4 && (
             <label className="flex h-9 w-full max-w-xs items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 sm:w-auto">
               <Search className="h-3.5 w-3.5 text-gray-400" aria-hidden />
-              <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar quadro" aria-label="Buscar quadro" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+              <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar quadro" aria-label="Buscar quadro" className="min-w-0 flex-1 bg-transparent text-base outline-none sm:text-sm" />
             </label>
           )}
         </div>

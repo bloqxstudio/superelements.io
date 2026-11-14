@@ -208,7 +208,7 @@ export const ProjectAccessDialog: React.FC<ProjectAccessDialogProps> = ({ open, 
         )}
 
         {status === 'error' ? (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-sm" role="alert">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-sm" role="alert">
             <p className="flex items-center gap-2 text-gray-700">
               <CircleAlert className="h-4 w-4 shrink-0 text-destructive" aria-hidden />
               Não foi possível ler quem tem acesso.

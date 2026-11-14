@@ -77,7 +77,7 @@ export const ProductCatalogEditor: React.FC<{ catalog: ProductCatalog | undefine
           <summary className="cursor-pointer text-xs font-medium text-violet-700">Logos das marcas ({brands.filter((b) => b.logo).length} de {brands.length})</summary>
           <div className="mt-2 grid gap-1.5">
             {brands.map((b) => (
-              <div key={b.name} className="grid grid-cols-[28px_110px_minmax(0,1fr)] items-center gap-2">
+              <div key={b.name} className="grid grid-cols-[28px_80px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[28px_110px_minmax(0,1fr)]">
                 <span className="grid h-7 w-7 place-items-center overflow-hidden rounded bg-zinc-50">{b.logo ? <img src={b.logo} alt="" className="h-6 w-6 object-contain" /> : <span className="text-xs font-semibold text-gray-400">{b.name.charAt(0)}</span>}</span>
                 <span className="truncate text-sm text-gray-700">{b.name}</span>
                 <input className={INPUT} placeholder="https://… (PNG ou SVG)" defaultValue={b.logo ?? ''} onBlur={(e) => setLogo(b.name, e.target.value)} aria-label={`Logo de ${b.name}`} />

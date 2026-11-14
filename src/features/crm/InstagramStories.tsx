@@ -139,7 +139,7 @@ const AiStrip: React.FC = () => {
   if (!connected || stale) {
     if (import.meta.hot) return <p className="text-xs text-gray-500">{stale ? 'O servidor de dev não conhece a esteira: reinicie o npm run dev.' : 'A IA do servidor de dev não respondeu.'}</p>
     return (
-      <div className="flex items-center gap-2 text-xs text-gray-600">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
         <span>{stale ? 'O conector está desatualizado: baixe de novo.' : 'Conecte o Codex deste computador para montar a semana.'}</span>
         <Button size="sm" variant="outline" className="h-7" onClick={() => setOpen(true)}>
           Conectar

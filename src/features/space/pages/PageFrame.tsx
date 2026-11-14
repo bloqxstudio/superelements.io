@@ -191,7 +191,7 @@ const PageBar: React.FC<PageBarProps> = ({ page, count, realHeight, onlyPage, ac
       >
         <h2 className={cn('min-w-0 truncate font-medium', active ? 'text-violet-700' : 'text-gray-600')}>{page.name}</h2>
         {!tiny && <PresenceStack presence={presence} max={1} size={16} ring="#f4f4f5" />}
-        <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100" onMouseDown={stop} onDoubleClick={stop}>
+        <div className="shrink-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0" onMouseDown={stop} onDoubleClick={stop}>
           <PageMenu page={page} count={count} onlyPage={onlyPage} />
         </div>
       </div>

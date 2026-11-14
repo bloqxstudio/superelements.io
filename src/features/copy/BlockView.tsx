@@ -66,7 +66,7 @@ export const BlockView = memo(function BlockView(p: Props) {
   const first = p.marks[0]
   return (
     <div
-      className={cn('group relative -mx-10 flex items-start gap-1 px-10 py-1', p.selected && 'rounded-lg bg-violet-50/60 ring-1 ring-violet-200', p.flash && 'rounded-lg bg-orange-50 ring-2 ring-orange-300 transition-colors')}
+      className={cn('group relative -mx-7 flex items-start gap-1 px-7 py-1 sm:-mx-10 sm:px-10', p.selected && 'rounded-lg bg-violet-50/60 ring-1 ring-violet-200', p.flash && 'rounded-lg bg-orange-50 ring-2 ring-orange-300 transition-colors')}
       onDragOver={(e) => {
         e.preventDefault()
         const r = e.currentTarget.getBoundingClientRect()
@@ -77,13 +77,13 @@ export const BlockView = memo(function BlockView(p: Props) {
         p.onDrop()
       }}
     >
-      {p.dropLine && <span className={cn('pointer-events-none absolute left-10 right-10 h-0.5 rounded bg-violet-500', p.dropLine === 'before' ? '-top-px' : '-bottom-px')} />}
+      {p.dropLine && <span className={cn('pointer-events-none absolute left-7 right-7 h-0.5 rounded bg-violet-500 sm:left-10 sm:right-10', p.dropLine === 'before' ? '-top-px' : '-bottom-px')} />}
 
       {/* Quem está aqui: uma barra na cor da pessoa (ou do agente) e o nome */}
       {first && (
         <>
-          <span className="pointer-events-none absolute inset-y-1 left-8 w-0.5 rounded" style={{ background: first.color }} />
-          <span className="pointer-events-none absolute -top-2 left-10 z-10 flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-px text-[10px] font-semibold text-white" style={{ background: first.color }}>
+          <span className="pointer-events-none absolute inset-y-1 left-5 w-0.5 rounded sm:left-8" style={{ background: first.color }} />
+          <span className="pointer-events-none absolute -top-2 left-7 z-10 flex sm:left-10 items-center gap-1 whitespace-nowrap rounded px-1.5 py-px text-[10px] font-semibold text-white" style={{ background: first.color }}>
             {first.name}
             {first.note ? ` · ${first.note}` : ''}
             {p.marks.length > 1 ? ` +${p.marks.length - 1}` : ''}
@@ -103,7 +103,7 @@ export const BlockView = memo(function BlockView(p: Props) {
         onClick={(e) => p.onSelectHandle(block.id, e.shiftKey || e.metaKey || e.ctrlKey)}
         aria-label="Mover ou escolher o bloco"
         title="Arraste para mover · clique para escolher (Shift soma) e pedir algo a um agente só sobre ele"
-        className="absolute left-1 top-1.5 flex h-6 w-5 cursor-grab items-center justify-center rounded text-gray-300 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100"
+        className="absolute left-1 top-1.5 flex h-6 w-5 cursor-grab items-center justify-center rounded text-gray-300 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
       >
         <GripVertical className="h-4 w-4" />
       </button>
@@ -150,7 +150,7 @@ export const BlockView = memo(function BlockView(p: Props) {
         onClick={() => p.onOpenComments(block.id)}
         aria-label={p.comments ? `${p.comments} comentários` : 'Comentar'}
         title={p.comments ? `${p.comments} comentário${p.comments > 1 ? 's' : ''}` : 'Comentar este bloco'}
-        className={cn('mt-1.5 flex h-6 shrink-0 items-center gap-1 rounded px-1 text-[11px] font-medium', p.comments ? 'bg-amber-100 text-amber-800' : 'text-gray-300 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100')}
+        className={cn('mt-1.5 flex h-6 shrink-0 items-center gap-1 rounded px-1 text-[11px] font-medium', p.comments ? 'bg-amber-100 text-amber-800' : 'text-gray-300 opacity-0 hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100 [@media(hover:none)]:opacity-100')}
       >
         <MessageSquare className="h-3.5 w-3.5" />
         {p.comments > 0 && p.comments}

@@ -130,13 +130,13 @@ export const MediaViewer: React.FC = () => {
         {kind === 'image' && (
           <>
             <button type="button" className={btn} onClick={() => setZoom((z) => Math.max(z - 1, 0))} disabled={!zoom} aria-label="Diminuir"><Minus className="h-4 w-4" /></button>
-            <span className="w-10 text-center text-xs tabular-nums text-white/60">{Math.round(scale * 100)}%</span>
+            <span className="hidden w-10 text-center text-xs tabular-nums text-white/60 min-[400px]:inline">{Math.round(scale * 100)}%</span>
             <button type="button" className={btn} onClick={() => setZoom((z) => Math.min(z + 1, ZOOMS.length - 1))} disabled={zoom === ZOOMS.length - 1} aria-label="Ampliar"><Plus className="h-4 w-4" /></button>
           </>
         )}
         {item.href && (
-          <button type="button" onClick={() => { close(); navigate(item.href!) }} className="ml-1 hidden items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-white/80 hover:bg-white/10 hover:text-white sm:flex">
-            {item.hrefLabel ?? 'Abrir de onde veio'}<ArrowUpRight className="h-3.5 w-3.5" />
+          <button type="button" onClick={() => { close(); navigate(item.href!) }} aria-label={item.hrefLabel ?? 'Abrir de onde veio'} className="flex h-9 w-9 shrink-0 items-center justify-center gap-1 rounded-full text-xs font-medium text-white/80 hover:bg-white/10 hover:text-white sm:ml-1 sm:h-auto sm:w-auto sm:px-3 sm:py-1.5">
+            <span className="hidden sm:inline">{item.hrefLabel ?? 'Abrir de onde veio'}</span><ArrowUpRight className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
           </button>
         )}
         <button type="button" className={btn} onClick={() => void download()} disabled={!url} aria-label="Baixar"><Download className="h-4 w-4" /></button>
@@ -165,7 +165,7 @@ export const MediaViewer: React.FC = () => {
       </div>
 
       {many && items.length <= 60 && (
-        <div className="flex shrink-0 justify-center gap-1.5 overflow-x-auto px-3 py-3">
+        <div className="flex shrink-0 gap-1.5 overflow-x-auto px-3 py-3 [&>:first-child]:ml-auto [&>:last-child]:mr-auto">
           {items.map((it, i) => (
             <button key={i} type="button" onClick={() => useViewer.setState({ index: i })} aria-label={`Ver ${it.name}`} aria-current={i === index}
               className={cn('h-12 w-12 shrink-0 overflow-hidden rounded-md border-2 bg-white/5', i === index ? 'border-white' : 'border-transparent opacity-60 hover:opacity-100')}>

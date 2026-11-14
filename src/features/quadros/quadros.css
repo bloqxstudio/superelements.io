@@ -13,6 +13,15 @@
 }
 .qd-title:hover { border-color: #e5e7eb; }
 .qd-title:focus { border-color: #a78bfa; background: #fff; }
+/* Celular: 16px evita o zoom do iOS ao renomear; a barra de cima recebe "Do sistema" e "Nota" (ver BoardEditor) */
+@media (max-width: 640px) {
+  .qd-bar { gap: 4px; padding: 0 8px; }
+  .qd-title { font-size: 16px; flex: 1 1 auto; }
+  .qd-sticky-btn, .qd-system-btn { padding: 0; width: 36px; justify-content: center; }
+  .qd-people .qd-avatar:nth-child(n+3):not(.qd-more) { display: none; }
+}
+/* O menu de cores fica por cima do canvas quando está na barra de cima */
+.qd-bar { position: relative; z-index: 20; }
 .qd-status { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #6b7280; white-space: nowrap; }
 @media (max-width: 520px) { .qd-status { display: none; } }
 
@@ -77,6 +86,15 @@
 .qd-plus:focus-visible { outline: 2px solid #7c3aed; outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .qd-plus { transition: none; } .qd-plus:hover { transform: none; } }
 
+/* Toque: alvos maiores para o "+" do fluxograma e o botão de pessoas da nota */
+@media (pointer: coarse) {
+  .qd-plus { width: 32px; height: 32px; margin: -16px 0 0 -16px; }
+  .qd-tag-btn { width: 36px; height: 36px; }
+  .qd-tag-people { translate: -10px -10px; }
+  .qd-tag-menu { top: 42px; }
+  .qd-tag-menu button { padding: 10px 6px; }
+}
+
 .qd-faces { position: absolute; display: flex; pointer-events: auto; }
 .qd-face {
   position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: -6px;
@@ -92,7 +110,7 @@
 }
 .qd-tag-btn:hover { color: #7c3aed; }
 .qd-tag-menu {
-  position: absolute; right: 0; top: 32px; width: 240px; max-height: 300px; overflow-y: auto; padding: 6px; z-index: 5;
+  position: absolute; right: 0; top: 32px; width: min(240px, calc(100vw - 24px)); max-height: 300px; overflow-y: auto; padding: 6px; z-index: 5;
   background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.14), 0 0 0 1px rgba(0,0,0,.06);
 }
 .qd-tag-menu p { margin: 2px 6px 6px; font-size: 11px; color: #6b7280; }

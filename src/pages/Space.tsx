@@ -15,6 +15,7 @@ import { useFrameGestureGuard } from '@/features/space/editor/frames'
 import { AgentCursors } from '@/features/space/chat/AgentCursors'
 import { useShareAgentCursors } from '@/features/space/presence/shareAgentCursors'
 import { useActivityLog } from '@/features/space/history/activity'
+import { useNarrow } from '@/features/space/useNarrow'
 
 const NO_INSETS = { left: 0, right: 0 }
 
@@ -26,6 +27,9 @@ const NO_INSETS = { left: 0, right: 0 }
 const Space: React.FC = () => {
   const { projectId = '' } = useParams()
   const panels = useSpaceUi((s) => s.panels)
+  const drawer = useSpaceUi((s) => s.drawer)
+  // No celular os painéis fixos (264 + 320 px) comeriam o canvas inteiro: viram gavetas
+  const narrow = useNarrow()
   useSectionShortcuts()
   useEditorShortcuts()
   useFrameGestureGuard()
@@ -46,17 +50,23 @@ const Space: React.FC = () => {
   }, [])
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-[#f5f5f7]">
+    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#f5f5f7]">
       <SpaceTopBar projectId={projectId} />
-      <div className="flex min-h-0 flex-1">
-        {panels && <SpaceSidebar />}
+      <div className="relative flex min-h-0 flex-1">
+        {panels && !narrow && <SpaceSidebar />}
         <div data-space-root className="relative min-w-0 flex-1 overflow-hidden">
           <SpaceCanvas />
           {/* O cursor dos agentes por cima do canvas; quem roda o Claude Code ou o Codex é o servidor de dev ou o conector */}
           <AgentCursors insets={NO_INSETS} />
           <CanvasDock />
         </div>
-        {panels && <SpaceInspector />}
+        {panels && !narrow && <SpaceInspector />}
+        {narrow && drawer && (
+          <>
+            <button type="button" aria-label="Fechar o painel" className="absolute inset-0 z-50 bg-black/20" onClick={() => useSpaceUi.getState().setDrawer(null)} />
+            {drawer === 'left' ? <SpaceSidebar drawer /> : <SpaceInspector drawer />}
+          </>
+        )}
       </div>
       <PagePlayer />
       <LibraryDragChip />

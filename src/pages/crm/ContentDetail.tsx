@@ -377,7 +377,7 @@ const ContentDetail: React.FC = () => {
 
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{content.title}</h1>
+          <h1 className="break-words text-2xl font-semibold tracking-tight text-gray-900">{content.title}</h1>
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
             <StatusChip content={content} />
             <span>{formatLabel(content.format)}</span>
@@ -423,7 +423,7 @@ const ContentDetail: React.FC = () => {
         </p>
       )}
 
-      <div role="tablist" aria-label="Partes do conteúdo" className="mt-5 flex w-fit rounded-lg bg-gray-100 p-0.5 text-sm">
+      <div role="tablist" aria-label="Partes do conteúdo" className="mt-5 flex w-fit max-w-full overflow-x-auto rounded-lg bg-gray-100 p-0.5 text-sm">
         {TABS.map((t) => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => openTab(t.id)} className={cn('rounded-md px-3 py-1 font-medium transition-colors', tab === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800')}>
             {t.label}

@@ -240,7 +240,7 @@ export const WelcomeEditor: React.FC<{ form: Pick<CrmForm, 'id' | 'teamId'>; def
         <div className="grid gap-4">
           <div>
             <span className={LABEL}>Logo (PNG com fundo transparente)</span>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex h-12 w-32 items-center justify-center overflow-hidden rounded-lg border border-dashed border-gray-300 bg-white px-2">
                 {w.logoUrl ? <img src={w.logoUrl} alt="" className="max-h-8 max-w-full object-contain" /> : <span className="text-xs text-gray-400">Sem logo</span>}
               </div>
@@ -266,13 +266,13 @@ export const WelcomeEditor: React.FC<{ form: Pick<CrmForm, 'id' | 'teamId'>; def
           </div>
 
           <div>
-            <div className="mb-1 flex items-center justify-between gap-2">
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
               <span className={cn(LABEL, 'mb-0')}>Headline: ícone + para quem você vende + resultado</span>
               <Counter n={words} max={WELCOME_LIMITS.titleWords} unit="palavras" />
             </div>
             <div className="flex items-start gap-2">
               <IconPicker value={w.icon} onChange={(icon) => set({ icon })} label="Ícone da headline" />
-              <textarea className={cn(FIELD, 'min-h-[64px] flex-1 py-2')} value={w.title} onChange={(e) => set({ title: e.target.value })} aria-label="Headline" />
+              <textarea className={cn(FIELD, 'min-h-[64px] min-w-0 flex-1 py-2')} value={w.title} onChange={(e) => set({ title: e.target.value })} aria-label="Headline" />
             </div>
             <p className="mt-1 text-[11px] text-gray-500">
               Use <code className="rounded bg-zinc-100 px-1">**assim**</code> para o negrito. Até {WELCOME_LIMITS.titleWords} palavras, transmitindo um resultado específico.
@@ -469,7 +469,7 @@ const DURATIONS = [15, 20, 30, 45, 60, 90, 120]
 const DayRow: React.FC<{ day: number; ranges: BookingRange[]; onChange: (ranges: BookingRange[]) => void }> = ({ day, ranges, onChange }) => {
   const on = ranges.length > 0
   return (
-    <li className="grid grid-cols-[96px_minmax(0,1fr)] items-start gap-3 py-2.5 sm:grid-cols-[120px_minmax(0,1fr)]">
+    <li className="grid grid-cols-1 items-start gap-x-3 gap-y-1 py-2.5 sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-3">
       <label className="flex h-9 items-center gap-2 text-sm font-medium text-gray-800">
         <Switch checked={on} onCheckedChange={(v) => onChange(v ? [{ start: '09:00', end: '18:00' }] : [])} aria-label={`Atende ${WEEKDAYS[day]}`} />
         {WEEKDAYS[day].slice(0, 3)}
@@ -477,10 +477,10 @@ const DayRow: React.FC<{ day: number; ranges: BookingRange[]; onChange: (ranges:
       {on ? (
         <div className="grid gap-1.5">
           {ranges.map((r, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <input type="time" step={900} className={cn(INPUT, 'w-[108px] tabular-nums')} value={r.start} onChange={(e) => onChange(ranges.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)))} aria-label={`${WEEKDAYS[day]}: início do intervalo ${i + 1}`} />
+            <div key={i} className="flex flex-wrap items-center gap-1.5">
+              <input type="time" step={900} className={cn(INPUT, 'w-[100px] tabular-nums sm:w-[108px]')} value={r.start} onChange={(e) => onChange(ranges.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)))} aria-label={`${WEEKDAYS[day]}: início do intervalo ${i + 1}`} />
               <span className="text-gray-400">–</span>
-              <input type="time" step={900} className={cn(INPUT, 'w-[108px] tabular-nums', r.end <= r.start && 'border-rose-300')} value={r.end} onChange={(e) => onChange(ranges.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)))} aria-label={`${WEEKDAYS[day]}: fim do intervalo ${i + 1}`} />
+              <input type="time" step={900} className={cn(INPUT, 'w-[100px] tabular-nums sm:w-[108px]', r.end <= r.start && 'border-rose-300')} value={r.end} onChange={(e) => onChange(ranges.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)))} aria-label={`${WEEKDAYS[day]}: fim do intervalo ${i + 1}`} />
               <button type="button" onClick={() => onChange(ranges.filter((_, j) => j !== i))} className="rounded p-1.5 text-gray-400 hover:bg-zinc-100 hover:text-rose-600" aria-label={`Tirar o intervalo ${i + 1} de ${WEEKDAYS[day]}`}>
                 <X className="h-4 w-4" />
               </button>
@@ -608,7 +608,7 @@ export const BookingEditor: React.FC<{ definition: FormDefinition; settings: For
               <input className={INPUT} value={b.title} onChange={(e) => set({ title: e.target.value })} />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div>
               <label className={LABEL}>Duração</label>
               <select className={INPUT} value={b.durationMin} onChange={(e) => set({ durationMin: Number(e.target.value) })}>

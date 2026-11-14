@@ -397,7 +397,7 @@ const MetricMenuItems: React.FC<{ value: string; onChange: (key: string) => void
   </DropdownMenuRadioGroup>
 )
 
-const MENU = 'max-h-[min(70vh,560px)] w-72 overflow-y-auto'
+const MENU = 'max-h-[min(70dvh,560px)] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto'
 
 /** Um destaque: o nome da métrica abre a lista para trocar (como os cartões do Google Ads). */
 const MetricTile: React.FC<{ metric: string; view: AdView; ctx: SubContext; dark?: boolean; onChange: (key: string) => void; onReset: () => void }> = ({ metric, view, ctx, dark, onChange, onReset }) => {
@@ -532,7 +532,7 @@ const CampaignFilter: React.FC<{ campaigns: AdCampaign[]; selected: string[] | n
           <span className="truncate">{label}</span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-80 p-0">
+        <DropdownMenuContent align="start" className="w-[min(20rem,calc(100vw-2rem))] p-0">
           <div className="border-b border-gray-100 p-2">
             <label className="flex items-center gap-2 rounded-md bg-zinc-50 px-2">
               <Search className="h-3.5 w-3.5 text-gray-400" aria-hidden />

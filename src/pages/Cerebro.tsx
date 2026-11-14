@@ -314,7 +314,7 @@ const NewNote: React.FC<{ teamId: string; folders: string[]; defaultFolder: stri
     finally { setBusy(false) }
   }
   return (
-    <div className="absolute right-0 top-full z-20 mt-2 w-80 rounded-xl border border-gray-200 bg-white p-4 shadow-lg">
+    <div className="absolute right-0 top-full z-20 mt-2 w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border border-gray-200 bg-white p-4 shadow-lg">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm font-semibold text-gray-900">Nova</p>
         <button type="button" onClick={onClose} aria-label="Fechar" className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><X className="h-4 w-4" /></button>

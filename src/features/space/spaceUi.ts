@@ -37,6 +37,9 @@ interface SpaceUiState {
   /** O "+" da barra: abre a Biblioteca ou, aberta, volta para a aba de antes. */
   toggleInsert: () => void
   togglePanels: () => void
+  /** No celular os painéis viram gavetas por cima do canvas: qual está aberta (uma por vez). */
+  drawer: 'left' | 'right' | null
+  setDrawer: (drawer: 'left' | 'right' | null) => void
 }
 
 /** O que está aberto nos painéis do Space: as abas, o tipo da Biblioteca e se os painéis aparecem. */
@@ -63,7 +66,8 @@ export const useSpaceUi = create<SpaceUiState>()((set, get) => {
     openLibrary: (kind) => {
       if (kind) get().setLibrary(kind)
       get().setLeft('library')
-      set({ panels: true })
+      // No celular abre a gaveta da esquerda; no computador `drawer` não é lido
+      set({ panels: true, drawer: 'left' })
     },
     toggleInsert: () => {
       const { left, panels, beforeLibrary } = get()
@@ -71,5 +75,7 @@ export const useSpaceUi = create<SpaceUiState>()((set, get) => {
       else get().openLibrary()
     },
     togglePanels: () => set((s) => ({ panels: !s.panels })),
+    drawer: null,
+    setDrawer: (drawer) => set({ drawer }),
   }
 })

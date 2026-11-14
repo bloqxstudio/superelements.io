@@ -95,7 +95,7 @@ const Item: React.FC<{
           <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-900">{comment.body}</p>
         )}
         {!editing && (mine || canDelete) && (
-          <div className="mt-0.5 flex gap-2 text-[11px] text-gray-500 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          <div className="mt-0.5 flex gap-2 text-[11px] text-gray-500 transition-opacity md:focus-within:opacity-100 md:opacity-0 md:group-hover:opacity-100">
             {mine && (
               <button type="button" onClick={() => setEditing(true)} className="hover:text-gray-900 hover:underline">
                 Editar

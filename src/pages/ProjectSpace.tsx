@@ -9,7 +9,7 @@ import { ProjectOpening } from '@/features/projects/ProjectOpening'
 import Space from '@/pages/Space'
 
 // O Space ocupa a tela inteira: a barra de cima é dele
-const FULL_HEIGHT = { height: '100vh' }
+const FULL_HEIGHT = { height: '100dvh' }
 
 const Failure: React.FC<{ title: string; text: string; onRetry: () => void }> = ({ title, text, onRetry }) => (
   <div className="flex items-center justify-center bg-zinc-100 px-4" style={FULL_HEIGHT}>

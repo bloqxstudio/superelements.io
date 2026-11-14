@@ -116,7 +116,7 @@ export const RecreateDialog: React.FC<{ reference: Reference; open: boolean; onC
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !busy && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[90dvh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Recriar a partir da referência</DialogTitle>
           <DialogDescription>{r.title || KIND_LABEL[r.kind]}{r.author ? ` · @${r.author}` : ''}. A Iara cria na marca da conta; nada de logo, foto ou texto da outra empresa.</DialogDescription>

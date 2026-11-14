@@ -238,10 +238,10 @@ const PageApproval: React.FC = () => {
                   placeholder={decision === 'changes' ? 'Diga a parte da página e o que trocar. Ex.: no topo, trocar a foto; nos planos, o valor do avulso é R$ 80.' : ''}
                   aria-invalid={!!formError}
                   aria-describedby={formError ? 'aprovacao-erro' : undefined}
-                  className="min-h-9 resize-y bg-white text-sm"
+                  className="min-h-9 resize-y bg-white text-base md:text-sm"
                 />
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-end gap-2">
                 <Button type="button" variant="ghost" size="sm" className="h-9" onClick={() => setDecision(null)} disabled={sending}>
                   Cancelar
                 </Button>
@@ -268,7 +268,7 @@ const PageApproval: React.FC = () => {
           >
             {notice ?? (sent?.decision === 'approved' ? 'Aprovação enviada. Obrigado!' : 'Pedido de ajuste enviado. Obrigado! Quem te mandou o link vai ver o seu comentário.')}
             {sent && !notice && (
-              <button type="button" className="text-xs font-medium underline underline-offset-2" onClick={() => setSent(null)}>
+              <button type="button" className="-my-1 py-1 text-xs font-medium underline underline-offset-2" onClick={() => setSent(null)}>
                 Fechar
               </button>
             )}

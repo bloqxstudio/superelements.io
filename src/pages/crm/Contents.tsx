@@ -295,11 +295,11 @@ const Contents: React.FC = () => {
               </ul>
             )
           ) : (
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="-mx-4 mt-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:snap-none md:grid-cols-2 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-4">
               {STATUS_ORDER.map((s) => {
                 const col = shown.filter((c) => c.status === s)
                 return (
-                  <section key={s} aria-label={STATUS_LABEL[s]} className="rounded-xl bg-gray-100/70 p-2.5">
+                  <section key={s} aria-label={STATUS_LABEL[s]} className="w-[85%] shrink-0 snap-start rounded-xl bg-gray-100/70 p-2.5 md:w-auto">
                     <h2 className="flex items-center justify-between px-1.5 pb-2 text-xs font-semibold text-gray-700">
                       {STATUS_LABEL[s]} <span className="tabular-nums text-gray-500">{col.length}</span>
                     </h2>

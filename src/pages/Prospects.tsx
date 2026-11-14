@@ -80,7 +80,7 @@ const SavedSearches: React.FC<{
                   type="button"
                   onClick={() => setConfirm(item.id)}
                   aria-label={`Apagar a busca de ${item.input.region}`}
-                  className="mr-1 mt-2 flex h-7 w-7 items-center justify-center rounded-md text-gray-400 opacity-0 hover:bg-gray-200 hover:text-gray-900 focus-visible:opacity-100 group-hover:opacity-100"
+                  className="mr-1 mt-2 flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-900 md:focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

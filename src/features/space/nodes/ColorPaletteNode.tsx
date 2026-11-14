@@ -138,7 +138,7 @@ export const ColorPaletteNode: React.FC<ColorPaletteNodeProps> = ({ node }) => {
               {data.colors.length > 1 && (
                 <button
                   onClick={() => removeColor(i)}
-                  className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-400 text-white rounded-full items-center justify-center hidden group-hover:flex transition-all"
+                  className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-400 text-white rounded-full items-center justify-center flex [@media(hover:hover)]:hidden group-hover:flex transition-all"
                 >
                   <Trash2 className="h-2 w-2" />
                 </button>

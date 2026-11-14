@@ -113,7 +113,7 @@ export const BrandAssets: React.FC<Props> = ({ brand, source, onChange }) => {
                     type="button"
                     aria-label={`Tirar: ${LOGO_LABELS[variant].toLowerCase()}`}
                     onClick={() => apply(setLogoVariant(source, variant, null))}
-                    className="absolute right-1 top-1 hidden rounded bg-background/90 p-0.5 text-muted-foreground shadow-sm hover:text-foreground group-hover:block"
+                    className="absolute right-1 top-1 rounded bg-background/90 p-0.5 text-muted-foreground shadow-sm hover:text-foreground group-hover:block block [@media(hover:hover)]:hidden"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -142,7 +142,7 @@ export const BrandAssets: React.FC<Props> = ({ brand, source, onChange }) => {
                   type="button"
                   aria-label="Tirar a foto do banco"
                   onClick={() => apply(removePhoto(source, photo.url))}
-                  className="absolute right-1 top-1 hidden rounded bg-background/90 p-0.5 text-muted-foreground shadow-sm hover:text-foreground group-hover:block"
+                  className="absolute right-1 top-1 rounded bg-background/90 p-0.5 text-muted-foreground shadow-sm hover:text-foreground group-hover:block block [@media(hover:hover)]:hidden"
                 >
                   <X className="h-3 w-3" />
                 </button>

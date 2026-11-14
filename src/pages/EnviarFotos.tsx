@@ -74,7 +74,7 @@ const EnviarFotos: React.FC = () => {
   const busy = items.some((i) => i.status === 'enviando')
 
   return (
-    <main className="flex min-h-screen items-start justify-center bg-gray-50 px-4 py-10">
+    <main className="flex min-h-[100dvh] items-start justify-center bg-gray-50 px-4 py-10">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
         <h1 className="text-lg font-semibold text-gray-900">Mandar fotos para a sua IA</h1>
         {error ? (
@@ -86,7 +86,7 @@ const EnviarFotos: React.FC = () => {
         ) : (
           <>
             <p className="mt-1 text-sm text-gray-600">
-              As fotos vão para o Cérebro de <strong>{info.conta}</strong>, na pasta <code className="rounded bg-gray-100 px-1">{info.pasta}</code>.
+              As fotos vão para o Cérebro de <strong>{info.conta}</strong>, na pasta <code className="break-all rounded bg-gray-100 px-1">{info.pasta}</code>.
             </p>
             <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className="hidden" onChange={(e) => void send(e.target.files)} />
             <button
@@ -108,6 +108,14 @@ const EnviarFotos: React.FC = () => {
                       {it.status === 'enviando' ? <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-600" /> : it.status === 'ok' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <TriangleAlert className="h-3.5 w-3.5 text-rose-600" />}
                     </span>
                   </li>
+                ))}
+              </ul>
+            )}
+            {/* O motivo da falha ficava só no title (hover), que o celular não mostra */}
+            {items.some((it) => it.status === 'erro') && (
+              <ul className="mt-3 grid gap-1 text-xs text-rose-700" role="alert">
+                {items.filter((it) => it.status === 'erro').map((it) => (
+                  <li key={it.preview} className="break-words">{it.name}: {it.error ?? 'Não enviou.'}</li>
                 ))}
               </ul>
             )}

@@ -133,7 +133,7 @@ const ProfileCard: React.FC<{ account: IgAccount; media: IgMedia[]; highlights: 
                 <li key={`${h}-${i}`} className="group flex w-16 shrink-0 flex-col items-center gap-1">
                   <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gray-50 text-sm font-semibold uppercase text-gray-500 ring-1 ring-gray-200">
                     {h.charAt(0)}
-                    <button type="button" onClick={() => onHighlights(highlights.filter((_, j) => j !== i))} aria-label={`Tirar ${h}`} className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-white group-hover:flex focus-visible:flex">
+                    <button type="button" onClick={() => onHighlights(highlights.filter((_, j) => j !== i))} aria-label={`Tirar ${h}`} className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-white md:hidden md:group-hover:flex md:focus-visible:flex">
                       <X className="h-3 w-3" />
                     </button>
                   </span>
@@ -512,7 +512,7 @@ export const AnalysisArea: React.FC<{ account: IgAccount }> = ({ account }) => {
                       {a.ai ? ' · com IA' : ''}
                       {viewing?.id === a.id ? ' (aberta)' : ''}
                     </button>
-                    <button type="button" onClick={() => void remove(a.id)} className="text-gray-300 opacity-0 hover:text-rose-600 group-hover:opacity-100 focus-visible:opacity-100" aria-label="Apagar análise">
+                    <button type="button" onClick={() => void remove(a.id)} className="text-gray-300 hover:text-rose-600 md:focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100" aria-label="Apagar análise">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </li>

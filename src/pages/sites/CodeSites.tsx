@@ -112,7 +112,7 @@ const CodeSites: React.FC = () => {
                             <p className="truncate font-medium text-gray-900">{site.name}</p>
                             <p className="truncate text-xs text-gray-500">{site.repo ?? site.dir}</p>
                           </div>
-                          <button type="button" onClick={() => void remove(site)} aria-label={`Tirar ${site.name} da lista`} className="rounded-md p-1.5 text-gray-400 opacity-0 transition-opacity hover:bg-gray-100 hover:text-gray-700 focus:opacity-100 group-hover:opacity-100">
+                          <button type="button" onClick={() => void remove(site)} aria-label={`Tirar ${site.name} da lista`} className="rounded-md p-2 text-gray-400 transition-opacity hover:bg-gray-100 hover:text-gray-700 focus:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0 sm:p-1.5">
                             <Trash2 className="h-4 w-4" aria-hidden />
                           </button>
                         </div>

@@ -231,6 +231,11 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   const layerIds = useEditor((s) => s.layerIds)
   const [snapped, setSnapped] = useState<{ slideId: string; v: number[]; h: number[] } | null>(null)
   const fitted = useRef(false)
+  // Toque (celular): dedos na tela, a pinça de zoom e o último toque (dois toques editam o texto)
+  const touches = useRef(new Map<number, { x: number; y: number }>())
+  const pinch = useRef<{ d: number; cx: number; cy: number } | null>(null)
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null)
+  const tapDouble = useRef(0)
   useEffect(() => {
     fitted.current = false
   }, [onlyPostId])
@@ -353,8 +358,35 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
       posts: s.posts.map((p) => (p.id !== pid ? p : { ...p, slides: p.slides.map((sl) => (sl.id !== sid ? sl : { ...sl, layers: sl.layers.map((l) => (patches.has(l.id) ? ({ ...l, ...patches.get(l.id) } as Layer) : l)) })) })),
     }))
 
+  /** A pinça: distância entre os dois dedos e o ponto do meio, na área do canvas. */
+  const pinchOf = () => {
+    const [a, b] = [...touches.current.values()]
+    const r = host.current!.getBoundingClientRect()
+    return { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2 - r.left, cy: (a.y + b.y) / 2 - r.top }
+  }
+
   const onDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('[data-ui]')) return
+    if (e.pointerType === 'touch') {
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (touches.current.size >= 2) {
+        // Segundo dedo: o gesto vira pinça (zoom e mover a vista); o arrasto do primeiro termina onde está
+        if (drag.current) onUp()
+        if (touches.current.size === 2) pinch.current = pinchOf()
+        e.currentTarget.setPointerCapture(e.pointerId)
+        return
+      }
+      // Dois toques seguidos no mesmo ponto valem o duplo clique (editar o texto no lugar)
+      const now = Date.now()
+      const last = lastTap.current
+      lastTap.current = { t: now, x: e.clientX, y: e.clientY }
+      if (last && now - last.t < 350 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 30) {
+        lastTap.current = null
+        tapDouble.current = now
+        onDouble(e)
+        return
+      }
+    }
     setMenu(null)
     const state = useEditor.getState()
     const w = world(e)
@@ -409,6 +441,19 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   }
 
   const onMove = (e: React.PointerEvent) => {
+    if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) {
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      const was = pinch.current
+      if (was && touches.current.size >= 2) {
+        const now = pinchOf()
+        pinch.current = now
+        if (was.d > 0) setView((v) => {
+          const k = Math.min(MAX_K, Math.max(MIN_K, (v.k * now.d) / was.d))
+          return { k, x: now.cx - ((was.cx - v.x) * k) / v.k, y: now.cy - ((was.cy - v.y) * k) / v.k }
+        })
+        return
+      }
+    }
     const d = drag.current
     {
       const w = world(e)
@@ -535,6 +580,13 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
   }
 
   const onUp = (e?: React.PointerEvent) => {
+    if (e?.pointerType === 'touch') {
+      touches.current.delete(e.pointerId)
+      if (pinch.current) {
+        if (touches.current.size < 2) pinch.current = null
+        return
+      }
+    }
     const d = drag.current
     drag.current = null
     setPanning(false)
@@ -623,7 +675,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
       onPointerUp={onUp}
       onPointerCancel={onUp}
       onPointerLeave={() => sendPointer(null)}
-      onDoubleClick={onDouble}
+      onDoubleClick={(e) => Date.now() - tapDouble.current > 600 && onDouble(e)}
       aria-label="Canvas dos criativos"
     >
       <style>{`@keyframes agentPulse{0%,100%{opacity:.45}50%{opacity:1}}@keyframes agentSweep{from{left:-35%}to{left:105%}}@keyframes agentFlash{0%{opacity:1}70%{opacity:1}100%{opacity:0}}@keyframes agentBob{0%,100%{transform:translate(0,0)}50%{transform:translate(8px,-6px)}}`}</style>
@@ -896,7 +948,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
         {/* Barra do slide escolhido */}
         {selected && (
           <div className="absolute" style={{ left: selected.x + selected.w, top: selected.y - 24 * inv, width: 0, height: 0 }}>
-            <div data-ui className="absolute bottom-0 right-0 flex items-center gap-1 whitespace-nowrap rounded-xl border bg-white p-1 shadow-lg" style={{ height: 36, transform: `scale(${inv * 1.4})`, transformOrigin: 'right bottom' }}>
+            <div data-ui className="absolute bottom-0 right-0 flex items-center gap-1 whitespace-nowrap rounded-xl border bg-white p-1 shadow-lg" style={{ height: 36, transform: `scale(${inv * (size.w < 640 ? 1 : 1.4)})`, transformOrigin: 'right bottom' }}>
               <span className="px-2 text-xs font-semibold text-gray-700">Slide {selected.index + 1}</span>
               {iara && <BarButton label="Referenciar no chat (@): diga o que trazer daqui" onClick={() => useRefs.getState().add({ id: `slide:${selected.slideId}`, kind: 'slide', label: `${set.posts.find((x) => x.id === selected.postId)?.name ?? 'Post'} · slide ${selected.index + 1}`, postId: selected.postId, slideId: selected.slideId }, true)}><AtSign className="h-4 w-4" /></BarButton>}
               <BarButton label="Ampliar" onClick={() => fit({ x: selected.x - 80, y: selected.y - 120, w: selected.w + 160, h: selected.h + 240 })}><Maximize2 className="h-4 w-4" /></BarButton>
@@ -953,7 +1005,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
       </div>
 
       {menu && (
-        <div data-ui className="absolute z-30 w-72 rounded-xl border bg-white p-1.5 shadow-xl" style={{ left: Math.min(menu.x, size.w - 300), top: Math.min(menu.y, size.h - 330) }}>
+        <div data-ui className="absolute z-30 w-72 rounded-xl border bg-white p-1.5 shadow-xl" style={{ left: Math.max(8, Math.min(menu.x, size.w - 300)), top: Math.max(8, Math.min(menu.y, size.h - 330)) }}>
           {TEMPLATES.map((t) => (
             <button key={t.id} type="button" onClick={() => { onAddSlide(menu.postId, t.id); setMenu(null) }} className="block w-full rounded-lg px-2.5 py-2 text-left hover:bg-gray-50">
               <span className="block text-sm font-medium text-gray-900">{t.name}</span>
@@ -963,7 +1015,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
         </div>
       )}
 
-      <div data-ui className="absolute bottom-3 left-3 flex items-center gap-0.5 rounded-xl border bg-white p-1 shadow-md">
+      <div data-ui className="absolute bottom-3 left-3 flex max-w-[calc(100%-24px)] touch-pan-x items-center gap-0.5 overflow-x-auto [&>*]:shrink-0 whitespace-nowrap rounded-xl border bg-white p-1 shadow-md [scrollbar-width:none] md:max-w-none md:overflow-visible">
         <BarButton label="Menos zoom" onClick={() => zoomAt(size.w / 2, size.h / 2, 1 / 1.25)}><Minus className="h-4 w-4" /></BarButton>
         <button type="button" onClick={() => zoomAt(size.w / 2, size.h / 2, 1 / view.k)} className="h-8 w-14 rounded-md text-xs font-semibold tabular-nums text-gray-700 hover:bg-gray-100" title="100%">{Math.round(view.k * 100)}%</button>
         <BarButton label="Mais zoom" onClick={() => zoomAt(size.w / 2, size.h / 2, 1.25)}><Plus className="h-4 w-4" /></BarButton>
@@ -975,7 +1027,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
           : <button type="button" onClick={() => setConfirmDel(true)} className="h-8 rounded-md px-2 text-xs font-medium text-red-600 hover:bg-red-50">Excluir não aprovados</button>)}
         <button type="button" onClick={toggleOut} aria-pressed={showOut} title="Mostrar o que passa da borda do card" className={cn('h-8 rounded-md px-2 text-xs font-medium', showOut ? 'bg-violet-100 text-violet-800' : 'text-gray-600 hover:bg-gray-100')}>Bordas</button>
       </div>
-      <p className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-white/80 px-2 py-1 text-[11px] text-gray-500">Arraste o fundo para mover · Ctrl/⌘ + roda para zoom · dois cliques no texto para editar</p>
+      <p className="pointer-events-none absolute bottom-3 right-3 hidden rounded-md bg-white/80 px-2 py-1 text-[11px] text-gray-500 md:block">Arraste o fundo para mover · Ctrl/⌘ + roda para zoom · dois cliques no texto para editar</p>
     </div>
   )
 }

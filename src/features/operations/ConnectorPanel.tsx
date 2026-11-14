@@ -53,7 +53,7 @@ export const ConnectorPanel: React.FC = () => {
           {outdated && <div className="font-semibold text-amber-700">Desatualizado: baixe de novo</div>}
           {viaConnector && !!version && !!latest && !outdated && <div className="font-medium text-emerald-700">Atualizado</div>}
         </dl>
-        <div className="ml-auto flex gap-1.5">
+        <div className="ml-auto flex flex-wrap gap-1.5">
           <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 bg-white" onClick={() => void check()} disabled={busy}>
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Verificar conexão
           </Button>

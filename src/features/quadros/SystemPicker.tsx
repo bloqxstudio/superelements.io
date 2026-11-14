@@ -300,8 +300,8 @@ const LinkTab: React.FC<{ embed: (r: SystemRef) => void }> = ({ embed }) => {
   return (
     <form onSubmit={submit} className="space-y-3 py-2">
       <p className="text-sm text-gray-600">Cole uma tela do app (ex.: o endereço de uma página de vendas, de um conteúdo ou de um relatório) ou um site de fora. Sites de fora que bloqueiam ser mostrados em outra página aparecem em branco: abra pelo botão "Abrir".</p>
-      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://… ou /crm/site" className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-violet-400" autoFocus />
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome (opcional)" className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-violet-400" />
+      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://… ou /crm/site" className="h-10 w-full rounded-lg border border-gray-200 px-3 text-base outline-none focus:border-violet-400 sm:text-sm" autoFocus />
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome (opcional)" className="h-10 w-full rounded-lg border border-gray-200 px-3 text-base outline-none focus:border-violet-400 sm:text-sm" />
       <button type="submit" disabled={!url.trim()} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Pôr no quadro</button>
     </form>
   )

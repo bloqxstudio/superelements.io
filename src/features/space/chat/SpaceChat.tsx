@@ -966,7 +966,7 @@ const HistoryList: React.FC<HistoryListProps> = ({ items, current, locked, onOpe
                 aria-label={confirm === item.epoch ? 'Confirmar: apagar esta conversa' : 'Apagar esta conversa'}
                 title={confirm === item.epoch ? 'Clique de novo para apagar' : 'Apagar'}
                 className={`shrink-0 rounded-md p-1.5 transition-[color,background-color,opacity] ${
-                  confirm === item.epoch ? 'bg-red-50 text-red-600 opacity-100' : 'text-gray-400 opacity-0 hover:bg-gray-100 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100'
+                  confirm === item.epoch ? 'bg-red-50 text-red-600 opacity-100' : 'text-gray-400 hover:bg-gray-100 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0'
                 }`}
               >
                 <Trash2 className="h-3.5 w-3.5" />

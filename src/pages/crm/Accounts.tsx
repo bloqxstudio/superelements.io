@@ -119,10 +119,10 @@ const AccountCard: React.FC<{ account: AccountOverview; current: boolean; onChan
           {(account.contactName || account.contactEmail || account.contactPhone || account.website) && (
             <p className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-gray-600">
               {account.contactName && <span>{account.contactName}</span>}
-              {account.contactEmail && <span>{account.contactEmail}</span>}
+              {account.contactEmail && <span className="min-w-0 break-all">{account.contactEmail}</span>}
               {account.contactPhone && <span>{account.contactPhone}</span>}
               {account.website && (
-                <a href={/^https?:/.test(account.website) ? account.website : `https://${account.website}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline-offset-2 hover:underline">
+                <a href={/^https?:/.test(account.website) ? account.website : `https://${account.website}`} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 break-all underline-offset-2 hover:underline">
                   {account.website.replace(/^https?:\/\//, '')} <ExternalLink className="h-3 w-3" aria-hidden />
                 </a>
               )}

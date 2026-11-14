@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Code2, ExternalLink, GitBranch, Loader2, Monitor, MousePointer2, Navigation, Play, RefreshCw, Smartphone, Sparkles, Square, Tablet, TerminalSquare, Upload } from 'lucide-react'
+import { ArrowLeft, Code2, ExternalLink, GitBranch, Loader2, Monitor, MousePointer2, Navigation, Play, RefreshCw, Smartphone, Sparkles, Square, Tablet, TerminalSquare, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useIara, useIaraScreen } from '@/features/iara/store'
@@ -8,6 +8,7 @@ import { callSites, clearLog, useSitesLink } from '@/features/sites/link'
 import type { ElementInfo, PickedElement, SiteEnv, SitePage, SiteStatus, TextHit } from '@/features/sites/protocol'
 import { PublishDialog } from '@/features/sites/PublishDialog'
 import { PREVIEW_TEXT, errorText, relFile } from '@/features/sites/ui'
+import { useNarrow } from '@/features/space/useNarrow'
 
 /**
  * O editor visual de um site em código (Astro). A prévia é o `astro dev` do site rodando nesta
@@ -47,6 +48,11 @@ const SiteEditor: React.FC = () => {
   const [terminal, setTerminal] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [annotated, setAnnotated] = useState(true)
+  // Celular: o painel do elemento é uma folha que abre a cada elemento escolhido e o X fecha
+  const narrow = useNarrow()
+  const [sheetClosed, setSheetClosed] = useState(false)
+  useEffect(() => setSheetClosed(false), [picked, annotated])
+  const sheet = (!!picked || !annotated) && !sheetClosed
   const pickedRef = useRef<Picked | null>(null)
   pickedRef.current = picked
 
@@ -179,13 +185,13 @@ const SiteEditor: React.FC = () => {
 
   if (!ready)
     return (
-      <div className="flex h-screen items-center justify-center p-6 text-center text-sm text-gray-500">
+      <div className="flex h-[100dvh] items-center justify-center p-6 text-center text-sm text-gray-500">
         Esperando esta máquina (conector ou npm run dev)…
       </div>
     )
   if (!site)
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3 p-6 text-center text-sm text-gray-500">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 p-6 text-center text-sm text-gray-500">
         Este site não está ligado nesta máquina.
         <Button asChild variant="outline" size="sm">
           <Link to="/sites">Ver sites em código</Link>
@@ -197,15 +203,37 @@ const SiteEditor: React.FC = () => {
   const behind = status?.behind ?? 0
   const onReview = status && status.branch !== status.defaultBranch
 
+  // A página da prévia: na barra de cima no computador, numa faixa própria no celular
+  const pageSelect = (
+    <select
+      value={pages.some((p) => p.route === path) ? path : ''}
+      onChange={(e) => {
+        setPath(e.target.value)
+        setPicked(null)
+        setInfo(null)
+        setFrameKey((k) => k + 1)
+      }}
+      aria-label="Página"
+      className="h-9 w-full min-w-0 rounded-md border border-gray-200 bg-white px-2 text-base text-gray-700 md:h-8 md:max-w-[220px] md:text-sm lg:w-auto"
+    >
+      {!pages.some((p) => p.route === path) && <option value="">{path}</option>}
+      {pages.map((p) => (
+        <option key={p.file} value={p.route} disabled={p.route.includes('[')}>
+          {p.route === '/' ? 'Início (/)' : p.route}
+        </option>
+      ))}
+    </select>
+  )
+
   return (
-    <div className="flex h-screen min-w-0 flex-col bg-[#f4f4f5]">
+    <div className="flex h-[100dvh] min-w-0 flex-col bg-[#f4f4f5]">
       {/* Barra do topo */}
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-3">
+      <header className="flex h-12 shrink-0 items-center gap-1 border-b border-gray-200 bg-white px-2 sm:gap-2 sm:px-3">
         <Link to="/sites" aria-label="Voltar para Sites em código" className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900">
           <ArrowLeft className="h-4 w-4" aria-hidden />
         </Link>
-        <Code2 className="h-4 w-4 text-gray-400" aria-hidden />
-        <span className="max-w-[180px] truncate text-sm font-medium text-gray-900">{site.name}</span>
+        <Code2 className="hidden h-4 w-4 shrink-0 text-gray-400 sm:block" aria-hidden />
+        <span className="min-w-0 max-w-[180px] truncate text-sm font-medium text-gray-900">{site.name}</span>
         {status && (
           <span title={onReview ? 'Revisão: as edições entram neste PR' : 'Branch principal'} className={`hidden items-center gap-1 rounded-full px-2 py-0.5 text-xs md:flex ${onReview ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'}`}>
             <GitBranch className="h-3 w-3" aria-hidden /> {status.branch}
@@ -213,33 +241,17 @@ const SiteEditor: React.FC = () => {
         )}
 
         <div className="mx-2 hidden min-w-0 items-center gap-1 lg:flex">
-          <select
-            value={pages.some((p) => p.route === path) ? path : ''}
-            onChange={(e) => {
-              setPath(e.target.value)
-              setPicked(null)
-              setInfo(null)
-              setFrameKey((k) => k + 1)
-            }}
-            aria-label="Página"
-            className="h-8 max-w-[220px] rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-700"
-          >
-            {!pages.some((p) => p.route === path) && <option value="">{path}</option>}
-            {pages.map((p) => (
-              <option key={p.file} value={p.route} disabled={p.route.includes('[')}>
-                {p.route === '/' ? 'Início (/)' : p.route}
-              </option>
-            ))}
-          </select>
+          {pageSelect}
         </div>
 
-        <div className="ml-auto flex items-center gap-1">
-          <div className="hidden items-center rounded-md border border-gray-200 p-0.5 md:flex" role="group" aria-label="Modo">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {/* No celular os dois modos ficam só com o ícone */}
+          <div className="flex items-center rounded-md border border-gray-200 p-0.5" role="group" aria-label="Modo">
             <button type="button" onClick={() => setEdit(true)} aria-pressed={edit} className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${edit ? 'bg-gray-900 text-white' : 'text-gray-600 hover:text-gray-900'}`}>
-              <MousePointer2 className="h-3.5 w-3.5" aria-hidden /> Editar
+              <MousePointer2 className="h-3.5 w-3.5" aria-hidden /> <span className="sr-only md:not-sr-only">Editar</span>
             </button>
             <button type="button" onClick={() => setEdit(false)} aria-pressed={!edit} className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${!edit ? 'bg-gray-900 text-white' : 'text-gray-600 hover:text-gray-900'}`}>
-              <Navigation className="h-3.5 w-3.5" aria-hidden /> Navegar
+              <Navigation className="h-3.5 w-3.5" aria-hidden /> <span className="sr-only md:not-sr-only">Navegar</span>
             </button>
           </div>
           <div className="hidden items-center rounded-md border border-gray-200 p-0.5 sm:flex" role="group" aria-label="Tamanho da prévia">
@@ -255,7 +267,7 @@ const SiteEditor: React.FC = () => {
           <button type="button" onClick={() => setFrameKey((k) => k + 1)} aria-label="Recarregar a prévia" title="Recarregar a prévia" className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900">
             <RefreshCw className="h-4 w-4" aria-hidden />
           </button>
-          <button type="button" onClick={() => setTerminal((v) => !v)} aria-pressed={terminal} aria-label="Terminal da prévia" title="Terminal da prévia" className={`rounded-md p-2 hover:bg-gray-100 ${terminal ? 'text-gray-900' : 'text-gray-500'}`}>
+          <button type="button" onClick={() => setTerminal((v) => !v)} aria-pressed={terminal} aria-label="Terminal da prévia" title="Terminal da prévia" className={`hidden rounded-md p-2 hover:bg-gray-100 sm:block ${terminal ? 'text-gray-900' : 'text-gray-500'}`}>
             <TerminalSquare className="h-4 w-4" aria-hidden />
           </button>
           {site.url && (
@@ -268,6 +280,8 @@ const SiteEditor: React.FC = () => {
           </Button>
         </div>
       </header>
+
+      <div className="shrink-0 border-b border-gray-200 bg-white px-2 py-1.5 md:hidden">{pageSelect}</div>
 
       {env && env.missing.length > 0 && <EnvBanner siteId={site.id} env={env} onSaved={setEnv} />}
 
@@ -356,7 +370,26 @@ const SiteEditor: React.FC = () => {
         </div>
 
         {/* Painel do elemento */}
-        <aside className="hidden w-[320px] shrink-0 overflow-y-auto border-l border-gray-200 bg-white md:block">
+        {/* No celular o painel vira uma folha por baixo, aberta ao escolher um elemento */}
+        {narrow && sheet && (
+          <button type="button" aria-label="Fechar o painel do elemento" className="fixed inset-0 z-40 bg-black/20" onClick={() => setSheetClosed(true)} />
+        )}
+        <aside
+          className={
+            narrow
+              ? sheet
+                ? 'fixed inset-x-0 bottom-0 z-50 max-h-[65dvh] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_40px_-12px_rgb(0_0_0/0.25)]'
+                : 'hidden'
+              : 'hidden w-[320px] shrink-0 overflow-y-auto border-l border-gray-200 bg-white md:block'
+          }
+        >
+          {narrow && (
+            <div className="sticky top-0 z-10 flex justify-end bg-white/95 px-2 pt-2">
+              <button type="button" onClick={() => setSheetClosed(true)} aria-label="Fechar" className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100">
+                <X className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+          )}
           {!annotated ? (
             <p className="p-4 text-sm text-amber-800">A prévia não trouxe as marcas de código. A barra de ferramentas do Astro está desligada nas preferências desta máquina: rode <code>npx astro preferences enable devToolbar</code> na pasta do site e recarregue.</p>
           ) : picked ? (
@@ -421,14 +454,14 @@ const EnvBanner: React.FC<{ siteId: string; env: SiteEnv; onSaved: (env: SiteEnv
       </p>
       <div className="mt-2 flex flex-wrap items-end gap-2">
         {env.missing.map((key) => (
-          <label key={key} className="flex min-w-[220px] flex-1 flex-col gap-0.5">
+          <label key={key} className="flex min-w-0 flex-1 basis-full flex-col gap-0.5 sm:min-w-[220px] sm:basis-auto">
             <span className="font-mono text-[11px]">{key}</span>
             <input
               value={values[key] ?? ''}
               onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
               autoComplete="off"
               spellCheck={false}
-              className="h-8 rounded-md border border-amber-300 bg-white px-2 font-mono text-xs text-gray-900"
+              className="h-8 rounded-md border border-amber-300 bg-white px-2 font-mono text-base text-gray-900 md:text-xs"
             />
           </label>
         ))}
@@ -516,7 +549,7 @@ const ElementPanel: React.FC<{
                 onChange={(e) => setTexts((all) => all.map((x, j) => (j === i ? e.target.value : x)))}
                 rows={Math.min(5, Math.max(1, Math.ceil(t.length / 34)))}
                 aria-label={texts.length > 1 ? `Trecho ${i + 1}` : 'Texto'}
-                className="w-full resize-y rounded-md border border-gray-200 px-2.5 py-1.5 text-sm leading-snug text-gray-900 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                className="w-full resize-y rounded-md border border-gray-200 px-2.5 py-1.5 text-base leading-snug md:text-sm text-gray-900 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
               />
             ))}
           </div>
@@ -584,7 +617,7 @@ const AttrField: React.FC<{ siteId: string; picked: PickedElement; name: string;
           onChange={(e) => setV(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && v !== value && void save()}
           disabled={locked}
-          className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 px-2 font-mono text-xs text-gray-900 disabled:bg-gray-50 disabled:text-gray-500"
+          className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 px-2 font-mono text-base text-gray-900 md:text-xs disabled:bg-gray-50 disabled:text-gray-500"
         />
         {v !== value && (
           <Button size="sm" className="h-8" disabled={saving} onClick={() => void save()}>
@@ -669,7 +702,7 @@ const FindInCode: React.FC<{ siteId: string; texts: string[]; onChanged: () => v
               <div key={key} className="mt-1.5">
                 <p className="truncate font-mono text-[11px] text-gray-500" title={hit.snippet}>{hit.file}:{hit.line}</p>
                 <div className="mt-0.5 flex gap-1">
-                  <input value={next[key] ?? text} onChange={(e) => setNext((n) => ({ ...n, [key]: e.target.value }))} className="h-7 min-w-0 flex-1 rounded border border-gray-200 bg-white px-1.5 text-xs" aria-label={`Texto novo em ${hit.file}:${hit.line}`} />
+                  <input value={next[key] ?? text} onChange={(e) => setNext((n) => ({ ...n, [key]: e.target.value }))} className="h-8 min-w-0 flex-1 rounded border border-gray-200 bg-white px-1.5 text-base md:h-7 md:text-xs" aria-label={`Texto novo em ${hit.file}:${hit.line}`} />
                   <Button size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={(next[key] ?? text) === text} onClick={() => void replace(text, hit)}>
                     Trocar
                   </Button>

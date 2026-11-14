@@ -481,7 +481,7 @@ const Pauta: React.FC = () => {
           )}
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <div className="inline-flex items-center rounded-lg border border-gray-200 bg-white">
                 <button type="button" aria-label={view === 'mes' ? 'Mês anterior' : 'Semana anterior'} onClick={() => step(-1)} className="flex h-8 w-8 items-center justify-center text-gray-600 hover:text-gray-900">
                   <ChevronLeft className="h-4 w-4" aria-hidden />
