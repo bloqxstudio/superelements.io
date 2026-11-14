@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import type { Opportunity } from '@/features/prospects/funnel'
 import { getOpportunity, listOpportunities } from './opportunities'
 
@@ -49,8 +50,8 @@ export function useOpportunityFeed(pipelineId: string | undefined, teamId: strin
     }
 
     let subscribed = false
-    const channel = supabase
-      .channel(`crm-funil-${pipelineId}`)
+    // Tópico fixo: o helper espera o canal antigo com esse tópico sair antes de entrar (revisão de 2026-11-13)
+    const leave = subscribeTopic(`crm-funil-${pipelineId}`, (channel) => channel
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_opportunities', filter: `pipeline_id=eq.${pipelineId}` }, (payload) => queue(String(payload.new.id)))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'crm_opportunities', filter: `pipeline_id=eq.${pipelineId}` }, (payload) => queue(String(payload.new.id)))
       // Exclusão não tem filtro na Realtime: chega só o id, e sai da lista se estiver nela
@@ -65,8 +66,8 @@ export function useOpportunityFeed(pipelineId: string | undefined, teamId: strin
           for (const o of prev) if (o.clientId === clientId) queue(o.id)
           return prev
         })
-      })
-      .subscribe((status) => {
+      }),
+    { onStatus: (status) => {
         if (status !== 'SUBSCRIBED') return
         if (subscribed) {
           // Voltou de uma queda: o que mudou enquanto isso não chegou
@@ -75,12 +76,13 @@ export function useOpportunityFeed(pipelineId: string | undefined, teamId: strin
             .catch(() => {})
         }
         subscribed = true
-      })
+      } }
+    )
 
     return () => {
       alive = false
       if (timer) clearTimeout(timer)
-      void supabase.removeChannel(channel)
+      leave()
     }
   }, [pipelineId, teamId])
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { create } from 'zustand'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import { useCrm } from './crmStore'
 import { refreshProfile } from './instagram'
 import { CONTACT_EVENTS, LIVE_MS } from './site'
@@ -231,20 +232,12 @@ export function useMenuFeed() {
     const siteSoon = debounce(refreshSite, 2000)
     const crmSoon = debounce(refreshCrm, 800)
     const waSoon = debounce(refreshWhatsapp, 500)
-    // Um canal por tabela: sem a migração de uma, o canal dela falha sozinho
+    // Um canal por tabela: sem a migração de uma, o canal dela falha sozinho. Tópicos fixos: o helper espera
+    // o canal antigo com o mesmo tópico sair antes de entrar (revisão de 2026-11-13)
     const channels = [
-      supabase
-        .channel(`menu-site-${teamId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'site_sessions', filter: `team_id=eq.${teamId}` }, siteSoon)
-        .subscribe(),
-      supabase
-        .channel(`menu-crm-${teamId}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_activities', filter: `team_id=eq.${teamId}` }, crmSoon)
-        .subscribe(),
-      supabase
-        .channel(`menu-whatsapp-${teamId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_whatsapp_chats', filter: `team_id=eq.${teamId}` }, waSoon)
-        .subscribe(),
+      subscribeTopic(`menu-site-${teamId}`, (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'site_sessions', filter: `team_id=eq.${teamId}` }, siteSoon)),
+      subscribeTopic(`menu-crm-${teamId}`, (ch) => ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_activities', filter: `team_id=eq.${teamId}` }, crmSoon)),
+      subscribeTopic(`menu-whatsapp-${teamId}`, (ch) => ch.on('postgres_changes', { event: '*', schema: 'public', table: 'crm_whatsapp_chats', filter: `team_id=eq.${teamId}` }, waSoon)),
     ]
 
     // E de tempos em tempos: quem sai do site não avisa, e sem Realtime é só isso
@@ -282,7 +275,7 @@ export function useMenuFeed() {
       timers.forEach(clearInterval)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('storage', onStorage)
-      channels.forEach((c) => void supabase.removeChannel(c))
+      channels.forEach((leave) => leave())
     }
   }, [userId, teamId])
 }

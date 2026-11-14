@@ -229,7 +229,8 @@ export const AccountWizard: React.FC = () => {
       try {
         const teamId = await createAccount({ ...form, website: form.website.trim() || store.domain, modules: { ...modules, site: true }, product })
         await load(user.id, true)
-        await select(teamId)
+        // Sem a conta nova aberta, o que vem depois cairia na conta anterior (revisão de 2026-11-13)
+        if (!(await select(teamId))) throw new Error('A conta foi criada, mas não abriu. Recarregue a página.')
         const name = form.name.trim() || store.name
         const id = await createTracker(teamId, store.domain, name)
         setShopTracker({ id, teamId, name, domain: store.domain, createdAt: Date.now() })
@@ -245,7 +246,8 @@ export const AccountWizard: React.FC = () => {
     try {
       const teamId = await createAccount({ ...form, modules, product })
       await load(user.id, true)
-      await select(teamId)
+      // O projeto nasce na conta aberta: sem a nova aberta, ele iria para a anterior (revisão de 2026-11-13)
+      if (!(await select(teamId))) throw new Error('A conta foi criada, mas não abriu. Recarregue a página.')
       const project = await useProjectStore.getState().create({ name: form.name.trim(), context: form.website.trim() ? `Site: ${form.website.trim()}` : '' })
       setProjectId(project.id)
       mark('account', 'done')

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 
 /**
  * A caixa de entrada do WhatsApp da equipe (CRM › WhatsApp): conversas e
@@ -167,14 +168,12 @@ export function useInboxFeed(teamId: string | undefined, onChange: () => void) {
 
   useEffect(() => {
     if (!teamId) return
-    const channel = db
-      .channel(`crm-whatsapp-inbox-${teamId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_whatsapp_chats', filter: `team_id=eq.${teamId}` }, () => latest.current())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_whatsapp_messages', filter: `team_id=eq.${teamId}` }, () => latest.current())
-      .subscribe()
-    return () => {
-      void db.removeChannel(channel)
-    }
+    // Tópico fixo: o helper espera o canal antigo com esse tópico sair antes de entrar (revisão de 2026-11-13)
+    return subscribeTopic(`crm-whatsapp-inbox-${teamId}`, (channel) =>
+      channel
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_whatsapp_chats', filter: `team_id=eq.${teamId}` }, () => latest.current())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_whatsapp_messages', filter: `team_id=eq.${teamId}` }, () => latest.current())
+    )
   }, [teamId])
 }
 

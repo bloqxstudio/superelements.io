@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import type { Json } from '@/integrations/supabase/types'
 import type { ActivityKind } from './types'
 
@@ -141,25 +142,31 @@ export function useComments(teamId: string | undefined) {
       else drop(row.id)
     }
     let subscribed = false
-    const channel = supabase
-      .channel(`crm-comentarios-${teamId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_activities', filter: `team_id=eq.${teamId}` }, (payload) => change(payload.new as Row))
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'crm_activities', filter: `team_id=eq.${teamId}` }, (payload) => change(payload.new as Row))
-      // Exclusão não tem filtro na Realtime: chega só o id
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'crm_activities' }, (payload) => {
-        const id = String((payload.old as { id?: string }).id ?? '')
-        if (id) drop(id)
-      })
-      .subscribe((status) => {
-        if (status !== 'SUBSCRIBED') return
-        // Voltou de uma queda: o que chegou enquanto isso
-        if (subscribed) void read()
-        subscribed = true
-      })
+    // Tópico fixo: o helper espera o canal antigo com esse tópico sair antes de entrar (revisão de 2026-11-13)
+    const leave = subscribeTopic(
+      `crm-comentarios-${teamId}`,
+      (channel) =>
+        channel
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_activities', filter: `team_id=eq.${teamId}` }, (payload) => change(payload.new as Row))
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'crm_activities', filter: `team_id=eq.${teamId}` }, (payload) => change(payload.new as Row))
+          // Exclusão não tem filtro na Realtime: chega só o id
+          .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'crm_activities' }, (payload) => {
+            const id = String((payload.old as { id?: string }).id ?? '')
+            if (id) drop(id)
+          }),
+      {
+        onStatus: (status) => {
+          if (status !== 'SUBSCRIBED') return
+          // Voltou de uma queda: o que chegou enquanto isso
+          if (subscribed) void read()
+          subscribed = true
+        },
+      }
+    )
 
     return () => {
       alive = false
-      void supabase.removeChannel(channel)
+      leave()
     }
   }, [teamId, put, drop])
 

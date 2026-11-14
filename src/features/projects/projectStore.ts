@@ -32,6 +32,8 @@ interface ProjectState {
   leave: (id: string) => Promise<void>
   /** Chamado a cada mudança no canvas; `edited` diz se o conteúdo mudou. Só atualiza o card daqui. */
   saved: (id: string, summary: ProjectSummary, edited: boolean) => void
+  /** Saiu da conta (revisão de 2026-11-13): a lista da pessoa anterior não pode aparecer para a próxima. */
+  reset: () => void
 }
 
 const EMPTY_SUMMARY: ProjectSummary = { sections: 0, colors: [] }
@@ -75,6 +77,8 @@ const replace = (projects: Project[], project: Project) => projects.map((p) => (
 export const useProjectStore = create<ProjectState>()((set, get) => ({
   status: 'loading',
   projects: [],
+
+  reset: () => set({ userId: undefined, accountId: undefined, projects: [], status: 'loading' }),
 
   load: async (userId) => {
     const crm = useCrm.getState()

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import type { Json, TablesUpdate } from '@/integrations/supabase/types'
 import type { PostPlan } from '@/features/criativos/plan'
 import type { StoryIdea, StoryPillar } from './storyPlan'
@@ -438,13 +439,13 @@ export function useStoryFeed(teamId: string | undefined, onChange: () => void) {
         latest.current()
       }, 300)
     }
-    const channel = supabase
-      .channel(`crm-stories-${teamId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_stories', filter: `team_id=eq.${teamId}` }, queue)
-      .subscribe()
+    // Tópico fixo: o helper espera o canal antigo com esse tópico sair antes de entrar (revisão de 2026-11-13)
+    const leave = subscribeTopic(`crm-stories-${teamId}`, (channel) =>
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'crm_stories', filter: `team_id=eq.${teamId}` }, queue)
+    )
     return () => {
       if (timer) clearTimeout(timer)
-      void supabase.removeChannel(channel)
+      leave()
     }
   }, [teamId])
 }

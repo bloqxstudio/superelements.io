@@ -508,7 +508,7 @@ const IMAGE_ACTIONS: ToolAction[] = [
         saved.push({ path, data: img.data })
       }
       ;(await import('@/features/cerebro/scope')).forgetBrain()
-      openViewer(saved.map((s) => ({ name: s.path.split('/').pop()!, src: s.data, resolve: () => mediaUrl(s.path), kind: 'image' as const })))
+      openViewer(saved.map((s) => ({ name: s.path.split('/').pop()!, src: s.data, resolve: () => mediaUrl(t.id, s.path), kind: 'image' as const })))
       return {
         done: [{ label: `${saved.length} imagem(ns) guardada(s) no Cérebro em ${folder}`, ok: true, to: `/cerebro?midia=${encodeURIComponent(saved[0].path)}` }],
         data: saved.map((s) => s.path),

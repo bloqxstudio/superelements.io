@@ -6,6 +6,7 @@ import { Ban, CalendarRange, Check, ChevronLeft, ChevronRight, CircleAlert, Copy
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import { cn } from '@/lib/utils'
 import { useCrm } from '@/features/crm/crmStore'
 import { FIELD, Page, PageHeader } from '@/features/crm/ui'
@@ -209,22 +210,34 @@ const Pauta: React.FC = () => {
     [params, setParams]
   )
 
+  // Revisão de 2026-11-13: a tela depende só do id da conta (renomear ou `setProfile` trocam o objeto `team`
+  // e recriavam o canal e a leitura), e as capas (um index.json por pasta de criativo) só são relidas
+  // quando os vínculos de criativo mudam ou num recarregar explícito, não a cada evento ao vivo.
+  const teamId = team?.id
+  const coversOf = useRef<string>()
   const load = useCallback(
     async (quiet = false) => {
-      if (!team) return
+      if (!teamId) return
       if (!quiet) setState('loading')
       try {
-        const next = await loadPauta(team.id)
+        const next = await loadPauta(teamId)
         setData(next)
         setState('ready')
-        void loadCovers(next.creatives).then(setCovers).catch(() => undefined)
+        const sig = Object.values(next.creatives)
+          .map((l) => `${l.contentId}:${l.projectId ?? ''}:${l.artifactId}:${l.linkedHash}`)
+          .sort()
+          .join('|')
+        if (!quiet || sig !== coversOf.current) {
+          coversOf.current = sig
+          void loadCovers(next.creatives).then(setCovers).catch(() => undefined)
+        }
       } catch (e) {
         console.error('[pauta] falha ao ler', e)
         setError(e instanceof Error ? e.message : undefined)
         if (!quiet) setState('error')
       }
     },
-    [team]
+    [teamId]
   )
 
   useEffect(() => {
@@ -234,24 +247,24 @@ const Pauta: React.FC = () => {
   // Ao vivo: o cliente respondeu, outra pessoa mudou um dia ou comentou
   const timer = useRef<number>()
   useEffect(() => {
-    if (!team) return
+    if (!teamId) return
     const later = () => {
       window.clearTimeout(timer.current)
       timer.current = window.setTimeout(() => void load(true), 600)
     }
-    const filter = `team_id=eq.${team.id}`
-    const channel = supabase
-      .channel(`pauta-${team.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_contents', filter }, later)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_approval_items', filter }, later)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_content_tags', filter }, later)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_content_comments', filter }, later)
-      .subscribe()
+    const filter = `team_id=eq.${teamId}`
+    const leave = subscribeTopic(`pauta-${teamId}`, (ch) =>
+      ch
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_contents', filter }, later)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_approval_items', filter }, later)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_content_tags', filter }, later)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_content_comments', filter }, later)
+    )
     return () => {
       window.clearTimeout(timer.current)
-      void supabase.removeChannel(channel)
+      leave()
     }
-  }, [team, load])
+  }, [teamId, load])
 
   const replace = (c: Content) => setData((d) => (d ? { ...d, contents: d.contents.map((x) => (x.id === c.id ? c : x)) } : d))
 

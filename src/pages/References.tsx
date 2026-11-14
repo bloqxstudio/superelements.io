@@ -175,11 +175,15 @@ const Groups: React.FC<{ teamId: string; onRun: () => void; onReview: () => void
   useEffect(() => { void load() }, [load])
   // Enquanto há pedido de leitura sem resposta, confere de tempos em tempos
   const waiting = list?.some((s) => s.runRequestedAt && (!s.lastRunAt || s.runRequestedAt > s.lastRunAt))
+  // `onRun` chega como função nova a cada render da tela: pelo ref, o intervalo de 20 s não recomeça a cada
+  // render (antes, com ele nas dependências, a conferência quase nunca chegava aos 20 s; revisão de 2026-11-13)
+  const runRef = useRef(onRun)
+  runRef.current = onRun
   useEffect(() => {
     if (!waiting) return
-    const t = window.setInterval(() => { void load(); onRun() }, 20_000)
+    const t = window.setInterval(() => { void load(); runRef.current() }, 20_000)
     return () => window.clearInterval(t)
-  }, [waiting, load, onRun])
+  }, [waiting, load])
 
   const thread = threadUrlOf(link)
   const add = async () => {

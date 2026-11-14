@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { toast } from 'sonner'
 import { supabase } from '@/integrations/supabase/client'
 import { listMyTeams } from './teams'
 import type { AccountProfile, Pipeline, Team } from './types'
@@ -49,13 +50,18 @@ interface CrmState {
   pipeline?: Pipeline
   /** Lê as equipes de quem entrou; `force` relê mesmo já tendo lido. */
   load: (userId: string, force?: boolean) => Promise<void>
-  select: (teamId: string) => Promise<void>
+  /** Abre outra equipe; `false` se a leitura do funil falhou ou outra troca veio depois. */
+  select: (teamId: string) => Promise<boolean>
   setPipeline: (pipeline: Pipeline) => void
   rename: (name: string) => void
   setProfile: (profile: AccountProfile) => void
+  /** Saiu da conta: esquece equipes e funil (o próximo login começa do zero). */
+  reset: () => void
 }
 
 let loading: Promise<void> | null = null
+/** A última equipe pedida em `select`: só ela grava (revisão de 2026-11-13). */
+let selecting: string | undefined
 
 export const useCrm = create<CrmState>((set, get) => ({
   status: 'idle',
@@ -64,7 +70,12 @@ export const useCrm = create<CrmState>((set, get) => ({
   load: (userId, force = false) => {
     const state = get()
     if (!force && state.userId === userId && (state.status === 'ready' || state.status === 'loading') && loading) return loading
-    set({ status: 'loading', userId })
+    // Revisão de 2026-11-13: outra pessoa entrou neste navegador. Antes a equipe e o funil da anterior ficavam
+    // na tela durante a leitura, e a equipe dela ganhava da lembrada na escolha abaixo.
+    if (state.userId !== userId) {
+      selecting = undefined
+      set({ status: 'loading', userId, error: undefined, teams: [], team: undefined, pipeline: undefined })
+    } else set({ status: 'loading', userId })
     loading = (async () => {
       try {
         const teams = await listMyTeams(userId)
@@ -85,9 +96,23 @@ export const useCrm = create<CrmState>((set, get) => ({
 
   select: async (teamId) => {
     const team = get().teams.find((t) => t.id === teamId)
-    if (!team) return
+    if (!team) return false
     remember(teamId)
-    set({ team, pipeline: await loadPipeline(teamId) })
+    // Revisão de 2026-11-13: trocar A → B depressa deixava o funil de A, se chegasse por último, gravar por
+    // cima de B; e a falha virava rejeição sem tratamento (quem chama usa `void select(...)`).
+    selecting = teamId
+    try {
+      const pipeline = await loadPipeline(teamId)
+      // Outra troca veio depois, ou a lista de equipes mudou (saiu da conta, outra pessoa entrou)
+      const current = get().teams.find((t) => t.id === teamId)
+      if (selecting !== teamId || !current) return false
+      set({ team: current, pipeline })
+      return true
+    } catch (error) {
+      console.error('[crm] falha ao abrir a equipe', error)
+      if (selecting === teamId) toast.error(`Não foi possível abrir ${team.name}. Tente de novo.`)
+      return false
+    }
   },
 
   setPipeline: (pipeline) => set({ pipeline }),
@@ -103,6 +128,12 @@ export const useCrm = create<CrmState>((set, get) => ({
       team: s.team ? { ...s.team, profile } : s.team,
       teams: s.teams.map((t) => (t.id === s.team?.id ? { ...t, profile } : t)),
     })),
+
+  reset: () => {
+    selecting = undefined
+    loading = null
+    set({ status: 'idle', error: undefined, userId: undefined, teams: [], team: undefined, pipeline: undefined })
+  },
 }))
 
 /**

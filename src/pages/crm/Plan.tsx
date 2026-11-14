@@ -10,6 +10,7 @@ import { useCrm } from '@/features/crm/crmStore'
 import { nameOf, useTeamPeople } from '@/features/crm/people'
 import { Page, PageHeader, whenLabel } from '@/features/crm/ui'
 import { ContentError, ContentTablesError, loadContext, saveContext, type ContextDraft } from '@/features/conteudos/api'
+import { forgetAccountContext } from '@/features/cerebro/accountContext'
 import { CONTEXT_LIMITS, canManage, validateContextDraft, type AccountContext } from '@/features/conteudos/rules'
 
 /**
@@ -281,6 +282,8 @@ const Plan: React.FC = () => {
     setProblem(undefined)
     try {
       const saved = await saveContext(team.id, ctx?.version ?? 0, clean(draft))
+      // O Plano entra no contexto da IA (guardado 1 minuto): esquece, para o próximo pedido levar o novo (revisão de 2026-11-13)
+      forgetAccountContext()
       setCtx(saved)
       setDraft(draftOf(saved))
       setConflict(false)

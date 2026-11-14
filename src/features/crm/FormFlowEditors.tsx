@@ -57,6 +57,7 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import { FIELD, Surface } from '@/features/crm/ui'
 import {
   BOOKING_DEFAULT,
@@ -825,12 +826,13 @@ export const BookingsList: React.FC<{ form: CrmForm; manager: boolean }> = ({ fo
 
   useEffect(() => {
     void load()
-    const channel = supabase
-      .channel(`form-bookings-${form.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_form_bookings', filter: `form_id=eq.${form.id}` }, () => void load())
-      .subscribe()
+    // Tópico fixo: o helper espera o canal antigo com esse tópico sair antes de entrar (revisão de 2026-11-13)
+    const leave = subscribeTopic(`form-bookings-${form.id}`, (channel) =>
+      channel
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_form_bookings', filter: `form_id=eq.${form.id}` }, () => void load())
+    )
     return () => {
-      void supabase.removeChannel(channel)
+      leave()
     }
   }, [form.id, load])
 

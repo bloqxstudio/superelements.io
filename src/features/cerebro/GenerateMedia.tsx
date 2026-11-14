@@ -37,8 +37,8 @@ const RATIOS: { id: Ratio; label: string }[] = [
 const toDataUrl = (blob: Blob) => new Promise<string>((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = no; r.readAsDataURL(blob) })
 
 /** Reduz a referência (a IA não precisa de mais que 1024 px) e devolve como data URL JPEG/PNG. */
-async function refData(m: VaultMedia): Promise<string> {
-  const blob = await (await fetch(m.url ?? await mediaUrl(m.path, m.mtime))).blob()
+async function refData(teamId: string, m: VaultMedia): Promise<string> {
+  const blob = await (await fetch(m.url ?? await mediaUrl(teamId, m.path, m.mtime))).blob()
   const bmp = await createImageBitmap(blob)
   const k = Math.min(1, 1024 / Math.max(bmp.width, bmp.height))
   const c = document.createElement('canvas')
@@ -88,7 +88,7 @@ export const GenerateMedia: React.FC<{ teamId: string; vault: LoadedVault; folde
     stop.current = ctrl
     try {
       setBusy('Lendo as referências')
-      const references = await Promise.all(refs.map((p) => refData(vault.media.find((m) => m.path === p)!)))
+      const references = await Promise.all(refs.map((p) => refData(vault.teamId, vault.media.find((m) => m.path === p)!)))
       const full = [
         kind.template,
         `O que a pessoa pediu: ${ask}`,
@@ -148,7 +148,7 @@ export const GenerateMedia: React.FC<{ teamId: string; vault: LoadedVault; folde
         <>
           <p className="mb-1.5 text-xs font-medium text-gray-600">Referências do Cérebro <span className="font-normal text-gray-400">(opcional, até 3: o produto real sai fiel)</span></p>
           <ul className="mb-4 flex gap-2 overflow-x-auto pb-1">
-            {photos.map((m) => <RefThumb key={m.path} m={m} on={refs.includes(m.path)} onClick={() => toggleRef(m.path)} />)}
+            {photos.map((m) => <RefThumb key={m.path} teamId={vault.teamId} m={m} on={refs.includes(m.path)} onClick={() => toggleRef(m.path)} />)}
           </ul>
         </>
       )}
@@ -200,9 +200,9 @@ export const GenerateMedia: React.FC<{ teamId: string; vault: LoadedVault; folde
   )
 }
 
-const RefThumb: React.FC<{ m: VaultMedia; on: boolean; onClick: () => void }> = ({ m, on, onClick }) => {
+const RefThumb: React.FC<{ teamId: string; m: VaultMedia; on: boolean; onClick: () => void }> = ({ teamId, m, on, onClick }) => {
   const [src, setSrc] = useState(m.url)
-  React.useEffect(() => { let live = true; if (!m.url) void mediaUrl(m.path, m.mtime).then((u) => live && setSrc(u)).catch(() => {}); return () => { live = false } }, [m.path, m.mtime, m.url])
+  React.useEffect(() => { let live = true; if (!m.url) void mediaUrl(teamId, m.path, m.mtime).then((u) => live && setSrc(u)).catch(() => {}); return () => { live = false } }, [teamId, m.path, m.mtime, m.url])
   return (
     <li className="shrink-0">
       <button type="button" onClick={onClick} aria-pressed={on} title={m.label ?? fileName(m.path)}

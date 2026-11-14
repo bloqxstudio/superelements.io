@@ -315,6 +315,15 @@ export const useIara = create<IaraState>()((set) => ({
   ask: (text) => (iaraEnabled() ? set({ open: true, queued: text }) : useMcpConnect.getState().show(text)),
 }))
 
+/**
+ * Saiu da conta (revisão de 2026-11-13): esquece a conversa aberta e as da conta anterior, para a próxima
+ * pessoa neste navegador não ver o histórico nem um pedido na fila. O guardado no navegador fica por conta.
+ */
+export function resetIara() {
+  background.clear()
+  useIara.setState({ busy: false, step: undefined, teamId: undefined, convId: undefined, conversations: [], busyConv: undefined, messages: [], queued: undefined, liveId: undefined })
+}
+
 /** Abre as conversas da conta: a mais recente fica aberta (ou uma nova, se não houver). */
 export function loadConversations(team: string) {
   background.clear()
