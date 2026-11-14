@@ -92,6 +92,9 @@ function alpha(color, a) {
   return `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${Math.round(a * 1e3) / 1e3})`;
 }
 
+// src/features/criativos/safeZone.ts
+var STORY_SAFE = { top: 250, bottom: 300 };
+
 // src/features/criativos/types.ts
 var FORMATS = {
   "4x5": { id: "4x5", label: "Feed 4:5", use: "Feed e an\xFAncio", width: 1080, height: 1350 },
@@ -751,7 +754,6 @@ var EDITORIAL = {
 };
 
 // src/features/criativos/templates.ts
-var STORY_SAFE = { top: 250, bottom: 300 };
 var ctxOf = (brand, format, dark) => {
   const p = paletteOf(brand);
   const { width: w, height: h } = sizeOf(format);
@@ -1161,10 +1163,48 @@ function slideToSvg(slide3, format, image3 = () => void 0) {
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs>${defs.items.join("")}</defs><rect width="${width}" height="${height}" ${fillAttr(slide3.background)}/>${body}</svg>`;
 }
 var slideImages = (slide3) => slide3.layers.filter((l) => l.type === "image" && !l.hidden && !!l.src).map((l) => l.src);
+
+// src/features/criativos/indexMerge.ts
+var same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function indexChanges(before, after) {
+  const old = new Map(before.map((r) => [r.id, r]));
+  const ids = new Set(after.map((r) => r.id));
+  return {
+    upserts: after.filter((r) => !same(old.get(r.id), r)),
+    removed: [...old.keys()].filter((id) => !ids.has(id))
+  };
+}
+function indexHolds(list, upserts, removed) {
+  const byId = new Map(list.map((r) => [r.id, r]));
+  return upserts.every((r) => {
+    const now = byId.get(r.id);
+    return !!now && (same(now, r) || (now.updatedAt ?? 0) > (r.updatedAt ?? 0));
+  }) && removed.every((id) => !byId.has(id));
+}
+async function writeIndexSafely(read, write, change, tries = 3) {
+  let list = await read() ?? [];
+  let next = list;
+  for (let i = 0; i < tries; i++) {
+    next = change(list);
+    const { upserts, removed } = indexChanges(list, next);
+    if (!upserts.length && !removed.length) return list;
+    await write(next);
+    const after = await read() ?? [];
+    if (indexHolds(after, upserts, removed)) return after;
+    list = after;
+  }
+  return next;
+}
+function upsertRow(list, id, make) {
+  const old = list.find((r) => r.id === id);
+  return old ? list.map((r) => r.id === id ? make(r) : r) : [make(void 0), ...list];
+}
 export {
   buildPost,
   setMeasureContext,
   sizeOf,
   slideImages,
-  slideToSvg
+  slideToSvg,
+  upsertRow,
+  writeIndexSafely
 };

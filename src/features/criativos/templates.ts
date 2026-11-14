@@ -4,6 +4,7 @@ import { alpha } from './color'
 import { EDITORIAL, type SlideAt } from './editorial'
 import { measureText, widestLine } from './render'
 import { caseBySlug, caseImage, ILLUSTRATIONS } from './library'
+import { STORY_SAFE } from './safeZone'
 import type { CaseView, SlideSpec, TemplateId } from './plan'
 import { sizeOf, uid, type FormatId, type ImageLayer, type Layer, type Post, type SetBrand, type ShapeLayer, type Slide, type TextLayer } from './types'
 
@@ -34,8 +35,8 @@ interface Ctx {
   soft: string
 }
 
-/** Faixas do story sem texto: cerca de 13% em cima e 16% embaixo de 1920 px. */
-export const STORY_SAFE = { top: 250, bottom: 300 }
+/** Faixas do story sem texto (250 px em cima, 300 embaixo): a mesma constante das guias do editor e do MCP. */
+export { STORY_SAFE }
 
 const ctxOf = (brand: SetBrand, format: FormatId, dark: boolean): Ctx => {
   const p = paletteOf(brand)

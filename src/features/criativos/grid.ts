@@ -1,3 +1,4 @@
+import { storySafe } from './safeZone'
 import { sizeOf, type FormatId, type Layer, type Post, type Slide } from './types'
 
 /**
@@ -74,8 +75,8 @@ export function guidesOf(format: FormatId, grid: PostGrid): Guides {
   if (grid.safe) {
     if (H / W > 1.6) {
       // Story e reels: a barra do perfil por cima (topo) e a caixa de resposta e os botões (base)
-      const top = Math.round(H * 0.13)
-      const bottom = Math.round(H * 0.18)
+      // As mesmas faixas que os modelos respeitam (antes 18% embaixo aqui e 300 px nos modelos; revisão de 2026-11-13)
+      const { top, bottom } = storySafe(H)
       out.covered.push({ x: 0, y: 0, w: W, h: top, label: 'Perfil e barra do story' }, { x: 0, y: H - bottom, w: W, h: bottom, label: 'Resposta e botões' })
     } else {
       // Post: a grade do perfil mostra o centro em 3:4, e as laterais somem

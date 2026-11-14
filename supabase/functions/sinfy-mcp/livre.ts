@@ -81,6 +81,13 @@ export function guardFont(g: BrandGuard | undefined, value: string, big: boolean
  */
 const SNAP = 24
 
+/**
+ * Faixas do story que o Instagram cobre, em px de 1920: cópia de `src/features/criativos/safeZone.ts` (o Deno não lê
+ * o app), conferida em `scripts/tests/mcp-marca.test.mjs`. Antes, 13% e 18% (346 px embaixo), diferente dos modelos
+ * e do DESIGN, que pedem 300 (revisão de 2026-11-13).
+ */
+export const STORY_SAFE = { top: 250, bottom: 300 }
+
 export function gridLines(format: string) {
   const { w: W, h: H } = SIZES[format] ?? SIZES['4x5']
   const m = Math.round(Math.min(W, H) * 0.0778)
@@ -89,8 +96,8 @@ export function gridLines(format: string) {
   const v = [m, W - m, W / 2]
   for (let i = 0; i < 4; i++) v.push(Math.round(m + i * (col + g)), Math.round(m + i * (col + g) + col))
   const story = H / W > 1.6
-  const top = story ? Math.round(H * 0.13) : m
-  const bottom = story ? H - Math.round(H * 0.18) : H - m
+  const top = story ? Math.round((H * STORY_SAFE.top) / 1920) : m
+  const bottom = story ? H - Math.round((H * STORY_SAFE.bottom) / 1920) : H - m
   return { W, H, m, v, h: [m, H - m, H / 2, top, bottom], top, bottom }
 }
 

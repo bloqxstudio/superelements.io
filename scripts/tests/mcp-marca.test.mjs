@@ -55,6 +55,17 @@ test('slide livre no grid: texto dentro da margem, encaixe nas colunas, fundo qu
 test('story: texto fora das faixas que o Instagram cobre', () => {
   const slide = buildFree({ fundo: '#ffffff', camadas: [{ tipo: 'texto', texto: 'topo', x: 84, y: 40, w: 900, tamanho: 60 }, { tipo: 'texto', texto: 'base', x: 84, y: 1800, w: 900, tamanho: 60 }] }, '9x16')
   const [a, b] = slide.layers
-  assert.ok(a.y >= Math.round(1920 * 0.13))
-  assert.ok(b.y + b.h <= 1920 - Math.round(1920 * 0.18))
+  assert.ok(a.y >= 250)
+  assert.ok(b.y + b.h <= 1920 - 300)
+})
+
+test('story: as faixas do MCP, das guias e dos modelos são as mesmas (250 em cima, 300 embaixo)', async () => {
+  const { STORY_SAFE, gridLines } = await import('../../supabase/functions/sinfy-mcp/livre.ts')
+  const app = await import('../../src/features/criativos/safeZone.ts')
+  assert.deepEqual({ ...STORY_SAFE }, { ...app.STORY_SAFE })
+  assert.deepEqual({ ...app.STORY_SAFE }, { top: 250, bottom: 300 })
+  assert.deepEqual(app.storySafe(1920), { top: 250, bottom: 300 })
+  const G = gridLines('9x16')
+  assert.equal(G.top, 250)
+  assert.equal(G.bottom, 1920 - 300)
 })

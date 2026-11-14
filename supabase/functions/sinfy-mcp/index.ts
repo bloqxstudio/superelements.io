@@ -205,19 +205,54 @@ async function listSets(caller: Caller) {
   return lists.flat().sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
+type IndexWriter = <T extends { id: string; updatedAt?: number }>(read: () => Promise<T[] | undefined>, write: (list: T[]) => Promise<void>, change: (list: T[]) => T[]) => Promise<T[]>
+type RowUpsert = <T extends { id: string }>(list: T[], id: string, make: (old: T | undefined) => T) => T[]
+
+/** A linha do índice a partir do conjunto achado (sem a pasta, que não vai no índice). */
+const rowOf = (s: Summary): Summary => ({ id: s.id, name: s.name, projectId: s.projectId, projectName: s.projectName, shared: s.shared, posts: s.posts, colors: s.colors ?? [], updatedAt: s.updatedAt })
+
+/**
+ * Muda só a linha `id` do `index.json` da pasta, sobre a lista lida na hora, e confere depois de gravar (o mesmo
+ * `writeIndexSafely` do navegador): antes, lia no começo da ferramenta e gravava a lista inteira no fim, e um conjunto
+ * salvo pelo editor no meio sumia do índice e da IA (revisão de 2026-11-13).
+ */
+async function upsertIndex(folder: string, id: string, make: (old: Summary | undefined) => Summary) {
+  const path = `${folder}/index.json`
+  await (Criativos.writeIndexSafely as IndexWriter)<Summary>(() => readJson<Summary[]>(path), (list) => writeJson(path, list), (list) => (Criativos.upsertRow as RowUpsert)(list, id, make))
+}
+
+const SET_ID = /^[A-Za-z0-9_-]{1,80}$/
+
+/**
+ * Sem a linha no índice (perdida numa gravação ao mesmo tempo), o conjunto ainda pode estar na pasta: lê o `set.json`
+ * direto e devolve a linha do índice de volta (revisão de 2026-11-13).
+ */
+async function setFromFolder(folder: string, id: unknown): Promise<Summary | undefined> {
+  if (typeof id !== 'string' || !SET_ID.test(id)) return undefined
+  const set = await readJson<{ id?: string; name?: string; projectId?: string; projectName?: string; shared?: boolean; posts?: unknown[]; brand?: { colors?: { hex: string }[] }; updatedAt?: number }>(`${folder}/${id}/set.json`)
+  if (!set || (set.id && set.id !== id)) return undefined
+  const row: Summary = { id, name: set.name ?? 'Criativos', projectId: set.projectId, projectName: set.projectName, shared: set.shared, posts: set.posts?.length ?? 0, colors: (set.brand?.colors ?? []).slice(0, 5).map((c) => c.hex), updatedAt: set.updatedAt ?? Date.now() }
+  await upsertIndex(folder, id, (old) => old ?? row).catch((err) => console.error('[sinfy-mcp] índice', err))
+  return row
+}
+
 /**
  * O conjunto pedido por uma ferramenta (`id` e, se vier, `projeto_id`). Com o projeto, lê direto a pasta dele,
- * mesmo fora dos 10 projetos mais recentes que `listSets` percorre.
+ * mesmo fora dos 10 projetos mais recentes que `listSets` percorre. Fora do índice, tenta o `set.json` da pasta.
  */
 async function findSet(caller: Caller, a: Args) {
   if (typeof a.projeto_id === 'string' && a.projeto_id) {
     const project = await projectById(caller, a.projeto_id)
     if (!project) return undefined
     const folder = `${project.owner_id}/${project.id}/criativos`
-    const hit = ((await readJson<Summary[]>(`${folder}/index.json`)) ?? []).find((s) => s.id === a.id)
+    const hit = ((await readJson<Summary[]>(`${folder}/index.json`)) ?? []).find((s) => s.id === a.id) ?? (await setFromFolder(folder, a.id))
     return hit ? { ...hit, folder, projectId: project.id, projectName: project.name, shared: true } : undefined
   }
-  return (await listSets(caller)).find((s) => s.id === a.id)
+  const hit = (await listSets(caller)).find((s) => s.id === a.id)
+  if (hit) return hit
+  const folder = `${personalFolder(caller)}/criativos`
+  const row = await setFromFolder(folder, a.id)
+  return row ? { ...row, folder, projectId: undefined, projectName: undefined, shared: false } : undefined
 }
 
 /** A pasta do vídeo no Mac para o Edits: o mesmo cálculo de `editsFolder` em `src/features/criativos/edits.ts`. */
@@ -505,6 +540,49 @@ async function attachBrainImages(caller: Caller, setDir: string, posts: BuiltPos
         l.src = `asset:${assetId}`
       }
   return out
+}
+
+type PendingSet = { name: string; brand?: Brand; posts?: BuiltPost[]; pending?: unknown[]; pendingBrand?: boolean }
+
+/**
+ * Os posts do conjunto com os pedidos da IA (`pending`) já montados, como o Criativos monta ao abrir. Antes este bloco
+ * se repetia em quatro ferramentas e a prévia (`sinfy_criativo_ver`) não olhava `pendingBrand`: um conjunto criado
+ * antes de a pasta ter marca saía na marca neutra (revisão de 2026-11-13).
+ *
+ * Com `pendingBrand` (o conjunto espera a marca do projeto): `esperaMarca` recusa com essa mensagem (quem grava ou
+ * publica não pode adivinhar a marca); sem ela (só prévia), usa a marca mais recente da pasta, ou a neutra, e avisa
+ * em `provisoria`. `fontes` carrega as fontes da marca mesmo sem nada pendente (quem vai montar slides novos).
+ */
+async function materialize(caller: Caller, set: PendingSet, opts: { folder: string; esperaMarca?: string; fontes?: boolean }) {
+  const pending = set.pending ?? []
+  let brand = set.brand ?? neutralBrand(set.name)
+  let provisoria = false
+  if (pending.length && set.pendingBrand) {
+    if (opts.esperaMarca) throw new ToolError(opts.esperaMarca)
+    const found = (await latestBrand(caller, opts.folder)) as Brand | undefined
+    if (found) brand = found
+    else provisoria = true
+  }
+  if (pending.length || opts.fontes) {
+    const fonts = await fontsFor([brand.headingFont, brand.bodyFont, brand.emphasisFont ?? ''])
+    Criativos.setMeasureContext(fonts.ctx)
+  }
+  const posts = [...(set.posts ?? []), ...pending.map((p) => Criativos.buildPost(p as never, brand) as BuiltPost)]
+  return { posts, brand, montou: pending.length > 0, provisoria }
+}
+
+const WAIT_BRAND = 'Este conjunto ainda espera a marca do projeto: abra o link uma vez na Sinfy e tente de novo.'
+
+/** Aviso sobre o editor aberto: ele recarrega sozinho ao fim da ferramenta (`mcpLive.ts`), sem gravar por cima. */
+const EDITOR_NOTE = 'Se o conjunto estiver aberto no editor, ele recarrega sozinho com esta mudança; se a pessoa tiver edições ainda não salvas lá, a tela avisa e oferece recarregar.'
+
+/** Recusa gravar quando o conjunto mudou desde a leitura (o editor salvou durante a ferramenta, que leva segundos). */
+async function ensureUnchanged(path: string, readAt: number | undefined, cleanup?: () => Promise<unknown>) {
+  const now = await readJson<{ updatedAt?: number }>(path)
+  if (!now) throw new ToolError('O conjunto não está mais lá (foi apagado?). Veja a lista com sinfy_criativos.')
+  if ((now.updatedAt ?? 0) === (readAt ?? 0)) return
+  await cleanup?.().catch(() => undefined)
+  throw new ToolError('Alguém mudou o conjunto agora (no editor) enquanto eu trabalhava; não gravei para não apagar a mudança. Veja de novo com sinfy_criativo_ver e repita o pedido.')
 }
 
 /** Camadas de foto ainda sem imagem (pedido em `prompt`), nos posts dados. */
@@ -952,9 +1030,8 @@ const TOOLS: Tool[] = [
       const photos = await generateMissingPhotos(caller, `${folder}/${id}`, set.posts as BuiltPost[], set.assets)
       set.assets = photos.assets
       await writeJson(`${folder}/${id}/set.json`, set, false)
-      const index = (await readJson<Summary[]>(`${folder}/index.json`)) ?? []
       const summary: Summary = { id, name, projectId: project?.id, projectName: project?.name, shared: !!project, posts: posts.length, colors: useBrand.colors.slice(0, 5).map((c) => c.hex), updatedAt: now }
-      await writeJson(`${folder}/index.json`, [summary, ...index.filter((s) => s.id !== id)])
+      await upsertIndex(folder, id, () => summary)
 
       let ligado: string | undefined
       if (content) {
@@ -1080,16 +1157,10 @@ const TOOLS: Tool[] = [
       need(caller, 'criativos', 'Criativos')
       const found = await findSet(caller, a)
       if (!found) throw new ToolError('Conjunto não encontrado nesta conta.')
-      const set = await readJson<{ name: string; brand?: Brand; posts: BuiltPost[]; pending?: { name: string; format: string; caption?: string; slides: unknown[] }[]; assets?: { id: string; path: string }[] }>(`${found.folder}/${found.id}/set.json`)
+      const set = await readJson<PendingSet & { assets?: { id: string; path: string }[] }>(`${found.folder}/${found.id}/set.json`)
       if (!set) throw new ToolError('Não consegui abrir o conjunto.')
-      let posts = set.posts ?? []
-      if (set.pending?.length) {
-        // Ainda não aberto no editor: monta aqui só para a prévia
-        const brand = set.brand ?? neutralBrand(set.name)
-        const fonts = await fontsFor([brand.headingFont, brand.bodyFont, brand.emphasisFont ?? ''])
-        Criativos.setMeasureContext(fonts.ctx)
-        posts = [...posts, ...set.pending.map((p) => Criativos.buildPost(p, brand) as BuiltPost)]
-      }
+      // Ainda não aberto no editor: monta aqui só para a prévia (na marca da pasta, se o conjunto espera a do projeto)
+      const { posts, provisoria } = await materialize(caller, set, { folder: found.folder })
       if (!posts.length) throw new ToolError('Este conjunto não tem posts.')
       const index = Math.min(posts.length, Math.max(1, Number(a.post) || 1)) - 1
       const post = posts[index]
@@ -1098,7 +1169,7 @@ const TOOLS: Tool[] = [
       const width = Math.min(1080, Math.max(320, Number(a.largura) || 720))
       const images = one >= 0 ? await renderSlides([{ ...post, slides: [post.slides[one]] }], set.assets ?? [], width, 1) : await renderSheets([post], set.assets ?? [], 1)
       return new WithImages(
-        { conjunto: set.name, post: `${index + 1} de ${posts.length}`, fotos_pendentes: pendingPhotos(posts), nome: post.name, formato: post.format, slides: post.slides.length, legenda: post.caption, link: setUrl(found.id, found.projectId), nota: one >= 0 ? `Slide ${one + 1} em tamanho grande. Mostre à pessoa.` : 'Todos os slides numa imagem, na ordem. Para ver um em detalhe, passe "slide". Mostre à pessoa.' },
+        { conjunto: set.name, post: `${index + 1} de ${posts.length}`, fotos_pendentes: pendingPhotos(posts), nome: post.name, formato: post.format, slides: post.slides.length, legenda: post.caption, link: setUrl(found.id, found.projectId), nota: one >= 0 ? `Slide ${one + 1} em tamanho grande. Mostre à pessoa.` : 'Todos os slides numa imagem, na ordem. Para ver um em detalhe, passe "slide". Mostre à pessoa.', ...(provisoria ? { marca: 'Prévia na marca neutra: o projeto ainda não tem marca salva; ao abrir o link, a Sinfy aplica a marca do projeto.' } : {}) },
         images
       )
     },
@@ -1142,6 +1213,8 @@ const TOOLS: Tool[] = [
         arquivo: { type: 'string', description: 'Caminho de uma imagem do Cérebro (sinfy_cerebro_arquivos), ex.: fotos/enviadas/x.jpg.' },
         url: { type: 'string', description: 'Endereço https da foto.' },
         base64: { type: 'string', description: 'Ou a foto em base64 (data URL), por exemplo a que você gerou no chat.' },
+        // Lido só com a geração no servidor ligada (SINFY_FOTOS_SERVIDOR); antes ficava fora do esquema, que recusa campos a mais (revisão de 2026-11-13)
+        prompt: { type: 'string', description: 'Só quando a geração de fotos no servidor está ligada: descreva a foto (sem texto) e ela é gerada aqui. Sem isso, use arquivo, url ou base64.' },
         nome_arquivo: { type: 'string' },
       },
       additionalProperties: false,
@@ -1151,14 +1224,12 @@ const TOOLS: Tool[] = [
       const found = await findSet(caller, a)
       if (!found) throw new ToolError('Conjunto não encontrado nesta conta.')
       const path = `${found.folder}/${found.id}/set.json`
-      const set = await readJson<Record<string, unknown> & { name: string; brand?: Brand; posts: BuiltPost[]; pending?: { name: string; format: string; caption?: string; slides: unknown[] }[]; pendingBrand?: boolean; assets?: { id: string; name: string; path: string; width: number; height: number }[] }>(path)
+      const set = await readJson<Record<string, unknown> & PendingSet & { posts: BuiltPost[]; assets?: { id: string; name: string; path: string; width: number; height: number }[]; updatedAt?: number }>(path)
       if (!set) throw new ToolError('Não consegui abrir o conjunto.')
-      if (set.pending?.length) {
-        if (set.pendingBrand) throw new ToolError('Este conjunto ainda espera a marca do projeto: abra o link uma vez na Sinfy e tente de novo.')
-        const brand = set.brand ?? neutralBrand(set.name)
-        const fonts = await fontsFor([brand.headingFont, brand.bodyFont, brand.emphasisFont ?? ''])
-        Criativos.setMeasureContext(fonts.ctx)
-        set.posts = [...(set.posts ?? []), ...set.pending.map((p) => Criativos.buildPost(p, brand) as BuiltPost)]
+      const readAt = set.updatedAt
+      const m = await materialize(caller, set, { folder: found.folder, esperaMarca: WAIT_BRAND })
+      if (m.montou) {
+        set.posts = m.posts
         delete set.pending
       }
       const post = set.posts[Math.max(1, Number(a.post) || 1) - 1]
@@ -1215,12 +1286,13 @@ const TOOLS: Tool[] = [
         delete target.prompt
         delete target.genFailed
       }
+      // O editor pode ter salvo enquanto a foto subia: sem gravar por cima (a foto que subiu sai da pasta)
+      await ensureUnchanged(path, readAt, () => admin.storage.from(BUCKET).remove([assetPath]))
       set.updatedAt = Date.now()
       await writeJson(path, set)
-      const index = (await readJson<Summary[]>(`${found.folder}/index.json`)) ?? []
-      await writeJson(`${found.folder}/index.json`, index.map((s) => (s.id === found.id ? { ...s, posts: set.posts.length, updatedAt: set.updatedAt as number } : s)))
+      await upsertIndex(found.folder, found.id, (old) => ({ ...(old ?? rowOf(found)), posts: set.posts.length, updatedAt: set.updatedAt as number }))
       const preview = await renderSlides([{ ...post, slides: [slide] }], set.assets, 540, 1)
-      return new WithImages({ ok: true, conjunto: found.id, post: Number(a.post) || 1, slide: Number(a.slide) || 1, no_cerebro: noCerebro, como: asBackground ? 'foto de fundo com véu (ajuste a opacidade do véu no editor, se quiser)' : 'foto do slide trocada', link: setUrl(found.id, found.projectId), aviso: 'Se o conjunto estiver aberto no editor agora, recarregue a página para não gravar por cima.' }, preview)
+      return new WithImages({ ok: true, conjunto: found.id, post: Number(a.post) || 1, slide: Number(a.slide) || 1, no_cerebro: noCerebro, como: asBackground ? 'foto de fundo com véu (ajuste a opacidade do véu no editor, se quiser)' : 'foto do slide trocada', link: setUrl(found.id, found.projectId), aviso: EDITOR_NOTE }, preview)
     },
   },
   {
@@ -1243,14 +1315,12 @@ const TOOLS: Tool[] = [
       if (!found) throw new ToolError('Conjunto não encontrado nesta conta (veja os ids em sinfy_criativos).')
       const path = `${found.folder}/${found.id}/set.json`
       type TextL = Layer & { text?: string; name?: string }
-      const set = await readJson<Record<string, unknown> & { name: string; brand?: Brand; posts: BuiltPost[]; pending?: unknown[]; pendingBrand?: boolean; assets?: { id: string; path: string }[]; updatedAt?: number }>(path)
+      const set = await readJson<Record<string, unknown> & PendingSet & { posts: BuiltPost[]; assets?: { id: string; path: string }[]; updatedAt?: number }>(path)
       if (!set) throw new ToolError('Não consegui abrir o conjunto.')
-      const brand = set.brand ?? neutralBrand(set.name)
-      const fonts = await fontsFor([brand.headingFont, brand.bodyFont, brand.emphasisFont ?? ''])
-      Criativos.setMeasureContext(fonts.ctx)
-      if (set.pending?.length) {
-        if (set.pendingBrand) throw new ToolError('Este conjunto ainda espera a marca do projeto: abra o link uma vez na Sinfy e tente de novo.')
-        set.posts = [...(set.posts ?? []), ...set.pending.map((p) => Criativos.buildPost(p, brand) as BuiltPost)]
+      const readAt = set.updatedAt
+      const { posts: built, brand, montou } = await materialize(caller, set, { folder: found.folder, esperaMarca: WAIT_BRAND, fontes: true })
+      if (montou) {
+        set.posts = built
         delete set.pending
       }
       const brandFixes: string[] = []
@@ -1342,10 +1412,11 @@ const TOOLS: Tool[] = [
       set.assets = await attachBrainImages(caller, `${found.folder}/${found.id}`, set.posts, set.assets ?? [])
       const photos = await generateMissingPhotos(caller, `${found.folder}/${found.id}`, set.posts.filter((p) => changed.has(p.id)), set.assets)
       set.assets = photos.assets
+      // O editor pode ter salvo durante a edição (fotos e montagem levam segundos): recusa em vez de gravar por cima
+      await ensureUnchanged(path, readAt)
       set.updatedAt = Date.now()
       await writeJson(path, set)
-      const index = (await readJson<Summary[]>(`${found.folder}/index.json`)) ?? []
-      await writeJson(`${found.folder}/index.json`, index.map((x) => (x.id === found.id ? { ...x, name: set.name, posts: set.posts.length, updatedAt: set.updatedAt as number } : x)))
+      await upsertIndex(found.folder, found.id, (old) => ({ ...(old ?? rowOf(found)), name: set.name, posts: set.posts.length, updatedAt: set.updatedAt as number }))
       const posts = set.posts.filter((p) => changed.has(p.id))
       let images: Picture[] = []
       try {
@@ -1364,7 +1435,7 @@ const TOOLS: Tool[] = [
           posts: set.posts.map((p, i) => ({ post: i + 1, nome: p.name, slides: p.slides.length, legenda: p.caption })),
           previa: images.length ? 'Uma imagem por post mudado, com os slides lado a lado. Mostre à pessoa.' : undefined,
           link: setUrl(found.id, found.projectId),
-          aviso: 'Se o conjunto estiver aberto no editor agora, recarregue a página antes de mexer lá, para não gravar por cima.',
+          aviso: EDITOR_NOTE,
         },
         images
       )
@@ -1396,16 +1467,9 @@ const TOOLS: Tool[] = [
       if (acc.sync_error === 'token') throw new ToolError(`A conexão do @${acc.username} caiu: reconecte em CRM › Instagram antes de publicar.`)
       const found = await findSet(caller, a)
       if (!found) throw new ToolError('Conjunto não encontrado nesta conta.')
-      const set = await readJson<{ name: string; brand?: Brand; posts: BuiltPost[]; pending?: unknown[]; pendingBrand?: boolean; assets?: { id: string; path: string }[] }>(`${found.folder}/${found.id}/set.json`)
+      const set = await readJson<PendingSet & { assets?: { id: string; path: string }[] }>(`${found.folder}/${found.id}/set.json`)
       if (!set) throw new ToolError('Não consegui abrir o conjunto.')
-      let posts = set.posts ?? []
-      if (set.pending?.length) {
-        if (set.pendingBrand) throw new ToolError('Este conjunto ainda espera a marca do projeto: abra o link uma vez na Sinfy antes de publicar.')
-        const brand = set.brand ?? neutralBrand(set.name)
-        const fonts = await fontsFor([brand.headingFont, brand.bodyFont, brand.emphasisFont ?? ''])
-        Criativos.setMeasureContext(fonts.ctx)
-        posts = [...posts, ...set.pending.map((p) => Criativos.buildPost(p, brand) as BuiltPost)]
-      }
+      const { posts } = await materialize(caller, set, { folder: found.folder, esperaMarca: 'Este conjunto ainda espera a marca do projeto: abra o link uma vez na Sinfy antes de publicar.' })
       const index = Math.max(1, Number(a.post) || 1) - 1
       const post = posts[index]
       if (!post) throw new ToolError(`O post ${index + 1} não existe (o conjunto tem ${posts.length}).`)
@@ -1602,7 +1666,8 @@ const WHERE_KEYS = ['id', 'conjunto', 'projeto_id', 'post', 'slide', 'quadro', '
 function liveEvent(caller: Caller, tool: Tool, phase: 'start' | 'done', args: Args, extra: Record<string, unknown> = {}) {
   const where: Record<string, unknown> = {}
   for (const k of WHERE_KEYS) if (args[k] !== undefined && (typeof args[k] !== 'string' || (args[k] as string).length <= 120)) where[k] = args[k]
-  const payload = { phase, tool: tool.name, titulo: tool.title, muda: !tool.annotations?.readOnlyHint, onde: where, ia: caller.who?.ia ?? 'IA', pessoa: caller.who?.pessoa ?? '', at: Date.now(), ...extra }
+  // `usuario`: a pessoa da chave. O app só gera as fotos pendentes nas abas dela, não nas de toda a conta (revisão de 2026-11-13)
+  const payload = { phase, tool: tool.name, titulo: tool.title, muda: !tool.annotations?.readOnlyHint, onde: where, ia: caller.who?.ia ?? 'IA', pessoa: caller.who?.pessoa ?? '', usuario: caller.userId, at: Date.now(), ...extra }
   return liveSend(`mcp:${caller.team.id}`, 'ia', payload)
 }
 

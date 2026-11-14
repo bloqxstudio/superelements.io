@@ -1,10 +1,12 @@
 import { toast } from 'sonner'
+import { supabase } from '@/integrations/supabase/client'
 import { useMcpEvent, type McpEvent } from '@/features/mcp/live'
 import { fillSetImages, generateAll } from './generate'
 import { useCreativeLink } from './link'
 import { loadSet, saveSet } from './storage'
 import { useEditor } from './store'
-import type { CreativeSet } from './types'
+import type { SyncPatch } from './syncPatch'
+import type { CreativeSet, SetAsset } from './types'
 
 /**
  * Fotos dos criativos feitos pela IA conectada (MCP), geradas pelo app local (2026-11-13, o usuário: "hoje vamos
@@ -13,6 +15,10 @@ import type { CreativeSet } from './types'
  * computador (o Codex, pelo plano da pessoa). Então qualquer aba do app aberta, em qualquer tela, com o conector
  * ligado, ouve o aviso ao vivo do MCP (criar, editar ou `sinfy_criativo_fotos`) e gera as fotos pendentes daquele
  * conjunto, sem ninguém abrir o editor. Com o conjunto aberto no editor, gera pelo editor (para não gravar por cima).
+ *
+ * Revisão de 2026-11-13: só gera nas abas da pessoa dona da chave (o aviso traz `usuario`; antes, cada membro da conta
+ * com o conector gerava as mesmas fotos, porque a trava é por navegador), e quem abre o editor no meio da geração
+ * recebe as fotos no estado dele (senão o próximo autosave do editor gravava a versão sem elas).
  */
 
 const TOOLS = new Set(['sinfy_criativo_criar', 'sinfy_criativo_editar', 'sinfy_criativo_fotos'])
@@ -42,6 +48,43 @@ const release = (id: string) => {
 }
 
 const running = new Set<string>()
+
+/** Quanto tempo depois de gravar ainda vale levar as fotos a um editor que abriu este conjunto (a abertura leva segundos). */
+const WATCH_EDITOR = 30_000
+
+/**
+ * Põe as fotos geradas no editor aberto neste conjunto, sobre o estado DELE (só as camadas ainda sem foto; o resto da
+ * edição dele fica), como mudança remota: o arquivo já está gravado, e o próximo autosave do editor leva as fotos junto.
+ */
+function patchEditor(setId: string, made: Map<string, string>, assets: SetAsset[]) {
+  const current = useEditor.getState().set
+  if (!current || current.id !== setId) return
+  const slides: NonNullable<SyncPatch['slides']> = []
+  for (const p of current.posts)
+    for (const sl of p.slides)
+      if (sl.layers.some((l) => l.type === 'image' && !l.src && made.has(l.id)))
+        slides.push({ postId: p.id, slide: { ...sl, layers: sl.layers.map((l) => (l.type === 'image' && !l.src && made.has(l.id) ? { ...l, src: made.get(l.id)!, genFailed: false } : l)) } })
+  const extra = assets.filter((a) => !current.assets.some((b) => b.id === a.id))
+  if (!slides.length && !extra.length) return
+  useEditor.getState().applyRemote({ ...(slides.length ? { slides } : {}), ...(extra.length ? { assets: [...current.assets, ...extra] } : {}) })
+}
+
+/** Leva as fotos ao editor agora e a um que termine de abrir este conjunto logo depois (leu a versão sem elas). */
+function deliverToEditor(setId: string, made: Map<string, string>, assets: SetAsset[]) {
+  if (!made.size) return
+  patchEditor(setId, made, assets)
+  const stop = useEditor.subscribe((s) => {
+    if (s.status === 'ready' && s.set?.id === setId) patchEditor(setId, made, assets)
+  })
+  setTimeout(stop, WATCH_EDITOR)
+}
+
+/** O aviso é da chave de outra pessoa da conta: as abas dela geram, não as nossas. */
+async function notMine(e: McpEvent) {
+  if (!e.usuario) return false // aviso de antes do campo: segue como era
+  const { data } = await supabase.auth.getSession()
+  return data.session?.user.id !== e.usuario
+}
 
 async function generateFor(setId: string, projectId?: string) {
   const link = useCreativeLink.getState()
@@ -82,6 +125,8 @@ async function generateFor(setId: string, projectId?: string) {
       posts: fresh.posts.map((p) => ({ ...p, slides: p.slides.map((sl) => ({ ...sl, layers: sl.layers.map((l) => (l.type === 'image' && !l.src && made.has(l.id) ? { ...l, src: made.get(l.id)!, genFailed: false } : l)) })) })),
       updatedAt: Date.now(),
     })
+    // Alguém abriu este conjunto no editor durante a geração: ele não sabe deste save
+    deliverToEditor(setId, made, assets)
     toast.success(`${made.size} de ${list.length} foto(s) gerada(s) no criativo da IA conectada.`, { id: toastId })
   } catch (err) {
     toast.error(err instanceof Error ? `Fotos do criativo: ${err.message}` : 'Não consegui gerar as fotos do criativo.', { id: toastId })
@@ -99,6 +144,6 @@ export function useMcpPhotoWorker() {
     const setId = (typeof e.criado?.conjunto === 'string' && e.criado.conjunto) || (typeof e.onde.id === 'string' ? e.onde.id : '')
     if (!setId) return
     const projectId = (typeof e.criado?.projeto_id === 'string' && e.criado.projeto_id) || (typeof e.onde.projeto_id === 'string' ? e.onde.projeto_id : undefined)
-    void generateFor(setId, projectId || undefined)
+    void notMine(e).then((skip) => (skip ? undefined : generateFor(setId, projectId || undefined)))
   })
 }

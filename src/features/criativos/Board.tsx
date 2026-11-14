@@ -2,6 +2,7 @@ import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, 
 import { AtSign, Check, ClipboardPaste, Copy, CopyPlus, Download, GripVertical, Maximize2, Minus, Plus, Scan, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { iaraEnabled } from '@/features/mcp/connect'
 import { agentInfo, PHASE_LABEL, useAgent } from './agentStore'
 import { boundsOf, withGroups } from './layerOps'
 import { useRefs } from './refStore'
@@ -192,6 +193,8 @@ interface Props {
 
 export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicateSlide, onDeleteSlide, onlyPostId }) => {
   const set = useEditor((s) => s.set)!
+  // O "@" leva o post ou o slide ao chat da Iara, que só aparece com ela ligada: sem a Iara, o botão não faz nada (revisão de 2026-11-13)
+  const [iara] = useState(iaraEnabled)
   const images = useEditor((s) => s.images)
   const postId = useEditor((s) => s.postId)
   const slideId = useEditor((s) => s.slideId)
@@ -657,7 +660,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
             >
               <Check style={{ width: 30, height: 30 }} /> {row.approved ? 'Aprovado' : 'Aprovar'}
             </button>
-            <button
+            {iara && <button
               type="button"
               data-ui
               onClick={() => useRefs.getState().add({ id: `post:${row.postId}`, kind: 'post', label: row.name, postId: row.postId }, true)}
@@ -667,7 +670,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
               style={{ left: Math.min(row.width - 60, 1180), top: row.y, width: 64, height: HEAD - 10 }}
             >
               <AtSign style={{ width: 34, height: 34 }} />
-            </button>
+            </button>}
             <button
               type="button"
               data-ui
@@ -895,7 +898,7 @@ export const Board: React.FC<Props> = ({ onAddSlide, onDownloadSlide, onDuplicat
           <div className="absolute" style={{ left: selected.x + selected.w, top: selected.y - 24 * inv, width: 0, height: 0 }}>
             <div data-ui className="absolute bottom-0 right-0 flex items-center gap-1 whitespace-nowrap rounded-xl border bg-white p-1 shadow-lg" style={{ height: 36, transform: `scale(${inv * 1.4})`, transformOrigin: 'right bottom' }}>
               <span className="px-2 text-xs font-semibold text-gray-700">Slide {selected.index + 1}</span>
-              <BarButton label="Referenciar no chat (@): diga o que trazer daqui" onClick={() => useRefs.getState().add({ id: `slide:${selected.slideId}`, kind: 'slide', label: `${set.posts.find((x) => x.id === selected.postId)?.name ?? 'Post'} · slide ${selected.index + 1}`, postId: selected.postId, slideId: selected.slideId }, true)}><AtSign className="h-4 w-4" /></BarButton>
+              {iara && <BarButton label="Referenciar no chat (@): diga o que trazer daqui" onClick={() => useRefs.getState().add({ id: `slide:${selected.slideId}`, kind: 'slide', label: `${set.posts.find((x) => x.id === selected.postId)?.name ?? 'Post'} · slide ${selected.index + 1}`, postId: selected.postId, slideId: selected.slideId }, true)}><AtSign className="h-4 w-4" /></BarButton>}
               <BarButton label="Ampliar" onClick={() => fit({ x: selected.x - 80, y: selected.y - 120, w: selected.w + 160, h: selected.h + 240 })}><Maximize2 className="h-4 w-4" /></BarButton>
               <BarButton label="Baixar slide" onClick={() => onDownloadSlide(selected.postId, selected.slideId)}><Download className="h-4 w-4" /></BarButton>
               <span data-ui title="Arraste para outro post ou outra posição (com Alt, copia)" aria-label="Arrastar slide" onPointerDown={(e) => startSlideDrag(e, selected)} className="flex h-8 w-8 cursor-grab items-center justify-center rounded-md text-gray-700 hover:bg-gray-100 active:cursor-grabbing"><GripVertical className="h-4 w-4" /></span>
