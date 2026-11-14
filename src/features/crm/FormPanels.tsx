@@ -4,6 +4,7 @@ import { Check, ChevronDown, CircleAlert, Copy, Download, ExternalLink, Link2, L
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import { isLocalAppUrl, publicAppUrl } from '@/features/approval/shares'
 import { FORMS_ENDPOINT, deleteSubmission, embedOf, listSubmissions, submissionsCsv, type CrmForm, type FormSubmission } from '@/features/crm/forms'
 import { META_URL_PARAMS as META_PARAMS } from '@/features/crm/SiteAds'
@@ -41,12 +42,13 @@ export const Submissions: React.FC<{ form: CrmForm; manager: boolean }> = ({ for
     setRows(null)
     void load()
     // Resposta nova aparece na hora, sem recarregar
-    const channel = supabase
-      .channel(`form-subs-${form.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_form_submissions', filter: `form_id=eq.${form.id}` }, () => void load())
-      .subscribe()
+    // Tópico fixo: o helper espera o canal antigo com esse tópico sair antes de entrar (revisão de 2026-11-13)
+    const leave = subscribeTopic(`form-subs-${form.id}`, (channel) =>
+      channel
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_form_submissions', filter: `form_id=eq.${form.id}` }, () => void load())
+    )
     return () => {
-      void supabase.removeChannel(channel)
+      leave()
     }
   }, [form.id, load])
 

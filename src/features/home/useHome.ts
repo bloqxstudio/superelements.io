@@ -1,6 +1,7 @@
 import { addDays, dayPeriod, dayStart, isDayPeriod, spanEnd, spanOfPeriod, todayKey } from '@/lib/day'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import { useCrm } from '@/features/crm/crmStore'
 import { moduleOn } from '@/features/crm/modules'
 import { fetchAdReport, loadAdAccounts, loadAdReport, NoAdTablesError, resultLabel, type AdAccount, type AdPreset, type AdReport } from '@/features/crm/ads'
@@ -40,13 +41,17 @@ function useSource<T>(enabled: boolean, load: () => Promise<T>, key: string, eve
   const [state, setState] = useState<Source<T>>(enabled ? { status: 'loading' } : { status: 'off' })
   const loader = useRef(load)
   loader.current = load
-  const alive = useRef(true)
+  // Revisão de 2026-11-13: um número por leitura, e só a última pedida grava. Com um `alive` só, trocar de
+  // período (7 → 30 dias, hoje ↔ dia) deixava a resposta velha, se chegasse depois, sobrescrever a nova.
+  const seq = useRef(0)
   const run = useCallback(() => {
     if (!enabled) return
+    const mine = ++seq.current
+    const current = () => seq.current === mine
     loader.current()
-      .then((data) => alive.current && setState({ status: 'ready', data, at: Date.now() }))
+      .then((data) => current() && setState({ status: 'ready', data, at: Date.now() }))
       .catch((e) => {
-        if (!alive.current) return
+        if (!current()) return
         if (e instanceof Absent) return setState({ status: 'none', reason: e.message })
         console.error('[home] falha ao ler uma fonte', e)
         setState((prev) => (prev.status === 'ready' ? { ...prev, error: errorText(e) } : { status: 'error', message: errorText(e) }))
@@ -54,14 +59,15 @@ function useSource<T>(enabled: boolean, load: () => Promise<T>, key: string, eve
   }, [enabled])
 
   useEffect(() => {
-    alive.current = true
     // Mudou de período ou de conta: a leitura nova começa, mas o dado de antes só sai quando o novo chega
     setState((prev) => (!enabled ? { status: 'off' } : prev.status === 'off' ? { status: 'loading' } : prev))
     run()
-    if (!every || !enabled) return () => void (alive.current = false)
+    // Saiu (desmontou, trocou de chave): invalida a leitura em andamento
+    const counter = seq
+    if (!every || !enabled) return () => void ++counter.current
     const timer = setInterval(() => document.visibilityState === 'visible' && run(), every)
     return () => {
-      alive.current = false
+      ++counter.current
       clearInterval(timer)
     }
   }, [run, key, every, enabled])
@@ -281,8 +287,7 @@ export function useHome(days: Days, day?: string) {
   const soonActs = useSoon(reloadActs, 600)
   useEffect(() => {
     if (!teamId || !crmOn) return
-    const channel = supabase.channel(`home-atividades-${teamId}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_activities', filter: `team_id=eq.${teamId}` }, soonActs).subscribe()
-    return () => void supabase.removeChannel(channel)
+    return subscribeTopic(`home-atividades-${teamId}`, (ch) => ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_activities', filter: `team_id=eq.${teamId}` }, soonActs))
   }, [teamId, crmOn, soonActs])
 
   // ---- site: relatório do período, quem está agora e os contatos ----
@@ -321,15 +326,18 @@ export function useHome(days: Days, day?: string) {
     5 * 60_000
   )
   const [siteRealtime, setSiteRealtime] = useState(false)
-  const soonSite = useSoon(reloadSite, 2500)
+  // Revisão de 2026-11-13 (egress): cada leitura do relatório são 3 consultas por site, e o batimento de
+  // quem está no site (UPDATE em site_sessions a cada poucos segundos) relia tudo a cada 2,5 s. Agora só
+  // visita nova (INSERT) acorda a Home, e no máximo uma releitura a cada 30 s; o resto fica com os 5 min.
+  const soonSite = useSoon(reloadSite, 30_000)
   useEffect(() => {
     setSiteRealtime(false)
     if (!teamId || !siteOn) return
-    const channel = supabase
-      .channel(`home-site-${teamId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_sessions', filter: `team_id=eq.${teamId}` }, soonSite)
-      .subscribe((status) => setSiteRealtime(status === 'SUBSCRIBED'))
-    return () => void supabase.removeChannel(channel)
+    return subscribeTopic(
+      `home-site-${teamId}`,
+      (ch) => ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'site_sessions', filter: `team_id=eq.${teamId}` }, soonSite),
+      { onStatus: (status) => setSiteRealtime(status === 'SUBSCRIBED') }
+    )
   }, [teamId, siteOn, soonSite])
 
   // ---- anúncios: o último relatório guardado de cada conta (a Home só chama a Meta para o de hoje, quando velho) ----

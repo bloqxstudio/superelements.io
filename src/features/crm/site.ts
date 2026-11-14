@@ -1,6 +1,7 @@
 import { isDayPeriod, isSingleDay, spanEnd, spanIn, spanOfPeriod, spanRange, spanShort, type DayPeriod } from '@/lib/day'
 import { useEffect, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import { isLocalAppUrl, publicAppUrl } from '@/features/approval/shares'
 import { shopifyPixelCode } from './shopifyPixel'
 
@@ -545,13 +546,14 @@ export function useSiteFeed(siteId: string | undefined, onSession: (session: Sit
       const r = row as SessionRow | null
       if (r?.id && r.started_at) latest.current(sessionOf(r))
     }
-    const channel = supabase
-      .channel(`site-visitas-${siteId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'site_sessions', filter: `site_id=eq.${siteId}` }, (payload) => deliver(payload.new))
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'site_sessions', filter: `site_id=eq.${siteId}` }, (payload) => deliver(payload.new))
-      .subscribe()
+    // Tópico fixo: o helper espera o canal antigo com esse tópico sair antes de entrar (revisão de 2026-11-13)
+    const leave = subscribeTopic(`site-visitas-${siteId}`, (channel) =>
+      channel
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'site_sessions', filter: `site_id=eq.${siteId}` }, (payload) => deliver(payload.new))
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'site_sessions', filter: `site_id=eq.${siteId}` }, (payload) => deliver(payload.new))
+    )
     return () => {
-      void supabase.removeChannel(channel)
+      leave()
     }
   }, [siteId])
 }

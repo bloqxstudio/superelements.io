@@ -26,9 +26,9 @@ const Img: React.FC<{ vault: LoadedVault; from: string; src?: string; className?
     const path = joinPath(dirOf(from), src).path
     const m = vault.media.find((x) => x.path === path)
     let live = true
-    void mediaUrl(path, m?.mtime).then((u) => live && setUrl(u)).catch(() => {})
+    void mediaUrl(vault.teamId, path, m?.mtime).then((u) => live && setUrl(u)).catch(() => {})
     return () => { live = false }
-  }, [src, from, vault.media])
+  }, [src, from, vault.media, vault.teamId])
   if (!src) return <div className={cn('flex items-center justify-center bg-gray-50 text-xs text-gray-400', className)}>Sem exemplo</div>
   return url ? <img src={url} alt={alt} className={className} /> : <div className={cn('animate-pulse bg-gray-100', className)} />
 }

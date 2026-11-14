@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import { call, NoTablesError } from './instagram'
 
 /**
@@ -165,13 +166,12 @@ export function useInboxFeed(accountId: string | undefined, onChange: () => void
   latest.current = onChange
   useEffect(() => {
     if (!accountId) return
-    const channel = db.channel(`crm-ig-inbox-${accountId}`)
-    for (const table of ['crm_instagram_comments', 'crm_instagram_threads', 'crm_instagram_dms']) {
-      channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `account_id=eq.${accountId}` }, () => latest.current())
-    }
-    channel.subscribe()
-    return () => {
-      void db.removeChannel(channel)
-    }
+    // Tópico fixo: o helper espera o canal antigo com esse tópico sair antes de entrar (revisão de 2026-11-13)
+    return subscribeTopic(`crm-ig-inbox-${accountId}`, (channel) => {
+      for (const table of ['crm_instagram_comments', 'crm_instagram_threads', 'crm_instagram_dms']) {
+        channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `account_id=eq.${accountId}` }, () => latest.current())
+      }
+      return channel
+    })
   }, [accountId])
 }

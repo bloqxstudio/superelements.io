@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
-import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 
 /**
  * A IA conectada (MCP) ao vivo nas telas (2026-11-12, o usuário: "quero ver alterando o sistema em tempo real,
@@ -51,17 +51,19 @@ export function useMcpChannel(teamId: string | undefined) {
   useEffect(() => {
     if (!teamId) return
     const topic = `mcp:${teamId}`
-    for (const old of supabase.getChannels()) if (old.topic === `realtime:${topic}`) void supabase.removeChannel(old)
-    const channel = supabase
-      .channel(topic, { config: { private: true } })
-      .on('broadcast', { event: 'ia' }, ({ payload }) => {
-        const e = payload as McpEvent
-        if (!e?.tool && e?.phase !== 'upload') return
-        useMcpLive.getState().push(e)
-        window.dispatchEvent(new CustomEvent<McpEvent>(EVENT, { detail: e }))
-      })
-      .subscribe()
-    return () => { void supabase.removeChannel(channel) }
+    // Antes removia o canal velho sem esperar e o `.channel()` devolvia esse mesmo canal saindo; o helper
+    // espera a saída terminar antes de entrar (revisão de 2026-11-13)
+    return subscribeTopic(
+      topic,
+      (channel) =>
+        channel.on('broadcast', { event: 'ia' }, ({ payload }) => {
+          const e = payload as McpEvent
+          if (!e?.tool && e?.phase !== 'upload') return
+          useMcpLive.getState().push(e)
+          window.dispatchEvent(new CustomEvent<McpEvent>(EVENT, { detail: e }))
+        }),
+      { config: { config: { private: true } } }
+    )
   }, [teamId])
 }
 

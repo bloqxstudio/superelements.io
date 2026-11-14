@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import type { Database } from '@/integrations/supabase/types'
 
 /**
@@ -97,14 +98,11 @@ export function useNumberFeed(teamId: string | undefined, onNumber: (number: WaN
 
   useEffect(() => {
     if (!teamId) return
-    const channel = supabase
-      .channel(`crm-whatsapp-${teamId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_whatsapp_numbers', filter: `team_id=eq.${teamId}` }, (payload) => {
+    // Tópico fixo: o helper espera o canal antigo com esse tópico sair antes de entrar (revisão de 2026-11-13)
+    return subscribeTopic(`crm-whatsapp-${teamId}`, (channel) =>
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'crm_whatsapp_numbers', filter: `team_id=eq.${teamId}` }, (payload) => {
         if (payload.new && 'team_id' in payload.new) latest.current(toNumber(payload.new as NumberRow))
       })
-      .subscribe()
-    return () => {
-      void supabase.removeChannel(channel)
-    }
+    )
   }, [teamId])
 }

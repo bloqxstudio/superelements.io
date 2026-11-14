@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import { LIVE_MS, isLive, toVisit, type FormVisit } from '@/features/crm/formFunnel'
 
 export * from '@/features/crm/formFunnel'
@@ -62,31 +63,32 @@ export function useFormVisits(formId: string, since: number) {
   }, [load])
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`form-visits-${formId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_form_visits', filter: `form_id=eq.${formId}` }, (payload) => {
-        if (payload.eventType === 'DELETE') {
-          const id = (payload.old as { id?: string }).id
-          setVisits((list) => (list ? list.filter((v) => v.id !== id) : list))
-          return
-        }
-        const visit = toVisit(payload.new as Record<string, unknown>)
-        if (visit.startedAt < sinceRef.current) return
-        setVisits((list) => {
-          if (!list) return list
-          const i = list.findIndex((v) => v.id === visit.id)
-          if (i < 0) return [visit, ...list]
-          const next = list.slice()
-          next[i] = visit
-          return next
+    // Tópico fixo: o helper espera o canal antigo com esse tópico sair antes de entrar (revisão de 2026-11-13)
+    const leave = subscribeTopic(`form-visits-${formId}`, (channel) =>
+      channel
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_form_visits', filter: `form_id=eq.${formId}` }, (payload) => {
+          if (payload.eventType === 'DELETE') {
+            const id = (payload.old as { id?: string }).id
+            setVisits((list) => (list ? list.filter((v) => v.id !== id) : list))
+            return
+          }
+          const visit = toVisit(payload.new as Record<string, unknown>)
+          if (visit.startedAt < sinceRef.current) return
+          setVisits((list) => {
+            if (!list) return list
+            const i = list.findIndex((v) => v.id === visit.id)
+            if (i < 0) return [visit, ...list]
+            const next = list.slice()
+            next[i] = visit
+            return next
+          })
         })
-      })
-      .subscribe()
+    )
     // Reserva: se a Realtime cair, uma leitura a cada 2 min com a aba à vista
     const t = setInterval(() => { if (document.visibilityState === 'visible') void load() }, 120_000)
     return () => {
       clearInterval(t)
-      void supabase.removeChannel(channel)
+      leave()
     }
   }, [formId, load])
 
@@ -107,21 +109,22 @@ export function useLiveCounts(teamId: string | undefined) {
       setRows(new Map((data ?? []).map((r) => [String(r.id), { formId: String(r.form_id), lastAt: Date.parse(String(r.last_at)) }])))
     }
     void load()
-    const channel = supabase
-      .channel(`form-visits-team-${teamId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_form_visits', filter: `team_id=eq.${teamId}` }, (payload) => {
-        const r = (payload.eventType === 'DELETE' ? payload.old : payload.new) as Record<string, unknown>
-        setRows((map) => {
-          const next = new Map(map)
-          if (payload.eventType === 'DELETE') next.delete(String(r.id))
-          else next.set(String(r.id), { formId: String(r.form_id), lastAt: Date.parse(String(r.last_at)), leftAt: r.left_at ? Date.parse(String(r.left_at)) : undefined })
-          return next
+    // Tópico fixo: o helper espera o canal antigo com esse tópico sair antes de entrar (revisão de 2026-11-13)
+    const leave = subscribeTopic(`form-visits-team-${teamId}`, (channel) =>
+      channel
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_form_visits', filter: `team_id=eq.${teamId}` }, (payload) => {
+          const r = (payload.eventType === 'DELETE' ? payload.old : payload.new) as Record<string, unknown>
+          setRows((map) => {
+            const next = new Map(map)
+            if (payload.eventType === 'DELETE') next.delete(String(r.id))
+            else next.set(String(r.id), { formId: String(r.form_id), lastAt: Date.parse(String(r.last_at)), leftAt: r.left_at ? Date.parse(String(r.left_at)) : undefined })
+            return next
+          })
         })
-      })
-      .subscribe()
+    )
     return () => {
       alive = false
-      void supabase.removeChannel(channel)
+      leave()
     }
   }, [teamId])
 

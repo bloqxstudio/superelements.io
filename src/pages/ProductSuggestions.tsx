@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { CircleAlert, Download, Loader2, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { FIELD, Page, PageHeader } from '@/features/crm/ui'
@@ -66,16 +67,17 @@ const ProductSuggestions: React.FC = () => {
   // Ao vivo: sugestão nova chega sem recarregar
   const timer = useRef<number>()
   useEffect(() => {
-    const channel = supabase
-      .channel('product-suggestions')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'product_suggestions' }, () => {
-        window.clearTimeout(timer.current)
-        timer.current = window.setTimeout(() => void load(), 500)
-      })
-      .subscribe()
+    // Tópico fixo: o helper espera o canal antigo com esse tópico sair antes de entrar (revisão de 2026-11-13)
+    const leave = subscribeTopic('product-suggestions', (channel) =>
+      channel
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'product_suggestions' }, () => {
+          window.clearTimeout(timer.current)
+          timer.current = window.setTimeout(() => void load(), 500)
+        })
+    )
     return () => {
       window.clearTimeout(timer.current)
-      void supabase.removeChannel(channel)
+      leave()
     }
   }, [load])
 

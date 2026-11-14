@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/integrations/supabase/client'
+import { subscribeTopic } from '@/lib/realtimeTopic'
 import { useCrm } from '@/features/crm/crmStore'
 import { cn } from '@/lib/utils'
 import {
@@ -42,9 +43,9 @@ const slug = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 const cleanFolder = (f: string) => f.split('/').map((s) => slug(s)).filter(Boolean).join('/')
 
 /** Um arquivo do cérebro, com o endereço resolvido. */
-const MediaThumb: React.FC<{ m: VaultMedia; className?: string }> = ({ m, className }) => {
+const MediaThumb: React.FC<{ teamId: string; m: VaultMedia; className?: string }> = ({ teamId, m, className }) => {
   const [src, setSrc] = useState<string | undefined>(m.url)
-  useEffect(() => { let live = true; if (!m.url) void mediaUrl(m.path, m.mtime).then((u) => live && setSrc(u)).catch(() => {}); return () => { live = false } }, [m.path, m.mtime, m.url])
+  useEffect(() => { let live = true; if (!m.url) void mediaUrl(teamId, m.path, m.mtime).then((u) => live && setSrc(u)).catch(() => {}); return () => { live = false } }, [teamId, m.path, m.mtime, m.url])
   if (isVideo(m.path)) return <video src={src} muted playsInline preload="metadata" className={className} />
   if (isImage(m.path)) return src ? <img src={src} alt={fileName(m.path)} loading="lazy" className={className} /> : <div className={cn('animate-pulse bg-gray-100', className)} />
   return <div className={cn('flex items-center justify-center bg-gray-50 text-xs font-medium uppercase text-gray-400', className)}>{m.path.split('.').pop()}</div>
@@ -92,7 +93,7 @@ const viewMedia = (vault: LoadedVault, paths: string[], start: string, remove?: 
     return {
       name: fileName(path),
       src: m?.url,
-      resolve: () => mediaUrl(path, m?.mtime),
+      resolve: () => mediaUrl(vault.teamId, path, m?.mtime),
       kind: kindOf(path),
       caption: m?.label ?? (dirOf(path) ? folderLabel(fileName(dirOf(path))) : undefined),
       href: m?.href,
@@ -201,7 +202,7 @@ const NoteBody: React.FC<{ vault: LoadedVault; note: VaultNote; onOpen: (p: stri
     root.querySelectorAll<HTMLImageElement | HTMLVideoElement>('[data-midia]').forEach((el) => {
       const path = el.dataset.midia!
       const m = vault.media.find((x) => x.path === path)
-      void mediaUrl(path, m?.mtime).then((u) => { if (live) el.src = u }).catch(() => {})
+      void mediaUrl(vault.teamId, path, m?.mtime).then((u) => { if (live) el.src = u }).catch(() => {})
       // Tirar a foto da nota: um × sobre cada imagem (nota que se edita)
       if (removeRef.current && !el.parentElement?.classList.contains('cb-media')) {
         const wrap = document.createElement('span')
@@ -219,7 +220,7 @@ const NoteBody: React.FC<{ vault: LoadedVault; note: VaultNote; onOpen: (p: stri
       }
     })
     return () => { live = false }
-  }, [html, vault.media])
+  }, [html, vault.media, vault.teamId])
   const click = (e: React.MouseEvent) => {
     const t = e.target as HTMLElement
     const a = t.closest('a') as HTMLAnchorElement | null
@@ -403,13 +404,13 @@ export default function Cerebro() {
   useEffect(() => {
     if (!teamId) return
     let timer = 0
-    const ch = supabase.channel(`cerebro:${teamId}`)
+    // Tópico fixo por conta: o helper espera o canal antigo sair antes de entrar (revisão de 2026-11-13)
+    const leave = subscribeTopic(`cerebro:${teamId}`, (ch) => ch
       .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_knowledge_notes', filter: `team_id=eq.${teamId}` }, () => {
         window.clearTimeout(timer)
         timer = window.setTimeout(() => { if (!editingRef.current) void reload() }, 600)
-      })
-      .subscribe()
-    return () => { window.clearTimeout(timer); void supabase.removeChannel(ch) }
+      }))
+    return () => { window.clearTimeout(timer); leave() }
   }, [teamId, reload])
   // Ao vivo: a IA conectada (MCP) guardou um arquivo (foto pelo link de envio, imagem salva ou foto de criativo)
   useMcpEvent((e) => {
@@ -732,7 +733,7 @@ export default function Cerebro() {
                         {folderMedia.map((m) => (
                           <li key={m.path} className="group relative">
                             <button type="button" onClick={() => viewMedia(vault, folderMedia.map((x) => x.path), m.path, removeFile)} className="block w-full text-left">
-                              <MediaThumb m={m} className="aspect-square w-full rounded-lg border border-gray-200 object-cover transition-opacity group-hover:opacity-90" />
+                              <MediaThumb teamId={vault.teamId} m={m} className="aspect-square w-full rounded-lg border border-gray-200 object-cover transition-opacity group-hover:opacity-90" />
                               <span className="mt-1.5 block truncate text-xs text-gray-600">{fileName(m.path)}</span>
                               {m.size > 0 && <span className="block text-[11px] text-gray-400">{(m.size / 1024).toFixed(0)} KB · {fmtDate(m.mtime)}</span>}
                             </button>

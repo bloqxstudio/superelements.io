@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/integrations/supabase/client'
-import { mediaUrl, setMediaTeam, uploadFiles } from '@/features/cerebro/data'
+import { mediaUrl, uploadFiles } from '@/features/cerebro/data'
 import type { RefKind, RefPlatform } from './rules'
 
 /**
@@ -102,8 +102,7 @@ export async function uploadReferenceShot(teamId: string, file: File): Promise<s
 
 /** O endereço da captura (link de 7 dias guardado neste navegador). */
 export function referenceShotUrl(teamId: string, path: string): Promise<string> {
-  setMediaTeam(teamId)
-  return mediaUrl(path)
+  return mediaUrl(teamId, path)
 }
 
 /** As melhores (com estrela) para o contexto da IA: só o que precisa, sem a captura. */

@@ -3,6 +3,9 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { PhoneCollectionModal } from '@/components/PhoneCollectionModal';
 import { avatarUrlOf, displayName } from '@/features/profile/profile';
+import { useCrm } from '@/features/crm/crmStore';
+import { useProjectStore } from '@/features/projects/projectStore';
+import { resetIara } from '@/features/iara/store';
 
 export type AppRole = 'free' | 'pro' | 'admin';
 
@@ -90,6 +93,22 @@ async function devAutoSignIn(): Promise<Session | null> {
   return data.session;
 }
 
+/**
+ * Voltou do Google agora? Lido ao carregar o módulo, antes de o cliente do Supabase limpar o endereço
+ * (`?code=` no PKCE, `#access_token=` no implícito). Assim a pergunta do telefone aparece depois do login
+ * pelo Google, e não a cada recarga de quem entrou antes (revisão de 2026-11-13).
+ */
+const cameFromOAuth = typeof window !== 'undefined' && /[?&#](code|access_token)=/.test(window.location.search + window.location.hash);
+
+const asksPhone = (p: UserProfile | null, u: User | null | undefined) => !!p && !p.phone && u?.app_metadata?.provider === 'google';
+
+/** Saiu da conta ou outra pessoa entrou: as listas da conta anterior não podem seguir na memória (revisão de 2026-11-13). */
+function resetAccountStores() {
+  useCrm.getState().reset();
+  useProjectStore.getState().reset();
+  resetIara();
+}
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -98,6 +117,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   // True once the initial getSession+fetchProfile completes
   const bootstrapDone = useRef(false);
+  // De quem é o perfil carregado (ou sendo lido): só um id novo pede outra leitura
+  const profileFor = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,9 +131,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
+        profileFor.current = s.user.id;
         const p = await fetchProfile(s.user.id);
         if (cancelled) return;
         setProfile(p);
+        // Revisão de 2026-11-13: o SIGNED_IN da volta do Google sai durante o `_initialize` do auth-js, antes
+        // daqui terminar, e era ignorado pelo ouvinte; a pergunta do telefone nunca abria. Decide aqui.
+        if (cameFromOAuth && asksPhone(p, s.user)) setShowPhoneModal(true);
       }
       bootstrapDone.current = true;
       setLoading(false);
@@ -129,9 +154,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (cancelled || !bootstrapDone.current) return;
 
       if (event === 'SIGNED_OUT') {
+        profileFor.current = null;
         setSession(null);
         setUser(null);
         setProfile(null);
+        setShowPhoneModal(false);
+        resetAccountStores();
         return;
       }
 
@@ -145,15 +173,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (event === 'SIGNED_IN') {
         setSession(newSession);
         setUser(newSession?.user ?? null);
-        if (newSession?.user) {
-          fetchProfile(newSession.user.id).then((p) => {
-            if (cancelled) return;
-            setProfile(p);
-            if (p && !p.phone && newSession.user.app_metadata?.provider === 'google') {
-              setShowPhoneModal(true);
-            }
-          });
-        }
+        // O auth-js emite SIGNED_IN de novo a cada volta à aba (`_recoverAndRefresh`): com o mesmo usuário,
+        // nada de reler o perfil (2 consultas) nem de abrir a pergunta do telefone (revisão de 2026-11-13).
+        const next = newSession?.user;
+        if (!next || next.id === profileFor.current) return;
+        if (profileFor.current) resetAccountStores();
+        profileFor.current = next.id;
+        setProfile(null);
+        fetchProfile(next.id).then((p) => {
+          if (cancelled || profileFor.current !== next.id) return;
+          setProfile(p);
+          if (asksPhone(p, next)) setShowPhoneModal(true);
+        });
       }
     });
 
@@ -191,9 +222,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (err) {
       console.error('Error signing out:', err);
     } finally {
+      profileFor.current = null;
       setUser(null);
       setSession(null);
       setProfile(null);
+      setShowPhoneModal(false);
+      resetAccountStores();
     }
   };
 

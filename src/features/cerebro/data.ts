@@ -5,6 +5,7 @@ import { coverUrls, listSets, loadSet, rememberOwners } from '@/features/criativ
 import type { CreativeSet, SetSummary } from '@/features/criativos/types'
 import { AUTO_FOLDER, type Vault, type VaultMedia, type VaultNote } from './vault'
 import { DESIGN_PATH, forgetStandard, saveBrand } from './standard'
+import { forgetAccountContext } from './accountContext'
 
 /**
  * O cérebro de uma conta (2026-11-07, o usuário: "não precisa vincular ao github… uma base de
@@ -46,7 +47,18 @@ export const isAutoPath = (path: string) => path === AUTO_FOLDER || path.startsW
 
 const cleanPath = (path: string) => path.trim().replace(/^\/+/, '').replace(/\/{2,}/g, '/')
 
+// Revisão de 2026-11-13: o contexto da IA (README, aprendizados, marca e padrões) fica guardado 1 minuto
+// por conta; depois de gravar (ou apagar) uma nota esquece esse guardado, para o próximo pedido de IA já
+// levar o texto novo.
 export async function saveNote(teamId: string, path: string, content: string, create = false): Promise<void> {
+  try {
+    await writeNote(teamId, path, content, create)
+  } finally {
+    forgetAccountContext()
+  }
+}
+
+async function writeNote(teamId: string, path: string, content: string, create: boolean): Promise<void> {
   const p = cleanPath(path)
   if (!p.endsWith('.md') || p.split('/').some((s) => !s || s === '..' || s.startsWith('.'))) throw new Error('Caminho de nota inválido.')
   if (isAutoPath(p)) throw new Error('A pasta "Da plataforma" é montada sozinha; mude na tela de origem.')
@@ -66,6 +78,7 @@ export async function deleteNote(teamId: string, path: string): Promise<void> {
   if (path === DESIGN_PATH) throw new Error('A marca não é apagada: edite o texto.')
   forgetStandard()
   const { error, count } = await db.from('crm_knowledge_notes').delete({ count: 'exact' }).eq('team_id', teamId).eq('path', path)
+  forgetAccountContext()
   if (error) throw new Error(error.message)
   if (!count) throw new Error('Só gestor da conta apaga notas.')
 }
@@ -145,28 +158,29 @@ export async function uploadFiles(teamId: string, folder: string, files: File[],
 export async function deleteFile(teamId: string, path: string): Promise<void> {
   const { error } = await bucket().remove([`${root(teamId)}/${path}`])
   if (error) throw new Error(error.message)
-  urls.delete(path)
+  urls.delete(`${teamId}/${path}`)
 }
 
 // Endereços: as capas já vêm assinadas; os arquivos do cérebro, por link de 7 dias guardado neste
 // navegador (o mesmo endereço volta e a imagem vem do cache, sem gastar o tráfego do Supabase).
+// Revisão de 2026-11-13: a conta vai explícita em cada pedido. Antes um `activeTeam` do módulo decidia a
+// pasta assinada, e uma tela de outra conta ainda montada (ou a Referências) podia assinar o caminho na
+// conta errada. A memória e o cache do navegador são por `<conta>/<caminho>`.
 const urls = new Map<string, string>()
-let activeTeam = ''
-/** A conta dos arquivos (outras telas que mostram arquivos do Cérebro, como Referências, sem abrir o cofre). */
-export const setMediaTeam = (teamId: string) => { activeTeam = teamId }
 const CACHE_KEY = 'cerebro-arquivos'
 const TTL = 7 * 86_400_000
 type UrlCache = Record<string, { url: string; until: number }>
 const readCache = (): UrlCache => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) ?? '{}') as UrlCache } catch { return {} } }
 
-export async function mediaUrl(path: string, mtime?: number): Promise<string> {
-  const known = urls.get(path)
+export async function mediaUrl(teamId: string, path: string, mtime?: number): Promise<string> {
+  if (!teamId) throw new Error('Sem conta para o arquivo do Cérebro.')
+  const known = urls.get(`${teamId}/${path}`)
   if (known) return known
-  const key = `${activeTeam}/${path}@${Math.round(mtime ?? 0)}`
+  const key = `${teamId}/${path}@${Math.round(mtime ?? 0)}`
   const cache = readCache()
   const hit = cache[key]
   if (hit && hit.until > Date.now() + 3_600_000) return hit.url
-  const { data, error } = await bucket().createSignedUrl(`${root(activeTeam)}/${path}`, TTL / 1000)
+  const { data, error } = await bucket().createSignedUrl(`${root(teamId)}/${path}`, TTL / 1000)
   if (error) throw error
   cache[key] = { url: data.signedUrl, until: Date.now() + TTL }
   try {
@@ -182,7 +196,6 @@ export async function mediaUrl(path: string, mtime?: number): Promise<string> {
  * de links de 7 dias do Cérebro e assina só o que falta, numa ida só.
  */
 export async function accountImages(teamId: string): Promise<VaultMedia[]> {
-  activeTeam = teamId
   const isImg = (p: string) => /\.(webp|png|jpe?g|gif|svg)$/i.test(p)
   const files = (await loadFiles(teamId)).filter((m) => isImg(m.path) && !isAutoPath(m.path))
   const cache = readCache()
@@ -291,7 +304,7 @@ async function autoVault(team: BrainTeam): Promise<Vault & { projects: Project[]
 }
 
 /** Criativos: a capa de cada post (as imagens que a conta já criou na plataforma). */
-async function creativesVault(projects: Project[]): Promise<Vault> {
+async function creativesVault(teamId: string, projects: Project[]): Promise<Vault> {
   const notes: VaultNote[] = []
   const media: VaultMedia[] = []
   const now = Date.now()
@@ -308,7 +321,7 @@ async function creativesVault(projects: Project[]): Promise<Vault> {
       if (!url) continue
       const path = `${AUTO_FOLDER}/criativos/${s.id}/${post.id}.jpg`
       media.push({ path, size: 0, mtime: s.updatedAt, url, label: `${s.name} · ${post.name}`, format: post.format, href: `${href}${href.includes('?') ? '&' : '?'}post=${post.id}` })
-      urls.set(path, url)
+      urls.set(`${teamId}/${path}`, url)
       imgs.push(`![${post.name.replace(/[[\]]/g, '')}](criativos/${s.id}/${post.id}.jpg)`)
     }
     parts.push(`## ${s.name}\n\n${s.posts} post(s)${s.projectName ? ` · ${s.projectName}` : ''} · atualizado em ${dateBr(s.updatedAt)} · [Abrir no Criativos](${href})\n\n${imgs.join(' ')}\n`)
@@ -350,7 +363,7 @@ async function creativesVault(projects: Project[]): Promise<Vault> {
       for (let n = 2; media.some((m) => m.path === path); n++) path = `${folder}/${f.name.replace(/(\.[a-z0-9]+)?$/i, `-${n}$1`)}`
       const label = shared ? `Em ${usedIn.get(f.key)!.size} conjuntos` : s.name
       media.push({ path, size: 0, mtime: s.updatedAt, url, label, href: `${base}${base.includes('?') ? '&' : '?'}post=${f.post}` })
-      urls.set(path, url)
+      urls.set(`${teamId}/${path}`, url)
     }
   })
   notes.push({
@@ -376,7 +389,7 @@ async function platformBase(team: BrainTeam) {
 export async function loadPlatformCreatives(team: BrainTeam): Promise<Vault> {
   if (fresh(creativesCache, team.id, CREATIVES_TTL)) return creativesCache!.vault
   const base = await platformBase(team)
-  const vault = await creativesVault(base.projects).catch(() => ({ notes: [], media: [] }) as Vault)
+  const vault = await creativesVault(team.id, base.projects).catch(() => ({ notes: [], media: [] }) as Vault)
   creativesCache = { team: team.id, at: Date.now(), vault }
   return vault
 }
@@ -386,7 +399,6 @@ export async function loadPlatformCreatives(team: BrainTeam): Promise<Vault> {
  * Criativos quando eles não estão guardados: volta `partial` e a tela chama `loadPlatformCreatives`.
  */
 export async function loadAccountVault(team: BrainTeam, opts: { creatives?: 'wait' | 'later' } = {}): Promise<LoadedVault> {
-  activeTeam = team.id
   const later = opts.creatives === 'later' && !fresh(creativesCache, team.id, CREATIVES_TTL)
   const [notes, files, base, creatives] = await Promise.all([
     loadNotes(team.id),

@@ -782,7 +782,7 @@ const CREATIVE_ACTIONS: Full[] = [
           const p = brainPath(m.cerebro)
           const hit = vault.media.find((x) => x.path === p || x.path.endsWith('/' + p))
           if (!hit) { done.push({ label: `Não achei "${m.cerebro}" no cérebro (use mostrar_imagens).`, ok: false }); continue }
-          const res = await fetch(await mediaUrl(hit.path, hit.mtime))
+          const res = await fetch(await mediaUrl(vault.teamId, hit.path, hit.mtime))
           if (!res.ok) { done.push({ label: `Não consegui baixar "${hit.path}" do cérebro.`, ok: false }); continue }
           file = { blob: await res.blob(), name: hit.path.split('/').pop()! }
         } else if (typeof m.caminho === 'string') {
@@ -1388,7 +1388,7 @@ const BRAIN_ACTIONS: Full[] = [
       if (busca) list = list.filter((m) => `${m.path} ${m.label ?? ''}`.toLowerCase().includes(busca))
       list = list.slice(0, 60)
       if (!list.length) return { done: [{ label: 'Não achei imagens com esse filtro no cérebro.', ok: false }], data: { pastas: [...new Set(vault.media.map((m) => m.path.split('/').slice(0, -1).join('/')))].slice(0, 60) } }
-      openViewer(list.map((m) => ({ name: m.path.split('/').pop()!, src: m.url, resolve: () => mediaUrl(m.path, m.mtime), caption: m.label, href: m.href, hrefLabel: m.href?.startsWith('/criativos') ? 'Abrir no Criativos' : undefined })))
+      openViewer(list.map((m) => ({ name: m.path.split('/').pop()!, src: m.url, resolve: () => mediaUrl(vault.teamId, m.path, m.mtime), caption: m.label, href: m.href, hrefLabel: m.href?.startsWith('/criativos') ? 'Abrir no Criativos' : undefined })))
       return {
         done: [{ label: `Abri ${list.length} imagem(ns) na tela`, ok: true, to: `/cerebro?midia=${encodeURIComponent(list[0].path)}` }],
         data: list.map((m) => ({ arquivo: m.path, de: m.label })),
