@@ -189,14 +189,114 @@ export const hostOf = (url: string) => {
   }
 }
 
-/** Não deixa um endereço apontar para a rede deste computador (ou do servidor). */
-export const isPublicHost = (host: string) => {
-  const bare = host.replace(/^\[|\]$/g, '')
-  if (!bare || bare === 'localhost' || bare.endsWith('.local') || bare.endsWith('.internal')) return false
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(bare)) return !/^(10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(bare)
-  if (bare.includes(':')) return !/^(::1?$|::ffff:|f[cd]|fe80)/i.test(bare)
+/** Os quatro números de um IPv4 escrito com pontos (`null` se não for um). */
+const ipv4Parts = (text: string): number[] | null => {
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(text)) return null
+  const parts = text.split('.').map(Number)
+  return parts.every((n) => n <= 255) ? parts : null
+}
+
+/**
+ * Faixas IPv4 que não são internet pública (revisão de 2026-11-13: faltavam 198.18/15, 224/4 e 240/4):
+ * esta rede, privadas, CGNAT, loopback, link-local, IETF, documentação, relay 6to4, benchmark, multicast e
+ * reservada/broadcast.
+ */
+const PRIVATE_V4 = [
+  '0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16', '172.16.0.0/12', '192.0.0.0/24', '192.0.2.0/24',
+  '192.88.99.0/24', '192.168.0.0/16', '198.18.0.0/15', '198.51.100.0/24', '203.0.113.0/24', '224.0.0.0/4', '240.0.0.0/4',
+].map((cidr) => {
+  const [ip, bits] = cidr.split('/')
+  return { net: v4Number(ipv4Parts(ip)!), bits: Number(bits) }
+})
+
+function v4Number([a, b, c, d]: number[]) {
+  return ((a << 24) >>> 0) + (b << 16) + (c << 8) + d
+}
+
+const v4Public = (parts: number[]) => {
+  const ip = v4Number(parts)
+  return !PRIVATE_V4.some(({ net, bits }) => ip >>> (32 - bits) === net >>> (32 - bits))
+}
+
+/** Os oito grupos de um IPv6 (aceita `::` e o IPv4 no fim, `::ffff:1.2.3.4`); `null` se não for um. */
+export const ipv6Groups = (text: string): number[] | null => {
+  let body = text.toLowerCase().replace(/%.*$/, '')
+  if (!/^[0-9a-f:.]+$/.test(body) || !body.includes(':')) return null
+  const tail: number[] = []
+  const v4 = /(\d{1,3}(?:\.\d{1,3}){3})$/.exec(body)
+  if (v4) {
+    const parts = ipv4Parts(v4[1])
+    if (!parts) return null
+    tail.push((parts[0] << 8) + parts[1], (parts[2] << 8) + parts[3])
+    body = body.slice(0, -v4[1].length)
+    // `::ffff:` perde o último `:` (sobra `::ffff`); `::` fica como está
+    if (body.endsWith(':') && !body.endsWith('::')) body = body.slice(0, -1)
+  }
+  const halves = body.split('::')
+  if (halves.length > 2) return null
+  const parse = (part: string) => (part ? part.split(':') : []).map((g) => (/^[0-9a-f]{1,4}$/.test(g) ? parseInt(g, 16) : NaN))
+  const head = parse(halves[0])
+  const rest = halves.length === 2 ? parse(halves[1]) : []
+  const missing = 8 - tail.length - head.length - rest.length
+  if (halves.length === 1 ? missing !== 0 : missing < 1) return null
+  const groups = [...head, ...Array(halves.length === 2 ? missing : 0).fill(0), ...rest, ...tail]
+  return groups.length === 8 && groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? groups : null
+}
+
+/**
+ * Faixas IPv6 fora da internet pública: não especificado e loopback, IPv4 mapeado/compatível/NAT64 (levam
+ * a um IPv4 qualquer), descarte, 6to4, documentação, ULA (fc00::/7), link-local e site-local (fe80::/10,
+ * fec0::/10) e multicast (ff00::/8).
+ */
+const v6Public = (g: number[]) => {
+  if (g.slice(0, 6).every((x) => x === 0)) return false // ::, ::1, ::a.b.c.d
+  if (g.slice(0, 5).every((x) => x === 0) && g[5] === 0xffff) return false // ::ffff:a.b.c.d
+  if (g[0] === 0x64 && g[1] === 0xff9b) return false // 64:ff9b::/96 (NAT64)
+  if (g[0] === 0x100 && g[1] === 0 && g[2] === 0 && g[3] === 0) return false // 100::/64
+  if (g[0] === 0x2002) return false // 6to4
+  if (g[0] === 0x2001 && g[1] === 0xdb8) return false // documentação
+  if (g[0] === 0x2001 && g[1] < 0x200) return false // 2001::/23 (IETF, Teredo)
+  if ((g[0] & 0xfe00) === 0xfc00) return false // fc00::/7
+  if ((g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xffc0) === 0xfec0) return false
+  if ((g[0] & 0xff00) === 0xff00) return false
   return true
 }
+
+/** O host é um IP escrito direto (IPv4 com pontos ou IPv6, com ou sem colchetes)? */
+export const isIpLiteral = (host: string) => {
+  const bare = host.replace(/^\[|\]$/g, '')
+  return !!ipv4Parts(bare) || !!ipv6Groups(bare)
+}
+
+/** Não deixa um endereço apontar para a rede deste computador (ou do servidor). */
+export const isPublicHost = (host: string) => {
+  const bare = host.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase()
+  if (!bare || bare === 'localhost' || bare.endsWith('.localhost') || bare.endsWith('.local') || bare.endsWith('.internal')) return false
+  const v4 = ipv4Parts(bare)
+  if (v4) return v4Public(v4)
+  // Só dígitos e pontos sem ser um IPv4 válido (999.1.1.1, 1.2.3): não é nome de site
+  if (/^[\d.]+$/.test(bare)) return false
+  if (bare.includes(':')) {
+    const v6 = ipv6Groups(bare)
+    return !!v6 && v6Public(v6)
+  }
+  return true
+}
+
+/**
+ * A checagem do DNS antes de cada abertura (a função `site-diagnostico` passa `Deno.resolveDns`). Revisão
+ * de 2026-11-13: um IP escrito direto não pula mais a conferência (vale a mesma lista de faixas), e um nome
+ * sem resposta no DNS não passa mais (falha fechada: vira "o domínio não existe mais").
+ */
+export const dnsGuard =
+  (resolve: (host: string, type: 'A' | 'AAAA') => Promise<string[]>): HostGuard =>
+  async (host) => {
+    if (isIpLiteral(host)) return isPublicHost(host)
+    const answers = await Promise.allSettled([resolve(host, 'A'), resolve(host, 'AAAA')])
+    const ips = answers.flatMap((answer) => (answer.status === 'fulfilled' ? answer.value : []))
+    if (!ips.length) throw Object.assign(new Error('o domínio não existe mais'), { code: 'ENOTFOUND' })
+    return ips.every((ip) => isPublicHost(ip))
+  }
 
 export const formatPhone = (raw: string) => {
   let digits = raw.replace(/\D/g, '')

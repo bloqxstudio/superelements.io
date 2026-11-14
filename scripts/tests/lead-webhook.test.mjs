@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { nestForm, parseLead, hasContact } from '../../supabase/functions/lead-webhook/parse.ts'
-import { alertText, campaignSnapshot, leadOrigin } from '../../supabase/functions/lead-webhook/origin.ts'
+import { nestForm, parseLead, hasContact } from '../../supabase/functions/_shared/leadParse.ts'
+import { alertText, campaignSnapshot, leadOrigin } from '../../supabase/functions/_shared/leadOrigin.ts'
 
 const elementor = {
   form: { id: 'abc', name: 'Contato' },
