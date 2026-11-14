@@ -97,20 +97,25 @@ export function useMetaAds(teamId: string | undefined, period: SitePeriod) {
 
   const refresh = useCallback(
     async (onlyStale: boolean) => {
-      const accounts = accountsRef.current.filter((a) => !onlyStale || Date.now() - (reportsRef.current.get(a.id)?.fetchedAt ?? 0) > STALE)
+      const reports = reportsRef.current
+      const accounts = accountsRef.current.filter((a) => !onlyStale || Date.now() - (reports.get(a.id)?.fetchedAt ?? 0) > STALE)
       if (!accounts.length) return
+      // Trocou o período no meio da leitura: o que chegar é do período velho e não entra no novo
+      const current = () => reportsRef.current === reports
       publish(true)
       let error: string | undefined
       await Promise.all(
         accounts.map((a) =>
           fetchAdReport(a.id, preset)
-            .then((report) => void reportsRef.current.set(a.id, report))
+            .then((report) => {
+              if (current()) reports.set(a.id, report)
+            })
             .catch((e) => {
               error = e instanceof Error ? e.message : String(e)
             })
         )
       )
-      publish(false, error)
+      if (current()) publish(false, error)
     },
     [preset, publish]
   )
