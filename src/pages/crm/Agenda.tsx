@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { CalendarDays, CalendarPlus, ExternalLink, Loader2, LogOut, RefreshCw, Search, Video, X } from 'lucide-react'
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, ExternalLink, Loader2, LogOut, RefreshCw, Search, Video, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -19,6 +19,7 @@ import {
   type AgendaEvent,
   type GoogleStatus,
 } from '@/features/crm/googleAgenda'
+import { EventDetails, MonthBoard, WeekBoard, addDays, dateOfKey, startOfMonthGrid, startOfWeek } from '@/features/crm/AgendaBoard'
 import { cn } from '@/lib/utils'
 
 /**
@@ -30,6 +31,24 @@ import { cn } from '@/lib/utils'
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const INPUT = cn(FIELD, 'h-9')
 const LABEL = 'mb-1 block text-xs font-medium text-gray-600'
+
+/** Semana e Mês: quadro como o do Google (`AgendaBoard.tsx`); Lista: os próximos dias agrupados. */
+type View = 'semana' | 'mes' | 'lista'
+const VIEWS: { id: View; label: string }[] = [
+  { id: 'semana', label: 'Semana' },
+  { id: 'mes', label: 'Mês' },
+  { id: 'lista', label: 'Lista' },
+]
+const VIEW_KEY = 'sinfy-agenda-view'
+const savedView = (): View => {
+  try {
+    const v = localStorage.getItem(VIEW_KEY)
+    if (v === 'semana' || v === 'mes' || v === 'lista') return v
+  } catch {
+    // sem armazenamento: começa na semana
+  }
+  return 'semana'
+}
 
 type Range = 'next7' | 'next30' | 'past7'
 const RANGES: { id: Range; label: string }[] = [
@@ -54,6 +73,17 @@ const dayTitle = (key: string) => {
   const label = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
   return key === today ? `Hoje · ${label}` : key === tomorrow ? `Amanhã · ${label}` : label.charAt(0).toUpperCase() + label.slice(1)
 }
+/** "novembro de 2026" ou "9 – 15 de nov. de 2026" */
+function periodTitle(view: View, anchor: Date) {
+  if (view === 'mes') return anchor.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  const start = startOfWeek(anchor)
+  const end = addDays(start, 6)
+  const sameMonth = start.getMonth() === end.getMonth()
+  return sameMonth
+    ? `${start.getDate()} – ${end.getDate()} de ${end.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}`
+    : `${start.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })} – ${end.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' })}`
+}
+
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
 const STATUS: Record<string, string> = { accepted: 'confirmou', declined: 'recusou', tentative: 'talvez', needsAction: 'sem resposta' }
@@ -64,10 +94,21 @@ const AgendaPage: React.FC = () => {
   const [status, setStatus] = useState<GoogleStatus | null>(null)
   const [statusError, setStatusError] = useState<string>()
   const [range, setRange] = useState<Range>('next7')
+  const [view, setViewState] = useState<View>(savedView)
+  const [anchor, setAnchor] = useState(() => new Date())
+  const [opened, setOpened] = useState<AgendaEvent>()
+  const setView = (next: View) => {
+    setViewState(next)
+    try {
+      localStorage.setItem(VIEW_KEY, next)
+    } catch {
+      // só não lembra na próxima visita
+    }
+  }
   const [events, setEvents] = useState<AgendaEvent[] | null>(null)
   const [eventsError, setEventsError] = useState<string>()
   const [busy, setBusy] = useState(false)
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState<{ date?: string; time?: string } | null>(null)
   const [cancelling, setCancelling] = useState<AgendaEvent>()
   const [disconnecting, setDisconnecting] = useState(false)
   const [params, setParams] = useSearchParams()
@@ -86,15 +127,15 @@ const AgendaPage: React.FC = () => {
     if (!team || !status?.connected) return
     setEvents(null)
     try {
-      const [from, to] = spanOf(range)
+      const [from, to] = view === 'semana' ? [startOfWeek(anchor), addDays(startOfWeek(anchor), 7)] : view === 'mes' ? [startOfMonthGrid(anchor), addDays(startOfMonthGrid(anchor), 42)] : spanOf(range)
       const list = await listAgenda(team.id, from, to)
-      setEvents(range === 'past7' ? [...list].reverse() : list)
+      setEvents(view === 'lista' && range === 'past7' ? [...list].reverse() : list)
       setEventsError(undefined)
     } catch (e) {
       setEventsError(errorText(e))
       setEvents([])
     }
-  }, [team, status?.connected, range])
+  }, [team, status?.connected, range, view, anchor])
 
   useEffect(() => {
     setStatus(null)
@@ -106,7 +147,7 @@ const AgendaPage: React.FC = () => {
 
   // Vindo do card do cliente (`?nova=1&cliente=…`): abre o formulário de reunião
   useEffect(() => {
-    if (params.get('nova') && status?.connected) setCreating(true)
+    if (params.get('nova') && status?.connected) setCreating({})
   }, [params, status?.connected])
 
   const groups = useMemo(() => {
@@ -137,7 +178,7 @@ const AgendaPage: React.FC = () => {
             <Button type="button" variant="outline" size="sm" onClick={() => void loadEvents()} aria-label="Atualizar">
               <RefreshCw className="h-4 w-4" />
             </Button>
-            <Button type="button" size="sm" onClick={() => setCreating(true)}>
+            <Button type="button" size="sm" onClick={() => setCreating({})}>
               <CalendarPlus className="mr-1.5 h-4 w-4" /> Nova reunião
             </Button>
           </>
@@ -179,17 +220,46 @@ const AgendaPage: React.FC = () => {
         {connected && (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
-                {RANGES.map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setRange(r.id)}
-                    className={cn('rounded-md px-3 py-1.5 text-xs font-medium', range === r.id ? 'bg-gray-900 text-white' : 'text-gray-600 hover:text-gray-900')}
-                  >
-                    {r.label}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+                  {VIEWS.map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setView(v.id)}
+                      className={cn('rounded-md px-3 py-1.5 text-xs font-medium', view === v.id ? 'bg-gray-900 text-white' : 'text-gray-600 hover:text-gray-900')}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+                {view === 'lista' ? (
+                  <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+                    {RANGES.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setRange(r.id)}
+                        className={cn('rounded-md px-3 py-1.5 text-xs font-medium', range === r.id ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:text-gray-900')}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setAnchor(new Date())}>
+                      Hoje
+                    </Button>
+                    <button type="button" aria-label="Anterior" className="rounded-md p-1.5 text-gray-600 hover:bg-gray-100" onClick={() => setAnchor((a) => (view === 'semana' ? addDays(a, -7) : new Date(a.getFullYear(), a.getMonth() - 1, 1)))}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button type="button" aria-label="Próximo" className="rounded-md p-1.5 text-gray-600 hover:bg-gray-100" onClick={() => setAnchor((a) => (view === 'semana' ? addDays(a, 7) : new Date(a.getFullYear(), a.getMonth() + 1, 1)))}>
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                    <span className="ml-1 text-sm font-medium text-gray-900 first-letter:uppercase">{periodTitle(view, anchor)}</span>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-500">
                 <span className="truncate">Conectado: {connected.email}</span>
@@ -214,7 +284,29 @@ const AgendaPage: React.FC = () => {
 
             {eventsError && <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{eventsError}</p>}
 
-            {events === null ? (
+            {view !== 'lista' ? (
+              <div className="relative">
+                {events === null && (
+                  <div className="absolute right-3 top-3 z-20 flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 text-xs text-gray-500 shadow-sm">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Lendo a agenda…
+                  </div>
+                )}
+                {view === 'semana' ? (
+                  <WeekBoard start={startOfWeek(anchor)} events={events ?? []} onSlot={(date, time) => setCreating({ date, time })} onOpen={setOpened} />
+                ) : (
+                  <MonthBoard
+                    month={anchor}
+                    events={events ?? []}
+                    onSlot={(date, time) => setCreating({ date, time })}
+                    onOpen={setOpened}
+                    onDay={(date) => {
+                      setAnchor(dateOfKey(date))
+                      setView('semana')
+                    }}
+                  />
+                )}
+              </div>
+            ) : events === null ? (
               <p className="flex items-center gap-2 text-sm text-gray-500">
                 <Loader2 className="h-4 w-4 animate-spin" /> Lendo a agenda…
               </p>
@@ -241,15 +333,26 @@ const AgendaPage: React.FC = () => {
         <NewMeetingDialog
           teamId={team.id}
           from={connected.email}
+          initialDate={creating.date}
+          initialTime={creating.time}
           initialClient={params.get('cliente') ?? undefined}
           opportunityId={params.get('oportunidade') ?? undefined}
           onClose={() => {
-            setCreating(false)
+            setCreating(null)
             if (params.get('nova')) setParams({}, { replace: true })
           }}
           onCreated={() => void loadEvents()}
         />
       )}
+
+      <EventDetails
+        event={opened}
+        onClose={() => setOpened(undefined)}
+        onCancel={(e) => {
+          setOpened(undefined)
+          setCancelling(e)
+        }}
+      />
 
       <Dialog open={!!cancelling} onOpenChange={(open) => !open && setCancelling(undefined)}>
         <DialogContent>
@@ -369,11 +472,20 @@ const EventRow: React.FC<{ event: AgendaEvent; onCancel: () => void }> = ({ even
 const DURATIONS = [15, 30, 45, 60, 90, 120]
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
-const NewMeetingDialog: React.FC<{ teamId: string; from: string; initialClient?: string; opportunityId?: string; onClose: () => void; onCreated: () => void }> = ({ teamId, from, initialClient, opportunityId, onClose, onCreated }) => {
+const NewMeetingDialog: React.FC<{ teamId: string; from: string; initialDate?: string; initialTime?: string; initialClient?: string; opportunityId?: string; onClose: () => void; onCreated: () => void }> = ({
+  teamId,
+  from,
+  initialDate,
+  initialTime,
+  initialClient,
+  opportunityId,
+  onClose,
+  onCreated,
+}) => {
   const tomorrow = new Date(Date.now() + 86_400_000).toLocaleDateString('sv-SE')
   const [title, setTitle] = useState('')
-  const [date, setDate] = useState(tomorrow)
-  const [time, setTime] = useState('10:00')
+  const [date, setDate] = useState(initialDate ?? tomorrow)
+  const [time, setTime] = useState(initialTime ?? '10:00')
   const [duration, setDuration] = useState(30)
   const [meet, setMeet] = useState(true)
   const [description, setDescription] = useState('')

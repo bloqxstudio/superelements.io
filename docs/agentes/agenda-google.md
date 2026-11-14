@@ -29,3 +29,11 @@ Ele usa o Gmail pessoal.
   (`GOOGLE_REDIRECT_URIS` opcional). Privacidade: quem é da equipe vê os eventos da agenda conectada.
 - Testes: `scripts/tests/form-agenda.test.mjs` (ocupados do Google, `google` só quando ligado). **Não testado**: login
   real no Google, criação de evento e convite (dependem dos segredos), a tela no navegador e o app publicado.
+- **Quadro** (2026-11-14, o usuário: "uma visualização de quadro na agenda… ver todos os dias da semana / mês, assim como o
+  Google Agenda"): `src/features/crm/AgendaBoard.tsx`. Semana (grade de horas, domingo a sábado como o Google pt-BR, abre
+  nas 7h, linha de agora, eventos que se cruzam dividem a largura, faixa "dia todo"; no celular rola para o lado com
+  cabeçalho e horas presos e abre no dia de hoje), Mês (42 dias, até 3 por dia e "+N mais", clicar no número abre a
+  semana) e Lista (a de antes). Clicar num horário vazio abre "Nova reunião" já com dia e hora; clicar num evento abre os
+  detalhes (convidados com resposta, cliente do CRM, Meet, Google, cancelar). Roxo: reunião com cliente do CRM ou de
+  formulário; azul: o resto. A visão escolhida fica no navegador (`sinfy-agenda-view`). Harness local com eventos
+  inventados em `.space/_harness/agenda/` (fora do Git; `?v=mes`, `&w=390`).
