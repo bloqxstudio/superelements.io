@@ -351,6 +351,9 @@ export interface FormBookingRow {
   email?: string
   status: 'confirmado' | 'cancelado'
   createdAt: number
+  /** Evento no Google Agenda (formulário com `booking.google`) */
+  googleEventId?: string
+  meetUrl?: string
 }
 
 export async function listBookings(formId: string): Promise<FormBookingRow[]> {
@@ -371,6 +374,8 @@ export async function listBookings(formId: string): Promise<FormBookingRow[]> {
     email: (r.email as string | null) ?? undefined,
     status: r.status as FormBookingRow['status'],
     createdAt: Date.parse(r.created_at as string),
+    googleEventId: (r.google_event_id as string | null) ?? undefined,
+    meetUrl: (r.meet_url as string | null) ?? undefined,
   }))
 }
 

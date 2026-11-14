@@ -61,6 +61,8 @@ const CrmWhatsApp = lazyPage(() => import("@/pages/crm/WhatsApp"));
 const CrmFlows = lazyPage(() => import("@/pages/crm/Flows"));
 const CrmForms = lazyPage(() => import("@/pages/crm/Forms"));
 const CrmFormEditor = lazyPage(() => import("@/pages/crm/FormEditor"));
+const CrmAgenda = lazyPage(() => import("@/pages/crm/Agenda"));
+const GoogleAgendaCallback = lazyPage(() => import("@/pages/GoogleAgendaCallback"));
 const CrmPlan = lazyPage(() => import("@/pages/crm/Plan"));
 const CrmContents = lazyPage(() => import("@/pages/crm/Contents"));
 const CrmContentDetail = lazyPage(() => import("@/pages/crm/ContentDetail"));
@@ -121,6 +123,7 @@ function App() {
               <Route path="/wordpress/retorno" element={<WordPressCallback />} />
               {/* Volta do login do Instagram: troca o código pelo acesso da conta da equipe */}
               {/* Quem veio pelo link do cliente volta sem login; o resto, como antes */}
+              <Route path="/agenda/retorno" element={<ProtectedRoute><GoogleAgendaCallback /></ProtectedRoute>} />
               <Route path="/instagram/retorno" element={comesFromLink() ? <ConnectInstagramReturn /> : <ProtectedRoute><InstagramCallback /></ProtectedRoute>} />
               <Route path="/conectar/instagram/:token" element={<ConnectInstagram />} />
               {/* Volta do login do Facebook: escolher as contas de anúncios da equipe */}
@@ -227,6 +230,8 @@ function App() {
                 <Route path="crm/whatsapp" element={<CrmGate><CrmWhatsApp /></CrmGate>} />
                 {/* Fluxos de atendimento e prospecção: a rotina comercial em mensagens de WhatsApp */}
                 <Route path="crm/fluxos" element={<CrmGate><CrmFlows /></CrmGate>} />
+                {/* O Google Agenda da conta: ver as calls, criar reunião com Meet e convite (função google-calendar) */}
+                <Route path="crm/agenda" element={<CrmGate><CrmAgenda /></CrmGate>} />
                 <Route path="crm/formularios" element={<CrmGate><CrmForms /></CrmGate>} />
                 <Route path="crm/formularios/:id" element={<CrmGate><CrmFormEditor /></CrmGate>} />
                 <Route path="crm/funis" element={<CrmGate><CrmFunnels /></CrmGate>} />

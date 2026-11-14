@@ -2,6 +2,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { hasLeadRecipients } from '../_shared/leadAlerts.ts'
 import { alertText, campaignSnapshot, leadOrigin, type AdReports } from '../_shared/leadOrigin.ts'
 import { hasContact, parseLead } from '../_shared/leadParse.ts'
+import { busyRanges, createEvent } from '../_shared/googleCalendar.ts'
 import { sameText } from '../_shared/metaAuth.ts'
 import { rateHit } from '../_shared/rateLimit.ts'
 import {
@@ -44,7 +45,7 @@ import { markVisit, track } from './track.ts'
  * chave de serviço) que só serve para reservar com aquela resposta.
  */
 
-const VERSION = 3
+const VERSION = 4
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://app.avencestudio.com'
 const MAX_BODY = 64 * 1024
@@ -70,10 +71,23 @@ const bookingToken = async (submissionId: string) => {
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 40)
 }
 
-/** Horários livres da agenda do formulário agora (sem os reservados). */
-async function freeDays(formId: string, booking: FormBooking) {
-  const { data } = await admin.from('crm_form_bookings').select('starts_at').eq('form_id', formId).eq('status', 'confirmado').gte('starts_at', new Date().toISOString())
-  return bookingDays(booking, new Date(), (data ?? []).map((r) => r.starts_at as string))
+/**
+ * Horários livres da agenda do formulário agora (sem os reservados). Com `booking.google`, também sem os que
+ * batem com um compromisso no Google Agenda da conta; se o Google falhar ou a conta não tiver conectado, a
+ * agenda segue só com as reservas (melhor oferecer um horário a mais do que travar o lead).
+ */
+async function freeDays(formId: string, teamId: string, booking: FormBooking) {
+  const now = new Date()
+  const [{ data }, blocked] = await Promise.all([
+    admin.from('crm_form_bookings').select('starts_at').eq('form_id', formId).eq('status', 'confirmado').gte('starts_at', now.toISOString()),
+    booking.google
+      ? busyRanges(admin, teamId, now, new Date(now.getTime() + 23 * 86_400_000)).catch((error) => {
+          console.warn('form-submit: Google Agenda fora, agenda sem os compromissos:', error instanceof Error ? error.message : error)
+          return null
+        })
+      : Promise.resolve(null),
+  ])
+  return bookingDays(booking, now, (data ?? []).map((r) => r.starts_at as string), blocked ?? [])
 }
 
 const dayLabel = (at: Date) => {
@@ -293,7 +307,7 @@ Deno.serve(async (request) => {
   let agenda: { token: string; submission: string; days: Awaited<ReturnType<typeof freeDays>> } | undefined
   if (eligible && booking && submissionId) {
     const { count: booked } = await admin.from('crm_form_bookings').select('id', { count: 'exact', head: true }).eq('submission_id', submissionId).eq('status', 'confirmado')
-    if (!booked) agenda = { token: await bookingToken(submissionId), submission: submissionId, days: await freeDays(id, booking) }
+    if (!booked) agenda = { token: await bookingToken(submissionId), submission: submissionId, days: await freeDays(id, teamId, booking) }
   }
 
   // Pixel pelo servidor: os mesmos ids do navegador, a Meta junta os dois (reenvio duplicado não dispara de novo)
@@ -348,7 +362,8 @@ async function book(id: string, body: Record<string, unknown>, request: Request)
     return json({ error: 'Esta resposta não abre a agenda.' }, 403)
   }
 
-  const days = await freeDays(id, booking)
+  const teamId = form.team_id as string
+  const days = await freeDays(id, teamId, booking)
   const at = new Date(start)
   const valid = days.some((d) => d.times.some((t) => slotInstant(d.date, t).getTime() === at.getTime()))
   if (!valid) return json({ error: 'Este horário acabou de ser reservado. Escolha outro.', days }, 409)
@@ -364,7 +379,7 @@ async function book(id: string, body: Record<string, unknown>, request: Request)
     if (error.code === '23505') {
       const { count } = await admin.from('crm_form_bookings').select('id', { count: 'exact', head: true }).eq('submission_id', submission).eq('status', 'confirmado')
       if (count) return json({ error: 'Você já tem uma reunião marcada.' }, 409)
-      return json({ error: 'Este horário acabou de ser reservado. Escolha outro.', days: await freeDays(id, booking) }, 409)
+      return json({ error: 'Este horário acabou de ser reservado. Escolha outro.', days: await freeDays(id, teamId, booking) }, 409)
     }
     console.error('crm_form_bookings:', error.message)
     return json({ error: 'Não consegui reservar. Tente de novo.' }, 500)
@@ -375,22 +390,45 @@ async function book(id: string, body: Record<string, unknown>, request: Request)
   if (visitError) console.error('crm_form_visits:', visitError.message)
 
   const label = dayLabel(at)
+
+  // Google Agenda (opcional): o evento com Meet e o convite para o e-mail do lead. Falhou, a reserva vale igual.
+  let meet: string | undefined
+  if (booking.google) {
+    try {
+      const email = typeof sub.email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(sub.email) ? sub.email : ''
+      const phone = typeof sub.phone === 'string' ? sub.phone : ''
+      const event = await createEvent(admin, teamId, {
+        title: `${booking.meetingName} · ${sub.name ?? 'Lead'}`.slice(0, 200),
+        start: at.toISOString(),
+        end: ends.toISOString(),
+        description: [sub.name, phone && `Telefone: ${phone}`, email && `E-mail: ${email}`].filter(Boolean).join('\n'),
+        attendees: email ? [{ email, name: (sub.name as string | null) ?? undefined }] : [],
+        meet: true,
+        bookingId: row.id as string,
+      })
+      meet = event.meet
+      await admin.from('crm_form_bookings').update({ google_event_id: event.id, meet_url: event.meet ?? null }).eq('id', row.id)
+    } catch (error) {
+      console.warn('form-submit: evento do Google não criado:', error instanceof Error ? error.message : error)
+    }
+  }
+
   if (sub.opportunity_id) {
     const { date } = localDay(at)
     await admin.from('crm_opportunities').update({ next_step: `Reunião agendada: ${label}`, next_date: date }).eq('id', sub.opportunity_id)
     if (sub.client_id) {
-      await admin.from('crm_activities').insert({ client_id: sub.client_id, opportunity_id: sub.opportunity_id, kind: 'meeting', body: `${booking.meetingName} agendada pelo formulário "${form.name}": ${label} (${booking.durationMin} min)`, data: { booking: row.id, starts_at: at.toISOString(), form: id } })
+      await admin.from('crm_activities').insert({ client_id: sub.client_id, opportunity_id: sub.opportunity_id, kind: 'meeting', body: `${booking.meetingName} agendada pelo formulário "${form.name}": ${label} (${booking.durationMin} min)${meet ? ` · Meet: ${meet}` : ''}`, data: { booking: row.id, starts_at: at.toISOString(), form: id, ...(meet ? { meet } : {}) } })
     }
   }
 
   // O aviso sai pela mesma fila dos leads novos (o grupo da conta no WhatsApp)
-  const teamId = form.team_id as string
   if (await hasLeadRecipients(admin, teamId)) {
     const phone = typeof sub.phone === 'string' ? sub.phone.replace(/^55(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3') : ''
     const lines = ['*📅 Reunião agendada*', '', `*${sub.name ?? 'Sem nome'}*`]
     if (phone) lines.push(`📱 ${phone}`)
     if (sub.email) lines.push(`✉️ ${sub.email}`)
     lines.push('', `🗓️ ${label} (${booking.durationMin} min)`, `📝 ${booking.meetingName} · ${form.name}`)
+    if (meet) lines.push(`🎥 ${meet}`)
     if (sub.opportunity_id) lines.push('', `Abrir no CRM: ${APP_URL}/crm?oportunidade=${sub.opportunity_id}`)
     const { error: alertError } = await admin.from('crm_lead_alerts').insert({ team_id: teamId, opportunity_id: sub.opportunity_id, text: lines.join('\n') })
     if (alertError) console.error('crm_lead_alerts:', alertError.message)
@@ -403,5 +441,5 @@ async function book(id: string, body: Record<string, unknown>, request: Request)
     await background(sendCapi(admin, id, pixel, scheduleEvents(pixel, row.id as string, data), { email: sub.email ?? undefined, phone: sub.phone ?? undefined, name: sub.name ?? undefined, ...metaCookies(meta), ...requestUser(request) }))
   }
 
-  return json({ ok: true, bookingId: row.id, start: at.toISOString(), label })
+  return json({ ok: true, bookingId: row.id, start: at.toISOString(), label, meetUrl: meet })
 }

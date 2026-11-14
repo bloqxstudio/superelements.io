@@ -96,6 +96,8 @@ import {
   type IconName,
 } from '@/features/crm/forms'
 import { directUrl } from '@/features/crm/FormPanels'
+import { useCrm } from '@/features/crm/crmStore'
+import { googleStatus, syncBooking, type GoogleStatus } from '@/features/crm/googleAgenda'
 import { cn } from '@/lib/utils'
 
 /**
@@ -803,7 +805,51 @@ export const BookingEditor: React.FC<{ definition: FormDefinition; settings: For
           </p>
         </div>
       </Surface>
+
+      <GoogleBookingToggle on={b.google === true} onChange={(google) => set({ google })} />
     </div>
+  )
+}
+
+/**
+ * Google Agenda na agenda do formulário (opcional, 2026-11-14): ligado, os horários em que a conta já tem
+ * compromisso no Google somem da lista e cada reserva vira um evento com Meet e convite para o lead.
+ * Desligado, ou sem Google conectado, tudo funciona como antes.
+ */
+const GoogleBookingToggle: React.FC<{ on: boolean; onChange: (on: boolean) => void }> = ({ on, onChange }) => {
+  const { team } = useCrm()
+  const [status, setStatus] = useState<GoogleStatus | null>(null)
+  useEffect(() => {
+    if (!team) return
+    googleStatus(team.id).then(setStatus, () => setStatus({ configured: false }))
+  }, [team])
+  const connected = status?.connected
+  return (
+    <Surface
+      title="Google Agenda"
+      action={
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <Switch checked={on} onCheckedChange={onChange} /> {on ? 'Ligado' : 'Desligado'}
+        </label>
+      }
+    >
+      <p className="text-sm text-gray-600">
+        Opcional. Ligado, os horários em que você já tem compromisso no Google Agenda não aparecem para o lead, e cada reunião marcada entra na sua agenda com link do Meet e convite para o e-mail do lead. Desligado, a agenda funciona como antes, só com as reservas do formulário.
+      </p>
+      {status === null ? null : connected ? (
+        <p className="mt-2 text-xs text-gray-500">
+          Agenda conectada: {connected.email}.{connected.lastError ? ` ${connected.lastError}` : ''}
+        </p>
+      ) : (
+        <p className={cn('mt-2 text-xs', on ? 'text-amber-800' : 'text-gray-500')}>
+          Nenhum Google Agenda conectado nesta conta{on ? ': enquanto isso, a agenda segue só com as reservas do formulário' : ''}.{' '}
+          <Link to="/crm/agenda" className="font-medium text-violet-700 hover:underline">
+            Conectar em Agenda
+          </Link>
+        </p>
+      )}
+      {on && <p className="mt-1 text-xs text-gray-500">Vale para o formulário no ar depois de publicar de novo.</p>}
+    </Surface>
   )
 }
 
@@ -848,6 +894,11 @@ export const BookingsList: React.FC<{ form: CrmForm; manager: boolean }> = ({ fo
         <span className="text-gray-400"> · {[phoneLabel(r.phone), r.email].filter(Boolean).join(' · ')}</span>
       </span>
       {r.status === 'cancelado' && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-gray-600">Cancelada</span>}
+      {r.meetUrl && r.status === 'confirmado' && r.endsAt >= now && (
+        <a href={r.meetUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-violet-700 hover:underline">
+          Meet <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
       {r.opportunityId && (
         <Link to={`/crm?oportunidade=${r.opportunityId}`} className="inline-flex items-center gap-1 text-xs font-medium text-violet-700 hover:underline">
           Card <ExternalLink className="h-3 w-3" />
@@ -859,8 +910,21 @@ export const BookingsList: React.FC<{ form: CrmForm; manager: boolean }> = ({ fo
           className="text-xs text-gray-500 hover:text-rose-600"
           onClick={() => {
             const status = r.status === 'confirmado' ? 'cancelado' : 'confirmado'
-            if (status === 'cancelado' && !window.confirm('Cancelar esta reunião? O horário volta a ficar livre. Avise a pessoa pelo WhatsApp.')) return
-            setBookingStatus(r.id, status).then(load, (e) => toast.error(e instanceof Error ? e.message : String(e)))
+            if (status === 'cancelado' && !window.confirm(r.googleEventId ? 'Cancelar esta reunião? O horário volta a ficar livre e o evento sai do Google Agenda (o lead recebe o aviso por e-mail).' : 'Cancelar esta reunião? O horário volta a ficar livre. Avise a pessoa pelo WhatsApp.')) return
+            setBookingStatus(r.id, status)
+              .then(() => {
+                void load()
+                // Com o Google ligado: cancelar tira o evento (e avisa o lead por e-mail); reativar cria de novo
+                return syncBooking(r.id).then(
+                  (sync) => {
+                    if (sync.removed) toast.success('Evento cancelado no Google Agenda', { description: 'O lead recebeu o aviso por e-mail.' })
+                    if (sync.created) toast.success('Evento criado de novo no Google Agenda')
+                    if (sync.removed || sync.created) void load()
+                  },
+                  (e) => toast.error(`Google Agenda: ${e instanceof Error ? e.message : String(e)}`)
+                )
+              })
+              .catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
           }}
         >
           {r.status === 'confirmado' ? 'Cancelar' : 'Reativar'}

@@ -1,6 +1,6 @@
 /** User-facing names only. Routes and module permissions remain unchanged. */
 const AREAS: [string, string][] = [
-  ['/crm/formularios', 'Formulários'], ['/crm/clientes', 'Clientes'], ['/crm/whatsapp', 'Conversas'],
+  ['/crm/agenda', 'Agenda'], ['/crm/formularios', 'Formulários'], ['/crm/clientes', 'Clientes'], ['/crm/whatsapp', 'Conversas'],
   ['/crm/fluxos', 'Automações'], ['/crm/funis', 'Funis de venda'], ['/crm/equipe', 'Equipe'],
   ['/crm/social', 'Relacionamento nas redes'], ['/crm/instagram', 'Instagram'], ['/crm/anuncios', 'Anúncios'],
   ['/crm/site', 'Visitas do site'], ['/crm/diagnostico', 'Diagnóstico'], ['/crm', 'Leads'],

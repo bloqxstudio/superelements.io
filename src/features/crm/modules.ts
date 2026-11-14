@@ -108,6 +108,7 @@ export function moduleOfPath(pathname: string): ModuleId | undefined {
   if (p.startsWith('/crm/clientes')) return 'clientes'
   if (p.startsWith('/crm/funis')) return 'funis'
   if (p.startsWith('/crm/formularios')) return 'formularios'
+  if (p.startsWith('/crm/agenda')) return 'crm'
   if (p.startsWith('/crm/social')) return 'social'
   if (p.startsWith('/crm/diagnostico')) return 'diagnostico'
   if (p.startsWith('/prospeccao')) return 'prospeccao'

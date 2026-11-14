@@ -5,7 +5,7 @@ import { ChevronsUpDown, LayoutDashboard, LayoutGrid, PanelLeftClose, PanelLeftO
 import { navigationMatches } from '@/features/navigation/workspace'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { areaPaths, type AreaId } from '@/features/navigation/AreaTabs'
-import { Activity, Bookmark, Bot, Brain, Building2, CalendarRange, Filter, House, Building, Globe, ListChecks, Images, Instagram, Megaphone, Palette, PenLine, Presentation, KanbanSquare, LayoutTemplate, LogOut, MessageCircle, Radar, ScanSearch, Send, Sparkles, Users, Wand2, X } from 'lucide-react'
+import { Activity, Bookmark, Bot, Brain, Building2, CalendarDays, CalendarRange, Filter, House, Building, Globe, ListChecks, Images, Instagram, Megaphone, Palette, PenLine, Presentation, KanbanSquare, LayoutTemplate, LogOut, MessageCircle, Radar, ScanSearch, Send, Sparkles, Users, Wand2, X } from 'lucide-react'
 import { Logo, SinfyLogo } from '@/components/Logo'
 import { PersonAvatar } from '@/features/profile/PersonAvatar'
 import { useAuth } from '@/contexts/AuthContext'
@@ -261,10 +261,11 @@ const buildModules = (on: (id: ModuleId) => boolean, team: boolean, crm: boolean
       ].filter(Boolean) as MenuModule['items'],
     },
     {
-      id: 'vendas', title: 'Vendas', hint: 'Leads, conversas e clientes', icon: KanbanSquare, color: 'linear-gradient(160deg,#fb7185,#e11d48)', exact: ['/crm'], paths: ['/crm/whatsapp', '/crm/fluxos', '/crm/formularios', '/crm/funis', '/crm/clientes', '/crm/social'], news: (b) => b.opportunities > 0 || b.whatsapp > 0,
+      id: 'vendas', title: 'Vendas', hint: 'Leads, conversas e clientes', icon: KanbanSquare, color: 'linear-gradient(160deg,#fb7185,#e11d48)', exact: ['/crm'], paths: ['/crm/whatsapp', '/crm/fluxos', '/crm/agenda', '/crm/formularios', '/crm/funis', '/crm/clientes', '/crm/social'], news: (b) => b.opportunities > 0 || b.whatsapp > 0,
       items: (crm ? [
         on('crm') && { to: '/crm', label: 'Leads', node: <OportunidadesItem /> },
         on('whatsapp') && { to: '/crm/whatsapp', label: 'Conversas', node: <WhatsAppItem /> },
+        on('crm') && { to: '/crm/agenda', label: 'Agenda', node: <Item to="/crm/agenda" icon={CalendarDays} label="Agenda" /> },
         on('formularios') && { to: '/crm/formularios', label: 'Formulários', node: <Item to="/crm/formularios" icon={ListChecks} label="Formulários" /> },
         on('funis') && { to: '/crm/funis', label: 'Funis de venda', node: <Item to="/crm/funis" icon={Filter} label="Funis de venda" /> },
         on('clientes') && { to: '/crm/clientes', label: 'Clientes', node: <Item to="/crm/clientes" icon={Building2} label="Clientes" /> },

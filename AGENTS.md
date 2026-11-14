@@ -90,6 +90,7 @@ Sem segredos e sem contatos de prospects ou clientes finais. O Cérebro **do app
 | Referências visuais da conta (`/referencias`, links de posts, estrela, ideia e criativo) | `referencias.md` |
 | Pauta e aprovação do cliente | `pauta.md` |
 | Formulários (capa, agenda, pixel, publicar, ao vivo e funil) | `formularios.md` |
+| Google Agenda da conta (`/crm/agenda`, criar reunião com Meet e convite, agenda do formulário com o Google) | `agenda-google.md` |
 | Página de cliente e componentes do Space | `space-componentes.md` |
 | Sites em código (Astro) | `sites-astro.md` |
 | Prospecção, funil, diagnóstico de site | `prospeccao.md` |

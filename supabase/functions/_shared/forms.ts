@@ -233,6 +233,12 @@ export interface FormBooking {
   confirmLabel: string
   successTitle: string
   successText: string
+  /**
+   * Google Agenda da conta (2026-11-14, opcional): horários ocupados no Google saem da lista e cada reserva vira
+   * um evento com Meet e convite para o e-mail do lead. Desligado, ou a conta sem Google conectado, ou o Google
+   * fora do ar: a agenda funciona como antes, só com as reservas do formulário.
+   */
+  google?: boolean
 }
 
 /** Evento do envio: o personalizado (`<prefixo>Submit`) ou um padrão da Meta. */
@@ -627,11 +633,14 @@ export function freeTimes(booking: FormBooking, weekday: number, isFree: (hhmm: 
 
 /**
  * Os próximos `booking.days` dias com horário livre (olhando até 21 dias à frente), sem os já
- * reservados (`taken`: instantes ISO) e respeitando a antecedência mínima. Um dia lotado (ou sem
+ * reservados (`taken`: instantes ISO), sem os que batem com um compromisso (`blocked`) e respeitando a antecedência mínima. Um dia lotado (ou sem
  * atendimento) é pulado, e o próximo dia de atendimento entra no lugar dele.
  */
-export function bookingDays(booking: FormBooking, now: Date, taken: Iterable<string> = []): BookingDay[] {
+export function bookingDays(booking: FormBooking, now: Date, taken: Iterable<string> = [], blocked: { start: number; end: number }[] = []): BookingDay[] {
   const busy = new Set([...taken].map((iso) => new Date(iso).getTime()))
+  const span = booking.durationMin * 60_000
+  // `blocked`: compromissos do Google Agenda (ms); o horário sai se a reunião encostar em qualquer um deles
+  const clash = (at: number) => blocked.some((r) => at < r.end && at + span > r.start)
   const earliest = now.getTime() + booking.noticeHours * 3_600_000
   const days: BookingDay[] = []
   const today = localDay(now).date
@@ -641,7 +650,7 @@ export function bookingDays(booking: FormBooking, now: Date, taken: Iterable<str
     const weekday = new Date(`${date}T12:00:00Z`).getUTCDay()
     const times = freeTimes(booking, weekday, (t) => {
       const at = slotInstant(date, t).getTime()
-      return at >= earliest && !busy.has(at)
+      return at >= earliest && !busy.has(at) && !clash(at)
     })
     if (times.length) days.push({ date, weekday, times })
   }
@@ -869,6 +878,7 @@ function cleanBooking(raw: unknown): FormBooking | undefined {
     confirmLabel: text(b.confirmLabel, BOOKING_DEFAULT.confirmLabel, 40),
     successTitle: text(b.successTitle, BOOKING_DEFAULT.successTitle, 120),
     successText: typeof b.successText === 'string' ? b.successText.slice(0, 600) : BOOKING_DEFAULT.successText,
+    ...(b.google === true ? { google: true } : {}),
   }
 }
 

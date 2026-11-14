@@ -1,6 +1,6 @@
 import type React from 'react'
 import { create } from 'zustand'
-import { Activity, Bookmark, Bot, Brain, Building, Building2, CalendarRange, Filter, Globe, Images, Instagram, KanbanSquare, LayoutTemplate, ListChecks, Megaphone, MessageCircle, PenLine, Presentation, Radar, ScanSearch, Send, Users, Wand2 } from 'lucide-react'
+import { Activity, Bookmark, Bot, Brain, Building, Building2, CalendarDays, CalendarRange, Filter, Globe, Images, Instagram, KanbanSquare, LayoutTemplate, ListChecks, Megaphone, MessageCircle, PenLine, Presentation, Radar, ScanSearch, Send, Users, Wand2 } from 'lucide-react'
 
 /**
  * A Visão geral de cada módulo (2026-11-12, o usuário: "ao entrar em Criação abre direto o Cérebro, o
@@ -35,6 +35,7 @@ export const SCREEN_INFO: Record<string, { icon: React.ElementType; desc: string
   '/criativos': { icon: Images, desc: 'Posts, carrosséis, stories e vídeos na marca da conta.' },
   '/crm': { icon: KanbanSquare, desc: 'Os contatos que chegaram e em que etapa cada um está.' },
   '/crm/whatsapp': { icon: MessageCircle, desc: 'As conversas do WhatsApp da conta.' },
+  '/crm/agenda': { icon: CalendarDays, desc: 'Suas calls do Google Agenda: ver, criar com Meet e convidar o cliente.' },
   '/crm/formularios': { icon: ListChecks, desc: 'Formulários para captar contatos, com agenda e pixel.' },
   '/crm/funis': { icon: Filter, desc: 'O caminho do anúncio à venda, com os números de cada etapa.' },
   '/crm/clientes': { icon: Building2, desc: 'As empresas e pessoas que já são clientes.' },

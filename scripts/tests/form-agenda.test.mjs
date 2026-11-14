@@ -108,3 +108,24 @@ test('dia lotado sai e entra o próximo dia útil (sexta lotada → segunda)', a
   assert.equal(old.mode, 'priority')
   assert.deepEqual(old.workdays, [1, 2, 3, 4, 5])
 })
+
+test('Google Agenda (opcional): compromisso que encosta no horário tira o horário; sem compromissos nada muda', () => {
+  // Sexta, 06/11/2026, 10:00 em Brasília; segunda 09/11 com atendimento 09:00–12:00 de 30 em 30
+  const now = slotInstant('2026-11-06', '10:00')
+  const b = { ...BOOKING_DEFAULT, mode: 'range', days: 1, noticeHours: 0, durationMin: 30, week: { 0: [], 1: [{ start: '09:00', end: '12:00' }], 2: [], 3: [], 4: [], 5: [], 6: [] } }
+  const all = bookingDays(b, now)
+  assert.deepEqual(all[0].times, ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30'])
+  assert.deepEqual(bookingDays(b, now, [], []), all)
+  // Compromisso 09:45–10:15: tira 09:30 (vai até 10:00) e 10:00; 09:00 e 10:30 ficam (só encostam)
+  const blocked = [{ start: slotInstant('2026-11-09', '09:45').getTime(), end: slotInstant('2026-11-09', '10:15').getTime() }]
+  assert.deepEqual(bookingDays(b, now, [], blocked)[0].times, ['09:00', '10:30', '11:00', '11:30'])
+  // Dia inteiro ocupado: a segunda some e entra o próximo dia de atendimento
+  const allDay = [{ start: slotInstant('2026-11-09', '00:00').getTime(), end: slotInstant('2026-11-10', '00:00').getTime() }]
+  assert.equal(bookingDays(b, now, [], allDay)[0].date, '2026-11-16')
+})
+
+test('agenda: `google` só fica quando ligado', () => {
+  assert.equal(cleanSettings({ booking: { ...BOOKING_DEFAULT, enabled: true, google: true } }).booking.google, true)
+  assert.equal('google' in cleanSettings({ booking: { ...BOOKING_DEFAULT, enabled: true, google: 'sim' } }).booking, false)
+  assert.equal('google' in cleanSettings({ booking: { ...BOOKING_DEFAULT, enabled: true } }).booking, false)
+})
