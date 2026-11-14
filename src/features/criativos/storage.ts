@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { currentUserId } from '@/features/projects/storage'
 import { personalFolder } from '@/features/crm/accountScope'
 import { createOnce, isAlreadyExists } from '@/features/conteudos/exclusive'
+import { writeIndexSafely } from './indexMerge'
 import type { CreativeSet, Post, PostInfo, SetAsset, SetSummary, VideoInfo } from './types'
 
 /**
@@ -174,10 +175,13 @@ export async function loadSet(id: string, projectId?: string): Promise<CreativeS
   return found && projectId ? { ...found, projectId, shared: true } : found
 }
 
+/**
+ * Grava o índice da pasta mudando só as linhas deste conjunto, sobre a lista lida na hora, e confere depois: o MCP
+ * pode criar outro conjunto na mesma pasta ao mesmo tempo, e a linha dele não pode sumir (revisão de 2026-11-13).
+ */
 const writeIndex = async (projectId: string | undefined, fn: (list: SetSummary[]) => SetSummary[]) => {
-  const base = await folderOf(projectId)
-  const list = (await readJson<SetSummary[]>(`${base}/index.json`)) ?? []
-  await writeJson(`${base}/index.json`, fn(list))
+  const path = `${await folderOf(projectId)}/index.json`
+  await writeIndexSafely(() => readJson<SetSummary[]>(path), (list) => writeJson(path, list), fn)
 }
 
 export async function saveSet(set: CreativeSet) {

@@ -41,6 +41,9 @@ export const Recorder: React.FC<{ kind: 'video' | 'audio'; brand?: string; onDon
   const [speed, setSpeed] = useState(1)
   const [level, setLevel] = useState(0)
   const prompter = useRef<HTMLDivElement>(null)
+  // Cada gravação (até 50 MB) é um endereço blob: sai da memória ao gravar de novo e ao fechar (revisão de 2026-11-13)
+  const resultUrl = result?.url
+  useEffect(() => () => { if (resultUrl) URL.revokeObjectURL(resultUrl) }, [resultUrl])
 
   useEffect(() => {
     let alive = true

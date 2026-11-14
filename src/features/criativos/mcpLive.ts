@@ -31,6 +31,7 @@ async function reloadFromServer(setId: string, projectId?: string) {
   if (!st.set || st.set.id !== setId) return []
   let fresh = await loadSet(setId, projectId)
   if (!fresh) return []
+  // Posts que a IA pediu: `materializePending` monta e já grava (antes um `persist()` aqui gravava tudo de novo; revisão de 2026-11-13)
   const pending = hasPending(fresh)
   if (pending) fresh = await materializePending(fresh)
   const now = useEditor.getState()
@@ -38,8 +39,9 @@ async function reloadFromServer(setId: string, projectId?: string) {
   const before = new Map(now.set.posts.flatMap((p) => p.slides.map((s) => [s.id, JSON.stringify(s)] as const)))
   const patch = diffSets(now.set, fresh)
   if (patch) now.applyRemote(patch)
-  // Posts que a IA pediu e o navegador acabou de montar: grava a montagem
-  if (pending) useEditor.getState().persist()
+  // A marca resolvida na montagem (o patch não leva a marca): o próximo autosave não volta à de antes
+  const brand = fresh.brand
+  if (pending) useEditor.setState((s) => (s.set?.id === setId ? { set: { ...s.set, brand } } : {}))
   return fresh.posts.flatMap((p) => p.slides).filter((s) => before.get(s.id) !== JSON.stringify(s)).map((s) => s.id)
 }
 

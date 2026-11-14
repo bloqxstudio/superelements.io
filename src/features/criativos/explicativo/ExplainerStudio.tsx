@@ -224,6 +224,8 @@ const Preview: React.FC<{ set: CreativeSet; scene: CodeScene; voice: Voice | nul
         drawn.current = -1
         setRunner(r)
       } catch (err) {
+        // O motor que não carregou sai com o worker dele (antes ficava vivo se o efeito já tinha sido limpo; revisão de 2026-11-13)
+        r?.dispose()
         if (alive) setError(err instanceof Error ? err.message : String(err))
       }
     }, 300)

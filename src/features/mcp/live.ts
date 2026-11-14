@@ -22,6 +22,8 @@ export interface McpEvent {
   onde: Record<string, unknown>
   ia: string
   pessoa: string
+  /** A pessoa dona da chave (user id). Ausente nos avisos da função antes de 2026-11-13. */
+  usuario?: string
   at: number
   ok?: boolean
   erro?: string

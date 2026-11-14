@@ -71,11 +71,17 @@ export async function loadImage(url: string): Promise<HTMLImageElement> {
   const img = new Image()
   if (!revoke) img.crossOrigin = 'anonymous'
   img.decoding = 'async'
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve()
-    img.onerror = () => reject(new Error(`Imagem não carregou: ${url.slice(0, 80)}`))
-    img.src = href
-  })
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error(`Imagem não carregou: ${url.slice(0, 80)}`))
+      img.src = href
+    })
+    // Decodificada, a imagem desenha sem o endereço: o blob sai da memória (antes nunca saía; revisão de 2026-11-13)
+    if (revoke) await img.decode().catch(() => undefined)
+  } finally {
+    if (revoke) URL.revokeObjectURL(href)
+  }
   return img
 }
 

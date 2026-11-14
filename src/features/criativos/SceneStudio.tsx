@@ -317,6 +317,8 @@ const Stage: React.FC<{ scene: CodeScene; set: CreativeSet; post?: Post; images:
         drawn.current = -1
         setRunner(r)
       } catch (err) {
+        // A cena que não carregou não serve: o worker sai (antes ficava vivo, sobretudo se a tela já tinha limpado o efeito; revisão de 2026-11-13)
+        r?.dispose()
         if (alive) onError(err instanceof SceneError ? err : new SceneError(String(err)))
       }
     }, 250)
