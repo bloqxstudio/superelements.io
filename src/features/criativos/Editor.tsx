@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { StaticToggle } from './StaticToggle'
+import { useNarrow } from '@/features/space/useNarrow'
 import { useCrm } from '@/features/crm/crmStore'
 import { accountBrand } from '@/features/conteudos/carousel'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, Wand2, LayoutGrid, SquareDashed, SlidersHorizontal, X, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, FolderOpen, ImagePlus, Instagram, Plus, Redo2, Square, Trash2, Type, Undo2, SendHorizontal } from 'lucide-react'
+import { MoreHorizontal, AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, Blend, Clapperboard, Grid3x3, Group, Layers as LayersIcon, Lock, Ungroup, Users, Sparkles, Wand2, LayoutGrid, SquareDashed, SlidersHorizontal, X, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, FolderOpen, ImagePlus, Instagram, Plus, Redo2, Square, Trash2, Type, Undo2, SendHorizontal } from 'lucide-react'
 import { LayersPanel } from './LayersPanel'
 import { MotionPanel, downloadMp4 } from './MotionPanel'
 import { videoSupported } from './video'
@@ -467,7 +468,13 @@ export const CreativeEditor: React.FC = () => {
   const [approving, setApproving] = useState<string | null>(null)
   const ai = useAiAvailable()
   const [aiOpen, setAiOpen] = useState(false)
-  const [view, setView] = useState<'canvas' | 'slide'>('canvas')
+  // No celular só o modo Slide: um slide por vez, na largura da tela. O Canvas monta a mesa com todos os posts e,
+  // no iPhone, era pesado demais (2026-11-13, o usuário: "abrir o canvas de um criativo no mobile sempre retorna" erro)
+  const narrow = useNarrow()
+  const [view, setView] = useState<'canvas' | 'slide'>(() => (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches ? 'slide' : 'canvas'))
+  useEffect(() => {
+    if (narrow) setView('slide')
+  }, [narrow])
   const [newPost, setNewPost] = useState<{ name: string; format: FormatId } | null>(null)
   const [sharing, setSharing] = useState<{ projectId: string; busy: boolean } | null>(null)
   const navigate = useNavigate()
@@ -481,6 +488,8 @@ export const CreativeEditor: React.FC = () => {
   /** Abaixo de lg o painel (Camadas, Ajustes, Motion) é uma gaveta sobre o canvas, aberta por botão. */
   const [sheet, setSheet] = useState(false)
   const [gridOpen, setGridOpen] = useState(false)
+  /** Celular: a folha "Mais" com o que não cabe nas barras. */
+  const [more, setMore] = useState(false)
   const refFocus = useRefs((r) => r.focus)
   const layerIds = useEditor((s) => s.layerIds)
   useEffect(() => {
@@ -735,20 +744,29 @@ export const CreativeEditor: React.FC = () => {
 
   pasteImage.current = (file) => void sendLayerImage(file.name === 'image.png' ? new File([file], 'imagem colada.png', { type: file.type }) : file)
 
+  const addText = () => addLayer({ id: uid(), type: 'text', name: 'Texto', text: 'Novo texto', x: 84, y: 200, w: 600, h: 0, font: set.brand.bodyFont, weight: 500, size: 56, color: '#111111', align: 'left', lineHeight: 1.15, letterSpacing: 0 })
+  const addShape = () => addLayer({ id: uid(), type: 'rect', name: 'Forma', x: 84, y: 200, w: 300, h: 300, fill: set.brand.colors[0]?.hex ?? '#2b3cf0', radius: 0 })
+  const addGradient = () => addLayer({ id: uid(), type: 'rect', name: 'Degradê', x: 0, y: Math.round(sizeOf(format).height * 0.5), w: sizeOf(format).width, h: Math.round(sizeOf(format).height * 0.5), fill: alpha(set.brand.colors[0]?.hex ?? '#111111', 0), fill2: alpha(set.brand.colors[0]?.hex ?? '#111111', 0.9), angle: 180, radius: 0 })
+  /** Fecha a folha "Mais" do celular e faz a ação. */
+  const fromMore = (fn: () => void) => () => {
+    setMore(false)
+    fn()
+  }
+
   return (
-    <div className="flex h-[calc(100dvh-56px)] min-h-[480px] flex-col md:h-dvh md:min-h-[560px]" onClick={() => menu && setMenu(null)}>
+    <div className="flex h-dvh min-h-[480px] flex-col md:min-h-[560px]" onClick={() => menu && setMenu(null)}>
       {/* No celular a barra tem duas linhas: nome e compartilhar em cima; as ferramentas rolam de lado embaixo, com Baixar sempre à vista */}
       <header className="se-editor-bar relative flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-white px-3 py-1.5 md:h-12 md:flex-nowrap md:py-0">
         <Link to="/criativos" aria-label="Voltar aos criativos" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
-        <input aria-label="Nome do conjunto" value={set.name} onChange={(e) => useEditor.getState().edit((s) => ({ ...s, name: e.target.value }))} className="h-8 w-36 min-w-0 rounded-md border border-transparent px-2 text-sm font-semibold text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none sm:w-56" />
-        <span className="shrink-0 text-xs text-gray-500">{savingLabel}</span>
+        <input aria-label="Nome do conjunto" value={set.name} onChange={(e) => useEditor.getState().edit((s) => ({ ...s, name: e.target.value }))} className="h-8 w-0 min-w-0 flex-1 rounded-md border border-transparent px-2 text-sm font-semibold text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none md:w-56 md:flex-none" />
+        <span className="hidden shrink-0 text-xs text-gray-500 md:inline">{savingLabel}</span>
         {set.source?.contentId && (
-          <Link to={`/conteudos/${set.source.contentId}`} aria-label="Voltar ao conteúdo" className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100">
+          <Link to={`/conteudos/${set.source.contentId}`} aria-label="Voltar ao conteúdo" className="hidden shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100 md:inline-flex">
             <ArrowLeft className="h-3 w-3" aria-hidden /> <span className="hidden sm:inline">Voltar ao conteúdo</span><span className="sm:hidden">Conteúdo</span>
           </Link>
         )}
         {set.shared ? (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <div className="hidden items-center gap-2 md:flex" onClick={(e) => e.stopPropagation()}>
             <span className="flex max-w-[9rem] items-center gap-1.5 truncate rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700 sm:max-w-none" title={live ? 'Ao vivo com a equipe do projeto' : 'Conectando ao canal ao vivo…'}>
               <span className={cn('h-1.5 w-1.5 rounded-full', live ? 'bg-emerald-500' : 'bg-amber-400')} /> {set.projectName ?? 'Equipe'}
             </span>
@@ -762,7 +780,7 @@ export const CreativeEditor: React.FC = () => {
           </div>
         ) : (
           <div className="md:relative" onClick={(e) => e.stopPropagation()}>
-            <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" aria-label="Compartilhar" onClick={() => setSharing(sharing ? null : { projectId: set.projectId ?? projects[0]?.id ?? '', busy: false })} disabled={!projects.length}>
+            <Button variant="outline" size="sm" className="hidden h-8 gap-1.5 bg-white md:inline-flex" aria-label="Compartilhar" onClick={() => setSharing(sharing ? null : { projectId: set.projectId ?? projects[0]?.id ?? '', busy: false })} disabled={!projects.length}>
               <Users className="h-4 w-4" /> <span className="hidden sm:inline">Compartilhar</span>
             </Button>
             {sharing && (
@@ -781,31 +799,34 @@ export const CreativeEditor: React.FC = () => {
             )}
           </div>
         )}
-        <div className="flex w-full min-w-0 items-center gap-1.5 md:ml-auto md:w-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1 md:gap-1.5" onClick={(e) => e.stopPropagation()}>
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] md:flex-none md:overflow-visible [&>*]:shrink-0">
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Desfazer (Ctrl+Z)" disabled={!canUndo} onClick={() => useEditor.getState().undo()}><Undo2 className="h-4 w-4" /></Button>
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Refazer (Ctrl+Shift+Z)" disabled={!canRedo} onClick={() => useEditor.getState().redo()}><Redo2 className="h-4 w-4" /></Button>
-          <div className="mr-1 flex rounded-lg border border-gray-200 bg-white p-0.5" role="group" aria-label="Modo de edição">
+          <div className="mr-1 hidden rounded-lg border border-gray-200 bg-white p-0.5 md:flex" role="group" aria-label="Modo de edição">
             {([['canvas', 'Canvas', LayoutGrid], ['slide', 'Slide', SquareDashed]] as const).map(([id, label, Icon]) => (
               <button key={id} type="button" onClick={() => setView(id)} className={cn('flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium', view === id ? 'bg-violet-100 text-violet-800' : 'text-gray-600 hover:bg-gray-100')}>
                 <Icon className="h-3.5 w-3.5" /> {label}
               </button>
             ))}
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5 bg-white" aria-label="IA" onClick={() => setAiOpen(true)} disabled={ai === false} title={ai === false ? 'A IA roda no app local (servidor de desenvolvimento com o Claude Code).' : 'Gerar posts com IA'}>
+          <Button variant="outline" size="sm" className="hidden gap-1.5 bg-white md:inline-flex" aria-label="IA" onClick={() => setAiOpen(true)} disabled={ai === false} title={ai === false ? 'A IA roda no app local (servidor de desenvolvimento com o Claude Code).' : 'Gerar posts com IA'}>
             <Sparkles className="h-4 w-4 text-violet-600" /> IA
           </Button>
-          <FormatField value={format} onChange={(f) => editPost((p) => reformat(p, f))} />
-          {post && <StaticToggle post={post} onChange={editPost} />}
-          <Button variant="outline" size="sm" className="gap-1.5 bg-white" disabled={!post} title="Mandar um link para o cliente ver como fica no Instagram e aprovar ou pedir ajuste" aria-label="Aprovação" onClick={() => post && setApproving(post.id)}>
+          <span className="hidden md:contents">
+            <FormatField value={format} onChange={(f) => editPost((p) => reformat(p, f))} />
+            {post && <StaticToggle post={post} onChange={editPost} />}
+          </span>
+          <Button variant="outline" size="sm" className="hidden gap-1.5 bg-white md:inline-flex" disabled={!post} title="Mandar um link para o cliente ver como fica no Instagram e aprovar ou pedir ajuste" aria-label="Aprovação" onClick={() => post && setApproving(post.id)}>
             <SendHorizontal className="h-4 w-4 text-emerald-600" /> <span className="hidden sm:inline">Aprovação</span>
           </Button>
-          <Button variant="outline" size="sm" className="gap-1.5 bg-white" disabled={!post} title="Publicar o post escolhido no Instagram da conta" aria-label="Publicar" onClick={() => post && setPublishing(post.id)}>
+          <Button variant="outline" size="sm" className="hidden gap-1.5 bg-white md:inline-flex" disabled={!post} title="Publicar o post escolhido no Instagram da conta" aria-label="Publicar" onClick={() => post && setPublishing(post.id)}>
             <Instagram className="h-4 w-4 text-fuchsia-600" /> <span className="hidden sm:inline">Publicar</span>
           </Button>
           </div>
+          <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" aria-label="Mais opções" onClick={() => setMore(true)}><MoreHorizontal className="h-4 w-4" /></Button>
           <div className="relative shrink-0">
-            <Button size="sm" className="gap-1.5" onClick={() => setMenu(menu === 'export' ? null : 'export')}><Download className="h-4 w-4" /> Baixar</Button>
+            <Button size="sm" className="gap-1.5" aria-label="Baixar" onClick={() => setMenu(menu === 'export' ? null : 'export')}><Download className="h-4 w-4" /> <span className="hidden sm:inline">Baixar</span></Button>
             {menu === 'export' && (
               <div className="absolute right-0 top-10 z-30 w-64 max-w-[calc(100vw-24px)] space-y-2 rounded-xl border bg-white p-3 shadow-xl">
                 <div className="flex gap-1">
@@ -825,6 +846,58 @@ export const CreativeEditor: React.FC = () => {
       </header>
 
       <AiDialog open={aiOpen} onClose={() => setAiOpen(false)} />
+      {more && (
+        <div className="fixed inset-0 z-50 md:hidden" onClick={(e) => { e.stopPropagation(); setMore(false) }}>
+          <div className="absolute inset-0 bg-black/30" aria-hidden />
+          <div role="dialog" aria-label="Mais opções" className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-2xl bg-white p-4 pb-[max(16px,env(safe-area-inset-bottom))] shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-gray-300" aria-hidden />
+            {post && (
+              <label className="mb-3 block text-xs font-medium text-gray-500">
+                Post
+                <input aria-label="Nome do post" value={post.name} onChange={(e) => editPost((p) => ({ ...p, name: e.target.value }))} className="mt-1 h-11 w-full rounded-xl border border-gray-200 px-3 text-base font-medium text-gray-900" />
+              </label>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                ['Novo post', Plus, fromMore(() => setNewPost({ name: '', format: '4x5' })), false],
+                ['Degradê', Blend, fromMore(addGradient), false],
+                ['Grade', Grid3x3, fromMore(() => setGridOpen(true)), false],
+                ['Insumos', FolderOpen, fromMore(() => setAccountFiles(true)), false],
+                ['Motion', Clapperboard, fromMore(() => { setPanel('motion'); setSheet(true) }), false],
+                ['IA', Sparkles, fromMore(() => setAiOpen(true)), ai === false],
+                ['Aprovação', SendHorizontal, fromMore(() => post && setApproving(post.id)), !post],
+                ['Publicar', Instagram, fromMore(() => post && setPublishing(post.id)), !post],
+                ...(!set.shared && projects.length ? [['Compartilhar', Users, fromMore(() => setSharing({ projectId: set.projectId ?? projects[0]?.id ?? '', busy: false })), false] as const] : []),
+              ] as const).map(([label, Icon, run, disabled]) => (
+                <button key={label} type="button" onClick={run} disabled={disabled} className="flex h-[72px] flex-col items-center justify-center gap-1.5 rounded-xl border border-gray-200 text-xs font-medium text-gray-800 transition-colors active:bg-gray-100 disabled:opacity-40">
+                  <Icon className="h-5 w-5" aria-hidden /> {label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700">
+                Formato <FormatField value={format} onChange={(f) => editPost((p) => reformat(p, f))} />
+              </div>
+              {slide && (
+                <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700">
+                  Cor do fundo
+                  <input type="color" value={/^#[0-9a-f]{6}$/i.test(slide.background) ? slide.background : '#ffffff'} onChange={(e) => editSlide((sl) => ({ ...sl, background: e.target.value }))} className="h-8 w-12 cursor-pointer rounded border border-gray-200 bg-white p-0.5" />
+                </label>
+              )}
+              {post && <div className="rounded-xl border border-gray-200 px-3 py-2 empty:hidden"><StaticToggle post={post} onChange={editPost} /></div>}
+              {set.source?.contentId && (
+                <Link to={`/conteudos/${set.source.contentId}`} className="flex h-11 items-center gap-2 rounded-xl border border-gray-200 px-3 text-sm font-medium text-gray-800"><ArrowLeft className="h-4 w-4" aria-hidden /> Voltar ao conteúdo</Link>
+              )}
+              {post && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Link to={`/motion/${set.id}?${new URLSearchParams({ ...(set.shared && set.projectId ? { projeto: set.projectId } : {}), post: post.id }).toString()}`} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-800"><Wand2 className="h-4 w-4" aria-hidden /> Motion avançado</Link>
+                  <button type="button" onClick={fromMore(deletePost)} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 text-sm font-medium text-red-700"><Trash2 className="h-4 w-4" aria-hidden /> Excluir post</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="relative flex min-h-0 flex-1">
         <aside className={cn('w-56 shrink-0 flex-col border-r bg-white', view === 'slide' ? 'hidden md:flex' : 'hidden')} onClick={(e) => e.stopPropagation()}>
           <div className="border-b p-2">
@@ -856,8 +929,8 @@ export const CreativeEditor: React.FC = () => {
 
         <main className="relative flex min-w-0 flex-1 flex-col">
           {/* A barra rola de lado no celular; os painéis dela se prendem a esta caixa (fora da rolagem) */}
-          <div className="relative shrink-0 border-b bg-white" onClick={(e) => e.stopPropagation()}>
-          <div className="flex h-10 items-center gap-1.5 overflow-x-auto px-3 [scrollbar-width:none] md:overflow-visible [&>*]:shrink-0">
+          <div className="relative shrink-0 bg-white md:border-b" onClick={(e) => e.stopPropagation()}>
+          <div className="hidden h-10 items-center gap-1.5 overflow-x-auto px-3 [scrollbar-width:none] md:flex md:overflow-visible [&>*]:shrink-0">
             {post && <input aria-label="Nome do post" value={post.name} onChange={(e) => editPost((p) => ({ ...p, name: e.target.value }))} className="h-8 w-32 rounded-md sm:w-40 border border-transparent px-2 text-sm font-medium text-gray-900 hover:border-gray-200 focus-visible:border-gray-300 focus-visible:outline-none" />}
             <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white" onClick={() => setNewPost(newPost ? null : { name: '', format: '4x5' })}><Plus className="h-4 w-4" /> Novo post</Button>
             <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-red-600" title="Excluir este post" onClick={deletePost}><Trash2 className="h-4 w-4" /></Button>
@@ -878,9 +951,9 @@ export const CreativeEditor: React.FC = () => {
                 </div>
               </div>
             )}
-            <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'text', name: 'Texto', text: 'Novo texto', x: 84, y: 200, w: 600, h: 0, font: set.brand.bodyFont, weight: 500, size: 56, color: '#111111', align: 'left', lineHeight: 1.15, letterSpacing: 0 })}><Type className="h-4 w-4" /> Texto</Button>
-            <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'rect', name: 'Forma', x: 84, y: 200, w: 300, h: 300, fill: set.brand.colors[0]?.hex ?? '#2b3cf0', radius: 0 })}><Square className="h-4 w-4" /> Forma</Button>
-            <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => addLayer({ id: uid(), type: 'rect', name: 'Degradê', x: 0, y: Math.round(sizeOf(format).height * 0.5), w: sizeOf(format).width, h: Math.round(sizeOf(format).height * 0.5), fill: alpha(set.brand.colors[0]?.hex ?? '#111111', 0), fill2: alpha(set.brand.colors[0]?.hex ?? '#111111', 0.9), angle: 180, radius: 0 })}><Blend className="h-4 w-4" /> Degradê</Button>
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={addText}><Type className="h-4 w-4" /> Texto</Button>
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={addShape}><Square className="h-4 w-4" /> Forma</Button>
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={addGradient}><Blend className="h-4 w-4" /> Degradê</Button>
             <div className="md:relative">
               <Button variant="ghost" size="sm" className={cn('h-8 gap-1.5', grid.show && 'bg-violet-50 text-violet-800')} onClick={() => setGridOpen((o) => !o)} title="Grade de boas práticas deste post (Ctrl+')"><Grid3x3 className="h-4 w-4" /> Grade</Button>
               {gridOpen && post && (
@@ -946,11 +1019,25 @@ export const CreativeEditor: React.FC = () => {
             </div>
           )}
           {!sheet && panel !== 'motion' && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); setPanel(layer || layerIds.length ? 'props' : panel); setSheet(true) }} className="absolute bottom-16 right-3 z-20 flex h-10 items-center gap-1.5 rounded-full bg-gray-900 px-4 text-sm font-medium text-white shadow-lg active:scale-[0.97] lg:hidden">
+            <button type="button" onClick={(e) => { e.stopPropagation(); setPanel(layer || layerIds.length ? 'props' : panel); setSheet(true) }} className="absolute bottom-16 right-3 z-20 hidden h-10 items-center md:flex gap-1.5 rounded-full bg-gray-900 px-4 text-sm font-medium text-white shadow-lg active:scale-[0.97] lg:hidden">
               <SlidersHorizontal className="h-4 w-4" /> {layer || layerIds.length ? 'Editar camada' : 'Camadas e ajustes'}
             </button>
           )}
           {view === 'canvas' ? <Board onlyPostId={onlyPost && set?.posts.some((p) => p.id === onlyPost) ? onlyPost : undefined} onAddSlide={addSlideTo} onDownloadSlide={() => void exportFiles('slide', exportType)} onDuplicateSlide={duplicateSlide} onDeleteSlide={deleteSlide} /> : <Stage />}
+          {/* Celular: as ferramentas embaixo, ao alcance do polegar; o resto fica em "Mais" (no topo) */}
+          <nav className="grid shrink-0 grid-cols-5 border-t bg-white pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Ferramentas" onClick={(e) => e.stopPropagation()}>
+            {([
+              ['Texto', Type, addText],
+              ['Imagem', ImagePlus, () => upload.current?.click()],
+              ['Forma', Square, addShape],
+              ['Camadas', LayersIcon, () => { setPanel('layers'); setSheet(true) }],
+              ['Ajustes', SlidersHorizontal, () => { setPanel('props'); setSheet(true) }],
+            ] as const).map(([label, Icon, run]) => (
+              <button key={label} type="button" onClick={run} className="flex h-14 flex-col items-center justify-center gap-1 text-[11px] font-medium text-gray-700 transition-colors active:bg-gray-100">
+                <Icon className="h-5 w-5" aria-hidden /> {label}
+              </button>
+            ))}
+          </nav>
           {(() => {
             const target = publishing ? set.posts.find((p) => p.id === publishing) : undefined
             return target ? <PublishPost key={target.id} post={target} open onClose={() => setPublishing(null)} /> : null

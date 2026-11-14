@@ -113,7 +113,8 @@ const Layout: React.FC = () => {
       <AppSidebar open={open} onClose={close} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       <a href="#workspace-content" className="se-skip-link">Pular para o conteúdo</a>
       <div style={{ paddingRight: 'var(--iara-dock, 0px)' }} className={`se-workspace flex min-h-screen min-w-0 flex-col transition-[padding] duration-200 ease-out motion-reduce:transition-none ${collapsed ? 'md:pl-[88px]' : 'md:pl-[264px]'}`}>
-        <header className="se-mobile-bar sticky top-0 z-30 box-content flex h-14 items-center gap-3 px-4 md:hidden">
+        {/* Nos editores (Copy, Criativos, Motion) a barra sai no celular: eles têm o próprio voltar e precisam da tela inteira */}
+        {!editorRoute && <header className="se-mobile-bar sticky top-0 z-30 box-content flex h-14 items-center gap-3 px-4 md:hidden">
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -127,7 +128,7 @@ const Layout: React.FC = () => {
           <Link to="/" aria-label="Projetos" className="transition-opacity hover:opacity-80">
             <SinfyLogo />
           </Link>
-        </header>
+        </header>}
 
         {!editorRoute && <nav
           ref={barRef}

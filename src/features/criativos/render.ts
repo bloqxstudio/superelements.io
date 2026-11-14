@@ -86,6 +86,33 @@ export async function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 /**
+ * Imagem para o editor desenhar: igual a `loadImage`, mas foto grande fica guardada reduzida. Uma foto de câmera
+ * decodificada ocupa 30–60 MB, e o editor carrega todas as do conjunto ao abrir: no iPhone isso passava do limite de
+ * memória da aba e o Chrome/Safari mostrava "Can't open this page" (o usuário, 2026-11-13). O desenho só usa
+ * proporções (`cover`/`contain` e foco de 0 a 1), então reduzir não muda o enquadramento; 2048 px no toque e 3072 px
+ * no computador sobram para exportar em 1080. SVG continua vetor.
+ */
+export async function loadCanvasImage(url: string): Promise<CanvasImageSource & { width: number; height: number }> {
+  const img = await loadImage(url)
+  const coarse = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
+  const limit = coarse ? 2048 : 3072
+  const w = img.naturalWidth || img.width
+  const h = img.naturalHeight || img.height
+  if (/\.svg(\?|$)/i.test(url) || !w || !h || Math.max(w, h) <= limit) return img
+  const k = limit / Math.max(w, h)
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(w * k)
+  canvas.height = Math.round(h * k)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return img
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+  // A imagem original sai da memória: só o canvas reduzido fica no mapa do editor
+  img.src = ''
+  return canvas
+}
+
+/**
  * Vídeo para desenhar no canvas como uma imagem que anda: baixado como blob
  * (a exportação não fica "tainted"), mudo, parado no primeiro quadro. `width`
  * e `height` ficam no tamanho do vídeo, como numa imagem.

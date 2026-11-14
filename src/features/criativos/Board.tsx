@@ -67,8 +67,10 @@ function layout(set: CreativeSet, only?: string) {
 }
 
 /** Quanto do tamanho real o canvas guarda: o suficiente para o zoom atual, em degraus. */
+const COARSE = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
 const bucket = (k: number) => {
-  const want = Math.min(1, k * Math.min(2, window.devicePixelRatio || 1))
+  // Em tela de toque (tablet), no máximo metade do tamanho real por slide: o iPad também derruba a aba por memória
+  const want = Math.min(COARSE ? 0.5 : 1, k * Math.min(2, window.devicePixelRatio || 1))
   return [0.0625, 0.125, 0.25, 0.5, 0.75, 1].find((s) => s >= want) ?? 1
 }
 

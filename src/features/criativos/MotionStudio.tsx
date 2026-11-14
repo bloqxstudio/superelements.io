@@ -225,7 +225,7 @@ export const MotionStudio: React.FC = () => {
   const editorLink = `/criativos/${set.id}?${new URLSearchParams({ ...(set.shared && set.projectId ? { projeto: set.projectId } : {}), post: post.id }).toString()}`
 
   return (
-    <div className="flex h-[calc(100dvh-56px)] min-h-[520px] flex-col bg-gray-50 md:h-dvh md:min-h-[600px]">
+    <div className="flex h-dvh min-h-[520px] flex-col bg-gray-50 md:min-h-[600px]">
       {/* No celular: nome e post em cima; as ações rolam de lado embaixo */}
       <header className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-white px-3 py-1.5 md:h-12 md:flex-nowrap md:py-0">
         <Link to="/motion" aria-label="Voltar ao Motion" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>

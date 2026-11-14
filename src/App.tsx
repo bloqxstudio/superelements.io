@@ -79,6 +79,8 @@ const ConnectAdsReturn = lazyNamed(() => import("@/pages/ConnectAds"), "ConnectA
 const SinfyConstrutorLanding = lazyPage(() => import("@/pages/SinfyConstrutorLanding"));
 const ProductLanding = lazyPage(() => import("@/pages/ProductLanding"));
 const DesignSystem = lazyPage(() => import("@/pages/DesignSystem"));
+// Só no `npm run dev`: o editor de Criativos sem login, para conferir no tamanho do celular
+const DevCreative = import.meta.env.DEV ? lazyPage(() => import("@/pages/DevCreative")) : null;
 
 // Vitrines dos modelos de clientes (guias de estilo e prévias do Elementor): fora do app, cada uma no seu arquivo
 const MenuzitoModel = lazyPage(() => import("@/pages/MenuzitoModel"));
@@ -158,6 +160,7 @@ function App() {
               <Route path="/superelements" element={<Navigate to="/construtor" replace />} />
               <Route path="/lp" element={<ProductLanding />} />
               <Route path="/design-system" element={<DesignSystem />} />
+              {DevCreative && <Route path="/dev/criativo/:setId" element={<DevCreative />} />}
 
               {/* Projetos (um por cliente); cada um abre o seu Space */}
               <Route

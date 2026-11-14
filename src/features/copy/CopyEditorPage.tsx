@@ -151,7 +151,7 @@ export const CopyEditorPage: React.FC = () => {
   ]
 
   return (
-    <div className="flex h-[calc(100dvh-56px)] min-h-[480px] flex-col md:h-dvh md:min-h-[560px]">
+    <div className="flex h-dvh min-h-[480px] flex-col md:min-h-[560px]">
       {/* No celular a barra quebra em duas linhas: título e compartilhar em cima, desfazer e enviar embaixo */}
       <header className="relative flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-white px-3 py-1.5 md:h-12 md:flex-nowrap md:py-0">
         <Link to="/copy" aria-label="Voltar à Copy" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>

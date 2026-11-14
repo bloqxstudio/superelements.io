@@ -151,14 +151,14 @@ export const VideoStudio: React.FC = () => {
 
   if (novo === 'referencia')
     return (
-      <div className="flex h-[calc(100dvh-56px)] flex-col bg-gray-50 md:h-dvh">
+      <div className="flex h-dvh flex-col bg-gray-50">
         {header('novo vídeo')}
         <VideoCreator set={set} refId={query.get('ref') ?? undefined} how={(query.get('modo') as 'igual' | 'novo' | null) ?? undefined} topic={query.get('tema') ?? undefined} onCreated={(id) => go({ id, novo: null, ref: null, modo: null, tema: null })} onCancel={() => go({ novo: scenes.length ? null : 'escolher', ref: null })} />
       </div>
     )
   if (novo === 'escolher' || (!scene && !novo))
     return (
-      <div className="flex h-[calc(100dvh-56px)] flex-col bg-gray-50 md:h-dvh">
+      <div className="flex h-dvh flex-col bg-gray-50">
         {header('novo vídeo')}
         <NewVideo onPick={(c) => go({ novo: c, id: null })} onCancel={scenes.length ? () => go({ novo: null }) : undefined} />
       </div>

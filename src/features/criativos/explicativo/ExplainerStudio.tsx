@@ -60,7 +60,7 @@ export const ExplainerStudio: React.FC = () => {
     )
 
   return (
-    <div className="flex h-[calc(100dvh-56px)] min-h-[520px] flex-col bg-gray-50 md:h-dvh md:min-h-[640px]">
+    <div className="flex h-dvh min-h-[520px] flex-col bg-gray-50 md:min-h-[640px]">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-white px-3">
         <Link to="/motion" aria-label="Voltar ao Motion" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"><ArrowLeft className="h-4 w-4" /></Link>
         <AudioLines className="h-4 w-4 shrink-0 text-violet-700" />

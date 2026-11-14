@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { toast } from 'sonner'
-import { EMPHASIS_FONT, loadFont, loadImage, loadVideo, type ImageMap } from './render'
+import { EMPHASIS_FONT, loadCanvasImage, loadFont, loadVideo, type ImageMap } from './render'
 import { loadSet, saveSet, assetUrl } from './storage'
 import { refreshCovers } from './covers'
 import { hasPending, materializePending } from './pending'
@@ -8,6 +8,7 @@ import { mergePatch, type SyncPatch } from './syncPatch'
 import { syncSpans } from './spanOps'
 import type { CreativeSet, FormatId, Layer, Post, Slide } from './types'
 import { sizeOf } from './types'
+import { DEV_SET_ID, devSet } from './devSet'
 
 /**
  * Estado do editor aberto: o conjunto, o que está selecionado, o histórico para
@@ -114,7 +115,7 @@ export const useEditor = create<EditorState>()((set, get) => {
       try {
         await pending
         await settle()
-        let loaded = await loadSet(id, projectId)
+        let loaded = import.meta.env.DEV && id === DEV_SET_ID ? await devSet() : await loadSet(id, projectId)
         if (ticket !== openSeq) return
         if (!loaded) return set({ status: 'missing' })
         // Posts pedidos pela IA de fora (MCP): monta na marca antes de abrir
@@ -213,7 +214,7 @@ export const useEditor = create<EditorState>()((set, get) => {
           url = await assetUrl(asset)
           video = asset.kind === 'video'
         }
-        const img = video ? await loadVideo(url) : await loadImage(url)
+        const img = video ? await loadVideo(url) : await loadCanvasImage(url)
         set((s) => ({ images: new Map(s.images).set(src, img) }))
       } catch (err) {
         console.warn('[criativos] imagem', err)
@@ -257,7 +258,8 @@ export const useEditor = create<EditorState>()((set, get) => {
       let done!: () => void
       inflight = new Promise<void>((resolve) => (done = resolve))
       try {
-        await saveSet(current)
+        // O conjunto de exemplo do modo dev (/dev/criativo) nunca grava
+        if (!(import.meta.env.DEV && current.id === DEV_SET_ID)) await saveSet(current)
         // Só o conjunto que continua aberto muda de estado (o que foi fechado não marca o próximo como sujo)
         set((s) => (s.set?.id !== current!.id ? {} : { saving: s.set.updatedAt === current!.updatedAt ? 'saved' : 'dirty' }))
         // As capas das listas acompanham, sem pressa: uma vez quando a edição para
